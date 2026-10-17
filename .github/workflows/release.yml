@@ -1,0 +1,96 @@
+name: release
+# A release: on a version tag (v1.2.3), the tests, then the Docker image to GHCR and the package to npm
+# (as `cornfield` and as `@popcorn245/cornfield`).
+#
+# INERT until the maintainer turns it on (RELEASING.md):
+#   - nothing runs without a tag v*; tags are pushed by hand, on the maintainer's go;
+#   - both publish jobs also need the repository variable CORNFIELD_RELEASE = "on";
+#   - the npm job needs the NPM_TOKEN secret, and stops with a clear message without it;
+#   - package.json's prepublishOnly (cli/release-guard.js) refuses any publish that is not this workflow's,
+#     on this tag, from the repo root.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    if: ${{ vars.CORNFIELD_RELEASE == 'on' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: node cli/cornfield.js validate
+      - name: The tag is the package's version
+        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/cornfield
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  npm:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: The npm token is there
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN}" ]; then echo "NPM_TOKEN is not set: add it as a repository secret (RELEASING.md)." >&2; exit 1; fi
+      - name: Publish cornfield
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CORNFIELD_RELEASE: '1'
+        run: npm publish --provenance --access public
+      - name: Publish @popcorn245/cornfield (the same files under the scoped name)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CORNFIELD_RELEASE: '1'
+        run: |
+          npm pkg set name=@popcorn245/cornfield
+          npm publish --provenance --access public

@@ -1,0 +1,1 @@
+{ "name": "@acme/web", "version": "1.0.0", "description": "The shop's pages", "type": "module", "main": "src/index.js", "dependencies": { "@acme/shared": "*" } }

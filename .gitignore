@@ -1,0 +1,15 @@
+node_modules/
+coverage/
+*.log
+.DS_Store
+# Never commit an env file: cornfield needs none (and keeps no secret in its config)
+.env
+.env.*
+!.env.example
+# cornfield's own state, if a data folder is pointed inside a checkout
+.cornfield/
+.cornfield-data/
+# Review files from older hubs that wrote them beside the proposal
+*.review.json
+# Local agent worktrees
+.claude/

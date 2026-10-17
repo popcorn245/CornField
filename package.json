@@ -1,0 +1,68 @@
+{
+  "name": "cornfield",
+  "version": "0.1.0",
+  "description": "A self-hostable dev dashboard with the topology map at its centre: proposals on the map, scenarios, outages and what-if edits, for any repo.",
+  "license": "MIT",
+  "author": "popcorn245 (https://github.com/popcorn245)",
+  "homepage": "https://github.com/popcorn245/cornfield#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/popcorn245/cornfield.git"
+  },
+  "bugs": {
+    "url": "https://github.com/popcorn245/cornfield/issues"
+  },
+  "keywords": [
+    "topology",
+    "architecture",
+    "map",
+    "dashboard",
+    "monorepo",
+    "self-hosted",
+    "buildless"
+  ],
+  "type": "module",
+  "bin": {
+    "cornfield": "cli/cornfield.js"
+  },
+  "exports": {
+    ".": "./core/index.js",
+    "./core/*": "./core/*",
+    "./plugins/*": "./plugins/*",
+    "./server": "./server/server.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cli/",
+    "core/",
+    "explorer/",
+    "plugins/",
+    "server/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "node cli/cornfield.js validate && vitest run",
+    "serve": "node cli/cornfield.js serve",
+    "sync": "node cli/cornfield.js sync",
+    "validate": "node cli/cornfield.js validate",
+    "prepublishOnly": "node cli/release-guard.js"
+  },
+  "optionalDependencies": {
+    "js-yaml": "4.1.0"
+  },
+  "devDependencies": {
+    "happy-dom": "20.11.6",
+    "vitest": "4.1.10"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

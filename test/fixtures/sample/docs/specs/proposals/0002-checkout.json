@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "spec": "0002",
+  "title": "Checkout",
+  "summary": "A checkout page that writes the order through the API, and the receipt it files in Nextcloud.",
+  "nodes": {
+    "add": [
+      { "id": "page-web-checkout", "label": "/checkout", "type": "page", "parent": "app-web", "desc": "Pay for the basket." },
+      { "id": "page-api-checkout", "label": "/api/v1/checkout", "type": "page", "parent": "app-api", "methods": ["POST"], "desc": "POST /api/v1/checkout: turns the basket into an order." }
+    ],
+    "change": [
+      { "id": "page-web-cart", "set": { "desc": "The basket: change it, then go to the checkout." }, "why": "the basket now leads to the checkout" }
+    ]
+  },
+  "edges": {
+    "add": [
+      { "from": "page-api-checkout", "to": "table-orders", "kind": "writes", "status": "proposed", "label": "orders.add" },
+      { "from": "page-api-checkout", "to": "container-nextcloud", "kind": "calls", "status": "proposed", "label": "files the receipt" }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "adult-pays",
+      "title": "An adult pays for the basket",
+      "actor": "adult",
+      "steps": [
+        { "node": "page-web-checkout", "text": "You open the checkout from the basket." },
+        { "edge": { "from": "page-api-checkout", "to": "table-orders", "kind": "writes" }, "text": "The API writes the order." },
+        { "edge": { "from": "page-api-checkout", "to": "container-nextcloud", "kind": "calls" }, "text": "It files the receipt in Nextcloud." }
+      ]
+    },
+    {
+      "id": "child-tries",
+      "title": "A child tries to pay",
+      "actor": "child",
+      "steps": [
+        { "node": "page-web-checkout", "at": "live-room-kitchen", "text": "A child opens the checkout on the kitchen tablet." },
+        { "edge": { "from": "page-api-checkout", "to": "table-orders", "kind": "writes" }, "check": { "table": "orders", "op": "write" }, "expect": "refused", "text": "Only an adult may place an order." }
+      ]
+    },
+    {
+      "id": "cloudflare-down",
+      "title": "Cloudflare is down",
+      "down": ["ext-cloudflare"],
+      "steps": [
+        { "node": "ext-cloudflare", "text": "Cloudflare stops answering." },
+        { "node": "container-caddy", "text": "Caddy keeps serving, but cannot renew a certificate." }
+      ]
+    }
+  ]
+}

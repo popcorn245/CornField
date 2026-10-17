@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "github",
+      "label": "GitHub",
+      "roles": ["runtime", "software", "account"],
+      "desc": "Where cornfield lives: the repo, its issues and pull requests, the actions CI runs, and the default forge of a repo's config.",
+      "breaks": "Now: no pull request can be opened, checked or merged, and a GitHub sign-in (v1) fails. At the next CI run: the checks cannot start.",
+      "plan": { "tier": "free" },
+      "match": { "actions": ["actions/", "docker/"], "hosts": ["github.com"] }
+    },
+    {
+      "id": "npm",
+      "label": "npm registry",
+      "roles": ["software"],
+      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names.",
+      "breaks": "At the next CI run or image build: the dev dependencies cannot install. A release cannot publish.",
+      "plan": { "tier": "free" },
+      "match": { "packages": ["npm"] }
+    },
+    {
+      "id": "docker-hub",
+      "label": "Docker Hub",
+      "roles": ["software"],
+      "desc": "The node:22-alpine base image.",
+      "breaks": "At the next image build: a fresh machine cannot pull the base image.",
+      "plan": { "tier": "free" },
+      "match": { "registries": ["docker.io/"] }
+    },
+    {
+      "id": "ghcr",
+      "label": "GitHub Container Registry",
+      "roles": ["software"],
+      "desc": "Where a release pushes the cornfield image, and where an always-on install pulls it from.",
+      "breaks": "At the next release or install: the image cannot be pushed or pulled; a running one keeps running.",
+      "plan": { "tier": "free" },
+      "uses": [{ "from": "tool-ci", "label": "the release pushes the image", "when": "deploy", "why": "The registry is named in the release workflow's with: block, which the CI detector does not read" }]
+    }
+  ]
+}

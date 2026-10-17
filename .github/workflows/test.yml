@@ -1,0 +1,50 @@
+name: test
+# Every pull request and every push to main: the test suite, and cornfield's own map against its code
+# (cornfield maps itself; a change that moves the code without `cornfield sync` fails here).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Tests (vitest)
+        run: npm test
+      - name: cornfield validate (its own map, schema, drift and proposals)
+        run: node cli/cornfield.js validate
+      - name: cornfield validate (the sample repo)
+        run: node cli/cornfield.js validate --repo test/fixtures/sample
+      - name: The package holds only what it should
+        run: npm pack --dry-run --json | node -e "const [p] = JSON.parse(require('fs').readFileSync(0, 'utf8')); const bad = p.files.map((f) => f.path).filter((f) => !/^(cli|core|explorer|plugins|server)\/|^(package\.json|README\.md|LICENSE|CHANGELOG\.md)$/.test(f)); if (bad.length) { console.error('Unexpected files in the package:', bad); process.exit(1); } console.log(p.files.length, 'files')"
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The image builds
+        run: docker build --tag cornfield:ci .
+      - name: The image serves its own map, on loopback only
+        run: |
+          set -eu
+          docker run --rm -d --name cf --network host -v "$PWD:/repo:ro" -e CORNFIELD_PORT=3399 cornfield:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3399/cornfield/config.json >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3399/topology.json | node -e "const t = JSON.parse(require('fs').readFileSync(0, 'utf8')); if (!t.nodes.length) process.exit(1); console.log(t.nodes.length, 'nodes')"
+          docker stop cf
+          if docker run --rm -e CORNFIELD_HOST=0.0.0.0 cornfield:ci serve --port 3398; then echo 'it listened on 0.0.0.0' >&2; exit 1; fi

@@ -1,0 +1,1 @@
+{ "name": "@acme/api", "version": "1.0.0", "description": "The API: orders and the address search", "type": "module", "main": "src/server.js", "dependencies": { "@acme/shared": "*" } }

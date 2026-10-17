@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>cornfield</title>
+  <!-- The server puts the config's import map here (server/server.js), for a repo-local source's bare imports -->
+  <!--@importmap-->
+
+  <!-- The explorer's own stylesheet and modules (explorer/): no build step, no CDN -->
+  <link rel="stylesheet" href="/explorer/explorer.css" />
+  <link rel="stylesheet" href="/explorer/house.css" />
+</head>
+<body>
+  <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->
+  <header class="hx-header">
+    <div class="hx-header-left">
+      <button type="button" class="hx-brand" data-action="reset-view" title="Reset View">
+        <span class="hx-live-dot"></span>
+        <span id="cf-title" class="hx-title gradient-text">cornfield</span>
+      </button>
+
+      <div class="hx-menu-wrap">
+        <button type="button" id="legend-toggle-btn" class="hx-btn" data-action="toggle-layers-menu" aria-label="Layers" title="Toggle Architecture Layers">
+          <span class="hx-dots">
+            <span style="background:#6366f1"></span><span style="background:#06b6d4"></span><span style="background:#38bdf8"></span><span style="background:#10b981"></span><span style="background:#a855f7"></span><span style="background:#ec4899"></span><span style="background:#fb923c"></span>
+          </span>
+          <span class="hx-only-wide">Layers</span>
+          <span class="hx-faint">▾</span>
+        </button>
+
+        <!-- Interactive section toggles and the legend -->
+        <div id="legend-dropdown" class="hx-menu glass" hidden>
+          <div class="hx-menu-title hx-menu-head">
+            <span>Section Toggles</span>
+            <span class="hx-menu-links">
+              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all">All</button>
+              <span class="hx-faint">•</span>
+              <button type="button" class="hx-textbtn" data-action="layers-none">None</button>
+            </span>
+          </div>
+          <p id="layers-preset-note" class="hx-note" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
+          <div id="layer-toggles-container" class="hx-toggles"></div>
+          <div id="flow-legend" hidden></div>
+          <div id="cloud-legend" class="hx-menu-section" hidden></div>
+
+          <!-- What a proposal's marks mean, while one is open (proposal.js) -->
+          <div id="proposal-legend" class="hx-menu-section" hidden>
+            <div class="hx-menu-title"><span>Proposal marks</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added"></span><span>Added: dashed ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: amber ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: red, faded, label struck through</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: violet</span></div>
+          </div>
+
+          <div class="hx-menu-section">
+            <div class="hx-menu-title">
+              <span>Connections</span>
+              <span class="hx-faint hx-mono">Click node to focus</span>
+            </div>
+            <div class="hx-legend-row hx-legend-row--split">
+              <span class="hx-legend-label"><span class="hx-swatch-line hx-swatch-solid"></span>Solid</span>
+              <span class="hx-faint hx-mono">Parent-Child / Hub</span>
+            </div>
+            <div class="hx-legend-row hx-legend-row--split">
+              <span class="hx-legend-label"><span class="hx-swatch-line hx-swatch-dashed hx-swatch-indigo"></span>Dotted</span>
+              <span class="hx-faint hx-mono">Usage &amp; Dependency</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- The data-flow preset: browser -> servers -> API -> tables -> services -> outside, animated -->
+      <button type="button" id="preset-dataflow-btn" class="hx-btn hx-btn--preset" data-action="preset-dataflow" aria-pressed="false" aria-label="Data flow" title="Show only how data moves: browser, app servers, API, tables, services, outside systems">
+        <span aria-hidden="true">⇄</span>
+        <span class="hx-only-wide">Data flow</span>
+      </button>
+
+      <!-- The House preset (explorer/house.js, spec 0029): the floor plan with its devices, machines and people, the software around it -->
+      <button type="button" id="preset-house-btn" class="hx-btn hx-btn--preset" data-action="preset-house" aria-pressed="false" aria-label="House" title="Show the house: each floor's rooms with their devices and machines, the people beside it, the software around it">
+        <span aria-hidden="true">⌂</span>
+        <span class="hx-only-wide">House</span>
+      </button>
+
+      <!-- Proposals: what a change would add, change and remove, drawn on the map (proposal.js) -->
+      <div id="proposal-wrap" class="hx-menu-wrap">
+        <button type="button" id="proposal-btn" class="hx-btn hx-btn--proposal" data-action="toggle-proposals-menu" aria-haspopup="true" aria-expanded="false" aria-label="Proposals" title="Open a proposal: what a change would add, change and remove">
+          <span aria-hidden="true">✎</span>
+          <span class="hx-only-wide">Proposals</span>
+          <span class="hx-faint">▾</span>
+        </button>
+        <div id="proposal-menu" class="hx-menu hx-menu--proposals glass" hidden></div>
+      </div>
+
+      <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
+      <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
+        <button type="button" id="live-chip" class="hx-btn hx-live-chip" aria-haspopup="true" aria-expanded="false" aria-label="Live layer">
+          <span class="hx-live-chip-dot" aria-hidden="true"></span>
+          <span id="live-chip-text" class="hx-only-wide hx-live-chip-text"></span>
+        </button>
+        <div id="live-menu" class="hx-menu hx-menu--live glass" role="status" hidden></div>
+      </div>
+    </div>
+
+    <div class="hx-header-right">
+      <button type="button" id="mobile-search-toggle" class="hx-btn hx-btn--icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes">⌕</button>
+
+      <div class="hx-search hx-only-desktop">
+        <input type="text" id="node-search" class="hx-input" placeholder="Search..." aria-label="Search nodes" />
+      </div>
+
+      <button type="button" id="freeform-toggle-btn" class="hx-btn" data-action="toggle-freeform" title="Toggle between Orbit parent clustering and freeform node dragging">
+        <span id="freeform-toggle-icon">🔒</span>
+        <span class="hx-only-wide" id="freeform-toggle-label">Orbit</span>
+      </button>
+
+      <button type="button" id="reset-positions-btn" class="hx-btn hx-btn--quiet" data-action="reset-positions" title="Reset custom dragged positions back to orbit" hidden>Reset Layout</button>
+
+      <div class="hx-zoom hx-only-desktop">
+        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In">+</button>
+        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out">−</button>
+        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View">⟲</button>
+        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen">⛶</button>
+      </div>
+
+      <!-- The config's links (cornfield.config.js `links`), filled by explorer/plugins.js -->
+      <span id="cf-links" class="hx-links"></span>
+    </div>
+  </header>
+
+  <!-- Mobile search bar -->
+  <div id="mobile-search-bar" class="hx-mobile-search glass-header" hidden>
+    <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" />
+    <button type="button" class="hx-textbtn" data-action="clear-search" aria-label="Clear search">✕</button>
+    <button type="button" class="hx-textbtn" data-action="close-mobile-search">Cancel</button>
+  </div>
+
+  <!-- The map -->
+  <div class="hx-stage">
+    <canvas id="graph-canvas"></canvas>
+    <!-- Every label, drawn on its own transparent canvas over the map (explorer/labels.js); the map canvas still gets the pointer -->
+    <canvas id="label-canvas" aria-hidden="true"></canvas>
+
+    <!-- Below 768px the proposal bar, the scenario player and the node panel stack here as bottom sheets (sheets.js); from 768px the dock is display: contents -->
+    <div id="sheet-dock" class="hx-dock">
+    <!-- The open proposal: counts, Before / Diff / After, problems, close (proposal.js) -->
+    <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden>
+      <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
+      <div id="proposal-body">
+        <div class="hx-proposal-head">
+          <strong id="proposal-title" class="hx-proposal-name"></strong>
+          <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
+          <div class="hx-seg" role="group" aria-label="Compare">
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="before" aria-pressed="false">Before</button>
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="diff" aria-pressed="true">Diff</button>
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false">After</button>
+          </div>
+          <button type="button" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map">Close</button>
+        </div>
+        <p id="proposal-summary" class="hx-proposal-summary" hidden></p>
+        <details id="proposal-errors" class="hx-proposal-errors" hidden>
+          <summary id="proposal-errors-count"></summary>
+          <ul id="proposal-errors-list"></ul>
+          <p class="hx-faint">The map shows what it can.</p>
+        </details>
+        <div id="proposal-changes" class="hx-proposal-changes" hidden></div>
+      </div>
+    </section>
+
+    <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile -->
+    <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details">
+      <div class="hx-drawer-body">
+        <div class="hx-drawer-head">
+          <span class="hx-drawer-title-wrap">
+            <span id="drawer-badge" class="hx-badge">ATOM</span>
+            <h2 id="drawer-title" class="hx-drawer-title">&lt;pop-button&gt;</h2>
+          </span>
+          <button type="button" class="hx-close" data-action="close-drawer" aria-label="Close">✕</button>
+        </div>
+
+        <p id="drawer-description" class="hx-faint hx-lead"></p>
+
+        <div class="hx-block">
+          <h3 class="hx-block-title">Properties &amp; Attributes</h3>
+          <div id="drawer-props-list" class="hx-props"></div>
+        </div>
+
+        <div class="hx-block">
+          <h3 class="hx-block-title">Details</h3>
+          <div id="drawer-meta-list" class="hx-meta"></div>
+        </div>
+      </div>
+
+      <div class="hx-drawer-foot">
+        <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer">Open ↗</a>
+        <button type="button" class="hx-btn hx-btn--copy" data-action="copy-spec">Copy Spec</button>
+      </div>
+    </aside>
+    </div>
+
+    <!-- Mobile zoom and fit, within thumb reach -->
+    <div class="hx-mobile-zoom glass hx-only-mobile">
+      <button type="button" class="hx-zoom-btn" data-action="zoom-in" aria-label="Zoom In">+</button>
+      <button type="button" class="hx-zoom-btn" data-action="zoom-out" aria-label="Zoom Out">−</button>
+      <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit View">⛶</button>
+    </div>
+
+    <div class="hx-hint glass">
+      <span class="hx-accent">👆</span>
+      <span id="instruction-badge-text">Tap node to inspect live spec</span>
+    </div>
+
+    <!-- Loading and error states: a failed load never leaves a blank canvas -->
+    <div id="loading-state" class="hx-state" role="status">Loading topology.json …</div>
+    <div id="error-state" class="hx-state hx-state--error glass" role="alert" hidden>
+      <strong>The map could not be loaded</strong>
+      <p id="error-message"></p>
+      <p class="hx-faint">The explorer reads /topology.json from the cornfield server (cornfield serve). Run cornfield sync if the repo has no map yet, check that the server is up, then retry.</p>
+      <button type="button" class="hx-btn hx-btn--active" data-action="retry">Retry</button>
+    </div>
+
+    <div id="drawer-backdrop" class="hx-backdrop" data-action="close-drawer" hidden></div>
+
+  </div>
+
+  <script type="module" src="/explorer/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# gitleaks configuration: gitleaks' own rules, nothing turned off.
+# The scan runs on every pull request (.github/workflows/secret-scan.yml). Run it locally with
+#   gitleaks dir . --config .gitleaks.toml --redact
+title = "cornfield gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dependencies are never in a checkout, but a local scan should not read them"
+paths = ['''(^|/)node_modules/''']

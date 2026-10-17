@@ -1,0 +1,1248 @@
+{
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "app-web",
+      "label": "web.example.test",
+      "type": "app",
+      "r": 24,
+      "color": "#6366f1",
+      "file": "packages/web",
+      "url": "https://web.example.test",
+      "upstreams": [
+        "web:3000"
+      ],
+      "stack": "app-stack",
+      "deployed": true,
+      "desc": "The shop: pages people browse and buy from."
+    },
+    {
+      "id": "app-api",
+      "label": "api.example.test",
+      "type": "app",
+      "r": 24,
+      "color": "#6366f1",
+      "file": "packages/api",
+      "url": "https://api.example.test",
+      "upstreams": [
+        "api:3245"
+      ],
+      "stack": "app-stack",
+      "deployed": true,
+      "desc": "The API: the one writer of every table."
+    },
+    {
+      "id": "app-cloud-example-test",
+      "label": "cloud.example.test",
+      "type": "app",
+      "r": 24,
+      "color": "#6366f1",
+      "url": "https://cloud.example.test",
+      "upstreams": [
+        "nextcloud:80"
+      ],
+      "stack": "app-stack",
+      "deployed": true,
+      "desc": "Nextcloud: files and calendars, run here."
+    },
+    {
+      "id": "app-ha-example-test",
+      "label": "ha.example.test",
+      "type": "app",
+      "r": 24,
+      "color": "#6366f1",
+      "url": "https://ha.example.test",
+      "upstreams": [
+        "homeassistant:8123"
+      ],
+      "stack": "app-stack",
+      "deployed": true,
+      "desc": "Home Assistant: the devices of the house, run here."
+    },
+    {
+      "id": "page-web-home",
+      "label": "/",
+      "type": "page",
+      "r": 18,
+      "color": "#38bdf8",
+      "file": "packages/web/src/index.js",
+      "desc": "The shop front: every product."
+    },
+    {
+      "id": "page-web-cart",
+      "label": "/cart",
+      "type": "page",
+      "r": 18,
+      "color": "#38bdf8",
+      "file": "packages/web/src/cart.js",
+      "desc": "The basket: change it, then pay."
+    },
+    {
+      "id": "page-api-orders",
+      "label": "/api/v1/orders",
+      "type": "page",
+      "r": 18,
+      "color": "#38bdf8",
+      "file": "packages/api/src/server.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "desc": "GET · POST /api/v1/orders"
+    },
+    {
+      "id": "page-api-geo",
+      "label": "/api/v1/geo/search",
+      "type": "page",
+      "r": 18,
+      "color": "#38bdf8",
+      "file": "packages/api/src/geo.js",
+      "methods": [
+        "GET"
+      ],
+      "desc": "GET /api/v1/geo/search: the address search."
+    },
+    {
+      "id": "page-api-webhooks-files",
+      "label": "/api/v1/webhooks/files",
+      "type": "page",
+      "r": 18,
+      "color": "#38bdf8",
+      "file": "packages/api/src/server.js",
+      "methods": [
+        "POST"
+      ],
+      "desc": "POST: Nextcloud says a file changed."
+    },
+    {
+      "id": "store-idb",
+      "label": "IndexedDB",
+      "type": "store",
+      "r": 20,
+      "color": "#fb923c",
+      "tier": "browser",
+      "desc": "The browser keeps changes here first, then sends them."
+    },
+    {
+      "id": "store-sqlite",
+      "label": "SQLite",
+      "type": "store",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "The one database file the API writes."
+    },
+    {
+      "id": "table-orders",
+      "label": "orders",
+      "type": "table",
+      "r": 18,
+      "color": "#fde047",
+      "table": "orders",
+      "desc": "The orders table."
+    },
+    {
+      "id": "table-products",
+      "label": "products",
+      "type": "table",
+      "r": 18,
+      "color": "#fde047",
+      "table": "products",
+      "desc": "The products table."
+    },
+    {
+      "id": "table-inbound-events",
+      "label": "inbound_events",
+      "type": "table",
+      "r": 18,
+      "color": "#fde047",
+      "table": "inbound_events",
+      "desc": "The inbound_events table."
+    },
+    {
+      "id": "svc-lib-geo",
+      "label": "geo.js",
+      "type": "service",
+      "r": 20,
+      "color": "#84cc16",
+      "kind": "client",
+      "file": "packages/api/src/geo.js",
+      "desc": "Asks Nominatim for an address."
+    },
+    {
+      "id": "svc-lib-push",
+      "label": "push",
+      "type": "service",
+      "r": 20,
+      "color": "#84cc16",
+      "kind": "client",
+      "desc": "Sends web push to phones."
+    },
+    {
+      "id": "svc-job-digest",
+      "label": "digest",
+      "type": "service",
+      "r": 20,
+      "color": "#84cc16",
+      "kind": "job",
+      "jobs": [
+        {
+          "name": "digest",
+          "cron": "0 7 * * *"
+        }
+      ],
+      "desc": "Every morning: what is due today, as a push."
+    },
+    {
+      "id": "stack-app-stack",
+      "label": "app-stack",
+      "type": "stack",
+      "r": 22,
+      "color": "#a8a29e",
+      "file": "stacks/app-stack/compose.yml",
+      "services": [
+        {
+          "name": "web",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        },
+        {
+          "name": "api",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        },
+        {
+          "name": "nextcloud",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        },
+        {
+          "name": "homeassistant",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        },
+        {
+          "name": "caddy",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        },
+        {
+          "name": "cloudflared",
+          "image": null,
+          "ports": [],
+          "volumes": []
+        }
+      ],
+      "desc": "The one compose stack."
+    },
+    {
+      "id": "container-web",
+      "label": "web",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "web",
+      "image": "node:22-alpine",
+      "ports": []
+    },
+    {
+      "id": "container-api",
+      "label": "api",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "api",
+      "ports": []
+    },
+    {
+      "id": "container-nextcloud",
+      "label": "nextcloud",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "nextcloud",
+      "image": "nextcloud:29",
+      "ports": [],
+      "selfHosted": true,
+      "summary": "Files and calendars"
+    },
+    {
+      "id": "container-homeassistant",
+      "label": "homeassistant",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "homeassistant",
+      "image": "ghcr.io/home-assistant/home-assistant:stable",
+      "ports": [],
+      "selfHosted": true,
+      "summary": "The house's devices"
+    },
+    {
+      "id": "container-caddy",
+      "label": "caddy",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "caddy",
+      "image": "caddy:2",
+      "ports": []
+    },
+    {
+      "id": "container-cloudflared",
+      "label": "cloudflared",
+      "type": "container",
+      "r": 12,
+      "color": "#d6d3d1",
+      "file": "stacks/app-stack/compose.yml",
+      "stack": "app-stack",
+      "service": "cloudflared",
+      "image": "cloudflare/cloudflared:latest",
+      "ports": []
+    },
+    {
+      "id": "machine-server-1",
+      "label": "server-1",
+      "type": "machine",
+      "r": 26,
+      "color": "#78716c",
+      "file": "stacks/world.json",
+      "hostname": "server-1",
+      "desc": "The server in the basement."
+    },
+    {
+      "id": "machine-engine-1",
+      "label": "engine-1",
+      "type": "machine",
+      "r": 26,
+      "color": "#78716c",
+      "file": "stacks/world.json",
+      "hostname": "engine-1",
+      "virtual": true,
+      "desc": "The container engine, a virtual machine on server-1."
+    },
+    {
+      "id": "device-camera-porch_cam",
+      "label": "Camera porch_cam",
+      "type": "device",
+      "r": 14,
+      "color": "#2dd4bf",
+      "kind": "camera",
+      "file": "stacks/app-stack/compose.yml",
+      "camera": "porch_cam",
+      "desc": "The porch camera."
+    },
+    {
+      "id": "root",
+      "label": "acme-home",
+      "type": "root",
+      "file": "package.json",
+      "r": 28,
+      "color": "#f59e0b",
+      "desc": "acme-home: the repo."
+    },
+    {
+      "id": "pkg-api",
+      "label": "@acme/api",
+      "type": "pkg",
+      "file": "packages/api",
+      "summary": "The API: orders and the address search",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The API: orders and the address search (packages/api)."
+    },
+    {
+      "id": "pkg-shared",
+      "label": "@acme/shared",
+      "type": "pkg",
+      "file": "packages/shared",
+      "summary": "Formats and checks both sides share",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "Formats and checks both sides share (packages/shared)."
+    },
+    {
+      "id": "pkg-web",
+      "label": "@acme/web",
+      "type": "pkg",
+      "file": "packages/web",
+      "summary": "The shop's pages",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The shop's pages (packages/web)."
+    },
+    {
+      "id": "store-personas",
+      "label": "Personas file",
+      "type": "store",
+      "file": "topology.personas.json",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "Personas file (topology.personas.json)."
+    },
+    {
+      "id": "persona-admin",
+      "label": "Admin",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Admin: role admin, any groups. Runs the server and the accounts.",
+      "role": "admin",
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-adult",
+      "label": "Adult",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Adult: role adult, in the family group. A parent or another grown-up of the household.",
+      "role": "adult",
+      "groups": [
+        "family"
+      ],
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-child",
+      "label": "Child",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Child: role child, in the family group. A child of the household.",
+      "role": "child",
+      "groups": [
+        "family"
+      ],
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-contributor",
+      "label": "Outside contributor",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Outside contributor: role adult, in none of the family group. An account outside the household: a friend who helps with the code.",
+      "role": "adult",
+      "groups": [],
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-guest",
+      "label": "Guest (no account)",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Guest (no account): no account. Someone with no account, scanning a QR sticker.",
+      "account": false,
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "tool-ci",
+      "label": "CI workflows",
+      "type": "tool",
+      "file": ".github/workflows",
+      "r": 19,
+      "color": "#f43f5e",
+      "desc": "CI workflows (.github/workflows)."
+    },
+    {
+      "id": "store-cloud",
+      "label": "Cloud file",
+      "type": "store",
+      "file": "topology.cloud.json",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "Cloud file (topology.cloud.json)."
+    },
+    {
+      "id": "ext-cloudflare",
+      "label": "Cloudflare",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "DNS for example.test, the DNS-01 challenge behind every certificate, the public resolvers, and the tunnel.",
+      "roles": [
+        "runtime",
+        "account"
+      ],
+      "breaks": "Now: the tunnel goes dark; once cached answers expire, no *.example.test name resolves. At the next renewal: no certificate is issued.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-letsencrypt",
+      "label": "Let's Encrypt",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "Caddy's default ACME certificate authority.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "At renewal: no new certificates; the current ones last up to 90 days.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-docker-hub",
+      "label": "Docker Hub",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "Where most images come from.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "At the next deploy: a new tag or a fresh machine cannot pull.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-ghcr",
+      "label": "GitHub Container Registry",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "ghcr.io: the Home Assistant image.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "At the next deploy: no new versions.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-npm",
+      "label": "npm registry",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "npm ci in the API image and in CI.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "A dependency change cannot deploy; CI fails.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-github",
+      "label": "GitHub",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The actions CI uses.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "CI cannot start, so nothing merges.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-google-fonts",
+      "label": "Google Fonts",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The shop's web font, fetched by the visitor's browser.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "System fonts instead.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-nominatim",
+      "label": "Nominatim",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "OpenStreetMap's address search, behind the API's geo search.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "Address search fails.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-push-service",
+      "label": "Web Push",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The browsers' push services, which carry reminders to phones.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "Reminders do not reach phones.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-tailscale",
+      "label": "Tailscale",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The tailnet every machine and phone joins.",
+      "roles": [
+        "runtime",
+        "account"
+      ],
+      "breaks": "Now: phones away from home cannot reach the tailnet-only sites.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-isp",
+      "label": "Internet provider",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The house's internet connection.",
+      "roles": [
+        "account"
+      ],
+      "breaks": "Everything outside at once; the LAN keeps working.",
+      "plan": {
+        "tier": "paid"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-registrar",
+      "label": "Domain registrar",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "Where example.test is registered; its nameservers point at Cloudflare.",
+      "roles": [
+        "account"
+      ],
+      "breaks": "At renewal: a lapsed registration takes every name down.",
+      "plan": {
+        "tier": "paid"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-email-relay",
+      "label": "Email relay",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "An SMTP relay, not set up yet.",
+      "roles": [
+        "account"
+      ],
+      "breaks": "Nothing today.",
+      "plan": {
+        "tier": "off",
+        "note": "none today; one may be added later"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-public-web",
+      "label": "Public web",
+      "type": "external",
+      "kind": "web",
+      "file": "topology.cloud.json",
+      "desc": "Any public page a person points the API at.",
+      "breaks": "One page down: that one import fails and is retried.",
+      "r": 21,
+      "color": "#94a3b8"
+    }
+  ],
+  "edges": [
+    {
+      "from": "root",
+      "to": "app-web"
+    },
+    {
+      "from": "root",
+      "to": "app-api"
+    },
+    {
+      "from": "root",
+      "to": "app-cloud-example-test"
+    },
+    {
+      "from": "root",
+      "to": "app-ha-example-test"
+    },
+    {
+      "from": "app-web",
+      "to": "page-web-home"
+    },
+    {
+      "from": "app-web",
+      "to": "page-web-cart"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-orders"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-geo"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-webhooks-files"
+    },
+    {
+      "from": "root",
+      "to": "store-idb"
+    },
+    {
+      "from": "root",
+      "to": "store-sqlite"
+    },
+    {
+      "from": "store-sqlite",
+      "to": "table-orders"
+    },
+    {
+      "from": "store-sqlite",
+      "to": "table-products"
+    },
+    {
+      "from": "store-sqlite",
+      "to": "table-inbound-events"
+    },
+    {
+      "from": "app-api",
+      "to": "svc-lib-geo"
+    },
+    {
+      "from": "app-api",
+      "to": "svc-lib-push"
+    },
+    {
+      "from": "app-api",
+      "to": "svc-job-digest"
+    },
+    {
+      "from": "root",
+      "to": "stack-app-stack"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-web"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-api"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-nextcloud"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-homeassistant"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-caddy"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "container-cloudflared"
+    },
+    {
+      "from": "root",
+      "to": "machine-server-1"
+    },
+    {
+      "from": "root",
+      "to": "machine-engine-1"
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "device-camera-porch_cam"
+    },
+    {
+      "from": "store-idb",
+      "to": "app-api",
+      "kind": "flow",
+      "flow": "outbox",
+      "status": "live",
+      "label": "the outbox sends saved changes"
+    },
+    {
+      "from": "app-web",
+      "to": "app-api",
+      "kind": "flow",
+      "flow": "api",
+      "status": "live",
+      "label": "the pages call the API"
+    },
+    {
+      "from": "table-products",
+      "to": "page-web-home",
+      "kind": "reads",
+      "status": "live",
+      "keys": [
+        "products/*"
+      ],
+      "label": "renders products rows"
+    },
+    {
+      "from": "page-web-cart",
+      "to": "table-orders",
+      "kind": "writes",
+      "status": "live",
+      "label": "orders.add"
+    },
+    {
+      "from": "table-orders",
+      "to": "page-api-orders",
+      "kind": "reads",
+      "status": "live",
+      "keys": [
+        "orders/*"
+      ],
+      "label": "route handler read"
+    },
+    {
+      "from": "page-api-orders",
+      "to": "table-orders",
+      "kind": "writes",
+      "status": "live",
+      "label": "route handler write"
+    },
+    {
+      "from": "page-api-webhooks-files",
+      "to": "table-inbound-events",
+      "kind": "writes",
+      "status": "live",
+      "label": "queues the delivery"
+    },
+    {
+      "from": "page-api-geo",
+      "to": "svc-lib-geo",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
+      "from": "svc-job-digest",
+      "to": "svc-lib-push",
+      "kind": "calls",
+      "status": "live",
+      "label": "sends the digest"
+    },
+    {
+      "from": "svc-job-digest",
+      "to": "container-homeassistant",
+      "kind": "calls",
+      "status": "live",
+      "label": "says it on the speakers"
+    },
+    {
+      "from": "table-orders",
+      "to": "svc-job-digest",
+      "kind": "reads",
+      "status": "live",
+      "keys": [
+        "orders/*"
+      ],
+      "label": "what is due"
+    },
+    {
+      "from": "page-api-orders",
+      "to": "container-nextcloud",
+      "kind": "calls",
+      "status": "live",
+      "label": "files the receipt"
+    },
+    {
+      "from": "container-nextcloud",
+      "to": "page-api-webhooks-files",
+      "kind": "delivers",
+      "status": "live",
+      "label": "a file changed"
+    },
+    {
+      "from": "device-camera-porch_cam",
+      "to": "container-homeassistant",
+      "kind": "delivers",
+      "label": "its stream"
+    },
+    {
+      "from": "app-web",
+      "to": "stack-app-stack",
+      "kind": "runs-on",
+      "label": "serves web.example.test",
+      "mappings": [
+        {
+          "host": "web.example.test",
+          "upstream": "web:3000",
+          "service": "web"
+        }
+      ]
+    },
+    {
+      "from": "app-api",
+      "to": "stack-app-stack",
+      "kind": "runs-on",
+      "label": "serves api.example.test",
+      "mappings": [
+        {
+          "host": "api.example.test",
+          "upstream": "api:3245",
+          "service": "api"
+        }
+      ]
+    },
+    {
+      "from": "app-cloud-example-test",
+      "to": "stack-app-stack",
+      "kind": "runs-on",
+      "label": "serves cloud.example.test",
+      "mappings": [
+        {
+          "host": "cloud.example.test",
+          "upstream": "nextcloud:80",
+          "service": "nextcloud"
+        }
+      ]
+    },
+    {
+      "from": "app-ha-example-test",
+      "to": "stack-app-stack",
+      "kind": "runs-on",
+      "label": "serves ha.example.test",
+      "mappings": [
+        {
+          "host": "ha.example.test",
+          "upstream": "homeassistant:8123",
+          "service": "homeassistant"
+        }
+      ]
+    },
+    {
+      "from": "stack-app-stack",
+      "to": "machine-engine-1",
+      "kind": "runs-on",
+      "label": "runs on the engine"
+    },
+    {
+      "from": "machine-engine-1",
+      "to": "machine-server-1",
+      "kind": "runs-on",
+      "label": "a virtual machine on server-1"
+    },
+    {
+      "from": "root",
+      "to": "pkg-api"
+    },
+    {
+      "from": "root",
+      "to": "pkg-shared"
+    },
+    {
+      "from": "root",
+      "to": "pkg-web"
+    },
+    {
+      "from": "pkg-api",
+      "to": "pkg-shared",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-web",
+      "to": "pkg-shared",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "store-personas"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-admin"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-adult"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-child"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-contributor"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-guest"
+    },
+    {
+      "from": "root",
+      "to": "tool-ci"
+    },
+    {
+      "from": "root",
+      "to": "store-cloud"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-cloudflare"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-letsencrypt"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-docker-hub"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-ghcr"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-npm"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-github"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-google-fonts"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-nominatim"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-push-service"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-tailscale"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-isp"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-registrar"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-email-relay"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-public-web"
+    },
+    {
+      "from": "page-api-geo",
+      "to": "ext-nominatim",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
+      "from": "page-web-home",
+      "to": "ext-google-fonts",
+      "kind": "calls",
+      "status": "live",
+      "label": "browser: link tag"
+    },
+    {
+      "from": "pkg-api",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "builds FROM node",
+      "when": "deploy"
+    },
+    {
+      "from": "pkg-api",
+      "to": "ext-npm",
+      "kind": "calls",
+      "status": "live",
+      "label": "npm ci",
+      "when": "deploy"
+    },
+    {
+      "from": "container-web",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "pulls node",
+      "when": "deploy"
+    },
+    {
+      "from": "container-nextcloud",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "pulls nextcloud",
+      "when": "deploy"
+    },
+    {
+      "from": "container-homeassistant",
+      "to": "ext-ghcr",
+      "kind": "calls",
+      "status": "live",
+      "label": "pulls ghcr.io/home-assistant/home-assistant",
+      "when": "deploy"
+    },
+    {
+      "from": "container-caddy",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "pulls caddy",
+      "when": "deploy"
+    },
+    {
+      "from": "container-cloudflared",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "pulls cloudflare/cloudflared",
+      "when": "deploy"
+    },
+    {
+      "from": "container-cloudflared",
+      "to": "ext-cloudflare",
+      "kind": "calls",
+      "status": "live",
+      "label": "runs cloudflare/cloudflared"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "uses actions/checkout · uses actions/setup-node",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-npm",
+      "kind": "calls",
+      "status": "live",
+      "label": "ci.yml: npm ci",
+      "when": "deploy"
+    },
+    {
+      "from": "container-caddy",
+      "to": "ext-cloudflare",
+      "kind": "calls",
+      "status": "live",
+      "label": "DNS-01 challenges for 3 sites · public resolvers for the DNS-01 check",
+      "when": "renew"
+    },
+    {
+      "from": "container-caddy",
+      "to": "ext-letsencrypt",
+      "kind": "calls",
+      "status": "live",
+      "label": "ACME certificates for 3 https sites",
+      "when": "renew"
+    },
+    {
+      "from": "machine-server-1",
+      "to": "ext-cloudflare",
+      "kind": "calls",
+      "status": "live",
+      "label": "resolves *.example.test"
+    },
+    {
+      "from": "svc-lib-push",
+      "to": "ext-push-service",
+      "kind": "calls",
+      "status": "live",
+      "label": "sends web push"
+    },
+    {
+      "from": "machine-server-1",
+      "to": "ext-tailscale",
+      "kind": "calls",
+      "status": "live",
+      "label": "joins the tailnet"
+    },
+    {
+      "from": "machine-server-1",
+      "to": "ext-isp",
+      "kind": "calls",
+      "status": "live",
+      "label": "its connection"
+    },
+    {
+      "from": "ext-cloudflare",
+      "to": "ext-registrar",
+      "kind": "calls",
+      "status": "live",
+      "label": "the zone is delegated to it",
+      "when": "renew"
+    }
+  ],
+  "updatedAt": "2026-10-17T08:44:34.675Z"
+}

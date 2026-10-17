@@ -1,0 +1,9 @@
+{
+  "name": "acme-home",
+  "private": true,
+  "type": "module",
+  "description": "A sample self-hosted repo for cornfield's tests: three packages, one stack on one machine, a few cloud services.",
+  "workspaces": [
+    "packages/*"
+  ]
+}

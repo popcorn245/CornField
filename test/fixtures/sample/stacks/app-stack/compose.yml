@@ -1,0 +1,13 @@
+services:
+  web:
+    image: node:22-alpine
+  api:
+    build: ../../packages/api
+  nextcloud:
+    image: nextcloud:29
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+  caddy:
+    image: caddy:2
+  cloudflared:
+    image: cloudflare/cloudflared:latest

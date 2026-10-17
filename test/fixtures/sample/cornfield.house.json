@@ -1,0 +1,190 @@
+{
+  "house": {
+    "viewBox": {
+      "width": 800,
+      "height": 600
+    },
+    "floors": [
+      {
+        "id": "basement",
+        "name": "Basement",
+        "level": -1
+      },
+      {
+        "id": "main",
+        "name": "Main Floor",
+        "level": 0
+      }
+    ],
+    "rooms": [
+      {
+        "id": "basement",
+        "floor_id": "basement",
+        "name": "Basement",
+        "group": null,
+        "x": 40,
+        "y": 40,
+        "w": 500,
+        "h": 400
+      },
+      {
+        "id": "kitchen",
+        "floor_id": "main",
+        "name": "Kitchen",
+        "group": null,
+        "x": 510,
+        "y": 190,
+        "w": 137,
+        "h": 110
+      },
+      {
+        "id": "office",
+        "floor_id": "main",
+        "name": "Office",
+        "group": null,
+        "x": null,
+        "y": null,
+        "w": null,
+        "h": null
+      }
+    ]
+  },
+  "accounts": [
+    {
+      "role": "admin",
+      "groups": [
+        "family"
+      ],
+      "count": 1
+    },
+    {
+      "role": "adult",
+      "groups": [
+        "family"
+      ],
+      "count": 2
+    },
+    {
+      "role": "child",
+      "groups": [],
+      "count": 3
+    },
+    {
+      "role": "child",
+      "groups": [
+        "family"
+      ],
+      "count": 1
+    }
+  ],
+  "phones": [
+    {
+      "id": "sub-1",
+      "platform": "apple",
+      "role": "adult",
+      "groups": [
+        "family"
+      ]
+    },
+    {
+      "id": "sub-2",
+      "platform": "google",
+      "role": "child",
+      "groups": []
+    }
+  ],
+  "nfc_tags": [
+    {
+      "id": "tag-1",
+      "room_id": "kitchen",
+      "needs_rewrite": false
+    },
+    {
+      "id": "tag-2",
+      "room_id": null,
+      "needs_rewrite": true
+    }
+  ],
+  "hardware": [
+    {
+      "kind": "machine",
+      "link": "server-1",
+      "item": {
+        "id": "inv-server",
+        "name": "The server",
+        "room_id": "basement",
+        "image": "/api/v1/files/f-1"
+      },
+      "contents": [
+        {
+          "id": "inv-gpu",
+          "name": "Graphics card",
+          "depth": 1,
+          "quantity": 1
+        },
+        {
+          "id": "inv-fan",
+          "name": "Fan",
+          "depth": 2,
+          "quantity": 2
+        }
+      ],
+      "contents_total": 5,
+      "sets": [
+        {
+          "id": "set-1",
+          "name": "Server rack",
+          "kind": "rig"
+        }
+      ]
+    },
+    {
+      "kind": "camera",
+      "link": "porch_cam",
+      "item": {
+        "id": "inv-cam",
+        "name": "Porch camera",
+        "room_id": "kitchen",
+        "image": null
+      },
+      "contents": [],
+      "contents_total": 0,
+      "sets": []
+    }
+  ],
+  "unlinked": {
+    "hosts": [
+      "workstation-1"
+    ],
+    "cameras": [],
+    "note": null
+  },
+  "home_assistant": {
+    "status": "ok",
+    "note": null,
+    "devices": [
+      {
+        "id": "ha-1",
+        "name": "Kitchen light",
+        "room_id": "kitchen",
+        "area": "Kitchen",
+        "entities": 6,
+        "manufacturer": "IKEA",
+        "model": "TRADFRI bulb"
+      },
+      {
+        "id": "ha-2",
+        "name": "Shed sensor",
+        "room_id": null,
+        "area": "Shed",
+        "entities": 1,
+        "manufacturer": null,
+        "model": null
+      }
+    ],
+    "unmatched_areas": [
+      "Shed"
+    ]
+  },
+  "version": 1
+}

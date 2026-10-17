@@ -1,0 +1,29 @@
+# cornfield as an always-on service: copy this next to your repo's checkout and adjust the paths.
+#
+# Stage 1 (now): there is no sign-in yet, so cornfield only listens on 127.0.0.1. Host networking makes that
+# the host's own loopback: open http://127.0.0.1:3350 on the machine, or tunnel to it
+# (ssh -L 3350:127.0.0.1:3350 you@the-machine). Do not put a reverse proxy in front of it until v1's forge
+# sign-in lands: anyone who can reach it would see everything it shows.
+#
+# v1: forge sign-in (GitHub or Forgejo OAuth, admins only, enforced on the server) lifts the loopback rule,
+# and this file gains the ports and the public URL.
+services:
+  cornfield:
+    image: ghcr.io/popcorn245/cornfield:latest
+    # build: .            # or build it from a checkout of cornfield
+    container_name: cornfield
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - CORNFIELD_PORT=3350
+      # - CORNFIELD_PUBLIC_URL=https://cornfield.example.org   # v1, with sign-in
+    volumes:
+      # The repo to map, read-only: cornfield reads the code, topology.json and the proposals
+      - ../my-repo:/repo:ro
+      # Unpushed proposals in git worktrees are listed too when the config's `worktrees` folder is inside the mount
+      # cornfield's own state: reviews now, the SQLite file in v1
+      - cornfield-data:/data
+    mem_limit: 512m
+
+volumes:
+  cornfield-data:

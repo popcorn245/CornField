@@ -1,0 +1,7 @@
+web.example.test, api.example.test, cloud.example.test {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+	reverse_proxy web:3000
+}

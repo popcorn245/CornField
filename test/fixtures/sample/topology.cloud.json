@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "cloudflare",
+      "label": "Cloudflare",
+      "roles": [
+        "runtime",
+        "account"
+      ],
+      "desc": "DNS for example.test, the DNS-01 challenge behind every certificate, the public resolvers, and the tunnel.",
+      "breaks": "Now: the tunnel goes dark; once cached answers expire, no *.example.test name resolves. At the next renewal: no certificate is issued.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "caddy": [
+          "dns cloudflare"
+        ],
+        "images": [
+          "cloudflare/cloudflared"
+        ],
+        "env": [
+          "CF_API_TOKEN",
+          "TUNNEL_TOKEN"
+        ],
+        "hosts": [
+          "1.1.1.1"
+        ]
+      },
+      "uses": [
+        {
+          "from": "machine-server-1",
+          "label": "resolves *.example.test",
+          "why": "Name resolution is not in any file: the zone lives in Cloudflare"
+        }
+      ]
+    },
+    {
+      "id": "letsencrypt",
+      "label": "Let's Encrypt",
+      "roles": [
+        "runtime"
+      ],
+      "desc": "Caddy's default ACME certificate authority.",
+      "breaks": "At renewal: no new certificates; the current ones last up to 90 days.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "caddy": [
+          "acme"
+        ]
+      }
+    },
+    {
+      "id": "docker-hub",
+      "label": "Docker Hub",
+      "roles": [
+        "software"
+      ],
+      "desc": "Where most images come from.",
+      "breaks": "At the next deploy: a new tag or a fresh machine cannot pull.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "registries": [
+          "docker.io/"
+        ]
+      }
+    },
+    {
+      "id": "ghcr",
+      "label": "GitHub Container Registry",
+      "roles": [
+        "software"
+      ],
+      "desc": "ghcr.io: the Home Assistant image.",
+      "breaks": "At the next deploy: no new versions.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "registries": [
+          "ghcr.io/"
+        ]
+      }
+    },
+    {
+      "id": "npm",
+      "label": "npm registry",
+      "roles": [
+        "software"
+      ],
+      "desc": "npm ci in the API image and in CI.",
+      "breaks": "A dependency change cannot deploy; CI fails.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "packages": [
+          "npm"
+        ]
+      }
+    },
+    {
+      "id": "github",
+      "label": "GitHub",
+      "roles": [
+        "software"
+      ],
+      "desc": "The actions CI uses.",
+      "breaks": "CI cannot start, so nothing merges.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "actions": [
+          "actions/"
+        ]
+      }
+    },
+    {
+      "id": "google-fonts",
+      "label": "Google Fonts",
+      "roles": [
+        "runtime"
+      ],
+      "desc": "The shop's web font, fetched by the visitor's browser.",
+      "breaks": "System fonts instead.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "hosts": [
+          "fonts.googleapis.com",
+          "fonts.gstatic.com"
+        ]
+      }
+    },
+    {
+      "id": "nominatim",
+      "label": "Nominatim",
+      "roles": [
+        "runtime"
+      ],
+      "desc": "OpenStreetMap's address search, behind the API's geo search.",
+      "breaks": "Address search fails.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "hosts": [
+          "nominatim.openstreetmap.org"
+        ]
+      }
+    },
+    {
+      "id": "push-service",
+      "label": "Web Push",
+      "roles": [
+        "runtime"
+      ],
+      "desc": "The browsers' push services, which carry reminders to phones.",
+      "breaks": "Reminders do not reach phones.",
+      "plan": {
+        "tier": "free"
+      },
+      "uses": [
+        {
+          "from": "svc-lib-push",
+          "label": "sends web push",
+          "why": "Each push endpoint comes from a subscription at run time, not from a file"
+        }
+      ]
+    },
+    {
+      "id": "tailscale",
+      "label": "Tailscale",
+      "roles": [
+        "runtime",
+        "account"
+      ],
+      "desc": "The tailnet every machine and phone joins.",
+      "breaks": "Now: phones away from home cannot reach the tailnet-only sites.",
+      "plan": {
+        "tier": "free"
+      },
+      "match": {
+        "hosts": [
+          "api.tailscale.com"
+        ]
+      },
+      "uses": [
+        {
+          "from": "machine-server-1",
+          "label": "joins the tailnet",
+          "why": "The tailnet is set up on the machine, not in a file of this repo"
+        }
+      ]
+    },
+    {
+      "id": "isp",
+      "label": "Internet provider",
+      "roles": [
+        "account"
+      ],
+      "desc": "The house's internet connection.",
+      "breaks": "Everything outside at once; the LAN keeps working.",
+      "plan": {
+        "tier": "paid"
+      },
+      "uses": [
+        {
+          "from": "machine-server-1",
+          "label": "its connection",
+          "why": "An account, not code"
+        }
+      ]
+    },
+    {
+      "id": "registrar",
+      "label": "Domain registrar",
+      "roles": [
+        "account"
+      ],
+      "desc": "Where example.test is registered; its nameservers point at Cloudflare.",
+      "breaks": "At renewal: a lapsed registration takes every name down.",
+      "plan": {
+        "tier": "paid"
+      },
+      "uses": [
+        {
+          "from": "ext-cloudflare",
+          "label": "the zone is delegated to it",
+          "when": "renew",
+          "why": "Registration is an account, not code"
+        }
+      ]
+    },
+    {
+      "id": "email-relay",
+      "label": "Email relay",
+      "roles": [
+        "account"
+      ],
+      "desc": "An SMTP relay, not set up yet.",
+      "breaks": "Nothing today.",
+      "plan": {
+        "tier": "off",
+        "note": "none today; one may be added later"
+      }
+    }
+  ],
+  "web": {
+    "label": "Public web",
+    "desc": "Any public page a person points the API at.",
+    "breaks": "One page down: that one import fails and is retried."
+  },
+  "links": [
+    {
+      "host": "www.openstreetmap.org",
+      "why": "A link a person follows from the shop; never fetched"
+    }
+  ]
+}

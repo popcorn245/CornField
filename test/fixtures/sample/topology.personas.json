@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "personas": [
+    {
+      "id": "admin",
+      "label": "Admin",
+      "role": "admin",
+      "desc": "Runs the server and the accounts"
+    },
+    {
+      "id": "adult",
+      "label": "Adult",
+      "role": "adult",
+      "groups": [
+        "family"
+      ],
+      "desc": "A parent or another grown-up of the household"
+    },
+    {
+      "id": "child",
+      "label": "Child",
+      "role": "child",
+      "groups": [
+        "family"
+      ],
+      "desc": "A child of the household"
+    },
+    {
+      "id": "contributor",
+      "label": "Outside contributor",
+      "role": "adult",
+      "groups": [],
+      "desc": "An account outside the household: a friend who helps with the code"
+    },
+    {
+      "id": "guest",
+      "label": "Guest (no account)",
+      "account": false,
+      "desc": "Someone with no account, scanning a QR sticker"
+    }
+  ]
+}

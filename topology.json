@@ -1,0 +1,2277 @@
+{
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "root",
+      "label": "cornfield",
+      "type": "root",
+      "file": "package.json",
+      "r": 28,
+      "color": "#f59e0b",
+      "desc": "cornfield: the repo."
+    },
+    {
+      "id": "pkg-cli",
+      "label": "cli",
+      "type": "pkg",
+      "file": "cli",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The cli workspace package (cli)."
+    },
+    {
+      "id": "pkg-core",
+      "label": "core",
+      "type": "pkg",
+      "file": "core",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The core workspace package (core)."
+    },
+    {
+      "id": "pkg-explorer",
+      "label": "explorer",
+      "type": "pkg",
+      "file": "explorer",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The explorer workspace package (explorer)."
+    },
+    {
+      "id": "pkg-cloud",
+      "label": "plugins/cloud",
+      "type": "pkg",
+      "file": "plugins/cloud",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/cloud workspace package (plugins/cloud)."
+    },
+    {
+      "id": "pkg-house",
+      "label": "plugins/house",
+      "type": "pkg",
+      "file": "plugins/house",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/house workspace package (plugins/house)."
+    },
+    {
+      "id": "pkg-personas",
+      "label": "plugins/personas",
+      "type": "pkg",
+      "file": "plugins/personas",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/personas workspace package (plugins/personas)."
+    },
+    {
+      "id": "pkg-starter",
+      "label": "plugins/starter",
+      "type": "pkg",
+      "file": "plugins/starter",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/starter workspace package (plugins/starter)."
+    },
+    {
+      "id": "pkg-server",
+      "label": "server",
+      "type": "pkg",
+      "file": "server",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The server workspace package (server)."
+    },
+    {
+      "id": "core-cli-cornfield",
+      "label": "cornfield.js",
+      "type": "core",
+      "file": "cli/cornfield.js",
+      "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der… (cli/cornfield.js)"
+    },
+    {
+      "id": "core-cli-release-guard",
+      "label": "release-guard.js",
+      "type": "core",
+      "file": "cli/release-guard.js",
+      "summary": "`prepublishOnly`: stops an `npm publish` that is not the release workflow's.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "`prepublishOnly`: stops an `npm publish` that is not the release workflow's. (cli/release-guard.js)"
+    },
+    {
+      "id": "core-core-cloud",
+      "label": "cloud.js",
+      "type": "core",
+      "file": "core/cloud.js",
+      "summary": "The cloud on the map (spec 0031 section 5, CLOUD-02): the services outside the house that we do not control, described in a committed registry (`topology.cloud.json`) and validated like the persona…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The cloud on the map (spec 0031 section 5, CLOUD-02): the services outside the house that we do not control, described in a committed registry (`topology.cloud.json`) and validated like the persona… (core/cloud.js)"
+    },
+    {
+      "id": "core-core-config",
+      "label": "config.js",
+      "type": "core",
+      "file": "core/config.js",
+      "summary": "cornfield.config.js: what a repo tells cornfield.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "cornfield.config.js: what a repo tells cornfield. (core/config.js)"
+    },
+    {
+      "id": "core-core-derive",
+      "label": "derive.js",
+      "type": "core",
+      "file": "core/derive.js",
+      "summary": "Running the derivers: the plugins that read a repo's code and say which nodes and edges the map must hold.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Running the derivers: the plugins that read a repo's code and say which nodes and edges the map must hold. (core/derive.js)"
+    },
+    {
+      "id": "core-core-fixture",
+      "label": "fixture.js",
+      "type": "core",
+      "file": "core/fixture.js",
+      "summary": "A synthetic topology to measure the explorer on (TOPO-01, spec 0012 A6).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A synthetic topology to measure the explorer on (TOPO-01, spec 0012 A6). (core/fixture.js)"
+    },
+    {
+      "id": "core-core-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "core/index.js",
+      "summary": "What a repo's own deriver or source can import from cornfield: the schema, the proposal format, the personas and cloud formats, the deriver contract, sync and validate.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a repo's own deriver or source can import from cornfield: the schema, the proposal format, the personas and cloud formats, the deriver contract, sync and validate. (core/index.js)"
+    },
+    {
+      "id": "core-core-personas",
+      "label": "personas.js",
+      "type": "core",
+      "file": "core/personas.js",
+      "summary": "Personas on the map (spec 0029 section 2, PHY-02): archetypes a scenario can act as, kept in a committed file (`topology.personas.json`) and validated like a proposal.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Personas on the map (spec 0029 section 2, PHY-02): archetypes a scenario can act as, kept in a committed file (`topology.personas.json`) and validated like a proposal. (core/personas.js)"
+    },
+    {
+      "id": "core-core-proposal",
+      "label": "proposal.js",
+      "type": "core",
+      "file": "core/proposal.js",
+      "summary": "A proposal is the one place unbuilt architecture is written down (spec 0012 B1): a JSON file beside the spec that says which nodes and edges a change would add, change and remove, and the scenarios…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A proposal is the one place unbuilt architecture is written down (spec 0012 B1): a JSON file beside the spec that says which nodes and edges a change would add, change and remove, and the scenarios… (core/proposal.js)"
+    },
+    {
+      "id": "core-core-repo",
+      "label": "repo.js",
+      "type": "core",
+      "file": "core/repo.js",
+      "summary": "Reading a target repo: the small set of readers every deriver and check is handed, rooted at one folder.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Reading a target repo: the small set of readers every deriver and check is handed, rooted at one folder. (core/repo.js)"
+    },
+    {
+      "id": "core-core-routes",
+      "label": "routes.js",
+      "type": "core",
+      "file": "core/routes.js",
+      "summary": "The routes cornfield answers under /proposals (spec 0012 B2, B5), written down once as data so the map can be derived from them (core/routes.js instead of being typed in by hand.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes cornfield answers under /proposals (spec 0012 B2, B5), written down once as data so the map can be derived from them (core/routes.js instead of being typed in by hand. (core/routes.js)"
+    },
+    {
+      "id": "core-core-schema",
+      "label": "schema.js",
+      "type": "core",
+      "file": "core/schema.js",
+      "summary": "What a `topology.json` node and edge may be: the node types with their colour and radius, and the edge kinds, the physical world's rules (spec 0029: live types and ids, which ends an edge kind may …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a `topology.json` node and edge may be: the node types with their colour and radius, and the edge kinds, the physical world's rules (spec 0029: live types and ids, which ends an edge kind may … (core/schema.js)"
+    },
+    {
+      "id": "core-core-sync",
+      "label": "sync.js",
+      "type": "core",
+      "file": "core/sync.js",
+      "summary": "Keeping `topology.json` true to the code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Keeping `topology.json` true to the code. (core/sync.js)"
+    },
+    {
+      "id": "core-core-text",
+      "label": "text.js",
+      "type": "core",
+      "file": "core/text.js",
+      "summary": "The one HTML escaper.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one HTML escaper. (core/text.js)"
+    },
+    {
+      "id": "core-core-validate",
+      "label": "validate.js",
+      "type": "core",
+      "file": "core/validate.js",
+      "summary": "What `cornfield validate` checks: - `validateTopology(topology)`: the schema, pure.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What `cornfield validate` checks: - `validateTopology(topology)`: the schema, pure. (core/validate.js)"
+    },
+    {
+      "id": "core-explorer-bench",
+      "label": "bench.js",
+      "type": "core",
+      "file": "explorer/bench.js",
+      "summary": "The explorer's own stopwatch (TOPO-01, spec 0012 A6).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The explorer's own stopwatch (TOPO-01, spec 0012 A6). (explorer/bench.js)"
+    },
+    {
+      "id": "core-explorer-camera",
+      "label": "camera.js",
+      "type": "core",
+      "file": "explorer/camera.js",
+      "summary": "The camera maths input.js uses, as pure functions on `{ x, y, zoom }` (screen px of the world origin, and the scale): `screen = camera.xy + world * zoom`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The camera maths input.js uses, as pure functions on `{ x, y, zoom }` (screen px of the world origin, and the scale): `screen = camera.xy + world * zoom`. (explorer/camera.js)"
+    },
+    {
+      "id": "core-explorer-check-model",
+      "label": "check-model.js",
+      "type": "core",
+      "file": "explorer/check-model.js",
+      "summary": "Checked scenarios, the pure half (spec 0029 sections 3, 5 and 9, PHY-10): the tool's side, no DOM, no fetch, no storage.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Checked scenarios, the pure half (spec 0029 sections 3, 5 and 9, PHY-10): the tool's side, no DOM, no fetch, no storage. (explorer/check-model.js)"
+    },
+    {
+      "id": "core-explorer-check",
+      "label": "check.js",
+      "type": "core",
+      "file": "explorer/check.js",
+      "summary": "Checked scenarios in the page (spec 0029 sections 3 and 5, PHY-10; the pure half is check-model.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Checked scenarios in the page (spec 0029 sections 3 and 5, PHY-10; the pure half is check-model.js). (explorer/check.js)"
+    },
+    {
+      "id": "core-explorer-cloud-model",
+      "label": "cloud-model.js",
+      "type": "core",
+      "file": "explorer/cloud-model.js",
+      "summary": "Cloud on the map, the explorer's pure half (spec 0031 sections 1 and 6, CLOUD-06): no DOM, no state.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Cloud on the map, the explorer's pure half (spec 0031 sections 1 and 6, CLOUD-06): no DOM, no state. (explorer/cloud-model.js)"
+    },
+    {
+      "id": "core-explorer-flows",
+      "label": "flows.js",
+      "type": "core",
+      "file": "explorer/flows.js",
+      "summary": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block… (explorer/flows.js)"
+    },
+    {
+      "id": "core-explorer-frame",
+      "label": "frame.js",
+      "type": "core",
+      "file": "explorer/frame.js",
+      "summary": "When to draw (spec 0012 A4, TOPO-06).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "When to draw (spec 0012 A4, TOPO-06). (explorer/frame.js)"
+    },
+    {
+      "id": "core-explorer-house-model",
+      "label": "house-model.js",
+      "type": "core",
+      "file": "explorer/house-model.js",
+      "summary": "The House view's pure half (spec 0029 section 7, PHY-11): the tool's side, no DOM, no fetch, no storage.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The House view's pure half (spec 0029 section 7, PHY-11): the tool's side, no DOM, no fetch, no storage. (explorer/house-model.js)"
+    },
+    {
+      "id": "core-explorer-house",
+      "label": "house.js",
+      "type": "core",
+      "file": "explorer/house.js",
+      "summary": "The House view in the page (spec 0029 section 7, PHY-11); its pure half is house-model.js.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The House view in the page (spec 0029 section 7, PHY-11); its pure half is house-model.js. (explorer/house.js)"
+    },
+    {
+      "id": "core-explorer-input",
+      "label": "input.js",
+      "type": "core",
+      "file": "explorer/input.js",
+      "summary": "Mouse and touch on the canvas: pan, wheel and pinch zoom, tap a node to inspect it.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Mouse and touch on the canvas: pan, wheel and pinch zoom, tap a node to inspect it. (explorer/input.js)"
+    },
+    {
+      "id": "core-explorer-labels",
+      "label": "labels.js",
+      "type": "core",
+      "file": "explorer/labels.js",
+      "summary": "The label overlay (spec 0012 A3, TOPO-05): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The label overlay (spec 0012 A3, TOPO-05): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer. (explorer/labels.js)"
+    },
+    {
+      "id": "core-explorer-layers",
+      "label": "layers.js",
+      "type": "core",
+      "file": "explorer/layers.js",
+      "summary": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean. (explorer/layers.js)"
+    },
+    {
+      "id": "core-explorer-layout",
+      "label": "layout.js",
+      "type": "core",
+      "file": "explorer/layout.js",
+      "summary": "Where every node sits.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where every node sits. (explorer/layout.js)"
+    },
+    {
+      "id": "core-explorer-live-model",
+      "label": "live-model.js",
+      "type": "core",
+      "file": "explorer/live-model.js",
+      "summary": "The live layer's pure half (spec 0029 sections 4 and 9, PHY-09): the tool's side, no DOM, no fetch, no storage.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The live layer's pure half (spec 0029 sections 4 and 9, PHY-09): the tool's side, no DOM, no fetch, no storage. (explorer/live-model.js)"
+    },
+    {
+      "id": "core-explorer-live",
+      "label": "live.js",
+      "type": "core",
+      "file": "explorer/live.js",
+      "summary": "The live layer in the page (spec 0029 section 4, PHY-09): runs a live source (a plugin's adapter, handed over by main.js) with live-model.js's runner, lays each answer over the map through `setMap`…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The live layer in the page (spec 0029 section 4, PHY-09): runs a live source (a plugin's adapter, handed over by main.js) with live-model.js's runner, lays each answer over the map through `setMap`… (explorer/live.js)"
+    },
+    {
+      "id": "core-explorer-main",
+      "label": "main.js",
+      "type": "core",
+      "file": "explorer/main.js",
+      "summary": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol… (explorer/main.js)"
+    },
+    {
+      "id": "core-explorer-outage-model",
+      "label": "outage-model.js",
+      "type": "core",
+      "file": "explorer/outage-model.js",
+      "summary": "\"X is down\" (spec 0031 section 8, CLOUD-07), the explorer's pure half: no DOM, no state.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "\"X is down\" (spec 0031 section 8, CLOUD-07), the explorer's pure half: no DOM, no state. (explorer/outage-model.js)"
+    },
+    {
+      "id": "core-explorer-panels",
+      "label": "panels.js",
+      "type": "core",
+      "file": "explorer/panels.js",
+      "summary": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, … (explorer/panels.js)"
+    },
+    {
+      "id": "core-explorer-plugins",
+      "label": "plugins.js",
+      "type": "core",
+      "file": "explorer/plugins.js",
+      "summary": "The sources a repo's cornfield.config.js names, loaded in the browser.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The sources a repo's cornfield.config.js names, loaded in the browser. (explorer/plugins.js)"
+    },
+    {
+      "id": "core-explorer-proposal-model",
+      "label": "proposal-model.js",
+      "type": "core",
+      "file": "explorer/proposal-model.js",
+      "summary": "The pure half of the proposal overlay (spec 0012 B2, TOPO-09): no DOM, no `window`, no fetch.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of the proposal overlay (spec 0012 B2, TOPO-09): no DOM, no `window`, no fetch. (explorer/proposal-model.js)"
+    },
+    {
+      "id": "core-explorer-proposal",
+      "label": "proposal.js",
+      "type": "core",
+      "file": "explorer/proposal.js",
+      "summary": "The proposal overlay on the page (spec 0012 B2, TOPO-09): the picker that lists what the server finds (`GET /proposals`), `/?proposal=<slug>` opening one directly, the bar with the counts chip, the…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The proposal overlay on the page (spec 0012 B2, TOPO-09): the picker that lists what the server finds (`GET /proposals`), `/?proposal=<slug>` opening one directly, the bar with the counts chip, the… (explorer/proposal.js)"
+    },
+    {
+      "id": "core-explorer-render",
+      "label": "render.js",
+      "type": "core",
+      "file": "explorer/render.js",
+      "summary": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets. (explorer/render.js)"
+    },
+    {
+      "id": "core-explorer-renderer-canvas2d",
+      "label": "renderer-canvas2d.js",
+      "type": "core",
+      "file": "explorer/renderer-canvas2d.js",
+      "summary": "The reference renderer: draws a scene (scene.js) on a Canvas 2D context.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The reference renderer: draws a scene (scene.js) on a Canvas 2D context. (explorer/renderer-canvas2d.js)"
+    },
+    {
+      "id": "core-explorer-renderer-webgl",
+      "label": "renderer-webgl.js",
+      "type": "core",
+      "file": "explorer/renderer-webgl.js",
+      "summary": "The WebGL2 renderer (spec 0012 A2, TOPO-03): draws a scene (scene.js) on the GPU.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The WebGL2 renderer (spec 0012 A2, TOPO-03): draws a scene (scene.js) on the GPU. (explorer/renderer-webgl.js)"
+    },
+    {
+      "id": "core-explorer-renderer",
+      "label": "renderer.js",
+      "type": "core",
+      "file": "explorer/renderer.js",
+      "summary": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer. (explorer/renderer.js)"
+    },
+    {
+      "id": "core-explorer-review-model",
+      "label": "review-model.js",
+      "type": "core",
+      "file": "explorer/review-model.js",
+      "summary": "The pure half of approving a proposal or sending it back: no DOM, no `window`, no clock (the time is passed in).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of approving a proposal or sending it back: no DOM, no `window`, no clock (the time is passed in). (explorer/review-model.js)"
+    },
+    {
+      "id": "core-explorer-review",
+      "label": "review.js",
+      "type": "core",
+      "file": "explorer/review.js",
+      "summary": "Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a click does.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a click does. (explorer/review.js)"
+    },
+    {
+      "id": "core-explorer-scenario-ui",
+      "label": "scenario-ui.js",
+      "type": "core",
+      "file": "explorer/scenario-ui.js",
+      "summary": "The browser half of the scenario player (spec 0012 B3, TOPO-10; the pure core is scenario.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The browser half of the scenario player (spec 0012 B3, TOPO-10; the pure core is scenario.js). (explorer/scenario-ui.js)"
+    },
+    {
+      "id": "core-explorer-scenario",
+      "label": "scenario.js",
+      "type": "core",
+      "file": "explorer/scenario.js",
+      "summary": "THE SCENARIO PLAYER'S CORE (spec 0012 B3, TOPO-10).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "THE SCENARIO PLAYER'S CORE (spec 0012 B3, TOPO-10). (explorer/scenario.js)"
+    },
+    {
+      "id": "core-explorer-scene",
+      "label": "scene.js",
+      "type": "core",
+      "file": "explorer/scene.js",
+      "summary": "THE SCENE CONTRACT (spec 0012 A1, TOPO-02).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "THE SCENE CONTRACT (spec 0012 A1, TOPO-02). (explorer/scene.js)"
+    },
+    {
+      "id": "core-explorer-shaders",
+      "label": "shaders.js",
+      "type": "core",
+      "file": "explorer/shaders.js",
+      "summary": "The GLSL (ES 3.00, WebGL2) behind renderer-webgl.js, as strings: no build step, no files to fetch.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The GLSL (ES 3.00, WebGL2) behind renderer-webgl.js, as strings: no build step, no files to fetch. (explorer/shaders.js)"
+    },
+    {
+      "id": "core-explorer-sheet-model",
+      "label": "sheet-model.js",
+      "type": "core",
+      "file": "explorer/sheet-model.js",
+      "summary": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded. (explorer/sheet-model.js)"
+    },
+    {
+      "id": "core-explorer-sheets",
+      "label": "sheets.js",
+      "type": "core",
+      "file": "explorer/sheets.js",
+      "summary": "The phone's bottom sheets (spec 0012, TOPO-18).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The phone's bottom sheets (spec 0012, TOPO-18). (explorer/sheets.js)"
+    },
+    {
+      "id": "core-explorer-spatial",
+      "label": "spatial.js",
+      "type": "core",
+      "file": "explorer/spatial.js",
+      "summary": "Which node is under a point, without looking at every node (spec 0012 A4, TOPO-06).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Which node is under a point, without looking at every node (spec 0012 A4, TOPO-06). (explorer/spatial.js)"
+    },
+    {
+      "id": "core-explorer-state",
+      "label": "state.js",
+      "type": "core",
+      "file": "explorer/state.js",
+      "summary": "The explorer's one shared, mutable state object.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The explorer's one shared, mutable state object. (explorer/state.js)"
+    },
+    {
+      "id": "core-explorer-view",
+      "label": "view.js",
+      "type": "core",
+      "file": "explorer/view.js",
+      "summary": "Loading the topology and choosing the view of it: the whole map (orbit) or the data-flow preset.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Loading the topology and choosing the view of it: the whole map (orbit) or the data-flow preset. (explorer/view.js)"
+    },
+    {
+      "id": "core-explorer-whatif-model",
+      "label": "whatif-model.js",
+      "type": "core",
+      "file": "explorer/whatif-model.js",
+      "summary": "The pure half of what-if editing (spec 0012 B4, TOPO-11): no DOM, no `window`, no clock.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of what-if editing (spec 0012 B4, TOPO-11): no DOM, no `window`, no clock. (explorer/whatif-model.js)"
+    },
+    {
+      "id": "core-explorer-whatif",
+      "label": "whatif.js",
+      "type": "core",
+      "file": "explorer/whatif.js",
+      "summary": "What-if editing on an open proposal (spec 0012 B4, TOPO-11): the controls next to the proposal bar, the drag that draws an edge, the keyboard and localStorage.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What-if editing on an open proposal (spec 0012 B4, TOPO-11): the controls next to the proposal bar, the drag that draws an edge, the keyboard and localStorage. (explorer/whatif.js)"
+    },
+    {
+      "id": "core-plugins-cloud-hosts",
+      "label": "hosts.js",
+      "type": "core",
+      "file": "plugins/cloud/hosts.js",
+      "summary": "Finding the outside hosts a source file names, and what the code does with each (the code detector of the cloud deriver): a call from the server, a fetch by the visitor's browser (a stylesheet or p…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Finding the outside hosts a source file names, and what the code does with each (the code detector of the cloud deriver): a call from the server, a fetch by the visitor's browser (a stylesheet or p… (plugins/cloud/hosts.js)"
+    },
+    {
+      "id": "core-plugins-cloud-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/cloud/index.js",
+      "summary": "The cloud deriver: the services outside your house (or your company) that the code depends on and you do not control, drawn from a committed registry, `topology.cloud.json` (core/cloud.js has the f…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The cloud deriver: the services outside your house (or your company) that the code depends on and you do not control, drawn from a committed registry, `topology.cloud.json` (core/cloud.js has the f… (plugins/cloud/index.js)"
+    },
+    {
+      "id": "core-plugins-cloud-sources",
+      "label": "sources.js",
+      "type": "core",
+      "file": "plugins/cloud/sources.js",
+      "summary": "Where software comes from, read from the files that pull it (the software detectors of the cloud deriver): image references (`{ registry }`), Dockerfiles (`FROM` and the package installs of each `R…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where software comes from, read from the files that pull it (the software detectors of the cloud deriver): image references (`{ registry }`), Dockerfiles (`FROM` and the package installs of each `R… (plugins/cloud/sources.js)"
+    },
+    {
+      "id": "core-plugins-house-browser",
+      "label": "browser.js",
+      "type": "core",
+      "file": "plugins/house/browser.js",
+      "summary": "The house plugin's browser half: a **live source** over a house answer, and a plain **floor renderer** for the House view.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The house plugin's browser half: a **live source** over a house answer, and a plain **floor renderer** for the House view. (plugins/house/browser.js)"
+    },
+    {
+      "id": "core-plugins-personas-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/personas/index.js",
+      "summary": "The personas deriver: the repo's `topology.personas.json` (core/personas.js has the format) as one `store-personas` node and a `persona-<id>` node per archetype.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The personas deriver: the repo's `topology.personas.json` (core/personas.js has the format) as one `store-personas` node and a `persona-<id>` node per archetype. (plugins/personas/index.js)"
+    },
+    {
+      "id": "core-plugins-starter-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/starter/index.js",
+      "summary": "The starter deriver: a map of any JavaScript repo with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The starter deriver: a map of any JavaScript repo with zero plugin code. (plugins/starter/index.js)"
+    },
+    {
+      "id": "core-server-bind",
+      "label": "bind.js",
+      "type": "core",
+      "file": "server/bind.js",
+      "summary": "Where the server may listen.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where the server may listen. (server/bind.js)"
+    },
+    {
+      "id": "core-server-files",
+      "label": "files.js",
+      "type": "core",
+      "file": "server/files.js",
+      "summary": "Taking a request path apart safely, and the files a request can name.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Taking a request path apart safely, and the files a request can name. (server/files.js)"
+    },
+    {
+      "id": "core-server-proposals",
+      "label": "proposals.js",
+      "type": "core",
+      "file": "server/proposals.js",
+      "summary": "The proposal routes.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The proposal routes. (server/proposals.js)"
+    },
+    {
+      "id": "core-server-proxy",
+      "label": "proxy.js",
+      "type": "core",
+      "file": "server/proxy.js",
+      "summary": "Same-origin paths for a live source: `proxy: { '/api/': 'http://127.0.0.1:3245' }` in the config sends `/api/*` on to that upstream and pipes the answer back, so a browser module can call its own A…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Same-origin paths for a live source: `proxy: { '/api/': 'http://127.0.0.1:3245' }` in the config sends `/api/*` on to that upstream and pipes the answer back, so a browser module can call its own A… (server/proxy.js)"
+    },
+    {
+      "id": "core-server-server",
+      "label": "server.js",
+      "type": "core",
+      "file": "server/server.js",
+      "summary": "cornfield's HTTP server: zero dependencies, Node's own `http`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "cornfield's HTTP server: zero dependencies, Node's own `http`. (server/server.js)"
+    },
+    {
+      "id": "tool-ci",
+      "label": "CI workflows",
+      "type": "tool",
+      "file": ".github/workflows",
+      "r": 19,
+      "color": "#f43f5e",
+      "desc": "CI workflows (.github/workflows)."
+    },
+    {
+      "id": "store-cloud",
+      "label": "Cloud file",
+      "type": "store",
+      "file": "topology.cloud.json",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "Cloud file (topology.cloud.json)."
+    },
+    {
+      "id": "ext-github",
+      "label": "GitHub",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "Where cornfield lives: the repo, its issues and pull requests, the actions CI runs, and the default forge of a repo's config.",
+      "roles": [
+        "runtime",
+        "software",
+        "account"
+      ],
+      "breaks": "Now: no pull request can be opened, checked or merged, and a GitHub sign-in (v1) fails. At the next CI run: the checks cannot start.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-npm",
+      "label": "npm registry",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "At the next CI run or image build: the dev dependencies cannot install. A release cannot publish.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-docker-hub",
+      "label": "Docker Hub",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "The node:22-alpine base image.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "At the next image build: a fresh machine cannot pull the base image.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
+      "id": "ext-ghcr",
+      "label": "GitHub Container Registry",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "Where a release pushes the cornfield image, and where an always-on install pulls it from.",
+      "roles": [
+        "software"
+      ],
+      "breaks": "At the next release or install: the image cannot be pushed or pulled; a running one keeps running.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    }
+  ],
+  "edges": [
+    {
+      "from": "root",
+      "to": "pkg-cli"
+    },
+    {
+      "from": "root",
+      "to": "pkg-core"
+    },
+    {
+      "from": "root",
+      "to": "pkg-explorer"
+    },
+    {
+      "from": "root",
+      "to": "pkg-cloud"
+    },
+    {
+      "from": "root",
+      "to": "pkg-house"
+    },
+    {
+      "from": "root",
+      "to": "pkg-personas"
+    },
+    {
+      "from": "root",
+      "to": "pkg-starter"
+    },
+    {
+      "from": "root",
+      "to": "pkg-server"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "core-cli-cornfield"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "core-cli-release-guard"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-cloud"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-config"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-derive"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-fixture"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-index"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-personas"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-proposal"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-repo"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-routes"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-schema"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-sync"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-text"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-validate"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-bench"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-camera"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-check-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-check"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-cloud-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-flows"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-frame"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-house-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-house"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-input"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-labels"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-layers"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-layout"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-live-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-live"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-main"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-outage-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-panels"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-plugins"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-proposal-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-proposal"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-render"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-renderer-canvas2d"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-renderer-webgl"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-renderer"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-review-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-review"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-scenario-ui"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-scenario"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-scene"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-shaders"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-sheet-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-sheets"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-spatial"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-state"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-view"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-whatif-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-whatif"
+    },
+    {
+      "from": "pkg-cloud",
+      "to": "core-plugins-cloud-hosts"
+    },
+    {
+      "from": "pkg-cloud",
+      "to": "core-plugins-cloud-index"
+    },
+    {
+      "from": "pkg-cloud",
+      "to": "core-plugins-cloud-sources"
+    },
+    {
+      "from": "pkg-house",
+      "to": "core-plugins-house-browser"
+    },
+    {
+      "from": "pkg-personas",
+      "to": "core-plugins-personas-index"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-index"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-bind"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-files"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-proposals"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-proxy"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-server"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "pkg-server",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-cloud",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-house",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-personas",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-server",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-cloud",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-derive",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-fixture",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-cloud",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-personas",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-index",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-personas",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-proposal",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-sync",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-cloud",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-personas",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-check-model",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-check",
+      "to": "core-explorer-check-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-check",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-check",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-cloud-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house-model",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house-model",
+      "to": "core-explorer-live-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house-model",
+      "to": "core-explorer-outage-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-live",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-house",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-spatial",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-labels",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-live-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layout",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live-model",
+      "to": "core-core-personas",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live-model",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-live-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-bench",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-check",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-input",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-live",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-plugins",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-renderer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-review",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-whatif",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-outage-model",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-live",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-plugins",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-frame",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-labels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-renderer-canvas2d",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-spatial",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-shaders",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer",
+      "to": "core-explorer-renderer-canvas2d",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer",
+      "to": "core-explorer-renderer-webgl",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-whatif",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-check",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-outage-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-scenario",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-check-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-outage-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-sheet-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-state",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-bench",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-live-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif-model",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif-model",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-whatif-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-core-cloud",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-plugins-cloud-hosts",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-plugins-cloud-sources",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-house-browser",
+      "to": "core-core-cloud",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-personas-index",
+      "to": "core-core-personas",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-cloud",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-fixture",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-bind",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-proxy",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "tool-ci"
+    },
+    {
+      "from": "root",
+      "to": "store-cloud"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-github"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-npm"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-docker-hub"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-ghcr"
+    },
+    {
+      "from": "core-core-config",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
+      "from": "core-server-server",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
+      "from": "root",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "builds FROM node",
+      "when": "deploy"
+    },
+    {
+      "from": "root",
+      "to": "ext-npm",
+      "kind": "calls",
+      "status": "live",
+      "label": "npm ci",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "uses actions/checkout · uses actions/setup-node · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-npm",
+      "kind": "calls",
+      "status": "live",
+      "label": "release.yml: npm ci · test.yml: npm ci",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-docker-hub",
+      "kind": "calls",
+      "status": "live",
+      "label": "test.yml: docker run cornfield",
+      "when": "deploy"
+    },
+    {
+      "from": "tool-ci",
+      "to": "ext-ghcr",
+      "kind": "calls",
+      "status": "live",
+      "label": "the release pushes the image",
+      "when": "deploy"
+    }
+  ],
+  "updatedAt": "2026-10-17T08:54:54.992Z"
+}
