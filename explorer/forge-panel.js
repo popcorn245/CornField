@@ -250,6 +250,8 @@ function paintFilters() {
   // A deploy has no labels and no author to pick: its list is filtered by state and the search
   $('forge-label').parentElement.hidden = ui.kind === 'deploys';
   $('forge-author').parentElement.hidden = ui.kind === 'deploys';
+  // …and its search reads the workflow, what it ran for, the branch and who started it, not a number or a label
+  $('forge-text').placeholder = ui.kind === 'deploys' ? 'Workflow, branch, commit, who' : 'Title, number, label';
 }
 
 /** What a deploy lights, said short, for its row: how many nodes, or that it is not mapped */

@@ -564,6 +564,7 @@ describe('deploys light the map', () => {
     expect($('forge-status').textContent).toMatch(/^4 of 4 deploys, as of 2 minutes ago$/);
     expect($('forge-label').parentElement.hidden).toBe(true);
     expect($('forge-author').parentElement.hidden).toBe(true);
+    expect($('forge-text').placeholder).toBe('Workflow, branch, commit, who'); // no numbers or labels to search for
     expect([...$('forge-state').options].map((o) => o.textContent)).toEqual(['All', 'Succeeded', 'Failed', 'Running or waiting', 'Cancelled or skipped']);
     expect(await said()).toBe('4 deploys shown');
   });
