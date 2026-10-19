@@ -124,6 +124,22 @@ describe('without sign-in', () => {
     expect(await askWithoutHost(srv.port, '/topology.json')).toMatch(/^HTTP\/1\.\d 421 /);
   });
 
+  it('refuses two Host headers, and a request target in absolute form that names another host', async () => {
+    const rawAsk = (text) => new Promise((resolve, reject) => {
+      const socket = net.connect(srv.port, '127.0.0.1', () => socket.write(text));
+      let out = '';
+      socket.on('data', (d) => { out += d; });
+      socket.on('end', () => resolve(out.split('\r\n')[0]));
+      socket.on('error', reject);
+    });
+    expect(await rawAsk('GET /topology.json HTTP/1.1\r\nHost: localhost\r\nHost: evil.example\r\nConnection: close\r\n\r\n')).toMatch(/ 421 /);
+    expect(await rawAsk('GET /topology.json HTTP/1.1\r\nHost: localhost\r\nHost: localhost\r\nConnection: close\r\n\r\n')).toMatch(/ 421 /);
+    expect(await rawAsk('GET http://evil.example/topology.json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')).toMatch(/ 421 /);
+    expect(await rawAsk('GET http://localhost/topology.json HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n')).toMatch(/ 200 /);
+    // An upgrade (a WebSocket) goes the same way: there is no upgrade handler, so it reaches the check like any request
+    expect(await rawAsk('GET /topology.json HTTP/1.1\r\nHost: evil.example\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n')).toMatch(/ 421 /);
+  });
+
   it('does not trust X-Forwarded-Host', async () => {
     expect((await ask(srv.port, 'evil.example', '/topology.json', { 'x-forwarded-host': 'localhost' })).status).toBe(421);
     expect((await ask(srv.port, 'localhost', '/topology.json', { 'x-forwarded-host': 'evil.example' })).status).toBe(200);
