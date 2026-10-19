@@ -51,7 +51,11 @@ export const BUILTIN_DERIVERS = {
 /** The browser sources cornfield ships, by name: the module the explorer imports */
 export const BUILTIN_SOURCES = {
   house: '/plugins/house/browser.js',
+  // Home Assistant's registries, read by the server (plugins/house/home-assistant.js) and served like a house file
+  'home-assistant': '/plugins/house/browser.js',
 };
+/** Options of a source the server reads and never sends to the browser */
+export const SERVER_ONLY_OPTIONS = { 'home-assistant': ['file', 'url'] };
 export const SOURCE_SLOTS = ['live', 'house', 'devices', 'checker'];
 export const FORGE_TYPES = ['github', 'forgejo'];
 
@@ -115,6 +119,10 @@ export function configProblems(c) {
         if (!isObject(s.options)) out.push(`sources.${slot}.options is an object.`);
         else {
           try { JSON.stringify(s.options); } catch { out.push(`sources.${slot}.options must be plain JSON: it is sent to the browser.`); }
+          if (use === 'home-assistant') {
+            if ('token' in s.options) out.push(`sources.${slot}.options.token: the Home Assistant token never goes in the config; set CORNFIELD_HA_TOKEN where cornfield runs.`);
+            if (s.options.url !== undefined && !/^https?:\/\/[^\s]+$/.test(String(s.options.url))) out.push(`sources.${slot}.options.url is Home Assistant's address, like http://homeassistant.local:8123.`);
+          }
         }
       }
     }
@@ -188,6 +196,8 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
   if (env.CORNFIELD_HOST) config.host = env.CORNFIELD_HOST;
   if (env.CORNFIELD_PUBLIC_URL) config.publicUrl = env.CORNFIELD_PUBLIC_URL;
   if (env.CORNFIELD_DATA) config.dataDir = env.CORNFIELD_DATA;
+  // Only a Home Assistant URL and token: the house comes from Home Assistant
+  if (!config.sources.house && env.CORNFIELD_HA_URL && env.CORNFIELD_HA_TOKEN) config.sources.house = { use: 'home-assistant', options: {} };
   if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535) throw new Error(`The port must be a whole number from 0 to 65535 (got ${config.port}).`);
   if (!config.title) config.title = readPackageName(absRoot) || path.basename(absRoot);
   if (!config.dataDir) config.dataDir = path.join(os.homedir(), '.cornfield', slugOf(absRoot));
@@ -234,7 +244,9 @@ export function browserSources(config) {
     const s = config.sources[slot];
     if (!s) { out[slot] = null; continue; }
     const use = typeof s === 'string' ? s : s.use;
-    const options = (typeof s === 'object' && s.options) || {};
+    const all = (typeof s === 'object' && s.options) || {};
+    const hidden = SERVER_ONLY_OPTIONS[use] || [];
+    const options = Object.fromEntries(Object.entries(all).filter(([k]) => !hidden.includes(k)));
     out[slot] = { module: BUILTIN_SOURCES[use] || `/repo/${use.replace(/^\.\//, '')}`, options };
   }
   return out;

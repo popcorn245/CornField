@@ -12,7 +12,8 @@
  *     the server serves it at /cornfield/house.json, and `create(options)` reads it, no token;
  *   - your own API, through a same-origin `proxy` path, with an admin token kept in this browser
  *     (`createLiveSource({ url: '/api/…', needsToken: true })` from your own source module);
- *   - Home Assistant directly (a roadmap item: docs/roadmap.md).
+ *   - Home Assistant directly (`use: 'home-assistant'`): the server reads its registries (plugins/house/home-assistant.js)
+ *     and serves them at /cornfield/house.json, read here as the house file is.
  *
  * The house answer (version 1), every part optional:
  *   { at, house: { viewBox, floors: [{ id, name, level }], rooms: [{ id, floor_id, name, group?, x, y, w, h }] },
