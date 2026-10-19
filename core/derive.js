@@ -31,6 +31,9 @@
  * point at. Derivers run in the
  * order the config lists them. A deriver that no longer recognises the code it reads throws, rather
  * than guessing; the error names it.
+ *
+ * The contract's types (JSDoc) and a test kit for a repo's own derivers are core/deriver-kit.js,
+ * exported as `cornfield/deriver-kit`.
  */
 
 import { repoReader } from './repo.js';

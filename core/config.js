@@ -44,6 +44,7 @@ export const BUILTIN_DERIVERS = {
   personas: 'plugins/personas/index.js',
   compose: 'plugins/compose/index.js',
   cloud: 'plugins/cloud/index.js',
+  docs: 'plugins/docs/index.js',
 };
 /** The browser sources cornfield ships, by name: the module the explorer imports */
 export const BUILTIN_SOURCES = {

@@ -13,3 +13,5 @@ coverage/
 *.review.json
 # Local agent worktrees
 .claude/
+# The docs site cornfield docs builds (the Pages workflow builds its own)
+_site/
