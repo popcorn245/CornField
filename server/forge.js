@@ -63,6 +63,7 @@
  */
 
 import { createGitHubForge } from './forge-github.js';
+import { createForgejoForge } from './forge-forgejo.js';
 import { ForgeError } from './forge-http.js';
 
 export { ForgeError, rateLimitWords } from './forge-http.js';
@@ -82,6 +83,7 @@ const REPO = /^[\w.-]+\/[\w.-]+$/;
 /** The adapters, by `forge.type` */
 const ADAPTERS = {
   github: createGitHubForge,
+  forgejo: createForgejoForge,
 };
 
 /** Whether cornfield has an adapter for a forge type (server/forge-routes.js says a missing one in words) */

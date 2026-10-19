@@ -1363,6 +1363,33 @@
       "desc": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit. (server/proposal-pulls.js)"
     },
     {
+      "id": "core-server-forge-forgejo",
+      "label": "forge-forgejo.js",
+      "type": "core",
+      "file": "server/forge-forgejo.js",
+      "summary": "The Forgejo adapter (its v1 API, which Gitea shares) behind the forge interface (server/forge.js): an instance at `<url>/api/v1`, which `forge.url` has to name (there is no default host).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Forgejo adapter (its v1 API)."
+    },
+    {
+      "id": "ext-forgejo",
+      "label": "Forgejo",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "A Forgejo instance, when the config's forge is one: sign-in, issues, pull requests, comments, checks.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "Now: a Forgejo-hosted repo's sign-in, issues, PRs and reviews stop; the map still shows.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
+    },
+    {
       "id": "core-explorer-forge-panel-model",
       "label": "forge-panel-model.js",
       "type": "core",
@@ -3812,6 +3839,33 @@
       "dashed": true
     },
     {
+      "from": "pkg-server",
+      "to": "core-server-forge-forgejo"
+    },
+    {
+      "from": "core-server-forge-forgejo",
+      "to": "core-server-forge-http",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge",
+      "to": "core-server-forge-forgejo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-forgejo"
+    },
+    {
+      "from": "core-server-forge-forgejo",
+      "to": "ext-forgejo",
+      "kind": "calls",
+      "status": "live",
+      "label": "the Forgejo API"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-forge-panel-model"
     },
@@ -3930,5 +3984,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:28:21.861Z"
+  "updatedAt": "2026-10-19T22:36:42.045Z"
 }
