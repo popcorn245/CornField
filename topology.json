@@ -667,10 +667,10 @@
       "label": "index.js",
       "type": "core",
       "file": "plugins/starter/index.js",
-      "summary": "The starter deriver: a map of any JavaScript repo with zero plugin code.",
+      "summary": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "The starter deriver: a map of any JavaScript repo with zero plugin code. (plugins/starter/index.js)"
+      "desc": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code. (plugins/starter/index.js)"
     },
     {
       "id": "core-server-bind",
@@ -1145,6 +1145,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "cornfield: the vision (docs/vision.md)."
+    },
+    {
+      "id": "core-plugins-starter-languages",
+      "label": "languages.js",
+      "type": "core",
+      "file": "plugins/starter/languages.js",
+      "summary": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl… (plugins/starter/languages.js)"
+    },
+    {
+      "id": "core-plugins-starter-toml",
+      "label": "toml.js",
+      "type": "core",
+      "file": "plugins/starter/toml.js",
+      "summary": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
     }
   ],
   "edges": [
@@ -3155,7 +3175,27 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-languages"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-toml"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-plugins-starter-languages",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-languages",
+      "to": "core-plugins-starter-toml",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T21:31:08.510Z"
+  "updatedAt": "2026-10-19T21:37:02.850Z"
 }

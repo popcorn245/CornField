@@ -1,0 +1,9 @@
+[project]
+name = "pantry-core"
+version = "0.1.0"
+description = "The pantry's items and their rules"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

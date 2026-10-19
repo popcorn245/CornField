@@ -24,7 +24,7 @@ npx cornfield validate    # schema, drift from the code, every proposal
 npx cornfield serve       # the map on http://127.0.0.1:3350
 ```
 
-No config is needed: the starter deriver maps any npm-workspaces repo (or, without workspaces, each top-level folder with code). Add a `cornfield.config.js` when you want more (see [docs/config.md](docs/config.md)).
+No config is needed: the starter deriver maps any npm-workspaces repo, Go modules, Rust crates and Python packages (or, without any, each top-level folder with code). Add a `cornfield.config.js` when you want more (see [docs/config.md](docs/config.md)).
 
 ## Stage 1: local only, until sign-in lands
 
