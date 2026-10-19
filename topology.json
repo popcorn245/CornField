@@ -1333,6 +1333,16 @@
       "desc": "The world deriver: which machine each stack runs on. (plugins/world/index.js)"
     },
     {
+      "id": "core-plugins-house-home-assistant",
+      "label": "home-assistant.js",
+      "type": "core",
+      "file": "plugins/house/home-assistant.js",
+      "summary": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
+    },
+    {
       "id": "core-server-proposal-pulls",
       "label": "proposal-pulls.js",
       "type": "core",
@@ -3221,11 +3231,6 @@
       "dashed": true
     },
     {
-      "from": "page-doc-docs-house",
-      "to": "page-doc-docs-roadmap",
-      "dashed": true
-    },
-    {
       "from": "page-doc-docs-proposals",
       "to": "page-doc-contributing",
       "dashed": true
@@ -3679,6 +3684,27 @@
       "label": "imports"
     },
     {
+      "from": "pkg-house",
+      "to": "core-plugins-house-home-assistant"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-plugins-house-home-assistant",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-house",
+      "dashed": true
+    },
+    {
       "from": "pkg-server",
       "to": "core-server-proposal-pulls"
     },
@@ -3712,5 +3738,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:16:46.354Z"
+  "updatedAt": "2026-10-19T22:19:08.864Z"
 }
