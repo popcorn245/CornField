@@ -62,12 +62,14 @@ docker run -d --name cornfield --network host \
 | `cornfield status` | what the map holds, the warnings, the validation |
 | `cornfield proposal <file>` | one proposal against the map: its counts, errors and what has landed |
 | `cornfield review <slug>` | the last review of a proposal (verdict, note, what-if edits) |
+| `cornfield docs` | the docs as a static site, built from the map of their links (`--out`, default `_site`) |
 
 Every command takes `--repo <dir>` and `--config <file>`.
 
 ## Extending it
 
 - **Derivers** read your code and say which nodes and edges the map must hold: [docs/derivers.md](docs/derivers.md) (contract 1).
+- **Docs** are on the map too: the `docs` deriver maps each document and its links (to other docs and to the code), `validate` fails on a broken link, and `cornfield docs` builds them as a site ([docs/derivers.md](docs/derivers.md#the-docs-site)).
 - **Sources** are browser modules for the live layer, the house, devices and permission checks: [docs/config.md](docs/config.md#sources).
 
 ## The plan
