@@ -1,0 +1,64 @@
+{
+  "_about": "Recorded GitHub REST v3 answers for the proposals menu (test/server/proposal-pulls.test.js): open pull requests over two pages, the files each changes, and the proposals at each head. Hand-written in GitHub's shapes: the repo is owner/name, the people are archetypes, no token appears. #23 adds a proposal; #22 changes only code; #21 deletes a proposal; #20 is a draft with a proposal that does not parse, one that is not at its head, a review file, a nested file, a file outside the folder and a file renamed into it.",
+  "GET /repos/owner/name/pulls?state=open&sort=created&direction=desc&per_page=100": {
+    "headers": { "link": "<{origin}/repositories/1/pulls?state=open&sort=created&direction=desc&per_page=100&page=2>; rel=\"next\", <{origin}/repositories/1/pulls?state=open&sort=created&direction=desc&per_page=100&page=2>; rel=\"last\"" },
+    "body": [
+      { "number": 23, "title": "Meals proposal", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "claude/meals-spec", "sha": "1110000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/23", "created_at": "2026-10-19T10:00:00Z", "updated_at": "2026-10-19T10:30:00Z", "merged_at": null },
+      { "number": 22, "title": "Fix the lint", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "claude/lint", "sha": "2220000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/22", "created_at": "2026-10-19T09:00:00Z", "updated_at": "2026-10-19T09:30:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repositories/1/pulls?state=open&sort=created&direction=desc&per_page=100&page=2": {
+    "headers": { "link": "<{origin}/repositories/1/pulls?state=open&sort=created&direction=desc&per_page=100&page=1>; rel=\"prev\", <{origin}/repositories/1/pulls?state=open&sort=created&direction=desc&per_page=100&page=1>; rel=\"first\"" },
+    "body": [
+      { "number": 21, "title": "Drop the checkout proposal", "state": "open", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "drop-checkout", "sha": "3330000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/21", "created_at": "2026-10-18T10:00:00Z", "updated_at": "2026-10-18T10:30:00Z", "merged_at": null },
+      { "number": 20, "title": "Planner proposal (draft)", "state": "open", "draft": true, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "claude/planner-spec", "sha": "4440000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/20", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T10:30:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repos/owner/name/pulls/23": {
+    "body": { "number": 23, "title": "Meals proposal", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "claude/meals-spec", "sha": "1110000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/23", "created_at": "2026-10-19T10:00:00Z", "updated_at": "2026-10-19T10:30:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/20": {
+    "body": { "number": 20, "title": "Planner proposal (draft)", "state": "open", "draft": true, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "claude/planner-spec", "sha": "4440000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/20", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T10:30:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/19": {
+    "body": { "number": 19, "title": "Already merged", "state": "closed", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "merged-spec", "sha": "5550000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/19", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z" }
+  },
+  "GET /repos/owner/name/pulls/23/files?per_page=100": {
+    "body": [
+      { "sha": "a1", "filename": "docs/specs/proposals/0013-meals.json", "status": "added", "additions": 40, "deletions": 0, "changes": 40 },
+      { "sha": "a2", "filename": "docs/specs/0013-meals.md", "status": "added", "additions": 20, "deletions": 0, "changes": 20 }
+    ]
+  },
+  "GET /repos/owner/name/pulls/22/files?per_page=100": {
+    "body": [
+      { "sha": "b1", "filename": "server/lint.js", "status": "modified", "additions": 3, "deletions": 1, "changes": 4 }
+    ]
+  },
+  "GET /repos/owner/name/pulls/21/files?per_page=100": {
+    "body": [
+      { "sha": "c1", "filename": "docs/specs/proposals/0002-checkout.json", "status": "removed", "additions": 0, "deletions": 30, "changes": 30 }
+    ]
+  },
+  "GET /repos/owner/name/pulls/20/files?per_page=100": {
+    "body": [
+      { "sha": "d1", "filename": "docs/specs/proposals/0014-planner.json", "status": "added", "additions": 25, "deletions": 0, "changes": 25 },
+      { "sha": "d2", "filename": "docs/specs/proposals/0014-planner.review.json", "status": "added", "additions": 4, "deletions": 0, "changes": 4 },
+      { "sha": "d3", "filename": "docs/specs/proposals/nested/0015-nested.json", "status": "added", "additions": 4, "deletions": 0, "changes": 4 },
+      { "sha": "d4", "filename": "docs/specs/other/0016-elsewhere.json", "status": "added", "additions": 4, "deletions": 0, "changes": 4 },
+      { "sha": "d5", "filename": "docs/specs/proposals/0017-moved.json", "previous_filename": "docs/0017-moved.json", "status": "renamed", "additions": 0, "deletions": 0, "changes": 0 },
+      { "sha": "d6", "filename": "docs/specs/proposals/0018-missing.json", "status": "added", "additions": 4, "deletions": 0, "changes": 4 }
+    ]
+  },
+  "GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=1110000000000000000000000000000000000000": {
+    "headers": { "content-type": "application/vnd.github.raw; charset=utf-8" },
+    "body": "{\n  \"version\": 1,\n  \"spec\": \"0013\",\n  \"title\": \"Meals\",\n  \"summary\": \"Adds /meals.\",\n  \"nodes\": { \"add\": [{ \"id\": \"page-meals\", \"label\": \"/meals\", \"type\": \"page\", \"parent\": \"app-a\" }] }\n}\n"
+  },
+  "GET /repos/owner/name/contents/docs/specs/proposals/0014-planner.json?ref=4440000000000000000000000000000000000000": {
+    "headers": { "content-type": "application/vnd.github.raw; charset=utf-8" },
+    "body": "{\n  \"version\": 1,\n  \"title\": \"Planner\",\n  \"summary\": \"A week planner.\"\n}\n"
+  },
+  "GET /repos/owner/name/contents/docs/specs/proposals/0017-moved.json?ref=4440000000000000000000000000000000000000": {
+    "headers": { "content-type": "application/vnd.github.raw; charset=utf-8" },
+    "body": "{ not json"
+  }
+}

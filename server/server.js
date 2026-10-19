@@ -16,7 +16,7 @@
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
- *   *    /proposals…                    server/proposals.js
+ *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
  * Before any route, `Host` must be a loopback name, or with sign-in the public URL's host too (else 421): a page on
@@ -206,7 +206,7 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
-    if (serveProposals(req, res, reqPath, url, where)) return;
+    if (serveProposals(req, res, reqPath, url, where, gate.session ? () => auth.forgeFor(gate.session) : null)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();
