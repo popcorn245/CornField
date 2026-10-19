@@ -134,7 +134,8 @@ export function createCornfieldServer(config, opts = {}) {
     try {
       await answer(req, res);
     } catch (err) {
-      console.error(`[cornfield] ${req.method} ${req.url}: ${err.stack || err.message}`);
+      // The path only: a query can carry what must not be logged (the sign-in's code and state)
+      console.error(`[cornfield] ${req.method} ${String(req.url).split('?')[0]}: ${err.stack || err.message}`);
       if (!res.headersSent) sendJson(res, 500, { ok: false, error: 'Something went wrong in cornfield; the log says what.' });
       else res.end();
     }

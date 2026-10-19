@@ -9,8 +9,10 @@
  *   a reader, not a maintainer   "this is the dev dashboard; ask a maintainer" for a page, 403 for anything else
  *   a maintainer             the route
  *
- * The permission is asked of the forge when the session starts and again once it is 15 minutes old; a token the
- * forge no longer accepts ends the session, a forge that does not answer then is a 503 (never a pass).
+ * The permission is asked of the forge when the session starts and, for a maintainer, again once it is 15 minutes
+ * old (by the forge's user id, so a rename is followed); a token the forge no longer accepts ends the session, a forge
+ * that does not answer then is a 503 (never a pass). Someone who is not a maintainer is asked again at their next
+ * sign-in: cornfield keeps no token of theirs.
  *
  * Its own routes, the only ones open without a session:
  *
@@ -29,12 +31,16 @@
  * is under. Half of it set is an error at startup, not a quiet fallback to no sign-in.
  *
  * Sessions are rows of the SQLite file (server/db.js). The cookie holds a random value; the row's id is its HMAC
- * under the session secret, so the file alone opens no session. The user's forge token is kept in the row encrypted
- * (AES-256-GCM, a key derived from the session secret) and never sent to the browser.
+ * under the session secret, so the file alone opens no session. A maintainer's forge token is kept in the row
+ * encrypted (AES-256-GCM, a key derived from the session secret) and never sent to the browser; anyone else's is
+ * revoked at once. A token is revoked at the forge when its session ends (sign-out, expiry, no longer a maintainer)
+ * where the forge lets an app do that: GitHub does (`DELETE /applications/<client id>/token`), Forgejo has no such
+ * call, so there the user revokes cornfield's app in their own settings.
  */
 
 import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createForge as defaultCreateForge, isMaintainer, ForgeError } from './forge.js';
+import { githubApiUrl } from './forge-github.js';
 import { sameOrigin } from './proposals.js';
 
 /** How often a session's permission is asked of the forge again */
@@ -45,6 +51,9 @@ export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 export const STATE_MS = 10 * 60 * 1000;
 export const MIN_SESSION_SECRET = 32;
 const TOKEN_TIMEOUT_MS = 15_000;
+const REVOKE_TIMEOUT_MS = 5_000;
+/** What a session row keeps in place of a token when it keeps none (a signed-in non-maintainer) */
+const NO_TOKEN = '';
 
 /** The env each forge's OAuth app is read from */
 export const OAUTH_ENV = Object.freeze({
@@ -218,6 +227,7 @@ export const signInPage = (title, forgeName) => pageHtml(title, `Sign in to ${ti
 /** The one page a signed-in non-maintainer sees */
 export const askMaintainerPage = (title, login, repo) => pageHtml(title, 'This is the dev dashboard', `
 <p>You are signed in as ${escapeHtml(login)}, who does not maintain ${escapeHtml(repo)}. Only its maintainers can see the dashboard: ask a maintainer if you need something from it.</p>
+<p>Made a maintainer since? Sign out and sign in again.</p>
 ${signOutForm}`);
 
 /** A sign-in that did not work, and the way to try again */
@@ -286,7 +296,8 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   /** @type {Promise<import('node:sqlite').DatabaseSync> | null} */
   let opening = null;
   // The SQLite file is opened on the first request that needs it (node:sqlite is loaded only when sign-in is on)
-  const store = () => (opening ??= import('./db.js').then((m) => (db = m.openStore(config.dataDir))));
+  // A failed open is not kept: the next request tries again (a data folder mounted late, a lock released)
+  const store = () => (opening ??= import('./db.js').then((m) => (db = m.openStore(config.dataDir))).catch((err) => { opening = null; throw err; }));
   const iso = (ms) => new Date(ms).toISOString();
   const forgeWith = (token) => createForge(forgeConfig, { token, ...forgeOptions });
 
@@ -305,6 +316,38 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   const clearSession = cookie(SESSION_COOKIE, '', { maxAge: 0, secure });
   const clearState = cookie(STATE_COOKIE, '', { maxAge: 0, secure });
 
+  /**
+   * Revokes a token at the forge, best effort: GitHub's `DELETE /applications/<client id>/token` (the app's own
+   * credentials). Forgejo's API has no way for an app to revoke a token; its users revoke the app in their settings.
+   * A failure is logged (never the token) and does not stop what called it.
+   */
+  async function revoke(token) {
+    if (!token || forgeConfig.type !== 'github') return false;
+    const api = (forgeOptions.apiUrl || githubApiUrl(forgeConfig.url)).replace(/\/+$/, '');
+    try {
+      const res = await doFetch(`${api}/applications/${encodeURIComponent(clientId)}/token`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'cornfield', Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}` },
+        body: JSON.stringify({ access_token: token }),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
+      });
+      await res.arrayBuffer();
+      // 204: revoked; 404: GitHub no longer knows it (already revoked, or expired)
+      if (res.status === 204 || res.status === 404) return true;
+      console.error(`[cornfield] ${forgeName} did not revoke a token (HTTP ${res.status}).`);
+    } catch (err) {
+      console.error(`[cornfield] ${forgeName} could not be asked to revoke a token: ${err.message}`);
+    }
+    return false;
+  }
+
+  /** Ends a session: its row goes, and the token it kept is revoked */
+  async function endRow(row) {
+    (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+    if (row.token !== NO_TOKEN) await revoke(openToken(keys.enc, row.token));
+  }
+
   /** The session row a request's cookie names, live, or null */
   async function rowOf(req) {
     const value = parseCookies(req.headers.cookie)[SESSION_COOKIE];
@@ -312,7 +355,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     const row = /** @type {SessionRow | undefined} */ ((await store()).prepare('SELECT * FROM sessions WHERE id = ?').get(macOf(keys.mac, value)));
     if (!row) return null;
     if (Date.parse(row.expires_at) <= now()) {
-      (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+      await endRow(row);
       return null;
     }
     return row;
@@ -322,22 +365,33 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   const sessionOf = (row) => ({ login: row.login, userId: row.user_id, permission: row.permission, admin: isMaintainer(row.permission), row });
 
   /**
-   * The session of a request with its permission asked again when it is due.
+   * The session of a request with its permission asked again when it is due. A session that keeps no token (someone
+   * who is not a maintainer) is not asked again: they are, until they sign in again. The user is matched by the
+   * forge's id, not by login, so a renamed maintainer keeps their session (with the new login).
    * @returns {Promise<{ session: Session | null, unchecked?: string }>}
    */
   async function currentSession(req) {
     const row = await rowOf(req);
     if (!row) return { session: null };
-    if (now() - Date.parse(row.checked_at) < RECHECK_MS) return { session: sessionOf(row) };
+    if (row.token === NO_TOKEN || now() - Date.parse(row.checked_at) < RECHECK_MS) return { session: sessionOf(row) };
     const token = openToken(keys.enc, row.token);
     if (token === null) {
-      (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+      await endRow(row);
       return { session: null };
     }
     try {
-      const permission = await forgeWith(token).permission(forgeConfig.repo, row.login);
-      (await store()).prepare('UPDATE sessions SET permission = ?, checked_at = ? WHERE id = ?').run(permission, iso(now()), row.id);
-      return { session: sessionOf({ ...row, permission, checked_at: iso(now()) }) };
+      const forge = forgeWith(token);
+      const user = await forge.me();
+      if (String(user.id) !== row.user_id) {
+        await endRow(row);
+        return { session: null };
+      }
+      const permission = await forge.permission(forgeConfig.repo, user.login);
+      const keep = isMaintainer(permission);
+      const next = { ...row, login: user.login, permission, checked_at: iso(now()), token: keep ? row.token : NO_TOKEN };
+      (await store()).prepare('UPDATE sessions SET login = ?, permission = ?, checked_at = ?, token = ? WHERE id = ?').run(next.login, next.permission, next.checked_at, next.token, row.id);
+      if (!keep) await revoke(token);
+      return { session: sessionOf(next) };
     } catch (err) {
       if (err instanceof ForgeError && err.code === 'unauthorized') {
         (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
@@ -390,10 +444,12 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   }
 
   async function callback(req, res, url) {
-    const fail = (words) => send(res, 400, failedPage(title, words), { 'Set-Cookie': clearState });
-    if (url.searchParams.get('error')) return fail(url.searchParams.get('error') === 'access_denied' ? `The sign-in was cancelled on ${forgeName}.` : `${forgeName} did not sign you in.`);
+    // The state cookie is cleared only by an answer to the sign-in it belongs to: a link from anywhere else
+    // (`/auth/callback?error=x`) cannot cancel one in progress
+    const fail = (words, clear = true) => send(res, 400, failedPage(title, words), clear ? { 'Set-Cookie': clearState } : {});
     const checked = checkState(req, url);
-    if (checked.error) return fail(checked.error);
+    if (checked.error) return fail(checked.error, false);
+    if (url.searchParams.get('error')) return fail(url.searchParams.get('error') === 'access_denied' ? `The sign-in was cancelled on ${forgeName}.` : `${forgeName} did not sign you in.`);
     const code = url.searchParams.get('code');
     if (!code || code.length > 1000) return fail(`${forgeName} came back without a sign-in code.`);
     let token;
@@ -410,9 +466,12 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     const value = random();
     const at = now();
     const file = await store();
-    file.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(iso(at));
+    for (const old of file.prepare('SELECT * FROM sessions WHERE expires_at <= ?').all(iso(at))) await endRow(/** @type {SessionRow} */ (old));
+    // Only a maintainer's token is kept; anyone else's is revoked at once (they are asked again at their next sign-in)
+    const keep = isMaintainer(permission);
     file.prepare('INSERT INTO sessions (id, forge, user_id, login, token, permission, created_at, checked_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(macOf(keys.mac, value), forgeConfig.type, user.id, user.login, sealToken(keys.enc, token), permission, iso(at), iso(at), iso(at + SESSION_MS));
+      .run(macOf(keys.mac, value), forgeConfig.type, String(user.id), user.login, keep ? sealToken(keys.enc, token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + SESSION_MS));
+    if (!keep) await revoke(token);
     redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: SESSION_MS / 1000, secure }), clearState]);
   }
 
@@ -440,7 +499,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     req.resume();
     if (!sameOrigin(req, publicHost)) return send(res, 403, { ok: false, error: 'Sign out from cornfield\'s own page.' });
     const row = await rowOf(req);
-    if (row) (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+    if (row) await endRow(row);
     return redirect(res, '/auth/sign-in', [clearSession]);
   }
 
@@ -481,7 +540,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     },
     /** The forge as a signed-in user, with their own token (for the routes that act on the forge) */
     forgeFor(session) {
-      const token = openToken(keys.enc, session.row.token);
+      const token = session.row.token === NO_TOKEN ? null : openToken(keys.enc, session.row.token);
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
       return forgeWith(token);
     },

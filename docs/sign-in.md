@@ -6,7 +6,7 @@ cornfield shows a map of a repo's weak points, so a hosted cornfield shows nothi
 - **Signed in, not a maintainer:** one page, "this is the dev dashboard; ask a maintainer", and 403 for everything else.
 - **A maintainer:** the dashboard. On GitHub that is the repo's `admin` or `maintain` permission; on Forgejo, which has no maintain level, its admins (and its owner).
 
-The server enforces this on every route, the explorer's own files included; only `/healthz` (`{ "ok": true }`, for health checks) and the sign-in routes under `/auth/` answer without a session. The forge is asked for your permission when you sign in and again once the session is 15 minutes old, so someone who loses maintainer rights loses the dashboard within 15 minutes. While the forge cannot be asked, the answer is 503, never a pass.
+The server enforces this on every route, the explorer's own files included; only `/healthz` (`{ "ok": true }`, for health checks) and the sign-in routes under `/auth/` answer without a session. The forge is asked for your permission when you sign in and, for a maintainer, again once the session is 15 minutes old, so someone who loses maintainer rights loses the dashboard within 15 minutes. While the forge cannot be asked, the answer is 503, never a pass. Someone who is not a maintainer is asked again only when they sign in again: cornfield keeps no token of theirs, so if you were just made a maintainer, sign out and sign in.
 
 ## Without sign-in
 
@@ -57,4 +57,6 @@ Set the config's `forge.url` to the instance, like `https://forgejo.example.org`
 
 ## What it keeps
 
-A session is a row of `cornfield.db` in the data folder ([config](config.md)): who you are, your permission, when it was last asked, and your forge token, encrypted. The cookie holds a random value whose hash names the row, so the file alone opens no session. Sessions last 7 days; **Sign out** in the header ends one at once. The token never reaches the browser.
+A session is a row of `cornfield.db` in the data folder ([config](config.md)): who you are, your permission, when it was last asked, and, for a maintainer only, your forge token, encrypted. The cookie holds a random value whose hash names the row, so the file alone opens no session. Sessions last 7 days; **Sign out** in the header ends one at once. The token never reaches the browser, and never reaches a `proxy` upstream either: cornfield's own cookies are taken out of what a proxied path forwards, and an upstream cannot set them.
+
+A token cornfield no longer needs is revoked at the forge: a non-maintainer's right after sign-in, and a maintainer's when the session ends (sign-out, expiry, or no longer a maintainer). GitHub lets the app do that; Forgejo's API has no such call, so on Forgejo revoke cornfield in **Settings → Applications → Authorized OAuth2 applications** when you stop using it.

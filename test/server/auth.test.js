@@ -4,9 +4,11 @@
  * Sign-in and the admins-only guard (server/auth.js, server/bind.js; spec 0001 section 3, ADR 0004), against a fake
  * forge on loopback: OAuth (GitHub, and Forgejo's own token request), sessions in the SQLite file, the permission
  * asked again after 15 minutes, sign-out, and the guard walked over every route as someone signed out, a reader and
- * a maintainer. The settings env must give, and where the server may then listen. No real forge, app or token.
+ * a maintainer; a proxied path that never carries cornfield's cookies either way; tokens kept for maintainers only and
+ * revoked when a session ends. The settings env must give, and where the server may then listen. No real forge, app
+ * or token.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -19,6 +21,8 @@ import { createCornfieldServer, listen } from '../../server/server.js';
 import { signInSettings, oauthEndpoints, parseCookies, sealToken, openToken, RECHECK_MS, SESSION_MS, STATE_MS } from '../../server/auth.js';
 // @ts-expect-error plain JS module, no declarations
 import { assertBind } from '../../server/bind.js';
+// @ts-expect-error plain JS module, no declarations
+import { OWN_COOKIES, withoutOwnCookies, withoutOwnSetCookies } from '../../server/proxy.js';
 // @ts-expect-error plain JS module, no declarations
 import { loadConfig } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
@@ -60,11 +64,13 @@ function fakeGitHub() {
   const tokenRequests = [];
   const PERMS = { admin: { admin: true, maintain: true, push: true, triage: true, pull: true }, maintain: { admin: false, maintain: true, push: true, triage: true, pull: true }, read: { admin: false, maintain: false, push: false, triage: false, pull: true } };
   const who = (req) => users[String(req.headers.authorization || '').replace(/^Bearer /, '')];
-  const state = { down: false, revoked: new Set() };
+  const state = { down: false, revoked: new Set(), revokedTokens: new Set() };
+  const revoked = [];
   const authed = (fn) => (req) => {
     if (state.down) return { status: 503, body: { message: 'Unavailable' } };
     const u = who(req);
-    if (!u || state.revoked.has(u.login)) return { status: 401, body: { message: 'Bad credentials' } };
+    const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!u || state.revoked.has(u.login) || state.revokedTokens.has(token)) return { status: 401, body: { message: 'Bad credentials' } };
     return fn(u);
   };
   const routes = {
@@ -77,8 +83,17 @@ function fakeGitHub() {
     },
     'GET /api/v3/user': authed((u) => ({ body: { id: u.id, login: u.login, name: null } })),
     'GET /api/v3/repos/acme/home': authed((u) => ({ body: { full_name: 'acme/home', permissions: PERMS[u.perm] } })),
+    // The app revokes a token with its own credentials (Basic client id and secret)
+    'DELETE /api/v3/applications/test-client-id/token': (req) => {
+      const basic = Buffer.from(`${ENV.CORNFIELD_GITHUB_CLIENT_ID}:${ENV.CORNFIELD_GITHUB_CLIENT_SECRET}`).toString('base64');
+      if (req.headers.authorization !== `Basic ${basic}`) return { status: 401, body: { message: 'Requires authentication' } };
+      const token = JSON.parse(req.body).access_token;
+      revoked.push(token);
+      state.revokedTokens.add(token);
+      return { status: 204 };
+    },
   };
-  return { routes, users, tokenRequests, state };
+  return { routes, users, tokenRequests, state, revoked };
 }
 
 async function serverOn(config, opts) {
@@ -119,10 +134,21 @@ describe('sign-in with GitHub, and the guard', () => {
     clock = Date.parse('2026-10-19T12:00:00Z');
     gh.state.down = false;
     gh.state.revoked.clear();
+    gh.state.revokedTokens.clear();
+    gh.revoked.length = 0;
     gh.users['tok-maint'].perm = 'maintain';
+    gh.users['tok-maint'].login = 'maintainer-one';
+    gh.users['tok-maint'].id = 1001;
   });
 
   const get = (p, headers = {}) => raw(srv.port, 'GET', p, headers);
+  /** The newest session row of a login, read straight from the SQLite file */
+  const sessionRow = (login) => {
+    const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+    const row = db.prepare('SELECT * FROM sessions WHERE login = ? ORDER BY created_at DESC, rowid DESC').get(login);
+    db.close();
+    return row;
+  };
 
   /** Signs in with a code, the way a browser does; answers the session cookie (`name=value`) */
   async function signIn(code) {
@@ -176,20 +202,24 @@ describe('sign-in with GitHub, and the guard', () => {
     const started = await get('/auth/start');
     const state = new URL(started.headers.location).searchParams.get('state');
     const cookie = setCookies(started)['cornfield-oauth'].split(';')[0];
+    // [path, headers, words, whether the answer may clear the state cookie: only one to the sign-in it belongs to]
     const tries = [
-      [`/auth/callback?code=c-maint&state=${state}`, {}, 'started in another browser'],
-      [`/auth/callback?code=c-maint&state=other`, { cookie }, 'answer to another request'],
-      [`/auth/callback?code=c-maint&state=${state}`, { cookie: cookie.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')) }, 'started in another browser'],
-      [`/auth/callback?code=c-bad&state=${state}`, { cookie }, 'GitHub did not give a token for this sign-in. GitHub said: &quot;The code passed is incorrect or expired.&quot;'],
-      [`/auth/callback?state=${state}`, { cookie }, 'without a sign-in code'],
-      [`/auth/callback?error=access_denied&state=${state}`, { cookie }, 'The sign-in was cancelled on GitHub.'],
+      [`/auth/callback?code=c-maint&state=${state}`, {}, 'started in another browser', false],
+      [`/auth/callback?code=c-maint&state=other`, { cookie }, 'answer to another request', false],
+      [`/auth/callback?code=c-maint&state=${state}`, { cookie: cookie.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')) }, 'started in another browser', false],
+      [`/auth/callback?error=access_denied`, { cookie }, 'answer to another request', false],
+      [`/auth/callback?error=access_denied&state=forged`, { cookie }, 'answer to another request', false],
+      [`/auth/callback?code=c-bad&state=${state}`, { cookie }, 'GitHub did not give a token for this sign-in. GitHub said: &quot;The code passed is incorrect or expired.&quot;', true],
+      [`/auth/callback?state=${state}`, { cookie }, 'without a sign-in code', true],
+      [`/auth/callback?error=access_denied&state=${state}`, { cookie }, 'The sign-in was cancelled on GitHub.', true],
     ];
-    for (const [p, h, words] of tries) {
+    for (const [p, h, words, clears] of tries) {
       const res = await get(p, h);
       expect(res.status, p).toBe(400);
       expect(res.body, p).toContain(words);
       expect(res.body).toContain('href="/auth/start"');
-      expect(res.headers['set-cookie'], p).toEqual([expect.stringMatching(/^cornfield-oauth=; .*Max-Age=0$/)]);
+      if (clears) expect(res.headers['set-cookie'], p).toEqual([expect.stringMatching(/^cornfield-oauth=; .*Max-Age=0$/)]);
+      else expect(res.headers['set-cookie'], p).toBeUndefined();
     }
     clock += STATE_MS + 1;
     expect((await get(`/auth/callback?code=c-maint&state=${state}`, { cookie })).body).toContain('The sign-in took too long.');
@@ -252,16 +282,50 @@ describe('sign-in with GitHub, and the guard', () => {
     expect((await get('/topology.json', { cookie })).status).toBe(401);
   });
 
-  it('asks the forge again after 15 minutes: a maintainer no more sees "ask a maintainer", one back sees the map', async () => {
+  it('asks the forge again after 15 minutes: a maintainer no more sees "ask a maintainer", and their token is revoked', async () => {
     const cookie = await signIn('c-maint');
     gh.users['tok-maint'].perm = 'read';
     clock += RECHECK_MS - 1000;
     expect((await get('/topology.json', { cookie })).status).toBe(200);
     clock += 2000;
     expect((await get('/topology.json', { cookie })).status).toBe(403);
+    expect(gh.revoked).toEqual(['tok-maint']);
+    expect(sessionRow('maintainer-one').token).toBe('');
+    // Made a maintainer again: nothing is asked with no token, so it takes a new sign-in
     gh.users['tok-maint'].perm = 'maintain';
+    gh.state.revokedTokens.clear();
+    clock += RECHECK_MS;
+    expect((await get('/topology.json', { cookie })).status).toBe(403);
+    expect((await get('/', { cookie })).body).toContain('Sign out and sign in again');
+    expect((await get('/topology.json', { cookie: await signIn('c-maint') })).status).toBe(200);
+  });
+
+  it('follows a rename by the forge\'s user id, and ends a session whose token now answers for someone else', async () => {
+    const cookie = await signIn('c-maint');
+    gh.users['tok-maint'].login = 'maintainer-renamed';
     clock += RECHECK_MS;
     expect((await get('/topology.json', { cookie })).status).toBe(200);
+    expect(JSON.parse((await get('/auth/me', { cookie })).body).login).toBe('maintainer-renamed');
+    gh.users['tok-maint'].id = 9999;
+    clock += RECHECK_MS;
+    expect((await get('/topology.json', { cookie })).status).toBe(401);
+  });
+
+  it('keeps no token for someone who is not a maintainer: it is revoked at once', async () => {
+    await signIn('c-reader');
+    expect(gh.revoked).toEqual(['tok-reader']);
+    expect(sessionRow('reader-two')).toMatchObject({ permission: 'read', token: '' });
+  });
+
+  it('revokes the token when a session ends: on sign-out and on expiry', async () => {
+    const one = await signIn('c-maint');
+    await raw(srv.port, 'POST', '/auth/sign-out', { cookie: one, origin: `http://127.0.0.1:${srv.port}` });
+    expect(gh.revoked).toEqual(['tok-maint']);
+    gh.state.revokedTokens.clear();
+    const two = await signIn('c-admin');
+    clock += SESSION_MS;
+    expect((await get('/topology.json', { cookie: two })).status).toBe(401);
+    expect(gh.revoked).toEqual(['tok-maint', 'tok-admin']);
   });
 
   it('ends the session when the forge no longer takes the token, and does not pass anyone while the forge is down', async () => {
@@ -468,5 +532,98 @@ describe('where it may listen', () => {
     const plainHttp = run({ CORNFIELD_FORGEJO_CLIENT_ID: 'x', CORNFIELD_FORGEJO_CLIENT_SECRET: 'y', CORNFIELD_SESSION_SECRET: SESSION_SECRET, CORNFIELD_PUBLIC_URL: 'http://cornfield.example.test', CORNFIELD_HOST: '0.0.0.0' });
     expect(plainHttp.status).toBe(1);
     expect(plainHttp.stderr).toMatch(/will not listen on "0.0.0.0": its public URL is "http:\/\/cornfield.example.test", not https/);
+  });
+});
+
+describe('a proxied path, with sign-in', () => {
+  let fake;
+  let upstream;
+  let seen;
+  let data;
+  let srv;
+  beforeAll(async () => {
+    const gh = fakeGitHub();
+    fake = await fakeForge(gh.routes);
+    seen = [];
+    // An upstream that logs what it is sent, and tries to set cornfield's cookies next to its own
+    upstream = await fakeForge({
+      'GET /api/x': (req) => {
+        seen.push(req.headers);
+        return { headers: { 'set-cookie': ['cornfield=attacker-chosen; Path=/; HttpOnly', '__Host-cornfield=attacker; Path=/; Secure', 'cornfield-oauth=x; Path=/', 'theirs=1; Path=/api'] }, body: { ok: true } };
+      },
+    });
+    data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-auth-proxy-'));
+    const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
+    Object.assign(config, { forge: { type: 'github', url: fake.url, repo: 'acme/home' }, publicUrl: PUBLIC, proxy: { '/api/': upstream.url } });
+    srv = await serverOn(config, { env: ENV });
+  });
+  afterAll(async () => {
+    await srv.close();
+    await upstream.close();
+    await fake.close();
+    fs.rmSync(data, { recursive: true, force: true });
+  });
+
+  it('sends the upstream none of cornfield\'s cookies, and lets it set none of them', async () => {
+    const started = await raw(srv.port, 'GET', '/auth/start');
+    const state = new URL(started.headers.location).searchParams.get('state');
+    const back = await raw(srv.port, 'GET', `/auth/callback?code=c-maint&state=${state}`, { cookie: setCookies(started)['cornfield-oauth'].split(';')[0] });
+    const session = setCookies(back).cornfield.split(';')[0];
+    expect((await raw(srv.port, 'GET', '/api/x')).status).toBe(401);
+    expect(seen).toEqual([]);
+    const res = await raw(srv.port, 'GET', '/api/x', { cookie: `theirs=1; ${session}; cornfield-oauth=y; __Host-cornfield=z` });
+    expect(res.status).toBe(200);
+    expect(seen[0].cookie).toBe('theirs=1');
+    expect(res.headers['set-cookie']).toEqual(['theirs=1; Path=/api']);
+    await raw(srv.port, 'GET', '/api/x', { cookie: session });
+    expect(seen[1].cookie).toBeUndefined();
+  });
+});
+
+describe('the data folder', () => {
+  it('a store that fails to open is tried again on the next request, and the log never has a query', async () => {
+    const gh = fakeGitHub();
+    const fake = await fakeForge(gh.routes);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-auth-store-'));
+    const dataDir = path.join(dir, 'data');
+    fs.writeFileSync(dataDir, 'a file where the folder should be');
+    const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: dataDir } });
+    Object.assign(config, { forge: { type: 'github', url: fake.url, repo: 'acme/home' }, publicUrl: PUBLIC });
+    const srv = await serverOn(config, { env: ENV });
+    const logged = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => { logged.push(a.join(' ')); });
+    try {
+      const started = await raw(srv.port, 'GET', '/auth/start');
+      const state = new URL(started.headers.location).searchParams.get('state');
+      const cookie = setCookies(started)['cornfield-oauth'].split(';')[0];
+      const failed = await raw(srv.port, 'GET', `/auth/callback?code=c-maint&state=${state}`, { cookie });
+      expect(failed.status).toBe(500);
+      expect(logged.join('\n')).toContain('GET /auth/callback:');
+      expect(logged.join('\n')).not.toContain('c-maint');
+      expect(logged.join('\n')).not.toContain(state);
+      fs.rmSync(dataDir);
+      const again = await raw(srv.port, 'GET', '/auth/start');
+      const s2 = new URL(again.headers.location).searchParams.get('state');
+      const ok = await raw(srv.port, 'GET', `/auth/callback?code=c-maint&state=${s2}`, { cookie: setCookies(again)['cornfield-oauth'].split(';')[0] });
+      expect(ok.status).toBe(303);
+    } finally {
+      spy.mockRestore();
+      await srv.close();
+      await fake.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('the proxy\'s cookie filters', () => {
+  it('know every cookie cornfield sets, and nothing else', () => {
+    expect(OWN_COOKIES).toEqual(['cornfield', 'cornfield-oauth', '__Host-cornfield', '__Host-cornfield-oauth']);
+    expect(withoutOwnCookies(undefined)).toBeUndefined();
+    expect(withoutOwnCookies('cornfield=a')).toBeUndefined();
+    expect(withoutOwnCookies('a=1; cornfield=s;__Host-cornfield-oauth=t ; cornfield2=k; b')).toBe('a=1; cornfield2=k; b');
+    expect(withoutOwnSetCookies(undefined)).toBeUndefined();
+    expect(withoutOwnSetCookies(['cornfield=x; Path=/'])).toBeUndefined();
+    expect(withoutOwnSetCookies('a=1; Path=/')).toEqual(['a=1; Path=/']);
+    expect(withoutOwnSetCookies([' __Host-cornfield =x', 'cornfield-oauth=; Max-Age=0', 'cornfieldx=1'])).toEqual(['cornfieldx=1']);
   });
 });
