@@ -2,10 +2,10 @@
  * @module explorer/sheets
  *
  * The phone's bottom sheets (spec 0012, TOPO-18). Below 768px the proposal bar, the scenario
- * player and the node panel are sheets docked at the bottom of the map (`#sheet-dock`, which is
- * `display: contents` from 768px up, so the desktop layout is untouched). Each is a **peek** by
- * default (a handle, a title and a line or two) and **expands** to at most half the screen (60% for
- * the node panel) with its own scroll. A tap or a swipe on the handle expands or collapses it; a tap
+ * player, the issues and PRs panel (forge-panel.js) and the node panel are sheets docked at the bottom of
+ * the map (`#sheet-dock`, which is `display: contents` from 768px up, so the desktop layout is untouched).
+ * Each is a **peek** by default (a handle, a title and a line or two) and **expands** to at most half the
+ * screen (60% for the node panel) with its own scroll. A tap or a swipe on the handle expands or collapses it; a tap
  * on the map collapses it. At most one is expanded at a time (sheet-model.js).
  *
  * The sheets cover the bottom of the map, so the map must not fit or follow a step into that part:
@@ -68,7 +68,8 @@ function markLast() {
   let last = null;
   for (const child of dock.children) {
     child.removeAttribute('data-sheet-last');
-    if (!child.hidden && !(child.classList.contains('hx-drawer') && !child.classList.contains('drawer-open'))) last = child;
+    const closed = (child.classList.contains('hx-drawer') && !child.classList.contains('drawer-open')) || (child.classList.contains('hx-forge') && !child.classList.contains('forge-open'));
+    if (!child.hidden && !closed) last = child;
   }
   if (last) last.setAttribute('data-sheet-last', '');
 }

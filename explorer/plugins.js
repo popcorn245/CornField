@@ -49,9 +49,10 @@ export function applyBranding(doc, config) {
     .filter((l) => l && typeof l.label === 'string' && /^(https?:\/\/|\/)/.test(String(l.href)))
     .map((l) => `<a class="hx-chip-link hx-chip-link--indigo hx-only-xl" href="${escHtml(l.href)}" target="_blank" rel="noreferrer"><span class="hx-dot-sm"></span> ${escHtml(l.label)}</a>`)
     .join('') : '';
-  // A plain form: signing out is a same-origin POST (server/auth.js), no script needed
+  // A plain form: signing out is a same-origin POST (server/auth.js), no script needed. On a narrow phone only its icon
+  // shows (explorer.css); the words stay in the button for a screen reader
   const signOut = config.signIn && typeof config.signIn.login === 'string'
-    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}">Sign out</button></form>`
+    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">Sign out</span></button></form>`
     : '';
   if (html || signOut) links.innerHTML = html + signOut;
 }
