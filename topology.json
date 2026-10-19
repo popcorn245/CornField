@@ -1194,6 +1194,25 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
+    },
+    {
+      "id": "pkg-openapi",
+      "label": "plugins/openapi",
+      "type": "pkg",
+      "file": "plugins/openapi",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/openapi workspace package (plugins/openapi)."
+    },
+    {
+      "id": "core-plugins-openapi-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/openapi/index.js",
+      "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
     }
   ],
   "edges": [
@@ -3281,7 +3300,15 @@
       "to": "core-plugins-compose-routes",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "pkg-openapi"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "core-plugins-openapi-index"
     }
   ],
-  "updatedAt": "2026-10-19T21:39:49.337Z"
+  "updatedAt": "2026-10-19T21:44:46.935Z"
 }
