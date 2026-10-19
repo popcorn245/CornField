@@ -41,6 +41,8 @@ export function applyBranding(doc, config) {
   if (!config || !doc) return;
   const title = doc.getElementById('cf-title');
   if (title && config.title) title.textContent = config.title;
+  const heading = doc.getElementById('cf-heading');
+  if (heading && config.title) heading.textContent = `${config.title}: the map`;
   const links = doc.getElementById('cf-links');
   if (links && Array.isArray(config.links)) {
     links.innerHTML = config.links

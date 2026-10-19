@@ -630,3 +630,12 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 .hx-cloud-fold[open] > summary { color: #e2e8f0; }
 .hx-cloud-browser { color: var(--hx-sky); font-size: 10px; }
 .hx-cloud-play { width: 100%; justify-content: center; } /* the cloud panel's "Play: X is down" (spec 0031 section 8) */
+
+/* ---- keyboard and screen reader (MAP-02, keyboard.js) ------------------------------------------
+   Text only a screen reader reads (the heading, the map's keys, the announcer); a focus ring on everything that
+   takes the focus, the map included (the more specific rings above still win where they are set). */
+.hx-sr-only { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+:where(button, a[href], summary, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+#graph-canvas:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: -3px; }
+.hx-drawer-title:focus { outline: none; }
+.hx-drawer-title:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
