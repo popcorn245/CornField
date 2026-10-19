@@ -27,6 +27,7 @@ Elsewhere:
 | The search box | `Enter` selects the first node whose name matches; no match is said |
 | The node's panel | `Escape` closes it and gives the focus back to the map |
 | The Layers and Proposals menus | `Escape` closes them, back on their button |
+| The Agents tab of that panel | a button in the panel's Show group; the groups are headings, the two switches are checkboxes, and the "Agent" mark has its reason in words ([agents.md](agents.md)) |
 | The issues and PRs button and panel | `Enter` opens the panel with the focus on its title, `Escape` closes it, back on the button; what it loaded, selected and lit is said ([issues-and-prs.md](issues-and-prs.md)) |
 | The scenario player | `Space` plays and pauses, `Left` and `Right` step (the map leaves those keys to it while a scenario plays) |
 | A proposal's what-if edits | `Ctrl+Z` undoes, `Ctrl+Shift+Z` or `Ctrl+Y` redoes, `Escape` backs out of a form or a drawing |

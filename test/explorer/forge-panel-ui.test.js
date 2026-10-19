@@ -67,6 +67,20 @@ const DETAIL = {
   },
 };
 
+// What /api/forge/work answers (server/forge-routes.js): #12 is the spec PR of proposal 0013-meals, #13 closes issue 5, #9 landed
+const WORK = {
+  agents: { authors: ['agent-four'], labels: [], branchPrefixes: ['claude/'], bots: true },
+  pulls: [
+    { ...PULLS.open[0], body: 'Fixes #5', updatedAt: '2026-10-18T11:00:00Z' },
+    { ...PULLS.open[1], body: '', head: { ref: 'spec/meals', sha: 'sha12' }, updatedAt: '2026-10-17T11:00:00Z' },
+    { ...PULLS.closed[0], body: 'Closes #5', author: user('maintainer-one'), updatedAt: '2026-10-12T11:00:00Z' },
+  ],
+  issues: [issue(5, 'Sign-in')],
+  branches: [{ name: 'main', sha: 'm', protected: true }, { name: 'claude/5-notes', sha: 'n', protected: false }, { name: 'claude/lone', sha: 'l', protected: false }, { name: 'human/idea', sha: 'h', protected: false }],
+  specs: [{ pull: 12, slug: '0013-meals' }],
+  specsProblem: null,
+};
+
 const NOW = Date.parse('2026-10-19T12:00:00Z');
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
@@ -91,6 +105,7 @@ function fakeServer(opts = {}) {
     const at = '2026-10-19T11:58:00.000Z';
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '4990 of 5000 GitHub calls left; the count resets at 12:30 UTC (in about 30 minutes).', items: PULLS[u.searchParams.get('state')] || [...PULLS.open, ...PULLS.closed] });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', items: [issue(5, 'Sign-in'), issue(3, 'Forge adapters', { labels: [], author: user('agent-four') }), issue(4, 'Odd link', { url: 'javascript:alert(1)' })] });
+    if (u.pathname === '/api/forge/work') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...(opts.work || WORK) });
     const one = /^\/api\/forge\/pulls\/(\d+)$/.exec(u.pathname);
     if (one && DETAIL[one[1]]) return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...DETAIL[one[1]] });
     return json(404, { ok: false, error: `GitHub has no pull request #${one ? one[1] : '?'} in owner/name, or this sign-in cannot see it.`, code: 'not-found' });
@@ -509,5 +524,129 @@ describe('on a phone', () => {
     await settle();
     expect(sheetState('forge')).toBe('peek');
     expect(state.selectedNode.id).toBe('core-server');
+  });
+});
+
+describe('the Agents tab', () => {
+  const tab = () => q('[data-forge-kind="work"]');
+  const groups = () => qa('#forge-list .hx-forge-group');
+  const titles = () => qa('.hx-forge-gtitle').map((h) => h.textContent.replace(/\s*↗$/, '').trim());
+  const rowTitles = (g) => [...g.querySelectorAll('.hx-forge-title')].map((t) => t.textContent.trim());
+  const open = async (opts) => {
+    const server = fakeServer(opts);
+    mount();
+    openForge();
+    await settle();
+    click(tab());
+    await settle();
+    return server;
+  };
+
+  it('is a third tab that reads the work in one request, once, and groups it by proposal, then issue, then neither', async () => {
+    const server = await open();
+    expect(tab().getAttribute('aria-pressed')).toBe('true');
+    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work']);
+    expect(titles()).toEqual(['Proposal 0013-meals', '#5 Sign-in', 'Not linked to an issue or a proposal']);
+    expect(rowTitles(groups()[0])).toEqual(['Meals page']);
+    expect(rowTitles(groups()[1])).toEqual(['Lint everything', 'Branch claude/5-notes']);
+    expect(rowTitles(groups()[2])).toEqual(['Branch claude/lone']);
+    expect($('forge-status').textContent).toBe('3 groups, 4 pieces of work, 4 by agents, as of 2 minutes ago');
+    // The pull request tab's filters give way to the two of this tab
+    expect($('forge-filters').hidden).toBe(true);
+    expect($('forge-work-filters').hidden).toBe(false);
+    // Going back and forth asks for nothing again
+    click(q('[data-forge-kind="pulls"]'));
+    click(tab());
+    await settle();
+    expect(server.urls().filter((u) => u.includes('/work'))).toHaveLength(1);
+    expect($('forge-filters').hidden).toBe(true);
+  });
+
+  it('says what each group holds, and which work is an agent\'s and why, in words as well as a mark', async () => {
+    await open();
+    expect(groups().map((g) => g.querySelector('.hx-forge-meta').textContent)).toEqual([
+      '1 pull request, 1 by an agent', '1 pull request, 1 branch, 2 by agents', '1 branch, 1 by an agent',
+    ]);
+    const lint = q('[data-forge-pr="13"]');
+    expect(lint.querySelector('.hx-forge-agent').textContent).toBe('Agent');
+    expect(lint.querySelector('.hx-forge-why').textContent).toBe('listed author agent-four');
+    const branch = qa('.hx-forge-branch')[0];
+    expect(branch.textContent).toContain('claude/5-notes');
+    expect(branch.textContent).toContain('no pull request yet');
+    expect(branch.querySelector('.hx-forge-why').textContent).toBe('branch starts with claude/');
+    expect(q('[data-forge-pr="12"]').parentElement.textContent).toContain('Spec PR for 0013-meals');
+    // A heading names its list
+    const list = groups()[1].querySelector('ul');
+    expect(document.getElementById(list.getAttribute('aria-labelledby')).textContent).toContain('#5 Sign-in');
+    // A group of an issue links out to it
+    expect(groups()[1].querySelector('.hx-forge-gout').getAttribute('href')).toBe('https://git.example.test/owner/name/issues/5');
+  });
+
+  it('shows open work, the finished with a switch, and only the agents\' with the other', async () => {
+    await open();
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+    const finished = $('forge-work-finished');
+    finished.checked = true;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).not.toBe(null);
+    expect(q('[data-forge-pr="9"]').querySelector('.hx-forge-agent')).toBe(null);
+    const agents = $('forge-work-agents');
+    agents.checked = true;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+    expect(qa('#forge-list .hx-forge-item').length).toBe(4);
+    expect(await said()).toBe('3 groups, 4 pieces of work, 4 by agents');
+    agents.checked = false;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
+    finished.checked = false;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+  });
+
+  it('a pull request in a group selects like any other: its files and checks are asked for and the map is lit', async () => {
+    const server = await open();
+    click(q('[data-forge-pr="12"]'));
+    await settle();
+    expect(server.urls()).toContain('/api/forge/pulls/12');
+    expect(sceneNode('core-server').glow).toBeGreaterThan(0);
+    expect(q('[data-forge-pr="12"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-btn-lit').textContent).toBe('#12');
+    click(q('[data-action="clear-forge-pr"]'));
+    expect(state.forgeLit).toBe(null);
+  });
+
+  it('is announced, its tab is a pressed button, and a refresh asks the server again for the work', async () => {
+    const server = await open();
+    expect(await said()).toBe('3 groups, 4 pieces of work, 4 by agents');
+    await refreshForge();
+    expect(server.calls.filter((c) => c.url === '/api/forge/work')).toHaveLength(2);
+    expect(server.calls.at(-1).init.cache).toBe('reload');
+    expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('with nothing to group says so, and with the spec PRs unreadable says that in a line', async () => {
+    await open({ work: { ...WORK, pulls: [], branches: [], specs: [] } });
+    expect($('forge-list').textContent).toContain('No work here yet.');
+    closeForge({ restoreFocus: false });
+    await open({ work: { ...WORK, specsProblem: 'GitHub did not answer.' } });
+    expect($('forge-notice').hidden).toBe(false);
+    expect($('forge-notice').textContent).toBe('Spec pull requests could not all be read: GitHub did not answer.');
+  });
+
+  it('says a failure in words, as the other tabs do', async () => {
+    await open({ answers: { '/api/forge/work': { status: 502, body: { ok: false, error: 'GitHub did not answer.' } } } });
+    expect($('forge-notice').textContent).toBe('GitHub did not answer.');
+    expect(groups()).toHaveLength(0);
+  });
+
+  it('on a phone it is the same sheet, and a pull request selected there shows its files in it', async () => {
+    vi.stubGlobal('matchMedia', (query) => ({ matches: /max-width: 767px/.test(query), media: query, addEventListener() {}, removeEventListener() {} }));
+    await open();
+    expect($('forge-panel').parentElement.id).toBe('sheet-dock');
+    expect(sheetState('forge')).toBe('expanded');
+    expect(groups()).toHaveLength(3);
+    click(q('[data-forge-pr="13"]'));
+    await settle();
+    expect(qa('.hx-forge-file').length).toBe(1);
   });
 });

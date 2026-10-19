@@ -57,6 +57,21 @@ describe('the GitHub adapter', () => {
     expect(fake.requests[0].headers.authorization).toBeUndefined();
   });
 
+  it('keeps a pull request\'s text (its "Closes #n") and marks an account GitHub calls a Bot, and only that', async () => {
+    const pull = (number, user, extra = {}) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', ...extra });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&sort=created&direction=desc&per_page=100': {
+        body: [pull(1, { login: 'dependabot[bot]', type: 'Bot' }, { body: 'Closes #5' }), pull(2, { login: 'agent-four', type: 'User' }), pull(3, { login: 'renovate[bot]' }, { body: null })],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.body)).toEqual(['Closes #5', '', '']);
+    expect(pulls[0].author).toEqual({ login: 'dependabot[bot]', url: null, bot: true });
+    expect(pulls[1].author).toEqual({ login: 'agent-four', url: null });
+    // No type said, no flag: the `[bot]` in the name is the agent rule's to read, not the adapter's
+    expect(pulls[2].author).toEqual({ login: 'renovate[bot]', url: null });
+  });
+
   it('asks the signed-in user once, and their own permission from the repo', async () => {
     const forge = await forgeOn({
       'GET /user': { body: { id: 1, login: 'maintainer-one' } },

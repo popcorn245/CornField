@@ -6,6 +6,7 @@ When the config names a forge (`forge: { type: 'github', repo: 'owner/name' }`, 
 
 - **Pull requests** and **Issues** are two lists, newest first, read through cornfield's server (the browser never talks to the forge, and never sees a token).
 - **Filters** on what is loaded: state (a pull request is open, merged, or closed without landing; an issue open or closed), label, author, and a search over the title, number, author and labels. The line under the title says how many pass.
+- A third tab, **Agents**, groups the work by issue and proposal and marks what agents made: [agents](agents.md).
 - A row links out to the forge. An issue's whole row is the link; a pull request's row selects it, with a link beside it.
 - Rate limits and errors are a line in the panel in words ("GitHub's limit for this sign-in is used up; it resets at 21:14 UTC"), never a blank list. While the forge cannot be asked, the last answer cornfield saw is shown and says it is old. **Refresh** asks the forge again.
 
@@ -33,6 +34,7 @@ The routes, for the curious (all `GET`, all behind the sign-in guard):
 | `/api/forge/issues?state=open\|closed\|all&labels=a,b&limit=100` | issues (not pull requests) |
 | `/api/forge/pulls?state=open\|closed\|all&limit=100` | pull requests |
 | `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head |
+| `/api/forge/work` | what the Agents tab groups: pull requests and issues of any state, branches, open spec PRs and the `agents` rules ([agents](agents.md)) |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
 

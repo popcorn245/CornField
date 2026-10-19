@@ -847,6 +847,17 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding-left: 62px; }
 .hx-forge-node { padding: 1px 8px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-text-2); font-size: 11px; }
 .hx-forge-node:hover { background: var(--hx-control-hover); }
+.hx-forge-work-filters { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.hx-forge-work-filters[hidden], .hx-forge-filters[hidden] { display: none; }
+.hx-forge-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; color: var(--hx-text-2); font-size: 12px; }
+.hx-forge-toggle input { accent-color: var(--hx-indigo); }
+.hx-forge-toggle input:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+.hx-forge-group { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; list-style: none; }
+.hx-forge-gtitle { margin: 0; font-size: 12px; font-weight: 700; color: var(--hx-ink); overflow-wrap: anywhere; }
+.hx-forge-gout { margin-left: 4px; }
+.hx-forge-agentline { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.hx-forge-agent { display: inline-block; padding: 0 6px; border-radius: 9999px; border: 1px solid currentColor; color: var(--hx-violet-text); font-size: 10px; font-weight: 700; }
+.hx-forge-why { font-size: 11px; overflow-wrap: anywhere; }
 :root[data-theme="light"] .hx-forge-tab[aria-pressed="true"] { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
 :root[data-theme="light"] .hx-forge { box-shadow: 10px 0 30px -12px rgba(15, 23, 42, 0.18); }
 :root[data-theme="light"] .hx-forge:not(.forge-open) { box-shadow: none; }

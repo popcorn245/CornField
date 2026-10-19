@@ -27,9 +27,9 @@
  *
  * @typedef {'admin' | 'maintain' | 'write' | 'triage' | 'read' | 'none'} Permission
  * @typedef {{ id: string, login: string, name: string | null, url: string | null, avatarUrl: string | null }} User
- * @typedef {{ login: string, url: string | null }} Author
+ * @typedef {{ login: string, url: string | null, bot?: true }} Author
  * @typedef {{ number: number, title: string, state: 'open' | 'closed', author: Author | null, labels: string[], comments: number, url: string, createdAt: string, updatedAt: string, closedAt: string | null }} Issue
- * @typedef {{ number: number, title: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
+ * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
  * @typedef {'queued' | 'running' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'} CheckState
