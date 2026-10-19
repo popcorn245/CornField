@@ -26,3 +26,4 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
 
 - `sync` takes away an edge of a derived kind only for the deriver that emits that kind, at the end where it puts its own nodes (`madeBy` and `claims` from `deriveTopology`), so a hand-written edge into a derived node of another deriver stays.
 - A container's `selfHosted` and `summary` are hand-written, no longer fields the code decides.
+- Node 22.13 or newer (`engines.node`, was 22.5): the SQLite store runs on `node:sqlite` without a flag only from 22.13, and sign-in is its first user. The image (`node:22-alpine`) and CI (`node-version: 22`) already run a newer 22.
