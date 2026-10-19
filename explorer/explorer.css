@@ -748,6 +748,26 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 
 /* Sign out (when sign-in is on): a form in the header, inline with the links */
 .cf-sign-out { display: inline-flex; margin: 0; }
+.cf-sign-out-icon { display: none; }
+/* A narrow phone, signed in, with Issues & PRs: the header keeps one row by showing the brand's dot without its
+   title (the button keeps its name) and Sign out as its icon (its words stay for a screen reader), so every control
+   keeps at least a 24px target (WCAG 2.5.8) */
+@media (max-width: 479px) {
+  .hx-brand .hx-title { display: none; }
+  .hx-brand { min-width: 24px; min-height: 24px; justify-content: center; }
+  .hx-header .hx-btn { min-width: 24px; }
+  .cf-sign-out .hx-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
+  .cf-sign-out-icon { display: inline; font-size: 14px; }
+  .cf-sign-out-text { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* Narrower still (320px, the reflow width): the left of the header scrolls sideways rather than running under the
+   right, so nothing overlaps; its menus open fixed under the header, as the Proposals and Live menus already do there,
+   so the scroll cannot clip them. The padding keeps the focus rings inside the scrolled box. */
+@media (max-width: 639px) {
+  .hx-header-left { overflow-x: auto; scrollbar-width: none; padding-block: 4px; }
+  .hx-header-left::-webkit-scrollbar { display: none; }
+  #legend-dropdown.hx-menu { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
+}
 
 /* ---- the issues and PRs panel (forge-panel.js, CF-07) -------------------------------------------
    A slide-over from the left from 768px (the node panel is the one from the right), a bottom sheet in #sheet-dock below.

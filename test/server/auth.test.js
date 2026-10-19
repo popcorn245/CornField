@@ -265,7 +265,12 @@ describe('sign-in with GitHub, and the guard', () => {
     expect(without.slice(0, 4)).toEqual([200, 200, 200, 200]);
     expect(await walk(srv.port, null)).toEqual(ROUTES.map(() => 401));
     expect(await walk(srv.port, await signIn('c-reader'))).toEqual(ROUTES.map(() => 403));
-    expect(await walk(srv.port, await signIn('c-maint'))).toEqual(without);
+    // A maintainer gets what Stage 1 gives, except the forge's reads: those need someone to ask as (403 without sign-in)
+    const forgeReads = ROUTES.map(([m, p]) => m === 'GET' && p.startsWith('/api/forge/'));
+    const maint = await walk(srv.port, await signIn('c-maint'));
+    expect(maint.filter((_, i) => !forgeReads[i])).toEqual(without.filter((_, i) => !forgeReads[i]));
+    expect(without.filter((_, i) => forgeReads[i])).toEqual([403, 403]);
+    for (const status of maint.filter((_, i) => forgeReads[i])) expect([401, 403]).not.toContain(status);
     const page = await get('/');
     expect(page.headers['content-type']).toMatch(/^text\/html/);
     expect(page.body).toContain('Sign in with GitHub');

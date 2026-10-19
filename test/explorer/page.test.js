@@ -81,7 +81,7 @@ describe('explorer/plugins.js: the header', () => {
     expect(a.els['cf-links'].innerHTML).not.toContain('sign-out');
     const b = docWith();
     applyBranding(b.doc, { links: [], signIn: { login: 'maint<er>' } });
-    expect(b.els['cf-links'].innerHTML).toBe('<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as maint&lt;er&gt;">Sign out</button></form>');
+    expect(b.els['cf-links'].innerHTML).toBe('<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as maint&lt;er&gt;"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">Sign out</span></button></form>');
   });
 });
 

@@ -3,8 +3,10 @@
  *
  * The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). Nothing
  * here writes to the forge: it only calls the interface's reads (server/forge.js), as the signed-in maintainer, with
- * their own token (`auth.forgeFor`), never one from the config. Without sign-in (Stage 1, loopback) the forge is asked
- * with no token at all, so only what anyone can read.
+ * their own token (`auth.forgeFor`), never one from the config. Without sign-in (Stage 1, loopback) there is nobody to
+ * ask as, so the routes answer 403 and say so, and the explorer does not offer the panel (as the Proposals menu does
+ * not list spec PRs without sign-in, server/proposal-pulls.js): no anonymous calls, so no unauthenticated rate limit
+ * shared by every visitor and no cache-less repeats.
  *
  *   GET /api/forge/issues?state=open|closed|all&labels=a,b&limit=100   issues, newest first
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
@@ -15,11 +17,11 @@
  * (server/db.js) per forge, signed-in user and request for a minute, with an ETag of the body, so a page load is not
  * a dozen API calls and the browser's revalidation is a 304; the panel's Refresh (`Cache-Control: no-cache`) asks the
  * forge again. When the forge is rate-limited or does not answer, the last answer is served with `stale` saying why,
- * for up to a day, instead of nothing. Sign-in off means no data file, so no cache.
+ * for up to a day, instead of nothing.
  */
 
 import { createHash } from 'node:crypto';
-import { createForge, ForgeError, rateLimitWords } from './forge.js';
+import { ForgeError, hasAdapter, rateLimitWords } from './forge.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -44,15 +46,6 @@ function listQuery(url, withLabels) {
   if (q.limit > MAX_LIMIT) throw new ForgeError(`The limit is at most ${MAX_LIMIT}.`, { code: 'invalid' });
   if (withLabels) q.labels = (url.searchParams.get('labels') ?? '').split(',').map((l) => l.trim()).filter(Boolean);
   return q;
-}
-
-/** The forge with no token, for a server without sign-in; a forge type with no adapter yet is a 501 in words */
-function anonymousForge(forge, options) {
-  try {
-    return createForge(forge, { token: null, ...options });
-  } catch (err) {
-    throw new ForgeError(err.message, { code: 'unavailable', status: 501 });
-  }
 }
 
 /**
@@ -108,7 +101,7 @@ function keep(db, key, etag, body, now) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, session: { userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, forgeOptions?: object, now?: () => number }} ctx
+ * @param {{ config: object, session: { userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
@@ -119,21 +112,29 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     send(req, res, 405, { ok: false, error: 'The forge routes only read.' }, { Allow: 'GET, HEAD' });
     return true;
   }
-  const { config, session, auth, forgeOptions = {}, now = Date.now } = ctx;
+  const { config, session, auth, now = Date.now } = ctx;
   if (!config.forge) {
     send(req, res, 404, { ok: false, error: 'No forge is configured: set `forge` in cornfield.config.js.', code: 'not-found' });
     return true;
   }
   const name = FORGE_NAMES[config.forge.type] || config.forge.type;
+  if (!hasAdapter(config.forge.type)) {
+    send(req, res, 501, { ok: false, error: `cornfield has no adapter for the forge type ${JSON.stringify(config.forge.type)} yet.`, code: 'unavailable' });
+    return true;
+  }
+  if (!session) {
+    send(req, res, 403, { ok: false, error: `Issues and pull requests are read from ${name} as the signed-in maintainer: set up sign-in to see them (docs/sign-in.md).`, code: 'forbidden' });
+    return true;
+  }
   try {
     const route = routeOf(reqPath, url);
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;
     }
-    const key = `${config.forge.type}|${session ? session.userId : 'anonymous'}|${route.key}`;
+    const key = `${config.forge.type}|${session.userId}|${route.key}`;
     let db = null;
-    if (session && auth.store) {
+    if (auth.store) {
       try { db = await auth.store(); } catch { db = null; }
     }
     const refresh = /no-cache/i.test(String(req.headers['cache-control'] || ''));
@@ -141,7 +142,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     let answer = had && !refresh && now() - Date.parse(had.at) < FRESH_MS ? had : null;
     let stale = null;
     if (!answer) {
-      const forge = session ? auth.forgeFor(session) : anonymousForge(config.forge, forgeOptions);
+      const forge = auth.forgeFor(session);
       try {
         const data = await route.load(forge);
         const rate = forge.rateLimit();

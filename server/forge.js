@@ -84,6 +84,9 @@ const ADAPTERS = {
   github: createGitHubForge,
 };
 
+/** Whether cornfield has an adapter for a forge type (server/forge-routes.js says a missing one in words) */
+export const hasAdapter = (type) => Object.hasOwn(ADAPTERS, type);
+
 /** Whether a permission makes its holder an admin of cornfield: they maintain the repo */
 export const isMaintainer = (permission) => permission === 'admin' || permission === 'maintain';
 

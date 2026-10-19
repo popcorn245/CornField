@@ -4,7 +4,8 @@
  * The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge
  * the config names, read through the server (`/api/forge/…`, server/forge-routes.js; the signed-in maintainer's own
  * token never leaves it). A header button opens it: a slide-over from the left from 768px, a bottom sheet on a phone
- * (sheets.js). With no forge in the config the button and the panel stay hidden and nothing else changes.
+ * (sheets.js). With no forge in the config, or no sign-in (Stage 1: there is nobody to ask the forge as, and the
+ * server answers 403), the button and the panel stay hidden and nothing else changes.
  *
  *   - Two lists, Pull requests and Issues, with filters on what is loaded: state, label, author and a search
  *     box. A row links out to the forge; a pull request's row selects it.
@@ -433,16 +434,16 @@ function onKey(e) {
 }
 
 /**
- * Wires the panel (main.js calls this once the config is read). With no forge in the config the button and the
- * panel stay hidden, and this returns false.
- * @param {{ forge?: { type: string, repo: string } | null }} config what `/cornfield/config.json` said
+ * Wires the panel (main.js calls this once the config is read). With no forge in the config, or nobody signed in,
+ * the button and the panel stay hidden, and this returns false.
+ * @param {{ forge?: { type: string, repo: string } | null, signIn?: false | { login: string } }} config what `/cornfield/config.json` said
  * @param {{ clock?: () => number }} [opts] `clock` for the times shown (tests)
  * @returns {boolean} whether the panel is on
  */
 export function initForgePanel(config, opts = {}) {
   const btn = $('forge-btn');
   const panel = $('forge-panel');
-  if (!config || !config.forge || !btn || !panel) return false;
+  if (!config || !config.forge || !config.signIn || !btn || !panel) return false;
   ui.config = config;
   if (opts.clock) now = opts.clock;
   btn.hidden = false;

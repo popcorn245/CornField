@@ -158,7 +158,7 @@ describe('the issues and PRs panel', () => {
   const start = () => {
     const canvas = mount();
     resetForgePanelForTests();
-    initForgePanel({ forge: { type: 'github', repo: 'owner/name' } });
+    initForgePanel({ forge: { type: 'github', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } });
     return canvas;
   };
   afterEach(() => { closeForge({ restoreFocus: false }); resetForgePanelForTests(); delete document.documentElement.dataset.theme; });

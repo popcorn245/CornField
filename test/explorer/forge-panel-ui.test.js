@@ -99,7 +99,7 @@ function fakeServer(opts = {}) {
   return { calls, mock, urls: () => calls.map((c) => c.url) };
 }
 
-function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'owner/name' } } = {}) {
+function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn = { login: 'maintainer-one' } } = {}) {
   document.body.innerHTML = body;
   document.documentElement.lang = 'en';
   const ctx = new Proxy({}, { get: (_t, k) => (k === 'measureText' ? (t) => ({ width: t.length * 6 }) : () => {}), set: () => true });
@@ -117,7 +117,7 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge }, { clock: () => NOW });
+  return initForgePanel({ forge, signIn }, { clock: () => NOW });
 }
 
 const sceneNode = (id) => render.getScene().nodes.find((n) => n.id === id);
@@ -136,6 +136,18 @@ describe('with no forge in the config', () => {
     expect($('forge-panel').classList.contains('forge-open')).toBe(false);
     expect(server.calls).toEqual([]);
     expect(state.forgeLit).toBe(null);
+  });
+});
+
+describe('with a forge but nobody signed in (Stage 1)', () => {
+  it('shows nothing and asks nothing: the server has nobody to ask the forge as', async () => {
+    const server = fakeServer();
+    expect(mount({ signIn: false })).toBe(false);
+    expect($('forge-btn').hidden).toBe(true);
+    expect($('forge-panel').hidden).toBe(true);
+    openForge();
+    expect($('forge-panel').classList.contains('forge-open')).toBe(false);
+    expect(server.calls).toEqual([]);
   });
 });
 

@@ -243,22 +243,24 @@ describe('the forge routes', () => {
     expect(fake.requests.filter((r) => r.method !== 'GET' && !r.url.startsWith('/login/'))).toEqual([]);
   });
 
-  it('without sign-in asks the forge with no token at all, and keeps nothing', async () => {
-    const res = await raw(plain.port, 'GET', '/api/forge/pulls/12');
-    expect(res.status, res.text).toBe(200);
-    expect(res.json.files).toHaveLength(4);
-    expect(res.headers.etag).toBeTruthy();
-    expect(fake.requests.length).toBeGreaterThan(0);
-    for (const r of fake.requests) expect(r.headers.authorization).toBeUndefined();
+  it('without sign-in there is nobody to ask as: a 403 in words, and the forge is not asked', async () => {
+    for (const p of ['/api/forge/pulls/12', '/api/forge/issues', '/api/forge/pulls']) {
+      const res = await raw(plain.port, 'GET', p);
+      expect([p, res.status, res.json.ok, res.json.code]).toEqual([p, 403, false, 'forbidden']);
+      expect(res.json.error).toBe('Issues and pull requests are read from GitHub as the signed-in maintainer: set up sign-in to see them (docs/sign-in.md).');
+    }
+    expect(fake.requests).toEqual([]);
     expect(fs.existsSync(path.join(plainData, 'cornfield.db'))).toBe(false);
   });
 
-  it('a forge type with no adapter yet is a 501 that says so', async () => {
+  it('a forge type with no adapter is a 501 that says so, before anything else is asked', async () => {
     const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } });
-    const other = await start(config, { env: {} }); // the sample's own forge is a Forgejo
+    Object.assign(config, { forge: { type: 'gitlab', url: fake.url, repo: 'owner/name' } });
+    const other = await start(config, { env: {} });
     const res = await raw(other.port, 'GET', '/api/forge/pulls');
     expect([res.status, res.json.ok]).toEqual([501, false]);
-    expect(res.json.error).toContain('no adapter for the forge type "forgejo"');
+    expect(res.json.error).toBe('cornfield has no adapter for the forge type "gitlab" yet.');
+    expect(fake.requests).toEqual([]);
     await other.close();
   });
 
