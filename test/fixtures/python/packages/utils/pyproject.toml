@@ -1,0 +1,7 @@
+[tool.poetry]
+name = "pantry-utils"
+version = "0.1.0"
+description = "Small helpers"
+
+[tool.poetry.dependencies]
+python = "^3.12"

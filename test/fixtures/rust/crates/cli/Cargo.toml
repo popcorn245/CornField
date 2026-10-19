@@ -1,0 +1,10 @@
+[package]
+name = "pantry-cli"
+version = "0.1.0"
+edition = "2021"
+description = "The pantry on the command line"
+
+[dependencies]
+pantry-core = { path = "../core" }
+shelf = { path = "../macros", package = "pantry-macros" } # declared under another name, never used
+serde = { workspace = true }

@@ -44,6 +44,7 @@ export const BUILTIN_DERIVERS = {
   personas: 'plugins/personas/index.js',
   compose: 'plugins/compose/index.js',
   world: 'plugins/world/index.js',
+  openapi: 'plugins/openapi/index.js',
   cloud: 'plugins/cloud/index.js',
   docs: 'plugins/docs/index.js',
 };
