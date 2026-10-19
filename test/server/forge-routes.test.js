@@ -78,7 +78,7 @@ describe('the forge routes', () => {
     plainData = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-forge-plain-'));
     const forge = { type: 'github', url: fake.url, repo: 'owner/name' };
     const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
-    Object.assign(config, { forge, publicUrl: PUBLIC, agents: { authors: ['agent-four'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true } });
+    Object.assign(config, { forge, publicUrl: PUBLIC, deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }, agents: { authors: ['agent-four'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true } });
     srv = await start(config, { env: ENV, now: () => clock });
     const open = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } });
     plain = await start(Object.assign(open, { forge }), { env: {} });
@@ -302,6 +302,43 @@ describe('the forge routes', () => {
       await forgejo.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('lists the deploys: the runs that are deploys, with what the config says each restarted, unmapped ones kept', async () => {
+    const cookie = await signIn();
+    fake.requests.length = 0;
+    const res = await raw(srv.port, 'GET', '/api/forge/deploys', { cookie });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json).toMatchObject({ ok: true, forge: 'github', repo: 'owner/name' });
+    // CI and Release are not deploys; Deploy media is, and nothing says what it restarts
+    expect(res.json.items.map((d) => [d.id, d.name, d.state, d.restarts])).toEqual([
+      ['9003', 'Deploy web', 'success', ['stack-web']],
+      ['9001', 'Deploy media', 'running', []],
+    ]);
+    for (const r of asked('/actions/runs')) expect(r.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(fake.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+    expect(res.headers.etag).toMatch(/^"[0-9a-f]{20}"$/);
+    const again = await raw(srv.port, 'GET', '/api/forge/deploys', { cookie, 'if-none-match': res.headers.etag });
+    expect(again.status).toBe(304);
+  });
+
+  it('keeps deploys per mapping, so a changed config is not answered from what was kept for the old one', async () => {
+    const cookie = await signIn();
+    await raw(srv.port, 'GET', '/api/forge/deploys', { cookie });
+    expect(cached().map((r) => r.key).filter((k) => k.includes('|deploys?limit=100&config='))).toHaveLength(1);
+  });
+
+  it('asks for at most the runs it is allowed to, and refuses more', async () => {
+    const cookie = await signIn();
+    const res = await raw(srv.port, 'GET', '/api/forge/deploys?limit=301', { cookie });
+    expect([res.status, res.json.code]).toEqual([400, 'invalid']);
+    const one = await raw(srv.port, 'GET', '/api/forge/deploys?limit=1', { cookie });
+    expect(one.json.items.map((d) => d.id)).toEqual(['9003']);
+  });
+
+  it('answers 403 in words without sign-in, as the other forge routes do', async () => {
+    const res = await raw(plain.port, 'GET', '/api/forge/deploys');
+    expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
   });
 
   it('answers what the agents view groups in one read: pull requests and issues of any state, branches, open spec PRs and the agent rules', async () => {

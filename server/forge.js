@@ -18,6 +18,7 @@
  *   rerun(check)                      re-runs one that can be (`check.rerunnable`)
  *   merge(n, { onlyIfGreen: true })   lands an open, ready pull request whose checks are all green, at the head they ran on
  *                                     (`sha`: the head the caller looked at; a pull request that has moved on since is refused)
+ *   runs({ limit })                   the latest workflow (Actions) runs, newest first: what the deploys on the map are read from
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
  *   fileBytes(ref, path)              the same file's bytes (a picture), or null
@@ -39,8 +40,12 @@
  * @typedef {'queued' | 'running' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'} CheckState
  * @typedef {{ id: string, name: string, state: CheckState, url: string | null, rerunnable: boolean }} Check
  * @typedef {{ name: string, sha: string, protected: boolean }} Branch
+ * @typedef {{ id: string, workflow: string, name: string, title: string, event: string, branch: string, sha: string, state: CheckState, actor: Author | null, url: string | null, createdAt: string, updatedAt: string }} Run
+ *   `workflow` is the workflow file's name ("deploy.yml"), `name` the workflow's own name ("Deploy web"; the file's
+ *   name where the forge has none), `title` what the run was for (a commit message, a release)
  * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number }} IssueQuery
  * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number }} PullQuery
+ * @typedef {{ limit?: number }} RunQuery
  * @typedef {'merge' | 'squash' | 'rebase'} MergeMethod
  * @typedef {{
  *   forge: 'github' | 'forgejo', repo: string,
@@ -55,14 +60,16 @@
  *   checks(ref: string): Promise<Check[]>,
  *   rerun(check: Check): Promise<void>,
  *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod, sha?: string }): Promise<{ sha: string }>,
+ *   runs(query?: RunQuery): Promise<Run[]>,
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
  *   fileBytes(ref: string, path: string): Promise<Buffer | null>,
  *   rateLimit(): import('./forge-http.js').RateLimit | null,
  * }} Forge
- * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls'> & {
+ * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls' | 'runs'> & {
  *   issues(query: Required<IssueQuery>): Promise<Issue[]>,
  *   pulls(query: Required<PullQuery>): Promise<Pull[]>,
+ *   runs(query: Required<RunQuery>): Promise<Run[]>,
  *   mergeAt(n: number, opts: { sha: string, method: MergeMethod }): Promise<{ sha: string }>,
  *   readiness?(n: number, sha: string): Promise<{ ready: boolean, why?: string }>,
  * }} Adapter
@@ -75,12 +82,14 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'branches', 'file', 'fileBytes', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
 /** The most a listing returns unless asked for fewer */
 export const DEFAULT_LIMIT = 1000;
+/** The runs a listing returns unless asked for fewer: one forge page */
+export const DEFAULT_RUN_LIMIT = 100;
 
 const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 const STATES = ['open', 'closed', 'all'];
@@ -226,6 +235,12 @@ export function wrap(a, forge) {
       }
       // At the sha the checks ran on: a push in between makes the forge refuse rather than land untested code
       return a.mergeAt(n, { sha: pr.head.sha, method });
+    },
+    runs: async (q) => {
+      if (q !== undefined && (q === null || typeof q !== 'object' || Array.isArray(q))) throw invalid('A query is an object.');
+      const { limit = DEFAULT_RUN_LIMIT } = q || {};
+      if (!Number.isSafeInteger(limit) || limit < 1) throw invalid('The limit is a whole number above 0.');
+      return a.runs({ limit });
     },
     branches: async () => a.branches(),
     file: async (ref, path) => {

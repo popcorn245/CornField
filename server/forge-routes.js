@@ -15,6 +15,8 @@
  *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
  *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
  *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
+ *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
+ *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
  *
  * Every answer is `{ ok: true, forge, repo, at, rate, … }` (`rate`: what is left of the forge's limit, in words, or
  * null) or `{ ok: false, error, code }` with the forge's error in plain words. Answers are kept in `forge_cache`
@@ -28,6 +30,7 @@ import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, rateLimitWords } from './forge.js';
 import { actionOf, serveAction } from './forge-actions.js';
 import { listPullProposals } from './proposal-pulls.js';
+import { deploysOf } from './deploys.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -72,6 +75,13 @@ function routeOf(reqPath, url, config) {
   if (reqPath === '/api/forge/pulls') {
     const q = listQuery(url, false);
     return { key: `pulls?state=${q.state}&limit=${q.limit}`, load: async (forge) => ({ items: await forge.pulls(q) }) };
+  }
+  if (reqPath === '/api/forge/deploys') {
+    const { limit } = listQuery(url, false);
+    // The runs asked for are the last `limit` of every workflow; the config picks the deploys among them. The config is
+    // in the key, so an answer kept before it changed is never served for the new one.
+    const mapping = createHash('sha256').update(JSON.stringify(config.deploys || null)).digest('hex').slice(0, 12);
+    return { key: `deploys?limit=${limit}&config=${mapping}`, load: async (forge) => ({ items: deploysOf(await forge.runs({ limit }), config.deploys) }) };
   }
   if (reqPath === '/api/forge/work') {
     return {

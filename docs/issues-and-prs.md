@@ -59,6 +59,10 @@ Just before it lands, the forge is asked once more what it knows besides the che
 
 Every attempt is a row in the `actions` table of `cornfield.db`: when, who, `merge` or `rerun`, the target (`owner/name#12`, or `owner/name#13/run:42`), the request (the number, the commit, the check), and the status and answer. It is written before the forge is asked and finished after, so a refusal, a forge error and a success are all there; a row with no status is an attempt that did not get an answer. If the table cannot be written, nothing is done (503). Read it with any SQLite tool: `SELECT at, login, action, target, status FROM actions ORDER BY id DESC`.
 
+## Deploys
+
+Another list, **Deploys**, shows the latest deploys (workflow runs) and lights the nodes a selected one restarted, from a mapping in the config. It has its own page: [deploys](deploys.md).
+
 ## Who it asks as
 
 The server asks the forge as the signed-in maintainer, with their own token ([sign-in](sign-in.md)), through the same adapter as everything else. The lists and details only read; the two actions above are the only writes. Without sign-in (a tool on your own machine, Stage 1) there is nobody to ask as, so the panel is not offered and the routes answer 403 in words, as the Proposals menu lists no spec PRs then. Asking anonymously would work for a public repo, but every visitor would share the forge's unauthenticated limit (60 requests an hour on GitHub), with nothing kept between them.
@@ -75,6 +79,7 @@ The routes, for the curious (all behind the sign-in guard):
 | `POST /api/forge/pulls/<n>/merge` `{ "sha" }` | lands it at that head, if green |
 | `POST /api/forge/pulls/<n>/rerun` `{ "sha", "check" }` | re-runs one failed or cancelled check on that head |
 | `/api/forge/work` | what the Agents tab groups: pull requests and issues of any state, branches, open spec PRs and the `agents` rules ([agents](agents.md)) |
+| `/api/forge/deploys?limit=100` | the workflow runs that are deploys, with what the config says each restarted ([deploys](deploys.md)) |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
 

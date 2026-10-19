@@ -97,7 +97,7 @@
       </div>
 
       <!-- Issues and pull requests (explorer/forge-panel.js): shown only when the config names a forge -->
-      <button type="button" id="forge-btn" class="hx-btn hx-btn--forge" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Issues and pull requests" title="Issues and pull requests: a pull request lights the nodes it changes" hidden>
+      <button type="button" id="forge-btn" class="hx-btn hx-btn--forge" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Issues and pull requests" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden>
         <span aria-hidden="true">⎇</span>
         <span class="hx-only-wide">Issues &amp; PRs</span>
         <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
@@ -205,6 +205,7 @@
           <div class="hx-forge-tabs" role="group" aria-label="Show">
             <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true">Pull requests</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false">Issues</button>
+            <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false">Deploys</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Work grouped by issue and proposal, agent-made work marked">Agents</button>
           </div>
           <div id="forge-work-filters" class="hx-forge-work-filters" hidden>

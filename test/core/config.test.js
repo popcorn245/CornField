@@ -49,6 +49,24 @@ describe('configProblems', () => {
   });
 });
 
+describe('the deploys key', () => {
+  it('accepts workflow patterns and what they restart, and nothing else', () => {
+    expect(configProblems({ deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web', 'media'] } } })).toEqual([]);
+    expect(configProblems({ deploys: null })).toEqual([]);
+    expect(configProblems({ deploys: [] })).toEqual(['"deploys" is { workflows, restarts }.']);
+    expect(configProblems({ deploys: { run: [] } })).toEqual(['deploys.run: the keys are workflows, restarts.']);
+    expect(configProblems({ deploys: { workflows: 'deploy' } })).toEqual(['deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].']);
+    expect(configProblems({ deploys: { restarts: [] } })).toEqual(['deploys.restarts is { "workflow name or pattern": ["node id or label"] }.']);
+    expect(configProblems({ deploys: { restarts: { Deploy: 'stack-web' } } })).toEqual(['deploys.restarts["Deploy"] is a list of node ids or labels.']);
+  });
+
+  it('defaults to any workflow with "deploy" in its name, restarting nothing', async () => {
+    expect(DEFAULTS.deploys).toEqual({ workflows: ['*deploy*'], restarts: {} });
+    const config = await loadConfig(repo('export default { deploys: { restarts: { Ship: ["stack-web"] } } };'));
+    expect(config.deploys).toEqual({ workflows: ['*deploy*'], restarts: { Ship: ['stack-web'] } });
+  });
+});
+
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
     expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });

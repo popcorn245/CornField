@@ -13,6 +13,8 @@
  *   testFilesOf               the test files a check's name names
  *   litFor                    for one pull request: which nodes its files are, and which a failing check's tests are
  *   paintForge                lights those in a built scene (scene.js calls it): the rest fades back
+ *   nodesForRestarts, litForDeploy   for one deploy (PIPE-03): the nodes the config says it restarted (a stack brings its containers),
+ *                             and the refs that are on no node; the deploys list's filters and words (matchesDeploy, deployWords, deployMeta)
  *   errorWords                a failed request, in words
  *   mergeBlock, rerunWhy      the actions (CF-08): why a pull request cannot be landed now, why a failed check cannot be re-run
  *   confirmMerge, mergeBody   what the confirm step shows of what will land, and what is sent when it is confirmed
@@ -21,11 +23,12 @@
 
 import { relativeTime } from './review-model.js';
 
-export const KINDS = Object.freeze(['pulls', 'issues']);
+export const KINDS = Object.freeze(['pulls', 'issues', 'deploys']);
 /** The states a list offers: [value, label]; a pull request that landed is "merged", one closed without landing "closed" */
 export const STATES = Object.freeze({
   pulls: [['open', 'Open'], ['merged', 'Merged'], ['closed', 'Closed'], ['all', 'All']],
   issues: [['open', 'Open'], ['closed', 'Closed'], ['all', 'All']],
+  deploys: [['all', 'All'], ['success', 'Succeeded'], ['failure', 'Failed'], ['running', 'Running or waiting'], ['other', 'Cancelled or skipped']],
 });
 /** How many a list asks for (the server's own default; its most is 300) */
 export const LIST_LIMIT = 100;
@@ -34,13 +37,15 @@ export const FORGE_DIM_ALPHA = 0.2;
 /** A node a failing check's test is: red (the light theme deepens it like any node colour) */
 export const FORGE_FAIL_COLOR = '#f87171';
 
-export const defaultFilters = () => ({ state: 'open', label: '', author: '', text: '' });
+export const defaultFilters = (kind = 'pulls') => ({ state: kind === 'deploys' ? 'all' : 'open', label: '', author: '', text: '' });
 
 /** What the server is asked for: a merged pull request is a closed one, filtered after */
 export const serverState = (state) => (state === 'merged' ? 'closed' : state);
 
 /** The address of a list */
-export const listUrl = (kind, state) => `/api/forge/${kind}?state=${serverState(state)}&limit=${LIST_LIMIT}`;
+export const listUrl = (kind, state) => (kind === 'deploys' ? `/api/forge/deploys?limit=${LIST_LIMIT}` : `/api/forge/${kind}?state=${serverState(state)}&limit=${LIST_LIMIT}`);
+/** What a list is kept under: a deploys list is filtered by state here, so every state is one list */
+export const listKeyOf = (kind, state) => (kind === 'deploys' ? 'deploys' : `${kind}|${serverState(state)}`);
 /** The address of one pull request with its files and checks */
 export const pullUrl = (n) => `/api/forge/pulls/${n}`;
 
@@ -62,8 +67,19 @@ export function matches(item, kind, filters) {
   return true;
 }
 
+/** Whether a deploy passes the filters: its state (cancelled and skipped are "other") and the search over its words */
+export function matchesDeploy(deploy, filters) {
+  const f = { ...defaultFilters('deploys'), ...filters };
+  const group = { success: 'success', failure: 'failure', running: 'running', queued: 'running' }[deploy.state] || 'other';
+  if (f.state !== 'all' && f.state !== group) return false;
+  const text = f.text.trim().toLowerCase();
+  if (!text) return true;
+  const hay = `${deploy.name} ${deploy.workflow} ${deploy.title} ${deploy.branch} ${deploy.event} ${deploy.actor ? deploy.actor.login : ''} ${deploy.sha.slice(0, 7)}`.toLowerCase();
+  return text.split(/\s+/).every((word) => hay.includes(word));
+}
+
 /** The items that pass the filters, in the order the forge gave them (newest first) */
-export const filterItems = (items, kind, filters) => items.filter((item) => matches(item, kind, filters));
+export const filterItems = (items, kind, filters) => (kind === 'deploys' ? items.filter((d) => matchesDeploy(d, filters)) : items.filter((item) => matches(item, kind, filters)));
 
 /** The labels and authors in a list, for the filters' choices: each once, sorted */
 export function facetsOf(items) {
@@ -191,11 +207,62 @@ export function litFor(detail, nodes) {
 }
 
 // ---------------------------------------------------------------------------
+//  Deploys to nodes
+// ---------------------------------------------------------------------------
+
+const DEPLOY_WORDS = { success: 'Succeeded', failure: 'Failed', running: 'Running', queued: 'Waiting', cancelled: 'Cancelled', skipped: 'Skipped', neutral: 'Finished' };
+/** A deploy's state, in a word */
+export const deployWords = (deploy) => DEPLOY_WORDS[deploy.state] || deploy.state;
+
+/** "main · abc1234 · maintainer-one · 3 days ago" (the branch or tag, the commit, who started it, when it last changed) */
+export function deployMeta(deploy, nowMs) {
+  return [deploy.branch, deploy.sha ? deploy.sha.slice(0, 7) : '', deploy.actor ? deploy.actor.login : '', relativeTime(deploy.updatedAt || deploy.createdAt, nowMs)].filter(Boolean).join(' · ');
+}
+
+/**
+ * The nodes a deploy restarted, from the refs the config gave it. A ref is a node's id, or else its label (every node
+ * with that label); a stack restarts its containers too (the node of type `stack` and the `container` nodes whose
+ * `stack` is its label). A ref no node answers to is reported, not dropped.
+ * @param {string[]} refs
+ * @param {{ id: string, label?: string, type?: string, stack?: string }[]} nodes
+ * @returns {{ nodes: object[], missing: string[] }} each node once, in the order of the refs
+ */
+export function nodesForRestarts(refs, nodes) {
+  const found = new Map();
+  const missing = [];
+  for (const ref of refs) {
+    const byId = nodes.filter((n) => n.id === ref);
+    const hit = byId.length ? byId : nodes.filter((n) => typeof n.label === 'string' && n.label.toLowerCase() === String(ref).toLowerCase());
+    if (!hit.length) { missing.push(ref); continue; }
+    for (const n of hit) {
+      found.set(n.id, n);
+      if (n.type === 'stack') for (const c of nodes) if (c.type === 'container' && c.stack === n.label) found.set(c.id, c);
+    }
+  }
+  return { nodes: [...found.values()], missing };
+}
+
+/**
+ * What one deploy lights: the nodes it restarted. A deploy that failed lights them as a failing check lights its tests
+ * (red); any other lights them as a pull request's files are (amber). A deploy the config maps to nothing lights nothing.
+ * @param {{ state: string, restarts: string[] }} deploy
+ * @param {object[]} nodes the map's nodes
+ * @returns {{ nodes: object[], missing: string[], changed: Set<string>, failing: Set<string> }}
+ */
+export function litForDeploy(deploy, nodes) {
+  const { nodes: hit, missing } = nodesForRestarts(deploy.restarts || [], nodes);
+  const ids = new Set(hit.map((n) => n.id));
+  return deploy.state === 'failure'
+    ? { nodes: hit, missing, changed: new Set(), failing: ids }
+    : { nodes: hit, missing, changed: ids, failing: new Set() };
+}
+
+// ---------------------------------------------------------------------------
 //  The picture
 // ---------------------------------------------------------------------------
 
 /**
- * Lights a pull request's nodes in a built scene: the nodes its files are get the amber glow of a search match, the
+ * Lights a pull request's (or a deploy's) nodes in a built scene: the nodes its files are get the amber glow of a search match, the
  * tests of a failing check turn red as well, and everything else fades back (nodes and the lines between them), so
  * the lit ones stand out whatever the selection or a proposal did before. Changes alpha, glow, halo, colour and label
  * only. Nothing lit (a pull request whose files are on no node) leaves the scene as it is.

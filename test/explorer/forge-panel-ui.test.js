@@ -32,8 +32,12 @@ const MAP = {
   nodes: [
     node('root', 'root', 'package.json'), node('pkg-server', 'pkg', 'server', { label: 'server' }), node('core-server', 'core', 'server/server.js', { label: 'server.js', parent: 'pkg-server' }),
     node('core-meals', 'core', 'server/meals.js', { label: 'meals.js', parent: 'pkg-server' }), node('tests-auth', 'core', 'test/server/auth.test.js', { label: 'auth.test.js' }),
+    // What a deploy restarts: a machine, a stack and its containers (the compose and world derivers' nodes)
+    node('machine-nas', 'machine', undefined, { label: 'nas' }), node('stack-web', 'stack', undefined, { label: 'web' }),
+    node('container-app', 'container', undefined, { label: 'app', stack: 'web' }), node('container-db', 'container', undefined, { label: 'db', stack: 'web' }),
   ],
-  edges: [{ from: 'root', to: 'pkg-server' }, { from: 'pkg-server', to: 'core-server' }, { from: 'pkg-server', to: 'core-meals' }, { from: 'root', to: 'tests-auth' }],
+  edges: [{ from: 'root', to: 'pkg-server' }, { from: 'pkg-server', to: 'core-server' }, { from: 'pkg-server', to: 'core-meals' }, { from: 'root', to: 'tests-auth' },
+    { from: 'root', to: 'machine-nas' }, { from: 'machine-nas', to: 'stack-web' }, { from: 'stack-web', to: 'container-app' }, { from: 'stack-web', to: 'container-db' }],
 };
 
 const user = (login) => ({ login, url: `https://git.example.test/${login}` });
@@ -81,6 +85,17 @@ const WORK = {
   specsProblem: null,
 };
 
+const run = (id, name, state, extra = {}) => ({
+  id, workflow: `${name.toLowerCase().replace(/\s+/g, '-')}.yml`, name, title: `Run ${id}`, event: 'push', branch: 'main', sha: 'abc1234def5678', state, actor: user('maintainer-one'),
+  url: `https://git.example.test/owner/name/actions/runs/${id}`, createdAt: '2026-10-19T10:00:00Z', updatedAt: '2026-10-19T11:00:00Z', restarts: [], ...extra,
+});
+const DEPLOYS = [
+  run('9004', 'Deploy web', 'success', { restarts: ['stack-web'] }),
+  run('9003', 'Deploy media', 'running', { title: 'Deploy media', actor: null }),
+  run('9002', 'Deploy nas', 'failure', { restarts: ['nas', 'ghost-node'] }),
+  run('9001', 'Deploy web', 'cancelled', { restarts: ['web'] }),
+];
+
 const NOW = Date.parse('2026-10-19T12:00:00Z');
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
@@ -109,6 +124,7 @@ function fakeServer(opts = {}) {
     const at = '2026-10-19T11:58:00.000Z';
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '4990 of 5000 GitHub calls left; the count resets at 12:30 UTC (in about 30 minutes).', items: PULLS[u.searchParams.get('state')] || [...PULLS.open, ...PULLS.closed] });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', items: [issue(5, 'Sign-in'), issue(3, 'Forge adapters', { labels: [], author: user('agent-four') }), issue(4, 'Odd link', { url: 'javascript:alert(1)' })] });
+    if (u.pathname === '/api/forge/deploys') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', items: opts.deploys || DEPLOYS });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...(opts.work || WORK) });
     const one = /^\/api\/forge\/pulls\/(\d+)$/.exec(u.pathname);
     if (one && DETAIL[one[1]]) return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...DETAIL[one[1]] });
@@ -127,6 +143,7 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   Object.defineProperty(canvas.parentElement, 'clientWidth', { value: 1000, configurable: true });
   Object.defineProperty(canvas.parentElement, 'clientHeight', { value: 700, configurable: true });
   Object.assign(state, { canvas, ctx, labelCanvas: null, proposal: null, view: 'orbit', selectedNode: null, isFreeform: false, scenario: null, searchQuery: '', forgeLit: null });
+  Object.assign(state.activeLayers, { stack: false, machine: false, container: false }); // the layers that start off
   state.camera = { x: 0, y: 0, zoom: 1 };
   render.resize();
   state.baseNodes = MAP.nodes.map((n) => ({ ...n }));
@@ -859,5 +876,205 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await select(12);
     const merge = q('[data-forge-merge]');
     expect([merge.tagName, merge.getAttribute('type'), merge.tabIndex]).toEqual(['BUTTON', 'button', 0]);
+  });
+});
+
+describe('deploys light the map', () => {
+  const tab = () => q('[data-forge-kind="deploys"]');
+  async function openDeploys(opts) {
+    const server = fakeServer(opts);
+    mount();
+    openForge();
+    await settle();
+    click(tab());
+    await settle();
+    return server;
+  }
+  const selectDeploy = async (id) => {
+    q(`[data-forge-deploy="${id}"]`).focus();
+    click(q(`[data-forge-deploy="${id}"]`));
+    await settle();
+  };
+  const titles = () => rows().map((r) => r.querySelector('.hx-forge-title').textContent);
+
+  it('lists the last deploys, newest first, with their state, branch, commit, who and when, and what each lights', async () => {
+    const server = await openDeploys();
+    expect(server.urls().at(-1)).toBe('/api/forge/deploys?limit=100');
+    expect(tab().getAttribute('aria-pressed')).toBe('true');
+    expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('false');
+    expect(titles()).toEqual(['Deploy web · Run 9004', 'Deploy media', 'Deploy nas · Run 9002', 'Deploy web · Run 9001']);
+    const first = rows()[0];
+    expect(first.querySelector('.hx-forge-state').textContent).toBe('Succeeded');
+    expect(first.querySelector('.hx-forge-meta').textContent).toBe('Succeeded main · abc1234 · maintainer-one · 1 hour ago');
+    expect(first.querySelector('.hx-forge-label').textContent).toBe('Lights 3 nodes'); // the stack and its two containers
+    expect(rows()[1].querySelector('.hx-forge-label').textContent).toBe('Not mapped to a node'); // listed, not dropped
+    expect(rows()[1].querySelector('.hx-forge-meta').textContent).not.toContain('null');
+    expect(rows()[2].querySelector('.hx-forge-label').textContent).toBe('Lights 1 node');
+    expect(first.querySelector('a.hx-forge-out').getAttribute('aria-label')).toBe('Open deploy Deploy web on GitHub (new tab)');
+    expect($('forge-status').textContent).toMatch(/^4 of 4 deploys, as of 2 minutes ago$/);
+    expect($('forge-label').parentElement.hidden).toBe(true);
+    expect($('forge-author').parentElement.hidden).toBe(true);
+    expect($('forge-text').placeholder).toBe('Workflow, branch, commit, who'); // no numbers or labels to search for
+    expect([...$('forge-state').options].map((o) => o.textContent)).toEqual(['All', 'Succeeded', 'Failed', 'Running or waiting', 'Cancelled or skipped']);
+    expect(await said()).toBe('4 deploys shown');
+  });
+
+  it('selecting one lights the nodes it restarted, a stack with its containers, and fades the rest', async () => {
+    const server = await openDeploys();
+    const asked = server.calls.length;
+    await selectDeploy('9004');
+    expect(server.calls.length).toBe(asked); // the list holds what it restarted: nothing more is asked
+    expect(q('[data-forge-deploy="9004"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).toBe(q('[data-forge-deploy="9004"]'));
+    expect([...state.forgeLit.changed].sort()).toEqual(['container-app', 'container-db', 'stack-web']);
+    expect(state.forgeLit.failing.size).toBe(0);
+    for (const id of ['stack-web', 'container-app', 'container-db']) expect(sceneNode(id)).toMatchObject({ alpha: 1, halo: 'match' });
+    expect(sceneNode('root').alpha).toBeLessThan(0.5);
+    expect(sceneNode('core-server').alpha).toBeLessThan(0.5);
+    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected deploy');
+    expect(q('.hx-forge-detail-title').textContent).toBe('Deploy web');
+    expect(q('.hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
+    expect(qa('[data-forge-node]').map((b) => b.textContent)).toEqual(['web', 'app', 'db']);
+    expect($('forge-btn-lit').textContent).toBe('deploy');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Issues and pull requests, a deploy selected');
+    expect(await said()).toBe('Deploy Deploy web of main, succeeded: 3 nodes restarted and lit. Turned on the Infra and Containers layers.');
+  });
+
+  it('turns on the layers its nodes are on, since containers, stacks and machines start off, and only those', async () => {
+    await openDeploys();
+    expect([state.activeLayers.stack, state.activeLayers.container, state.activeLayers.machine]).toEqual([false, false, false]);
+    await selectDeploy('9004');
+    expect([state.activeLayers.stack, state.activeLayers.container, state.activeLayers.machine]).toEqual([true, true, false]);
+    expect(qa('[data-forge-node]').every((b) => !b.textContent.includes('layer off'))).toBe(true);
+    click(q('[data-forge-deploy="9004"]')); // letting go leaves the layers as the person now has them
+    expect(state.activeLayers.stack).toBe(true);
+  });
+
+  it('a failed deploy lights its nodes red, and says a node the config names that is not on the map', async () => {
+    await openDeploys();
+    await selectDeploy('9002');
+    expect([...state.forgeLit.failing]).toEqual(['machine-nas']); // found by its label, "nas"
+    expect(state.forgeLit.changed.size).toBe(0);
+    expect(sceneNode('machine-nas').color).toBe('#f87171');
+    expect(q('#forge-detail .hx-forge-notice').textContent).toBe('ghost-node is named in the config but not on the map.');
+    expect(await said()).toBe('Deploy Deploy nas of main, failed: 1 node restarted and lit, 1 named that is not on the map. Turned on the Machines layer.');
+  });
+
+  it('a deploy the config maps to nothing is listed, says so, and lights nothing', async () => {
+    await openDeploys();
+    await selectDeploy('9003');
+    expect(state.forgeLit.changed.size + state.forgeLit.failing.size).toBe(0);
+    expect(sceneNode('root').alpha).toBe(1);
+    expect(q('#forge-detail .hx-forge-notice').textContent).toContain('No node is mapped to this deploy, so nothing is lit.');
+    expect(q('#forge-detail .hx-forge-notice').textContent).toContain('deploys.restarts');
+    expect(qa('[data-forge-node]')).toHaveLength(0);
+    expect(await said()).toBe('Deploy Deploy media of main, running. No node is mapped to it, so nothing is lit.');
+  });
+
+  it('selecting it again, or Clear, lets go; a pull request and a deploy are never selected together', async () => {
+    fakeServer();
+    mount();
+    openForge();
+    await settle();
+    click(q('[data-forge-pr="12"]'));
+    await settle();
+    expect($('forge-btn-lit').textContent).toBe('#12');
+    click(tab());
+    await settle();
+    await selectDeploy('9004');
+    expect($('forge-btn-lit').textContent).toBe('deploy'); // the pull request's lights were let go for the deploy's
+    expect(state.forgeLit.changed.has('core-server')).toBe(false);
+    click(q('[data-forge-deploy="9004"]'));
+    expect(state.forgeLit).toBe(null);
+    expect($('forge-detail').hidden).toBe(true);
+    expect($('forge-btn-lit').hidden).toBe(true);
+    expect(sceneNode('root').alpha).toBe(1);
+    await selectDeploy('9001'); // restarts "web": the stack by its label
+    expect([...state.forgeLit.changed].sort()).toEqual(['container-app', 'container-db', 'stack-web']);
+    click(q('[data-action="clear-forge-deploy"]'));
+    expect(state.forgeLit).toBe(null);
+    expect(document.activeElement).toBe($('forge-title'));
+    expect(await said()).toBe('Deploy Deploy web cleared');
+    click(q('[data-forge-kind="pulls"]'));
+    click(q('[data-forge-pr="12"]'));
+    await settle();
+    expect(state.forgeLit.changed.has('core-server')).toBe(true);
+    expect(q('#forge-detail').getAttribute('aria-label')).toBe('Selected pull request');
+  });
+
+  it('filters by state and a search; the lights stay with the selected deploy', async () => {
+    await openDeploys();
+    await selectDeploy('9004');
+    choose('forge-state', 'failure');
+    expect(titles()).toEqual(['Deploy nas · Run 9002']);
+    choose('forge-state', 'running');
+    expect(titles()).toEqual(['Deploy media']);
+    choose('forge-state', 'other');
+    expect(titles()).toEqual(['Deploy web · Run 9001']);
+    choose('forge-state', 'all');
+    $('forge-text').value = 'nas';
+    $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(titles()).toEqual(['Deploy nas · Run 9002']);
+    $('forge-text').value = 'abc1234 main';
+    $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(rows()).toHaveLength(4);
+    $('forge-text').value = 'nothing like it';
+    $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(q('.hx-forge-empty').textContent).toBe('No deploy matches these filters.');
+    expect(state.forgeLit.changed.has('stack-web')).toBe(true);
+  });
+
+  it('a node button selects the node on the map', async () => {
+    await openDeploys();
+    await selectDeploy('9004');
+    click(q('[data-forge-node="container-db"]'));
+    await settle();
+    expect(state.selectedNode.id).toBe('container-db');
+    expect(await said()).toBe('db, container');
+  });
+
+  it('follows the map when its nodes change, and Refresh reads the deploys again', async () => {
+    const server = await openDeploys();
+    await selectDeploy('9002');
+    expect(state.forgeLit.failing.has('machine-nas')).toBe(true);
+    setMap(MAP.nodes.filter((n) => n.id !== 'machine-nas').map((n) => ({ ...n })), MAP.edges);
+    expect(state.forgeLit.failing.size).toBe(0);
+    expect(q('#forge-detail .hx-forge-notice').textContent).toBe('nas, ghost-node are named in the config but not on the map.');
+    const before = server.calls.length;
+    await refreshForge();
+    expect(server.calls.length).toBe(before + 1);
+    expect(server.calls.at(-1).init).toEqual({ cache: 'reload' });
+    expect(q('[data-forge-deploy="9002"]').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('when the forge cannot list runs, says why in the panel (Forgejo without Actions) and the other lists still work', async () => {
+    fakeServer({ answers: { '/api/forge/deploys?limit=100': { status: 501, body: { ok: false, error: 'Forgejo cannot list the Actions runs of owner/name: Actions is off for the repo, or the instance is older than Forgejo 11 (or Gitea 1.24), which cannot list runs. Deploys are not read from it.', code: 'unavailable' } } } });
+    mount();
+    openForge();
+    await settle();
+    click(tab());
+    await settle();
+    expect($('forge-notice').hidden).toBe(false);
+    expect($('forge-notice').textContent).toContain('Forgejo cannot list the Actions runs of owner/name');
+    expect(rows()).toHaveLength(0);
+    click(q('[data-forge-kind="pulls"]'));
+    expect(rows()).toHaveLength(3);
+  });
+
+  it('says there are no deploys when the forge has none', async () => {
+    await openDeploys({ deploys: [] });
+    expect(q('.hx-forge-empty').textContent).toBe('No deploys here.');
+  });
+
+  it('on a phone it is the same sheet: a deploy selected lights the map, and its node button collapses the sheet', async () => {
+    vi.stubGlobal('matchMedia', (query) => ({ matches: /max-width: 767px/.test(query), media: query, addEventListener() {}, removeEventListener() {} }));
+    await openDeploys();
+    expect(sheetState('forge')).toBe('expanded');
+    await selectDeploy('9004');
+    expect(state.forgeLit.changed.has('stack-web')).toBe(true);
+    click(q('[data-forge-node="stack-web"]'));
+    await settle();
+    expect(sheetState('forge')).toBe('peek');
+    expect(state.selectedNode.id).toBe('stack-web');
   });
 });
