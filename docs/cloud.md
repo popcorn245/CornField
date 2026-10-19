@@ -37,6 +37,7 @@ The cloud deriver draws the services outside your house (or company) that the co
 | Dockerfiles | `FROM` images and the package installs of `RUN`s | the node holding the Dockerfile, `deploy` |
 | Images | the `image` of container nodes another deriver made | the container, `deploy` |
 | CI | `.github/workflows` and `.forgejo/workflows`: `uses:`, job images, downloads, installs, `docker run` (needs js-yaml, an optional dependency) | a `tool-ci` node (or `options.ci.from`), `deploy` |
+| Tailnet | the machines of a world file (the `world` deriver, listed before `cloud`) with `tailnet: true`, by hostname; an entry claims them with `"tailnet": true` in its `match` | the machine, `run` |
 | Caddy | the Caddyfiles named in `options.caddyfiles: [{ file, from }]`: DNS-01 providers, resolvers, the ACME CA | the node named, `renew` |
 
 Options: `{ ownDomains, code, ci: { from }, dockerfiles, caddyfiles }`. `ownDomains` are never outside (your own domains). A repo's own deriver can add evidence of any kind (`lib`, `route`, `env`…) before the cloud deriver runs.
