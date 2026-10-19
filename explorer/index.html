@@ -96,6 +96,13 @@
         <div id="proposal-menu" class="hx-menu hx-menu--proposals glass" hidden></div>
       </div>
 
+      <!-- Issues and pull requests (explorer/forge-panel.js): shown only when the config names a forge -->
+      <button type="button" id="forge-btn" class="hx-btn hx-btn--forge" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Issues and pull requests" title="Issues and pull requests: a pull request lights the nodes it changes" hidden>
+        <span aria-hidden="true">⎇</span>
+        <span class="hx-only-wide">Issues &amp; PRs</span>
+        <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
+      </button>
+
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
       <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
         <button type="button" id="live-chip" class="hx-btn hx-live-chip" aria-haspopup="true" aria-expanded="false" aria-label="Live layer">
@@ -184,6 +191,34 @@
         <div id="proposal-changes" class="hx-proposal-changes" hidden></div>
       </div>
     </section>
+
+    <!-- Issues and pull requests (forge-panel.js): a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge -->
+    <aside id="forge-panel" class="hx-forge glass" aria-label="Issues and pull requests" inert hidden>
+      <div class="hx-forge-body">
+        <div class="hx-forge-head">
+          <h2 id="forge-title" class="hx-drawer-title" tabindex="-1">Issues and pull requests</h2>
+          <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again">Refresh</button>
+          <button type="button" class="hx-close" data-action="close-forge" aria-label="Close">✕</button>
+        </div>
+        <p id="forge-status" class="hx-forge-status hx-faint"></p>
+        <div class="hx-forge-controls">
+          <div class="hx-forge-tabs" role="group" aria-label="Show">
+            <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true">Pull requests</button>
+            <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false">Issues</button>
+          </div>
+          <div class="hx-forge-filters">
+            <label class="hx-forge-field">State<select id="forge-state" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field">Label<select id="forge-label" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field">Author<select id="forge-author" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field hx-forge-field--text">Search<input type="search" id="forge-text" class="hx-forge-input" placeholder="Title, number, label" autocomplete="off" /></label>
+          </div>
+        </div>
+        <p id="forge-notice" class="hx-forge-notice" hidden></p>
+        <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
+        <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
+        <p id="forge-rate" class="hx-forge-rate hx-faint"></p>
+      </div>
+    </aside>
 
     <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile -->
     <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert>

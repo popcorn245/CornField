@@ -1312,6 +1312,46 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Sign-in (docs/sign-in.md)."
+    },
+    {
+      "id": "core-explorer-forge-panel-model",
+      "label": "forge-panel-model.js",
+      "type": "core",
+      "file": "explorer/forge-panel-model.js",
+      "summary": "The issues and PRs panel, the pure half: no DOM, no `window`, no clock (the time is passed in).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The issues and PRs panel, the pure half: no DOM, no `window`, no clock (the time is passed in). (explorer/forge-panel-model.js)"
+    },
+    {
+      "id": "core-explorer-forge-panel",
+      "label": "forge-panel.js",
+      "type": "core",
+      "file": "explorer/forge-panel.js",
+      "summary": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
+    },
+    {
+      "id": "core-server-forge-routes",
+      "label": "forge-routes.js",
+      "type": "core",
+      "file": "server/forge-routes.js",
+      "summary": "The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). (server/forge-routes.js)"
+    },
+    {
+      "id": "page-doc-docs-issues-and-prs",
+      "type": "page",
+      "label": "/docs/issues-and-prs",
+      "file": "docs/issues-and-prs.md",
+      "summary": "Issues and pull requests",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Issues and pull requests (docs/issues-and-prs.md)."
     }
   ],
   "edges": [
@@ -3628,7 +3668,125 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-forge-panel-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-forge-panel"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-forge-routes"
+    },
+    {
+      "from": "core-explorer-forge-panel-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-forge-routes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-issues-and-prs"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:02:16.896Z"
+  "updatedAt": "2026-10-19T22:23:28.400Z"
 }

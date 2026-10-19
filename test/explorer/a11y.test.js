@@ -32,6 +32,9 @@ import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
 
+// @ts-expect-error plain JS modules, no declarations
+import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -136,6 +139,87 @@ describe('axe finds no violation', () => {
     expect(await audit()).toEqual([]);
     clearScenario();
     closeProposal();
+  });
+});
+
+describe('the issues and PRs panel', () => {
+  const author = { login: 'agent-four', url: 'https://git.example.test/agent-four' };
+  const pr = (number, title, extra = {}) => ({ number, title, state: 'open', draft: false, author, labels: ['agent'], head: { ref: 'b', sha: 'abc' }, base: { ref: 'main' }, url: `https://git.example.test/pull/${number}`, createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null, ...extra });
+  const DETAIL = {
+    pull: pr(13, 'Lint everything'),
+    files: [{ path: 'app-a', status: 'modified', previousPath: null, additions: 2, deletions: 1 }, { path: 'README.md', status: 'added', previousPath: null, additions: 5, deletions: 0 }],
+    checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: false }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false }],
+  };
+  const stub = () => vi.stubGlobal('fetch', vi.fn(async (url) => {
+    const u = new URL(url, 'http://localhost');
+    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : DETAIL;
+    return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
+  }));
+  const start = () => {
+    const canvas = mount();
+    resetForgePanelForTests();
+    initForgePanel({ forge: { type: 'github', repo: 'owner/name' } });
+    return canvas;
+  };
+  afterEach(() => { closeForge({ restoreFocus: false }); resetForgePanelForTests(); delete document.documentElement.dataset.theme; });
+
+  it('is not on the page without a forge, and the page passes as it did', async () => {
+    mount();
+    resetForgePanelForTests();
+    expect(initForgePanel({ forge: null })).toBe(false);
+    expect($('forge-btn').hidden).toBe(true);
+    expect($('forge-panel').hidden).toBe(true);
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has no violation closed (inert off screen), open with its lists, and with a pull request selected', async () => {
+    stub();
+    start();
+    expect($('forge-panel').inert).toBe(true);
+    expect(await audit()).toEqual([]);
+    openForge();
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
+    expect(await audit()).toEqual([]);
+    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('.hx-forge-file').length).toBe(2);
+    expect(await audit()).toEqual([]);
+    document.querySelector('[data-forge-kind="issues"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none in the light theme either (contrast is checked in Chromium, in both themes)', async () => {
+    stub();
+    start();
+    document.documentElement.dataset.theme = 'light';
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(await audit()).toEqual([]);
+  });
+
+  it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {
+    stub();
+    start();
+    const btn = $('forge-btn');
+    expect(btn.tabIndex).toBe(0);
+    expect(btn.getAttribute('aria-controls')).toBe('forge-panel');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    btn.focus();
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); // Enter and Space on a button are a click
+    await settle();
+    expect(document.activeElement).toBe($('forge-title'));
+    expect([...$('forge-panel').querySelectorAll('button, select, input, a[href]')].every((el) => el.tabIndex >= 0)).toBe(true);
+    await settle(40);
+    expect($('map-announcer').textContent).toBe('2 pull requests shown');
+    key($('forge-title'), 'Escape');
+    expect(document.activeElement).toBe(btn);
+    expect($('forge-panel').inert).toBe(true);
+    await settle(40);
+    expect($('map-announcer').textContent).toBe('Issues and pull requests closed');
   });
 });
 

@@ -121,7 +121,8 @@ describe('sign-in with GitHub, and the guard', () => {
     config.forge = { type: 'github', url: fake.url, repo: 'acme/home' };
     config.publicUrl = PUBLIC;
     srv = await serverOn(config, { env: ENV, now: () => clock });
-    plain = await serverOn(await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } }), { env: {} });
+    // The same forge (the sample's own has no adapter yet), so a route that reads it answers alike with and without sign-in
+    plain = await serverOn(Object.assign(await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } }), { forge: config.forge }), { env: {} });
   });
   afterAll(async () => {
     await srv.close();
@@ -245,6 +246,7 @@ describe('sign-in with GitHub, and the guard', () => {
     ['GET', '/'], ['HEAD', '/'], ['GET', '/index.html'], ['GET', '/cornfield/config.json'], ['GET', '/topology.json'], ['GET', '/topology.cloud.json'],
     ['GET', '/cornfield/house.json'], ['GET', '/topology-fixture.json?nodes=300&edges=900&seed=4'], ['GET', '/explorer/main.js'], ['GET', '/explorer/explorer.css'],
     ['GET', '/core/schema.js'], ['GET', '/plugins/house/browser.js'], ['GET', '/repo/packages/api/src/server.js'], ['GET', '/proposals'],
+    ['GET', '/api/forge/issues'], ['GET', '/api/forge/pulls/12'], ['POST', '/api/forge/pulls'],
     ['GET', '/proposals/0002-checkout.json'], ['GET', '/proposals/0002-checkout/review'], ['PUT', '/proposals/0002-checkout/review', own, JSON.stringify({ verdict: 'approved' })],
     ['GET', '/.env'], ['GET', '/nope'], ['POST', '/topology.json'], ['DELETE', '/proposals'],
   ];

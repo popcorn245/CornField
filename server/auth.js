@@ -279,6 +279,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       /** Stage 1: everything passes; the routes under /auth/ are not there */
       gate: async () => ({ done: false, session: null }),
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
+      store: null,
       close() {},
     };
   }
@@ -544,6 +545,8 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
       return forgeWith(token);
     },
+    /** The SQLite file (opened on first use), for the routes that keep answers in it (server/forge-routes.js) */
+    store,
     close() {
       if (db?.isOpen) db.close();
       db = null;

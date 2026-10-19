@@ -112,6 +112,12 @@ export const state = {
   scenario: null,
 
   /**
+   * What the selected pull request lights (forge-panel.js, forge-panel-model.js `litFor`): `{ changed, failing }`, sets of
+   * node ids (the nodes its files are; the nodes of the tests a failing check names), or null with none selected.
+   */
+  forgeLit: null,
+
+  /**
    * Changes whenever anything the scene is built from changes (scene.js). render.js rebuilds the
    * scene only when this moved: never for a camera change or a packet frame.
    */
