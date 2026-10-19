@@ -1,0 +1,8 @@
+[package]
+name = "pantry-core"
+version = "0.1.0"
+edition = "2021"
+description = "The pantry's items and their rules"
+
+[dependencies]
+serde.workspace = true
