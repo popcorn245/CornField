@@ -174,11 +174,11 @@ describe('proposals from spec PRs', () => {
     expect(r.json.error).toMatch(/Not valid JSON/);
   });
 
-  it('is read-only for a PR\'s proposal too, and a review of one is not taken yet', async () => {
+  it('is read-only for a PR\'s proposal too, and a review of one is only posted by a signed-in maintainer (reviews.test.js)', async () => {
     expect((await get('/proposals/0013-meals.json?source=pull%2F23', 'POST')).status).toBe(405);
     const put409 = await get('/proposals/0013-meals/review?source=pull%2F23', 'PUT');
     expect(put409.status).toBe(409);
-    expect(put409.json.error).toMatch(/not posted from cornfield yet/);
+    expect(put409.json.error).toMatch(/comment on a spec PR/);
     expect((await get('/proposals/0013-meals/review?source=pull%2F23')).status).toBe(404);
     expect(fs.existsSync(path.join(root, '.cornfield-data'))).toBe(false);
   });

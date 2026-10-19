@@ -10,9 +10,10 @@
  *   sendBackProblem    why a note is missing (or null)
  *   reviewBody         what the server's PUT takes: { verdict, note, edits }
  *   editsHint          what to tell the maintainer about the edits after a send
+ *   isReviewable       whether a proposal's source can be reviewed (a spec PR: `pull/<n>`), and the words for when it cannot
  *   specNumber         the spec number a proposal's `spec` field names
  *
- * The review the server keeps: `{ "version": 1, "verdict": "approved" | "notes", "note": string, "edits": Edit[], "at": ISO string }`.
+ * The review is a comment on the spec PR; the server answers it as `{ "version": 1, "slug", "verdict": "approved" | "notes", "note": string, "edits": Edit[], "at": ISO string, "by": login, "comment": { id, url } }`.
  */
 
 const MINUTE = 60_000;
@@ -65,8 +66,14 @@ export function reviewBody(verdict, note, edits) {
   return { verdict, note: typeof note === 'string' ? note.trim() : '', edits: structuredClone(Array.isArray(edits) ? edits : []) };
 }
 
+/** Whether a proposal opened from `source` can be reviewed: only a proposal of an open spec PR (`pull/<n>`) has a PR to hold the review */
+export const isReviewable = (source) => typeof source === 'string' && /^pull\/[1-9]\d{0,8}$/.test(source);
+
+/** What the bar says for a proposal that is not on a PR */
+export const NOT_ON_A_PR = 'A review is a comment on the proposal\'s spec PR. Push this draft as a spec PR to approve or send it back here.';
+
 /**
- * What to say about the edits once the review is sent. They go in the file either way; an approval keeps them in the
+ * What to say about the edits once the review is sent. They go in the comment either way; an approval keeps them in the
  * viewer (the drafting agent folds them into the proposal), a send back empties the list (they went with the notes).
  * @param {'approved'|'notes'} verdict
  * @param {number} count
@@ -75,7 +82,7 @@ export function editsHint(verdict, count) {
   if (!count) return '';
   const them = plural(count, 'edit');
   return verdict === 'approved'
-    ? `Your ${them} ${count === 1 ? 'is' : 'are'} in the review file. The drafting agent will fold ${count === 1 ? 'it' : 'them'} into the proposal.`
+    ? `Your ${them} ${count === 1 ? 'is' : 'are'} in the review comment on the PR. The drafting agent will fold ${count === 1 ? 'it' : 'them'} into the proposal.`
     : `Sent with your ${them}. The drafting agent will fold ${count === 1 ? 'it' : 'them'} into the next draft.`;
 }
 

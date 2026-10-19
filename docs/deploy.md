@@ -38,7 +38,7 @@ Traefik: the labels in the compose file's commented block: a router for the `Hos
 
 ## The data folder
 
-`/data` is a named volume (`cornfield-data`) holding `cornfield.db`: sessions (with maintainers' forge tokens, encrypted), reviews, the forge cache. The image creates `/data` owned by its non-root user `node` (uid 1000), so a new named volume is created owned by it; cornfield keeps the folder `0700` and the file `0600`. With a bind mount instead of a volume, `chown 1000:1000` and `chmod 700` the host folder first. The repo is mounted read-only at `/repo`. The container runs as `node`, with a read-only root filesystem, no capabilities and `no-new-privileges`.
+`/data` is a named volume (`cornfield-data`) holding `cornfield.db`: sessions (with maintainers' forge tokens, encrypted), the audit of every review posted, the forge cache. The image creates `/data` owned by its non-root user `node` (uid 1000), so a new named volume is created owned by it; cornfield keeps the folder `0700` and the file `0600`. With a bind mount instead of a volume, `chown 1000:1000` and `chmod 700` the host folder first. The repo is mounted read-only at `/repo`. The container runs as `node`, with a read-only root filesystem, no capabilities and `no-new-privileges`.
 
 The health check asks `GET /healthz`, which answers `{ "ok": true }` without a session; `docker ps` shows the container as healthy.
 
@@ -49,5 +49,5 @@ The health check asks `GET /healthz`, which answers `{ "ok": true }` without a s
 - **Secrets** live in `.env` or your orchestrator's secret store, never in the image, the compose file or git. The OAuth client secret and the session secret are the two to protect; keep `.env` mode `0600`.
 - **A maintainer's forge token** is kept encrypted in `cornfield.db`, with a key from the session secret. Whoever has both the file and the secret can use those tokens, so keep backups apart from `.env`.
 - **Rotate the session secret** when it may have leaked, or on a schedule: put a new `openssl rand -base64 48` in `.env` and run `docker compose up -d`. Every session becomes unreadable, so everyone is signed out and signs in again. Rotate the OAuth client secret on the forge the same way and update `.env`.
-- **Back up** the `cornfield-data` volume (the reviews in it cannot be rebuilt). Stop the container for a consistent copy, then archive it, for example `docker run --rm -v cornfield-data:/data:ro -v "$PWD:/backup" alpine tar czf /backup/cornfield-data.tgz -C /data .`. A backup holds encrypted tokens and session hashes: store it like a secret. Restore by unpacking into an empty volume and `chown -R 1000:1000` it.
+- **Back up** the `cornfield-data` volume (it holds the sessions and the audit of what cornfield did on the forge). Stop the container for a consistent copy, then archive it, for example `docker run --rm -v cornfield-data:/data:ro -v "$PWD:/backup" alpine tar czf /backup/cornfield-data.tgz -C /data .`. A backup holds encrypted tokens and session hashes: store it like a secret. Restore by unpacking into an empty volume and `chown -R 1000:1000` it.
 - **Updates:** pin the image to a version tag rather than `latest` once you depend on it.

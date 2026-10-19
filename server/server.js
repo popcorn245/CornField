@@ -2,7 +2,7 @@
  * @module server/server
  *
  * cornfield's HTTP server: zero dependencies, Node's own `http`. It serves the explorer, the target
- * repo's map and proposals, and takes a maintainer's review. What it answers:
+ * repo's map and proposals, and, with sign-in, posts a maintainer's review as a comment on a spec PR. What it answers:
  *
  *   GET  /healthz                       { ok: true } and nothing else: the image's health check, open without a session
  *   *    /auth/…                        sign-in (server/auth.js), when it is configured
@@ -16,7 +16,8 @@
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
- *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js)
+ *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
+ *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
  * Before any route, `Host` must be a loopback name, or with sign-in the public URL's host too (else 421): a page on
@@ -206,7 +207,9 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
-    if (serveProposals(req, res, reqPath, url, where, gate.session ? () => auth.forgeFor(gate.session) : null)) return;
+    const session = gate.session;
+    const forgeFor = session ? () => auth.forgeFor(session) : null;
+    if (serveProposals(req, res, reqPath, url, where, forgeFor, session ? { login: session.login, record: (entry) => auth.record(entry) } : null)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();

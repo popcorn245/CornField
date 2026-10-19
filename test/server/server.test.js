@@ -146,18 +146,15 @@ describe('cornfield serve', () => {
     expect((await raw(port, 'PUT', '/proposals/0002-checkout.json')).status).toBe(405);
   });
 
-  it('keeps a review in its data folder, never in the repo, and only from its own page', async () => {
+  it('takes no review of a draft that is not on a PR: a review is a PR comment, so nothing is written in the data folder or the repo', async () => {
     const ok = JSON.stringify({ verdict: 'approved', note: '', edits: [] });
     const own = { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' };
-    expect((await raw(port, 'PUT', '/proposals/0002-checkout/review', { 'Content-Type': 'application/json' }, ok)).status).toBe(403);
-    expect((await raw(port, 'PUT', '/proposals/0002-checkout/review', { ...own, Origin: 'http://evil.example' }, ok)).status).toBe(403);
-    expect((await raw(port, 'PUT', '/proposals/nope/review', own, ok)).status).toBe(404);
     const res = await raw(port, 'PUT', '/proposals/0002-checkout/review', own, ok);
-    expect(res.status).toBe(200);
-    expect(fs.existsSync(path.join(data, 'reviews', 'checkout', '0002-checkout.review.json'))).toBe(true);
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/comment on a spec PR/);
+    expect(fs.existsSync(path.join(data, 'reviews'))).toBe(false);
     expect(fs.readdirSync(path.join(SAMPLE, 'docs/specs/proposals'))).toEqual(['0002-checkout.json']);
-    const shown = spawnSync(process.execPath, [CLI, 'review', '0002-checkout', '--repo', SAMPLE], { env: { ...process.env, CORNFIELD_DATA: data }, encoding: 'utf8' });
-    expect(JSON.parse(shown.stdout)).toMatchObject({ version: 1, verdict: 'approved' });
+    expect((await raw(port, 'GET', '/proposals/0002-checkout/review')).status).toBe(404);
   });
 
   it('answers 400 for a malformed escape and sends no CORS preflight allowance', async () => {

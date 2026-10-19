@@ -85,15 +85,24 @@ With a `forge` and [sign-in](sign-in.md) configured, the list also holds the pro
 - **Before / Diff / After.** Diff rings what is added (dashed), changed (amber) and removed (red, label struck through) and dims the rest; Before and After show the map as it is and as it would be. The counts chip lists every change; a row takes you to it.
 - **Scenarios.** Each plays step by step over the map, the step's text in the player at the bottom. Space plays and pauses, the arrow keys step.
 - **What-if edits.** Add or remove a node or an edge, draw an edge by dragging from one node to another, add, reword or reorder steps. Edits are violet and can be undone; they never touch the file.
-- **Approve or Send back.** Send back needs a note. Either one is kept with the edits you made, in cornfield's data folder (`<dataDir>/reviews/<source>/<slug>.review.json`, by default under `~/.cornfield/`), never in the checkout. (A proposal of a spec PR cannot be approved or sent back from cornfield yet: comment on the PR until reviews are posted there.)
+- **Approve or Send back.** Send back needs a note. Either one is posted as a **comment on the spec PR**, as you (your own token, so the PR shows who said it), with the edits you made. The comment is one line for people ("Approved `0002-checkout` with 2 edits (you, in cornfield).", the note quoted under it) and a fenced block for the agent, named for the proposal:
 
-Whoever is writing the proposal reads the last review with:
+  `````text
+  ```cornfield-review 0002-checkout
+  { "verdict": "notes", "note": "Make the checkout one page.", "edits": [ { "op": "remove-node", "id": "page-web-confirm" } ] }
+  ```
+  `````
+
+  The **latest comment by an admin** (someone who maintains the repo) is the review. A block from anyone else, a block that is not exactly `{ verdict, note, edits }` (not JSON, another verdict, an extra key) and a quoted one are ignored, so a reader cannot overrule a maintainer and a typo cannot break the page. You can write one by hand on the PR in the same shape; the bar shows the latest one when the proposal opens ("Approved 3 minutes ago"). Every post is written to cornfield's audit table (who, which PR, what the forge answered). Nothing is written into the checkout.
+- **A draft with no PR cannot be reviewed.** A proposal from the checkout or a worktree has no PR to hold a review, so its buttons are off and the bar says to push it as a spec PR. Reviews that earlier versions kept in the data folder (`<dataDir>/reviews/<source>/<slug>.review.json`) are carried over once: the first time you open the menu signed in, each one is posted as a comment on the one open spec PR that holds its proposal (unless that PR already has a review of it, which is newer), and the file is renamed `….review.json.migrated` and never read again. One whose proposal is on no PR yet waits for one.
+
+Whoever is writing the proposal reads the review from the PR with:
 
 ```sh
-npx cornfield review 0002-checkout
+CORNFIELD_FORGE_TOKEN=… npx cornfield review 0002-checkout        # --pr 23 to name the PR
 ```
 
-It prints the review as stored: `{ "version": 1, "verdict": "approved" | "notes", "note": "…", "edits": [ … ], "at": "…" }`. The edits are in the same terms the viewer used (`add-node`, `remove-edge`, `add-step`, …); `applyEdits` from cornfield's core folds them into the proposal. A script for it, in your repo with cornfield installed:
+It finds the one open spec PR that holds the proposal (or takes `--pr`), reads its comments, and prints the latest admin review: `{ "version": 1, "slug": "…", "verdict": "approved" | "notes", "note": "…", "edits": [ … ], "at": "…", "by": "…", "comment": { "id": "…", "url": "…" } }`. The token is a GitHub (or Forgejo) token that can see the repo's PRs; `GITHUB_TOKEN` and `GH_TOKEN` work on GitHub, and only reads are made. The edits are in the same terms the viewer used (`add-node`, `remove-edge`, `add-step`, …); `applyEdits` from cornfield's core folds them into the proposal. A script for it, in your repo with cornfield installed:
 
 ```js
 // fold-review.mjs: node fold-review.mjs <proposal.json> <review.json>
@@ -115,7 +124,7 @@ npx cornfield proposal docs/specs/proposals/0002-checkout.json
 
 Then fix what the note asks for by hand, and ask for another look.
 
-**Off the map, in a pull request.** The proposal is a plain JSON file, so it can be reviewed like any other: open a PR with it, and let the reviewer read the diff, or check it out and run `cornfield serve` to look at it on the map. CI already checks it: `cornfield validate` checks every proposal in the folder against the map (below). What the verdict is and where it is written is your team's call; cornfield's own rule is a PR review comment.
+**Off the map, in a pull request.** The proposal is a plain JSON file, so it can be reviewed like any other: open a PR with it, and let the reviewer read the diff, or check it out and run `cornfield serve` to look at it on the map. CI already checks it: `cornfield validate` checks every proposal in the folder against the map (below). What the verdict is and where it is written is your team's call; cornfield's own rule is the comment above.
 
 ## 3. Land it
 
@@ -152,4 +161,4 @@ Drafts in a worktree and proposals of spec PRs are not checked: only the checkou
 ## Not covered here
 
 - cornfield's own rule of *which* changes need a proposal is in [CONTRIBUTING.md](../CONTRIBUTING.md). For your repo, pick your own: some teams propose every new service, some only what crosses a team's boundary.
-- Reviews as forge PR comments, proposals read from spec branches and sign-in are v1 work ([specs/0001-v1.md](specs/0001-v1.md)). Until then the review is kept in cornfield's data folder, and cornfield only listens on loopback.
+- Forgejo as the forge is v1 work still to land ([specs/0001-v1.md](specs/0001-v1.md)); reviews as PR comments work on GitHub today.
