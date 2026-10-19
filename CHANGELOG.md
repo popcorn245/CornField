@@ -19,4 +19,12 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
 - The `docs` deriver: a repo's Markdown on the map as an app with a page per document, its links to other docs and to the code they describe; a broken link fails `validate`.
 - `cornfield docs`: the docs as a small static site built from that map (a page per document, the links around it, a map of the docs' links), published for cornfield itself to GitHub Pages by `.github/workflows/pages.yml`.
 - The deriver kit, `cornfield/deriver-kit`: the deriver contract as JSDoc types, `defineDeriver`, and a test kit (`fixtureRepo`, `runDeriver`, `checkDeriver`) that runs a repo's own deriver on a fixture repo as `sync` and `validate` would and lists everything `validate` would fail on. Guide: `docs/deriver-kit.md`.
+- The `compose` deriver: stacks and containers from Docker compose files, and an app with a `runs-on` edge per host a Caddyfile or Traefik labels route to them (SRC-02). The sample repo's stack now comes from its compose file.
+- The `openapi` deriver: an API's endpoints from its OpenAPI, Swagger or OpenCollection file, as page nodes with their methods under the API's app (SRC-05). `test/fixtures/openapi` is a repo with nothing but an OpenAPI file.
+- The starter deriver reads Python packages, Go modules and Rust crates the way it reads npm workspaces: their manifests, the imports between them, and a dependency declared and never imported (SRC-04). A fixture repo per language in `test/fixtures/python`, `go` and `rust`.
 - Keyboard and screen readers (MAP-02): the map takes the focus and its keys (arrows pan, + and - zoom, 0 fits, N and P step through the nodes, Enter and Escape go into and out of the panel, Alt+arrow moves a node in Freeform); a live region says where the keyboard landed; Enter in the search selects the match; a what-if edge can be drawn from a list. The closed panel is inert, the menus say whether they are open, and the page has its landmarks and heading. axe-core (a dev dependency) checks each state of the page in the tests. [docs/accessibility.md](docs/accessibility.md).
+
+### Changed
+
+- `sync` takes away an edge of a derived kind only for the deriver that emits that kind, at the end where it puts its own nodes (`madeBy` and `claims` from `deriveTopology`), so a hand-written edge into a derived node of another deriver stays.
+- A container's `selfHosted` and `summary` are hand-written, no longer fields the code decides.

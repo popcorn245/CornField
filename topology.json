@@ -667,10 +667,10 @@
       "label": "index.js",
       "type": "core",
       "file": "plugins/starter/index.js",
-      "summary": "The starter deriver: a map of any JavaScript repo with zero plugin code.",
+      "summary": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "The starter deriver: a map of any JavaScript repo with zero plugin code. (plugins/starter/index.js)"
+      "desc": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code. (plugins/starter/index.js)"
     },
     {
       "id": "core-server-bind",
@@ -1165,6 +1165,74 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "The deriver kit: put your own code on the map (docs/deriver-kit.md)."
+    },
+    {
+      "id": "pkg-compose",
+      "label": "plugins/compose",
+      "type": "pkg",
+      "file": "plugins/compose",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/compose workspace package (plugins/compose)."
+    },
+    {
+      "id": "core-plugins-compose-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/compose/index.js",
+      "summary": "The compose deriver: the Software band of a self-hosted repo with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The compose deriver: the Software band of a self-hosted repo with zero plugin code. (plugins/compose/index.js)"
+    },
+    {
+      "id": "core-plugins-compose-routes",
+      "label": "routes.js",
+      "type": "core",
+      "file": "plugins/compose/routes.js",
+      "summary": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
+    },
+    {
+      "id": "pkg-openapi",
+      "label": "plugins/openapi",
+      "type": "pkg",
+      "file": "plugins/openapi",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/openapi workspace package (plugins/openapi)."
+    },
+    {
+      "id": "core-plugins-openapi-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/openapi/index.js",
+      "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
+    },
+    {
+      "id": "core-plugins-starter-languages",
+      "label": "languages.js",
+      "type": "core",
+      "file": "plugins/starter/languages.js",
+      "summary": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl… (plugins/starter/languages.js)"
+    },
+    {
+      "id": "core-plugins-starter-toml",
+      "label": "toml.js",
+      "type": "core",
+      "file": "plugins/starter/toml.js",
+      "summary": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
     },
     {
       "id": "core-explorer-keyboard-model",
@@ -3260,6 +3328,58 @@
       "dashed": true
     },
     {
+      "from": "root",
+      "to": "pkg-compose"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-index"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-routes"
+    },
+    {
+      "from": "core-core-derive",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-plugins-compose-routes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "pkg-openapi"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "core-plugins-openapi-index"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-languages"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-toml"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-plugins-starter-languages",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-languages",
+      "to": "core-plugins-starter-toml",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-keyboard-model"
     },
@@ -3330,5 +3450,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T21:42:24.094Z"
+  "updatedAt": "2026-10-19T21:51:45.881Z"
 }
