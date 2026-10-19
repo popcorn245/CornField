@@ -113,7 +113,7 @@ export function sendFile(req, res, filePath, reqPath) {
 // ---------------------------------------------------------------------------
 
 /** A proposal's file name: letters, digits, `.`, `_`, `-`; never a leading dot or dash. The slug is the name without `.json` */
-export const PROPOSAL_FILE =/^([A-Za-z0-9][A-Za-z0-9._-]*)\.json$/;
+export const PROPOSAL_FILE = /^([A-Za-z0-9][A-Za-z0-9._-]*)\.json$/;
 
 /**
  * The folders to look in: the checkout first, then each worktree (a real directory, never a link).

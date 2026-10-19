@@ -263,3 +263,41 @@ describe('proposals from spec PRs', () => {
     for (const bad of ['pull/0', 'pull/-1', 'pull/1.5', 'pull/', 'pull/1/2', ' pull/1', 'checkout', '', null, undefined, 'pull/1234567890']) expect(pullNumber(bad), String(bad)).toBeNull();
   });
 });
+
+describe('what a menu open costs', () => {
+  it('asks the forge for the open PRs only, once their heads were read; a PR pushed to is read again at its new head', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-pulls-cache-'));
+    fs.writeFileSync(path.join(root, 'topology.json'), JSON.stringify(topology));
+    const answers = recordings('github-spec-prs');
+    const fake = await fakeForge(answers);
+    const where = whereOf(root); // one server, one where: the cache is its own
+    const forgeFor = () => createForge({ type: 'github', url: 'https://github.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://localhost');
+      serveProposals(req, res, decodeURIComponent(url.pathname), url, where, forgeFor);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
+    const list = async () => (await fetch(`http://127.0.0.1:${/** @type {import('node:net').AddressInfo} */ (server.address()).port}/proposals`)).json();
+    const askedFor = () => fake.requests.map((r) => r.url).filter((u) => !/\/pulls\?|\/repositories\/1\/pulls\?/.test(u));
+    try {
+      const first = await list();
+      expect(askedFor().length).toBeGreaterThan(0);
+      fake.requests.length = 0;
+      expect(await list()).toEqual(first);
+      expect(askedFor()).toEqual([]);
+      // #23 gets a new head: only its files and its file are asked again
+      const page = answers[FIRST_PAGE].body;
+      const meals = page.find((p) => p.number === 23);
+      const moved = '9990000000000000000000000000000000000000';
+      meals.head.sha = moved;
+      answers[`GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=${moved}`] = answers[`GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=${SHA_MEALS}`];
+      fake.requests.length = 0;
+      await list();
+      expect(askedFor().sort()).toEqual(['/repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=' + moved, '/repos/owner/name/pulls/23/files?per_page=100']);
+    } finally {
+      await new Promise((resolve) => server.close(() => resolve(undefined)));
+      await fake.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

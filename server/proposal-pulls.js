@@ -10,6 +10,12 @@
  * (`findPullProposal`), and the path read is built from the proposals folder and the slug, never from the request.
  * A file a PR deletes has nothing at its head and is not listed.
  *
+ * **What a menu open costs.** What a commit holds never changes, so a PR's files and a file's text are kept by the
+ * head sha they were read at (in memory, per server: keyed by its `where`, at most `CACHE_MAX` answers). Opening the
+ * menu again asks the forge for the open PRs only (one call a page); a PR pushed to since is read again at its new
+ * head. Every maintainer of the repo sees the same PRs, so what one maintainer's token read is shown to another.
+ * Answers are kept only when the forge gave them; a failure is asked again next time.
+ *
  * @typedef {{ slug: string, source: string, path: string, sha: string, pull: { number: number, title: string, url: string, draft: boolean, author: string | null } }} PullEntry
  */
 
@@ -19,6 +25,25 @@ import { PROPOSAL_FILE } from './files.js';
 
 /** How many pull requests have their files asked at once */
 const PARALLEL = 6;
+/** The most answers kept per server (a PR's files, or a file's text, at one head sha); the oldest goes first */
+export const CACHE_MAX = 500;
+
+/** @type {WeakMap<object, Map<string, unknown>>} */
+const caches = new WeakMap();
+
+/** What was read at `key` (a head sha is in every key), or `read()`'s answer, kept for next time */
+async function atSha(where, key, read) {
+  let cache = caches.get(where);
+  if (!cache) caches.set(where, (cache = new Map()));
+  if (cache.has(key)) return cache.get(key);
+  const value = await read();
+  cache.set(key, value);
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+  return value;
+}
+
+/** The files of a pull request at its head, from the cache when that head was read before */
+const filesAt = (forge, where, pull) => atSha(where, `files ${pull.number}@${pull.head.sha}`, () => forge.pullFiles(pull.number));
 
 /** `pull/<n>` for a pull request's proposals */
 export const pullSource = (n) => `pull/${n}`;
@@ -73,7 +98,7 @@ export async function listPullProposals(forge, where) {
     while (next < pulls.length) {
       const at = next++;
       try {
-        found[at] = (await forge.pullFiles(pulls[at].number)).filter((f) => isProposal(f, folder)).map((f) => entryOf(pulls[at], f));
+        found[at] = (await filesAt(forge, where, pulls[at])).filter((f) => isProposal(f, folder)).map((f) => entryOf(pulls[at], f));
       } catch (err) {
         problem ??= forgeWords(err);
       }
@@ -101,18 +126,19 @@ export async function findPullProposal(forge, where, slug, n) {
   }
   if (pull.state !== 'open') return null;
   const folder = folderOf(where);
-  const file = (await forge.pullFiles(n)).find((f) => isProposal(f, folder) && PROPOSAL_FILE.exec(path.posix.basename(f.path))?.[1] === slug);
+  const file = (await filesAt(forge, where, pull)).find((f) => isProposal(f, folder) && PROPOSAL_FILE.exec(path.posix.basename(f.path))?.[1] === slug);
   return file ? entryOf(pull, file) : null;
 }
 
 /**
  * The text of a listed proposal at its PR's head commit. Throws a ForgeError, `not-found` when the file is not there.
  * @param {import('./forge.js').Forge} forge
+ * @param {{ proposals: string }} where the server's, whose cache it is
  * @param {PullEntry} entry
  * @returns {Promise<string>}
  */
-export async function readPullProposal(forge, entry) {
-  const text = await forge.file(entry.sha, entry.path);
+export async function readPullProposal(forge, where, entry) {
+  const text = await atSha(where, `file ${entry.sha}:${entry.path}`, () => forge.file(entry.sha, entry.path));
   if (text === null) throw new ForgeError(`${entry.path} is not at the head of pull request #${entry.pull.number}.`, { code: 'not-found' });
   return text;
 }

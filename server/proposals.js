@@ -37,7 +37,7 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles, reviewFilePath } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
-import { findPullProposal,forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
+import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
 
@@ -255,11 +255,11 @@ function describeProposal(slug, source, proposal, topology) {
 }
 
 /** The listing entry of a file in an open spec PR, read at the PR's head. A file the forge cannot give is listed with its error. */
-async function describePull(entry, forge, topology) {
+async function describePull(entry, forge, where, topology) {
   const { slug, source, pull } = entry;
   let proposal;
   try {
-    proposal = JSON.parse(await readPullProposal(forge, entry));
+    proposal = JSON.parse(await readPullProposal(forge, where, entry));
   } catch (err) {
     const why = err instanceof SyntaxError ? `Not valid JSON: ${err.message}` : forgeWords(err);
     return { slug, title: slug, summary: '', spec: null, source, counts: null, errors: null, review: null, pull, error: why };
@@ -290,7 +290,7 @@ async function listWithPulls(where, forgeFor) {
     return { list: local, problem: forgeWords(err) };
   }
   const { entries, problem } = await listPullProposals(forge, where);
-  const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, topology)));
+  const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, where, topology)));
   const list = [...local, ...pulls].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
   return { list, problem };
 }
@@ -305,7 +305,7 @@ async function servePull(res, where, forgeFor, slug, source) {
     const forge = forgeFor();
     entry = n === null ? (await listPullProposals(forge, where)).entries.find((e) => e.slug === slug) : await findPullProposal(forge, where, slug, n);
     if (!entry) return send(res, 404, { error: 'No such proposal' });
-    text = await readPullProposal(forge, entry);
+    text = await readPullProposal(forge, where, entry);
   } catch (err) {
     return send(res, err instanceof ForgeError ? (err.code === 'not-found' ? 404 : 502) : 500, { error: forgeWords(err) });
   }
