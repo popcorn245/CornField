@@ -17,7 +17,8 @@
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
- *   POST /api/forge/release-drafts      the one write there: the notes kept as a DRAFT release, for a signed-in maintainer, from cornfield's own page
+ *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
+ *   POST /api/forge/release-drafts      the release notes kept as a DRAFT release on the forge (never published, no tag made)
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
  *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
@@ -99,7 +100,7 @@ export function clientConfig(config, signIn = false) {
     version: PKG.version,
     title: config.title,
     links: config.links || [],
-    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo } : null,
+    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge' } : null,
     sources: browserSources(config),
     signIn,
   };

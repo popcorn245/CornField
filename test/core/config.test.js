@@ -29,6 +29,12 @@ describe('configProblems', () => {
     expect(configProblems(mod.default)).toEqual([]);
   });
 
+  it('takes a forge\'s merge method: merge, squash or rebase, and nothing else', () => {
+    const forge = (mergeMethod) => ({ forge: { type: 'github', repo: 'o/n', mergeMethod } });
+    for (const m of [undefined, 'merge', 'squash', 'rebase']) expect(configProblems(forge(m)), m).toEqual([]);
+    for (const m of ['force', 'fast-forward', '', 1]) expect(configProblems(forge(m))).toEqual(['forge.mergeMethod is one of merge, squash, rebase.']);
+  });
+
   it('names what is wrong: unknown keys, a bad port, a deriver or source that is neither built in nor a path, a path out of the repo', () => {
     const out = configProblems({
       colour: 'red', port: 70000, derivers: ['nope', './../x.js', { use: 'starter', options: 3 }],
@@ -40,6 +46,45 @@ describe('configProblems', () => {
     for (const want of ['unknown key "colour"', '"port"', 'derivers[0] "nope"', 'derivers[1] "./../x.js" leaves the repo', 'derivers[2].options', 'sources.live "mystery"', 'sources.radio', 'forge.type', 'forge.repo', '"worktrees"', 'links[0]', 'proxy "/cornfield/" is cornfield', 'proxy "api"', '"importMap"', '"personas"']) {
       expect(text, want).toContain(want);
     }
+  });
+});
+
+describe('the deploys key', () => {
+  it('accepts workflow patterns and what they restart, and nothing else', () => {
+    expect(configProblems({ deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web', 'media'] } } })).toEqual([]);
+    expect(configProblems({ deploys: null })).toEqual([]);
+    expect(configProblems({ deploys: [] })).toEqual(['"deploys" is { workflows, restarts }.']);
+    expect(configProblems({ deploys: { run: [] } })).toEqual(['deploys.run: the keys are workflows, restarts.']);
+    expect(configProblems({ deploys: { workflows: 'deploy' } })).toEqual(['deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].']);
+    expect(configProblems({ deploys: { restarts: [] } })).toEqual(['deploys.restarts is { "workflow name or pattern": ["node id or label"] }.']);
+    expect(configProblems({ deploys: { restarts: { Deploy: 'stack-web' } } })).toEqual(['deploys.restarts["Deploy"] is a list of node ids or labels.']);
+  });
+
+  it('defaults to any workflow with "deploy" in its name, restarting nothing', async () => {
+    expect(DEFAULTS.deploys).toEqual({ workflows: ['*deploy*'], restarts: {} });
+    const config = await loadConfig(repo('export default { deploys: { restarts: { Ship: ["stack-web"] } } };'));
+    expect(config.deploys).toEqual({ workflows: ['*deploy*'], restarts: { Ship: ['stack-web'] } });
+  });
+});
+
+describe('the agents rules', () => {
+  it('are empty by default, with bot accounts counted', async () => {
+    expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    const c = await loadConfig(repo(), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    expect(c.agents).not.toBe(DEFAULTS.agents);
+  });
+
+  it('take the keys of the file over the defaults, and the rest stay', async () => {
+    const c = await loadConfig(repo("export default { agents: { branchPrefixes: ['claude/'], labels: ['agent', 'needs human'], bots: false } };"), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false });
+  });
+
+  it('are checked: the shape, the keys, and what a name may be', () => {
+    expect(configProblems({ agents: { authors: ['claude-bot', 'renovate[bot]'], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false } })).toEqual([]);
+    const text = configProblems({ agents: { authors: ['two words', ''], labels: 'agent', branchPrefixes: [1], bots: 'yes', colour: 1 } }).join('\n');
+    for (const want of ['agents.authors is a list of account names', 'agents.labels is a list of label names', 'agents.branchPrefixes is a list of branch name starts', 'agents.bots is true or false', 'agents.colour']) expect(text, want).toContain(want);
+    expect(configProblems({ agents: [] }).join()).toContain('"agents" is { authors');
   });
 });
 

@@ -852,7 +852,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-detail { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--hx-line); border-left: 4px solid var(--hx-indigo); border-radius: 10px; background: var(--hx-well-soft); }
 .hx-forge-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .hx-forge-detail-title { min-width: 0; font-size: 13px; font-weight: 700; color: var(--hx-ink); overflow-wrap: anywhere; }
-.hx-forge-sub, .hx-forge-confirm-title { margin: 4px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-300); }
+.hx-forge-sub, .hx-forge-subact, .hx-forge-confirm-title { margin: 4px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-300); }
 .hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
 .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
 .hx-forge-lights { flex-basis: 100%; font-size: 11px; line-height: 1.5; }
@@ -860,9 +860,34 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 4px 0; border-top: 1px solid var(--hx-line-soft); overflow-wrap: anywhere; }
 .hx-forge-fstatus { flex: none; min-width: 56px; color: var(--hx-slate-400); font-size: 11px; }
 .hx-forge-del { color: var(--hx-red); }
+.hx-forge-act { align-self: flex-start; min-height: 24px; padding: 2px 10px; }
+.hx-forge-detail > .hx-forge-act { padding: 6px 14px; }
+.hx-forge-why { margin: 0; font-size: 11px; line-height: 1.5; }
+.hx-forge-notice--ok { border-color: var(--hx-emerald); }
+.hx-confirm-scrim { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 6, 23, 0.6); }
+.hx-confirm-scrim[hidden] { display: none; }
+.hx-confirm { display: flex; flex-direction: column; gap: 10px; width: min(440px, 100%); max-height: 100%; overflow-y: auto; padding: 18px; border: 1px solid var(--hx-line); border-radius: 14px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6); font-size: 12px; user-select: text; }
+.hx-confirm-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--hx-ink); }
+.hx-confirm-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.hx-confirm-facts dt { color: var(--hx-slate-400); }
+.hx-confirm-facts dd { margin: 0; overflow-wrap: anywhere; color: var(--hx-ink); }
+.hx-confirm-checks { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-confirm-note { margin: 0; color: var(--hx-text-2); line-height: 1.5; }
+.hx-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding-left: 62px; }
 .hx-forge-node { padding: 1px 8px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-text-2); font-size: 11px; }
 .hx-forge-node:hover { background: var(--hx-control-hover); }
+.hx-forge-work-filters { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.hx-forge-work-filters[hidden], .hx-forge-filters[hidden] { display: none; }
+.hx-forge-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; color: var(--hx-text-2); font-size: 12px; }
+.hx-forge-toggle input { accent-color: var(--hx-indigo); }
+.hx-forge-toggle input:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+.hx-forge-group { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; list-style: none; }
+.hx-forge-gtitle { margin: 0; font-size: 12px; font-weight: 700; color: var(--hx-ink); overflow-wrap: anywhere; }
+.hx-forge-gout { margin-left: 4px; }
+.hx-forge-agentline { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.hx-forge-agent { display: inline-block; padding: 0 6px; border-radius: 9999px; border: 1px solid currentColor; color: var(--hx-violet-text); font-size: 10px; font-weight: 700; }
+.hx-forge-why { font-size: 11px; overflow-wrap: anywhere; }
 .hx-forge-notes, .hx-forge-confirm { display: flex; flex-direction: column; gap: 8px; }
 .hx-forge-preview { width: 100%; min-height: 12em; resize: vertical; padding: 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well); color: var(--hx-ink); font-family: var(--pop-font-mono); font-size: 11px; line-height: 1.5; font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
 .hx-forge-preview:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }

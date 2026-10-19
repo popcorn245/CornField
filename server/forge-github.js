@@ -9,7 +9,11 @@
  *   - **Issues.** GitHub lists pull requests among the issues; they are left out.
  *   - **Checks.** The check runs on the commit and its commit statuses (CI that reports the old way), as one list.
  *     Only a GitHub Actions job can be re-run with a user's token, so only a finished, not-green one is `rerunnable`.
+ *   - **Runs.** `actions/runs`: GitHub Actions workflow runs, newest first. `name` is the workflow's, `workflow` its file.
  *   - **Merge.** `PUT …/pulls/<n>/merge` with the head sha, so a push after the checks makes GitHub refuse (409).
+ *     Before it, `readiness`: GitHub's own `mergeable_state` is `clean` (its required checks and reviews are met, no
+ *     conflicts), and no workflow run on the head is still queued or running: just after a push, a fast check can be
+ *     green before a slow workflow has registered its own.
  *   - **Files.** `contents/<path>?ref=` as raw text; a folder or a missing file is null.
  *   - **Tags and releases.** `tags`, and `commits/<tag>` for the time a tag was made; a release is created with `draft: true`,
  *     which GitHub keeps as a draft, with no tag, until it is published on GitHub.
@@ -45,7 +49,8 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
-const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null } : null);
+// `bot` is set only when the forge says the account is a bot (GitHub's user type `Bot`): the agent-made rule reads it
+const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null, ...(u.type === 'Bot' ? { bot: true } : {}) } : null);
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 
 /** @returns {import('./forge.js').Issue} */
@@ -56,7 +61,7 @@ const toIssue = (i) => ({
 
 /** @returns {import('./forge.js').Pull} */
 const toPull = (p) => ({
-  number: p.number, title: p.title, state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
+  number: p.number, title: p.title, body: p.body ?? '', state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });
@@ -84,6 +89,16 @@ function toRun(r) {
 const STATUS_STATE = { success: 'success', failure: 'failure', error: 'failure', pending: 'running' };
 /** @returns {import('./forge.js').Check} */
 const toStatus = (s) => ({ id: `status:${s.context}`, name: s.context, state: STATUS_STATE[s.state] || 'queued', url: s.target_url ?? null, rerunnable: false });
+
+/** The workflow file's name from a run's `path` (".github/workflows/deploy.yml", or "…/deploy.yml@refs/heads/main") */
+export const workflowFile = (p) => String(p || '').replace(/@.*$/, '').split('/').pop() || '';
+
+/** @returns {import('./forge.js').Run} */
+const toRunItem = (r) => ({
+  id: String(r.id), workflow: workflowFile(r.path), name: r.name || workflowFile(r.path), title: r.display_title ?? r.head_commit?.message?.split('\n')[0] ?? '',
+  event: r.event ?? '', branch: r.head_branch ?? '', sha: r.head_sha ?? '', state: runState(r), actor: author(r.actor), url: r.html_url ?? null,
+  createdAt: r.run_started_at ?? r.created_at, updatedAt: r.updated_at ?? r.created_at,
+});
 
 /** @returns {import('./forge.js').Permission} */
 function fromPermissions(p) {
@@ -193,6 +208,28 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       const id = /^run:(\d+)$/.exec(check.id)?.[1];
       if (!id) throw new ForgeError(`${check.name || check.id} cannot be re-run from cornfield; re-run it on GitHub.`, { code: 'invalid', forge: NAME });
       await client.request('POST', `repos/${repo}/actions/jobs/${id}/rerun`, { what: `the check ${check.name || id}` });
+    },
+
+    async runs({ limit }) {
+      const all = await client.list(`repos/${repo}/actions/runs?per_page=${PER_PAGE}`, { what: `the workflow runs of ${forge.repo}`, limit, items: (b) => b?.workflow_runs });
+      return all.map(toRunItem);
+    },
+
+    async readiness(n, sha) {
+      const { body: p } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+      const state = p.mergeable_state;
+      if (state === 'unknown' || state === undefined || state === null) return { ready: false, why: 'GitHub is still working out whether it can be merged; try again in a moment' };
+      if (state === 'dirty') return { ready: false, why: 'it has conflicts with its base' };
+      if (state === 'behind') return { ready: false, why: 'its branch is behind its base; update it first' };
+      if (state === 'blocked') return { ready: false, why: 'GitHub\'s branch protection is not met yet (a required check or review)' };
+      if (state === 'draft') return { ready: false, why: 'it is a draft' };
+      if (state !== 'clean' && state !== 'has_hooks') return { ready: false, why: `GitHub says it is ${state}` };
+      // A workflow that has not reported a check yet still counts: none may be queued or running on this head
+      const { status, body } = await client.request('GET', `repos/${repo}/actions/runs?head_sha=${enc(sha)}&per_page=100`, { what: `the workflow runs of ${pullWhat(n)}`, allow: [404] });
+      const runs = status === 404 ? [] : (body?.workflow_runs || []);
+      const going = runs.filter((r) => r.head_sha === sha && r.status !== 'completed');
+      if (going.length) return { ready: false, why: `${going.map((r) => r.name).join(', ')} ${going.length === 1 ? 'is' : 'are'} still running` };
+      return { ready: true };
     },
 
     async mergeAt(n, { sha, method }) {

@@ -12,8 +12,13 @@
  *   - **Issues.** `type=issues` leaves the pull requests out.
  *   - **Checks.** Forgejo Actions reports each job as a commit status, so the commit's statuses are all the checks
  *     there are. Its API cannot re-run one: none is `rerunnable`.
+ *   - **Runs.** `actions/runs` (Forgejo 11 and later, Gitea 1.24 and later), where Actions is on for the repo; an older
+ *     instance, or a repo without Actions, answers 404, which is said in words (HTTP 501 from cornfield's routes).
+ *     Forgejo gives a run no name of its own, so `name` is the workflow file's.
  *   - **Merge.** `POST …/pulls/<n>/merge` with `head_commit_id`, so a push after the checks makes Forgejo refuse
- *     (409). It answers nothing, so the merge commit is read back from the pull request.
+ *     (409). Before it, `readiness`: Forgejo says the pull request is `mergeable` (no conflicts). Its API does not say
+ *     which checks branch protection requires, nor list a workflow that has not reported a status yet, so a commit
+ *     whose slow job has not started can look green: branch protection's required checks are the backstop there. It answers nothing, so the merge commit is read back from the pull request.
  *   - **Files.** `raw/<path>?ref=`; a folder or a missing file is null.
  *   - **Tags and releases.** `tags` and `tags/<name>` (the commit carries the time); a release is created with `draft: true`,
  *     which Forgejo keeps as a draft until it is published on the instance.
@@ -42,9 +47,16 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
+/** Forgejo's Actions system user: what a workflow does on the forge is done as it (id -2, a Bot in Gitea's model since before the fork) */
+export const ACTIONS_USER_ID = -2;
+
+// `bot` is set only when the forge says the account is a bot, as GitHub's adapter does: the user's `type` is "Bot" (Gitea's API
+// renders the user type, capitalised as GitHub's; an instance that does not send it simply marks nothing), or the user
+// is the Actions system user. The agent rule (explorer/agents-model.js) reads it.
 const author = (u) => {
   const login = u && (u.login || u.username);
-  return typeof login === 'string' && login ? { login, url: u.html_url || null } : null;
+  if (typeof login !== 'string' || !login) return null;
+  return { login, url: u.html_url || null, ...(u.type === 'Bot' || u.id === ACTIONS_USER_ID ? { bot: true } : {}) };
 };
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 
@@ -59,7 +71,7 @@ const isDraft = (p) => p.draft === true || /^\s*(\[WIP\]|WIP:|Draft:)/i.test(p.t
 
 /** @returns {import('./forge.js').Pull} */
 const toPull = (p) => ({
-  number: p.number, title: p.title, state: p.merged || p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: isDraft(p),
+  number: p.number, title: p.title, body: p.body ?? '', state: p.merged || p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: isDraft(p),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });
@@ -75,6 +87,20 @@ const toComment = (c) => ({ id: String(c.id), author: author(c.user), body: c.bo
 const STATUS_STATE = { success: 'success', skipped: 'skipped', failure: 'failure', error: 'failure', warning: 'failure', pending: 'running' };
 /** @returns {import('./forge.js').Check} */
 const toStatus = (s) => ({ id: `status:${s.context}`, name: s.context, state: STATUS_STATE[s.status ?? s.state] || 'queued', url: s.target_url || null, rerunnable: false });
+
+/** The workflow file's name from a run's `path` ("deploy.yaml@refs/heads/main") */
+export const workflowFile = (p) => String(p || '').replace(/@.*$/, '').split('/').pop() || '';
+
+const RUN_STATE = { success: 'success', failure: 'failure', cancelled: 'cancelled', canceled: 'cancelled', skipped: 'skipped', neutral: 'neutral', running: 'running', in_progress: 'running' };
+/** A run's state: a finished run says how in `conclusion`; one still going has only its `status` (waiting, blocked, running) */
+const runState = (r) => RUN_STATE[r.conclusion] || (r.status === 'completed' ? 'failure' : RUN_STATE[r.status]) || 'queued';
+
+/** @returns {import('./forge.js').Run} */
+const toRunItem = (r) => ({
+  id: String(r.id), workflow: workflowFile(r.path), name: workflowFile(r.path), title: r.display_title ?? '', event: r.event ?? '', branch: r.head_branch ?? '',
+  sha: r.head_sha ?? '', state: runState(r), actor: author(r.actor || r.trigger_actor), url: r.html_url ?? null,
+  createdAt: r.started_at ?? r.created_at ?? '', updatedAt: r.completed_at ?? r.updated_at ?? r.started_at ?? r.created_at ?? '',
+});
 
 /** @returns {import('./forge.js').Permission} */
 function fromPermissions(p) {
@@ -166,6 +192,25 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
 
     async rerun(check) {
       throw new ForgeError(`${check.name || check.id} cannot be re-run from cornfield; re-run it on Forgejo.`, { code: 'invalid', forge: NAME });
+    },
+
+    async runs({ limit }) {
+      let all;
+      try {
+        all = await client.list(`repos/${repo}/actions/runs?limit=${PER_PAGE}`, { what: `the workflow runs of ${forge.repo}`, limit, items: (b) => b?.workflow_runs });
+      } catch (err) {
+        if (err instanceof ForgeError && err.code === 'not-found') {
+          throw new ForgeError(`Forgejo cannot list the Actions runs of ${forge.repo}: Actions is off for the repo, or the instance is older than Forgejo 11 (or Gitea 1.24), which cannot list runs. Deploys are not read from it.`, { code: 'unavailable', status: 501, forge: NAME, rateLimit: err.rateLimit });
+        }
+        throw err;
+      }
+      return all.map(toRunItem);
+    },
+
+    async readiness(n) {
+      const { body: p } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+      if (p.mergeable === false) return { ready: false, why: 'Forgejo says it cannot be merged (conflicts with its base, or branch protection)' };
+      return { ready: true };
     },
 
     async mergeAt(n, { sha, method }) {

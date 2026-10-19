@@ -11,7 +11,9 @@
  *     sources: {                              // browser modules for the live layer, the house and devices
  *       live: null, house: null, devices: null, checker: null,
  *     },
- *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'
+ *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'
+ *     deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } },   // which workflow runs are deploys, and what they restart (docs/deploys.md)
+ *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md)
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
@@ -59,12 +61,15 @@ export const BUILTIN_SOURCES = {
 export const SERVER_ONLY_OPTIONS = { 'home-assistant': ['file', 'url'] };
 export const SOURCE_SLOTS = ['live', 'house', 'devices', 'checker'];
 export const FORGE_TYPES = ['github', 'forgejo'];
+/** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
+export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 
 export const DEFAULTS = Object.freeze({
   title: null,
   derivers: ['starter', 'personas', 'cloud'],
   sources: { live: null, house: null, devices: null, checker: null },
   forge: null,
+  deploys: { workflows: ['*deploy*'], restarts: {} },
   port: 3350,
   host: '127.0.0.1',
   publicUrl: null,
@@ -74,6 +79,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
   links: [],
   proxy: {},
   importMap: {},
@@ -81,6 +87,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 const KEYS = Object.keys(DEFAULTS);
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots'];
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 /** A path inside the repo: relative, forward slashes, no `..` segment */
@@ -135,6 +142,34 @@ export function configProblems(c) {
       if (!FORGE_TYPES.includes(c.forge.type)) out.push(`forge.type is one of ${FORGE_TYPES.join(', ')}.`);
       if (c.forge.url !== undefined && !/^https?:\/\/[^/\s]+\/?$/.test(String(c.forge.url))) out.push('forge.url is the forge\'s origin, like https://github.com.');
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || ''))) out.push('forge.repo is "owner/name".');
+      if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);
+    }
+  }
+  if (c.agents !== undefined) {
+    if (!isObject(c.agents)) out.push('"agents" is { authors, labels, branchPrefixes, bots }.');
+    else {
+      for (const k of Object.keys(c.agents)) if (!AGENT_KEYS.includes(k)) out.push(`agents.${k}: the keys are ${AGENT_KEYS.join(', ')}.`);
+      for (const k of ['authors', 'labels', 'branchPrefixes']) {
+        const v = c.agents[k];
+        // Account names have no spaces or commas; a label may have spaces; neither starts or ends with one
+        const fine = (e) => isText(e) && e === e.trim() && (k === 'labels' || !/[\s,]/.test(e));
+        if (v !== undefined && (!Array.isArray(v) || !v.every(fine))) {
+          out.push(`agents.${k} is a list of ${k === 'authors' ? 'account names ("claude-bot")' : k === 'labels' ? 'label names ("agent")' : 'branch name starts ("claude/")'}.`);
+        }
+      }
+      if (c.agents.bots !== undefined && typeof c.agents.bots !== 'boolean') out.push('agents.bots is true or false: whether a bot account ("[bot]" or the forge\'s Bot type) counts as an agent.');
+    }
+  }
+  if (c.deploys !== undefined && c.deploys !== null) {
+    const list = (v) => Array.isArray(v) && v.every(isText);
+    if (!isObject(c.deploys)) out.push('"deploys" is { workflows, restarts }.');
+    else {
+      for (const k of Object.keys(c.deploys)) if (!['workflows', 'restarts'].includes(k)) out.push(`deploys.${k}: the keys are workflows, restarts.`);
+      if (c.deploys.workflows !== undefined && !list(c.deploys.workflows)) out.push('deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].');
+      if (c.deploys.restarts !== undefined) {
+        if (!isObject(c.deploys.restarts)) out.push('deploys.restarts is { "workflow name or pattern": ["node id or label"] }.');
+        else for (const [p, refs] of Object.entries(c.deploys.restarts)) if (!isText(p) || !list(refs)) out.push(`deploys.restarts["${p}"] is a list of node ids or labels.`);
+      }
     }
   }
   if (c.releaseNotes !== undefined) {
@@ -191,12 +226,14 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     if (problems.length) throw new Error(`${path.relative(absRoot, configFile) || CONFIG_FILE}:\n  ${problems.join('\n  ')}`);
   }
   const config = {
-    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, releaseNotes: { ...DEFAULTS.releaseNotes } }),
+    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, agents: { ...DEFAULTS.agents }, releaseNotes: { ...DEFAULTS.releaseNotes } }),
     ...raw,
     sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
     personas: { ...DEFAULTS.personas, ...(raw.personas || {}) },
     cloud: { ...DEFAULTS.cloud, ...(raw.cloud || {}) },
     releaseNotes: { ...DEFAULTS.releaseNotes, ...(raw.releaseNotes || {}) },
+    deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
+    agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
   if (env.CORNFIELD_PORT) config.port = Number(env.CORNFIELD_PORT);
   if (env.PORT && !env.CORNFIELD_PORT) config.port = Number(env.PORT);

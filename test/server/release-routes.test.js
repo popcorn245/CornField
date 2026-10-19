@@ -211,6 +211,21 @@ describe('release notes and drafts over HTTP', () => {
       expect(row.request + row.answer).not.toContain(TOKEN);
     });
 
+    it('posts nothing, and asks the forge nothing, when the audit row cannot be begun', async () => {
+      const cookie = await signIn();
+      fake.requests.length = 0;
+      const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+      db.exec("CREATE TRIGGER no_audit BEFORE INSERT ON actions BEGIN SELECT RAISE(ABORT, 'the audit is read-only'); END");
+      try {
+        const res = await post(cookie, { tag: 'v0.3.0' });
+        expect([res.status, res.json.code]).toEqual([503, 'unavailable']);
+        expect(fake.requests).toEqual([]);
+      } finally {
+        db.exec('DROP TRIGGER no_audit');
+        db.close();
+      }
+    });
+
     it('asks the forge again whether the signed-in user still maintains the repo: a demoted maintainer is refused, and it is audited', async () => {
       const cookie = await signIn();
       state.override[REPO] = () => ({ body: { id: 1, full_name: 'owner/name', permissions: { admin: false, maintain: false, push: true, triage: true, pull: true } } });

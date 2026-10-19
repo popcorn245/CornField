@@ -17,6 +17,8 @@
  *   checks(ref)                       the checks on a commit (a branch, a tag or a sha)
  *   rerun(check)                      re-runs one that can be (`check.rerunnable`)
  *   merge(n, { onlyIfGreen: true })   lands an open, ready pull request whose checks are all green, at the head they ran on
+ *                                     (`sha`: the head the caller looked at; a pull request that has moved on since is refused)
+ *   runs({ limit })                   the latest workflow (Actions) runs, newest first: what the deploys on the map are read from
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
  *   fileBytes(ref, path)              the same file's bytes (a picture), or null
@@ -27,25 +29,31 @@
  *
  * An adapter module (server/forge-github.js, server/forge-forgejo.js) implements these at its forge's level, with
  * `mergeAt(n, { sha, method })` in place of `merge`; `wrap` checks the arguments and builds `merge` once for every
- * forge, so the green-only rule cannot differ between them. There is no force-merge and no call that deploys or
- * touches anything live (ADR 0006). Admins are the repo's maintainers: `isMaintainer(permission)` (ADR 0003).
+ * forge, so the green-only rule cannot differ between them. Green is every check finished green and at least one
+ * passed; an adapter may add what its forge knows besides (`readiness(n, sha)`: required checks, a workflow that has not
+ * reported yet, conflicts). There is no force-merge and no call that deploys or touches anything live (ADR 0006).
+ * Admins are the repo's maintainers: `isMaintainer(permission)` (ADR 0003).
  *
  * @typedef {'admin' | 'maintain' | 'write' | 'triage' | 'read' | 'none'} Permission
  * @typedef {{ id: string, login: string, name: string | null, url: string | null, avatarUrl: string | null }} User
- * @typedef {{ login: string, url: string | null }} Author
+ * @typedef {{ login: string, url: string | null, bot?: true }} Author
  * @typedef {{ number: number, title: string, state: 'open' | 'closed', author: Author | null, labels: string[], comments: number, url: string, createdAt: string, updatedAt: string, closedAt: string | null }} Issue
- * @typedef {{ number: number, title: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
+ * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
  * @typedef {'queued' | 'running' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'} CheckState
  * @typedef {{ id: string, name: string, state: CheckState, url: string | null, rerunnable: boolean }} Check
  * @typedef {{ name: string, sha: string, protected: boolean }} Branch
+ * @typedef {{ id: string, workflow: string, name: string, title: string, event: string, branch: string, sha: string, state: CheckState, actor: Author | null, url: string | null, createdAt: string, updatedAt: string }} Run
+ *   `workflow` is the workflow file's name ("deploy.yml"), `name` the workflow's own name ("Deploy web"; the file's
+ *   name where the forge has none), `title` what the run was for (a commit message, a release)
  * @typedef {{ name: string, sha: string }} Tag
  * @typedef {{ name: string, sha: string, date: string }} TagInfo
  * @typedef {{ tag: string, name: string, body: string }} ReleaseDraftInput
  * @typedef {{ id: string, url: string, draft: true }} ReleaseDraft
  * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number }} IssueQuery
  * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number }} PullQuery
+ * @typedef {{ limit?: number }} RunQuery
  * @typedef {'merge' | 'squash' | 'rebase'} MergeMethod
  * @typedef {{
  *   forge: 'github' | 'forgejo', repo: string,
@@ -59,7 +67,8 @@
  *   comment(n: number, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
  *   rerun(check: Check): Promise<void>,
- *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod }): Promise<{ sha: string }>,
+ *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod, sha?: string }): Promise<{ sha: string }>,
+ *   runs(query?: RunQuery): Promise<Run[]>,
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
  *   fileBytes(ref: string, path: string): Promise<Buffer | null>,
@@ -69,10 +78,12 @@
  *   createReleaseDraft(input: ReleaseDraftInput): Promise<ReleaseDraft>,
  *   rateLimit(): import('./forge-http.js').RateLimit | null,
  * }} Forge
- * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls'> & {
+ * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls' | 'runs'> & {
  *   issues(query: Required<IssueQuery>): Promise<Issue[]>,
  *   pulls(query: Required<PullQuery>): Promise<Pull[]>,
+ *   runs(query: Required<RunQuery>): Promise<Run[]>,
  *   mergeAt(n: number, opts: { sha: string, method: MergeMethod }): Promise<{ sha: string }>,
+ *   readiness?(n: number, sha: string): Promise<{ ready: boolean, why?: string }>,
  * }} Adapter
  */
 
@@ -83,12 +94,14 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
 /** The most a listing returns unless asked for fewer */
 export const DEFAULT_LIMIT = 1000;
+/** The runs a listing returns unless asked for fewer: one forge page */
+export const DEFAULT_RUN_LIMIT = 100;
 
 const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 const STATES = ['open', 'closed', 'all'];
@@ -111,11 +124,21 @@ export const hasAdapter = (type) => Object.hasOwn(ADAPTERS, type);
 export const isMaintainer = (permission) => permission === 'admin' || permission === 'maintain';
 
 /**
- * Whether a commit's checks let it land: at least one check, and every one finished green. A commit with no checks
- * is not green: nothing says it works.
+ * Whether a commit's checks let it land: every one finished green, and at least one of them passed. A commit with no
+ * checks, or whose checks were all skipped or neutral, is not green: nothing says it works.
  * @param {Check[]} checks
  */
-export const isGreen = (checks) => checks.length > 0 && checks.every((c) => GREEN_STATES.includes(c.state));
+export const isGreen = (checks) => checks.some((c) => c.state === 'success') && checks.every((c) => GREEN_STATES.includes(c.state));
+
+/** The states a check is re-run from: it failed, or it was cancelled (a newer push or a concurrency group stopped it) */
+export const RERUN_STATES = Object.freeze(['failure', 'cancelled']);
+
+/**
+ * Whether cornfield may re-run a check: one that failed or was cancelled, and that the forge can run again
+ * (`check.rerunnable`). A check that is still running, or passed, is not re-run from here.
+ * @param {Check} check
+ */
+export const canRerun = (check) => Boolean(check) && check.rerunnable === true && RERUN_STATES.includes(check.state);
 
 /**
  * What keeps a commit from being green, in words: "lint failed; test is still running", or "it has no checks".
@@ -123,6 +146,7 @@ export const isGreen = (checks) => checks.length > 0 && checks.every((c) => GREE
  */
 export function notGreenWords(checks) {
   if (!checks.length) return 'it has no checks';
+  if (checks.every((c) => GREEN_STATES.includes(c.state))) return 'no check has passed (they were all skipped or neutral)';
   const words = { queued: 'is waiting to run', running: 'is still running', failure: 'failed', cancelled: 'was cancelled' };
   return checks.filter((c) => !GREEN_STATES.includes(c.state)).map((c) => `${c.name} ${words[c.state] || c.state}`).join('; ');
 }
@@ -208,21 +232,41 @@ export function wrap(a, forge) {
     checks: async (ref) => a.checks(text(ref, 'The commit')),
     rerun: async (check) => {
       if (!check || typeof check.id !== 'string') throw invalid('Re-run which check?');
-      if (!check.rerunnable) throw invalid(`${check.name || 'That check'} cannot be re-run from cornfield; re-run it on the forge.`);
+      if (!canRerun(check)) {
+        throw invalid(check.rerunnable && !RERUN_STATES.includes(check.state)
+          ? `${check.name || 'That check'} has not failed; only a failed or cancelled check is re-run.`
+          : `${check.name || 'That check'} cannot be re-run from cornfield; re-run it on the forge.`);
+      }
       return a.rerun(check);
     },
     merge: async (n, opts) => {
       number(n);
-      const { onlyIfGreen, method = 'merge' } = opts || {};
+      const { onlyIfGreen, method = 'merge', sha } = opts || {};
       if (onlyIfGreen !== true) throw invalid('cornfield only lands a pull request whose checks are green: pass { onlyIfGreen: true }.');
       if (!MERGE_METHODS.includes(method)) throw invalid(`The merge method is one of ${MERGE_METHODS.join(', ')}.`);
+      if (sha !== undefined && (typeof sha !== 'string' || !/^[0-9a-f]{7,64}$/i.test(sha))) throw invalid('The commit to land is a sha.');
       const pr = await a.pull(n);
       if (pr.state !== 'open') throw new ForgeError(`Pull request #${n} is ${pr.state}; only an open one can land.`, { code: 'conflict' });
       if (pr.draft) throw new ForgeError(`Pull request #${n} is a draft; mark it ready first.`, { code: 'conflict' });
+      // The head the caller looked at, and confirmed, is the head that lands: a push since is for them to look at again
+      if (sha !== undefined && sha.toLowerCase() !== pr.head.sha.toLowerCase()) {
+        throw new ForgeError(`Pull request #${n} has changed since it was looked at (its head is now ${pr.head.sha.slice(0, 7)}); look again before landing it.`, { code: 'conflict' });
+      }
       const checks = await a.checks(pr.head.sha);
       if (!isGreen(checks)) throw new ForgeError(`Pull request #${n} is not green: ${notGreenWords(checks)}.`, { code: 'not-green' });
+      // What the forge itself says about landing it: its required checks, a workflow that has not reported yet, conflicts
+      if (a.readiness) {
+        const ready = await a.readiness(n, pr.head.sha);
+        if (!ready.ready) throw new ForgeError(`Pull request #${n} is not ready to land: ${ready.why}.`, { code: 'not-green' });
+      }
       // At the sha the checks ran on: a push in between makes the forge refuse rather than land untested code
       return a.mergeAt(n, { sha: pr.head.sha, method });
+    },
+    runs: async (q) => {
+      if (q !== undefined && (q === null || typeof q !== 'object' || Array.isArray(q))) throw invalid('A query is an object.');
+      const { limit = DEFAULT_RUN_LIMIT } = q || {};
+      if (!Number.isSafeInteger(limit) || limit < 1) throw invalid('The limit is a whole number above 0.');
+      return a.runs({ limit });
     },
     branches: async () => a.branches(),
     file: async (ref, path) => {

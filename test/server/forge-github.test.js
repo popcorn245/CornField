@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { createForge, isMaintainer, isGreen, notGreenWords, FORGE_METHODS } from '../../server/forge.js';
+import { createForge, isMaintainer, isGreen, notGreenWords, canRerun, wrap, FORGE_METHODS } from '../../server/forge.js';
 // @ts-expect-error plain JS module, no declarations
 import { githubApiUrl, githubRateLimit } from '../../server/forge-github.js';
 // @ts-expect-error plain JS module, no declarations
@@ -36,6 +36,23 @@ describe('the GitHub adapter', () => {
     expect(Object.isFrozen(forge)).toBe(true);
   });
 
+  it('reads a run\'s own name and its workflow file, a missing title from the head commit, and every status and conclusion', async () => {
+    const forge = await forgeOn({
+      'GET /repos/owner/name/actions/runs?per_page=100': {
+        body: { workflow_runs: [
+          { id: 1, name: 'Deploy web', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'timed_out', head_commit: { message: 'Fix it\n\nlong' } },
+          { id: 2, path: '.github/workflows/ship.yml@refs/heads/main', status: 'queued' },
+          { id: 3, name: 'x', path: 'x.yml', status: 'waiting' },
+          { id: 4, name: 'x', path: 'x.yml', status: 'completed', conclusion: 'skipped' },
+        ] },
+      },
+    });
+    const runs = await forge.runs();
+    expect(runs.map((r) => [r.name, r.workflow, r.state, r.title])).toEqual([
+      ['Deploy web', 'deploy.yml', 'failure', 'Fix it'], ['ship.yml', 'ship.yml', 'queued', ''], ['x', 'x.yml', 'queued', ''], ['x', 'x.yml', 'skipped', ''],
+    ]);
+  });
+
   it('finds the API of github.com and of a GitHub Enterprise Server', () => {
     expect(githubApiUrl()).toBe('https://api.github.com');
     expect(githubApiUrl('https://github.com/')).toBe('https://api.github.com');
@@ -55,6 +72,21 @@ describe('the GitHub adapter', () => {
     const forge = await forgeOn({ 'GET /repos/owner/name/branches?per_page=100': { body: [] } }, { token: null });
     await forge.branches();
     expect(fake.requests[0].headers.authorization).toBeUndefined();
+  });
+
+  it('keeps a pull request\'s text (its "Closes #n") and marks an account GitHub calls a Bot, and only that', async () => {
+    const pull = (number, user, extra = {}) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', ...extra });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&sort=created&direction=desc&per_page=100': {
+        body: [pull(1, { login: 'dependabot[bot]', type: 'Bot' }, { body: 'Closes #5' }), pull(2, { login: 'agent-four', type: 'User' }), pull(3, { login: 'renovate[bot]' }, { body: null })],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.body)).toEqual(['Closes #5', '', '']);
+    expect(pulls[0].author).toEqual({ login: 'dependabot[bot]', url: null, bot: true });
+    expect(pulls[1].author).toEqual({ login: 'agent-four', url: null });
+    // No type said, no flag: the `[bot]` in the name is the agent rule's to read, not the adapter's
+    expect(pulls[2].author).toEqual({ login: 'renovate[bot]', url: null });
   });
 
   it('asks the signed-in user once, and their own permission from the repo', async () => {
@@ -113,7 +145,7 @@ describe('the GitHub adapter', () => {
   });
 
   it('merges with the merge method asked for, and says so when GitHub refuses because the head moved', async () => {
-    const pr = { number: 12, state: 'open', draft: false, head: { ref: 'f', sha: 'abc' }, base: { ref: 'main' } };
+    const pr = { number: 12, state: 'open', draft: false, head: { ref: 'f', sha: 'abc' }, base: { ref: 'main' }, mergeable_state: 'clean' };
     const green = { check_runs: [{ id: 1, name: 'test', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] };
     const forge = await forgeOn({
       'GET /repos/owner/name/pulls/12': { body: pr },
@@ -250,6 +282,41 @@ describe('what the adapters share', () => {
     expect(isGreen([c('a', 'success'), c('b', 'neutral'), c('c', 'skipped')])).toBe(true);
     expect(isGreen([c('a', 'success'), c('b', 'queued')])).toBe(false);
     expect(notGreenWords([c('a', 'success'), c('b', 'queued'), c('c', 'cancelled'), c('d', 'failure')])).toBe('b is waiting to run; c was cancelled; d failed');
+  });
+
+  it('is not green when nothing passed: all skipped, all neutral, or a mix of the two', () => {
+    const c = (name, state) => ({ id: name, name, state, url: null, rerunnable: false });
+    for (const checks of [[c('a', 'skipped')], [c('a', 'neutral')], [c('a', 'skipped'), c('b', 'neutral')]]) {
+      expect(isGreen(checks)).toBe(false);
+      expect(notGreenWords(checks)).toBe('no check has passed (they were all skipped or neutral)');
+    }
+  });
+
+  it('merge() does not land a head whose checks were all skipped or neutral, and asks the adapter\'s readiness last', async () => {
+    const H = 'a'.repeat(40);
+    const calls = [];
+    const adapter = (checks, ready = { ready: true }) => ({
+      pull: async () => ({ number: 1, state: 'open', draft: false, head: { sha: H } }),
+      checks: async () => checks,
+      readiness: async () => { calls.push('readiness'); return ready; },
+      mergeAt: async () => { calls.push('mergeAt'); return { sha: 'm' }; },
+    });
+    const c = (state) => ({ id: state, name: state, state, url: null, rerunnable: false });
+    for (const checks of [[c('skipped')], [c('neutral')], [c('skipped'), c('neutral')]]) {
+      await forgeError(() => wrap(adapter(checks), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H }), 'not-green');
+    }
+    expect(calls).toEqual([]);
+    const notReady = await forgeError(() => wrap(adapter([c('success')], { ready: false, why: 'test is still running' }), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H }), 'not-green');
+    expect(notReady.message).toBe('Pull request #1 is not ready to land: test is still running.');
+    expect(calls).toEqual(['readiness']);
+    expect(await wrap(adapter([c('success'), c('skipped')]), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H })).toEqual({ sha: 'm' });
+  });
+
+  it('canRerun: a failed or cancelled check the forge can run again, nothing else', () => {
+    const c = (state, rerunnable = true) => ({ id: state, name: state, state, url: null, rerunnable });
+    expect(['failure', 'cancelled', 'success', 'running', 'queued', 'neutral', 'skipped'].map((s) => canRerun(c(s)))).toEqual([true, true, false, false, false, false, false]);
+    expect(canRerun(c('failure', false))).toBe(false);
+    expect(canRerun(null)).toBe(false);
   });
 
   it('nextLink reads rel="next" wherever it is in the header', () => {

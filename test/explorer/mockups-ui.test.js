@@ -183,7 +183,7 @@ describe('in the node\'s panel', () => {
 });
 
 describe('the window', () => {
-  const dialog = () => document.querySelector('[role="dialog"]');
+  const dialog = () => document.querySelector('.hx-mockup-dialog[role="dialog"]');
 
   it('shows a picture in an <img> with the title as its alt text, from an address made of the position', async () => {
     await open();
@@ -267,7 +267,7 @@ describe('the window', () => {
     await selectNode(state.nodes.find((n) => n.id === 'page-new'));
     panelButtons()[0].click();
     panelButtons()[1].click();
-    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.hx-mockup-dialog[role="dialog"]')).toHaveLength(1);
     expect(dialog().querySelector('iframe')).not.toBe(null);
     expect(openMockup(3, null)).toBe(false); // out of the folder: not offered
     expect(openMockup(99, null)).toBe(false);

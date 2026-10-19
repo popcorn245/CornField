@@ -13,9 +13,22 @@
  *     `file` holds it (the deepest one), a failing check lights the test files its name names, and the rest of the
  *     map fades back (`state.forgeLit`, painted by scene.js). A file on no node is listed, with the others, as not on
  *     the map. Each node has a button that selects it on the map.
+ *   - The third tab, Agents, groups the work by what it belongs to (explorer/agents-model.js): one group per proposal
+ *     (the spec PR and the work on it), per issue (its pull requests and branches) and one for the rest, with the work
+ *     made by an agent marked and why. Nothing is launched (ADR 0007); a pull request there selects like any other.
+ *   - A fourth tab, Deploys (PIPE-03, docs/deploys.md): the latest workflow runs that are deploys, each with the nodes
+ *     the config says it restarted. Selecting one lights those nodes (a stack brings its containers; a failed deploy lights
+ *     them red) through the same paint path, turning on the layers they are on; a deploy no `deploys.restarts` names is listed and says it lights nothing.
+ *     Only one thing is selected at a time, a pull request or a deploy.
  *   - Keys: Tab reaches the header button, Enter opens the panel with the focus on its title; Escape closes it and
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
+ *   - Actions (CF-08), on a selected pull request, for a signed-in maintainer: Land it, when it is open, ready and every
+ *     check is green, and Re-run on a failed or cancelled check the forge can run again. Where a button is not shown the panel says
+ *     why. Land it opens a confirm dialog that shows exactly what will land (the pull request, its head commit, where
+ *     it goes, how, each check); a scrim covers the page, the dialog is `aria-modal`, Tab stays inside, Escape and Cancel close it and give the
+ *     focus back, and it is announced. What is sent is the head that was shown: a push since is refused by the server,
+ *     which checks everything again (server/forge-actions.js). While one is in flight the buttons are off.
  *   - Errors and rate limits are a line in the panel, in the words the server gives; a stale answer says it is old.
  *   - A third tab, Release notes (PIPE-04): the pull requests merged since a tag, grouped by what they changed on the
  *     map, as Markdown to preview and Copy (the clipboard, else the selected text to copy by hand). "Post as draft"
@@ -32,8 +45,12 @@ import { selectNode } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
+import { LAYER_DEFS, toggleLayer } from './layers.js';
+import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
+  mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
+  listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
 } from './forge-panel-model.js';
 
@@ -48,13 +65,21 @@ const ui = {
   kind: 'pulls',
   filters: defaultFilters(),
   lists: {}, // `${kind}|${server state}` -> { items, at, rate, stale }
+  work: null, // { grouped, problem, at, rate, stale } of the Agents tab
+  workFilters: { agentsOnly: false, finished: false },
   loading: false,
   error: '',
   selected: null, // the pull request's number
   detail: null, // { pull, files, checks, at, rate, stale } of the selected one
   detailError: '',
   lit: null, // litFor(detail, nodes)
+  deploy: null, // the selected deploy's id; the deploy itself is `deployItem`
+  deployItem: null,
+  litDeploy: null, // litForDeploy(deployItem, nodes)
   nodesSeen: null, // the `state.nodes` the lights were worked out for
+  busy: '', // the action in flight ('merge', or 'rerun:<check id>'), so a second click does nothing
+  note: null, // { text, ok }: what the last action came to, for the selected pull request
+  confirm: null, // { opener: selector } while the confirm dialog is open
   notes: freshNotes(), // the Release notes view
 };
 
@@ -72,10 +97,11 @@ let offScene = null;
 let now = () => Date.now();
 
 const forgeName = () => FORGE_NAMES[ui.config && ui.config.forge && ui.config.forge.type] || 'the forge';
-const listKey = () => `${ui.kind}|${serverState(ui.filters.state)}`;
-const current = () => ui.lists[listKey()] || null;
+const listKey = () => listKeyOf(ui.kind, ui.filters.state);
+const current = () => (ui.kind === 'work' ? ui.work : ui.lists[listKey()]) || null;
+const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
-const kindWords = () => (ui.kind === 'pulls' ? 'pull request' : 'issue');
+const kindWords = () => ({ pulls: 'pull request', issues: 'issue', deploys: 'deploy' })[ui.kind] || 'piece of work';
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
@@ -97,9 +123,29 @@ async function request(url, refresh, post) {
   }
 }
 
+/** Loads the Agents tab: everything it groups, in one answer */
+async function loadWork(refresh, token) {
+  ui.loading = true;
+  ui.error = '';
+  paint();
+  const res = await request(WORK_URL, refresh);
+  if (token !== listToken) return;
+  ui.loading = false;
+  if (res.ok) {
+    const b = res.body;
+    ui.work = { grouped: groupWork(b), problem: b.specsProblem || '', at: b.at, rate: b.rate || '', stale: b.stale || '' };
+    announce(`${workStatus(groupsShown(), '', now())}${ui.work.stale ? '. This is an older answer' : ''}`);
+  } else {
+    ui.error = errorWords(res.status, res.body);
+    announce(ui.error);
+  }
+  paint();
+}
+
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
-async function loadList(refresh = false) {
+async function loadList(refresh = false, quiet = false) {
   const token = ++listToken;
+  if (ui.kind === 'work') return loadWork(refresh, token);
   const key = listKey();
   ui.loading = true;
   ui.error = '';
@@ -109,10 +155,10 @@ async function loadList(refresh = false) {
   ui.loading = false;
   if (res.ok) {
     ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
-    announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
+    if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
   } else {
     ui.error = errorWords(res.status, res.body);
-    announce(ui.error);
+    if (!quiet) announce(ui.error);
   }
   paintFilters();
   paint();
@@ -121,10 +167,14 @@ async function loadList(refresh = false) {
 /** Selects a pull request: asks for its files and checks, then lights what they are on the map */
 async function selectPull(n) {
   const token = ++pullToken;
+  ui.deploy = null;
+  ui.deployItem = null;
+  ui.litDeploy = null;
   ui.selected = n;
   ui.detail = null;
   ui.detailError = '';
   ui.lit = null;
+  ui.note = null;
   state.forgeLit = null;
   touchScene();
   render();
@@ -147,7 +197,9 @@ async function selectPull(n) {
 export function clearPull() {
   pullToken++;
   const had = ui.selected;
+  if (ui.confirm) closeConfirm({ restoreFocus: false });
   ui.selected = null;
+  ui.note = null;
   ui.detail = null;
   ui.detailError = '';
   ui.lit = null;
@@ -161,7 +213,10 @@ export function clearPull() {
 /** What the selected pull request lights, worked out again: for the nodes now on the map */
 function relight() {
   ui.nodesSeen = state.nodes;
-  if (ui.detail) {
+  if (ui.deployItem) {
+    ui.litDeploy = litForDeploy(ui.deployItem, state.nodes);
+    state.forgeLit = { changed: ui.litDeploy.changed, failing: ui.litDeploy.failing };
+  } else if (ui.detail) {
     ui.lit = litFor(ui.detail, state.nodes);
     state.forgeLit = { changed: ui.lit.changed, failing: ui.lit.failing };
   } else {
@@ -175,7 +230,52 @@ function relight() {
 
 /** A proposal opening, or the live layer, changes the nodes: the lights follow them */
 function onNodesChange() {
-  if (ui.detail && state.nodes !== ui.nodesSeen) relight();
+  if ((ui.detail || ui.deployItem) && state.nodes !== ui.nodesSeen) relight();
+}
+
+/** Selects a deploy: nothing to ask (the list holds what it restarted), so its nodes light at once */
+export function selectDeploy(id) {
+  const found = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === id);
+  if (!found) return;
+  pullToken++;
+  ui.selected = null;
+  ui.detail = null;
+  ui.detailError = '';
+  ui.lit = null;
+  ui.deploy = id;
+  ui.deployItem = found;
+  // A container, a stack or a machine is on a layer that starts off: the layers the deploy's nodes are on come on, or nothing would light
+  const turnedOn = [];
+  for (const n of litForDeploy(found, state.nodes).nodes) {
+    const layer = LAYER_DEFS.find((l) => l.key === n.type);
+    if (layer && state.activeLayers[layer.key] === false) { toggleLayer(layer.key); turnedOn.push(layer.label); }
+  }
+  relight();
+  $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the deploy's nodes are what was asked for, not the row that was tapped
+  announce(deploySelectionWords(turnedOn));
+}
+
+/** Lets go of the selected deploy: nothing is lit any more */
+export function clearDeploy() {
+  const had = ui.deployItem;
+  ui.deploy = null;
+  ui.deployItem = null;
+  ui.litDeploy = null;
+  state.forgeLit = null;
+  touchScene();
+  render();
+  paint();
+  if (had) announce(`Deploy ${had.name} cleared`);
+}
+
+/** What a screen reader hears when a deploy is selected */
+function deploySelectionWords(turnedOn = []) {
+  const { name, branch } = ui.deployItem;
+  const lit = ui.litDeploy;
+  const head = `Deploy ${name}${branch ? ` of ${branch}` : ''}, ${deployWords(ui.deployItem).toLowerCase()}`;
+  if (!ui.deployItem.restarts.length) return `${head}. No node is mapped to it, so nothing is lit.`;
+  const layers = turnedOn.length ? ` Turned on the ${turnedOn.join(' and ')} ${turnedOn.length === 1 ? 'layer' : 'layers'}.` : '';
+  return `${head}: ${plural(lit.nodes.length, 'node')} restarted and lit${lit.missing.length ? `, ${lit.missing.length} named that ${lit.missing.length === 1 ? 'is' : 'are'} not on the map` : ''}.${layers}`;
 }
 
 /** What a screen reader hears when a pull request is selected */
@@ -197,7 +297,7 @@ async function loadNotes(refresh = false) {
   n.loading = true;
   n.error = '';
   n.message = '';
-  closeConfirm(false);
+  closeNotesConfirm(false);
   paint();
   const res = await request(notesUrl(n.since), refresh);
   if (token !== notesToken) return;
@@ -241,7 +341,7 @@ async function copyNotes() {
 }
 
 /** The confirm step: what will happen in words, and the tag to ask for (the one the server suggests, to change) */
-function openConfirm() {
+function openNotesConfirm() {
   const n = ui.notes;
   if (!n.data || n.posting) return;
   if (!n.data.count) { say('There are no merged pull requests to put in a draft.', true); return; }
@@ -254,7 +354,7 @@ function openConfirm() {
 }
 
 /** Closes the confirm step; the focus goes back to the button that opened it unless told not to */
-function closeConfirm(restoreFocus = true) {
+function closeNotesConfirm(restoreFocus = true) {
   const n = ui.notes;
   if (!n.confirm) return;
   n.confirm = false;
@@ -327,23 +427,49 @@ const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' 
 
 /** The filters' choices: the states of the kind, the labels and authors of what is loaded */
 function paintFilters() {
-  if (ui.kind === 'notes') return;
-  const items = current() ? current().items : [];
+  $('forge-filters').hidden = ui.kind === 'work' || ui.kind === 'notes';
+  $('forge-work-filters').hidden = ui.kind !== 'work';
+  $('forge-work-agents').checked = ui.workFilters.agentsOnly;
+  $('forge-work-finished').checked = ui.workFilters.finished;
+  if (ui.kind === 'work' || ui.kind === 'notes') return;
+  const items = current() && ui.kind !== 'deploys' ? current().items : [];
   const { labels, authors } = facetsOf(items);
   if (ui.filters.label && !labels.includes(ui.filters.label)) ui.filters.label = '';
   if (ui.filters.author && !authors.includes(ui.filters.author)) ui.filters.author = '';
   $('forge-state').innerHTML = STATES[ui.kind].map(([v, l]) => option(v, l, v === ui.filters.state)).join('');
   $('forge-label').innerHTML = option('', 'Any label', !ui.filters.label) + labels.map((l) => option(l, l, l === ui.filters.label)).join('');
   $('forge-author').innerHTML = option('', 'Anyone', !ui.filters.author) + authors.map((a) => option(a, a, a === ui.filters.author)).join('');
+  // A deploy has no labels and no author to pick: its list is filtered by state and the search
+  $('forge-label').parentElement.hidden = ui.kind === 'deploys';
+  $('forge-author').parentElement.hidden = ui.kind === 'deploys';
+  // …and its search reads the workflow, what it ran for, the branch and who started it, not a number or a label
+  $('forge-text').placeholder = ui.kind === 'deploys' ? 'Workflow, branch, commit, who' : 'Title, number, label';
 }
 
-function itemHtml(item) {
+/** What a deploy lights, said short, for its row: how many nodes, or that it is not mapped */
+function lightsWords(deploy) {
+  if (!deploy.restarts.length) return 'Not mapped to a node';
+  const { nodes } = nodesForRestarts(deploy.restarts, state.nodes);
+  return nodes.length ? `Lights ${plural(nodes.length, 'node')}` : 'Names nodes not on the map';
+}
+
+function deployHtml(d) {
+  const link = safeUrl(d.url);
+  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open deploy ${escHtml(d.name)} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-deploy="${escHtml(d.id)}" aria-pressed="${ui.deploy === d.id}">
+    <span class="hx-forge-title">${escHtml(d.name)}${d.title && d.title !== d.name ? `<span class="hx-faint"> · ${escHtml(d.title)}</span>` : ''}</span>
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}">${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
+    <span class="hx-forge-labels"><span class="hx-forge-label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
+}
+
+function itemHtml(item, before = '', after = '') {
+  if (ui.kind === 'deploys') return deployHtml(item);
   const link = safeUrl(item.url);
   const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}">${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${labels}`;
-  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(kindWords())} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
-  if (ui.kind === 'pulls') {
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}">${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${before}${after}${labels}`;
+  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(item.head ? 'pull request' : 'issue')} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  if (ui.kind !== 'issues') {
     return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-pr="${item.number}" aria-pressed="${ui.selected === item.number}">${inner}</button>${out}</li>`;
   }
   // An issue has no more to show here: its row is the link out
@@ -352,8 +478,48 @@ function itemHtml(item) {
     : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div></li>`;
 }
 
+/** One piece of work in a group: a pull request (a row that selects it, as in the Pull requests tab) or a branch with none */
+function workHtml(e) {
+  const mark = e.mark ? `<span class="hx-forge-agentline"><span class="hx-forge-agent" title="Agent-made: ${escHtml(markWords(e.mark))}">Agent</span><span class="hx-forge-why hx-faint">${escHtml(markWords(e.mark))}</span></span>` : '';
+  if (e.type === 'pull') {
+    const also = e.issues.slice(1);
+    const note = [e.proposal ? `Spec PR for ${e.proposal}` : '', also.length ? `Also closes ${also.map((n) => `#${n}`).join(', ')}` : ''].filter(Boolean);
+    return itemHtml(e.pull, mark, note.length ? `<span class="hx-forge-meta">${escHtml(note.join(' · '))}</span>` : '');
+  }
+  return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-branch"><span class="hx-forge-title"><span class="hx-sr-only">Branch </span><code class="hx-code">${escHtml(e.branch.name)}</code></span><span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--draft">Branch</span> no pull request yet</span>${mark}</div></li>`;
+}
+
+/** The Agents tab's groups, each a heading and its work */
+function groupsHtml(groups) {
+  return groups.map((g, i) => {
+    const link = g.issue && safeUrl(g.issue.url) ? ` <a class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+    return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3><p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
+  }).join('');
+}
+
 /** The selected pull request: its checks, its files and the nodes they are */
+/** The selected deploy: what it was, and the nodes it restarted (each a button that selects it on the map) */
+function deployDetailHtml() {
+  const d = ui.deployItem;
+  const lit = ui.litDeploy;
+  const url = safeUrl(d.url);
+  const head = `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-deploy">Clear</button></div>
+    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}">${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
+  const stale = ui.lists.deploys && ui.lists.deploys.stale;
+  let body;
+  if (!d.restarts.length) {
+    body = '<p class="hx-forge-notice">No node is mapped to this deploy, so nothing is lit. Say what it restarts under <code class="hx-code">deploys.restarts</code> in cornfield.config.js (docs/deploys.md).</p>';
+  } else {
+    const rows = lit.nodes.map((n) => `<li class="hx-forge-file"><button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
+    const missing = lit.missing.length ? `<p class="hx-forge-notice">${escHtml(lit.missing.join(', '))} ${lit.missing.length === 1 ? 'is' : 'are'} named in the config but not on the map.</p>` : '';
+    const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--${d.state === 'failure' ? 'removed' : 'changed'}" aria-hidden="true"></span>${d.state === 'failure' ? 'restarted by a deploy that failed' : 'restarted by this deploy'}</p>` : '';
+    body = `<h4 class="hx-forge-sub">${escHtml(`Restarted: ${plural(lit.nodes.length, 'node')} on the map`)}</h4>${key}${rows ? `<ul class="hx-forge-files">${rows}</ul>` : ''}${missing}`;
+  }
+  return `${head}${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${body}`;
+}
+
 function detailHtml() {
+  if (ui.deployItem) return deployDetailHtml();
   if (ui.selected === null) return '';
   const head = (title, link) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-pr">Clear</button></div>${link || ''}`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice">${escHtml(ui.detailError)}</p>`;
@@ -372,7 +538,12 @@ function detailHtml() {
         : 'Names no test file, so lights nothing'}</span>`
       : '';
     const name = safeUrl(c.url) ? `<a class="hx-link" href="${escHtml(c.url)}" target="_blank" rel="noreferrer">${escHtml(c.name)}</a>` : `<span class="hx-name">${escHtml(c.name)}</span>`;
-    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}">${escHtml(checkWords(c))}</span> ${name}${lights}</li>`;
+    const why = rerunWhy(c, forgeName());
+    const again = c.state === 'failure' && c.canRerun
+      ? `<button type="button" class="hx-btn hx-forge-act" data-forge-rerun="${escHtml(c.id)}" aria-label="Re-run ${escHtml(c.name)}"${ui.busy ? ' disabled' : ''}>Re-run</button>`
+      : '';
+    const whyNot = why ? `<span class="hx-faint hx-forge-lights">${escHtml(why)}</span>` : '';
+    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}">${escHtml(checkWords(c))}</span> ${name}${again}${lights}${whyNot}</li>`;
   }).join('');
 
   const fileRows = lit.files.map((f) => {
@@ -383,6 +554,12 @@ function detailHtml() {
     return `<li class="hx-forge-file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
   }).join('');
 
+  const block = mergeBlock(ui.detail);
+  const act = block
+    ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
+    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''}>Land it …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
+  const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}">${escHtml(ui.note.text)}</p>` : '';
+
   const key = lit.changed.size || lit.failing.size
     ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
     : '';
@@ -390,6 +567,9 @@ function detailHtml() {
     ${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
     <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
     ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
+    <h4 class="hx-forge-subact">Land it</h4>
+    ${note}
+    ${act}
     <h4 class="hx-forge-sub">${escHtml(plural(lit.files.length, 'file'))} changed, ${mapped} on the map</h4>
     ${key}
     <ul class="hx-forge-files">${fileRows}</ul>`;
@@ -399,7 +579,10 @@ function detailHtml() {
 function findAgain(el) {
   if (!el || !el.dataset) return null;
   if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
+  if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
+  if (el.dataset.forgeMerge) return '[data-forge-merge]';
+  if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   return null;
 }
 
@@ -416,7 +599,8 @@ function paint() {
 function draw(panel) {
   for (const btn of panel.querySelectorAll('[data-forge-kind]')) btn.setAttribute('aria-pressed', String(btn.dataset.forgeKind === ui.kind));
   const notes = ui.kind === 'notes';
-  $('forge-filters').hidden = notes;
+  $('forge-filters').hidden = notes || ui.kind === 'work';
+  $('forge-work-filters').hidden = ui.kind !== 'work';
   $('forge-list').hidden = notes;
   $('forge-notes').hidden = !notes;
   if (notes) {
@@ -425,23 +609,28 @@ function draw(panel) {
   }
 
   const list = current();
-  const shown = list ? filterItems(list.items, ui.kind, ui.filters) : [];
+  const work = ui.kind === 'work';
+  const groups = work ? groupsShown() : [];
+  const shown = list && !work ? filterItems(list.items, ui.kind, ui.filters) : [];
   const status = $('forge-status');
-  if (ui.loading && !list) status.textContent = `Loading ${kindWords()}s from ${forgeName()} …`;
+  if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : `Loading ${kindWords()}s from ${forgeName()} …`;
   else if (!list) status.textContent = '';
+  else if (work) status.textContent = workStatus(groups, list.at, now());
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
-  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '');
+  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '');
   notice.hidden = !words;
   notice.textContent = words;
 
   const rows = $('forge-list');
   if (!list) rows.innerHTML = '';
-  else rows.innerHTML = shown.length ? shown.map(itemHtml).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
+  else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : `<li class="hx-forge-empty hx-faint">${ui.work.grouped.groups.length ? 'No work matches these filters.' : 'No work here yet.'}</li>`;
+  else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
 
   const detail = $('forge-detail');
-  detail.hidden = ui.selected === null;
+  detail.hidden = ui.selected === null && !ui.deployItem;
+  detail.setAttribute('aria-label', ui.deployItem ? 'Selected deploy' : 'Selected pull request');
   detail.innerHTML = detailHtml();
 
   const rate = (ui.detail && ui.detail.rate) || (list && list.rate) || '';
@@ -467,12 +656,141 @@ function drawNotes() {
 function paintButton() {
   const btn = $('forge-btn');
   if (!btn) return;
-  const lit = ui.selected !== null;
+  const lit = ui.selected !== null || !!ui.deployItem;
   const tag = $('forge-btn-lit');
   tag.hidden = !lit;
-  tag.textContent = lit ? `#${ui.selected}` : '';
-  btn.setAttribute('aria-label', lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
+  tag.textContent = ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  btn.setAttribute('aria-label', ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
   btn.setAttribute('aria-expanded', String(ui.open));
+}
+
+// ---------------------------------------------------------------------------
+//  Actions: land a green pull request, re-run a failed check
+// ---------------------------------------------------------------------------
+
+/** One POST of JSON; `{ ok, status, body }`, with a status of null when the server did not answer */
+async function post(url, payload) {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    let body = null;
+    try { body = await res.json(); } catch { /* no body */ }
+    return { ok: !!res.ok && !!body && body.ok === true, status: res.status, body };
+  } catch {
+    return { ok: false, status: null, body: null };
+  }
+}
+
+/** What an action came to: said on the panel and through the live region, and everything is read again from the forge */
+async function finishAction(action, res, n) {
+  const text = actionWords(action, res.status, res.body, n);
+  ui.busy = '';
+  ui.note = { text, ok: res.ok };
+  announce(text);
+  paint();
+  if (res.status === null) return;
+  // The other tabs' answers are from before it: they are read again when next shown (the server let go of its own copies)
+  if (ui.kind === 'work') ui.lists = {};
+  else { ui.lists = { [listKey()]: ui.lists[listKey()] }; ui.work = null; }
+  // Whatever it came to (a refusal says the pull request is not what was shown), the panel looks again
+  if (ui.selected === n) await refreshForge({ quiet: true });
+}
+
+/** Re-runs one failed check on the head that is shown */
+async function rerunCheck(id) {
+  if (ui.busy || !ui.detail) return;
+  const { pull, checks } = ui.detail;
+  const check = checks.find((c) => c.id === id);
+  if (!check || check.state !== 'failure' || !check.canRerun) return;
+  ui.busy = `rerun:${id}`;
+  ui.note = null;
+  announce(`Re-running ${check.name}`);
+  paint();
+  const res = await post(actionUrl(pull.number, 'rerun'), { sha: pull.head.sha, check: id });
+  await finishAction('rerun', res, pull.number);
+}
+
+const confirmEl = () => $('forge-confirm');
+
+/** While the confirm step is open the focus cannot leave it: a focus that lands elsewhere is brought back */
+function keepFocusIn(e) {
+  const el = confirmEl();
+  if (ui.confirm && el && !el.contains(e.target)) el.querySelector('[data-action="forge-confirm-cancel"]').focus();
+}
+
+/** Opens the confirm step for landing the selected pull request: what will land, exactly; the focus goes to Cancel */
+function openConfirm(opener) {
+  const el = confirmEl();
+  if (!el || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
+  const what = confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod);
+  $('forge-confirm-title').textContent = what.title;
+  $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${k === 'Commit' ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
+    <ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>
+    <p class="hx-confirm-note">${escHtml(what.note)}</p>`;
+  const go = el.querySelector('[data-action="forge-confirm-go"]');
+  go.disabled = false;
+  go.textContent = 'Land it';
+  go.removeAttribute('aria-busy');
+  // The scrim covers the page for the pointer, aria-modal tells a reader the rest is out of play, and the focus stays in
+  ui.confirm = { opener };
+  document.addEventListener('focusin', keepFocusIn);
+  el.hidden = false;
+  el.querySelector('[data-action="forge-confirm-cancel"]').focus();
+  announce(`${what.title} ${what.lines.map(([k, v]) => `${k}: ${v}`).join('. ')}. ${what.note} Cancel or Land it.`);
+}
+
+/** Closes the confirm step; the focus goes back to the button that opened it (or the panel's title if that is gone) */
+function closeConfirm({ restoreFocus = true } = {}) {
+  const el = confirmEl();
+  if (!el || !ui.confirm) return;
+  const { opener } = ui.confirm;
+  ui.confirm = null;
+  el.hidden = true;
+  document.removeEventListener('focusin', keepFocusIn);
+  if (!restoreFocus) return;
+  const back = $('forge-panel').querySelector(opener) || $('forge-title');
+  if (back && !back.disabled) back.focus();
+}
+
+/** Land it, confirmed: posts the head that was shown */
+async function confirmedMerge() {
+  if (ui.busy || !ui.detail || !ui.confirm) return;
+  const { pull } = ui.detail;
+  const body = mergeBody(ui.detail);
+  ui.busy = 'merge';
+  ui.note = null;
+  const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
+  go.disabled = true;
+  go.setAttribute('aria-busy', 'true');
+  go.textContent = 'Landing …';
+  announce(`Landing pull request ${pull.number}`);
+  const res = await post(actionUrl(pull.number, 'merge'), body);
+  closeConfirm();
+  await finishAction('merge', res, pull.number);
+}
+
+/** Keys inside the confirm step: Escape cancels, Tab stays between its two buttons, nothing reaches the map behind it */
+function onConfirmKey(e) {
+  e.stopPropagation();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (!ui.busy) closeConfirm();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const buttons = [...confirmEl().querySelectorAll('button:not([disabled])')];
+  if (!buttons.length) { e.preventDefault(); return; }
+  const at = buttons.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1) : (at === -1 || at === buttons.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  buttons[next].focus();
+}
+
+function onConfirmClick(e) {
+  const t = e.target;
+  if (t === confirmEl()) { if (!ui.busy) closeConfirm(); return; } // the scrim
+  const action = t.closest && t.closest('[data-action]');
+  if (!action) return;
+  if (action.dataset.action === 'forge-confirm-cancel') { if (!ui.busy) closeConfirm(); } else if (action.dataset.action === 'forge-confirm-go') confirmedMerge();
 }
 
 // ---------------------------------------------------------------------------
@@ -514,11 +832,17 @@ export function closeForge({ restoreFocus = true } = {}) {
 export const toggleForge = () => (ui.open ? closeForge() : openForge());
 
 /** Asks the forge again, past the server's cache: the list, and the selected pull request */
-export async function refreshForge() {
-  announce('Asking the forge again');
+export async function refreshForge({ quiet = false } = {}) {
+  if (!quiet) announce('Asking the forge again');
   if (ui.kind === 'notes') { await loadNotes(true); return; }
   const n = ui.selected;
-  await loadList(true);
+  await loadList(true, quiet);
+  if (ui.deployItem) {
+    // The list is read again: the deploy as the forge now has it (still running, now finished), else the last copy
+    const again = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === ui.deploy);
+    if (again) { ui.deployItem = again; relight(); }
+    return;
+  }
   if (n !== null && ui.selected === n) {
     const token = ++pullToken;
     const res = await request(pullUrl(n), true);
@@ -536,7 +860,8 @@ export async function refreshForge() {
 function filtersChanged(announceNow = true) {
   paint();
   const list = current();
-  if (announceNow && list) announce(`${filterItems(list.items, ui.kind, ui.filters).length} of ${plural(list.items.length, kindWords())} shown`);
+  if (announceNow && list && ui.kind === 'work') announce(workStatus(groupsShown(), '', now()));
+  else if (announceNow && list) announce(`${filterItems(list.items, ui.kind, ui.filters).length} of ${plural(list.items.length, kindWords())} shown`);
 }
 
 function onClick(e) {
@@ -551,7 +876,7 @@ function onClick(e) {
       return;
     }
     ui.kind = kind.dataset.forgeKind;
-    ui.filters = defaultFilters();
+    ui.filters = defaultFilters(ui.kind);
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
     return;
@@ -560,6 +885,11 @@ function onClick(e) {
   if (pr) {
     const n = Number(pr.dataset.forgePr);
     if (ui.selected === n) clearPull(); else selectPull(n);
+    return;
+  }
+  const dep = t.closest('[data-forge-deploy]');
+  if (dep) {
+    if (ui.deploy === dep.dataset.forgeDeploy) clearDeploy(); else selectDeploy(dep.dataset.forgeDeploy);
     return;
   }
   const nodeBtn = t.closest('[data-forge-node]');
@@ -572,15 +902,20 @@ function onClick(e) {
     announce(`${node.label}, ${node.type}`);
     return;
   }
+  const merge = t.closest('[data-forge-merge]');
+  if (merge) { openConfirm('[data-forge-merge]'); return; }
+  const rerun = t.closest('[data-forge-rerun]');
+  if (rerun) { rerunCheck(rerun.dataset.forgeRerun); return; }
   const action = t.closest('[data-action]');
   if (!action) return;
   if (action.dataset.action === 'close-forge') closeForge();
   else if (action.dataset.action === 'refresh-forge') refreshForge();
   else if (action.dataset.action === 'copy-notes') copyNotes();
-  else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeConfirm(); else openConfirm(); }
+  else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeNotesConfirm(); else openNotesConfirm(); }
   else if (action.dataset.action === 'confirm-notes') postDraft();
-  else if (action.dataset.action === 'cancel-notes') { closeConfirm(); announce('Cancelled. Nothing was posted.'); }
+  else if (action.dataset.action === 'cancel-notes') { closeNotesConfirm(); announce('Cancelled. Nothing was posted.'); }
   else if (action.dataset.action === 'clear-forge-pr') { clearPull(); $('forge-title').focus(); }
+  else if (action.dataset.action === 'clear-forge-deploy') { clearDeploy(); $('forge-title').focus(); }
 }
 
 function onChange(e) {
@@ -593,6 +928,11 @@ function onChange(e) {
     ui.filters.state = e.target.value;
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
+  } else if (id === 'forge-work-agents' || id === 'forge-work-finished') {
+    if (id === 'forge-work-agents') ui.workFilters.agentsOnly = e.target.checked;
+    else ui.workFilters.finished = e.target.checked;
+    paint();
+    announce(workStatus(groupsShown(), '', now()));
   } else if (id === 'forge-label') {
     ui.filters.label = e.target.value;
     filtersChanged();
@@ -615,7 +955,7 @@ function onKey(e) {
   if (e.key === 'Enter' && e.target.id === 'notes-tag' && !e.defaultPrevented) { e.preventDefault(); postDraft(); return; }
   if (e.key === 'Escape' && !e.defaultPrevented && ui.notes.confirm && e.target.closest && e.target.closest('#notes-confirm')) {
     e.preventDefault();
-    closeConfirm();
+    closeNotesConfirm();
     announce('Cancelled. Nothing was posted.');
     return;
   }
@@ -650,6 +990,11 @@ export function initForgePanel(config, opts = {}) {
     panel.addEventListener('change', onChange);
     panel.addEventListener('input', onInput);
     panel.addEventListener('keydown', onKey);
+    const confirm = confirmEl();
+    if (confirm) {
+      confirm.addEventListener('click', onConfirmClick);
+      confirm.addEventListener('keydown', onConfirmKey);
+    }
     offScene = onSceneTouch(onNodesChange);
   }
   return true;
@@ -657,6 +1002,7 @@ export function initForgePanel(config, opts = {}) {
 
 /** For tests: forget the page this was wired to, and everything shown */
 export function resetForgePanelForTests(clock = () => Date.now()) {
+  if (ui.confirm) closeConfirm({ restoreFocus: false });
   if (offScene) offScene();
   offScene = null;
   clearTimeout(searchTimer);
@@ -666,5 +1012,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   pullToken++;
   notesToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null, notes: freshNotes() });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, notes: freshNotes() });
 }

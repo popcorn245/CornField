@@ -1,8 +1,9 @@
 /**
  * @module server/forge-routes
  *
- * The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). Nothing
- * here writes to the forge: it only calls the interface's reads (server/forge.js), as the signed-in maintainer, with
+ * The surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). The GETs below
+ * only call the interface's reads (server/forge.js); the two POSTs that act (land, re-run) are server/forge-actions.js.
+ * All as the signed-in maintainer, with
  * their own token (`auth.forgeFor`), never one from the config. Without sign-in (Stage 1, loopback) there is nobody to
  * ask as, so the routes answer 403 and say so, and the explorer does not offer the panel (as the Proposals menu does
  * not list spec PRs without sign-in, server/proposal-pulls.js): no anonymous calls, so no unauthenticated rate limit
@@ -11,16 +12,21 @@
  *   GET /api/forge/issues?state=open|closed|all&labels=a,b&limit=100   issues, newest first
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
+ *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
+ *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
+ *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
+ *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
+ *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
  *   GET /api/forge/release-notes?since=<tag>                           the merged pull requests since a tag (the latest version tag unless
  *                                                                      told), grouped by what they changed on the map, as Markdown too
  *
- * The one write is a DRAFT release (PIPE-04), and it is not a read, so it is not like the rest:
+ * Besides the two actions above, the other write is a DRAFT release (PIPE-04):
  *
  *   POST /api/forge/release-drafts   { tag, since?, name? }   drafts the notes again, fresh, and has the forge keep them as a draft release
  *
  * It takes a POST from cornfield's own page only (`sameOrigin`), asks the forge again who is signed in and whether they
  * still maintain the repo (not the session's 15-minute-old answer), writes a row to the audit (`actions`, via
- * `auth.record`) before the forge is asked and the forge's answer after, and creates a draft only: nothing publishes a
+ * `auth.begin`) before the forge is asked and the forge's answer after (`auth.finish`), and creates a draft only: nothing publishes a
  * release or makes or pushes a tag. The notes are made here from the pull requests and the map, never taken from the
  * page, so what is posted is what the preview said for the same inputs.
  *
@@ -35,7 +41,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { ForgeError, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
+import { ForgeError, canRerun, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
+import { actionOf, countAttempt, serveAction } from './forge-actions.js';
+import { listPullProposals } from './proposal-pulls.js';
+import { deploysOf } from './deploys.js';
 import { readBody, sameOrigin } from './proposals.js';
 import { releaseNotes } from './release-notes.js';
 import { readTopology } from '../core/validate.js';
@@ -47,6 +56,12 @@ export const KEEP_MS = 24 * 60 * 60 * 1000;
 /** The most a listing may ask for, and what it asks for unless told */
 export const MAX_LIMIT = 300;
 export const DEFAULT_LIMIT = 100;
+/** What the agents view reads: the newest pull requests and issues, any state, and the most branches */
+export const WORK_PULLS = 100;
+export const WORK_ISSUES = 200;
+export const WORK_BRANCHES = 300;
+/** A pull request's text is read for "Closes #n": the first of it is enough, and the answer stays small */
+export const WORK_BODY_MAX = 4000;
 
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
 const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
@@ -104,6 +119,32 @@ function routeOf(reqPath, url, config) {
     const q = listQuery(url, false);
     return { key: `pulls?state=${q.state}&limit=${q.limit}`, load: async (forge) => ({ items: await forge.pulls(q) }) };
   }
+  if (reqPath === '/api/forge/deploys') {
+    const { limit } = listQuery(url, false);
+    // The runs asked for are the last `limit` of every workflow; the config picks the deploys among them. The config is
+    // in the key, so an answer kept before it changed is never served for the new one.
+    const mapping = createHash('sha256').update(JSON.stringify(config.deploys || null)).digest('hex').slice(0, 12);
+    return { key: `deploys?limit=${limit}&config=${mapping}`, load: async (forge) => ({ items: deploysOf(await forge.runs({ limit }), config.deploys) }) };
+  }
+  if (reqPath === '/api/forge/work') {
+    return {
+      key: 'work',
+      load: async (forge) => {
+        const [pulls, issues, branches, specs] = await Promise.all([
+          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, config),
+        ]);
+        return {
+          pulls: pulls.map((p) => ({ ...p, body: p.body.slice(0, WORK_BODY_MAX) })),
+          issues,
+          branches: branches.slice(0, WORK_BRANCHES),
+          specs: specs.entries.map((e) => ({ pull: e.pull.number, slug: e.slug })),
+          specsProblem: specs.problem,
+          // In the kept answer, so a changed config is a changed ETag
+          agents: config.agents,
+        };
+      },
+    };
+  }
   const one = /^\/api\/forge\/pulls\/([1-9]\d{0,8})$/.exec(reqPath);
   if (one) {
     const n = Number(one[1]);
@@ -112,7 +153,7 @@ function routeOf(reqPath, url, config) {
       load: async (forge) => {
         const pull = await forge.pull(n);
         const [files, checks] = await Promise.all([forge.pullFiles(n), pull.head.sha ? forge.checks(pull.head.sha) : []]);
-        return { pull, files, checks };
+        return { pull, files, checks: checks.map((c) => ({ ...c, canRerun: canRerun(c) })) };
       },
     };
   }
@@ -144,19 +185,29 @@ function keep(db, key, etag, body, now) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, session: { userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
 export async function serveForge(req, res, reqPath, url, ctx) {
   if (reqPath !== '/api/forge' && !reqPath.startsWith('/api/forge/')) return false;
+  const { config, session, auth, now = Date.now } = ctx;
+  const act = actionOf(reqPath);
+  if (act) {
+    if (!config.forge || !hasAdapter(config.forge.type)) {
+      req.resume();
+      send(req, res, config.forge ? 501 : 404, { ok: false, error: config.forge ? `cornfield has no adapter for the forge type ${JSON.stringify(config.forge.type)} yet.` : 'No forge is configured: set `forge` in cornfield.config.js.', code: config.forge ? 'unavailable' : 'not-found' });
+      return true;
+    }
+    await serveAction(req, res, act, ctx, (status, body, headers) => send(req, res, status, body, headers));
+    return true;
+  }
   const drafting = reqPath === DRAFTS;
   if (!drafting) req.resume();
   if (!drafting && req.method !== 'GET' && req.method !== 'HEAD') {
-    send(req, res, 405, { ok: false, error: 'The forge routes only read.' }, { Allow: 'GET, HEAD' });
+    send(req, res, 405, { ok: false, error: 'The forge routes only read, but for landing and re-running a pull request and posting a release draft.' }, { Allow: 'GET, HEAD' });
     return true;
   }
-  const { config, session, auth, now = Date.now } = ctx;
   if (!config.forge) {
     req.resume();
     send(req, res, 404, { ok: false, error: 'No forge is configured: set `forge` in cornfield.config.js.', code: 'not-found' });
@@ -268,22 +319,30 @@ async function postDraft(req, res, ctx, name) {
   const request = { tag: asked.tag, since: asked.since ?? null, name: asked.name ?? asked.tag };
   const target = `${config.forge.repo}@${asked.tag}`;
 
+  // The same ceiling as landing and re-running, before anything is written down: a page on a sibling subdomain is
+  // same-site, so the cookie rides along, and its refused attempts must not grow the audit table without end
+  const flood = countAttempt(ctx, session.userId, (ctx.now || Date.now)());
+  if (flood) return say(flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
   // One draft at a time for a tag: a double click must not make two drafts
   const busyKey = `${config.forge.repo}@${asked.tag}`;
   if (inFlight.has(busyKey)) return say(429, { ok: false, error: `A draft for ${asked.tag} is already being made; wait for it.`, code: 'rate-limited' }, { 'Retry-After': '5' });
   inFlight.add(busyKey);
-  let audit = null;
-  const finish = async (status, answer) => { if (audit) await audit.done(status, answer); };
+  // The audit row is begun before anything is asked of the forge (as for landing and re-running): no row, no draft
+  let rowId = null;
+  try {
+    rowId = await auth.begin({ login: session.login, action: 'release-draft', target, request });
+  } catch {
+    inFlight.delete(busyKey);
+    return say(503, { ok: false, error: 'cornfield cannot write its audit log, so it will not post a draft.', code: 'unavailable' });
+  }
+  const finish = async (status, answer) => {
+    try { await auth.finish(rowId, { status, answer }); } catch (err) { console.error(`[cornfield] the audit row of release-draft ${target} could not be finished: ${err instanceof Error ? err.message : err}`); }
+  };
   try {
     const forge = auth.forgeFor(session);
     // Asked again now, not the session's last answer: a maintainer removed a minute ago can no longer do this
     const me = await forge.me();
     const permission = String(me.id) === String(session.userId) ? await forge.permission(config.forge.repo, me.login) : 'none';
-    try {
-      audit = await auth.record({ login: me.login, action: 'release-draft', target, request });
-    } catch {
-      return say(500, { ok: false, error: 'The action could not be written to the audit, so it was not done.', code: 'unavailable' });
-    }
     if (!isMaintainer(permission)) {
       const error = `${me.login} does not maintain ${config.forge.repo} on ${name} (any more), so cornfield will not post for them.`;
       await finish(null, { error, code: 'forbidden' });

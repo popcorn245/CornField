@@ -29,12 +29,14 @@ export default {
 | `title` | the explorer's title (default: the package name) |
 | `derivers` | built-in names (`starter`, `personas`, `compose`, `world`, `openapi`, `cloud`, `docs`), paths (`./tools/deriver.js`), or `{ use, options }`; run in order. [derivers.md](derivers.md) |
 | `sources` | browser modules for the live layer, the house, devices and the permission checker (below) |
-| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name' }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md) |
+| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name', mergeMethod? }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md). `mergeMethod` is how the panel lands a green pull request: `merge` (the default), `squash` or `rebase`, the way the repo lands its own |
 | `port`, `host` | where `serve` listens. Without sign-in the host must be loopback; with it and an https `publicUrl`, any address ([sign-in](sign-in.md)) |
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
 | `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
+| `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests |
 | `topology` | the map file |
+| `agents` | what marks work as made by an agent: `authors`, `labels`, `branchPrefixes` (lists, empty by default) and `bots` (default true: `[bot]` accounts count). The Agents tab of the issues and PRs panel uses it: [agents](agents.md) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
