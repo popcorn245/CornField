@@ -41,13 +41,16 @@ export function announce(text) {
 /** The visible nodes, in the order the keys step through them */
 const stepOrder = () => K.readingOrder(state.nodes.filter((n) => isNodeVisible(n)));
 
-/** Moves the camera so `node` is in the middle of the part of the map not under the panel or a phone's sheets */
-function centreOn(node) {
+/** Moves the camera so `node` is in the middle of the part of the map not under the panels or a phone's sheets */
+export function centreOn(node) {
   const { camera, width, height } = state;
   const visibleHeight = Math.max(160, height - (state.coveredBottom || 0));
   const panel = $('spec-drawer');
   const visibleWidth = width >= 768 && panel && panel.classList.contains('drawer-open') ? Math.max(160, width - (panel.offsetWidth || 480)) : width;
-  camera.x = visibleWidth / 2 - node.x * camera.zoom;
+  // The issues and PRs panel slides in from the left (forge-panel.js)
+  const forge = $('forge-panel');
+  const left = width >= 768 && forge && forge.classList.contains('forge-open') ? Math.min(forge.offsetWidth || 400, visibleWidth - 160) : 0;
+  camera.x = left + (visibleWidth - left) / 2 - node.x * camera.zoom;
   camera.y = visibleHeight / 2 - node.y * camera.zoom;
   render();
 }

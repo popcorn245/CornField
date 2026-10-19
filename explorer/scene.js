@@ -15,7 +15,7 @@
  *                       timeMs ─────┘
  *
  * What changes the scene (and so what must call `touchScene()` in state.js): the topology, the
- * layout, the layers, the selection, the search, the view, a playing scenario (the ROM simulation is one), a dragged node.
+ * layout, the layers, the selection, the search, the view, a playing scenario (the ROM simulation is one), a dragged node, a selected pull request.
  * What does NOT: the camera (pan, zoom, fit) and time (packets). So the scene is built once per
  * `state.sceneVersion` and drawn many times. The one camera-dependent decision, label level of
  * detail, is therefore not in the scene's nodes but in `labelAt(node, zoom, scene)`, which
@@ -161,6 +161,7 @@ import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } fr
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenDash } from './cloud-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
+import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 
 // ---------------------------------------------------------------------------
@@ -701,6 +702,7 @@ export function buildScene(state, opts = {}) {
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
   if (state.scenario) paintOutage(scene, outageFor(state.scenario, state.nodes, state.edges)); // CLOUD-07: red, amber, violet by when the outage bites
   if (state.scenario) paintVerdict(scene, state.scenario); // PHY-10: red, green or amber by the step's permission check
+  if (state.forgeLit) paintForge(scene, state.forgeLit); // CF-07: the selected pull request's nodes, the rest faded
   if (state.theme === 'light') lightenScene(scene); // MAP-01: last, so what every painter above set is themed with the rest (theme-model.js)
   return scene;
 }
