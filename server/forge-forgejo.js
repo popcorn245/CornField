@@ -38,9 +38,16 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
+/** Forgejo's Actions system user: what a workflow does on the forge is done as it (id -2, a Bot in Gitea's model since before the fork) */
+export const ACTIONS_USER_ID = -2;
+
+// `bot` is set only when the forge says the account is a bot, as GitHub's adapter does: the user's `type` is "Bot" (Gitea's API
+// renders the user type, capitalised as GitHub's; an instance that does not send it simply marks nothing), or the user
+// is the Actions system user. The agent rule (explorer/agents-model.js) reads it.
 const author = (u) => {
   const login = u && (u.login || u.username);
-  return typeof login === 'string' && login ? { login, url: u.html_url || null } : null;
+  if (typeof login !== 'string' || !login) return null;
+  return { login, url: u.html_url || null, ...(u.type === 'Bot' || u.id === ACTIONS_USER_ID ? { bot: true } : {}) };
 };
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 

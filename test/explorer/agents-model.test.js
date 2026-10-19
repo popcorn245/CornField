@@ -106,6 +106,13 @@ describe('which issue', () => {
     expect(linksOf(pull(20, 'release/2026-10-19'), known).issues).toEqual([]);
     expect(linksOf({ name: 'claude/10-solo' }, known).issues).toEqual([10]);
   });
+
+  it('a closing reference to a pull request the forge listed is not an issue (they share numbers); one to an issue it did not list still is', () => {
+    const known = { issues: new Map([[10, {}]]), pulls: new Set([51, 20]), specs: new Map(), slugs: [] };
+    expect(linksOf(pull(20, 'x', { body: 'Fixes #51, #10 and #77' }), known).issues).toEqual([10, 77]);
+    const { groups } = groupWork({ pulls: [pull(51, 'a'), pull(52, 'b', { body: 'Closes #51' })], issues: [], branches: [], specs: [] });
+    expect(groups.map((g) => g.id)).toEqual(['none']);
+  });
 });
 
 describe('which proposal', () => {

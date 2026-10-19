@@ -19,7 +19,8 @@
  * its name can mark it.
  *
  * **Linking.** A pull request belongs to the issue named by "Closes / Fixes / Resolves #n" in its text (also
- * "closed", "fixed", "resolved", "fix", "close", "resolve", and lists: "Closes #1, #2"), else by an issue number at
+ * "closed", "fixed", "resolved", "fix", "close", "resolve", and lists: "Closes #1, #2"; a number that is a listed pull
+ * request and not a listed issue is left out, as issues and pull requests share numbers), else by an issue number at
  * the start of a segment of its branch name (`claude/10-agents-tracked`, `issue-10`, `#10`) when that number is an
  * issue the forge listed (a date in a release branch's name is not an issue). A spec PR (one the server lists
  * as adding a proposal) belongs to that proposal, and so does work whose branch name holds the proposal's slug.
@@ -97,14 +98,17 @@ export const holdsSlug = (ref, slug) => new RegExp(`(?:^|[^a-z0-9])${lower(slug)
 /**
  * Which issues and which proposal a pull request or a branch belongs to.
  * @param {{ number?: number, body?: string, head?: { ref: string }, name?: string }} item a pull request, or a branch `{ name }`
- * @param {{ issues: Map<number, object>, specs: Map<number, string[]>, slugs: string[] }} known
+ * @param {{ issues: Map<number, object>, pulls?: Set<number>, specs: Map<number, string[]>, slugs: string[] }} known
+ *   `pulls`: the numbers of the pull requests listed, so a closing reference to one of them is not taken for an issue
  * @returns {{ issues: number[], proposal: string | null, spec: boolean, bySlug: string | null }}
  *   `issues` all it names (the first is its group), `proposal` the slug of the spec PR it is, `bySlug` the slug its branch name holds
  */
 export function linksOf(item, known) {
   const ref = item.head ? item.head.ref : item.name || '';
   const issues = [];
-  for (const n of [...closedIssues(item.body), ...branchNumbers(ref).filter((n) => known.issues.has(n))]) {
+  // Issues and pull requests share their numbers: "Fixes #51" naming a pull request the forge listed is not an issue
+  const closes = closedIssues(item.body).filter((n) => known.issues.has(n) || !(known.pulls && known.pulls.has(n)));
+  for (const n of [...closes, ...branchNumbers(ref).filter((n) => known.issues.has(n))]) {
     if (n !== item.number && !issues.includes(n)) issues.push(n);
   }
   const mine = item.number !== undefined && known.specs.get(item.number);
@@ -130,7 +134,7 @@ export function groupWork(work) {
   const issues = new Map((work.issues || []).map((i) => [i.number, i]));
   const specs = new Map();
   for (const s of work.specs || []) specs.set(s.pull, [...(specs.get(s.pull) || []), s.slug]);
-  const known = { issues, specs, slugs: [...new Set((work.specs || []).map((s) => s.slug))] };
+  const known = { issues, pulls: new Set(pulls.map((p) => p.number)), specs, slugs: [...new Set((work.specs || []).map((s) => s.slug))] };
 
   /** @type {Entry[]} */
   const entries = pulls.map((pull) => ({ type: 'pull', pull, mark: agentMark(pull, rules), ...pick(linksOf(pull, known)) }));

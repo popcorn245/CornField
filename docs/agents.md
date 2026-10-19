@@ -20,7 +20,7 @@ Two switches under the tabs: **Agent-made only**, and **Include merged and close
 
 A pull request belongs to an issue when:
 
-- its text says "Closes #n", "Fixes #n" or "Resolves #n" (also "closed", "fixed", "resolved", and lists such as "Closes #3, #4"; an issue in another repo, `owner/name#n`, is not this repo's); or
+- its text says "Closes #n", "Fixes #n" or "Resolves #n" (also "closed", "fixed", "resolved", and lists such as "Closes #3, #4"; an issue in another repo, `owner/name#n`, is not this repo's, and a number that is one of the listed pull requests is not an issue, as the two share numbers); or
 - its branch name starts a segment with the issue's number, like `claude/10-agents-tracked`, `fix/issue-10` or `10-agents`, and that number is an issue the forge listed (a date in `release/2026-10-19` is not an issue).
 
 A pull request that names several issues is in the first one's group, and its row says "Also closes #4". A branch with no pull request is linked by its name in the same way.
@@ -48,6 +48,8 @@ export default {
 Work is agent-made when any of those holds, and the mark names the first that does, in this order: a listed author, a bot account, a label, a branch prefix. A branch with no pull request has no author or label in the forge's answers, so only its prefix can mark it. `validate` fails on a mistake in `agents` (an unknown key, a name with a space, `bots` that is not true or false).
 
 With the defaults, then, `dependabot[bot]` and `renovate[bot]` are marked and nothing else; name your own agents' account, label or branch prefix to see theirs. `bots: false` leaves bot accounts unmarked.
+
+Which accounts the forge calls bots: on GitHub, a user whose type is `Bot` (apps such as Dependabot). On Forgejo, a user whose `type` is `Bot` where the instance sends the type (Gitea's API does; an instance that does not simply marks no one that way), and always the Actions system user (id -2), which is who a workflow acts as. A login ending in `[bot]` counts on either forge.
 
 ## What it reads
 
