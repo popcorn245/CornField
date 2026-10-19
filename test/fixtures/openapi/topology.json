@@ -1,0 +1,80 @@
+{
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "root",
+      "label": "Pantry",
+      "type": "root",
+      "r": 28,
+      "color": "#f59e0b",
+      "desc": "Pantry: the repo."
+    },
+    {
+      "id": "app-api",
+      "label": "Pantry API",
+      "type": "app",
+      "file": "openapi.yaml",
+      "r": 24,
+      "color": "#6366f1",
+      "desc": "Not deployed by any stack in this repo."
+    },
+    {
+      "id": "page-api-items",
+      "label": "/api/v1/items",
+      "type": "page",
+      "file": "openapi.yaml",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "desc": "GET · POST /api/v1/items: Every item in the pantry",
+      "r": 18,
+      "color": "#38bdf8"
+    },
+    {
+      "id": "page-api-items-id",
+      "label": "/api/v1/items/{id}",
+      "type": "page",
+      "file": "openapi.yaml",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "desc": "GET · PATCH · DELETE /api/v1/items/{id}: One item",
+      "r": 18,
+      "color": "#38bdf8"
+    },
+    {
+      "id": "page-api-shopping-list",
+      "label": "/api/v1/shopping-list",
+      "type": "page",
+      "file": "openapi.yaml",
+      "methods": [
+        "PUT"
+      ],
+      "desc": "PUT /api/v1/shopping-list: Replace the shopping list",
+      "r": 18,
+      "color": "#38bdf8"
+    }
+  ],
+  "edges": [
+    {
+      "from": "root",
+      "to": "app-api"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-items"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-items-id"
+    },
+    {
+      "from": "app-api",
+      "to": "page-api-shopping-list"
+    }
+  ],
+  "updatedAt": "2026-10-19T21:22:07.045Z"
+}

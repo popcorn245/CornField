@@ -3,5 +3,21 @@ web.example.test, api.example.test, cloud.example.test {
 		dns cloudflare {env.CF_API_TOKEN}
 		resolvers 1.1.1.1
 	}
-	reverse_proxy web:3000
+	@api host api.example.test
+	handle @api {
+		reverse_proxy api:3245
+	}
+	@cloud host cloud.example.test
+	handle @cloud {
+		reverse_proxy nextcloud:80
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# On the LAN only: Caddy's own certificate authority
+ha.example.test {
+	tls internal
+	reverse_proxy homeassistant:8123
 }
