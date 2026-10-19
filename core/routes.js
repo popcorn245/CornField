@@ -9,7 +9,7 @@
  * method listed here is answered, anything else gets a 405 whose `Allow` is these methods). Change a
  * route there, change it here, and run `cornfield sync`.
  *
- * `reads` and `writes` say what the route does with the proposal files on disk (docs/specs/proposals/):
+ * `reads` and `writes` say what the route does with the proposal files on disk (a review touches none: it is a PR comment) (docs/specs/proposals/):
  * the dependency keys it reads and the label of what it writes. They become the map's edges between the
  * "Proposal files" store and the route.
  */
@@ -40,7 +40,7 @@ export const PROPOSAL_ROUTES = [
   {
     route: '/proposals/[slug]/review',
     methods: ['GET', 'PUT'],
-    reads: { keys: [`${PROPOSAL_FILES_DIR}/<slug>.review.json`], label: 'GET: the last review' },
-    writes: { label: 'PUT: writes <slug>.review.json beside the proposal' },
+    reads: { keys: [], label: 'GET: the latest admin review comment on the spec PR (no file is read)' },
+    writes: { label: 'PUT: posts the review as a comment on the spec PR (the forge, not a file)' },
   },
 ];

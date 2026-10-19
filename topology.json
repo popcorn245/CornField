@@ -500,7 +500,7 @@
       "summary": "Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a click does.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a click does. (explorer/review.js)"
+      "desc": "Approve and Send back on the proposal bar: the review goes to the spec PR as a comment, and the bar shows the latest one."
     },
     {
       "id": "core-explorer-scenario-ui",
@@ -700,7 +700,7 @@
       "summary": "The proposal routes.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "The proposal routes. (server/proposals.js)"
+      "desc": "The proposal routes: proposals from open spec PRs and from the worktrees folder; a review is posted to the spec PR, never written into a checkout."
     },
     {
       "id": "core-server-proxy",
@@ -1430,6 +1430,16 @@
       "desc": "Issues and pull requests (docs/issues-and-prs.md)."
     },
     {
+      "id": "core-server-reviews",
+      "label": "reviews.js",
+      "type": "core",
+      "file": "server/reviews.js",
+      "summary": "A review is a comment on the spec PR (spec 0001 section 3): a line a person can read, then a fenced block tagged `cornfield-review` and named for the proposal, holding `{ verdict, note, edits }`: A…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Approve / Send back as a spec-PR comment (a human line and a fenced cornfield-review JSON block); the latest admin comment is the review."
+    },
+    {
       "id": "core-server-forge-actions",
       "label": "forge-actions.js",
       "type": "core",
@@ -1798,12 +1808,6 @@
     {
       "from": "core-cli-cornfield",
       "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-cli-cornfield",
-      "to": "core-server-files",
       "dashed": true,
       "label": "imports"
     },
@@ -3995,6 +3999,46 @@
     },
     {
       "from": "pkg-server",
+      "to": "core-server-reviews"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-reviews",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-reviews",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-reviews",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-reviews",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-server",
       "to": "core-server-forge-actions"
     },
     {
@@ -4016,5 +4060,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T22:54:05.831Z"
+  "updatedAt": "2026-10-19T22:56:51.717Z"
 }

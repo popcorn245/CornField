@@ -1,19 +1,17 @@
 /**
  * @vitest-environment node
  *
- * The review of a proposal (TOPO-12, spec 0012 B5): the schema of what the viewer sends, and
- * the hub's `PUT /proposals/<slug>/review` that writes it beside the proposal, with every guard it
- * has (method, same origin, size, schema, only a proposal the hub listed, only beside that one, atomic),
- * `GET` of it, and the `review` the listing carries. Runs the handler in-process over a temporary checkout.
+ * The schema of a review (server/reviews.js `validateReview`, what the viewer sends), the same-origin rule of the
+ * PUT, and what the review routes say for a proposal that is not on a spec PR (the checkout, a worktree): it has no PR
+ * to hold a review, so the PUT answers 409 and nothing is written. Reviews of spec PRs are test/server/reviews.test.js.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import net from 'node:net';
 // @ts-expect-error plain JS module, no declarations
-import { serveProposals, validateReview, sameOrigin, REVIEW_LIMIT, MAX_REVIEW_EDITS } from '../../server/proposals.js';
+import { serveProposals, validateReview, sameOrigin, MAX_REVIEW_EDITS } from '../../server/proposals.js';
 import { whereOf } from './where.js';
 
 const topology = { nodes: [{ id: 'root', label: 'root', type: 'root' }, { id: 'app-a', label: 'a', type: 'app' }], edges: [{ from: 'root', to: 'app-a' }] };
@@ -122,32 +120,23 @@ describe('sameOrigin', () => {
 });
 
 // ---------------------------------------------------------------------------
-//  The routes
+//  A draft that is not on a PR
 // ---------------------------------------------------------------------------
 
-describe('PUT /proposals/<slug>/review', () => {
+describe('the review of a proposal in the checkout or a worktree', () => {
   let root        ;
   let server             ;
   let port        ;
-  const dirOf = (where        ) => path.join(root, where, 'docs/specs/proposals');
-  const put = (where        , name        , text        ) => {
-    fs.mkdirSync(dirOf(where), { recursive: true });
-    fs.writeFileSync(path.join(dirOf(where), name), text);
-  };
-  /** Where the server keeps a review: its data folder, by source (never beside the proposal) */
-  const reviewsOf = (where) => path.join(root, '.cornfield-data', 'reviews', where ? where.split('/').pop() : 'checkout');
-  const reviewAt = (where        , slug = '0013-meals') => path.join(reviewsOf(where), `${slug}.review.json`);
-  const origin = () => `http://127.0.0.1:${port}`;
-  const same = () => ({ Origin: origin() });
-  const approve = { verdict: 'approved', note: 'Looks right.', edits };
 
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-review-'));
     fs.writeFileSync(path.join(root, 'topology.json'), JSON.stringify(topology));
-    fs.writeFileSync(path.join(root, 'secret.json'), '{"secret":true}');
+    const put = (where        , name        , text        ) => {
+      const dir = path.join(root, where, 'docs/specs/proposals');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, name), text);
+    };
     put('', '0013-meals.json', JSON.stringify(proposal));
-    put('', '0014-other.json', JSON.stringify({ ...proposal, title: 'Other' }));
-    put('.claude/worktrees/topo-09', '0013-meals.json', JSON.stringify({ ...proposal, title: 'Meals, newer' }));
     put('.claude/worktrees/topo-09', '0017-worktree-only.json', JSON.stringify({ version: 1, title: 'Only here', summary: 's' }));
     server = http.createServer((req, res) => {
       const url = new URL(req.url , 'http://localhost');
@@ -162,265 +151,43 @@ describe('PUT /proposals/<slug>/review', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  /** A request with the path exactly as given and a body as given (fetch would tidy a `..` away) */
-  function raw(method        , target        , body                  , headers                         = {})                                                                                          {
-    return new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port, method, path: target, headers, agent: false }, (res) => {
-        let text = '';
-        res.on('data', (c) => { text += c; });
-        res.on('end', () => { let json = null; try { json = JSON.parse(text); } catch { /* not json */ } resolve({ status: res.statusCode || 0, headers: res.headers, body: text, json }); });
-      });
-      req.on('error', reject);
-      req.end(body);
-    });
-  }
-  const send = (target        , body         , headers                         = same(), method = 'PUT') =>
-    raw(method, target, typeof body === 'string' ? body : JSON.stringify(body), { 'Content-Type': 'application/json', ...headers });
-  const files = (where        ) => fs.readdirSync(dirOf(where)).sort();
+  const call = (method        , target        , body         ) => fetch(`http://127.0.0.1:${port}${target}`, { method, headers: { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' }, body });
+  const ok = JSON.stringify({ verdict: 'approved', note: '', edits });
 
-  it('keeps the review in its data folder, never in the checkout: version, verdict, note, edits and the time it was written', async () => {
-    const before = Date.now();
-    const r = await send('/proposals/0014-other/review?source=checkout', approve);
-    expect(r.status).toBe(200);
-    expect(r.headers['content-type']).toMatch(/application\/json/);
-    expect(r.headers['access-control-allow-origin']).toBeUndefined();
-    const file = JSON.parse(fs.readFileSync(reviewAt('', '0014-other'), 'utf8'));
-    expect(file).toEqual({ version: 1, verdict: 'approved', note: 'Looks right.', edits, at: expect.any(String) });
-    expect(Object.keys(file)).toEqual(['version', 'verdict', 'note', 'edits', 'at']);
-    expect(new Date(file.at).toISOString()).toBe(file.at);
-    expect(Date.parse(file.at)).toBeGreaterThanOrEqual(before - 1000);
-    expect(r.json).toEqual(file);
-    expect(files('')).toEqual(['0013-meals.json', '0014-other.json']); // nothing written into the checkout
-    expect(fs.readdirSync(reviewsOf('')).sort()).toEqual(['0014-other.review.json']); // no temp file left behind
+  it('cannot be reviewed: a review is a comment on a PR, so the PUT says to push a spec PR, and nothing is written anywhere', async () => {
+    for (const target of ['/proposals/0013-meals/review', '/proposals/0013-meals/review?source=checkout', '/proposals/0017-worktree-only/review?source=topo-09']) {
+      const res = await call('PUT', target, ok);
+      expect(res.status, target).toBe(409);
+      expect((await res.json()).error).toMatch(/comment on a spec PR.*Push this draft/);
+    }
+    expect(fs.existsSync(path.join(root, '.cornfield-data'))).toBe(false);
+    expect(fs.readdirSync(path.join(root, 'docs/specs/proposals'))).toEqual(['0013-meals.json']);
   });
 
-  it('keeps the review of the copy it was asked about: the worktree copy and the checkout copy apart', async () => {
-    expect((await send('/proposals/0013-meals/review?source=topo-09', { verdict: 'notes', note: 'Smaller.', edits: [] })).status).toBe(200);
-    expect(fs.existsSync(reviewAt('.claude/worktrees/topo-09'))).toBe(true);
-    expect(fs.existsSync(reviewAt(''))).toBe(false);
-    expect((await send('/proposals/0013-meals/review?source=checkout', approve)).status).toBe(200);
-    expect(JSON.parse(fs.readFileSync(reviewAt(''), 'utf8')).verdict).toBe('approved');
-    expect(JSON.parse(fs.readFileSync(reviewAt('.claude/worktrees/topo-09'), 'utf8')).verdict).toBe('notes');
+  it('refuses a PR\'s source without sign-in the same way: there is no forge to ask', async () => {
+    expect((await call('PUT', '/proposals/0013-meals/review?source=pull%2F23', ok)).status).toBe(409);
+    expect((await call('GET', '/proposals/0013-meals/review?source=pull%2F23')).status).toBe(404);
   });
 
-  it('with no source it is the first listed, the worktree copy, as for the proposal itself', async () => {
-    expect((await send('/proposals/0013-meals/review', approve)).status).toBe(200);
-    expect(fs.existsSync(reviewAt('.claude/worktrees/topo-09'))).toBe(true);
-    expect(fs.existsSync(reviewAt(''))).toBe(false);
-    expect((await send('/proposals/0013-meals/review?source=', approve)).status).toBe(200);
+  it('has no review to read: 404, "No review yet" for a listed proposal and "No such proposal" for any other', async () => {
+    const yet = await call('GET', '/proposals/0013-meals/review');
+    expect([yet.status, (await yet.json()).error]).toEqual([404, 'No review yet']);
+    const none = await call('GET', '/proposals/nope/review');
+    expect([none.status, (await none.json()).error]).toEqual([404, 'No such proposal']);
   });
 
-  it('replaces the review that was there, and leaves the proposal as it was', async () => {
-    const proposalText = fs.readFileSync(path.join(dirOf(''), '0014-other.json'), 'utf8');
-    await send('/proposals/0014-other/review?source=checkout', approve);
-    await send('/proposals/0014-other/review?source=checkout', { verdict: 'notes', note: 'Changed my mind.', edits: [] });
-    const file = JSON.parse(fs.readFileSync(reviewAt('', '0014-other'), 'utf8'));
-    expect(file).toMatchObject({ verdict: 'notes', note: 'Changed my mind.', edits: [] });
-    expect(fs.readFileSync(path.join(dirOf(''), '0014-other.json'), 'utf8')).toBe(proposalText);
-    expect(files('')).toEqual(['0013-meals.json', '0014-other.json']);
-  });
-
-  it('stores what the schema made of it: a bare approval gets an empty note and no edits', async () => {
-    await send('/proposals/0014-other/review?source=checkout', { verdict: 'approved' });
-    expect(JSON.parse(fs.readFileSync(reviewAt('', '0014-other'), 'utf8'))).toMatchObject({ verdict: 'approved', note: '', edits: [] });
+  it('reads no review from the data folder any more, and lists none', async () => {
+    const dir = path.join(root, '.cornfield-data', 'reviews', 'checkout');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, '0013-meals.review.json'), JSON.stringify({ version: 1, verdict: 'approved', note: '', edits: [], at: '2026-10-01T00:00:00.000Z' }));
+    expect((await call('GET', '/proposals/0013-meals/review')).status).toBe(404);
+    const list = await (await call('GET', '/proposals')).json();
+    expect(list.every((e        ) => e.review === null)).toBe(true);
   });
 
   it('answers 405 for any other method, with what is allowed', async () => {
-    for (const method of ['POST', 'DELETE', 'PATCH']) {
-      const r = await send('/proposals/0014-other/review?source=checkout', approve, same(), method);
-      expect(r.status, method).toBe(405);
-      expect(r.headers.allow).toBe('GET, HEAD, PUT');
-    }
-    expect(fs.existsSync(reviewAt('', '0014-other'))).toBe(false);
-  });
-
-  describe('only from the hub\'s own page', () => {
-    it('answers 403 without Origin or Sec-Fetch-Site, from another site, or from another port', async () => {
-      const tries                           = [
-        {},
-        { Origin: 'http://evil.example' },
-        { Origin: `http://127.0.0.1:${port + 1}` },
-        { Origin: 'null' },
-        { 'Sec-Fetch-Site': 'cross-site' },
-        { 'Sec-Fetch-Site': 'same-site' },
-        { 'Sec-Fetch-Site': 'none' },
-        { Origin: origin(), 'Sec-Fetch-Site': 'cross-site' },
-        { Origin: 'http://evil.example', 'Sec-Fetch-Site': 'same-origin' },
-        { Host: 'evil.example', Origin: 'http://evil.example' }, // a rebound name
-      ];
-      for (const headers of tries) {
-        const r = await send('/proposals/0014-other/review?source=checkout', approve, headers);
-        expect(r.status, JSON.stringify(headers)).toBe(403);
-        expect(r.json.error).toBeTruthy();
-      }
-      expect(fs.existsSync(reviewAt('', '0014-other'))).toBe(false);
-    });
-
-    it('takes Sec-Fetch-Site: same-origin on its own', async () => {
-      expect((await send('/proposals/0014-other/review?source=checkout', approve, { 'Sec-Fetch-Site': 'same-origin' })).status).toBe(200);
-    });
-
-    it('checks the origin before it looks at the slug or the body, so another site learns nothing', async () => {
-      const r = await send('/proposals/nope/review', 'not json at all', { Origin: 'http://evil.example' });
-      expect(r.status).toBe(403);
-    });
-  });
-
-  describe('size', () => {
-    it('allows a body up to 256 KB', async () => {
-      expect(REVIEW_LIMIT).toBe(256 * 1024);
-      const note = 'x'.repeat(20000);
-      const big = { verdict: 'approved', note, edits: Array.from({ length: 300 }, (_, i) => ({ op: 'add-node', id: `n${i}`, label: 'y'.repeat(600) })) };
-      expect(Buffer.byteLength(JSON.stringify(big))).toBeLessThan(REVIEW_LIMIT);
-      expect(Buffer.byteLength(JSON.stringify(big))).toBeGreaterThan(150 * 1024);
-      expect((await send('/proposals/0014-other/review?source=checkout', big)).status).toBe(200);
-    });
-
-    it('answers 413 for a body over it, and writes nothing', async () => {
-      const over = JSON.stringify({ verdict: 'approved', note: 'n', edits: [{ op: 'add-node', label: 'x'.repeat(REVIEW_LIMIT) }] });
-      expect(Buffer.byteLength(over)).toBeGreaterThan(REVIEW_LIMIT);
-      const r = await send('/proposals/0014-other/review?source=checkout', over);
-      expect(r.status).toBe(413);
-      expect(r.json.error).toMatch(/256 KB/);
-      expect(files('')).toEqual(['0013-meals.json', '0014-other.json']);
-    });
-
-    it('answers 413 for a body whose first bytes are fine and the rest is not (no Content-Length to go by)', async () => {
-      const r = await new Promise                    ((resolve, reject) => {
-        const req = http.request({ host: '127.0.0.1', port, method: 'PUT', path: '/proposals/0014-other/review?source=checkout', headers: { ...same(), 'Transfer-Encoding': 'chunked', 'Content-Type': 'application/json' } }, (res) => { res.resume(); res.on('end', () => resolve({ status: res.statusCode || 0 })); });
-        req.on('error', reject);
-        req.write('{"verdict":"approved","note":"');
-        req.write('y'.repeat(REVIEW_LIMIT + 10));
-        req.end('"}');
-      });
-      expect(r.status).toBe(413);
-      expect(files('')).toEqual(['0013-meals.json', '0014-other.json']);
-    });
-  });
-
-  describe('schema', () => {
-    it('answers 400 with a message for a body that is not JSON, or not a review', async () => {
-      const bad            = ['{ nope', '', '[]', 'null', '"approved"', {}, { verdict: 'maybe' }, { verdict: 'notes' }, { verdict: 'approved', edits: 'x' }, { verdict: 'approved', edits: [{ nope: 1 }] }, { verdict: 'approved', at: '2020-01-01' }, { verdict: 'approved', version: 1 }];
-      for (const body of bad) {
-        const r = await send('/proposals/0014-other/review?source=checkout', body       );
-        expect(r.status, JSON.stringify(body)).toBe(400);
-        expect(typeof r.json.error, JSON.stringify(body)).toBe('string');
-        expect(r.json.error.length).toBeGreaterThan(5);
-      }
-      expect(files('')).toEqual(['0013-meals.json', '0014-other.json']);
-    });
-  });
-
-  describe('only a proposal the hub listed, and only beside it', () => {
-    it('answers 404 for a slug or a source that was not listed', async () => {
-      const targets = [
-        '/proposals/nope/review',
-        '/proposals/0013-meals/review?source=nowhere',
-        '/proposals/0017-worktree-only/review?source=checkout',
-        '/proposals/0013-meals.review/review',
-        '/proposals/0013-meals.json/review',
-        '/proposals/.json/review',
-      ];
-      for (const target of targets) {
-        const r = await send(target, approve);
-        expect(r.status, target).toBe(404);
-      }
-      expect(files('')).toEqual(['0013-meals.json', '0014-other.json']);
-    });
-
-    it('cannot be walked out of the proposals folders, however the path or the source is spelled', async () => {
-      const targets = [
-        '/proposals/../secret/review',
-        '/proposals/..%2fsecret/review',
-        '/proposals/%2e%2e/secret/review',
-        '/proposals/%2e%2e%2fsecret/review',
-        '/proposals/..%5csecret/review',
-        '/proposals/0014-other/../../secret/review',
-        '/proposals/%2e%2e%2f%2e%2e%2fsecret/review',
-        `/proposals/${encodeURIComponent(path.join(root, 'secret'))}/review`,
-        `/proposals/${encodeURIComponent(path.join(root, 'docs/specs/proposals/0014-other'))}/review`,
-        '/proposals/0014-other/review?source=..',
-        '/proposals/0014-other/review?source=../../..',
-        '/proposals/0014-other/review?source=.claude/worktrees/topo-09',
-        '/proposals/0014-other/review?source=topo-09/../checkout',
-        `/proposals/0014-other/review?source=${encodeURIComponent(root)}`,
-        '/proposals/0014-other/review?source=..&source=checkout',
-        '/proposals/0014-other/review/../../../secret',
-        '/proposals/0014-other/review/extra',
-        '/proposals/0014-other/reviewx',
-        '/proposals//review',
-      ];
-      for (const target of targets) {
-        const r = await send(target, approve);
-        expect(r.status, target).not.toBe(200);
-      }
-      // nothing was written anywhere in the checkout but beside a listed proposal
-      const all           = [];
-      const walk = (dir        ) => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else all.push(path.relative(root, p).split(path.sep).join('/')); } };
-      walk(root);
-      expect(all.filter((f) => f.includes('review'))).toEqual([]);
-      expect(fs.readFileSync(path.join(root, 'secret.json'), 'utf8')).toBe('{"secret":true}');
-    });
-
-    it('does not write through a link, or over a folder, where the review would go', async () => {
-      fs.mkdirSync(reviewAt('', '0014-other'), { recursive: true }); // a folder with the review's name
-      expect((await send('/proposals/0014-other/review?source=checkout', approve)).status).toBe(409);
-      expect(fs.statSync(reviewAt('', '0014-other')).isDirectory()).toBe(true);
-      fs.rmdirSync(reviewAt('', '0014-other'));
-      try {
-        fs.symlinkSync(path.join(root, 'secret.json'), reviewAt('', '0014-other'));
-      } catch { return; /* no permission to make a link here */ }
-      expect((await send('/proposals/0014-other/review?source=checkout', approve)).status).toBe(409);
-      expect(fs.readFileSync(path.join(root, 'secret.json'), 'utf8')).toBe('{"secret":true}');
-    });
-
-    it('never lists a review as a proposal, however many there are', async () => {
-      await send('/proposals/0014-other/review?source=checkout', approve);
-      await send('/proposals/0013-meals/review?source=topo-09', approve);
-      const list = JSON.parse((await raw('GET', '/proposals')).body);
-      expect(list.map((e     ) => `${e.slug}@${e.source}`)).toEqual(['0013-meals@topo-09', '0013-meals@checkout', '0014-other@checkout', '0017-worktree-only@topo-09']);
-      expect((await raw('GET', '/proposals/0014-other.review.json')).status).toBe(404);
-    });
-  });
-
-  describe('the listing and GET', () => {
-    it('lists review as null until there is one, then its verdict and time', async () => {
-      const entry = async (slug        , source        ) => JSON.parse((await raw('GET', '/proposals')).body).find((e     ) => e.slug === slug && e.source === source);
-      expect((await entry('0014-other', 'checkout')).review).toBeNull();
-      const r = await send('/proposals/0014-other/review?source=checkout', { verdict: 'notes', note: 'Smaller.' });
-      expect(await entry('0014-other', 'checkout')).toMatchObject({ review: { verdict: 'notes', at: r.json.at } });
-      expect(Object.keys((await entry('0014-other', 'checkout')).review)).toEqual(['verdict', 'at']); // the note and the edits are not in the list
-      expect((await entry('0013-meals', 'checkout')).review).toBeNull(); // another proposal, another place
-      expect((await entry('0013-meals', 'topo-09')).review).toBeNull();
-    });
-
-    it('lists null for a review file that is not one (garbled, another version, no verdict)', async () => {
-      const entry = async () => JSON.parse((await raw('GET', '/proposals')).body).find((e     ) => e.slug === '0014-other');
-      fs.mkdirSync(reviewsOf(''), { recursive: true });
-      for (const text of ['{ nope', '[]', 'null', '{"verdict":"approved"}', '{"version":2,"verdict":"approved","at":"2026-10-06T10:00:00.000Z","note":"","edits":[]}', '{"version":1,"verdict":"maybe","at":"2026-10-06T10:00:00.000Z"}']) {
-        fs.writeFileSync(reviewAt('', '0014-other'), text);
-        expect((await entry()).review, text).toBeNull();
-      }
-    });
-
-    it('serves the review as it was written, or 404 when there is none', async () => {
-      expect((await raw('GET', '/proposals/0014-other/review?source=checkout')).status).toBe(404);
-      await send('/proposals/0014-other/review?source=checkout', approve);
-      const r = await raw('GET', '/proposals/0014-other/review?source=checkout');
-      expect(r.status).toBe(200);
-      expect(r.headers['content-type']).toMatch(/application\/json/);
-      expect(r.headers['access-control-allow-origin']).toBeUndefined();
-      expect(r.json).toMatchObject({ version: 1, verdict: 'approved', note: 'Looks right.', edits });
-      expect((await raw('GET', '/proposals/nope/review')).status).toBe(404);
-      expect((await raw('GET', '/proposals/0014-other/review?source=nowhere')).status).toBe(404);
-      expect((await raw('GET', '/proposals/..%2fsecret/review')).status).toBe(404);
-    });
-
-    it('answers HEAD like GET without the body', async () => {
-      await send('/proposals/0014-other/review?source=checkout', approve);
-      const r = await raw('HEAD', '/proposals/0014-other/review?source=checkout');
-      expect(r.status).toBe(200);
-      expect(r.body).toBe('');
-    });
+    const res = await call('DELETE', '/proposals/0013-meals/review');
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('GET, HEAD, PUT');
   });
 });

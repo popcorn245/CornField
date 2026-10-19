@@ -279,6 +279,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       /** Stage 1: everything passes; the routes under /auth/ are not there */
       gate: async () => ({ done: false, session: null }),
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
+      record: async () => { throw new Error('Sign-in is not configured.'); },
       store: null,
       close() {},
     };
@@ -538,6 +539,15 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
         return { done: true };
       }
       return { done: false, session };
+    },
+    /**
+     * Writes one row of the `actions` audit table: who did what to what, when, and what the forge answered. The caller
+     * decides what happens when this throws (the action it records has usually happened already).
+     * @param {{ login: string, action: string, target: string, request?: object, status?: number | null, answer?: object | null }} entry
+     */
+    async record({ login, action, target, request = {}, status = null, answer = null }) {
+      (await store()).prepare('INSERT INTO actions (at, login, action, target, request, status, answer) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(iso(now()), login, action, target, JSON.stringify(request), status, answer === null ? null : JSON.stringify(answer));
     },
     /** The forge as a signed-in user, with their own token (for the routes that act on the forge) */
     forgeFor(session) {

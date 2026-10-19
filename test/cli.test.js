@@ -68,12 +68,14 @@ describe('on a copy of the sample repo', () => {
     expect(res.status).toBe(0);
   });
 
-  it('says there is no review yet, and refuses a proposal it cannot find', () => {
-    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-cli-data-'));
-    const env = { ...process.env, CORNFIELD_DATA: data };
-    expect(run(['review', '0002-checkout', '--repo', root], { env }).stdout).toMatch(/No review of 0002-checkout \(checkout\) yet/);
-    expect(run(['review', '9999-nope', '--repo', root], { env }).status).toBe(1);
-    fs.rmSync(data, { recursive: true, force: true });
+  it('reads a review from the PR, so it needs a slug and a token, and says so (test/server/reviews.test.js reads one)', () => {
+    const env = { ...process.env, CORNFIELD_FORGE_TOKEN: '', GITHUB_TOKEN: '', GH_TOKEN: '' };
+    const usage = run(['review', '--repo', root], { env });
+    expect(usage.status).toBe(1);
+    expect(usage.stderr).toMatch(/Usage: cornfield review <slug>/);
+    const noToken = run(['review', '0002-checkout', '--repo', root], { env });
+    expect(noToken.status).toBe(1);
+    expect(noToken.stderr).toMatch(/needs a token: set CORNFIELD_FORGE_TOKEN/);
   });
 });
 
