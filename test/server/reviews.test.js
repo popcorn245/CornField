@@ -90,6 +90,29 @@ describe('parseReviewBlocks', () => {
     for (const body of bad) expect(parseReviewBlocks(body), body).toEqual([]);
     for (const body of [undefined, null, 5, {}, '', 'cornfield-review']) expect(parseReviewBlocks(body)).toEqual([]);
   });
+
+  it("carries an approval's mockups in the same block, round-trip, and refuses any that are not exactly { node, path, sha256 }", () => {
+    const mockups = [{ node: 'page-meals', path: '0013-meals/list.png', sha256: 'a'.repeat(64) }];
+    const approved = { ...ok, mockups };
+    const text = reviewComment('0013-meals', approved, { login: 'maintainer-one' });
+    expect(JSON.parse(/```cornfield-review 0013-meals\n([\s\S]*?)\n```/.exec(text)[1])).toEqual(approved);
+    expect(parseReviewBlocks(text)).toEqual([{ slug: '0013-meals', review: approved }]);
+    expect(reviewComment('0013-meals', ok, { login: 'maintainer-one' })).not.toContain('mockups');
+    const m = mockups[0];
+    for (const bad of [
+      { verdict: 'notes', note: 'x', mockups }, // only an approval covers mockups
+      { ...ok, mockups: m },
+      { ...ok, mockups: [{ ...m, extra: 1 }] },
+      { ...ok, mockups: [{ ...m, node: '' }] },
+      { ...ok, mockups: [{ ...m, path: '../out.png' }] },
+      { ...ok, mockups: [{ ...m, path: 'a/b.txt' }] },
+      { ...ok, mockups: [{ ...m, path: '/abs.png' }] },
+      { ...ok, mockups: [{ ...m, sha256: 'A'.repeat(64) }] },
+      { ...ok, mockups: [{ ...m, sha256: 'a'.repeat(63) }] },
+      { ...ok, mockups: [{ ...m, sha256: null }] },
+      { ...ok, mockups: Array.from({ length: 41 }, () => m) },
+    ]) expect(parseReviewBlocks(block('a', bad)), JSON.stringify(bad).slice(0, 80)).toEqual([]);
+  });
 });
 
 describe('the latest admin comment is the review', () => {

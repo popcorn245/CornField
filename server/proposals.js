@@ -12,7 +12,11 @@
  *   PUT /proposals/<slug>/review?source=pull/<n>   { verdict, note, edits } -> posts the comment as the signed-in maintainer
  *   GET /proposals/<slug>/review?source=pull/<n>   the latest admin comment's review, or 404
  *
- * The answer is `{ version: 1, slug, verdict, note, edits, at, by, comment: { id, url } }`. The agent drafting the spec
+ *   GET /proposals/<slug>/mockups[/<n>]?source=…   the screens a proposal lists, and each file (server/mockups.js)
+ *
+ * The answer is `{ version: 1, slug, verdict, note, edits, mockups?, at, by, comment: { id, url } }`. An approval of a
+ * proposal that lists mockups carries `mockups: [{ node, path, sha256 }]`: the server hashes each file as the PR's head
+ * holds it when the maintainer approves (`hashPullMockups`); the page never sends it, and a PUT that does is refused. The agent drafting the spec
  * reads it (`cornfield review <slug>`) and folds the edits into the proposal. The PUT is same-origin only
  * (`sameOrigin`), at most `REVIEW_LIMIT` bytes, checked by `validateReview`, and only for a proposal the forge
  * says the PR holds; it is written to the `actions` audit table. A proposal in the checkout or a worktree has no
@@ -40,6 +44,7 @@ import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
 import { REVIEW_LIMIT, validateReview, latestReview, postReview, migrateStage1Reviews } from './reviews.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
+import { hashPullMockups, serveMockups } from './mockups.js';
 
 // The review's checks live in server/reviews.js; these are re-exported for the callers that always had them here
 export { REVIEW_LIMIT, MAX_REVIEW_EDITS, MAX_NOTE_CHARS, validateReview } from './reviews.js';
@@ -252,12 +257,20 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
   } catch (err) {
     return send(res, 400, { error: `Not valid JSON: ${err.message}` });
   }
+  // What an approval covers is the server's to record, from the files themselves, never the page's word
+  if (parsed !== null && typeof parsed === 'object' && 'mockups' in parsed) return send(res, 400, { error: 'The mockups an approval covers are recorded by the server; a review does not send them.' });
   const checked = validateReview(parsed);
   if (!checked.ok) return send(res, 400, { error: checked.error });
   try {
     const forge = forgeFor();
-    if (!(await findPullProposal(forge, where, slug, n))) return send(res, 404, { error: 'No such proposal' });
-    return send(res, 200, await postReview(forge, n, slug, checked.value, { login: signedIn.login, record: signedIn.record }));
+    const entry = await findPullProposal(forge, where, slug, n);
+    if (!entry) return send(res, 404, { error: 'No such proposal' });
+    let review = checked.value;
+    if (review.verdict === 'approved') {
+      const mockups = await hashPullMockups(forge, where, entry);
+      if (mockups.length) review = { ...review, mockups };
+    }
+    return send(res, 200, await postReview(forge, n, slug, review, { login: signedIn.login, record: signedIn.record }));
   } catch (err) {
     return send(res, forgeStatus(err), { error: forgeWords(err) });
   }
@@ -310,6 +323,14 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null, s
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     send(res, 405, { error: 'Proposals are read-only here' }, { Allow: 'GET, HEAD' });
+    return true;
+  }
+
+  const mockups = /^\/proposals\/([^/]+)\/mockups(?:\/(\d{1,4}))?$/.exec(reqPath);
+  if (mockups) {
+    serveMockups(req, res, mockups, url, where, forgeFor).catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'The mockups could not be read' });
+    });
     return true;
   }
 

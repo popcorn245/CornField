@@ -1440,6 +1440,36 @@
       "desc": "Approve / Send back as a spec-PR comment (a human line and a fenced cornfield-review JSON block); the latest admin comment is the review."
     },
     {
+      "id": "core-explorer-mockups-model",
+      "label": "mockups-model.js",
+      "type": "core",
+      "file": "explorer/mockups-model.js",
+      "summary": "The pure half of a proposal's mockups (screens listed in `proposal.mockups`, core/proposal.js): which ones belong to a node, what to say of each, the address of its file, and the section of the nod…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of a proposal's mockups (screens listed in `proposal.mockups`, core/proposal.js): which ones belong to a node, what to say of each, the address of its file, and the section of the nod… (explorer/mockups-model.js)"
+    },
+    {
+      "id": "core-explorer-mockups",
+      "label": "mockups.js",
+      "type": "core",
+      "file": "explorer/mockups.js",
+      "summary": "Opening a proposal's mockups (`proposal.mockups`, core/proposal.js) from the node they name.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Opening a proposal's mockups (`proposal.mockups`, core/proposal.js) from the node they name. (explorer/mockups.js)"
+    },
+    {
+      "id": "core-server-mockups",
+      "label": "mockups.js",
+      "type": "core",
+      "file": "server/mockups.js",
+      "summary": "The mockups of a proposal (its `mockups` list, core/proposal.js): screens kept beside the proposal, images or HTML in the spec branch, that the explorer opens from the node they name.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The mockups of a proposal (its `mockups` list, core/proposal.js): screens kept beside the proposal, images or HTML in the spec branch, that the explorer opens from the node they name. (server/mockups.js)"
+    },
+    {
       "id": "core-server-forge-actions",
       "label": "forge-actions.js",
       "type": "core",
@@ -4038,6 +4068,114 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-mockups-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-mockups"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-mockups"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-mockups",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups-model",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups-model",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-mockups-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-mockups-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-mockups",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-mockups",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-mockups",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-mockups",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-mockups",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-mockups",
+      "to": "core-server-reviews",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-mockups",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-reviews",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-server",
       "to": "core-server-forge-actions"
     },
@@ -4060,5 +4198,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T22:56:51.717Z"
+  "updatedAt": "2026-10-19T23:07:24.858Z"
 }

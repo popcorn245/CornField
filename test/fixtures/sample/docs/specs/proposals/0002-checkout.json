@@ -18,6 +18,11 @@
       { "from": "page-api-checkout", "to": "container-nextcloud", "kind": "calls", "status": "proposed", "label": "files the receipt" }
     ]
   },
+  "mockups": [
+    {"node": "page-web-checkout", "path": "0002-checkout/checkout.svg", "title": "The checkout page: the basket total and a Pay button"},
+    {"node": "page-api-checkout", "path": "0002-checkout/receipt.html", "title": "The receipt filed in Nextcloud"},
+    {"node": "page-web-cart", "path": "0002-checkout/basket.png", "title": "The basket, with a link to the checkout"}
+  ],
   "scenarios": [
     {
       "id": "adult-pays",

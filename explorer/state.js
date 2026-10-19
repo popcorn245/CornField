@@ -94,6 +94,8 @@ export const state = {
   proposalSource: null,
   proposalSlug: null,
   proposalErrors: [],
+  /** Where each of the open proposal's mockups stands with the review, by position: 'approved' | 'changed' | 'unreviewed' | 'missing' (mockups.js; none read yet is empty) */
+  mockupStates: {},
   /**
    * The proposal the map is drawn from: `proposal` with what-if edits folded in (whatif.js, TOPO-11), or `proposal` itself
    * when there are none; null with no proposal open. `proposal` is never changed: it is the robot's file.

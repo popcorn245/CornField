@@ -247,7 +247,7 @@ describe('sign-in with GitHub, and the guard', () => {
     ['GET', '/cornfield/house.json'], ['GET', '/topology-fixture.json?nodes=300&edges=900&seed=4'], ['GET', '/explorer/main.js'], ['GET', '/explorer/explorer.css'],
     ['GET', '/core/schema.js'], ['GET', '/plugins/house/browser.js'], ['GET', '/repo/packages/api/src/server.js'], ['GET', '/proposals'],
     ['GET', '/api/forge/issues'], ['GET', '/api/forge/pulls/12'], ['POST', '/api/forge/pulls'],
-    ['GET', '/proposals/0002-checkout.json'], ['GET', '/proposals/0002-checkout/review'], ['PUT', '/proposals/0002-checkout/review', own, JSON.stringify({ verdict: 'approved' })],
+    ['GET', '/proposals/0002-checkout.json'], ['GET', '/proposals/0002-checkout/review'], ['GET', '/proposals/0002-checkout/mockups'], ['GET', '/proposals/0002-checkout/mockups/0'], ['PUT', '/proposals/0002-checkout/review', own, JSON.stringify({ verdict: 'approved' })],
     ['GET', '/.env'], ['GET', '/nope'], ['POST', '/topology.json'], ['DELETE', '/proposals'],
   ];
   const walk = async (port, cookie) => {
