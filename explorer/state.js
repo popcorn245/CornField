@@ -31,6 +31,9 @@ export const state = {
   /** The orbital rings layout.js drew the positions on */
   rings: { rings: [], clusters: [] },
 
+  /** 'dark' or 'light': the ground the map is drawn for (theme.js keeps it, from the system and the toggle); a change must `touchScene()` */
+  theme: 'dark',
+
   camera: { x: 0, y: 0, zoom: 1 },
   selectedNode: null,
   searchQuery: '',

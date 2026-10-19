@@ -35,7 +35,7 @@
  * @property {boolean} [strike]   a line through the text: a node a proposal removes
  */
 
-import { EDGE_LABEL_SIZE, FONT_EDGE, FONT_NODE, LABEL_OUTLINE, labelAt } from './scene.js';
+import { EDGE_LABEL_SIZE, FONT_EDGE, FONT_NODE, labelAt, looksFor } from './scene.js';
 
 /** At most this many node labels at a time (lane text and selection edge labels are extra) */
 export const MAX_LABELS = 400;
@@ -68,6 +68,7 @@ const TIER_REST = 3;
 export function chooseLabels(scene, camera, viewport, opts = {}) {
   const { max = MAX_LABELS, margin = CULL_MARGIN, measure = null } = opts;
   const out = [];
+  const outline = looksFor(scene.theme).labelOutline; // the ground's own colour, under the text
 
   // Always there: the data-flow lanes' titles, notes and arrows ...
   for (const lane of scene.decor.lanes) {
@@ -78,7 +79,7 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   // ... and the labels on the selection's edges
   for (const edge of scene.edges) {
     const l = edge.label;
-    if (l) out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y, size: EDGE_LABEL_SIZE, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: LABEL_OUTLINE.edge, align: 'center', family: FONT_EDGE });
+    if (l) out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y, size: EDGE_LABEL_SIZE, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: outline.edge, align: 'center', family: FONT_EDGE });
   }
 
   // Node labels: level of detail, then the ones whose box reaches the viewport
@@ -114,7 +115,7 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   }
 
   for (const { label, id } of kept) {
-    out.push({ kind: 'node', id, text: label.text, x: label.x, y: label.y, size: label.size, bold: label.bold, italic: false, color: label.color, alpha: label.alpha, outline: LABEL_OUTLINE.node, align: 'center', family: FONT_NODE, strike: !!label.strike });
+    out.push({ kind: 'node', id, text: label.text, x: label.x, y: label.y, size: label.size, bold: label.bold, italic: false, color: label.color, alpha: label.alpha, outline: outline.node, align: 'center', family: FONT_NODE, strike: !!label.strike });
   }
   return out;
 }
