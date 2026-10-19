@@ -75,4 +75,22 @@ jobs:
             [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker stop cf; exit 1; }
           done
           curl -s http://127.0.0.1:3397/ | grep -q 'Sign in with GitHub'
+          # The image runs as a non-root user, and the data folder is that user's, 0700, with cornfield.db 0600 inside
+          [ "$(docker exec cf id -u)" != 0 ] || { echo 'the image runs as root' >&2; docker stop cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data)" = 'node 700' ] || { docker exec cf stat -c '%U %a' /data >&2; docker stop cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data/cornfield.db)" = 'node 600' ] || { docker exec cf stat -c '%U %a' /data/cornfield.db >&2; docker stop cf; exit 1; }
+          # The image's own health check (/healthz, which needs no session) turns healthy
+          for i in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] && break; sleep 2; done
+          [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] || { docker inspect -f '{{json .State.Health}}' cf >&2; docker stop cf; exit 1; }
           docker stop cf
+      - name: The example compose file is valid, and stops without its secrets
+        env:
+          CORNFIELD_PUBLIC_URL: https://cornfield-ci
+          CORNFIELD_GITHUB_CLIENT_ID: ci-placeholder-id
+          CORNFIELD_GITHUB_CLIENT_SECRET: placeholder
+          CORNFIELD_SESSION_SECRET: placeholderplaceholderplaceholder00
+        run: |
+          set -eu
+          docker compose -f compose.example.yml config --quiet
+          if out=$(env -u CORNFIELD_SESSION_SECRET docker compose -f compose.example.yml config 2>&1); then echo 'compose accepted a missing session secret' >&2; exit 1; fi
+          echo "$out" | grep -q CORNFIELD_SESSION_SECRET
