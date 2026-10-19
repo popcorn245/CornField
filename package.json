@@ -59,6 +59,7 @@
     "js-yaml": "4.1.0"
   },
   "devDependencies": {
+    "axe-core": "4.13.0",
     "happy-dom": "20.11.6",
     "vitest": "4.1.10"
   },

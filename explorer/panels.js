@@ -22,7 +22,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------
 const code = (s) => `<code class="hx-code">${escHtml(s)}</code>`;
 const nm = (id) => `<span class="hx-name">${escHtml(nameOf(id))}</span>`;
-const line = (color, arrow, body) => `<div class="hx-line"><span style="color:${color}">${arrow}</span><span>${body}</span></div>`;
+const line = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
 const section = (title, rows) => (rows.length ? `<div class="hx-sec"><strong class="hx-strong">${title}</strong>${rows.join('')}</div>` : '');
 const varList = (vars) => `<div class="hx-chips">${vars.map((v) => `<code class="hx-var">${escHtml(v)}</code>`).join('')}</div>`;
 const edgesOf = (kind, side, id) => state.edges.filter((e) => e.kind === kind && e[side] === id);
@@ -180,6 +180,7 @@ export async function selectNode(node) {
   hydrateLivePhotos($('drawer-live'));
 
   $('spec-drawer').classList.add('drawer-open');
+  $('spec-drawer').inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
   $('drawer-backdrop').hidden = false;
 }
 
@@ -188,6 +189,7 @@ export function closeDrawer() {
   state.selectedEdge = null;
   clearScenario();
   $('spec-drawer').classList.remove('drawer-open');
+  $('spec-drawer').inert = true;
   $('drawer-backdrop').hidden = true;
   collapseSheet('drawer'); // the next node opens as a peek on a phone
   state.selectedNode = null;

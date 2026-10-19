@@ -1235,6 +1235,65 @@
       "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
     },
     {
+      "id": "core-explorer-theme-boot",
+      "label": "theme-boot.js",
+      "type": "core",
+      "file": "explorer/theme-boot.js",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Puts light or dark on the page before its first paint (MAP-01). (explorer/theme-boot.js)"
+    },
+    {
+      "id": "core-explorer-theme-model",
+      "label": "theme-model.js",
+      "type": "core",
+      "file": "explorer/theme-model.js",
+      "summary": "Light and dark, the pure half (MAP-01).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark, the pure half (MAP-01). (explorer/theme-model.js)"
+    },
+    {
+      "id": "core-explorer-theme",
+      "label": "theme.js",
+      "type": "core",
+      "file": "explorer/theme.js",
+      "summary": "Light and dark (MAP-01), the half that touches the page.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark (MAP-01), the half that touches the page. (explorer/theme.js)"
+    },
+    {
+      "id": "core-explorer-keyboard-model",
+      "label": "keyboard-model.js",
+      "type": "core",
+      "file": "explorer/keyboard-model.js",
+      "summary": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told. (explorer/keyboard-model.js)"
+    },
+    {
+      "id": "core-explorer-keyboard",
+      "label": "keyboard.js",
+      "type": "core",
+      "file": "explorer/keyboard.js",
+      "summary": "The map by keyboard, and what a screen reader hears (MAP-02).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard, and what a screen reader hears (MAP-02). (explorer/keyboard.js)"
+    },
+    {
+      "id": "page-doc-docs-accessibility",
+      "type": "page",
+      "label": "/docs/accessibility",
+      "file": "docs/accessibility.md",
+      "summary": "Keyboard and screen readers",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Keyboard and screen readers (docs/accessibility.md)."
+    },
+    {
       "id": "pkg-world",
       "label": "plugins/world",
       "type": "pkg",
@@ -3369,6 +3428,142 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-boot"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-accessibility"
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
       "from": "root",
       "to": "pkg-world"
     },
@@ -3389,5 +3584,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T21:52:40.024Z"
+  "updatedAt": "2026-10-19T22:01:32.911Z"
 }
