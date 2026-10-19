@@ -87,7 +87,7 @@
       "label": "cornfield.js",
       "type": "core",
       "file": "cli/cornfield.js",
-      "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der…",
+      "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only unless sign-in is configured) cornfield …",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der… (cli/cornfield.js)"
@@ -667,17 +667,17 @@
       "label": "index.js",
       "type": "core",
       "file": "plugins/starter/index.js",
-      "summary": "The starter deriver: a map of any JavaScript repo with zero plugin code.",
+      "summary": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "The starter deriver: a map of any JavaScript repo with zero plugin code. (plugins/starter/index.js)"
+      "desc": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code. (plugins/starter/index.js)"
     },
     {
       "id": "core-server-bind",
       "label": "bind.js",
       "type": "core",
       "file": "server/bind.js",
-      "summary": "Where the server may listen.",
+      "summary": "Where the server may listen (spec 0001 section 3, ADR 0004).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Where the server may listen. (server/bind.js)"
@@ -720,7 +720,7 @@
       "summary": "cornfield's HTTP server: zero dependencies, Node's own `http`.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "cornfield's HTTP server: zero dependencies, Node's own `http`. (server/server.js)"
+      "desc": "The HTTP server: every route behind the sign-in guard; the loopback rule lifts once sign-in is configured with an https public URL."
     },
     {
       "id": "tool-ci",
@@ -1165,6 +1165,182 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "The deriver kit: put your own code on the map (docs/deriver-kit.md)."
+    },
+    {
+      "id": "pkg-compose",
+      "label": "plugins/compose",
+      "type": "pkg",
+      "file": "plugins/compose",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/compose workspace package (plugins/compose)."
+    },
+    {
+      "id": "core-plugins-compose-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/compose/index.js",
+      "summary": "The compose deriver: the Software band of a self-hosted repo with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The compose deriver: the Software band of a self-hosted repo with zero plugin code. (plugins/compose/index.js)"
+    },
+    {
+      "id": "core-plugins-compose-routes",
+      "label": "routes.js",
+      "type": "core",
+      "file": "plugins/compose/routes.js",
+      "summary": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
+    },
+    {
+      "id": "pkg-openapi",
+      "label": "plugins/openapi",
+      "type": "pkg",
+      "file": "plugins/openapi",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/openapi workspace package (plugins/openapi)."
+    },
+    {
+      "id": "core-plugins-openapi-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/openapi/index.js",
+      "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
+    },
+    {
+      "id": "core-plugins-starter-languages",
+      "label": "languages.js",
+      "type": "core",
+      "file": "plugins/starter/languages.js",
+      "summary": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl… (plugins/starter/languages.js)"
+    },
+    {
+      "id": "core-plugins-starter-toml",
+      "label": "toml.js",
+      "type": "core",
+      "file": "plugins/starter/toml.js",
+      "summary": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
+    },
+    {
+      "id": "core-explorer-theme-boot",
+      "label": "theme-boot.js",
+      "type": "core",
+      "file": "explorer/theme-boot.js",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Puts light or dark on the page before its first paint (MAP-01). (explorer/theme-boot.js)"
+    },
+    {
+      "id": "core-explorer-theme-model",
+      "label": "theme-model.js",
+      "type": "core",
+      "file": "explorer/theme-model.js",
+      "summary": "Light and dark, the pure half (MAP-01).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark, the pure half (MAP-01). (explorer/theme-model.js)"
+    },
+    {
+      "id": "core-explorer-theme",
+      "label": "theme.js",
+      "type": "core",
+      "file": "explorer/theme.js",
+      "summary": "Light and dark (MAP-01), the half that touches the page.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark (MAP-01), the half that touches the page. (explorer/theme.js)"
+    },
+    {
+      "id": "core-explorer-keyboard-model",
+      "label": "keyboard-model.js",
+      "type": "core",
+      "file": "explorer/keyboard-model.js",
+      "summary": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told. (explorer/keyboard-model.js)"
+    },
+    {
+      "id": "core-explorer-keyboard",
+      "label": "keyboard.js",
+      "type": "core",
+      "file": "explorer/keyboard.js",
+      "summary": "The map by keyboard, and what a screen reader hears (MAP-02).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard, and what a screen reader hears (MAP-02). (explorer/keyboard.js)"
+    },
+    {
+      "id": "page-doc-docs-accessibility",
+      "type": "page",
+      "label": "/docs/accessibility",
+      "file": "docs/accessibility.md",
+      "summary": "Keyboard and screen readers",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Keyboard and screen readers (docs/accessibility.md)."
+    },
+    {
+      "id": "core-server-auth",
+      "label": "auth.js",
+      "type": "core",
+      "file": "server/auth.js",
+      "summary": "Sign-in with the repo's forge (GitHub or Forgejo OAuth) and the admins-only guard every route passes through (spec 0001 sections 2.4 and 3, ADR 0004).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Sign-in with GitHub or Forgejo (OAuth), sessions in an HttpOnly cookie, and the admins-only guard every route passes through."
+    },
+    {
+      "id": "page-doc-docs-sign-in",
+      "type": "page",
+      "label": "/docs/sign-in",
+      "file": "docs/sign-in.md",
+      "summary": "Sign-in",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Sign-in (docs/sign-in.md)."
+    },
+    {
+      "id": "pkg-world",
+      "label": "plugins/world",
+      "type": "pkg",
+      "file": "plugins/world",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/world workspace package (plugins/world)."
+    },
+    {
+      "id": "core-plugins-world-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/world/index.js",
+      "summary": "The world deriver: which machine each stack runs on.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The world deriver: which machine each stack runs on. (plugins/world/index.js)"
+    },
+    {
+      "id": "core-plugins-house-home-assistant",
+      "label": "home-assistant.js",
+      "type": "core",
+      "file": "plugins/house/home-assistant.js",
+      "summary": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
     },
     {
       "id": "core-server-forge-forgejo",
@@ -2648,7 +2824,7 @@
       "to": "ext-docker-hub",
       "kind": "calls",
       "status": "live",
-      "label": "test.yml: docker run cornfield",
+      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00",
       "when": "deploy"
     },
     {
@@ -3072,11 +3248,6 @@
       "dashed": true
     },
     {
-      "from": "page-doc-docs-house",
-      "to": "page-doc-docs-roadmap",
-      "dashed": true
-    },
-    {
       "from": "page-doc-docs-proposals",
       "to": "page-doc-contributing",
       "dashed": true
@@ -3257,6 +3428,300 @@
       "dashed": true
     },
     {
+      "from": "root",
+      "to": "pkg-compose"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-index"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-routes"
+    },
+    {
+      "from": "core-core-derive",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-plugins-compose-routes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "pkg-openapi"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "core-plugins-openapi-index"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-languages"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-toml"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-plugins-starter-languages",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-languages",
+      "to": "core-plugins-starter-toml",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-boot"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-accessibility"
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-auth"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-db",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-forge-github",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-auth",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-sign-in"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "core-server-auth",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
+      "from": "root",
+      "to": "pkg-world"
+    },
+    {
+      "from": "pkg-world",
+      "to": "core-plugins-world-index"
+    },
+    {
+      "from": "pkg-world",
+      "to": "pkg-compose",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-world-index",
+      "to": "core-plugins-compose-index",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-house",
+      "to": "core-plugins-house-home-assistant"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-plugins-house-home-assistant",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-house",
+      "dashed": true
+    },
+    {
       "from": "pkg-server",
       "to": "core-server-forge-forgejo"
     },
@@ -3284,5 +3749,5 @@
       "label": "the Forgejo API"
     }
   ],
-  "updatedAt": "2026-10-19T21:42:30.000Z"
+  "updatedAt": "2026-10-19T22:18:14.501Z"
 }

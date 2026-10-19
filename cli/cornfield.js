@@ -4,7 +4,7 @@
  *
  * The cornfield command, run against a repo (the current folder, or `--repo <dir>`):
  *
- *   cornfield serve              the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists)
+ *   cornfield serve              the dev dashboard on http://127.0.0.1:3350 (loopback only unless sign-in is configured)
  *   cornfield sync               derive the map from the code and write topology.json
  *   cornfield validate           the schema, drift from the code, the personas and cloud files, every proposal
  *   cornfield status             what the map holds, the warnings, and the validation
@@ -212,10 +212,11 @@ async function docs(flags) {
 async function serve(flags) {
   const { config } = await setup(flags);
   const { listen } = await import('../server/server.js');
-  const { url } = await listen(config);
+  const { url, signIn } = await listen(config);
   console.log(`\ncornfield ${PKG.version} is serving ${config.title}`);
-  console.log(`  ${url}`);
-  console.log('  Loopback only: there is no sign-in yet (v1), so nothing else can reach it.\n');
+  console.log(`  ${url}${signIn && config.publicUrl ? `, opened at ${config.publicUrl}` : ''}`);
+  if (signIn) console.log(`  Sign-in with ${config.forge.type === 'github' ? 'GitHub' : 'Forgejo'}: only the maintainers of ${config.forge.repo} see the dashboard.\n`);
+  else console.log('  Loopback only: sign-in is not configured (docs/sign-in.md), so nothing else can reach it.\n');
   return null; // keeps running
 }
 

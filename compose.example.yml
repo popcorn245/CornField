@@ -1,12 +1,12 @@
 # cornfield as an always-on service: copy this next to your repo's checkout and adjust the paths.
 #
-# Stage 1 (now): there is no sign-in yet, so cornfield only listens on 127.0.0.1. Host networking makes that
-# the host's own loopback: open http://127.0.0.1:3350 on the machine, or tunnel to it
-# (ssh -L 3350:127.0.0.1:3350 you@the-machine). Do not put a reverse proxy in front of it until v1's forge
-# sign-in lands: anyone who can reach it would see everything it shows.
+# Without sign-in, cornfield only listens on 127.0.0.1. Host networking makes that the host's own loopback: open
+# http://127.0.0.1:3350 on the machine, or tunnel to it (ssh -L 3350:127.0.0.1:3350 you@the-machine). Do not put a
+# reverse proxy in front of it without sign-in: anyone who can reach it would see everything it shows.
 #
-# v1: forge sign-in (GitHub or Forgejo OAuth, admins only, enforced on the server) lifts the loopback rule,
-# and this file gains the ports and the public URL.
+# Forge sign-in (GitHub or Forgejo OAuth, maintainers only, enforced on the server; docs/sign-in.md) lifts the
+# loopback rule once its env and an https CORNFIELD_PUBLIC_URL are set. The always-on setup with it (the ports, a
+# reverse proxy) is its own issue; until then this file stays the loopback one.
 services:
   cornfield:
     image: ghcr.io/popcorn245/cornfield:latest

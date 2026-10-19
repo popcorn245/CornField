@@ -17,14 +17,14 @@
 
 /* The plan, dark: the house's outline faint, each room a box with its name (pop-floor-map's markup, or the tool's plain boxes) */
 .hx-house-plan .floor-map__svg,
-.hx-house-plan .hx-plain-floor { background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(163, 230, 53, 0.18); border-radius: 6px; font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
+.hx-house-plan .hx-plain-floor { background: var(--hx-well-soft); border: 1px solid rgba(163, 230, 53, 0.18); border-radius: 6px; font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
 .hx-house-plan .floor-map__box,
 .hx-house-plan .hx-plain-room rect { fill: rgba(190, 242, 100, 0.06); stroke: rgba(190, 242, 100, 0.45); stroke-width: 1.2; }
 .hx-house-plan .floor-map__label,
-.hx-house-plan .hx-plain-room text { fill: #d9f99d; font-size: 13px; font-weight: 600; }
+.hx-house-plan .hx-plain-room text { fill: var(--hx-lime-text); font-size: 13px; font-weight: 600; }
 .hx-house-plan .floor-map__badge { display: none; }
 .hx-house-plan [aria-current="true"] .floor-map__box,
-.hx-house-plan .hx-plain-room[aria-current="true"] rect { fill: rgba(129, 140, 248, 0.18); stroke: #818cf8; stroke-width: 2.5; }
+.hx-house-plan .hx-plain-room[aria-current="true"] rect { fill: rgba(129, 140, 248, 0.18); stroke: var(--hx-indigo, #818cf8); stroke-width: 2.5; }
 
 /* The floor chips at the stage's top left; on a phone the people and the Software and Cloud toggles in a row under them */
 .hx-house-bar { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; z-index: 12; pointer-events: none; }
@@ -32,8 +32,8 @@
 .hx-house-floors, .hx-house-people { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; pointer-events: auto; }
 .hx-house-floors { max-width: 100%; padding: 3px; border-radius: 9999px; }
 .hx-house-people[hidden] { display: none; }
-.hx-house-chip { min-height: 28px; padding: 3px 12px; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 9999px; background: rgba(15, 23, 42, 0.85); color: var(--hx-slate-300, #cbd5e1); font-weight: 600; font-size: 12px; line-height: 1.2; font-family: inherit; cursor: pointer; white-space: nowrap; }
-.hx-house-chip:hover { border-color: rgba(163, 230, 53, 0.5); color: #fff; }
+.hx-house-chip { min-height: 28px; padding: 3px 12px; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 9999px; background: var(--hx-well); color: var(--hx-slate-300, #cbd5e1); font-weight: 600; font-size: 12px; line-height: 1.2; font-family: inherit; cursor: pointer; white-space: nowrap; }
+.hx-house-chip:hover { border-color: rgba(163, 230, 53, 0.5); color: var(--hx-ink); }
 .hx-house-chip:focus-visible { outline: 2px solid var(--hx-indigo, #818cf8); outline-offset: 2px; }
 .hx-house-chip[aria-pressed="true"] { background: rgba(77, 124, 15, 0.9); border-color: #a3e635; color: #fff; }
 .hx-house-chip--person { border-color: rgba(251, 113, 133, 0.45); }
@@ -46,7 +46,7 @@
 /* "+3": a room that holds more than its grid, where its last slot is */
 .hx-house-over { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
 .hx-house-over[hidden] { display: none; }
-.hx-house-more { position: absolute; left: 0; top: 0; min-width: 34px; height: 24px; padding: 0 8px; border: 1px solid #2dd4bf; border-radius: 9999px; background: rgba(15, 23, 42, 0.92); color: #99f6e4; font-weight: 700; font-size: 12px; line-height: 1; font-family: inherit; cursor: pointer; pointer-events: auto; }
+.hx-house-more { position: absolute; left: 0; top: 0; min-width: 34px; height: 24px; padding: 0 8px; border: 1px solid #2dd4bf; border-radius: 9999px; background: var(--hx-well); color: var(--hx-teal-strong); font-weight: 700; font-size: 12px; line-height: 1; font-family: inherit; cursor: pointer; pointer-events: auto; }
 .hx-house-more:hover, .hx-house-more:focus-visible { background: #0f766e; color: #fff; outline: none; }
 
 /* The House button joins the toolbar: up to a wide screen the live chip's line is cut shorter (the whole line is in its
@@ -62,3 +62,10 @@
   .hx-house-chip { min-height: 32px; padding: 4px 12px; }
   .hx-house-people { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 }
+
+/* The plan on the light ground (MAP-01): the rooms' lime deepened the way theme-model.js `lightColor` deepens the map's */
+:root[data-theme="light"] .hx-house-plan .floor-map__svg,
+:root[data-theme="light"] .hx-house-plan .hx-plain-floor { border-color: rgba(101, 152, 19, 0.3); }
+:root[data-theme="light"] .hx-house-plan .floor-map__box,
+:root[data-theme="light"] .hx-house-plan .hx-plain-room rect { fill: rgba(101, 152, 13, 0.06); stroke: rgba(101, 152, 13, 0.55); }
+:root[data-theme="light"] .hx-house-more { border-color: #209a8b; }

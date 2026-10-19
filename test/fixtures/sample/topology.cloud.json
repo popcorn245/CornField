@@ -190,15 +190,9 @@
       "match": {
         "hosts": [
           "api.tailscale.com"
-        ]
-      },
-      "uses": [
-        {
-          "from": "machine-server-1",
-          "label": "joins the tailnet",
-          "why": "The tailnet is set up on the machine, not in a file of this repo"
-        }
-      ]
+        ],
+        "tailnet": true
+      }
     },
     {
       "id": "isp",

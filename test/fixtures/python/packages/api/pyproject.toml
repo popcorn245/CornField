@@ -1,0 +1,9 @@
+[project]
+name = "pantry-api"
+version = "0.1.0"
+description = "The pantry's HTTP API"
+dependencies = [
+  "pantry-core>=0.1",  # imported
+  "Pantry_Utils",      # declared, never imported
+  "requests>=2",       # not a package of this repo
+]

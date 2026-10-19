@@ -15,6 +15,8 @@
  *  - **CI.** GitHub Actions and Forgejo Actions workflows (`.github/workflows`, `.forgejo/workflows`):
  *    `uses:` owners (`{ actions }`), job images, downloads, installs, `docker run` images, `when: deploy`.
  *    Needs the optional dependency js-yaml; without it the CI detector is skipped with a warning.
+ *  - **Tailnet.** Every machine a world file (the `world` deriver) says has joined the tailnet: its hostname
+ *    (`{ tailnet }`, never an address).
  *  - **Caddy** (option `caddyfiles: [{ file, from }]`): DNS-01 providers, resolvers and the ACME CA, `when: renew`.
  *
  * Without a `topology.cloud.json` nothing is drawn: the deriver says how many outside hosts it found and
@@ -115,6 +117,11 @@ export default {
       image(n.image, n.id, `pulls ${imageRef(n.image)?.name || n.image}`, n.file || 'topology.json');
     }
 
+    // The machines of the world file that joined the tailnet
+    for (const m of ctx.info.world?.machines || []) {
+      if (m.tailnet) add({ match: { kind: 'tailnet', value: m.hostname }, from: m.id, label: 'joins the tailnet', file: m.file });
+    }
+
     // CI workflows
     const workflowFiles = WORKFLOW_DIRS.flatMap((dir) => ctx.list(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => `${dir}/${f}`));
     if (workflowFiles.length) {
@@ -152,6 +159,7 @@ export default {
     const kinds = new Set(['host', 'registry', 'packages', 'image']);
     if (workflowFiles.length) kinds.add('actions');
     if ((options.caddyfiles || []).length) kinds.add('caddy');
+    if (ctx.info.world) kinds.add('tailnet');
     for (const e of all) kinds.add(e.match.kind);
     const cloud = deriveCloud({
       read: ctx.read, exists: ctx.exists, evidence: all,

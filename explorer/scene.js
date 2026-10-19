@@ -26,7 +26,9 @@
  * runs before a scene exists. A label layer that needs widths brings its own measurer.
  *
  * Colours are CSS colour strings (`#818cf8`, `rgba(255, 255, 255, 0.16)`); `parseColor` turns one
- * into `[r, g, b, a]` (0..255, alpha 0..1) for a GPU. Positions are world units; the camera
+ * into `[r, g, b, a]` (0..255, alpha 0..1) for a GPU. They are written for the dark ground; in the light
+ * theme (`state.theme === 'light'`) buildScene hands every one through theme-model.js as its last step,
+ * and the looks a renderer holds itself come from `looksFor(scene.theme)`. Positions are world units; the camera
  * `{ x, y, zoom }` maps world to screen as `screen = camera.xy + world * zoom`.
  *
  * @typedef {'none'|'added'|'changed'|'removed'|'edit'} Mark
@@ -135,6 +137,7 @@
  * @property {SceneEdge[]} edges
  * @property {SceneDecor} decor
  * @property {boolean} preset      the data-flow view: every node is labelled and the label boost differs (see `labelAt`)
+ * @property {'dark'|'light'} theme  the ground it is drawn for (`state.theme`, theme.js): every colour in it already suits it; `looksFor(theme)` has the rest
  * @property {number} version      the `state.sceneVersion` it was built from
  *
  * @typedef {object} Camera
@@ -158,6 +161,7 @@ import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } fr
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenDash } from './cloud-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
+import { lightColor, lightenScene, parseColor } from './theme-model.js';
 
 // ---------------------------------------------------------------------------
 //  Constants every renderer shares, so the looks cannot drift apart
@@ -197,6 +201,29 @@ export const MARK = {
   removed: { color: '#f87171', ringR: 9, ringWidth: 2, ringDash: null, edgeDash: [3, 4], edgeWidth: 2, alpha: 0.55, strike: true },
   edit: { color: '#a78bfa', ringR: 9, ringWidth: 2.5, ringDash: null, edgeDash: null, edgeWidth: 2.4, alpha: 1, strike: false },
 };
+/**
+ * The looks a renderer draws itself, per theme (MAP-01): the halos, the mark rings, the core dot and the
+ * outline under a label. `looksFor('dark')` is HALO, MARK, CORE_COLOR and LABEL_OUTLINE as they are; the light
+ * ones are derived from them by theme-model.js (the rule the scene's own colours go through), except the
+ * label outline, which is the light ground itself so a dark label reads over the lines. A scene says which
+ * (`scene.theme`); a renderer asks for `looksFor(scene.theme)`.
+ * @param {'dark'|'light'|undefined} theme
+ */
+export function looksFor(theme) {
+  return theme === 'light' ? LIGHT_LOOKS : DARK_LOOKS;
+}
+const lightLook = (look) => {
+  const out = { ...look };
+  for (const k of ['fill', 'ring', 'color']) if (typeof out[k] === 'string') out[k] = lightColor(out[k]);
+  return out;
+};
+const DARK_LOOKS = Object.freeze({ halo: HALO, mark: MARK, core: CORE_COLOR, labelOutline: LABEL_OUTLINE });
+const LIGHT_LOOKS = Object.freeze({
+  halo: Object.fromEntries(Object.entries(HALO).map(([k, v]) => [k, lightLook(v)])),
+  mark: Object.fromEntries(Object.entries(MARK).map(([k, v]) => [k, lightLook(v)])),
+  core: CORE_COLOR, // the white dot stays white: it sits on the node's own (deepened) colour, not on the ground
+  labelOutline: { node: { color: 'rgba(244, 246, 250, 0.9)', width: 3.5 }, edge: { color: 'rgba(244, 246, 250, 0.92)', width: 3 } },
+});
 /** However far the camera is zoomed out, a mark stays at least this thick on screen (px), and a ring at least this far from its node: world sizes would shrink to nothing */
 export const MARK_MIN_PX = { ring: 1.8, edge: 1.6, gap: 4 };
 /** How bright what a proposal does not touch is in the Diff view: dim, but still plainly there */
@@ -326,17 +353,8 @@ export function packetPoint(edge, timeMs) {
 // ---------------------------------------------------------------------------
 //  Colours, for renderers that cannot take a CSS string
 // ---------------------------------------------------------------------------
-/** `#rgb`, `#rrggbb`, `rgb(...)` or `rgba(...)` → `[r, g, b, a]` (0..255, alpha 0..1); transparent for anything else */
-export function parseColor(css) {
-  const s = String(css).trim().toLowerCase();
-  let m = /^#([0-9a-f]{3})$/.exec(s);
-  if (m) return [...m[1]].map((h) => parseInt(h + h, 16)).concat(1);
-  m = /^#([0-9a-f]{6})$/.exec(s);
-  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16), 1];
-  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(s);
-  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
-  return [0, 0, 0, 0];
-}
+/** `#rgb`, `#rrggbb`, `rgb(...)` or `rgba(...)` → `[r, g, b, a]` (0..255, alpha 0..1); transparent for anything else (theme-model.js) */
+export { parseColor };
 
 // ---------------------------------------------------------------------------
 //  Labels: the one decision that depends on the camera
@@ -676,12 +694,14 @@ export function buildScene(state, opts = {}) {
     edges: buildEdges(state, subgraph, !!opts.reduceMotion),
     decor: { grid: { size: 48, color: 'rgba(255, 255, 255, 0.035)', width: 0.5, margin: 200 }, rings, lanes },
     preset,
+    theme: 'dark',
     version: state.sceneVersion || 0,
   };
   if (state.view === 'house') decorateHouseScene(scene, state); // its bands and tray as lanes, rooms unlabelled (house-model.js)
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
   if (state.scenario) paintOutage(scene, outageFor(state.scenario, state.nodes, state.edges)); // CLOUD-07: red, amber, violet by when the outage bites
   if (state.scenario) paintVerdict(scene, state.scenario); // PHY-10: red, green or amber by the step's permission check
+  if (state.theme === 'light') lightenScene(scene); // MAP-01: last, so what every painter above set is themed with the rest (theme-model.js)
   return scene;
 }
 
