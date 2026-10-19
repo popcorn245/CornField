@@ -146,18 +146,35 @@ describe('cornfield serve', () => {
     expect((await raw(port, 'PUT', '/proposals/0002-checkout.json')).status).toBe(405);
   });
 
-  it('keeps a review in its data folder, never in the repo, and only from its own page', async () => {
+  it('serves a proposal\'s mockups under their own sandbox policy, not the page\'s, and lets only cornfield\'s page frame them', async () => {
+    const page = await get(port, '/');
+    expect(page.headers['x-frame-options']).toBe('DENY');
+    expect(page.headers['content-security-policy']).toContain("script-src 'self'");
+    const list = JSON.parse((await get(port, '/proposals/0002-checkout/mockups?source=checkout')).body);
+    expect(list.map((m) => [m.node, m.type, m.state])).toEqual([['page-web-checkout', 'image', 'unreviewed'], ['page-api-checkout', 'page', 'unreviewed'], ['page-web-cart', 'image', 'unreviewed']]);
+    const svg = await get(port, list[0].url);
+    const html = await get(port, list[1].url);
+    expect(svg.headers['content-type']).toBe('image/svg+xml');
+    expect(html.headers['content-type']).toBe('text/html; charset=utf-8');
+    expect(svg.body).toContain('<svg');
+    for (const r of [svg, html, await get(port, list[2].url)]) {
+      expect(r.status).toBe(200);
+      expect(r.headers['content-security-policy']).toMatch(/^sandbox; default-src 'none'/);
+      expect(r.headers['content-security-policy']).not.toContain('script-src');
+      expect(r.headers['x-frame-options']).toBe('SAMEORIGIN');
+      expect(r.headers['x-content-type-options']).toBe('nosniff');
+    }
+  });
+
+  it('takes no review of a draft that is not on a PR: a review is a PR comment, so nothing is written in the data folder or the repo', async () => {
     const ok = JSON.stringify({ verdict: 'approved', note: '', edits: [] });
     const own = { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' };
-    expect((await raw(port, 'PUT', '/proposals/0002-checkout/review', { 'Content-Type': 'application/json' }, ok)).status).toBe(403);
-    expect((await raw(port, 'PUT', '/proposals/0002-checkout/review', { ...own, Origin: 'http://evil.example' }, ok)).status).toBe(403);
-    expect((await raw(port, 'PUT', '/proposals/nope/review', own, ok)).status).toBe(404);
     const res = await raw(port, 'PUT', '/proposals/0002-checkout/review', own, ok);
-    expect(res.status).toBe(200);
-    expect(fs.existsSync(path.join(data, 'reviews', 'checkout', '0002-checkout.review.json'))).toBe(true);
-    expect(fs.readdirSync(path.join(SAMPLE, 'docs/specs/proposals'))).toEqual(['0002-checkout.json']);
-    const shown = spawnSync(process.execPath, [CLI, 'review', '0002-checkout', '--repo', SAMPLE], { env: { ...process.env, CORNFIELD_DATA: data }, encoding: 'utf8' });
-    expect(JSON.parse(shown.stdout)).toMatchObject({ version: 1, verdict: 'approved' });
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/comment on a spec PR/);
+    expect(fs.existsSync(path.join(data, 'reviews'))).toBe(false);
+    expect(fs.readdirSync(path.join(SAMPLE, 'docs/specs/proposals'))).toEqual(['0002-checkout', '0002-checkout.json']);
+    expect((await raw(port, 'GET', '/proposals/0002-checkout/review')).status).toBe(404);
   });
 
   it('answers 400 for a malformed escape and sends no CORS preflight allowance', async () => {

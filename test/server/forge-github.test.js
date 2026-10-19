@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { createForge, isMaintainer, isGreen, notGreenWords, FORGE_METHODS } from '../../server/forge.js';
+import { createForge, isMaintainer, isGreen, notGreenWords, canRerun, wrap, FORGE_METHODS } from '../../server/forge.js';
 // @ts-expect-error plain JS module, no declarations
 import { githubApiUrl, githubRateLimit } from '../../server/forge-github.js';
 // @ts-expect-error plain JS module, no declarations
@@ -128,7 +128,7 @@ describe('the GitHub adapter', () => {
   });
 
   it('merges with the merge method asked for, and says so when GitHub refuses because the head moved', async () => {
-    const pr = { number: 12, state: 'open', draft: false, head: { ref: 'f', sha: 'abc' }, base: { ref: 'main' } };
+    const pr = { number: 12, state: 'open', draft: false, head: { ref: 'f', sha: 'abc' }, base: { ref: 'main' }, mergeable_state: 'clean' };
     const green = { check_runs: [{ id: 1, name: 'test', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] };
     const forge = await forgeOn({
       'GET /repos/owner/name/pulls/12': { body: pr },
@@ -265,6 +265,41 @@ describe('what the adapters share', () => {
     expect(isGreen([c('a', 'success'), c('b', 'neutral'), c('c', 'skipped')])).toBe(true);
     expect(isGreen([c('a', 'success'), c('b', 'queued')])).toBe(false);
     expect(notGreenWords([c('a', 'success'), c('b', 'queued'), c('c', 'cancelled'), c('d', 'failure')])).toBe('b is waiting to run; c was cancelled; d failed');
+  });
+
+  it('is not green when nothing passed: all skipped, all neutral, or a mix of the two', () => {
+    const c = (name, state) => ({ id: name, name, state, url: null, rerunnable: false });
+    for (const checks of [[c('a', 'skipped')], [c('a', 'neutral')], [c('a', 'skipped'), c('b', 'neutral')]]) {
+      expect(isGreen(checks)).toBe(false);
+      expect(notGreenWords(checks)).toBe('no check has passed (they were all skipped or neutral)');
+    }
+  });
+
+  it('merge() does not land a head whose checks were all skipped or neutral, and asks the adapter\'s readiness last', async () => {
+    const H = 'a'.repeat(40);
+    const calls = [];
+    const adapter = (checks, ready = { ready: true }) => ({
+      pull: async () => ({ number: 1, state: 'open', draft: false, head: { sha: H } }),
+      checks: async () => checks,
+      readiness: async () => { calls.push('readiness'); return ready; },
+      mergeAt: async () => { calls.push('mergeAt'); return { sha: 'm' }; },
+    });
+    const c = (state) => ({ id: state, name: state, state, url: null, rerunnable: false });
+    for (const checks of [[c('skipped')], [c('neutral')], [c('skipped'), c('neutral')]]) {
+      await forgeError(() => wrap(adapter(checks), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H }), 'not-green');
+    }
+    expect(calls).toEqual([]);
+    const notReady = await forgeError(() => wrap(adapter([c('success')], { ready: false, why: 'test is still running' }), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H }), 'not-green');
+    expect(notReady.message).toBe('Pull request #1 is not ready to land: test is still running.');
+    expect(calls).toEqual(['readiness']);
+    expect(await wrap(adapter([c('success'), c('skipped')]), { type: 'github', repo: 'o/n' }).merge(1, { onlyIfGreen: true, sha: H })).toEqual({ sha: 'm' });
+  });
+
+  it('canRerun: a failed or cancelled check the forge can run again, nothing else', () => {
+    const c = (state, rerunnable = true) => ({ id: state, name: state, state, url: null, rerunnable });
+    expect(['failure', 'cancelled', 'success', 'running', 'queued', 'neutral', 'skipped'].map((s) => canRerun(c(s)))).toEqual([true, true, false, false, false, false, false]);
+    expect(canRerun(c('failure', false))).toBe(false);
+    expect(canRerun(null)).toBe(false);
   });
 
   it('nextLink reads rel="next" wherever it is in the header', () => {

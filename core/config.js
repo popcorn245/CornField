@@ -11,7 +11,7 @@
  *     sources: {                              // browser modules for the live layer, the house and devices
  *       live: null, house: null, devices: null, checker: null,
  *     },
- *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'
+ *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'
  *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md)
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
@@ -59,6 +59,8 @@ export const BUILTIN_SOURCES = {
 export const SERVER_ONLY_OPTIONS = { 'home-assistant': ['file', 'url'] };
 export const SOURCE_SLOTS = ['live', 'house', 'devices', 'checker'];
 export const FORGE_TYPES = ['github', 'forgejo'];
+/** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
+export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 
 export const DEFAULTS = Object.freeze({
   title: null,
@@ -136,6 +138,7 @@ export function configProblems(c) {
       if (!FORGE_TYPES.includes(c.forge.type)) out.push(`forge.type is one of ${FORGE_TYPES.join(', ')}.`);
       if (c.forge.url !== undefined && !/^https?:\/\/[^/\s]+\/?$/.test(String(c.forge.url))) out.push('forge.url is the forge\'s origin, like https://github.com.');
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || ''))) out.push('forge.repo is "owner/name".');
+      if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);
     }
   }
   if (c.agents !== undefined) {

@@ -65,7 +65,7 @@ That form has no sign-in, so it only listens on the host's loopback. For a hoste
 | `cornfield validate` | schema, drift, the personas and cloud files, every proposal; exit 1 on a problem |
 | `cornfield status` | what the map holds, the warnings, the validation |
 | `cornfield proposal <file>` | one proposal against the map: its counts, errors and what has landed |
-| `cornfield review <slug>` | the last review of a proposal (verdict, note, what-if edits) |
+| `cornfield review <slug>` | the review of a proposal, read from its spec PR (verdict, note, what-if edits; needs `CORNFIELD_FORGE_TOKEN`) |
 | `cornfield docs` | the docs as a static site, built from the map of their links (`--out`, default `_site`) |
 
 Every command takes `--repo <dir>` and `--config <file>`.

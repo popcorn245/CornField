@@ -58,7 +58,7 @@ export function pullNumber(source) {
 export const forgeWords = (err) => (err instanceof ForgeError ? err.message : 'The forge could not be asked; the log says why.');
 
 /** The proposals folder as the forge spells paths: no leading `./`, no trailing slash */
-const folderOf = (where) => path.posix.normalize(String(where.proposals)).replace(/^\.\//, '').replace(/\/+$/, '');
+export const folderOf = (where) => path.posix.normalize(String(where.proposals)).replace(/^\.\//, '').replace(/\/+$/, '');
 
 /** Whether a changed file is a proposal that has a version at the head: a plain `<slug>.json` in the folder, not a review, not deleted */
 function isProposal(file, folder) {

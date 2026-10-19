@@ -28,7 +28,7 @@ export default {
 | `title` | the explorer's title (default: the package name) |
 | `derivers` | built-in names (`starter`, `personas`, `compose`, `world`, `openapi`, `cloud`, `docs`), paths (`./tools/deriver.js`), or `{ use, options }`; run in order. [derivers.md](derivers.md) |
 | `sources` | browser modules for the live layer, the house, devices and the permission checker (below) |
-| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name' }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md) |
+| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name', mergeMethod? }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md). `mergeMethod` is how the panel lands a green pull request: `merge` (the default), `squash` or `rebase`, the way the repo lands its own |
 | `port`, `host` | where `serve` listens. Without sign-in the host must be loopback; with it and an https `publicUrl`, any address ([sign-in](sign-in.md)) |
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
 | `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
@@ -40,7 +40,7 @@ export default {
 | `links` | extra links in the explorer's header |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
-| `dataDir` | cornfield's own state: reviews now, and `cornfield.db`, its SQLite file (private to its owner: it holds sessions). Default: `~/.cornfield/<repo folder>`, never inside the checkout |
+| `dataDir` | cornfield's own state: `cornfield.db`, its SQLite file (private to its owner: it holds sessions). Default: `~/.cornfield/<repo folder>`, never inside the checkout |
 
 Env vars win over the file: `CORNFIELD_PORT` (or `PORT`), `CORNFIELD_HOST`, `CORNFIELD_PUBLIC_URL`, `CORNFIELD_DATA`, `CORNFIELD_CONFIG`. Sign-in is env only, never the file: `CORNFIELD_GITHUB_CLIENT_ID` and `CORNFIELD_GITHUB_CLIENT_SECRET` (or the `FORGEJO` pair) and `CORNFIELD_SESSION_SECRET` ([sign-in](sign-in.md)). `CORNFIELD_HA_URL` and `CORNFIELD_HA_TOKEN` are read only by the server, for the `home-assistant` house source; with both set and no `sources.house`, the house comes from Home Assistant ([house.md](house.md#home-assistant-directly)).
 

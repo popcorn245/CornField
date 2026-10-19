@@ -19,6 +19,12 @@
  *   - Keys: Tab reaches the header button, Enter opens the panel with the focus on its title; Escape closes it and
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
+ *   - Actions (CF-08), on a selected pull request, for a signed-in maintainer: Land it, when it is open, ready and every
+ *     check is green, and Re-run on a failed or cancelled check the forge can run again. Where a button is not shown the panel says
+ *     why. Land it opens a confirm dialog that shows exactly what will land (the pull request, its head commit, where
+ *     it goes, how, each check); a scrim covers the page, the dialog is `aria-modal`, Tab stays inside, Escape and Cancel close it and give the
+ *     focus back, and it is announced. What is sent is the head that was shown: a push since is refused by the server,
+ *     which checks everything again (server/forge-actions.js). While one is in flight the buttons are off.
  *   - Errors and rate limits are a line in the panel, in the words the server gives; a stale answer says it is old.
  *
  * What is asked, which words and which nodes are forge-panel-model.js, tested without a page.
@@ -33,6 +39,7 @@ import { relativeTime } from './review-model.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
+  mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -55,6 +62,9 @@ const ui = {
   detailError: '',
   lit: null, // litFor(detail, nodes)
   nodesSeen: null, // the `state.nodes` the lights were worked out for
+  busy: '', // the action in flight ('merge', or 'rerun:<check id>'), so a second click does nothing
+  note: null, // { text, ok }: what the last action came to, for the selected pull request
+  confirm: null, // { opener: selector } while the confirm dialog is open
 };
 
 let wired = false;
@@ -110,7 +120,7 @@ async function loadWork(refresh, token) {
 }
 
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
-async function loadList(refresh = false) {
+async function loadList(refresh = false, quiet = false) {
   const token = ++listToken;
   if (ui.kind === 'work') return loadWork(refresh, token);
   const key = listKey();
@@ -122,10 +132,10 @@ async function loadList(refresh = false) {
   ui.loading = false;
   if (res.ok) {
     ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
-    announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
+    if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
   } else {
     ui.error = errorWords(res.status, res.body);
-    announce(ui.error);
+    if (!quiet) announce(ui.error);
   }
   paintFilters();
   paint();
@@ -138,6 +148,7 @@ async function selectPull(n) {
   ui.detail = null;
   ui.detailError = '';
   ui.lit = null;
+  ui.note = null;
   state.forgeLit = null;
   touchScene();
   render();
@@ -160,7 +171,9 @@ async function selectPull(n) {
 export function clearPull() {
   pullToken++;
   const had = ui.selected;
+  if (ui.confirm) closeConfirm({ restoreFocus: false });
   ui.selected = null;
+  ui.note = null;
   ui.detail = null;
   ui.detailError = '';
   ui.lit = null;
@@ -275,7 +288,12 @@ function detailHtml() {
         : 'Names no test file, so lights nothing'}</span>`
       : '';
     const name = safeUrl(c.url) ? `<a class="hx-link" href="${escHtml(c.url)}" target="_blank" rel="noreferrer">${escHtml(c.name)}</a>` : `<span class="hx-name">${escHtml(c.name)}</span>`;
-    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}">${escHtml(checkWords(c))}</span> ${name}${lights}</li>`;
+    const why = rerunWhy(c, forgeName());
+    const again = c.state === 'failure' && c.canRerun
+      ? `<button type="button" class="hx-btn hx-forge-act" data-forge-rerun="${escHtml(c.id)}" aria-label="Re-run ${escHtml(c.name)}"${ui.busy ? ' disabled' : ''}>Re-run</button>`
+      : '';
+    const whyNot = why ? `<span class="hx-faint hx-forge-lights">${escHtml(why)}</span>` : '';
+    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}">${escHtml(checkWords(c))}</span> ${name}${again}${lights}${whyNot}</li>`;
   }).join('');
 
   const fileRows = lit.files.map((f) => {
@@ -286,6 +304,12 @@ function detailHtml() {
     return `<li class="hx-forge-file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
   }).join('');
 
+  const block = mergeBlock(ui.detail);
+  const act = block
+    ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
+    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''}>Land it …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
+  const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}">${escHtml(ui.note.text)}</p>` : '';
+
   const key = lit.changed.size || lit.failing.size
     ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
     : '';
@@ -293,6 +317,9 @@ function detailHtml() {
     ${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
     <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
     ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
+    <h4 class="hx-forge-subact">Land it</h4>
+    ${note}
+    ${act}
     <h4 class="hx-forge-sub">${escHtml(plural(lit.files.length, 'file'))} changed, ${mapped} on the map</h4>
     ${key}
     <ul class="hx-forge-files">${fileRows}</ul>`;
@@ -303,6 +330,8 @@ function findAgain(el) {
   if (!el || !el.dataset) return null;
   if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
+  if (el.dataset.forgeMerge) return '[data-forge-merge]';
+  if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   return null;
 }
 
@@ -361,6 +390,135 @@ function paintButton() {
 }
 
 // ---------------------------------------------------------------------------
+//  Actions: land a green pull request, re-run a failed check
+// ---------------------------------------------------------------------------
+
+/** One POST of JSON; `{ ok, status, body }`, with a status of null when the server did not answer */
+async function post(url, payload) {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    let body = null;
+    try { body = await res.json(); } catch { /* no body */ }
+    return { ok: !!res.ok && !!body && body.ok === true, status: res.status, body };
+  } catch {
+    return { ok: false, status: null, body: null };
+  }
+}
+
+/** What an action came to: said on the panel and through the live region, and everything is read again from the forge */
+async function finishAction(action, res, n) {
+  const text = actionWords(action, res.status, res.body, n);
+  ui.busy = '';
+  ui.note = { text, ok: res.ok };
+  announce(text);
+  paint();
+  if (res.status === null) return;
+  // The other tabs' answers are from before it: they are read again when next shown (the server let go of its own copies)
+  if (ui.kind === 'work') ui.lists = {};
+  else { ui.lists = { [listKey()]: ui.lists[listKey()] }; ui.work = null; }
+  // Whatever it came to (a refusal says the pull request is not what was shown), the panel looks again
+  if (ui.selected === n) await refreshForge({ quiet: true });
+}
+
+/** Re-runs one failed check on the head that is shown */
+async function rerunCheck(id) {
+  if (ui.busy || !ui.detail) return;
+  const { pull, checks } = ui.detail;
+  const check = checks.find((c) => c.id === id);
+  if (!check || check.state !== 'failure' || !check.canRerun) return;
+  ui.busy = `rerun:${id}`;
+  ui.note = null;
+  announce(`Re-running ${check.name}`);
+  paint();
+  const res = await post(actionUrl(pull.number, 'rerun'), { sha: pull.head.sha, check: id });
+  await finishAction('rerun', res, pull.number);
+}
+
+const confirmEl = () => $('forge-confirm');
+
+/** While the confirm step is open the focus cannot leave it: a focus that lands elsewhere is brought back */
+function keepFocusIn(e) {
+  const el = confirmEl();
+  if (ui.confirm && el && !el.contains(e.target)) el.querySelector('[data-action="forge-confirm-cancel"]').focus();
+}
+
+/** Opens the confirm step for landing the selected pull request: what will land, exactly; the focus goes to Cancel */
+function openConfirm(opener) {
+  const el = confirmEl();
+  if (!el || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
+  const what = confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod);
+  $('forge-confirm-title').textContent = what.title;
+  $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${k === 'Commit' ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
+    <ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>
+    <p class="hx-confirm-note">${escHtml(what.note)}</p>`;
+  const go = el.querySelector('[data-action="forge-confirm-go"]');
+  go.disabled = false;
+  go.textContent = 'Land it';
+  go.removeAttribute('aria-busy');
+  // The scrim covers the page for the pointer, aria-modal tells a reader the rest is out of play, and the focus stays in
+  ui.confirm = { opener };
+  document.addEventListener('focusin', keepFocusIn);
+  el.hidden = false;
+  el.querySelector('[data-action="forge-confirm-cancel"]').focus();
+  announce(`${what.title} ${what.lines.map(([k, v]) => `${k}: ${v}`).join('. ')}. ${what.note} Cancel or Land it.`);
+}
+
+/** Closes the confirm step; the focus goes back to the button that opened it (or the panel's title if that is gone) */
+function closeConfirm({ restoreFocus = true } = {}) {
+  const el = confirmEl();
+  if (!el || !ui.confirm) return;
+  const { opener } = ui.confirm;
+  ui.confirm = null;
+  el.hidden = true;
+  document.removeEventListener('focusin', keepFocusIn);
+  if (!restoreFocus) return;
+  const back = $('forge-panel').querySelector(opener) || $('forge-title');
+  if (back && !back.disabled) back.focus();
+}
+
+/** Land it, confirmed: posts the head that was shown */
+async function confirmedMerge() {
+  if (ui.busy || !ui.detail || !ui.confirm) return;
+  const { pull } = ui.detail;
+  const body = mergeBody(ui.detail);
+  ui.busy = 'merge';
+  ui.note = null;
+  const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
+  go.disabled = true;
+  go.setAttribute('aria-busy', 'true');
+  go.textContent = 'Landing …';
+  announce(`Landing pull request ${pull.number}`);
+  const res = await post(actionUrl(pull.number, 'merge'), body);
+  closeConfirm();
+  await finishAction('merge', res, pull.number);
+}
+
+/** Keys inside the confirm step: Escape cancels, Tab stays between its two buttons, nothing reaches the map behind it */
+function onConfirmKey(e) {
+  e.stopPropagation();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (!ui.busy) closeConfirm();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const buttons = [...confirmEl().querySelectorAll('button:not([disabled])')];
+  if (!buttons.length) { e.preventDefault(); return; }
+  const at = buttons.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1) : (at === -1 || at === buttons.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  buttons[next].focus();
+}
+
+function onConfirmClick(e) {
+  const t = e.target;
+  if (t === confirmEl()) { if (!ui.busy) closeConfirm(); return; } // the scrim
+  const action = t.closest && t.closest('[data-action]');
+  if (!action) return;
+  if (action.dataset.action === 'forge-confirm-cancel') { if (!ui.busy) closeConfirm(); } else if (action.dataset.action === 'forge-confirm-go') confirmedMerge();
+}
+
+// ---------------------------------------------------------------------------
 //  Opening and closing
 // ---------------------------------------------------------------------------
 
@@ -398,10 +556,10 @@ export function closeForge({ restoreFocus = true } = {}) {
 export const toggleForge = () => (ui.open ? closeForge() : openForge());
 
 /** Asks the forge again, past the server's cache: the list, and the selected pull request */
-export async function refreshForge() {
-  announce('Asking the forge again');
+export async function refreshForge({ quiet = false } = {}) {
+  if (!quiet) announce('Asking the forge again');
   const n = ui.selected;
-  await loadList(true);
+  await loadList(true, quiet);
   if (n !== null && ui.selected === n) {
     const token = ++pullToken;
     const res = await request(pullUrl(n), true);
@@ -451,6 +609,10 @@ function onClick(e) {
     announce(`${node.label}, ${node.type}`);
     return;
   }
+  const merge = t.closest('[data-forge-merge]');
+  if (merge) { openConfirm('[data-forge-merge]'); return; }
+  const rerun = t.closest('[data-forge-rerun]');
+  if (rerun) { rerunCheck(rerun.dataset.forgeRerun); return; }
   const action = t.closest('[data-action]');
   if (!action) return;
   if (action.dataset.action === 'close-forge') closeForge();
@@ -519,6 +681,11 @@ export function initForgePanel(config, opts = {}) {
     panel.addEventListener('change', onChange);
     panel.addEventListener('input', onInput);
     panel.addEventListener('keydown', onKey);
+    const confirm = confirmEl();
+    if (confirm) {
+      confirm.addEventListener('click', onConfirmClick);
+      confirm.addEventListener('keydown', onConfirmKey);
+    }
     offScene = onSceneTouch(onNodesChange);
   }
   return true;
@@ -526,6 +693,7 @@ export function initForgePanel(config, opts = {}) {
 
 /** For tests: forget the page this was wired to, and everything shown */
 export function resetForgePanelForTests(clock = () => Date.now()) {
+  if (ui.confirm) closeConfirm({ restoreFocus: false });
   if (offScene) offScene();
   offScene = null;
   clearTimeout(searchTimer);
@@ -534,5 +702,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   listToken++;
   pullToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null, busy: '', note: null, confirm: null });
 }

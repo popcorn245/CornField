@@ -59,6 +59,7 @@ What to know while writing:
 - **Edges.** An edge is named by `from` + `to` + `kind` (no `kind` is the ownership line; a `flow` edge names its `flow` too). `kind` is one of `flow`, `reads`, `writes`, `uses`, `extends`, `calls`, `triggers`, `delivers`, `runs-on`. `"status": "proposed"` draws a flow-like edge dashed, with its label in italics, until it is built.
 - **Scenarios.** Each step points at a node (`{ "node": id }`) or an edge (`{ "edge": { from, to, kind } }`) and says, in a sentence, what happens there. A step may point at anything in the map or in the proposal, including what the proposal removes, so a scenario can show the old path going away. Steps can also carry an `actor` (a persona), an `at` (where it happens) and a permission `check`; an outage scenario lists the cloud nodes it takes `down`.
 - **A sketch, not the map.** A proposal never edits `topology.json`, and it is held to fewer rules than the map: a page's label must still be a route (`/checkout`), but a `reads` edge without `keys` is fine here. `topology.json` stays derived from the code.
+- **Mockups.** A proposal may carry the screens it is about: `"mockups": [{ "node": "page-web-checkout", "path": "0002-checkout/checkout.svg", "title": "The checkout page: the basket total and a Pay button" }]`. The `node` is one the proposal adds, changes or removes; the `path` is relative to the proposals folder and stays inside it (no `..`, no leading slash), and ends in `png`, `jpg`, `jpeg`, `webp`, `svg` or `html`; the `title` says what the screen is and is its alt text. Keep the files in the spec branch beside the proposal (the sample repo has `0002-checkout/`). `cornfield proposal` and `validate` report a path that leaves the folder, a type that is not allowed, and a node the proposal does not touch; `validate` also fails when a listed file is not there. A proposal without `mockups` is valid as it always was.
 
 The full format, every field and every rule, is the comment at the top of [core/proposal.js](../core/proposal.js). The sample repo's [0002-checkout.json](../test/fixtures/sample/docs/specs/proposals/0002-checkout.json) has actors, a permission check and an outage; cornfield's own [0001-v1.json](specs/proposals/0001-v1.json) is a large real one.
 
@@ -85,15 +86,29 @@ With a `forge` and [sign-in](sign-in.md) configured, the list also holds the pro
 - **Before / Diff / After.** Diff rings what is added (dashed), changed (amber) and removed (red, label struck through) and dims the rest; Before and After show the map as it is and as it would be. The counts chip lists every change; a row takes you to it.
 - **Scenarios.** Each plays step by step over the map, the step's text in the player at the bottom. Space plays and pauses, the arrow keys step.
 - **What-if edits.** Add or remove a node or an edge, draw an edge by dragging from one node to another, add, reword or reorder steps. Edits are violet and can be undone; they never touch the file.
-- **Approve or Send back.** Send back needs a note. Either one is kept with the edits you made, in cornfield's data folder (`<dataDir>/reviews/<source>/<slug>.review.json`, by default under `~/.cornfield/`), never in the checkout. (A proposal of a spec PR cannot be approved or sent back from cornfield yet: comment on the PR until reviews are posted there.)
+- **Mockups.** Select a node the proposal lists a mockup for: its panel has a button per mockup, with where it stands (`Not reviewed yet`, `Reviewed`, `Changed since you approved`, `File not found`). A click, or Enter, opens it in a window over the map: a picture with its title as alt text, or an HTML page in a frame. Escape closes it and the focus goes back to the button. Mockups of a spec PR are read at the PR's head commit, like the proposal.
+- **Approve or Send back.** Send back needs a note. Either one is posted as a **comment on the spec PR**, as you (your own token, so the PR shows who said it), with the edits you made. The comment is one line for people ("Approved `0002-checkout` with 2 edits (you, in cornfield).", the note quoted under it) and a fenced block for the agent, named for the proposal:
 
-Whoever is writing the proposal reads the last review with:
+  `````text
+  ```cornfield-review 0002-checkout
+  { "verdict": "notes", "note": "Make the checkout one page.", "edits": [ { "op": "remove-node", "id": "page-web-confirm" } ] }
+  ```
+  `````
+
+  An approval of a proposal that lists mockups also covers them: cornfield reads each file at the PR's head as you approve and puts `"mockups": [{ "node", "path", "sha256" }]` in the same block (the page never sends hashes). A mockup changed afterwards shows as `Changed since you approved` until a new approval; Send back records none.
+
+  The **latest comment by an admin** (someone who maintains the repo) is the review. A block from anyone else, a block that is not exactly `{ verdict, note, edits }` (not JSON, another verdict, an extra key) and a quoted one are ignored, so a reader cannot overrule a maintainer and a typo cannot break the page. A review comment that was **edited** after it was posted does not count, and neither does anything older on that proposal: on both forges someone with write access can edit anyone's comment, so to change your mind, post a new review. You can write one by hand on the PR in the same shape; the bar shows the latest one when the proposal opens ("Approved 3 minutes ago"). Every post is written to cornfield's audit table (who, which PR, what the forge answered). Nothing is written into the checkout.
+- **A draft with no PR cannot be reviewed.** A proposal from the checkout or a worktree has no PR to hold a review, so its buttons are off and the bar says to push it as a spec PR (its mockups read `Not reviewed yet`). Reviews that earlier versions kept in the data folder (`<dataDir>/reviews/<source>/<slug>.review.json`) are carried over once: the first time you open the menu signed in, each one is posted as a comment on the one open spec PR that holds its proposal (unless that PR already has a review of it, which is newer), and the file is renamed `….review.json.migrated` and never read again. One whose proposal is on no PR yet waits for one.
+
+**Mockups are untrusted.** A branch can put anything in an HTML or SVG file, so cornfield never lets one run script against its own page. Every mockup is served at `/proposals/<slug>/mockups/<n>` (by its position in the list, never by a path in the request; behind the sign-in and the Host check like every route) with the type its extension names, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: sandbox; default-src 'none'; …` (no script, no network, an opaque origin, even if the address is opened on its own), and only cornfield's own page may frame it. The explorer shows pictures and SVG in an `<img>`, and HTML in an `<iframe sandbox>` with no `allow-` keyword at all. A file is at most 5 MB, and a link that leads out of the proposals folder is not followed. Do not put a secret in a mockup: it is read by everyone who can open the proposal.
+
+Whoever is writing the proposal reads the review from the PR with:
 
 ```sh
-npx cornfield review 0002-checkout
+CORNFIELD_FORGE_TOKEN=… npx cornfield review 0002-checkout        # --pr 23 to name the PR
 ```
 
-It prints the review as stored: `{ "version": 1, "verdict": "approved" | "notes", "note": "…", "edits": [ … ], "at": "…" }`. The edits are in the same terms the viewer used (`add-node`, `remove-edge`, `add-step`, …); `applyEdits` from cornfield's core folds them into the proposal. A script for it, in your repo with cornfield installed:
+It finds the one open spec PR that holds the proposal (or takes `--pr`), reads its comments, and prints the latest admin review: `{ "version": 1, "slug": "…", "verdict": "approved" | "notes", "note": "…", "edits": [ … ], "mockups": [ … ], "at": "…", "by": "…", "comment": { "id": "…", "url": "…" } }` (`mockups` only on an approval of a proposal that lists some). The token is a GitHub (or Forgejo) token that can see the repo's PRs; `GITHUB_TOKEN` and `GH_TOKEN` work on GitHub, and only reads are made. The edits are in the same terms the viewer used (`add-node`, `remove-edge`, `add-step`, …); `applyEdits` from cornfield's core folds them into the proposal. A script for it, in your repo with cornfield installed:
 
 ```js
 // fold-review.mjs: node fold-review.mjs <proposal.json> <review.json>
@@ -115,7 +130,7 @@ npx cornfield proposal docs/specs/proposals/0002-checkout.json
 
 Then fix what the note asks for by hand, and ask for another look.
 
-**Off the map, in a pull request.** The proposal is a plain JSON file, so it can be reviewed like any other: open a PR with it, and let the reviewer read the diff, or check it out and run `cornfield serve` to look at it on the map. CI already checks it: `cornfield validate` checks every proposal in the folder against the map (below). What the verdict is and where it is written is your team's call; cornfield's own rule is a PR review comment.
+**Off the map, in a pull request.** The proposal is a plain JSON file, so it can be reviewed like any other: open a PR with it, and let the reviewer read the diff, or check it out and run `cornfield serve` to look at it on the map. CI already checks it: `cornfield validate` checks every proposal in the folder against the map (below). What the verdict is and where it is written is your team's call; cornfield's own rule is the comment above.
 
 ## 3. Land it
 
@@ -152,4 +167,4 @@ Drafts in a worktree and proposals of spec PRs are not checked: only the checkou
 ## Not covered here
 
 - cornfield's own rule of *which* changes need a proposal is in [CONTRIBUTING.md](../CONTRIBUTING.md). For your repo, pick your own: some teams propose every new service, some only what crosses a team's boundary.
-- Reviews as forge PR comments, proposals read from spec branches and sign-in are v1 work ([specs/0001-v1.md](specs/0001-v1.md)). Until then the review is kept in cornfield's data folder, and cornfield only listens on loopback.
+- Forgejo as the forge is v1 work still to land ([specs/0001-v1.md](specs/0001-v1.md)); reviews as PR comments work on GitHub today.

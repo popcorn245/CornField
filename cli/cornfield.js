@@ -9,12 +9,13 @@
  *   cornfield validate           the schema, drift from the code, the personas and cloud files, every proposal
  *   cornfield status             what the map holds, the warnings, and the validation
  *   cornfield proposal <file>    one proposal against the map: its summary, its errors, what has landed
- *   cornfield review <slug>      the last review of a proposal (approve or send back, with the edits)
+ *   cornfield review <slug>      the review of a proposal, from its spec PR (approve or send back, with the edits)
  *   cornfield docs               the docs as a static site, from the docs deriver's map of them (--out, default _site)
  *   cornfield help | --version
  *
- * Options: `--repo <dir>`, `--config <file>`, `--port <n>`. Env: CORNFIELD_PORT, CORNFIELD_HOST,
- * CORNFIELD_PUBLIC_URL, CORNFIELD_DATA, CORNFIELD_CONFIG (core/config.js).
+ * Options: `--repo <dir>`, `--config <file>`, `--port <n>`, `--pr <n>` (review). Env: CORNFIELD_PORT, CORNFIELD_HOST,
+ * CORNFIELD_PUBLIC_URL, CORNFIELD_DATA, CORNFIELD_CONFIG (core/config.js); CORNFIELD_FORGE_TOKEN, or GITHUB_TOKEN /
+ * GH_TOKEN on GitHub, for `review` (a token of someone who can see the repo's PRs; only their reads are used).
  */
 
 import fs from 'node:fs';
@@ -39,7 +40,7 @@ Commands:
   validate           check the map, its drift from the code, and every proposal (exit 1 on a problem)
   status             what the map holds, the warnings, and the validation
   proposal <file>    check one proposal against the map
-  review <slug>      print the last review of a proposal (--source <worktree> for a worktree's copy)
+  review <slug>      print the review of a proposal: the latest admin comment on its spec PR (--pr <n> to name the PR)
   docs               build the docs as a static site from their map (--out <dir>, default _site)
   help               this text
 
@@ -47,6 +48,7 @@ Options:
   --repo <dir>       the repo to work on (default: the current folder)
   --config <file>    the config file (default: cornfield.config.js in the repo)
   --port <n>         the port for serve (default 3350, or CORNFIELD_PORT)
+  --pr <n>           the spec PR for review (default: the one open PR that holds the proposal)
   --version          print the version
 `;
 
@@ -177,25 +179,64 @@ async function proposal(flags, file) {
   return 0;
 }
 
-async function review(flags, slug) {
+/** The token `review` reads the PR with: cornfield's own variable, then the forge's usual one */
+function forgeToken(config, env) {
+  const names = ['CORNFIELD_FORGE_TOKEN', ...(config.forge.type === 'github' ? ['GITHUB_TOKEN', 'GH_TOKEN'] : [])];
+  return names.map((n) => env[n]).find((v) => typeof v === 'string' && v.trim() !== '') || null;
+}
+
+/** `forgeOptions` are the forge's own overrides (tests point it at a fake) */
+export async function review(flags, slug, forgeOptions = {}) {
   if (!slug) {
-    console.error('Usage: cornfield review <slug> [--source <worktree>]');
+    console.error('Usage: cornfield review <slug> [--pr <n>]');
     return 1;
   }
   const { config } = await setup(flags);
-  const { findProposalFile, reviewFilePath } = await import('../server/files.js');
-  const entry = findProposalFile({ root: config.root, proposals: config.proposals, worktrees: config.worktrees }, slug, flags.source || null);
-  if (!entry) {
-    console.error(`\nNo proposal "${slug}" in ${config.proposals}${config.worktrees ? ` or the worktrees in ${config.worktrees}` : ''}.\n`);
+  if (!config.forge) {
+    console.error('\nA review is a comment on the proposal\'s spec PR, and no forge is configured: set `forge: { type, url, repo }` in the config.\n');
     return 1;
   }
-  const file = reviewFilePath(entry, config.dataDir);
-  if (!file || !fs.existsSync(file)) {
-    console.log(`\nNo review of ${slug} (${entry.source}) yet.\n`);
-    return 0;
+  const token = forgeToken(config, process.env);
+  if (!token) {
+    console.error(`\nReading the PR needs a token: set CORNFIELD_FORGE_TOKEN${config.forge.type === 'github' ? ' (or GITHUB_TOKEN)' : ''} to one that can see ${config.forge.repo}.\n`);
+    return 1;
   }
-  process.stdout.write(fs.readFileSync(file, 'utf8'));
-  return 0;
+  const { createForge, ForgeError } = await import('../server/forge.js');
+  const { listPullProposals, forgeWords, pullNumber } = await import('../server/proposal-pulls.js');
+  const { latestReview } = await import('../server/reviews.js');
+  try {
+    const forge = createForge(config.forge, { token, ...forgeOptions });
+    let n = null;
+    if (flags.pr !== undefined || flags.source !== undefined) {
+      n = /^[1-9]\d{0,8}$/.test(String(flags.pr)) ? Number(flags.pr) : pullNumber(flags.source);
+      if (n === null) {
+        console.error('\n--pr is a pull request number (or --source pull/<n>).\n');
+        return 1;
+      }
+    } else {
+      const { entries, problem } = await listPullProposals(forge, { proposals: config.proposals });
+      const holders = entries.filter((e) => e.slug === slug);
+      if (holders.length === 0) {
+        console.error(`\nNo open spec PR holds a proposal "${slug}" in ${config.proposals}${problem ? ` (${problem})` : ''}. Name the PR with --pr <n>.\n`);
+        return 1;
+      }
+      if (holders.length > 1) {
+        console.error(`\nMore than one open spec PR holds "${slug}": ${holders.map((e) => `#${e.pull.number}`).join(', ')}. Name one with --pr <n>.\n`);
+        return 1;
+      }
+      n = holders[0].pull.number;
+    }
+    const found = await latestReview(forge, n, slug);
+    if (!found) {
+      console.log(`\nNo review of ${slug} on PR #${n} yet.\n`);
+      return 0;
+    }
+    console.log(JSON.stringify(found, null, 2));
+    return 0;
+  } catch (err) {
+    console.error(`\n${err instanceof ForgeError ? forgeWords(err) : err.message}\n`);
+    return 1;
+  }
 }
 
 async function docs(flags) {

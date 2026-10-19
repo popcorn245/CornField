@@ -201,12 +201,12 @@ describe('the Forgejo adapter', () => {
   it('answers a landed merge as landed even when reading the pull request back fails', async () => {
     let reads = 0;
     const forge = await forgeOn({
-      'GET /repos/owner/name/pulls/12': () => (++reads === 1 ? { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } } : { status: 502, body: {} }),
+      'GET /repos/owner/name/pulls/12': () => (++reads <= 2 ? { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } } : { status: 502, body: {} }),
       'GET /repos/owner/name/commits/abc/status?limit=50': { body: { statuses: [{ context: 'ci', status: 'success' }] } },
       'POST /repos/owner/name/pulls/12/merge': { status: 200 },
     });
     expect(await forge.merge(12, { onlyIfGreen: true })).toEqual({ sha: 'abc' });
-    expect(reads).toBe(2);
+    expect(reads).toBe(3);
   });
 
   it('sends the merge methods under Forgejo\'s names, and never a force', async () => {

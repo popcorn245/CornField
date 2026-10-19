@@ -26,9 +26,16 @@
  *     edges?:     { add?: [{ from, to, kind?, flow?, label?, … }],
  *                   change?: [{ from, to, kind?, flow?, set: { …fields }, why }],
  *                   remove?: [{ from, to, kind?, flow?, why }] },
+ *     mockups?:   [{ node, path, title }],
  *     scenarios?: [{ id, title, steps: [{ node } | { edge: { from, to, kind?, flow? } }, + text, + ms?,
  *                    + actor?, at?, check?, expect?], stepMs?, linkNodes?, actor?, down? }] }
  *
+ *  - Mockups: `mockups` lists screens kept beside the proposal (images, or HTML, in the spec branch). Each is the `node`
+ *    it belongs to (a node the proposal adds, changes or removes), a `path` relative to the proposals folder, and a
+ *    `title` that is also the picture's alt text. The path stays inside the folder (no `..`, no leading slash, no
+ *    backslash, no hidden segment) and ends in one of MOCKUP_EXTENSIONS. The explorer opens a mockup from its node;
+ *    approving the proposal covers the files (server/mockups.js). HTML and SVG are untrusted content from a branch:
+ *    the server and the explorer never let them run script (docs/proposals.md).
  *  - An edge is identified by `from` + `to` + `kind`. No `kind` is the ownership edge (parent → child);
  *    a `flow` edge also names its `flow` (one of FLOW_KINDS), and that is part of its identity.
  *  - `parent` on an added node adds the ownership edge `parent → id`; `parent` is not a node field and
@@ -65,7 +72,13 @@
 
 import { NODE_THEMES, EDGE_KINDS, FLOW_KINDS, DEVICE_KINDS, EXTERNAL_KINDS, LIVE_ID_PREFIX, parseLiveId, isLiveNode, personaNodeId, callFieldProblems } from './schema.js';
 
-const TOP_KEYS = ['version', 'spec', 'title', 'summary', 'nodes', 'edges', 'scenarios'];
+const TOP_KEYS = ['version', 'spec', 'title', 'summary', 'nodes', 'edges', 'mockups', 'scenarios'];
+const MOCKUP_KEYS = ['node', 'path', 'title'];
+/** The file types a mockup may be, by lower-case extension. `.html` and `.svg` are untrusted content and are served sandboxed */
+export const MOCKUP_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'html'];
+/** Mockups in one proposal, and the characters of a path */
+export const MAX_MOCKUPS = 40;
+export const MAX_MOCKUP_PATH = 200;
 const SCENARIO_KEYS = ['id', 'title', 'steps', 'stepMs', 'linkNodes', 'actor', 'down'];
 const STEP_KEYS = ['node', 'edge', 'text', 'ms', 'actor', 'at', 'check', 'expect'];
 /** What a step's `check` may ask (spec 0029 section 3): a route and a method, or a table, an op and a row shape */
@@ -98,6 +111,43 @@ function same(a, b) {
   const keys = Object.keys(a);
   if (keys.length !== Object.keys(b).length) return false;
   return keys.every((k) => same(a[k], b[k]));
+}
+
+/**
+ * Why a mockup's `path` is not allowed, or null when it is: a relative path of plain segments that stays inside the
+ * proposals folder and ends in one of MOCKUP_EXTENSIONS. Pure text checks only; the server also resolves the real
+ * path (links included) before it reads the file.
+ * @param {unknown} p
+ * @returns {string | null}
+ */
+export function mockupPathProblem(p) {
+  if (typeof p !== 'string' || p.trim() === '') return '"path" must be the file\'s path, relative to the proposals folder.';
+  if (p.length > MAX_MOCKUP_PATH) return `"path" is at most ${MAX_MOCKUP_PATH} characters.`;
+  // eslint-disable-next-line no-control-regex
+  if (/[\\\u0000-\u001f:%?#]/.test(p)) return '"path" has a character a plain relative path does not (a backslash, a colon, a control character, %, ? or #).';
+  if (p.startsWith('/')) return '"path" is relative to the proposals folder; it does not start with a slash.';
+  const parts = p.split('/');
+  if (parts.some((seg) => seg === '' || seg === '.' || seg === '..')) return '"path" stays inside the proposals folder: no "..", no "." and no empty parts.';
+  if (parts.some((seg) => seg.startsWith('.'))) return '"path" has a hidden part (one that starts with a dot).';
+  const ext = parts[parts.length - 1].split('.').length > 1 ? parts[parts.length - 1].split('.').pop().toLowerCase() : '';
+  if (!MOCKUP_EXTENSIONS.includes(ext)) return `A mockup is one of: ${MOCKUP_EXTENSIONS.join(', ')}.`;
+  return null;
+}
+
+/**
+ * The mockups a proposal lists that can be served: `{ index, node, path, title }`, where `index` is the position in
+ * the proposal's `mockups` (what the server is asked for, never a path). An entry that is malformed is left out;
+ * `validateProposal` says why.
+ * @param {any} proposal
+ * @returns {{ index: number, node: string, path: string, title: string }[]}
+ */
+export function mockupsOf(proposal) {
+  if (!isObject(proposal) || !Array.isArray(proposal.mockups)) return [];
+  const out = [];
+  proposal.mockups.slice(0, MAX_MOCKUPS).forEach((m, index) => {
+    if (isObject(m) && isText(m.node) && isText(m.title) && mockupPathProblem(m.path) === null) out.push({ index, node: m.node, path: m.path, title: m.title.trim() });
+  });
+  return out;
 }
 
 /**
@@ -432,6 +482,26 @@ export function validateProposal(topology, proposal) {
     });
   });
 
+  // --- mockups
+  if (proposal.mockups !== undefined && !Array.isArray(proposal.mockups)) err('mockups', '"mockups" must be a list.');
+  else if (Array.isArray(proposal.mockups)) {
+    if (proposal.mockups.length > MAX_MOCKUPS) err('mockups', `At most ${MAX_MOCKUPS} mockups in one proposal.`);
+    const touched = new Set([...addedIds.keys(), ...removedIds, ...nodes.change.filter((c) => isObject(c) && isText(c.id)).map((c) => c.id)]);
+    const seenPath = new Set();
+    proposal.mockups.forEach((m, i) => {
+      const p = `mockups[${i}]`;
+      if (!isObject(m)) return err(p, 'A mockup is an object with a node, a path and a title.');
+      for (const key of Object.keys(m)) if (!MOCKUP_KEYS.includes(key)) err(`${p}.${key}`, `Unknown key "${key}" in a mockup. A mockup has: ${MOCKUP_KEYS.join(', ')}.`);
+      if (!isText(m.title)) err(`${p}.title`, 'A mockup needs a "title": what the screen is. It is also its alt text.');
+      const bad = mockupPathProblem(m.path);
+      if (bad) err(`${p}.path`, bad);
+      else if (seenPath.has(`${m.node}|${m.path}`)) err(p, `Mockup "${m.path}" is listed twice for node "${m.node}".`);
+      else seenPath.add(`${m.node}|${m.path}`);
+      if (!isText(m.node)) err(`${p}.node`, 'A mockup needs the "node" it belongs to.');
+      else if (!touched.has(m.node)) err(`${p}.node`, `Mockup is beside node "${m.node}", which this proposal does not add, change or remove. Name a node the proposal touches.`);
+    });
+  }
+
   return errors;
 }
 
@@ -752,6 +822,7 @@ export function applyEdits(proposal, edits) {
             for (const a of adds) if (!gone.has(a.id) && gone.has(a.parent)) { gone.add(a.id); grew = true; }
           }
           next.nodes.add = adds.filter((a) => !gone.has(a.id));
+          if (Array.isArray(next.mockups)) next.mockups = next.mockups.filter((m) => !(m && gone.has(m.node))); // their screens go with them
           const edgeAdds = list('edges', 'add');
           const dropped = edgeAdds.filter((e) => gone.has(e.from) || gone.has(e.to));
           next.edges.add = edgeAdds.filter((e) => !dropped.includes(e));

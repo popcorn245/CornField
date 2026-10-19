@@ -29,6 +29,12 @@ describe('configProblems', () => {
     expect(configProblems(mod.default)).toEqual([]);
   });
 
+  it('takes a forge\'s merge method: merge, squash or rebase, and nothing else', () => {
+    const forge = (mergeMethod) => ({ forge: { type: 'github', repo: 'o/n', mergeMethod } });
+    for (const m of [undefined, 'merge', 'squash', 'rebase']) expect(configProblems(forge(m)), m).toEqual([]);
+    for (const m of ['force', 'fast-forward', '', 1]) expect(configProblems(forge(m))).toEqual(['forge.mergeMethod is one of merge, squash, rebase.']);
+  });
+
   it('names what is wrong: unknown keys, a bad port, a deriver or source that is neither built in nor a path, a path out of the repo', () => {
     const out = configProblems({
       colour: 'red', port: 70000, derivers: ['nope', './../x.js', { use: 'starter', options: 3 }],
