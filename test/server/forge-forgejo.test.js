@@ -201,12 +201,12 @@ describe('the Forgejo adapter', () => {
   it('answers a landed merge as landed even when reading the pull request back fails', async () => {
     let reads = 0;
     const forge = await forgeOn({
-      'GET /repos/owner/name/pulls/12': () => (++reads === 1 ? { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } } : { status: 502, body: {} }),
+      'GET /repos/owner/name/pulls/12': () => (++reads <= 2 ? { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } } : { status: 502, body: {} }),
       'GET /repos/owner/name/commits/abc/status?limit=50': { body: { statuses: [{ context: 'ci', status: 'success' }] } },
       'POST /repos/owner/name/pulls/12/merge': { status: 200 },
     });
     expect(await forge.merge(12, { onlyIfGreen: true })).toEqual({ sha: 'abc' });
-    expect(reads).toBe(2);
+    expect(reads).toBe(3);
   });
 
   it('sends the merge methods under Forgejo\'s names, and never a force', async () => {
@@ -366,5 +366,27 @@ describe('the Forgejo adapter', () => {
     const forge = await forgeOn({ 'GET /user': () => (++calls === 1 ? { status: 502, body: {} } : { body: { id: 1, login: 'maintainer-one' } }) });
     await forgeError(() => forge.me(), 'unavailable');
     expect((await forge.me()).login).toBe('maintainer-one');
+  });
+
+  it('marks an account the forge calls a Bot, and its Actions user, and only those', async () => {
+    const pull = (number, user) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', body: `Closes #${number}` });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&limit=50': {
+        body: [
+          pull(1, { id: 7, login: 'renovate', type: 'Bot' }),
+          pull(2, { id: -2, login: 'forgejo-actions' }),
+          pull(3, { id: 9, login: 'agent-four', type: 'User' }),
+          pull(4, { id: 10, login: 'someone[bot]' }),
+        ],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.author)).toEqual([
+      { login: 'renovate', url: null, bot: true },
+      { login: 'forgejo-actions', url: null, bot: true },
+      { login: 'agent-four', url: null },
+      { login: 'someone[bot]', url: null }, // the name is the agent rule's to read, not the adapter's
+    ]);
+    expect(pulls[0].body).toBe('Closes #1');
   });
 });

@@ -64,11 +64,25 @@ const DETAIL = {
     pull: PULLS.open[0],
     files: [{ path: 'server/server.js', status: 'modified', previousPath: null, additions: 2, deletions: 2 }],
     checks: [
-      { id: 'run:42', name: 'vitest test/server/auth.test.js', state: 'failure', url: 'https://git.example.test/runs/42', rerunnable: true },
-      { id: 'run:43', name: 'lint', state: 'failure', url: null, rerunnable: true },
+      { id: 'run:42', name: 'vitest test/server/auth.test.js', state: 'failure', url: 'https://git.example.test/runs/42', rerunnable: true, canRerun: true },
+      { id: 'run:43', name: 'lint', state: 'failure', url: null, rerunnable: false, canRerun: false },
       { id: 'run:44', name: 'build', state: 'running', url: null, rerunnable: false },
     ],
   },
+};
+
+// What /api/forge/work answers (server/forge-routes.js): #12 is the spec PR of proposal 0013-meals, #13 closes issue 5, #9 landed
+const WORK = {
+  agents: { authors: ['agent-four'], labels: [], branchPrefixes: ['claude/'], bots: true },
+  pulls: [
+    { ...PULLS.open[0], body: 'Fixes #5', updatedAt: '2026-10-18T11:00:00Z' },
+    { ...PULLS.open[1], body: '', head: { ref: 'spec/meals', sha: 'sha12' }, updatedAt: '2026-10-17T11:00:00Z' },
+    { ...PULLS.closed[0], body: 'Closes #5', author: user('maintainer-one'), updatedAt: '2026-10-12T11:00:00Z' },
+  ],
+  issues: [issue(5, 'Sign-in')],
+  branches: [{ name: 'main', sha: 'm', protected: true }, { name: 'claude/5-notes', sha: 'n', protected: false }, { name: 'claude/lone', sha: 'l', protected: false }, { name: 'human/idea', sha: 'h', protected: false }],
+  specs: [{ pull: 12, slug: '0013-meals' }],
+  specsProblem: null,
 };
 
 const run = (id, name, state, extra = {}) => ({
@@ -101,12 +115,17 @@ function fakeServer(opts = {}) {
     calls.push({ url, init });
     if (opts.down) throw new TypeError('Failed to fetch');
     const u = new URL(url, 'http://localhost');
+    if (init.method === 'POST') {
+      const answer = opts.posts && opts.posts[u.pathname];
+      return answer ? json(answer.status ?? 200, answer.body) : json(404, { ok: false, error: 'No such action.' });
+    }
     const override = opts.answers && opts.answers[u.pathname + u.search];
     if (override) return json(override.status ?? 200, override.body);
     const at = '2026-10-19T11:58:00.000Z';
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '4990 of 5000 GitHub calls left; the count resets at 12:30 UTC (in about 30 minutes).', items: PULLS[u.searchParams.get('state')] || [...PULLS.open, ...PULLS.closed] });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', items: [issue(5, 'Sign-in'), issue(3, 'Forge adapters', { labels: [], author: user('agent-four') }), issue(4, 'Odd link', { url: 'javascript:alert(1)' })] });
     if (u.pathname === '/api/forge/deploys') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', items: opts.deploys || DEPLOYS });
+    if (u.pathname === '/api/forge/work') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...(opts.work || WORK) });
     const one = /^\/api\/forge\/pulls\/(\d+)$/.exec(u.pathname);
     if (one && DETAIL[one[1]]) return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', ...DETAIL[one[1]] });
     return json(404, { ok: false, error: `GitHub has no pull request #${one ? one[1] : '?'} in owner/name, or this sign-in cannot see it.`, code: 'not-found' });
@@ -526,6 +545,337 @@ describe('on a phone', () => {
     await settle();
     expect(sheetState('forge')).toBe('peek');
     expect(state.selectedNode.id).toBe('core-server');
+  });
+});
+
+describe('the Agents tab', () => {
+  const tab = () => q('[data-forge-kind="work"]');
+  const groups = () => qa('#forge-list .hx-forge-group');
+  const titles = () => qa('.hx-forge-gtitle').map((h) => h.textContent.replace(/\s*↗$/, '').trim());
+  const rowTitles = (g) => [...g.querySelectorAll('.hx-forge-title')].map((t) => t.textContent.trim());
+  const open = async (opts) => {
+    const server = fakeServer(opts);
+    mount();
+    openForge();
+    await settle();
+    click(tab());
+    await settle();
+    return server;
+  };
+
+  it('is a third tab that reads the work in one request, once, and groups it by proposal, then issue, then neither', async () => {
+    const server = await open();
+    expect(tab().getAttribute('aria-pressed')).toBe('true');
+    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work']);
+    expect(titles()).toEqual(['Proposal 0013-meals', '#5 Sign-in', 'Not linked to an issue or a proposal']);
+    expect(rowTitles(groups()[0])).toEqual(['Meals page']);
+    expect(rowTitles(groups()[1])).toEqual(['Lint everything', 'Branch claude/5-notes']);
+    expect(rowTitles(groups()[2])).toEqual(['Branch claude/lone']);
+    expect($('forge-status').textContent).toBe('3 groups, 4 pieces of work, 4 by agents, as of 2 minutes ago');
+    // The pull request tab's filters give way to the two of this tab
+    expect($('forge-filters').hidden).toBe(true);
+    expect($('forge-work-filters').hidden).toBe(false);
+    // Going back and forth asks for nothing again
+    click(q('[data-forge-kind="pulls"]'));
+    click(tab());
+    await settle();
+    expect(server.urls().filter((u) => u.includes('/work'))).toHaveLength(1);
+    expect($('forge-filters').hidden).toBe(true);
+  });
+
+  it('says what each group holds, and which work is an agent\'s and why, in words as well as a mark', async () => {
+    await open();
+    expect(groups().map((g) => g.querySelector('.hx-forge-meta').textContent)).toEqual([
+      '1 pull request, 1 by an agent', '1 pull request, 1 branch, 2 by agents', '1 branch, 1 by an agent',
+    ]);
+    const lint = q('[data-forge-pr="13"]');
+    expect(lint.querySelector('.hx-forge-agent').textContent).toBe('Agent');
+    expect(lint.querySelector('.hx-forge-why').textContent).toBe('listed author agent-four');
+    const branch = qa('.hx-forge-branch')[0];
+    expect(branch.textContent).toContain('claude/5-notes');
+    expect(branch.textContent).toContain('no pull request yet');
+    expect(branch.querySelector('.hx-forge-why').textContent).toBe('branch starts with claude/');
+    expect(q('[data-forge-pr="12"]').parentElement.textContent).toContain('Spec PR for 0013-meals');
+    // A heading names its list
+    const list = groups()[1].querySelector('ul');
+    expect(document.getElementById(list.getAttribute('aria-labelledby')).textContent).toContain('#5 Sign-in');
+    // A group of an issue links out to it
+    expect(groups()[1].querySelector('.hx-forge-gout').getAttribute('href')).toBe('https://git.example.test/owner/name/issues/5');
+  });
+
+  it('shows open work, the finished with a switch, and only the agents\' with the other', async () => {
+    await open();
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+    const finished = $('forge-work-finished');
+    finished.checked = true;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).not.toBe(null);
+    expect(q('[data-forge-pr="9"]').querySelector('.hx-forge-agent')).toBe(null);
+    const agents = $('forge-work-agents');
+    agents.checked = true;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+    expect(qa('#forge-list .hx-forge-item').length).toBe(4);
+    expect(await said()).toBe('3 groups, 4 pieces of work, 4 by agents');
+    agents.checked = false;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
+    finished.checked = false;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(q('[data-forge-pr="9"]')).toBe(null);
+  });
+
+  it('a pull request in a group selects like any other: its files and checks are asked for and the map is lit', async () => {
+    const server = await open();
+    click(q('[data-forge-pr="12"]'));
+    await settle();
+    expect(server.urls()).toContain('/api/forge/pulls/12');
+    expect(sceneNode('core-server').glow).toBeGreaterThan(0);
+    expect(q('[data-forge-pr="12"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-btn-lit').textContent).toBe('#12');
+    click(q('[data-action="clear-forge-pr"]'));
+    expect(state.forgeLit).toBe(null);
+  });
+
+  it('is announced, its tab is a pressed button, and a refresh asks the server again for the work', async () => {
+    const server = await open();
+    expect(await said()).toBe('3 groups, 4 pieces of work, 4 by agents');
+    await refreshForge();
+    expect(server.calls.filter((c) => c.url === '/api/forge/work')).toHaveLength(2);
+    expect(server.calls.at(-1).init.cache).toBe('reload');
+    expect(q('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('with nothing to group says so, and with the spec PRs unreadable says that in a line', async () => {
+    await open({ work: { ...WORK, pulls: [], branches: [], specs: [] } });
+    expect($('forge-list').textContent).toContain('No work here yet.');
+    closeForge({ restoreFocus: false });
+    await open({ work: { ...WORK, specsProblem: 'GitHub did not answer.' } });
+    expect($('forge-notice').hidden).toBe(false);
+    expect($('forge-notice').textContent).toBe('Spec pull requests could not all be read: GitHub did not answer.');
+  });
+
+  it('says a failure in words, as the other tabs do', async () => {
+    await open({ answers: { '/api/forge/work': { status: 502, body: { ok: false, error: 'GitHub did not answer.' } } } });
+    expect($('forge-notice').textContent).toBe('GitHub did not answer.');
+    expect(groups()).toHaveLength(0);
+  });
+
+  it('on a phone it is the same sheet, and a pull request selected there shows its files in it', async () => {
+    vi.stubGlobal('matchMedia', (query) => ({ matches: /max-width: 767px/.test(query), media: query, addEventListener() {}, removeEventListener() {} }));
+    await open();
+    expect($('forge-panel').parentElement.id).toBe('sheet-dock');
+    expect(sheetState('forge')).toBe('expanded');
+    expect(groups()).toHaveLength(3);
+    click(q('[data-forge-pr="13"]'));
+    await settle();
+    expect(qa('.hx-forge-file').length).toBe(1);
+  });
+});
+
+describe('actions: landing a green pull request and re-running a failed check', () => {
+  const LANDED = { status: 200, body: { ok: true, merged: true, number: 12, sha: 'fff0000000000000000000000000000000000000', head: 'sha12' } };
+  const mockCalls = () => /** @type {any} */ (globalThis.fetch).mock.calls.map(([url, init]) => ({ url, init: init || {} }));
+  const posts = () => mockCalls().filter((c) => c.init.method === 'POST');
+
+  const select = async (n) => {
+    openForge();
+    await settle();
+    click(q(`[data-forge-pr="${n}"]`));
+    await settle();
+  };
+
+  it('a green, open, ready pull request has Land it; the others say why not, in words', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    expect(q('[data-forge-merge]').textContent).toBe('Land it …');
+    expect(qa('.hx-forge-why')[0].textContent).toMatch(/Never forced, never deployed/);
+    click(q('[data-action="clear-forge-pr"]'));
+    click(q('[data-forge-pr="13"]'));
+    await settle();
+    expect(q('[data-forge-merge]')).toBe(null);
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. Not every check is green: vitest test/server/auth.test.js failed; lint failed; build is still running.');
+  });
+
+  it('a draft says it is a draft', async () => {
+    fakeServer({ answers: { '/api/forge/pulls/14': { body: { ok: true, pull: PULLS.open[2], files: [], checks: [{ id: 'run:1', name: 'test', state: 'success', url: null, rerunnable: false, canRerun: false }] } } } });
+    mount();
+    await select(14);
+    expect(q('[data-forge-merge]')).toBe(null);
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. It is a draft: mark it ready on the forge first.');
+  });
+
+  it('Land it opens a confirm dialog that shows exactly what will land, announced, with the focus on Cancel', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const dialog = q('#forge-confirm [role="dialog"]');
+    expect($('forge-confirm').hidden).toBe(false);
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('forge-confirm-title');
+    expect($('forge-confirm-title').textContent).toBe('Land pull request #12?');
+    const facts = qa('#forge-confirm dt').map((dt) => [dt.textContent, dt.nextElementSibling.textContent]);
+    expect(facts).toEqual([
+      ['Pull request', '#12 Meals page'], ['Commit', 'sha12'], ['From', 'branch-12'], ['Into', 'main'], ['How', 'A merge commit, made by GitHub'], ['Checks', '1 check passed'],
+    ]);
+    expect(qa('#forge-confirm .hx-confirm-checks li').map((li) => li.textContent.trim())).toEqual(['passed test']);
+    expect($('forge-confirm').textContent).toMatch(/Nothing is deployed/);
+    expect(document.activeElement).toBe(q('[data-action="forge-confirm-cancel"]'));
+    expect(await said()).toMatch(/^Land pull request #12\? Pull request: #12 Meals page\. Commit: sha12\./);
+    expect(posts()).toEqual([]);
+  });
+
+  it('the focus cannot leave the dialog; Escape or Cancel closes it, the focus back on the button', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    $('forge-btn').focus();
+    expect(document.activeElement).toBe(q('[data-action="forge-confirm-cancel"]'));
+    expect(key(q('[data-action="forge-confirm-cancel"]'), 'Escape').defaultPrevented).toBe(true);
+    expect($('forge-confirm').hidden).toBe(true);
+    $('forge-btn').focus();
+    expect(document.activeElement).toBe($('forge-btn'));
+    q('[data-forge-merge]').focus();
+    expect(document.activeElement).toBe(q('[data-forge-merge]'));
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-cancel"]'));
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(document.activeElement).toBe(q('[data-forge-merge]'));
+    expect(posts()).toEqual([]);
+  });
+
+  it('Tab stays inside the dialog, both ways, and a map key does not reach the map', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const cancel = q('[data-action="forge-confirm-cancel"]');
+    const go = q('[data-action="forge-confirm-go"]');
+    const tab = (el, shiftKey = false) => { const e = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }); el.dispatchEvent(e); return e; };
+    expect(tab(cancel).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(go);
+    tab(go);
+    expect(document.activeElement).toBe(cancel);
+    tab(cancel, true);
+    expect(document.activeElement).toBe(go);
+    const seen = vi.fn();
+    document.addEventListener('keydown', seen);
+    key(go, 'ArrowLeft');
+    document.removeEventListener('keydown', seen);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('confirming posts the head that was shown, says it landed, and looks at the forge again', async () => {
+    const server = fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    const sent = posts();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('/api/forge/pulls/12/merge');
+    expect(JSON.parse(sent[0].init.body)).toEqual({ sha: 'sha12' });
+    expect(sent[0].init.headers['Content-Type']).toBe('application/json');
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 landed as fff0000.');
+    expect(await said()).toBe('Pull request #12 landed as fff0000.');
+    expect(server.urls().filter((u) => u === '/api/forge/pulls/12')).toHaveLength(2);
+  });
+
+  it('after landing, the other tabs are read again when next shown, not from before it', async () => {
+    const server = fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    openForge();
+    await settle();
+    click(q('[data-forge-kind="work"]')); // the Agents tab, loaded before the landing
+    await settle();
+    click(q('[data-forge-kind="pulls"]'));
+    await settle();
+    click(q('[data-forge-pr="12"]'));
+    await settle();
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    const before = server.urls().filter((u) => u === '/api/forge/work').length;
+    click(q('[data-forge-kind="work"]'));
+    await settle();
+    expect(server.urls().filter((u) => u === '/api/forge/work')).toHaveLength(before + 1);
+  });
+
+  it('three clicks on Land it send one request', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const go = q('[data-action="forge-confirm-go"]');
+    click(go);
+    click(go);
+    click(go);
+    await settle();
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('a refusal is said in the server\'s words and nothing is shown as landed', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/12/merge': { status: 409, body: { ok: false, code: 'conflict', error: 'Pull request #12 has changed since it was looked at (its head is now abc0000); look again before landing it.' } } } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 was not landed: Pull request #12 has changed since it was looked at (its head is now abc0000); look again before landing it.');
+    expect(q('.hx-forge-detail .hx-forge-notice--ok')).toBe(null);
+    expect(await said()).toMatch(/^Pull request #12 was not landed/);
+  });
+
+  it('a server that is gone is said, and the panel does not claim it landed', async () => {
+    const server = fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    server.mock.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 was not landed: cornfield could not be reached. Look at the forge before trying again.');
+  });
+
+  it('a failed check the forge can re-run has Re-run, which posts the head and the check; one it cannot says why', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/13/rerun': { status: 202, body: { ok: true, rerun: true, number: 13, check: 'run:42', name: 'vitest test/server/auth.test.js' } } } });
+    mount();
+    await select(13);
+    const buttons = qa('[data-forge-rerun]');
+    expect(buttons.map((b) => b.dataset.forgeRerun)).toEqual(['run:42']);
+    expect(buttons[0].getAttribute('aria-label')).toBe('Re-run vitest test/server/auth.test.js');
+    const checks = qa('.hx-forge-check');
+    expect(checks[1].textContent).toMatch(/GitHub does not let cornfield re-run this one: re-run it there\./);
+    expect(checks[2].querySelector('button')).toBe(null);
+    expect(checks[2].textContent).not.toMatch(/re-run/);
+    click(buttons[0]);
+    await settle();
+    const sent = posts();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('/api/forge/pulls/13/rerun');
+    expect(JSON.parse(sent[0].init.body)).toEqual({ sha: 'sha13', check: 'run:42' });
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('vitest test/server/auth.test.js is running again.');
+    expect(await said()).toBe('vitest test/server/auth.test.js is running again.');
+  });
+
+  it('a passing check has no Re-run and nothing to explain', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    expect(q('[data-forge-rerun]')).toBe(null);
+    expect(q('.hx-forge-check').textContent).not.toMatch(/re-run/i);
+  });
+
+  it('the buttons are real buttons, in the tab order', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    const merge = q('[data-forge-merge]');
+    expect([merge.tagName, merge.getAttribute('type'), merge.tabIndex]).toEqual(['BUTTON', 'button', 0]);
   });
 });
 

@@ -17,7 +17,7 @@ import {
   NODE_THEMES, FLOW_KINDS, DATA_EDGE_KINDS, SERVICE_EDGE_KINDS, STACK_EDGE_KINDS, EDGE_ENDS,
   endsAllowed, describeEnds, committedNodeProblems, callFieldProblems,
 } from './schema.js';
-import { proposalProblems, summarize } from './proposal.js';
+import { mockupsOf, proposalProblems, summarize } from './proposal.js';
 import { PERSONAS_FILE, validatePersonas } from './personas.js';
 import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
@@ -138,6 +138,12 @@ export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
     }
     const hint = summarize(proposal).added === 0 ? ` ${ONLY_REMOVES_HINT}` : '';
     for (const e of proposalProblems(topology, proposal).errors) problems.push(`${where}: ${e.path || '(file)'}: ${e.message}${e.state === 'missing-target' ? hint : ''}`);
+    // A mockup the proposal lists must be a file beside it, so a typo fails here and not only in the explorer
+    for (const m of mockupsOf(proposal)) {
+      let ok = false;
+      try { ok = fs.statSync(path.join(dir, ...m.path.split('/'))).isFile(); } catch { ok = false; }
+      if (!ok) problems.push(`${where}: mockups[${m.index}].path: "${m.path}" is not a file in ${path.relative(root, dir).split(path.sep).join('/') || '.'}.`);
+    }
   }
   return problems;
 }

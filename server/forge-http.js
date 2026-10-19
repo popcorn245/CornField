@@ -154,9 +154,10 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
    * empty); anything else throws a ForgeError, except a status in `allow`, which answers too (a 404 that means "none").
    * @param {string} method
    * @param {string} pathOrUrl a path under the API root, or a full URL on its origin (a `next` link)
-   * @param {{ body?: unknown, what?: string, raw?: boolean, accept?: string, allow?: number[] }} [opts]
+   * @param {{ body?: unknown, what?: string, raw?: boolean, bytes?: boolean, accept?: string, allow?: number[] }} [opts]
+   *   `bytes`: the body is a Buffer, not decoded (a picture)
    */
-  async function request(method, pathOrUrl, { body, what = 'that', raw = false, accept, allow = [] } = {}) {
+  async function request(method, pathOrUrl, { body, what = 'that', raw = false, bytes = false, accept, allow = [] } = {}) {
     const url = urlOf(pathOrUrl);
     /** @type {Record<string, string>} */
     const h = { 'User-Agent': 'cornfield', ...headers };
@@ -165,23 +166,25 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
     if (body !== undefined) h['Content-Type'] = 'application/json';
     let res;
     let text;
+    let buffer = null;
     try {
       res = await doFetch(url, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
-      text = await res.text();
+      if (bytes) buffer = Buffer.from(await res.arrayBuffer());
+      text = buffer ? buffer.toString('utf8') : await res.text();
     } catch (err) {
       const timedOut = err?.name === 'TimeoutError';
       throw new ForgeError(`${forge} did not answer${timedOut ? ` within ${plural(Math.max(1, Math.round(timeoutMs / 1000)), 'second')}` : ''}; try again in a minute.`, { code: 'unavailable', forge, cause: err });
     }
     lastRate = readRateLimit(res.headers);
     let parsed = null;
-    if (text !== '' && !raw) {
+    if (text !== '' && !raw && !buffer) {
       try { parsed = JSON.parse(text); } catch { parsed = null; }
     }
     if (res.ok) {
-      if (text !== '' && !raw && parsed === null) {
+      if (text !== '' && !raw && !buffer && parsed === null) {
         throw new ForgeError(`${forge} answered for ${what} with something that is not JSON.`, { code: 'unavailable', status: res.status, forge, rateLimit: lastRate });
       }
-      return { status: res.status, body: raw ? text : parsed, headers: res.headers };
+      return { status: res.status, body: buffer ?? (raw ? text : parsed), headers: res.headers };
     }
     if (allow.includes(res.status)) return { status: res.status, body: parsed, headers: res.headers };
     throw errorFor(forge, res.status, parsed, lastRate, what);

@@ -279,6 +279,9 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       /** Stage 1: everything passes; the routes under /auth/ are not there */
       gate: async () => ({ done: false, session: null }),
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
+      record: async () => { throw new Error('Sign-in is not configured.'); },
+      begin: async () => { throw new Error('Sign-in is not configured.'); },
+      finish: async () => { throw new Error('Sign-in is not configured.'); },
       store: null,
       close() {},
     };
@@ -538,6 +541,36 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
         return { done: true };
       }
       return { done: false, session };
+    },
+    /**
+     * Writes one row of the `actions` audit table: who did what to what, when, and what the forge answered. The caller
+     * decides what happens when this throws (the action it records has usually happened already).
+     * @param {{ login: string, action: string, target: string, request?: object, status?: number | null, answer?: object | null }} entry
+     */
+    async record({ login, action, target, request = {}, status = null, answer = null }) {
+      (await store()).prepare('INSERT INTO actions (at, login, action, target, request, status, answer) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(iso(now()), login, action, target, JSON.stringify(request), status, answer === null ? null : JSON.stringify(answer));
+    },
+    /**
+     * The first half of an audit row, written before anything is asked of the forge, so an action that never comes
+     * back (a crash, a lost connection) still left its trace. Answers the row's id for `finish`.
+     * @param {{ login: string, action: string, target: string, request?: object }} entry
+     * @returns {Promise<number>}
+     */
+    async begin({ login, action, target, request = {} }) {
+      return Number((await store()).prepare('INSERT INTO actions (at, login, action, target, request) VALUES (?, ?, ?, ?, ?)')
+        .run(iso(now()), login, action, target, JSON.stringify(request)).lastInsertRowid);
+    },
+    /**
+     * The rest of a row `begin` wrote: what was asked in the end, and what the forge (or cornfield) answered.
+     * @param {number} id
+     * @param {{ target?: string, request?: object, status?: number | null, answer?: object | null }} rest
+     */
+    async finish(id, { target, request, status = null, answer = null }) {
+      const db = await store();
+      if (target !== undefined) db.prepare('UPDATE actions SET target = ? WHERE id = ?').run(target, id);
+      if (request !== undefined) db.prepare('UPDATE actions SET request = ? WHERE id = ?').run(JSON.stringify(request), id);
+      db.prepare('UPDATE actions SET status = ?, answer = ? WHERE id = ?').run(status, answer === null ? null : JSON.stringify(answer), id);
     },
     /** The forge as a signed-in user, with their own token (for the routes that act on the forge) */
     forgeFor(session) {

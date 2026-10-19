@@ -11,6 +11,9 @@
  *     Only a GitHub Actions job can be re-run with a user's token, so only a finished, not-green one is `rerunnable`.
  *   - **Runs.** `actions/runs`: GitHub Actions workflow runs, newest first. `name` is the workflow's, `workflow` its file.
  *   - **Merge.** `PUT …/pulls/<n>/merge` with the head sha, so a push after the checks makes GitHub refuse (409).
+ *     Before it, `readiness`: GitHub's own `mergeable_state` is `clean` (its required checks and reviews are met, no
+ *     conflicts), and no workflow run on the head is still queued or running: just after a push, a fast check can be
+ *     green before a slow workflow has registered its own.
  *   - **Files.** `contents/<path>?ref=` as raw text; a folder or a missing file is null.
  */
 
@@ -42,7 +45,8 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
-const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null } : null);
+// `bot` is set only when the forge says the account is a bot (GitHub's user type `Bot`): the agent-made rule reads it
+const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null, ...(u.type === 'Bot' ? { bot: true } : {}) } : null);
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 
 /** @returns {import('./forge.js').Issue} */
@@ -53,7 +57,7 @@ const toIssue = (i) => ({
 
 /** @returns {import('./forge.js').Pull} */
 const toPull = (p) => ({
-  number: p.number, title: p.title, state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
+  number: p.number, title: p.title, body: p.body ?? '', state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });
@@ -207,6 +211,23 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return all.map(toRunItem);
     },
 
+    async readiness(n, sha) {
+      const { body: p } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+      const state = p.mergeable_state;
+      if (state === 'unknown' || state === undefined || state === null) return { ready: false, why: 'GitHub is still working out whether it can be merged; try again in a moment' };
+      if (state === 'dirty') return { ready: false, why: 'it has conflicts with its base' };
+      if (state === 'behind') return { ready: false, why: 'its branch is behind its base; update it first' };
+      if (state === 'blocked') return { ready: false, why: 'GitHub\'s branch protection is not met yet (a required check or review)' };
+      if (state === 'draft') return { ready: false, why: 'it is a draft' };
+      if (state !== 'clean' && state !== 'has_hooks') return { ready: false, why: `GitHub says it is ${state}` };
+      // A workflow that has not reported a check yet still counts: none may be queued or running on this head
+      const { status, body } = await client.request('GET', `repos/${repo}/actions/runs?head_sha=${enc(sha)}&per_page=100`, { what: `the workflow runs of ${pullWhat(n)}`, allow: [404] });
+      const runs = status === 404 ? [] : (body?.workflow_runs || []);
+      const going = runs.filter((r) => r.head_sha === sha && r.status !== 'completed');
+      if (going.length) return { ready: false, why: `${going.map((r) => r.name).join(', ')} ${going.length === 1 ? 'is' : 'are'} still running` };
+      return { ready: true };
+    },
+
     async mergeAt(n, { sha, method }) {
       const { body } = await client.request('PUT', `repos/${repo}/pulls/${n}/merge`, { body: { sha, merge_method: method }, what: pullWhat(n) });
       return { sha: body.sha };
@@ -226,6 +247,15 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       // A folder answers its listing as JSON, whatever was asked for: a list of entries with a type and a path
       if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(text)) return null;
       return text;
+    },
+
+    async fileBytes(ref, path) {
+      const { status, body, headers } = await client.request('GET', `repos/${repo}/contents/${segments(path)}?ref=${enc(ref)}`, {
+        what: `${path} at ${ref}`, bytes: true, accept: 'application/vnd.github.raw+json', allow: [404],
+      });
+      if (status === 404 || !Buffer.isBuffer(body)) return null;
+      if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(body.toString('utf8'))) return null; // a folder
+      return body;
     },
 
     rateLimit: () => client.rateLimit(),

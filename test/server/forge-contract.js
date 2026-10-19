@@ -199,6 +199,14 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(await forge.file(SHA_GREEN, 'docs/specs/proposals/0099-none.json')).toBeNull();
     });
 
+    it('fileBytes(): the same file as bytes, or null when it is not there', async () => {
+      const bytes = await forge.fileBytes(SHA_GREEN, 'docs/specs/proposals/0013-meals.json');
+      expect(Buffer.isBuffer(bytes)).toBe(true);
+      expect(JSON.parse(bytes.toString('utf8'))).toEqual({ version: 1, title: 'Meals' });
+      expect(await forge.fileBytes(SHA_GREEN, 'docs/specs/proposals/0099-none.json')).toBeNull();
+      await forgeError(() => forge.fileBytes(SHA_GREEN, '../secrets'), 'invalid');
+    });
+
     it('refuses arguments that are not what the interface takes, before the forge is asked', async () => {
       for (const bad of [0, -1, 1.5, '12', NaN, null]) await forgeError(() => forge.pull(bad), 'invalid');
       await forgeError(() => forge.comment(12, '   '), 'invalid');

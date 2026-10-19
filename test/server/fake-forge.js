@@ -4,7 +4,7 @@
  *
  * A recording is keyed by the method and the path with its query, exactly as the adapter sends it
  * (`"GET /repos/owner/name/pulls?state=open&per_page=100"`), and answers `{ status?, headers?, body? }`: a body
- * that is a string is sent as it is, anything else as JSON. `{origin}` anywhere in a header or a string body is
+ * that is a string or a Buffer is sent as it is, anything else as JSON. `{origin}` anywhere in a header or a string body is
  * the fake's own origin (for `Link` headers). A route may be a function `(req) => answer` instead. A request no
  * recording matches answers 404 `{ message: 'Not Found' }`, as both forges do.
  */
@@ -33,8 +33,8 @@ export async function fakeForge(routes) {
       const route = routes[`${seen.method} ${seen.url}`];
       const answer = typeof route === 'function' ? await route(seen) : route ?? { status: 404, body: { message: 'Not Found' } };
       const headers = Object.fromEntries(Object.entries(answer.headers || {}).map(([k, v]) => [k, fill(v)]));
-      const body = answer.body === undefined ? '' : typeof answer.body === 'string' ? fill(answer.body) : JSON.stringify(answer.body);
-      if (answer.body !== undefined && typeof answer.body !== 'string' && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['Content-Type'] = 'application/json; charset=utf-8';
+      const body = answer.body === undefined ? '' : Buffer.isBuffer(answer.body) ? answer.body : typeof answer.body === 'string' ? fill(answer.body) : JSON.stringify(answer.body);
+      if (answer.body !== undefined && typeof answer.body !== 'string' && !Buffer.isBuffer(answer.body) && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['Content-Type'] = 'application/json; charset=utf-8';
       if (answer.hang) return; // never answers: the adapter's time limit has to end it
       res.writeHead(answer.status ?? 200, headers);
       res.end(body);

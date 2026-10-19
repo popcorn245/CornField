@@ -16,7 +16,9 @@
  *     instance, or a repo without Actions, answers 404, which is said in words (HTTP 501 from cornfield's routes).
  *     Forgejo gives a run no name of its own, so `name` is the workflow file's.
  *   - **Merge.** `POST …/pulls/<n>/merge` with `head_commit_id`, so a push after the checks makes Forgejo refuse
- *     (409). It answers nothing, so the merge commit is read back from the pull request.
+ *     (409). Before it, `readiness`: Forgejo says the pull request is `mergeable` (no conflicts). Its API does not say
+ *     which checks branch protection requires, nor list a workflow that has not reported a status yet, so a commit
+ *     whose slow job has not started can look green: branch protection's required checks are the backstop there. It answers nothing, so the merge commit is read back from the pull request.
  *   - **Files.** `raw/<path>?ref=`; a folder or a missing file is null.
  *   - **Limits.** Forgejo sends no rate-limit headers; only a `Retry-After` from the instance or a proxy in front of
  *     it is read. A listing is paged 50 at a time (the most it gives by default) and follows `Link`.
@@ -41,9 +43,16 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
+/** Forgejo's Actions system user: what a workflow does on the forge is done as it (id -2, a Bot in Gitea's model since before the fork) */
+export const ACTIONS_USER_ID = -2;
+
+// `bot` is set only when the forge says the account is a bot, as GitHub's adapter does: the user's `type` is "Bot" (Gitea's API
+// renders the user type, capitalised as GitHub's; an instance that does not send it simply marks nothing), or the user
+// is the Actions system user. The agent rule (explorer/agents-model.js) reads it.
 const author = (u) => {
   const login = u && (u.login || u.username);
-  return typeof login === 'string' && login ? { login, url: u.html_url || null } : null;
+  if (typeof login !== 'string' || !login) return null;
+  return { login, url: u.html_url || null, ...(u.type === 'Bot' || u.id === ACTIONS_USER_ID ? { bot: true } : {}) };
 };
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 
@@ -58,7 +67,7 @@ const isDraft = (p) => p.draft === true || /^\s*(\[WIP\]|WIP:|Draft:)/i.test(p.t
 
 /** @returns {import('./forge.js').Pull} */
 const toPull = (p) => ({
-  number: p.number, title: p.title, state: p.merged || p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: isDraft(p),
+  number: p.number, title: p.title, body: p.body ?? '', state: p.merged || p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: isDraft(p),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });
@@ -194,6 +203,12 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return all.map(toRunItem);
     },
 
+    async readiness(n) {
+      const { body: p } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+      if (p.mergeable === false) return { ready: false, why: 'Forgejo says it cannot be merged (conflicts with its base, or branch protection)' };
+      return { ready: true };
+    },
+
     async mergeAt(n, { sha, method }) {
       await client.request('POST', `repos/${repo}/pulls/${n}/merge`, { body: { Do: method, head_commit_id: sha }, what: pullWhat(n) });
       // Forgejo answers an empty 200, so the commit it made is read from the pull request (the head it landed, if it
@@ -214,6 +229,11 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
     async file(ref, path) {
       const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, raw: true, allow: [404] });
       return status === 404 ? null : /** @type {string} */ (body);
+    },
+
+    async fileBytes(ref, path) {
+      const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, bytes: true, allow: [404] });
+      return status === 404 || !Buffer.isBuffer(body) ? null : body;
     },
 
     rateLimit: () => client.rateLimit(),

@@ -42,6 +42,7 @@ ssh -L 3350:127.0.0.1:3350 you@the-machine
 - **Derived, not drawn by hand.** `cornfield sync` runs the derivers named in your config and merges what they find into `topology.json`; hand-written parts (descriptions, flows, anything of a type no deriver owns) are kept. `cornfield validate` fails on drift, so CI keeps the map honest.
 - **Proposals.** `docs/specs/proposals/NNNN-slug.json` says what a change would add, change and remove, with scenarios. cornfield lists them from your checkout, from every git worktree in the configured worktrees folder and, with sign-in, from your open spec PRs, and shows Before / Diff / After, the scenario player, what-if edits, and Approve / Send back. Writing, reviewing and landing one in your repo: [docs/proposals.md](docs/proposals.md). The format and its validator: [core/proposal.js](core/proposal.js).
 - **Issues and pull requests.** With a forge in the config and sign-in, a panel of its pull requests and issues (GitHub; Forgejo behind the same interface), with filters. Select a pull request and the nodes its files are light up on the map, and a failing check lights the tests it names. A Deploys list reads the forge's workflow runs and lights what a selected deploy restarted, from a mapping in the config ([docs/deploys.md](docs/deploys.md)). A bottom sheet on a phone. [docs/issues-and-prs.md](docs/issues-and-prs.md).
+- **Agents, tracked.** The panel's Agents tab groups branches, spec PRs and PRs by the issue and the proposal they belong to, and marks the work agents made (by author, bot account, label or branch prefix, set in the config). Nothing is launched. [docs/agents.md](docs/agents.md).
 - **Personas, not people.** `topology.personas.json` holds archetypes (Admin, Member, Guest); scenarios act as them, never as a real person.
 - **The cloud you do not control.** `topology.cloud.json` describes the outside services; the cloud deriver's detectors (hosts in code, Dockerfiles, container images, CI workflows, a Caddyfile) keep it complete in both directions. "Cloudflare is down" plays as an outage: what breaks now, at the next deploy, at the next certificate renewal. [docs/cloud.md](docs/cloud.md).
 - **The house, optional.** A House view of floors, rooms, devices, machines and people (as counts), read from a source: a JSON file in your repo, your own API, later Home Assistant. cornfield only displays it. [docs/house.md](docs/house.md).
@@ -64,7 +65,7 @@ That form has no sign-in, so it only listens on the host's loopback. For a hoste
 | `cornfield validate` | schema, drift, the personas and cloud files, every proposal; exit 1 on a problem |
 | `cornfield status` | what the map holds, the warnings, the validation |
 | `cornfield proposal <file>` | one proposal against the map: its counts, errors and what has landed |
-| `cornfield review <slug>` | the last review of a proposal (verdict, note, what-if edits) |
+| `cornfield review <slug>` | the review of a proposal, read from its spec PR (verdict, note, what-if edits; needs `CORNFIELD_FORGE_TOKEN`) |
 | `cornfield docs` | the docs as a static site, built from the map of their links (`--out`, default `_site`) |
 
 Every command takes `--repo <dir>` and `--config <file>`.

@@ -101,7 +101,7 @@ describe('without sign-in', () => {
 
   it('refuses a foreign Host with 421 and a plain-text reason, on every kind of route', async () => {
     for (const h of ['evil.example', `evil.example:${srv.port}`, 'localhost.evil.example', 'EVIL.example', '127.0.0.1.evil.example', '::1']) {
-      for (const p of ['/topology.json', '/', '/healthz', '/cornfield/config.json', '/explorer/main.js', '/proposals', '/auth/me', '/nope', '/api/x']) {
+      for (const p of ['/topology.json', '/', '/healthz', '/cornfield/config.json', '/explorer/main.js', '/proposals', '/proposals/0002-checkout/mockups', '/proposals/0002-checkout/mockups/0?source=checkout', '/auth/me', '/nope', '/api/x']) {
         const res = await ask(srv.port, h, p);
         expect(res.status, `${h} ${p}`).toBe(421);
         expect(res.headers['content-type']).toMatch(/^text\/plain/);

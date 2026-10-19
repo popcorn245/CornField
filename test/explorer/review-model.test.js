@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { relativeTime, reviewWords, sendBackProblem, reviewBody, editsHint, specNumber } from '../../explorer/review-model.js';
+import { relativeTime, reviewWords, sendBackProblem, reviewBody, editsHint, specNumber, isReviewable, NOT_ON_A_PR } from '../../explorer/review-model.js';
 
 const NOW = Date.parse('2026-10-06T12:00:00.000Z');
 const ago = (ms        ) => new Date(NOW - ms).toISOString();
@@ -67,8 +67,8 @@ describe('editsHint', () => {
   it('says nothing when there are no edits, and that the agent folds them in when there are', () => {
     expect(editsHint('approved', 0)).toBe('');
     expect(editsHint('notes', 0)).toBe('');
-    expect(editsHint('approved', 1)).toBe('Your 1 edit is in the review file. The drafting agent will fold it into the proposal.');
-    expect(editsHint('approved', 3)).toBe('Your 3 edits are in the review file. The drafting agent will fold them into the proposal.');
+    expect(editsHint('approved', 1)).toBe('Your 1 edit is in the review comment on the PR. The drafting agent will fold it into the proposal.');
+    expect(editsHint('approved', 3)).toBe('Your 3 edits are in the review comment on the PR. The drafting agent will fold them into the proposal.');
     expect(editsHint('notes', 2)).toBe('Sent with your 2 edits. The drafting agent will fold them into the next draft.');
   });
 });
@@ -82,5 +82,15 @@ describe('specNumber', () => {
   });
   it('is null for anything else', () => {
     for (const bad of [null, undefined, '', '0000', 0, -3, 1.5, 'spec 13', '0013-meals', '1e3', '12345678', {}, [], true]) expect(specNumber(bad       ), String(bad)).toBeNull();
+  });
+});
+
+describe('isReviewable', () => {
+  it('is true for a proposal of a spec PR and for nothing else', () => {
+    for (const ok of ['pull/1', 'pull/23', 'pull/123456789']) expect(isReviewable(ok), ok).toBe(true);
+    for (const no of ['checkout', 'topo-09', 'pull/', 'pull/0', 'pull/01', 'pull/1234567890', 'pull/2/files', 'Pull/2', '', null, undefined, 23]) expect(isReviewable(no), String(no)).toBe(false);
+  });
+  it('has words for a draft that is not on a PR', () => {
+    expect(NOT_ON_A_PR).toMatch(/spec PR/);
   });
 });

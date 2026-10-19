@@ -206,8 +206,13 @@
             <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true">Pull requests</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false">Issues</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false">Deploys</button>
+            <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Work grouped by issue and proposal, agent-made work marked">Agents</button>
           </div>
-          <div class="hx-forge-filters">
+          <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-agents" /> Agent-made only</label>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
+          </div>
+          <div id="forge-filters" class="hx-forge-filters">
             <label class="hx-forge-field">State<select id="forge-state" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Label<select id="forge-label" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Author<select id="forge-author" class="hx-forge-select"></select></label>
@@ -275,6 +280,18 @@
 
     <div id="drawer-backdrop" class="hx-backdrop" data-action="close-drawer" hidden></div>
 
+  </div>
+
+  <!-- The confirm step of landing a pull request (forge-panel.js): a modal dialog over a scrim; the focus stays in it while it is open -->
+  <div id="forge-confirm" class="hx-confirm-scrim" hidden>
+    <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="forge-confirm-title" aria-describedby="forge-confirm-body">
+      <h2 id="forge-confirm-title" class="hx-confirm-title"></h2>
+      <div id="forge-confirm-body"></div>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-action="forge-confirm-cancel">Cancel</button>
+        <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go">Land it</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/explorer/main.js"></script>

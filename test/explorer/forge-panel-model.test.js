@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   listUrl, serverState, matches, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, nodesForFile, isTestPath, testFilesOf, litFor,
   paintForge, errorWords, FORGE_DIM_ALPHA, FORGE_FAIL_COLOR, defaultFilters,
+  mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/forge-panel-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -215,5 +216,63 @@ describe('the picture', () => {
     const light = buildScene({ ...st(lit([], [nodes[1].id])), theme: 'light' });
     expect(light.nodes.find((n) => n.id === nodes[1].id).color).not.toBe(dark.nodes.find((n) => n.id === nodes[1].id).color);
     expect(paintForge({ nodes: [], edges: [] }, null)).toBeUndefined();
+  });
+});
+
+describe('actions: why not, what is confirmed, what is said', () => {
+  const check = (state, extra = {}) => ({ id: `run:${state}`, name: state, state, url: null, rerunnable: false, canRerun: false, ...extra });
+  const detail = (extra = {}, checks = [check('success')]) => ({ pull: pull(12, { head: { ref: 'feature/meals', sha: 'abc0000000000000000000000000000000000000' } }), checks, ...extra });
+
+  it('lets a green, open, ready pull request land and gives every other a reason', () => {
+    expect(mergeBlock(detail())).toBe(null);
+    expect(mergeBlock(detail({}, [check('success'), check('neutral'), check('skipped')]))).toBe(null);
+    expect(mergeBlock({ ...detail(), pull: pull(12, { state: 'merged' }) })).toBe('It has landed already.');
+    expect(mergeBlock({ ...detail(), pull: pull(12, { state: 'closed' }) })).toBe('It is closed, so it cannot be landed.');
+    expect(mergeBlock({ ...detail(), pull: pull(12, { draft: true }) })).toBe('It is a draft: mark it ready on the forge first.');
+    expect(mergeBlock(detail({}, []))).toBe('It has no checks, so nothing says it works.');
+    expect(mergeBlock(detail({}, [check('failure', { name: 'lint' }), check('running', { name: 'test' }), check('queued', { name: 'build' }), check('cancelled', { name: 'e2e' })])))
+      .toBe('Not every check is green: lint failed; test is still running; build is waiting to run; e2e was cancelled.');
+    expect(mergeBlock(detail({ stale: 'GitHub could not be reached.' }))).toBe('This is an older answer from the forge: refresh before landing it.');
+  });
+
+  it('says why a failed or cancelled check has no Re-run, and nothing for the rest', () => {
+    expect(rerunWhy(check('failure'), 'GitHub')).toBe('GitHub does not let cornfield re-run this one: re-run it there.');
+    expect(rerunWhy(check('cancelled'), 'GitHub')).toBe('GitHub does not let cornfield re-run this one: re-run it there.');
+    expect(rerunWhy(check('failure', { canRerun: true }), 'GitHub')).toBe(null);
+    expect(rerunWhy(check('cancelled', { canRerun: true }), 'GitHub')).toBe(null);
+    for (const state of ['success', 'running', 'queued', 'neutral', 'skipped']) expect(rerunWhy(check(state), 'GitHub')).toBe(null);
+  });
+
+  it('says how it will land: the config\'s merge method', () => {
+    const d = detail({}, [check('success', { name: 'test' })]);
+    const how = (m) => Object.fromEntries(confirmMerge(d, 'GitHub', m).lines).How;
+    expect(how(undefined)).toBe('A merge commit, made by GitHub');
+    expect(how('squash')).toBe('Squashed into one commit, made by GitHub');
+    expect(how('rebase')).toBe('Its commits rebased onto the base, made by GitHub');
+  });
+
+  it('shows what will land: the pull request, the commit, where it goes, each check; and sends only the head shown', () => {
+    const d = detail({}, [check('success', { name: 'test' }), check('neutral', { name: 'docs' })]);
+    const c = confirmMerge(d, 'GitHub');
+    expect(c.title).toBe('Land pull request #12?');
+    expect(c.lines).toEqual([
+      ['Pull request', '#12 Pull 12'], ['Commit', 'abc0000000000000000000000000000000000000'], ['From', 'feature/meals'], ['Into', 'main'], ['How', 'A merge commit, made by GitHub'], ['Checks', 'All 2 passed'],
+    ]);
+    expect(c.checks).toEqual([{ name: 'test', words: 'passed' }, { name: 'docs', words: 'neutral' }]);
+    expect(c.note).toBe('Only this commit lands, and only while its checks are green on GitHub. Nothing is deployed.');
+    expect(mergeBody(d)).toEqual({ sha: 'abc0000000000000000000000000000000000000' });
+    expect(actionUrl(12, 'merge')).toBe('/api/forge/pulls/12/merge');
+    expect(actionUrl(13, 'rerun')).toBe('/api/forge/pulls/13/rerun');
+  });
+
+  it('says an answer in words: landed, re-running, refused, signed out, unreachable', () => {
+    expect(actionWords('merge', 200, { ok: true, sha: 'fff0000000000000000000000000000000000000' }, 12)).toBe('Pull request #12 landed as fff0000.');
+    expect(actionWords('merge', 200, { ok: true }, 12)).toBe('Pull request #12 landed.');
+    expect(actionWords('rerun', 202, { ok: true, name: 'lint' }, 13)).toBe('lint is running again.');
+    expect(actionWords('merge', 409, { ok: false, error: 'Pull request #12 is not green: lint failed.' }, 12)).toBe('Pull request #12 was not landed: Pull request #12 is not green: lint failed.');
+    expect(actionWords('rerun', 403, { ok: false, error: 'Only the repo\'s maintainers land pull requests or re-run checks; x is not one now.' }, 13)).toMatch(/^The check was not re-run: Only the repo's maintainers/);
+    expect(actionWords('merge', 401, null, 12)).toBe('Pull request #12 was not landed: your sign-in has ended. Sign in again.');
+    expect(actionWords('merge', 500, null, 12)).toBe('Pull request #12 was not landed: cornfield answered 500.');
+    expect(actionWords('merge', null, null, 12)).toBe('Pull request #12 was not landed: cornfield could not be reached. Look at the forge before trying again.');
   });
 });

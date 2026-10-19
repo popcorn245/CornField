@@ -30,6 +30,8 @@ import { initProposals, openProposal, closeProposal } from '../../explorer/propo
 // @ts-expect-error plain JS modules, no declarations
 import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initMockups, resetMockupsForTests, openMockup, closeMockup } from '../../explorer/mockups.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
 
 // @ts-expect-error plain JS modules, no declarations
@@ -51,13 +53,20 @@ const PROPOSAL = {
   scenarios: [{ id: 's', title: 'A walk', steps: [{ node: 'page-new', text: 'You open meals.' }, { node: 'table-t', text: 'It reads orders.' }] }],
 };
 
+const MOCKUPS = [
+  { node: 'page-new', path: 'screens/list.png', title: 'The meal list' },
+  { node: 'page-new', path: 'screens/edit.html', title: 'The edit form' },
+];
+const PROPOSAL_WITH_MOCKUPS = { ...PROPOSAL, mockups: MOCKUPS };
+
 const $ = (id) => document.getElementById(id);
 const key = (el, k, opts = {}) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }); el.dispatchEvent(e); return e; };
 const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 /** axe on the page as it stands, rules that need a layout off; returns the violations as "rule: target" */
 async function audit() {
-  const r = await axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
+  // An iframe is left to its own check below: happy-dom cannot run axe across a frame
+  const r = await axe.run({ include: [document.documentElement], exclude: [['iframe']] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
   return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`));
 }
 
@@ -142,17 +151,71 @@ describe('axe finds no violation', () => {
   });
 });
 
+describe('axe finds no violation with a proposal\'s mockups', () => {
+  /** A node\'s panel with its mockups, then each opened in its window, in the dark and the light theme (contrast is checked in Chromium) */
+  it('in a node\'s panel and in the window a picture and a page open in, in both themes', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const u = new URL(url, 'http://localhost');
+      if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => [{ slug: '0013-meals', title: 'Meals', summary: 'Adds /meals.', source: 'checkout', counts: { added: 1, changed: 0, removed: 0, scenarios: 1 }, errors: 0 }] };
+      if (u.pathname.endsWith('/review')) return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
+      if (u.pathname.endsWith('/mockups')) return { ok: true, status: 200, headers: new Headers(), json: async () => [{ index: 0, state: 'approved' }, { index: 1, state: 'changed' }] };
+      return { ok: true, status: 200, headers: new Headers({ 'X-Proposal-Source': 'checkout' }), json: async () => structuredClone(PROPOSAL_WITH_MOCKUPS) };
+    }));
+    mount();
+    window.happyDOM.settings.disableIframePageLoading = true; // the frame's address is the server's; nothing is fetched here (happy-dom still logs that it declined)
+    resetWhatIfForTests();
+    resetMockupsForTests();
+    initWhatIf();
+    initMockups();
+    await initProposals();
+    expect(await openProposal('0013-meals', 'checkout')).toBe(true);
+    await settle();
+    await selectNode(state.nodes.find((n) => n.id === 'page-new'));
+    const buttons = [...document.querySelectorAll('#drawer-meta-list [data-mockup]')];
+    expect(buttons.map((b) => b.textContent.trim())).toEqual(['The meal list (image, opens in a window)', 'The edit form (page, opens in a window)']);
+    expect(document.querySelector('#drawer-meta-list').textContent).toContain('Changed since you approved');
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      expect(await audit(), `${theme}: the panel`).toEqual([]);
+      for (const b of buttons) {
+        b.click();
+        const dialog = document.querySelector('.hx-mockup-dialog[role="dialog"]');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(dialog.contains(document.activeElement) || dialog === document.activeElement).toBe(true);
+        const frame = dialog.querySelector('iframe');
+        if (frame) expect([frame.getAttribute('sandbox'), frame.getAttribute('title')]).toEqual(['', 'The edit form']);
+        else expect(dialog.querySelector('img').getAttribute('alt')).toBe('The meal list');
+        expect(await audit(), `${theme}: ${b.textContent.trim()} open`).toEqual([]);
+        closeMockup();
+        expect(document.activeElement).toBe(b);
+      }
+    }
+    delete document.documentElement.dataset.theme;
+    resetMockupsForTests();
+    clearScenario();
+    closeProposal();
+  });
+});
+
 describe('the issues and PRs panel', () => {
   const author = { login: 'agent-four', url: 'https://git.example.test/agent-four' };
   const pr = (number, title, extra = {}) => ({ number, title, state: 'open', draft: false, author, labels: ['agent'], head: { ref: 'b', sha: 'abc' }, base: { ref: 'main' }, url: `https://git.example.test/pull/${number}`, createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null, ...extra });
   const DETAIL = {
     pull: pr(13, 'Lint everything'),
     files: [{ path: 'app-a', status: 'modified', previousPath: null, additions: 2, deletions: 1 }, { path: 'README.md', status: 'added', previousPath: null, additions: 5, deletions: 0 }],
-    checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: false }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false }],
+    checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: true, canRerun: true }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false, canRerun: false }, { id: 'status:ci', name: 'ci', state: 'failure', url: null, rerunnable: false, canRerun: false }],
   };
+  const GREEN = { pull: pr(12, 'Meals page'), files: DETAIL.files, checks: [{ id: 'run:7', name: 'test', state: 'success', url: 'https://git.example.test/runs/7', rerunnable: false, canRerun: false }] };
   const stub = () => vi.stubGlobal('fetch', vi.fn(async (url) => {
     const u = new URL(url, 'http://localhost');
-    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : DETAIL;
+    const work = {
+      agents: { authors: [], labels: ['agent'], branchPrefixes: ['claude/'], bots: true },
+      pulls: [pr(13, 'Lint everything', { body: 'Closes #5' }), pr(12, 'Meals page', { draft: true, labels: [], body: '' }), pr(9, 'Old work', { state: 'merged', labels: [], body: 'Closes #5' })],
+      issues: [{ number: 5, title: 'Sign-in', state: 'open', author, labels: [], comments: 0, url: 'https://git.example.test/issues/5', createdAt: '2026-10-16T10:00:00Z', updatedAt: '2026-10-16T10:00:00Z', closedAt: null }],
+      branches: [{ name: 'claude/5-notes', sha: 'n', protected: false }, { name: 'claude/lone', sha: 'l', protected: false }],
+      specs: [{ pull: 12, slug: '0013-meals' }], specsProblem: null,
+    };
+    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname === '/api/forge/work' ? work : u.pathname.endsWith('/12') ? GREEN : DETAIL;
     return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
   }));
   const start = () => {
@@ -198,6 +261,72 @@ describe('the issues and PRs panel', () => {
     await settle();
     document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none on the Agents tab: its groups, the marks, a selected pull request, the finished work shown (dark)', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-group').length).toBe(3);
+    expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
+    expect(await audit()).toEqual([]);
+    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('.hx-forge-file').length).toBe(2);
+    expect(await audit()).toEqual([]);
+    const finished = $('forge-work-finished');
+    finished.checked = true;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.querySelector('[data-forge-pr="9"]')).not.toBe(null);
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none on the Agents tab in the light theme either', async () => {
+    stub();
+    start();
+    document.documentElement.dataset.theme = 'light';
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
+    expect(await audit()).toEqual([]);
+    const agents = $('forge-work-agents');
+    agents.checked = true;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none with the actions shown (Re-run, the reasons why not, Land it) and with the confirm dialog open, in both themes', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    click('[data-forge-pr="13"]');
+    await settle();
+    expect(document.querySelectorAll('[data-forge-rerun]').length).toBe(1);
+    expect(document.querySelectorAll('.hx-forge-lights').length).toBeGreaterThan(1);
+    expect(await audit()).toEqual([]);
+    click('[data-forge-pr="13"]');
+    click('[data-forge-pr="12"]');
+    await settle();
+    expect(document.querySelector('[data-forge-merge]')).not.toBe(null);
+    expect(await audit()).toEqual([]);
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      click('[data-forge-merge]');
+      expect($('forge-confirm').hidden).toBe(false);
+      expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
+      expect(await audit()).toEqual([]);
+      key(document.activeElement, 'Escape');
+      expect($('forge-confirm').hidden).toBe(true);
+      expect(document.activeElement).toBe(document.querySelector('[data-forge-merge]'));
+    }
     expect(await audit()).toEqual([]);
   });
 

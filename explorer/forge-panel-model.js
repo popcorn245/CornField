@@ -16,6 +16,9 @@
  *   nodesForRestarts, litForDeploy   for one deploy (PIPE-03): the nodes the config says it restarted (a stack brings its containers),
  *                             and the refs that are on no node; the deploys list's filters and words (matchesDeploy, deployWords, deployMeta)
  *   errorWords                a failed request, in words
+ *   mergeBlock, rerunWhy      the actions (CF-08): why a pull request cannot be landed now, why a failed check cannot be re-run
+ *   confirmMerge, mergeBody   what the confirm step shows of what will land, and what is sent when it is confirmed
+ *   actionUrl, actionWords    where an action is posted, and how the answer is said
  */
 
 import { relativeTime } from './review-model.js';
@@ -284,6 +287,91 @@ export function paintForge(scene, lit) {
     }
   }
   for (const e of scene.edges) if (!on(e.from) && !on(e.to)) e.alpha = Math.min(e.alpha, FORGE_DIM_ALPHA / 2);
+}
+
+// ---------------------------------------------------------------------------
+//  Actions: land a green pull request, re-run a failed check (the server decides again, see server/forge-actions.js)
+// ---------------------------------------------------------------------------
+
+/** The states of a check that let a pull request land (the same rule as server/forge.js: finished, and not failed) */
+const GREEN = ['success', 'neutral', 'skipped'];
+
+/** The address an action is posted to */
+export const actionUrl = (n, action) => `/api/forge/pulls/${n}/${action}`;
+
+/**
+ * Why a pull request cannot be landed from here now, in words; null when it can (the button is shown). The server
+ * checks all of it again when asked.
+ * @param {{ pull: { number: number, state: string, draft: boolean }, checks: { name: string, state: string }[], stale?: string }} detail
+ * @returns {string | null}
+ */
+export function mergeBlock(detail) {
+  const { pull, checks } = detail;
+  if (pull.state === 'merged') return 'It has landed already.';
+  if (pull.state !== 'open') return 'It is closed, so it cannot be landed.';
+  if (pull.draft) return 'It is a draft: mark it ready on the forge first.';
+  if (!checks.length) return 'It has no checks, so nothing says it works.';
+  const words = { queued: 'is waiting to run', running: 'is still running', failure: 'failed', cancelled: 'was cancelled' };
+  const not = checks.filter((c) => !GREEN.includes(c.state));
+  if (not.length) return `Not every check is green: ${not.map((c) => `${c.name} ${words[c.state] || c.state}`).join('; ')}.`;
+  if (detail.stale) return 'This is an older answer from the forge: refresh before landing it.';
+  return null;
+}
+
+/**
+ * Why a failed check has no Re-run button; null when it has one or is not a failed check (nothing to say).
+ * @param {{ state: string, canRerun?: boolean }} check
+ * @param {string} forgeName
+ */
+export function rerunWhy(check, forgeName) {
+  if (!['failure', 'cancelled'].includes(check.state) || check.canRerun) return null;
+  return `${forgeName} does not let cornfield re-run this one: re-run it there.`;
+}
+
+/** How a merge method lands a pull request, in words */
+const HOW = { merge: 'A merge commit', squash: 'Squashed into one commit', rebase: 'Its commits rebased onto the base' };
+
+/**
+ * What the confirm step shows of what will land: the pull request, the commit, where it goes, how (the config's
+ * `forge.mergeMethod`) and each check.
+ * @returns {{ title: string, lines: [string, string][], checks: { name: string, words: string }[], note: string }}
+ */
+export function confirmMerge(detail, forgeName, method = 'merge') {
+  const { pull, checks } = detail;
+  return {
+    title: `Land pull request #${pull.number}?`,
+    lines: [
+      ['Pull request', `#${pull.number} ${pull.title}`],
+      ['Commit', pull.head.sha],
+      ['From', pull.head.ref],
+      ['Into', pull.base.ref],
+      ['How', `${HOW[method] || HOW.merge}, made by ${forgeName}`],
+      ['Checks', checksWords(checks)],
+    ],
+    checks: checks.map((c) => ({ name: c.name, words: checkWords(c) })),
+    note: `Only this commit lands, and only while its checks are green on ${forgeName}. Nothing is deployed.`,
+  };
+}
+
+/** What is posted to land a pull request: the head that was shown, so a push since is refused */
+export const mergeBody = (detail) => ({ sha: detail.pull.head.sha });
+
+/**
+ * An action's answer in words for the panel and the live region.
+ * @param {'merge' | 'rerun'} action
+ * @param {number | null} status the HTTP status, null when the server did not answer
+ * @param {{ ok?: boolean, error?: string, sha?: string, name?: string } | null} body
+ */
+export function actionWords(action, status, body, number) {
+  if (status !== null && body && body.ok) {
+    return action === 'merge'
+      ? `Pull request #${number} landed${body.sha ? ` as ${String(body.sha).slice(0, 7)}` : ''}.`
+      : `${body.name || 'The check'} is running again.`;
+  }
+  const what = action === 'merge' ? `Pull request #${number} was not landed` : 'The check was not re-run';
+  if (status === null) return `${what}: cornfield could not be reached. Look at the forge before trying again.`;
+  if (status === 401) return `${what}: your sign-in has ended. Sign in again.`;
+  return `${what}: ${body && typeof body.error === 'string' && body.error ? body.error : `cornfield answered ${status}.`}`;
 }
 
 // ---------------------------------------------------------------------------
