@@ -202,7 +202,7 @@
       "services": [
         {
           "name": "web",
-          "image": null,
+          "image": "node:22-alpine",
           "ports": [],
           "volumes": []
         },
@@ -214,25 +214,25 @@
         },
         {
           "name": "nextcloud",
-          "image": null,
+          "image": "nextcloud:29",
           "ports": [],
           "volumes": []
         },
         {
           "name": "homeassistant",
-          "image": null,
+          "image": "ghcr.io/home-assistant/home-assistant:stable",
           "ports": [],
           "volumes": []
         },
         {
           "name": "caddy",
-          "image": null,
+          "image": "caddy:2",
           "ports": [],
           "volumes": []
         },
         {
           "name": "cloudflared",
-          "image": null,
+          "image": "cloudflare/cloudflared:latest",
           "ports": [],
           "volumes": []
         }
@@ -1244,5 +1244,5 @@
       "when": "renew"
     }
   ],
-  "updatedAt": "2026-10-17T08:44:34.675Z"
+  "updatedAt": "2026-10-19T21:13:38.338Z"
 }

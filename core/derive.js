@@ -37,6 +37,7 @@
  */
 
 import { repoReader } from './repo.js';
+import { claimKey, edgeCategory } from './sync.js';
 
 /** The deriver contract this cornfield speaks */
 export const DERIVER_CONTRACT = 1;
@@ -61,13 +62,17 @@ export function deriverProblems(d) {
 /**
  * Runs every deriver over the repo and merges what they made.
  * @param {{ root: string, config?: object, derivers: { deriver: object, options?: object }[], map?: { nodes: any[], edges: any[] } | null }} opts
- * @returns {Promise<{ nodes: any[], edges: any[], warnings: string[], problems: string[], ownedTypes: string[], ownedIds: string[], pageOwners: string[], evidence: any[], info: Record<string, any> }>}
+ * @returns {Promise<{ nodes: any[], edges: any[], warnings: string[], problems: string[], ownedTypes: string[], ownedIds: string[], pageOwners: string[], evidence: any[], info: Record<string, any>, madeBy: Record<string, string>, claims: string[] }>}
+ *   `madeBy` names the deriver of each node; `claims` (core/sync.js `claimKey`) say, per deriver and edge
+ *   category, at which end and of which type its own nodes sit, so `sync` only takes away an edge the
+ *   deriver that emits its kind would have made
  */
 export async function deriveTopology({ root, config = {}, derivers, map = null }) {
   const io = repoReader(root);
   const committed = map && Array.isArray(map.nodes) ? { nodes: map.nodes, edges: Array.isArray(map.edges) ? map.edges : [] } : { nodes: [], edges: [] };
   const out = { nodes: [], edges: [], warnings: [], problems: [], ownedTypes: [], ownedIds: [], pageOwners: [], evidence: [], info: {} };
   const seen = new Map();
+  const emitted = [];
   for (const { deriver, options = {} } of derivers) {
     const bad = deriverProblems(deriver);
     if (bad.length) throw new Error(bad.join(' '));
@@ -84,6 +89,7 @@ export async function deriveTopology({ root, config = {}, derivers, map = null }
       out.nodes.push(n);
     }
     out.edges.push(...(result.edges || []));
+    emitted.push([deriver.name, result.edges || []]);
     out.warnings.push(...(result.warnings || []));
     out.problems.push(...(result.problems || []));
     out.ownedIds.push(...(result.ownedIds || []));
@@ -92,5 +98,12 @@ export async function deriveTopology({ root, config = {}, derivers, map = null }
     for (const t of deriver.owns || []) if (!out.ownedTypes.includes(t)) out.ownedTypes.push(t);
     if (result.info !== undefined) out.info[deriver.name] = result.info;
   }
-  return out;
+  const typeOf = new Map(out.nodes.map((n) => [n.id, n.type]));
+  const claims = new Set();
+  for (const [name, edges] of emitted) {
+    for (const e of edges) {
+      for (const end of ['from', 'to']) if (seen.get(e[end]) === name) claims.add(claimKey(name, edgeCategory(e), end, typeOf.get(e[end])));
+    }
+  }
+  return { ...out, madeBy: Object.fromEntries(seen), claims: [...claims] };
 }
