@@ -17,7 +17,7 @@ export const DERIVED_FIELDS = {
   root: ['label', 'file'],
   app: ['label', 'file', 'url', 'upstreams', 'stack', 'deployed', 'vars'],
   pkg: ['label', 'file', 'summary'],
-  page: ['label', 'file', 'methods', 'render_fn', 'render', 'external'],
+  page: ['label', 'file', 'methods', 'render_fn', 'render', 'external', 'summary'],
   table: ['label', 'type', 'table', 'model', 'file'],
   atom: ['label', 'file', 'vars'],
   molecule: ['label', 'type', 'file', 'model', 'table', 'vars'],
@@ -54,6 +54,7 @@ export function defaultDesc(n) {
   if (n.type === 'device') return `A ${n.kind} (${n.file})${n.enabled === false ? ', turned off there' : ''}.`;
   if (n.type === 'tool' || n.type === 'store') return `${n.label} (${n.file}).`;
   if (n.type === 'core' && n.summary) return `${n.summary} (${n.file})`;
+  if (n.type === 'page' && n.summary && !n.methods) return `${n.summary} (${n.file}).`;
   if (n.type === 'page') return n.methods ? `${n.methods.join(' · ')} ${n.label}` : `Rendered by ${n.render_fn || n.file} (${n.file}).`;
   return `<${n.label}>${n.model ? `, a record element for ${n.table} (${n.model})` : ''}, defined in ${n.file}.`;
 }
