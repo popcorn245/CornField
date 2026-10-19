@@ -21,6 +21,7 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
 - The deriver kit, `cornfield/deriver-kit`: the deriver contract as JSDoc types, `defineDeriver`, and a test kit (`fixtureRepo`, `runDeriver`, `checkDeriver`) that runs a repo's own deriver on a fixture repo as `sync` and `validate` would and lists everything `validate` would fail on. Guide: `docs/deriver-kit.md`.
 - The `compose` deriver: stacks and containers from Docker compose files, and an app with a `runs-on` edge per host a Caddyfile or Traefik labels route to them (SRC-02). The sample repo's stack now comes from its compose file.
 - The `openapi` deriver: an API's endpoints from its OpenAPI, Swagger or OpenCollection file, as page nodes with their methods under the API's app (SRC-05). `test/fixtures/openapi` is a repo with nothing but an OpenAPI file.
+- The starter deriver reads Python packages, Go modules and Rust crates the way it reads npm workspaces: their manifests, the imports between them, and a dependency declared and never imported (SRC-04). A fixture repo per language in `test/fixtures/python`, `go` and `rust`.
 - Home Assistant as a house source (SRC-01): with `CORNFIELD_HA_URL` and `CORNFIELD_HA_TOKEN` set, the server reads the floor, area, device and entity registries over the WebSocket API (read-only) and serves them as the house answer; areas map to a house file's rooms by name and alias, and a `mobile_app` device (a person's phone) is left out entirely. The token never leaves the server.
 
 ### Changed
