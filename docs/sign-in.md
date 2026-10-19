@@ -12,6 +12,16 @@ The server enforces this on every route, the explorer's own files included; only
 
 With no OAuth app configured, cornfield is a tool on your own machine: it shows everything, and it only listens on loopback (`127.0.0.1`, `localhost`, `::1`). It refuses any other address at startup.
 
+## Which `Host` it answers
+
+Listening on loopback is not enough on its own: a web page on another site can point its own hostname at `127.0.0.1` (DNS rebinding) and read what cornfield answers from your browser. So the server also checks the `Host` header of every request, before the guard and before any `proxy` path, and answers anything else with `421 Misdirected Request`:
+
+- **Without sign-in:** `localhost`, `127.0.0.1` or `[::1]`, with or without a port. Open it at one of those, not at a name of your own that points at this machine (an SSH port forward to `localhost` is fine).
+- **With sign-in:** the host of the public URL, and the loopback names above. Loopback stays because the image's health check asks `http://127.0.0.1:<port>/healthz` from inside the container; the guard still applies to every other route there, and a page on another site cannot make your browser send a loopback `Host` to your hosted cornfield's name. Your reverse proxy must pass the original `Host` on, not rewrite it to the upstream's address, or every request gets 421. Caddy (`reverse_proxy`) and Traefik do this by default; nginx does not, so add `proxy_set_header Host $host;` next to `proxy_pass`.
+- `/healthz` follows the same rule; it is not exempt.
+
+Names are compared in any case and the port is ignored: DNS rebinding changes the name, not the port, and a proxy may or may not keep `:443`. A request with no `Host` (HTTP/1.0), with two, or whose request line names another host (`GET http://other/…`) does not pass, and `X-Forwarded-Host` is never read.
+
 ## What to set
 
 Sign-in is configured by env only, never by the config file:

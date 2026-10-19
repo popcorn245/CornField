@@ -6,6 +6,8 @@ export default {
     'personas',
     // The stack and its containers from stacks/app-stack/compose.yml, the apps from its Caddyfile
     'compose',
+    // The machines of stacks/world.json and the stack that runs on each
+    'world',
     { use: 'cloud', options: { ownDomains: ['example.test'], code: ['packages'], caddyfiles: [{ file: 'stacks/app-stack/Caddyfile', from: 'container-caddy' }] } },
   ],
   personas: { roles: ['admin', 'adult', 'child'] },

@@ -1,1 +1,1 @@
-{ "version": 1, "hosts": { "server-1": {}, "engine-1": { "virtual": true, "on": "server-1" } }, "runs": { "stacks/app-stack": "engine-1" } }
+{ "version": 1, "hosts": { "server-1": { "tailnet": true }, "engine-1": { "virtual": true, "on": "server-1" } }, "runs": { "stacks/app-stack": "engine-1" } }

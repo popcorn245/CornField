@@ -1314,6 +1314,55 @@
       "desc": "Sign-in (docs/sign-in.md)."
     },
     {
+      "id": "pkg-world",
+      "label": "plugins/world",
+      "type": "pkg",
+      "file": "plugins/world",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/world workspace package (plugins/world)."
+    },
+    {
+      "id": "core-plugins-world-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/world/index.js",
+      "summary": "The world deriver: which machine each stack runs on.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The world deriver: which machine each stack runs on. (plugins/world/index.js)"
+    },
+    {
+      "id": "core-plugins-house-home-assistant",
+      "label": "home-assistant.js",
+      "type": "core",
+      "file": "plugins/house/home-assistant.js",
+      "summary": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
+    },
+    {
+      "id": "page-doc-docs-deploy",
+      "type": "page",
+      "label": "/docs/deploy",
+      "file": "docs/deploy.md",
+      "summary": "Deploy: cornfield always on",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Deploy: cornfield always on (docs/deploy.md)."
+    },
+    {
+      "id": "core-server-proposal-pulls",
+      "label": "proposal-pulls.js",
+      "type": "core",
+      "file": "server/proposal-pulls.js",
+      "summary": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit. (server/proposal-pulls.js)"
+    },
+    {
       "id": "core-explorer-forge-panel-model",
       "label": "forge-panel-model.js",
       "type": "core",
@@ -2808,7 +2857,7 @@
       "to": "ext-docker-hub",
       "kind": "calls",
       "status": "live",
-      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00",
+      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run /tmp",
       "when": "deploy"
     },
     {
@@ -3229,11 +3278,6 @@
     {
       "from": "page-doc-docs-derivers",
       "to": "page-doc-docs-cloud",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-house",
-      "to": "page-doc-docs-roadmap",
       "dashed": true
     },
     {
@@ -3670,6 +3714,104 @@
       "label": "calls"
     },
     {
+      "from": "root",
+      "to": "pkg-world"
+    },
+    {
+      "from": "pkg-world",
+      "to": "core-plugins-world-index"
+    },
+    {
+      "from": "pkg-world",
+      "to": "pkg-compose",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-world-index",
+      "to": "core-plugins-compose-index",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-house",
+      "to": "core-plugins-house-home-assistant"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-plugins-house-home-assistant",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-house",
+      "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-deploy"
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-proposal-pulls"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-forge-panel-model"
     },
@@ -3788,5 +3930,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:23:28.400Z"
+  "updatedAt": "2026-10-19T22:28:21.861Z"
 }

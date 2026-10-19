@@ -40,7 +40,7 @@ ssh -L 3350:127.0.0.1:3350 you@the-machine
 
 - **The map.** WebGL2 (Canvas 2D fallback), 5,000 nodes and 15,000 edges at frame rate. Orbit, data-flow and House views, layers, search, focus, freeform drag. `/?fixture=5k&bench=1` measures it. All of it works by keyboard, and a screen reader is told where you are: [docs/accessibility.md](docs/accessibility.md).
 - **Derived, not drawn by hand.** `cornfield sync` runs the derivers named in your config and merges what they find into `topology.json`; hand-written parts (descriptions, flows, anything of a type no deriver owns) are kept. `cornfield validate` fails on drift, so CI keeps the map honest.
-- **Proposals.** `docs/specs/proposals/NNNN-slug.json` says what a change would add, change and remove, with scenarios. cornfield lists them from your checkout and from every git worktree in the configured worktrees folder, and shows Before / Diff / After, the scenario player, what-if edits, and Approve / Send back. Writing, reviewing and landing one in your repo: [docs/proposals.md](docs/proposals.md). The format and its validator: [core/proposal.js](core/proposal.js).
+- **Proposals.** `docs/specs/proposals/NNNN-slug.json` says what a change would add, change and remove, with scenarios. cornfield lists them from your checkout, from every git worktree in the configured worktrees folder and, with sign-in, from your open spec PRs, and shows Before / Diff / After, the scenario player, what-if edits, and Approve / Send back. Writing, reviewing and landing one in your repo: [docs/proposals.md](docs/proposals.md). The format and its validator: [core/proposal.js](core/proposal.js).
 - **Issues and pull requests.** With a forge in the config, a panel of its pull requests and issues (GitHub; Forgejo behind the same interface), with filters. Select a pull request and the nodes its files are light up on the map, and a failing check lights the tests it names. A bottom sheet on a phone. [docs/issues-and-prs.md](docs/issues-and-prs.md).
 - **Personas, not people.** `topology.personas.json` holds archetypes (Admin, Member, Guest); scenarios act as them, never as a real person.
 - **The cloud you do not control.** `topology.cloud.json` describes the outside services; the cloud deriver's detectors (hosts in code, Dockerfiles, container images, CI workflows, a Caddyfile) keep it complete in both directions. "Cloudflare is down" plays as an outage: what breaks now, at the next deploy, at the next certificate renewal. [docs/cloud.md](docs/cloud.md).
@@ -53,7 +53,7 @@ docker run -d --name cornfield --network host \
   -v "$PWD:/repo:ro" -v cornfield-data:/data ghcr.io/popcorn245/cornfield
 ```
 
-[compose.example.yml](compose.example.yml) is the same as a compose service. Host networking is what keeps it on the host's loopback without sign-in.
+That form has no sign-in, so it only listens on the host's loopback. For a hosted cornfield, [compose.example.yml](compose.example.yml) adds forge sign-in, the public URL, secrets from the environment and a reverse proxy in front: [docs/deploy.md](docs/deploy.md).
 
 ## Commands
 

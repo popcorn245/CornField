@@ -80,10 +80,12 @@ npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the header
 
 or open one straight away at `http://127.0.0.1:3350/?proposal=0002-checkout`. A draft in a worktree shows in the list with the worktree's name.
 
+With a `forge` and [sign-in](sign-in.md) configured, the list also holds the proposals of **open pull requests** that add or change a file directly in the proposals folder, each read at the PR's head commit and listed as `Spec PR #23 by someone` (a draft PR says so). That is how a proposal gets reviewed before it is merged: open the spec PR and pick it from the menu. A PR that deletes a proposal lists nothing; one that only touches code is not listed. The PRs are asked of the forge with the signed-in maintainer's own token, so a private repo's PRs show for those who can see them. If the forge cannot be asked (it is down, or the sign-in has to be renewed) the menu says why above the list and still lists the checkout and the worktrees. What a PR's head commit holds is read once and kept (in memory), so opening the menu again asks the forge only for the open PRs; a PR pushed to is read again at its new head. Without a forge the list is the checkout and the worktrees, as before.
+
 - **Before / Diff / After.** Diff rings what is added (dashed), changed (amber) and removed (red, label struck through) and dims the rest; Before and After show the map as it is and as it would be. The counts chip lists every change; a row takes you to it.
 - **Scenarios.** Each plays step by step over the map, the step's text in the player at the bottom. Space plays and pauses, the arrow keys step.
 - **What-if edits.** Add or remove a node or an edge, draw an edge by dragging from one node to another, add, reword or reorder steps. Edits are violet and can be undone; they never touch the file.
-- **Approve or Send back.** Send back needs a note. Either one is kept with the edits you made, in cornfield's data folder (`<dataDir>/reviews/<source>/<slug>.review.json`, by default under `~/.cornfield/`), never in the checkout.
+- **Approve or Send back.** Send back needs a note. Either one is kept with the edits you made, in cornfield's data folder (`<dataDir>/reviews/<source>/<slug>.review.json`, by default under `~/.cornfield/`), never in the checkout. (A proposal of a spec PR cannot be approved or sent back from cornfield yet: comment on the PR until reviews are posted there.)
 
 Whoever is writing the proposal reads the last review with:
 
@@ -145,7 +147,7 @@ While a change is half built, the proposal still validates: once something it ad
 - run: npx cornfield validate
 ```
 
-Drafts in a worktree are not checked: only the checkout's proposals folder is.
+Drafts in a worktree and proposals of spec PRs are not checked: only the checkout's proposals folder is.
 
 ## Not covered here
 

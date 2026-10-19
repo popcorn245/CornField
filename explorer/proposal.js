@@ -49,6 +49,8 @@ let pinnedSource = false;
 /** What the server listed last: `[{ slug, title, summary, spec, source, counts, errors, review, error? }]`, or null before the first answer */
 let listing = null;
 let listingProblem = null;
+/** Why the server left the open spec PRs out of the last listing (the forge could not be asked), or null */
+let forgeProblem = null;
 
 // ---------------------------------------------------------------------------
 //  Loading and closing
@@ -61,8 +63,11 @@ export async function loadProposalList() {
     if (!res.ok) throw new Error(`GET /proposals answered ${res.status}`);
     listing = await res.json();
     listingProblem = null;
+    const said = res.headers.get('X-Proposals-Forge-Error');
+    forgeProblem = said ? decodeURIComponent(said) : null;
   } catch (err) {
     listing = null;
+    forgeProblem = null;
     listingProblem = err.message || String(err);
   }
   renderMenu();
@@ -333,13 +338,16 @@ async function toggleMenu() {
   await loadProposalList(); // always ask again: worktrees come and go
 }
 
-const where = (source) => (source === 'checkout' ? 'In the checkout' : `In worktree ${source}`);
+function where(entry) {
+  if (entry.pull) return `Spec PR #${entry.pull.number}${entry.pull.draft ? ' (draft)' : ''}${entry.pull.author ? ` by ${entry.pull.author}` : ''}`;
+  return entry.source === 'checkout' ? 'In the checkout' : `In worktree ${entry.source}`;
+}
 
 /** One row of the picker */
 export function proposalRowHtml(entry, current) {
   const mine = current && current.slug === entry.slug && current.source === entry.source;
   const head = `<span class="hx-proposal-title">${escHtml(entry.title || entry.slug)}</span>`;
-  const meta = [`<span class="hx-proposal-where">${escHtml(where(entry.source))}</span>`];
+  const meta = [`<span class="hx-proposal-where">${escHtml(where(entry))}</span>`];
   if (entry.spec) meta.push(`<span>spec ${escHtml(entry.spec)}</span>`);
   if (entry.error) {
     return `<div class="hx-proposal-item is-broken">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
@@ -360,7 +368,8 @@ function renderMenu(loading = false) {
   else if (listingProblem) body = `<p class="hx-error-text hx-proposal-empty">The list could not be loaded: ${escHtml(listingProblem)}</p>`;
   else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
   else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
-  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>Proposals</span></div>${body}`;
+  const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
+  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>Proposals</span></div>${forge}${body}`;
 }
 
 // ---------------------------------------------------------------------------

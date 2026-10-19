@@ -55,4 +55,26 @@ export function create(options) {
 
 ## Home Assistant directly
 
-On the [roadmap](roadmap.md#home-assistant-as-a-house-source).
+Set two env vars where cornfield runs, and nothing else:
+
+```sh
+export CORNFIELD_HA_URL=http://homeassistant.local:8123
+export CORNFIELD_HA_TOKEN=…   # a long-lived access token (your Home Assistant profile → Security)
+```
+
+With both set and no `sources.house` in the config, the house comes from Home Assistant. To say so in the config, or to keep a plan beside it:
+
+```js
+// cornfield.config.js
+export default {
+  sources: { house: { use: 'home-assistant', options: { file: 'cornfield.house.json' } } },
+};
+```
+
+The server reads Home Assistant's floor, area, device and entity registries over its WebSocket API (`config/*_registry/list`: read-only, nothing is ever written) and answers `/cornfield/house.json` with them, at most every 30 seconds:
+
+- Floors come from the floor registry, and each area is a room on its floor (an area on no floor goes on a "Home" floor). With a house file (`options.file`), the file's plan is the house instead, and each area maps to the room whose name is the area's name or one of its aliases (case and spacing aside); an area no room matches is listed as an HA area with no room. The file's other parts (accounts, hardware…) are kept.
+- Devices are placed in their area's room, with the number of their enabled entities. A service (an integration, not a thing in a room) is placed by the host of its configuration URL; one at an IP address is never given its address.
+- A `mobile_app` device, a person's phone, is left out entirely: it is never named, counted or placed.
+
+The token stays on the server: it is never in the config (`validate` refuses one there), never sent to the browser, never in an answer or an error. The Home Assistant URL (`options.url` or `CORNFIELD_HA_URL`) is not sent to the browser either. When Home Assistant is unreachable, slow (10 s) or refuses the token, the House view says so and shows the file's plan, if any.
