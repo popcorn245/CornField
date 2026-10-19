@@ -809,6 +809,16 @@
       },
       "r": 21,
       "color": "#94a3b8"
+    },
+    {
+      "id": "core-core-deriver-kit",
+      "label": "deriver-kit.js",
+      "type": "core",
+      "file": "core/deriver-kit.js",
+      "summary": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know). (core/deriver-kit.js)"
     }
   ],
   "edges": [
@@ -2271,7 +2281,41 @@
       "status": "live",
       "label": "the release pushes the image",
       "when": "deploy"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-deriver-kit"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-17T08:54:54.992Z"
+  "updatedAt": "2026-10-19T21:20:01.351Z"
 }

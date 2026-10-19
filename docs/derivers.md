@@ -1,6 +1,6 @@
 # Derivers (contract 1)
 
-A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships three: `starter`, `personas` and `cloud`. A repo adds its own by path.
+A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships three: `starter`, `personas` and `cloud`. A repo adds its own by path, and tests it with the deriver kit (`cornfield/deriver-kit`, see [deriver-kit.md](deriver-kit.md)).
 
 ```js
 // cornfield.config.js
@@ -63,6 +63,10 @@ export default {
 - **starter** (`plugins/starter`): packages from npm workspaces (or each top-level folder with code, or `options.packages`), the imports between them, a dependency declared and never imported; with `modules: true`, one node per source file with the first sentence of its doc comment as its summary. Options: `{ packages, modules, tests, extensions }`.
 - **personas** (`plugins/personas`): `topology.personas.json` as a store node and one persona node each. Roles come from `personas.roles` in the config (any kebab-case role when none). See [core/personas.js](../core/personas.js).
 - **cloud** (`plugins/cloud`): `topology.cloud.json` and its detectors. See [cloud.md](cloud.md).
+
+## Testing one
+
+`import { defineDeriver, checkDeriver } from 'cornfield/deriver-kit'`: `defineDeriver` checks a deriver against this contract when it loads and types it for the editor; `checkDeriver(deriver, { files, before, options })` runs it on a throwaway repo as `sync` and `validate` would, and throws a list of everything `validate` would fail on. The guide: [deriver-kit.md](deriver-kit.md).
 
 ## Versions
 
