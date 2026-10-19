@@ -1165,6 +1165,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "The deriver kit: put your own code on the map (docs/deriver-kit.md)."
+    },
+    {
+      "id": "core-plugins-house-home-assistant",
+      "label": "home-assistant.js",
+      "type": "core",
+      "file": "plugins/house/home-assistant.js",
+      "summary": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
     }
   ],
   "edges": [
@@ -3045,11 +3055,6 @@
       "dashed": true
     },
     {
-      "from": "page-doc-docs-house",
-      "to": "page-doc-docs-roadmap",
-      "dashed": true
-    },
-    {
       "from": "page-doc-docs-proposals",
       "to": "page-doc-contributing",
       "dashed": true
@@ -3228,7 +3233,28 @@
       "from": "page-doc-docs-derivers",
       "to": "page-doc-docs-deriver-kit",
       "dashed": true
+    },
+    {
+      "from": "pkg-house",
+      "to": "core-plugins-house-home-assistant"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-plugins-house-home-assistant",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-house",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T21:35:54.393Z"
+  "updatedAt": "2026-10-19T21:43:02.834Z"
 }
