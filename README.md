@@ -68,7 +68,7 @@ Every command takes `--repo <dir>` and `--config <file>`.
 
 ## Extending it
 
-- **Derivers** read your code and say which nodes and edges the map must hold: [docs/derivers.md](docs/derivers.md) (contract 1).
+- **Derivers** read your code and say which nodes and edges the map must hold: [docs/derivers.md](docs/derivers.md) (contract 1). Put your own code on the map (routes, jobs, queues) with a deriver of yours, and test it against a fixture repo with one import, `cornfield/deriver-kit`: [docs/deriver-kit.md](docs/deriver-kit.md).
 - **Docs** are on the map too: the `docs` deriver maps each document and its links (to other docs and to the code), `validate` fails on a broken link, and `cornfield docs` builds them as a site ([docs/derivers.md](docs/derivers.md#the-docs-site)).
 - **Sources** are browser modules for the live layer, the house, devices and permission checks: [docs/config.md](docs/config.md#sources).
 

@@ -29,6 +29,7 @@
     ".": "./core/index.js",
     "./core/*": "./core/*",
     "./plugins/*": "./plugins/*",
+    "./deriver-kit": "./core/deriver-kit.js",
     "./server": "./server/server.js",
     "./package.json": "./package.json"
   },
