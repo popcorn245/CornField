@@ -8,7 +8,7 @@
       "desc": "Where cornfield lives: the repo, its issues and pull requests, the actions CI runs, and the default forge of a repo's config.",
       "breaks": "Now: no pull request can be opened, checked or merged, and a GitHub sign-in (v1) fails. At the next CI run: the checks cannot start.",
       "plan": { "tier": "free" },
-      "match": { "actions": ["actions/", "docker/"], "hosts": ["github.com"] }
+      "match": { "actions": ["actions/", "docker/"], "hosts": ["github.com", "api.github.com"] }
     },
     {
       "id": "npm",
