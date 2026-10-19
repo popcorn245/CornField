@@ -745,3 +745,6 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 #graph-canvas:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: -3px; }
 .hx-drawer-title:focus { outline: none; }
 .hx-drawer-title:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+
+/* Sign out (when sign-in is on): a form in the header, inline with the links */
+.cf-sign-out { display: inline-flex; margin: 0; }

@@ -87,7 +87,7 @@
       "label": "cornfield.js",
       "type": "core",
       "file": "cli/cornfield.js",
-      "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der…",
+      "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only unless sign-in is configured) cornfield …",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der… (cli/cornfield.js)"
@@ -677,7 +677,7 @@
       "label": "bind.js",
       "type": "core",
       "file": "server/bind.js",
-      "summary": "Where the server may listen.",
+      "summary": "Where the server may listen (spec 0001 section 3, ADR 0004).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Where the server may listen. (server/bind.js)"
@@ -720,7 +720,7 @@
       "summary": "cornfield's HTTP server: zero dependencies, Node's own `http`.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "cornfield's HTTP server: zero dependencies, Node's own `http`. (server/server.js)"
+      "desc": "The HTTP server: every route behind the sign-in guard; the loopback rule lifts once sign-in is configured with an https public URL."
     },
     {
       "id": "tool-ci",
@@ -1292,6 +1292,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Keyboard and screen readers (docs/accessibility.md)."
+    },
+    {
+      "id": "core-server-auth",
+      "label": "auth.js",
+      "type": "core",
+      "file": "server/auth.js",
+      "summary": "Sign-in with the repo's forge (GitHub or Forgejo OAuth) and the admins-only guard every route passes through (spec 0001 sections 2.4 and 3, ADR 0004).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Sign-in with GitHub or Forgejo (OAuth), sessions in an HttpOnly cookie, and the admins-only guard every route passes through."
+    },
+    {
+      "id": "page-doc-docs-sign-in",
+      "type": "page",
+      "label": "/docs/sign-in",
+      "file": "docs/sign-in.md",
+      "summary": "Sign-in",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Sign-in (docs/sign-in.md)."
     }
   ],
   "edges": [
@@ -2748,7 +2768,7 @@
       "to": "ext-docker-hub",
       "kind": "calls",
       "status": "live",
-      "label": "test.yml: docker run cornfield",
+      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00",
       "when": "deploy"
     },
     {
@@ -3543,7 +3563,72 @@
       "from": "page-doc-readme",
       "to": "page-doc-docs-accessibility",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-auth"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-db",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-forge-github",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-auth",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-sign-in"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "core-server-auth",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
     }
   ],
-  "updatedAt": "2026-10-19T21:54:35.895Z"
+  "updatedAt": "2026-10-19T22:02:16.896Z"
 }

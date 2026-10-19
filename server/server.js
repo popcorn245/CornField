@@ -4,6 +4,8 @@
  * cornfield's HTTP server: zero dependencies, Node's own `http`. It serves the explorer, the target
  * repo's map and proposals, and takes a maintainer's review. What it answers:
  *
+ *   GET  /healthz                       { ok: true } and nothing else: the image's health check, open without a session
+ *   *    /auth/…                        sign-in (server/auth.js), when it is configured
  *   GET  /                              the explorer (explorer/index.html), with the config's import map
  *   GET  /explorer/…, /core/…, /plugins/<name>/browser.js
  *                                       cornfield's own browser modules (an allowlist, never a folder of the repo)
@@ -16,9 +18,12 @@
  *   *    /proposals…                    server/proposals.js
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
+ * With sign-in configured, every route but /healthz and /auth/… passes the admins-only guard first (server/auth.js):
+ * no session is the sign-in page or a 401, a non-maintainer the "ask a maintainer" page or a 403. Without it, `listen`
+ * only binds to loopback (server/bind.js); with it and an https public URL, it may bind to any address.
+ *
  * No CORS headers: the explorer and its sources are all same-origin, so no other site's page has any
- * business reading what cornfield serves. Stage 1 has no sign-in, so `listen` only binds to loopback
- * (server/bind.js).
+ * business reading what cornfield serves.
  */
 
 import fs from 'node:fs';
@@ -31,7 +36,8 @@ import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { proxyTo } from './proxy.js';
-import { assertLocalBind } from './bind.js';
+import { assertBind } from './bind.js';
+import { createAuth, signInSettings } from './auth.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -73,8 +79,13 @@ function repoModuleDirs(config) {
   return { dirs: [...new Set(dirs)], files };
 }
 
-/** What `/cornfield/config.json` says: only what the browser needs, never the data folder or a path on this machine */
-export function clientConfig(config) {
+/**
+ * What `/cornfield/config.json` says: only what the browser needs, never the data folder or a path on this machine.
+ * `signIn` is false without sign-in, else who is signed in.
+ * @param {object} config
+ * @param {false | { login: string }} [signIn]
+ */
+export function clientConfig(config, signIn = false) {
   return {
     name: 'cornfield',
     version: PKG.version,
@@ -82,7 +93,7 @@ export function clientConfig(config) {
     links: config.links || [],
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo } : null,
     sources: browserSources(config),
-    signIn: false,
+    signIn,
   };
 }
 
@@ -94,11 +105,13 @@ function publicRegistry(text) {
 }
 
 /**
- * The server for one repo. It does not listen: `listen(server, config)` does, on loopback only.
+ * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
+ * @param {Parameters<typeof createAuth>[1]} [opts] what sign-in reads (`env`, and tests' fakes); see server/auth.js
  * @returns {import('node:http').Server}
  */
-export function createCornfieldServer(config) {
+export function createCornfieldServer(config, opts = {}) {
+  const auth = createAuth(config, opts);
   const root = config.root;
   const importMap = importMapOf(config);
   const csp = cspOf(importMap);
@@ -117,7 +130,20 @@ export function createCornfieldServer(config) {
     return html;
   };
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
+    try {
+      await answer(req, res);
+    } catch (err) {
+      // The path only: a query can carry what must not be logged (the sign-in's code and state)
+      console.error(`[cornfield] ${req.method} ${String(req.url).split('?')[0]}: ${err.stack || err.message}`);
+      if (!res.headersSent) sendJson(res, 500, { ok: false, error: 'Something went wrong in cornfield; the log says what.' });
+      else res.end();
+    }
+  });
+  server.on('close', () => auth.close());
+  return server;
+
+  async function answer(req, res) {
     res.setHeader('Content-Security-Policy', csp);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -134,6 +160,14 @@ export function createCornfieldServer(config) {
       return res.end('400 Bad Request');
     }
 
+    if (reqPath === '/healthz') {
+      req.resume();
+      return sendJson(res, 200, { ok: true });
+    }
+    const gate = await auth.gate(req, res, reqPath, url);
+    if (gate.done) return;
+    const signedIn = gate.session ? { login: gate.session.login } : false;
+
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     if (serveProposals(req, res, reqPath, url, where)) return;
 
@@ -147,7 +181,7 @@ export function createCornfieldServer(config) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(req.method === 'HEAD' ? undefined : page());
     }
-    if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config));
+    if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config, signedIn));
     if (reqPath === '/topology.json') {
       const file = inside(root, config.topology);
       if (!file || !fs.existsSync(file)) return sendJson(res, 404, { error: `${config.topology} is not there yet: run cornfield sync` });
@@ -208,23 +242,26 @@ export function createCornfieldServer(config) {
       return allowed ? sendFile(req, res, file, reqPath) : notFound(res, reqPath);
     }
     return notFound(res, reqPath);
-  });
+  }
 }
 
 /**
- * Starts the server on the config's port, loopback only. Resolves with the address it listens on.
+ * Starts the server on the config's port and host, where server/bind.js allows. Resolves with the address it
+ * listens on, and whether sign-in guards it.
  * @param {object} config
- * @returns {Promise<{ server: import('node:http').Server, url: string }>}
+ * @param {Parameters<typeof createAuth>[1]} [opts]
+ * @returns {Promise<{ server: import('node:http').Server, url: string, signIn: boolean }>}
  */
-export function listen(config) {
-  assertLocalBind(config.host);
-  const server = createCornfieldServer(config);
+export function listen(config, opts = {}) {
+  const signIn = signInSettings(config, opts.env) !== null;
+  assertBind(config.host, { signIn, publicUrl: config.publicUrl });
+  const server = createCornfieldServer(config, opts);
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(config.port, config.host, () => {
       const { port } = /** @type {import('node:net').AddressInfo} */ (server.address());
       const host = config.host === '::1' ? '[::1]' : config.host;
-      resolve({ server, url: `http://${host}:${port}` });
+      resolve({ server, url: `http://${host}:${port}`, signIn });
     });
   });
 }
