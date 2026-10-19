@@ -14,3 +14,4 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
   - The CLI: `serve`, `sync`, `validate`, `status`, `proposal`, `review`.
   - The server: an allowlist, never a folder; a strict Content-Security-Policy; loopback only until forge sign-in exists.
   - A Dockerfile, `compose.example.yml`, GitHub Actions for tests, secret scanning and (inert until switched on) releases.
+- The SQLite store (`server/db.js`, #2): `cornfield.db` in the data folder over Node's built-in `node:sqlite`, numbered migrations, and the four tables of v1: `sessions`, `reviews`, `actions`, `forge_cache`.
