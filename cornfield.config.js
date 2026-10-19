@@ -16,6 +16,8 @@ export default {
   // cornfield's own pull requests are squash-merged; the forge panel lands them the same way
   forge: { type: 'github', url: 'https://github.com', repo: 'popcorn245/cornfield', mergeMethod: 'squash' },
   port: 3350,
+  // Work on a claude/ branch is an agent's (docs/agents.md)
+  agents: { branchPrefixes: ['claude/'] },
   worktrees: '.claude/worktrees',
   proposals: 'docs/specs/proposals',
   links: [{ label: 'GitHub', href: 'https://github.com/popcorn245/cornfield' }],

@@ -55,6 +55,45 @@ describe('configProblems', () => {
   });
 });
 
+describe('the deploys key', () => {
+  it('accepts workflow patterns and what they restart, and nothing else', () => {
+    expect(configProblems({ deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web', 'media'] } } })).toEqual([]);
+    expect(configProblems({ deploys: null })).toEqual([]);
+    expect(configProblems({ deploys: [] })).toEqual(['"deploys" is { workflows, restarts }.']);
+    expect(configProblems({ deploys: { run: [] } })).toEqual(['deploys.run: the keys are workflows, restarts.']);
+    expect(configProblems({ deploys: { workflows: 'deploy' } })).toEqual(['deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].']);
+    expect(configProblems({ deploys: { restarts: [] } })).toEqual(['deploys.restarts is { "workflow name or pattern": ["node id or label"] }.']);
+    expect(configProblems({ deploys: { restarts: { Deploy: 'stack-web' } } })).toEqual(['deploys.restarts["Deploy"] is a list of node ids or labels.']);
+  });
+
+  it('defaults to any workflow with "deploy" in its name, restarting nothing', async () => {
+    expect(DEFAULTS.deploys).toEqual({ workflows: ['*deploy*'], restarts: {} });
+    const config = await loadConfig(repo('export default { deploys: { restarts: { Ship: ["stack-web"] } } };'));
+    expect(config.deploys).toEqual({ workflows: ['*deploy*'], restarts: { Ship: ['stack-web'] } });
+  });
+});
+
+describe('the agents rules', () => {
+  it('are empty by default, with bot accounts counted', async () => {
+    expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    const c = await loadConfig(repo(), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    expect(c.agents).not.toBe(DEFAULTS.agents);
+  });
+
+  it('take the keys of the file over the defaults, and the rest stay', async () => {
+    const c = await loadConfig(repo("export default { agents: { branchPrefixes: ['claude/'], labels: ['agent', 'needs human'], bots: false } };"), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false });
+  });
+
+  it('are checked: the shape, the keys, and what a name may be', () => {
+    expect(configProblems({ agents: { authors: ['claude-bot', 'renovate[bot]'], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false } })).toEqual([]);
+    const text = configProblems({ agents: { authors: ['two words', ''], labels: 'agent', branchPrefixes: [1], bots: 'yes', colour: 1 } }).join('\n');
+    for (const want of ['agents.authors is a list of account names', 'agents.labels is a list of label names', 'agents.branchPrefixes is a list of branch name starts', 'agents.bots is true or false', 'agents.colour']) expect(text, want).toContain(want);
+    expect(configProblems({ agents: [] }).join()).toContain('"agents" is { authors');
+  });
+});
+
 describe('loadConfig', () => {
   it('fills the defaults, names the title from package.json, and keeps the data folder out of the repo', async () => {
     const root = repo();

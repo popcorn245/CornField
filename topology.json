@@ -1480,6 +1480,46 @@
       "desc": "The two things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08): land a green pull request and re-run a failed check. (server/forge-actions.js)"
     },
     {
+      "id": "core-explorer-agents-model",
+      "label": "agents-model.js",
+      "type": "core",
+      "file": "explorer/agents-model.js",
+      "summary": "The agents view of the issues and PRs panel, the pure half (CF-09, ADR 0007: v1 tracks agents by what they leave, it does not launch them): no DOM, no `window`, no clock.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The agents view of the issues and PRs panel, the pure half (CF-09, ADR 0007: v1 tracks agents by what they leave, it does not launch them): no DOM, no `window`, no clock. (explorer/agents-model.js)"
+    },
+    {
+      "id": "page-doc-docs-agents",
+      "type": "page",
+      "label": "/docs/agents",
+      "file": "docs/agents.md",
+      "summary": "Agents, tracked",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Agents, tracked (docs/agents.md)."
+    },
+    {
+      "id": "core-server-deploys",
+      "label": "deploys.js",
+      "type": "core",
+      "file": "server/deploys.js",
+      "summary": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md). (server/deploys.js)"
+    },
+    {
+      "id": "page-doc-docs-deploys",
+      "type": "page",
+      "label": "/docs/deploys",
+      "file": "docs/deploys.md",
+      "summary": "Deploys on the map",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Deploys on the map (docs/deploys.md)."
+    },
+    {
       "id": "core-server-pipeline",
       "label": "pipeline.js",
       "type": "core",
@@ -4208,6 +4248,167 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-agents-model"
+    },
+    {
+      "from": "core-explorer-agents-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-agents-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-agents"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "page-doc-docs-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-proposals",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-agents",
+      "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-deploys"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-deploys",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-deploys"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "core-server-forge",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
       "from": "pkg-server",
       "to": "core-server-pipeline"
     },
@@ -4280,5 +4481,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T23:31:27.705Z"
+  "updatedAt": "2026-10-19T23:36:17.424Z"
 }

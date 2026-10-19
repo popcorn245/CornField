@@ -107,6 +107,21 @@
   },
   "POST /repos/owner/name/pulls/12/merge": { "status": 200 },
 
+  "GET /repos/owner/name/actions/runs?limit=50": {
+    "headers": { "link": "<{origin}/api/v1/repos/owner/name/actions/runs?limit=50&page=2>; rel=\"next\",<{origin}/api/v1/repos/owner/name/actions/runs?limit=50&page=2>; rel=\"last\"", "x-total-count": "4" },
+    "body": { "total_count": 4, "workflow_runs": [
+      { "id": 9003, "display_title": "Meals page (#12)", "path": "deploy.yml@refs/heads/main", "event": "push", "head_branch": "main", "head_sha": "abc0000000000000000000000000000000000000", "status": "success", "actor": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "html_url": "https://forgejo.example.com/owner/name/actions/runs/3", "started_at": "2026-10-18T12:00:05Z", "completed_at": "2026-10-18T12:04:00Z" },
+      { "id": 9002, "display_title": "Lint everything", "path": ".forgejo/workflows/ci.yml@refs/pull/13/head", "event": "pull_request", "head_branch": "claude/13-lint", "head_sha": "def0000000000000000000000000000000000000", "status": "completed", "conclusion": "failure", "actor": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "html_url": "https://forgejo.example.com/owner/name/actions/runs/2", "started_at": "2026-10-18T10:00:02Z", "completed_at": "2026-10-18T10:03:00Z" },
+      { "id": 9001, "display_title": "Deploy media", "path": ".forgejo/workflows/deploy-media.yml@refs/heads/main", "event": "workflow_dispatch", "head_branch": "main", "head_sha": "0000000000000000000000000000000000000001", "status": "running", "actor": null, "html_url": "https://forgejo.example.com/owner/name/actions/runs/1", "started_at": "2026-10-18T09:00:00Z", "completed_at": null }
+    ] }
+  },
+  "GET /api/v1/repos/owner/name/actions/runs?limit=50&page=2": {
+    "headers": { "x-total-count": "4" },
+    "body": { "total_count": 4, "workflow_runs": [
+      { "id": 9000, "display_title": "v0.2.0", "path": ".forgejo/workflows/release.yml@refs/tags/v0.2.0", "event": "release", "head_branch": "v0.2.0", "head_sha": "9990000000000000000000000000000000000009", "status": "cancelled", "actor": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "html_url": "https://forgejo.example.com/owner/name/actions/runs/0", "started_at": "2026-10-17T09:00:00Z", "completed_at": "2026-10-17T09:02:00Z" }
+    ] }
+  },
+
   "GET /repos/owner/name/branches?limit=50": {
     "headers": { "x-total-count": "2" },
     "body": [

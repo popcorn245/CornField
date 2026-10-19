@@ -288,6 +288,35 @@ describe('the Forgejo adapter', () => {
     expect((await forgeError(() => forge.branches(), 'not-found')).message).toBe('Forgejo says the branches of owner/name has moved; check forge.repo in cornfield.config.js.');
   });
 
+  it('reads a run\'s workflow from its path, and its state from the conclusion once it has finished, else the status', async () => {
+    const forge = await forgeOn({
+      'GET /repos/owner/name/actions/runs?limit=50': {
+        body: { workflow_runs: [
+          { id: 1, path: 'deploy.yaml@refs/heads/main', status: 'completed', conclusion: 'success' },
+          { id: 2, path: '.forgejo/workflows/a.yml', status: 'completed', conclusion: 'weird' },
+          { id: 3, path: 'b.yml', status: 'waiting' },
+          { id: 4, path: 'c.yml', status: 'blocked' },
+          { id: 5, path: 'd.yml', status: 'in_progress' },
+          { id: 6, path: 'e.yml', status: 'skipped' },
+        ] },
+      },
+    });
+    const runs = await forge.runs();
+    expect(runs.map((r) => [r.workflow, r.name, r.state])).toEqual([
+      ['deploy.yaml', 'deploy.yaml', 'success'], ['a.yml', 'a.yml', 'failure'], ['b.yml', 'b.yml', 'queued'], ['c.yml', 'c.yml', 'queued'], ['d.yml', 'd.yml', 'running'], ['e.yml', 'e.yml', 'skipped'],
+    ]);
+  });
+
+  it('says in words that it cannot list runs when Actions is off or the instance is too old (404), and passes other failures on', async () => {
+    const off = await forgeOn({});
+    const err = await forgeError(() => off.runs(), 'unavailable');
+    expect(err.status).toBe(501);
+    expect(err.message).toContain('Forgejo cannot list the Actions runs of owner/name');
+    expect(err.message).toContain('Forgejo 11');
+    const down = await forgeOn({ 'GET /repos/owner/name/actions/runs?limit=50': { status: 403, body: { message: 'no' } } });
+    await forgeError(() => down.runs(), 'forbidden');
+  });
+
   it('sends no rate-limit headers, so there is nothing to report until an instance or its proxy says to slow down', async () => {
     const forge = await forgeOn({
       'GET /user': { body: { id: 1, login: 'm' } },
@@ -337,5 +366,27 @@ describe('the Forgejo adapter', () => {
     const forge = await forgeOn({ 'GET /user': () => (++calls === 1 ? { status: 502, body: {} } : { body: { id: 1, login: 'maintainer-one' } }) });
     await forgeError(() => forge.me(), 'unavailable');
     expect((await forge.me()).login).toBe('maintainer-one');
+  });
+
+  it('marks an account the forge calls a Bot, and its Actions user, and only those', async () => {
+    const pull = (number, user) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', body: `Closes #${number}` });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&limit=50': {
+        body: [
+          pull(1, { id: 7, login: 'renovate', type: 'Bot' }),
+          pull(2, { id: -2, login: 'forgejo-actions' }),
+          pull(3, { id: 9, login: 'agent-four', type: 'User' }),
+          pull(4, { id: 10, login: 'someone[bot]' }),
+        ],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.author)).toEqual([
+      { login: 'renovate', url: null, bot: true },
+      { login: 'forgejo-actions', url: null, bot: true },
+      { login: 'agent-four', url: null },
+      { login: 'someone[bot]', url: null }, // the name is the agent rule's to read, not the adapter's
+    ]);
+    expect(pulls[0].body).toBe('Closes #1');
   });
 });

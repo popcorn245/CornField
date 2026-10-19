@@ -36,6 +36,23 @@ describe('the GitHub adapter', () => {
     expect(Object.isFrozen(forge)).toBe(true);
   });
 
+  it('reads a run\'s own name and its workflow file, a missing title from the head commit, and every status and conclusion', async () => {
+    const forge = await forgeOn({
+      'GET /repos/owner/name/actions/runs?per_page=100': {
+        body: { workflow_runs: [
+          { id: 1, name: 'Deploy web', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'timed_out', head_commit: { message: 'Fix it\n\nlong' } },
+          { id: 2, path: '.github/workflows/ship.yml@refs/heads/main', status: 'queued' },
+          { id: 3, name: 'x', path: 'x.yml', status: 'waiting' },
+          { id: 4, name: 'x', path: 'x.yml', status: 'completed', conclusion: 'skipped' },
+        ] },
+      },
+    });
+    const runs = await forge.runs();
+    expect(runs.map((r) => [r.name, r.workflow, r.state, r.title])).toEqual([
+      ['Deploy web', 'deploy.yml', 'failure', 'Fix it'], ['ship.yml', 'ship.yml', 'queued', ''], ['x', 'x.yml', 'queued', ''], ['x', 'x.yml', 'skipped', ''],
+    ]);
+  });
+
   it('finds the API of github.com and of a GitHub Enterprise Server', () => {
     expect(githubApiUrl()).toBe('https://api.github.com');
     expect(githubApiUrl('https://github.com/')).toBe('https://api.github.com');
@@ -55,6 +72,21 @@ describe('the GitHub adapter', () => {
     const forge = await forgeOn({ 'GET /repos/owner/name/branches?per_page=100': { body: [] } }, { token: null });
     await forge.branches();
     expect(fake.requests[0].headers.authorization).toBeUndefined();
+  });
+
+  it('keeps a pull request\'s text (its "Closes #n") and marks an account GitHub calls a Bot, and only that', async () => {
+    const pull = (number, user, extra = {}) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', ...extra });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&sort=created&direction=desc&per_page=100': {
+        body: [pull(1, { login: 'dependabot[bot]', type: 'Bot' }, { body: 'Closes #5' }), pull(2, { login: 'agent-four', type: 'User' }), pull(3, { login: 'renovate[bot]' }, { body: null })],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.body)).toEqual(['Closes #5', '', '']);
+    expect(pulls[0].author).toEqual({ login: 'dependabot[bot]', url: null, bot: true });
+    expect(pulls[1].author).toEqual({ login: 'agent-four', url: null });
+    // No type said, no flag: the `[bot]` in the name is the agent rule's to read, not the adapter's
+    expect(pulls[2].author).toEqual({ login: 'renovate[bot]', url: null });
   });
 
   it('asks the signed-in user once, and their own permission from the repo', async () => {

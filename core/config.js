@@ -12,6 +12,8 @@
  *       live: null, house: null, devices: null, checker: null,
  *     },
  *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'; baseBranch: 'main'
+ *     deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } },   // which workflow runs are deploys, and what they restart (docs/deploys.md)
+ *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md)
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
@@ -66,6 +68,7 @@ export const DEFAULTS = Object.freeze({
   derivers: ['starter', 'personas', 'cloud'],
   sources: { live: null, house: null, devices: null, checker: null },
   forge: null,
+  deploys: { workflows: ['*deploy*'], restarts: {} },
   port: 3350,
   host: '127.0.0.1',
   publicUrl: null,
@@ -74,6 +77,7 @@ export const DEFAULTS = Object.freeze({
   topology: 'topology.json',
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
   links: [],
   proxy: {},
   importMap: {},
@@ -81,6 +85,7 @@ export const DEFAULTS = Object.freeze({
 });
 
 const KEYS = Object.keys(DEFAULTS);
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots'];
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 /** A path inside the repo: relative, forward slashes, no `..` segment */
@@ -139,6 +144,33 @@ export function configProblems(c) {
       if (c.forge.baseBranch !== undefined && !(typeof c.forge.baseBranch === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(c.forge.baseBranch) && !c.forge.baseBranch.includes('..'))) out.push('forge.baseBranch is the branch spec pull requests go into, like "main".');
     }
   }
+  if (c.agents !== undefined) {
+    if (!isObject(c.agents)) out.push('"agents" is { authors, labels, branchPrefixes, bots }.');
+    else {
+      for (const k of Object.keys(c.agents)) if (!AGENT_KEYS.includes(k)) out.push(`agents.${k}: the keys are ${AGENT_KEYS.join(', ')}.`);
+      for (const k of ['authors', 'labels', 'branchPrefixes']) {
+        const v = c.agents[k];
+        // Account names have no spaces or commas; a label may have spaces; neither starts or ends with one
+        const fine = (e) => isText(e) && e === e.trim() && (k === 'labels' || !/[\s,]/.test(e));
+        if (v !== undefined && (!Array.isArray(v) || !v.every(fine))) {
+          out.push(`agents.${k} is a list of ${k === 'authors' ? 'account names ("claude-bot")' : k === 'labels' ? 'label names ("agent")' : 'branch name starts ("claude/")'}.`);
+        }
+      }
+      if (c.agents.bots !== undefined && typeof c.agents.bots !== 'boolean') out.push('agents.bots is true or false: whether a bot account ("[bot]" or the forge\'s Bot type) counts as an agent.');
+    }
+  }
+  if (c.deploys !== undefined && c.deploys !== null) {
+    const list = (v) => Array.isArray(v) && v.every(isText);
+    if (!isObject(c.deploys)) out.push('"deploys" is { workflows, restarts }.');
+    else {
+      for (const k of Object.keys(c.deploys)) if (!['workflows', 'restarts'].includes(k)) out.push(`deploys.${k}: the keys are workflows, restarts.`);
+      if (c.deploys.workflows !== undefined && !list(c.deploys.workflows)) out.push('deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].');
+      if (c.deploys.restarts !== undefined) {
+        if (!isObject(c.deploys.restarts)) out.push('deploys.restarts is { "workflow name or pattern": ["node id or label"] }.');
+        else for (const [p, refs] of Object.entries(c.deploys.restarts)) if (!isText(p) || !list(refs)) out.push(`deploys.restarts["${p}"] is a list of node ids or labels.`);
+      }
+    }
+  }
   for (const key of ['worktrees', 'proposals', 'topology']) {
     if (c[key] !== undefined && c[key] !== null && !inRepo(c[key])) out.push(`"${key}" is a folder or file inside the repo, written relative to it.`);
   }
@@ -189,11 +221,13 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     if (problems.length) throw new Error(`${path.relative(absRoot, configFile) || CONFIG_FILE}:\n  ${problems.join('\n  ')}`);
   }
   const config = {
-    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud } }),
+    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, agents: { ...DEFAULTS.agents } }),
     ...raw,
     sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
     personas: { ...DEFAULTS.personas, ...(raw.personas || {}) },
     cloud: { ...DEFAULTS.cloud, ...(raw.cloud || {}) },
+    deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
+    agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
   if (env.CORNFIELD_PORT) config.port = Number(env.CORNFIELD_PORT);
   if (env.PORT && !env.CORNFIELD_PORT) config.port = Number(env.PORT);

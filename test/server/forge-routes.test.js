@@ -78,7 +78,7 @@ describe('the forge routes', () => {
     plainData = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-forge-plain-'));
     const forge = { type: 'github', url: fake.url, repo: 'owner/name' };
     const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
-    Object.assign(config, { forge, publicUrl: PUBLIC });
+    Object.assign(config, { forge, publicUrl: PUBLIC, deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }, agents: { authors: ['agent-four'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true } });
     srv = await start(config, { env: ENV, now: () => clock });
     const open = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } });
     plain = await start(Object.assign(open, { forge }), { env: {} });
@@ -302,6 +302,93 @@ describe('the forge routes', () => {
       await forgejo.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('lists the deploys: the runs that are deploys, with what the config says each restarted, unmapped ones kept', async () => {
+    const cookie = await signIn();
+    fake.requests.length = 0;
+    const res = await raw(srv.port, 'GET', '/api/forge/deploys', { cookie });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json).toMatchObject({ ok: true, forge: 'github', repo: 'owner/name' });
+    // CI and Release are not deploys; Deploy media is, and nothing says what it restarts
+    expect(res.json.items.map((d) => [d.id, d.name, d.state, d.restarts])).toEqual([
+      ['9003', 'Deploy web', 'success', ['stack-web']],
+      ['9001', 'Deploy media', 'running', []],
+    ]);
+    for (const r of asked('/actions/runs')) expect(r.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(fake.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+    expect(res.headers.etag).toMatch(/^"[0-9a-f]{20}"$/);
+    const again = await raw(srv.port, 'GET', '/api/forge/deploys', { cookie, 'if-none-match': res.headers.etag });
+    expect(again.status).toBe(304);
+  });
+
+  it('keeps deploys per mapping, so a changed config is not answered from what was kept for the old one', async () => {
+    const cookie = await signIn();
+    await raw(srv.port, 'GET', '/api/forge/deploys', { cookie });
+    expect(cached().map((r) => r.key).filter((k) => k.includes('|deploys?limit=100&config='))).toHaveLength(1);
+  });
+
+  it('asks for at most the runs it is allowed to, and refuses more', async () => {
+    const cookie = await signIn();
+    const res = await raw(srv.port, 'GET', '/api/forge/deploys?limit=301', { cookie });
+    expect([res.status, res.json.code]).toEqual([400, 'invalid']);
+    const one = await raw(srv.port, 'GET', '/api/forge/deploys?limit=1', { cookie });
+    expect(one.json.items.map((d) => d.id)).toEqual(['9003']);
+  });
+
+  it('answers 403 in words without sign-in, as the other forge routes do', async () => {
+    const res = await raw(plain.port, 'GET', '/api/forge/deploys');
+    expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
+  });
+
+  it('answers what the agents view groups in one read: pull requests and issues of any state, branches, open spec PRs and the agent rules', async () => {
+    const cookie = await signIn();
+    state.override['GET /api/v3/repos/owner/name/branches?per_page=100'] = () => ({
+      body: [{ name: 'main', commit: { sha: 'm' }, protected: true }, { name: 'feature/meals', commit: { sha: 'abc' }, protected: false }, { name: 'claude/5-sign-in-notes', commit: { sha: 'c5' }, protected: false }],
+    });
+    fake.requests.length = 0;
+    const res = await raw(srv.port, 'GET', '/api/forge/work', { cookie });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json.pulls.map((p) => [p.number, p.state, p.body.split('\n')[0]])).toEqual([[14, 'open', ''], [13, 'open', 'Fixes #5'], [12, 'open', 'Adds the meals proposal.'], [9, 'merged', 'Closes #2']]);
+    expect(res.json.pulls[0].author).toEqual({ login: 'dependabot[bot]', url: 'https://github.example.com/dependabot[bot]', bot: true });
+    expect(res.json.pulls[1].author.bot).toBeUndefined();
+    expect(res.json.issues.map((i) => [i.number, i.state])).toEqual([[5, 'open'], [2, 'closed']]);
+    expect(res.json.branches.map((b) => b.name)).toEqual(['main', 'feature/meals', 'claude/5-sign-in-notes']);
+    expect(res.json.specs).toEqual([{ pull: 12, slug: '0013-meals' }]);
+    expect(res.json.specsProblem).toBe(null);
+    expect(res.json.agents).toEqual({ authors: ['agent-four'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true });
+    // Only reads, as the signed-in maintainer
+    expect(fake.requests.every((r) => r.method === 'GET')).toBe(true);
+    for (const r of fake.requests) expect(r.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    // Kept like any other answer
+    const rows = cached();
+    expect(rows.map((r) => r.key)).toEqual(['github|1001|work']);
+    const before = fake.requests.length;
+    const again = await raw(srv.port, 'GET', '/api/forge/work', { cookie, 'if-none-match': res.headers.etag });
+    expect(again.status).toBe(304);
+    expect(fake.requests).toHaveLength(before);
+  });
+
+  it('cuts a long pull request text, and says in words when the spec PRs could not be read', async () => {
+    const cookie = await signIn();
+    // A head nobody read before (what is read at a commit is kept by its sha), whose files the forge cannot give
+    const open = { number: 12, title: 'Meals page', state: 'open', body: '', user: { login: 'agent-four' }, labels: [], head: { ref: 'feature/meals', sha: 'fresh' }, base: { ref: 'main' }, html_url: 'u', created_at: '2026-10-17T12:00:00Z', updated_at: '2026-10-17T12:00:00Z' };
+    state.override[OPEN_PULLS] = () => ({ body: [open] });
+    state.override['GET /api/v3/repos/owner/name/pulls/12/files?per_page=100'] = () => ({ status: 502, body: { message: 'Bad Gateway' } });
+    state.override['GET /api/v3/repos/owner/name/pulls?state=all&sort=created&direction=desc&per_page=100'] = () => ({ body: [{ number: 13, title: 'Long', state: 'open', body: `Closes #5 ${'x'.repeat(9000)}`, user: { login: 'agent-four' }, labels: [], head: { ref: 'a', sha: 's' }, base: { ref: 'main' }, html_url: 'u', created_at: '2026-10-17T12:00:00Z', updated_at: '2026-10-17T12:00:00Z' }] });
+    const res = await raw(srv.port, 'GET', '/api/forge/work', { cookie });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json.pulls[0].body).toHaveLength(4000);
+    expect(res.json.specsProblem).toEqual(expect.any(String));
+    expect(res.json.specs).toEqual([]);
+  });
+
+  it('is read-only like the other forge routes, and signed-in only', async () => {
+    const cookie = await signIn();
+    const post = await raw(srv.port, 'POST', '/api/forge/work', { cookie });
+    expect(post.status).toBe(405);
+    const without = await raw(plain.port, 'GET', '/api/forge/work');
+    expect([without.status, without.json.code]).toEqual([403, 'forbidden']);
   });
 
   it('with no forge in the config there is nothing to read', async () => {
