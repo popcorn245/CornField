@@ -264,6 +264,44 @@ describe('the forge routes', () => {
     await other.close();
   });
 
+  it('Forgejo answers through the same interface: its pull requests, one with its files and its statuses as checks', async () => {
+    const routes = { 'POST /login/oauth/access_token': () => ({ body: { access_token: TOKEN, token_type: 'bearer' } }) };
+    for (const [key, answer] of Object.entries(recordings('forgejo'))) {
+      if (key.startsWith('_')) continue;
+      const [method, p] = key.split(' ');
+      routes[p.startsWith('/api/v1/') ? key : `${method} /api/v1${p}`] = answer;
+    }
+    const forgejo = await fakeForge(routes);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-forgejo-'));
+    const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: dir } });
+    Object.assign(config, { forge: { type: 'forgejo', url: forgejo.url, repo: 'owner/name' }, publicUrl: PUBLIC });
+    const env = { CORNFIELD_FORGEJO_CLIENT_ID: 'test-client-id', CORNFIELD_FORGEJO_CLIENT_SECRET: 'not-real', CORNFIELD_SESSION_SECRET: SESSION_SECRET };
+    const server = await start(config, { env });
+    try {
+      const started = await raw(server.port, 'GET', '/auth/start');
+      const to = new URL(started.headers.location);
+      const stateCookie = started.headers['set-cookie'].find((c) => c.startsWith('cornfield-oauth=')).split(';')[0];
+      const back = await raw(server.port, 'GET', `/auth/callback?code=c-maint&state=${to.searchParams.get('state')}`, { cookie: stateCookie });
+      expect(back.status, back.text).toBe(303);
+      const cookie = back.headers['set-cookie'].find((c) => c.startsWith('cornfield=')).split(';')[0];
+
+      const list = await raw(server.port, 'GET', '/api/forge/pulls', { cookie });
+      expect(list.status, list.text).toBe(200);
+      expect([list.json.ok, list.json.forge]).toEqual([true, 'forgejo']);
+      expect(list.json.items.map((p) => p.number)).toContain(12);
+      const one = await raw(server.port, 'GET', '/api/forge/pulls/12', { cookie });
+      expect(one.status, one.text).toBe(200);
+      expect(one.json.pull.number).toBe(12);
+      expect(one.json.files.length).toBeGreaterThan(0);
+      expect(Array.isArray(one.json.checks)).toBe(true);
+      for (const r of forgejo.requests.filter((q) => q.url.startsWith('/api/v1/repos/'))) expect(r.headers.authorization).toBe(`token ${TOKEN}`);
+    } finally {
+      await server.close();
+      await forgejo.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('with no forge in the config there is nothing to read', async () => {
     const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } });
     delete config.forge;
