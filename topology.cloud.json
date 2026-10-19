@@ -17,7 +17,7 @@
       "desc": "A Forgejo instance, when the config's forge is one: sign-in, issues, pull requests, comments, checks.",
       "breaks": "Now: a Forgejo-hosted repo's sign-in, issues, PRs and reviews stop; the map still shows.",
       "plan": { "tier": "free" },
-      "match": { "hosts": ["codeberg.org"] }
+      "uses": [{ "from": "core-server-forge-forgejo", "label": "the Forgejo API", "why": "The instance is the config's forge.url, so the code names no host for it" }]
     },
     {
       "id": "npm",

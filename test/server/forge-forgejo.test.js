@@ -198,6 +198,17 @@ describe('the Forgejo adapter', () => {
     expect(moved.message).toBe('Forgejo refused: pull request #12 in owner/name cannot be changed that way now. Forgejo said: "Head branch was modified. Review and try the merge again."');
   });
 
+  it('answers a landed merge as landed even when reading the pull request back fails', async () => {
+    let reads = 0;
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls/12': () => (++reads === 1 ? { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } } : { status: 502, body: {} }),
+      'GET /repos/owner/name/commits/abc/status?limit=50': { body: { statuses: [{ context: 'ci', status: 'success' }] } },
+      'POST /repos/owner/name/pulls/12/merge': { status: 200 },
+    });
+    expect(await forge.merge(12, { onlyIfGreen: true })).toEqual({ sha: 'abc' });
+    expect(reads).toBe(2);
+  });
+
   it('sends the merge methods under Forgejo\'s names, and never a force', async () => {
     const forge = await forgeOn({
       'GET /repos/owner/name/pulls/12': { body: { number: 12, state: 'open', draft: false, head: { sha: 'abc' } } },
@@ -262,11 +273,13 @@ describe('the Forgejo adapter', () => {
     expect(await forge.branches()).toHaveLength(MAX_PAGES);
   });
 
-  it('never follows a next link to another origin, so the token stays with Forgejo (an instance behind a proxy that names itself otherwise ends the listing)', async () => {
+  it('never follows a next link to another origin, so the token stays with Forgejo; an instance behind a proxy that names itself otherwise says so', async () => {
     const forge = await forgeOn({
       'GET /repos/owner/name/branches?limit=50': { headers: { link: '<https://git.example.org/api/v1/repos/owner/name/branches?limit=50&page=2>; rel="next"' }, body: [{ name: 'main', commit: { id: 's' } }] },
     });
-    expect((await forge.branches()).map((b) => b.name)).toEqual(['main']);
+    const err = await forgeError(() => forge.branches(), 'unavailable');
+    expect(err.message).toContain('the next page of the branches of owner/name is at https://git.example.org');
+    expect(err.message).toContain('set forge.url to the address Forgejo calls itself');
     expect(fake.requests).toHaveLength(1);
   });
 

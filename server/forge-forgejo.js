@@ -23,7 +23,7 @@ import { createClient, ForgeError } from './forge-http.js';
 
 const NAME = 'Forgejo';
 const PER_PAGE = 50;
-const NO_URL = 'forge.url is required for Forgejo: the instance, like "https://codeberg.org".';
+const NO_URL = 'forge.url is required for Forgejo: the instance\'s address, like "https://forgejo.example.org".';
 
 /** Where a forge's API is: `<url>/api/v1`, under a path too when the instance is served from one */
 export function forgejoApiUrl(url) {
@@ -166,9 +166,14 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
 
     async mergeAt(n, { sha, method }) {
       await client.request('POST', `repos/${repo}/pulls/${n}/merge`, { body: { Do: method, head_commit_id: sha }, what: pullWhat(n) });
-      // Forgejo answers an empty 200, so the commit it made is read from the pull request (the head it landed, if it says none)
-      const { body } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
-      return { sha: body?.merge_commit_sha || sha };
+      // Forgejo answers an empty 200, so the commit it made is read from the pull request (the head it landed, if it
+      // says none). It has landed by now: a read that fails afterwards must not report the merge as failed.
+      try {
+        const { body } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+        return { sha: body?.merge_commit_sha || sha };
+      } catch {
+        return { sha };
+      }
     },
 
     async branches() {
