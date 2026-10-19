@@ -290,6 +290,23 @@ describe('a repo with only a Home Assistant URL and token', () => {
     expect(body.data.home_assistant.devices.find((d) => d.id === 'd-light').room_id).toBe('k');
   });
 
+  it('answers only a loopback Host: a foreign one gets 421 and Home Assistant is never asked', async () => {
+    const root = repo({ 'package.json': { name: 'flat' } });
+    const env = { CORNFIELD_HA_URL: ha.url, CORNFIELD_HA_TOKEN: TOKEN };
+    const server = createCornfieldServer(await loadConfig(root, { env }), { env });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const before = ha.seen.length;
+    try {
+      const status = await new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: server.address().port, path: '/cornfield/house.json', headers: { Host: 'attacker.example.test' } }, (res) => { res.resume(); resolve(res.statusCode); });
+        req.on('error', reject);
+        req.end();
+      });
+      expect(status).toBe(421);
+      expect(ha.seen.length).toBe(before);
+    } finally { server.closeAllConnections?.(); await new Promise((r) => server.close(r)); }
+  });
+
   it('refuses a token in the config, and a URL that is not one', () => {
     expect(configProblems({ sources: { house: { use: 'home-assistant', options: { token: 'x' } } } }).join()).toMatch(/token never goes in the config/);
     expect(configProblems({ sources: { house: { use: 'home-assistant', options: { url: 'homeassistant.local' } } } }).join()).toMatch(/url is Home Assistant's address/);
