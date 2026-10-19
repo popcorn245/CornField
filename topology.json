@@ -1312,6 +1312,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Sign-in (docs/sign-in.md)."
+    },
+    {
+      "id": "core-server-proposal-pulls",
+      "label": "proposal-pulls.js",
+      "type": "core",
+      "file": "server/proposal-pulls.js",
+      "summary": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit. (server/proposal-pulls.js)"
     }
   ],
   "edges": [
@@ -3628,7 +3638,40 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-proposal-pulls"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:02:16.896Z"
+  "updatedAt": "2026-10-19T22:13:42.207Z"
 }

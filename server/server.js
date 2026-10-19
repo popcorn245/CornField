@@ -15,7 +15,7 @@
  *   GET  /cornfield/config.json         what the browser needs of the config: title, links, forge, sources
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
- *   *    /proposals…                    server/proposals.js
+ *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
  * With sign-in configured, every route but /healthz and /auth/… passes the admins-only guard first (server/auth.js):
@@ -169,7 +169,7 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
-    if (serveProposals(req, res, reqPath, url, where)) return;
+    if (serveProposals(req, res, reqPath, url, where, gate.session ? () => auth.forgeFor(gate.session) : null)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();

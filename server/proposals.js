@@ -23,12 +23,21 @@
  * `{ root, proposals, worktrees, topology, dataDir, publicHost? }` (core/config.js names them). A file that does not
  * parse is listed with an `error` instead of breaking the list. The listing carries each proposal's
  * `review: { verdict, at } | null`.
+ *
+ * With sign-in the server also passes `forgeFor`, which gives the forge as the signed-in maintainer
+ * (server/server.js), and the open spec PRs are listed too (server/proposal-pulls.js): source `pull/<n>`, a
+ * `pull: { number, title, url, draft, author }` on the entry, the file read at the PR's head commit. A forge that
+ * cannot answer does not break the list: the checkout and the worktrees are listed, and `X-Proposals-Forge-Error`
+ * (percent-encoded) says why the PRs are not. A PR's review is not taken here yet (reviews as PR comments are the
+ * next step). Without `forgeFor` nothing is asked of a forge and the routes answer as they always have.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { findProposalFile, listProposalFiles, reviewFilePath } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
+import { ForgeError } from './forge.js';
+import { findPullProposal,forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
 
@@ -227,6 +236,11 @@ function describeEntry(entry, topology, dataDir) {
   } catch (err) {
     return { slug, title: slug, summary: '', spec: null, source, counts: null, errors: null, review, error: `Not valid JSON: ${err.message}` };
   }
+  return { ...describeProposal(slug, source, proposal, topology), review };
+}
+
+/** What a listing entry says of a parsed proposal (the file may hold anything JSON can) */
+function describeProposal(slug, source, proposal, topology) {
   const object = proposal !== null && typeof proposal === 'object' && !Array.isArray(proposal);
   const text = (v) => (typeof v === 'string' ? v : '');
   return {
@@ -237,8 +251,20 @@ function describeEntry(entry, topology, dataDir) {
     source,
     counts: summarize(proposal),
     errors: topology ? proposalProblems(topology, proposal).errors.length : null,
-    review,
   };
+}
+
+/** The listing entry of a file in an open spec PR, read at the PR's head. A file the forge cannot give is listed with its error. */
+async function describePull(entry, forge, topology) {
+  const { slug, source, pull } = entry;
+  let proposal;
+  try {
+    proposal = JSON.parse(await readPullProposal(forge, entry));
+  } catch (err) {
+    const why = err instanceof SyntaxError ? `Not valid JSON: ${err.message}` : forgeWords(err);
+    return { slug, title: slug, summary: '', spec: null, source, counts: null, errors: null, review: null, pull, error: why };
+  }
+  return { ...describeProposal(slug, source, proposal, topology), review: null, pull };
 }
 
 /** The listing `GET /proposals` answers with */
@@ -248,24 +274,78 @@ export function listProposals(where) {
 }
 
 /**
+ * The listing with the open spec PRs in it, and the words for why they are missing when the forge could not be asked.
+ * The checkout and the worktrees come first within a slug, then the PRs, newest first.
+ * @param {object} where
+ * @param {() => import('./forge.js').Forge} forgeFor
+ * @returns {Promise<{ list: object[], problem: string | null }>}
+ */
+async function listWithPulls(where, forgeFor) {
+  const topology = readTopology(where);
+  const local = listProposalFiles(where).map((entry) => describeEntry(entry, topology, where.dataDir));
+  let forge;
+  try {
+    forge = forgeFor();
+  } catch (err) {
+    return { list: local, problem: forgeWords(err) };
+  }
+  const { entries, problem } = await listPullProposals(forge, where);
+  const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, topology)));
+  const list = [...local, ...pulls].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+  return { list, problem };
+}
+
+/** GET /proposals/<slug>.json for a proposal that is not in a folder here: one in an open spec PR, if the forge has it */
+async function servePull(res, where, forgeFor, slug, source) {
+  const n = pullNumber(source);
+  if (source && n === null) return send(res, 404, { error: 'No such proposal' });
+  let entry;
+  let text;
+  try {
+    const forge = forgeFor();
+    entry = n === null ? (await listPullProposals(forge, where)).entries.find((e) => e.slug === slug) : await findPullProposal(forge, where, slug, n);
+    if (!entry) return send(res, 404, { error: 'No such proposal' });
+    text = await readPullProposal(forge, entry);
+  } catch (err) {
+    return send(res, err instanceof ForgeError ? (err.code === 'not-found' ? 404 : 502) : 500, { error: forgeWords(err) });
+  }
+  try {
+    JSON.parse(text);
+  } catch (err) {
+    return send(res, 422, { error: `Not valid JSON: ${err.message}` });
+  }
+  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source) });
+}
+
+/**
  * Answers a request under `/proposals`, or returns false when it is not one.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded request path
  * @param {URL} url
  * @param {{ root: string, proposals: string, worktrees?: string|null, topology?: string, dataDir: string, publicHost?: string|null }} where
+ * @param {(() => import('./forge.js').Forge) | null} [forgeFor] the forge as the signed-in user; null without sign-in
  * @returns {boolean} true when the request was answered
  */
-export function serveProposals(req, res, reqPath, url, where) {
+export function serveProposals(req, res, reqPath, url, where, forgeFor = null) {
   if (reqPath !== '/proposals' && !reqPath.startsWith('/proposals/')) return false;
 
   // The review of one proposal (spec 0012 B5): the only thing here that can be written
   const review = /^\/proposals\/([^/]+)\/review$/.exec(reqPath);
   if (review) {
+    // A proposal of a spec PR is reviewed on the PR (a later step); until then there is nothing to read or write here
+    const onPull = forgeFor && pullNumber(url.searchParams.get('source')) !== null;
     if (req.method === 'PUT') {
+      if (onPull) {
+        req.resume();
+        send(res, 409, { error: 'A review of a spec PR is not posted from cornfield yet; comment on the PR for now.' });
+        return true;
+      }
       putReview(req, res, url, where, review[1]).catch(() => {
         if (!res.headersSent) send(res, 500, { error: 'The review could not be saved' });
       });
+    } else if (onPull && (req.method === 'GET' || req.method === 'HEAD')) {
+      send(res, 404, { error: 'No review yet' });
     } else if (req.method === 'GET' || req.method === 'HEAD') {
       const entry = findProposalFile(where, review[1], url.searchParams.get('source') || null);
       const found = entry && readReview(entry, where.dataDir);
@@ -284,15 +364,30 @@ export function serveProposals(req, res, reqPath, url, where) {
   }
 
   if (reqPath === '/proposals') {
-    send(res, 200, listProposals(where));
+    if (!forgeFor) {
+      send(res, 200, listProposals(where));
+      return true;
+    }
+    listWithPulls(where, forgeFor).then(({ list, problem }) => {
+      send(res, 200, list, problem ? { 'X-Proposals-Forge-Error': encodeURIComponent(problem) } : {});
+    }).catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'The proposals could not be listed' });
+    });
     return true;
   }
 
   // /proposals/<slug>.json: one name, no further slashes. What is asked for is looked up in the
   // listing; it never becomes part of a path.
   const m = /^\/proposals\/([^/]+)\.json$/.exec(reqPath);
-  const entry = m ? findProposalFile(where, m[1], url.searchParams.get('source') || null) : null;
+  const source = url.searchParams.get('source') || null;
+  const entry = m ? findProposalFile(where, m[1], source) : null;
   if (!entry) {
+    if (m && forgeFor) {
+      servePull(res, where, forgeFor, m[1], source).catch(() => {
+        if (!res.headersSent) send(res, 500, { error: 'The proposal could not be read' });
+      });
+      return true;
+    }
     send(res, 404, { error: 'No such proposal' });
     return true;
   }
