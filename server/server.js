@@ -18,6 +18,8 @@
  *   *    /proposals…                    server/proposals.js
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
+ * Before any route, `Host` must be a loopback name, or with sign-in the public URL's host too (else 421): a page on
+ * another site could otherwise reach this server by DNS rebinding (server/bind.js `hostAllowed`).
  * With sign-in configured, every route but /healthz and /auth/… passes the admins-only guard first (server/auth.js):
  * no session is the sign-in page or a 401, a non-maintainer the "ask a maintainer" page or a 403. Without it, `listen`
  * only binds to loopback (server/bind.js); with it and an https public URL, it may bind to any address.
@@ -36,7 +38,7 @@ import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { proxyTo } from './proxy.js';
-import { assertBind } from './bind.js';
+import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -147,6 +149,17 @@ export function createCornfieldServer(config, opts = {}) {
     res.setHeader('Content-Security-Policy', csp);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
+    // The first thing: before the guard and the proxies, so no route (/healthz included) answers a foreign `Host`
+    // One `Host` only (Node keeps the first of several), and a request target in absolute form (`GET http://name/…`),
+    // which outranks `Host`, must name an allowed host too
+    const hosts = req.rawHeaders.filter((_, i) => i % 2 === 0 && req.rawHeaders[i].toLowerCase() === 'host').length;
+    const absolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(req.url || '') ? /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(req.url)[1] : null;
+    const allowedHost = (h) => hostAllowed(h, auth.enabled ? publicHost : null);
+    if (hosts !== 1 || !allowedHost(req.headers.host) || (absolute !== null && !allowedHost(absolute))) {
+      req.resume();
+      res.writeHead(421, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('421 Misdirected Request: cornfield answers only to localhost, or to its public URL when sign-in is on');
+    }
     let url;
     try {
       url = new URL(req.url, 'http://localhost');
