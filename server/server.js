@@ -13,11 +13,14 @@
  *   GET  /topology.cloud.json           the repo's cloud registry, without its env var names
  *   GET  /topology-fixture.json?nodes=… a synthetic map to measure the explorer on, made in memory
  *   GET  /cornfield/config.json         what the browser needs of the config: title, links, forge, sources
- *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source
+ *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
+ *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
  *   *    /proposals…                    server/proposals.js
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
+ * Before any route, `Host` must be a loopback name, or with sign-in the public URL's host too (else 421): a page on
+ * another site could otherwise reach this server by DNS rebinding (server/bind.js `hostAllowed`).
  * With sign-in configured, every route but /healthz and /auth/… passes the admins-only guard first (server/auth.js):
  * no session is the sign-in page or a 401, a non-maintainer the "ask a maintainer" page or a 403. Without it, `listen`
  * only binds to loopback (server/bind.js); with it and an https public URL, it may bind to any address.
@@ -36,7 +39,8 @@ import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { proxyTo } from './proxy.js';
-import { assertBind } from './bind.js';
+import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
+import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -104,13 +108,19 @@ function publicRegistry(text) {
   return JSON.stringify(file);
 }
 
+/** How long a Home Assistant answer is reused before the registries are read again */
+export const HA_CACHE_MS = 30_000;
+
 /**
  * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
- * @param {Parameters<typeof createAuth>[1]} [opts] what sign-in reads (`env`, and tests' fakes); see server/auth.js
+ * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object }} [opts] what sign-in reads (`env`, and tests' fakes;
+ *   see server/auth.js); the Home Assistant URL and token are read from the same `env`, and `homeAssistant` is what
+ *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket)
  * @returns {import('node:http').Server}
  */
 export function createCornfieldServer(config, opts = {}) {
+  const { env = process.env, homeAssistant = {} } = opts;
   const auth = createAuth(config, opts);
   const root = config.root;
   const importMap = importMapOf(config);
@@ -122,6 +132,22 @@ export function createCornfieldServer(config, opts = {}) {
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
   const houseFile = houseSource && houseSource.options && houseSource.options.file ? inside(root, houseSource.options.file) : null;
+  const haSource = config.sources.house && (config.sources.house === 'home-assistant' || config.sources.house.use === 'home-assistant') ? config.sources.house : null;
+  const haOptions = (haSource && typeof haSource === 'object' && haSource.options) || {};
+  const haFile = haOptions.file ? inside(root, haOptions.file) : null;
+  let haCache = null; // { until, promise }
+  /** Home Assistant's house answer, over the house file's plan and other parts when there is one; reused for HA_CACHE_MS */
+  const haHouse = () => {
+    const now = Date.now();
+    if (haCache && haCache.until > now) return haCache.promise;
+    let file = null;
+    if (haFile && fs.existsSync(haFile)) {
+      try { file = JSON.parse(fs.readFileSync(haFile, 'utf8')); } catch { file = null; }
+    }
+    const promise = homeAssistantHouse({ url: haOptions.url || env[HA_ENV.url], token: env[HA_ENV.token], file, ...homeAssistant });
+    haCache = { until: now + HA_CACHE_MS, promise };
+    return promise;
+  };
 
   const page = () => {
     const html = fs.readFileSync(path.join(EXPLORER_DIR, 'index.html'), 'utf8')
@@ -147,6 +173,17 @@ export function createCornfieldServer(config, opts = {}) {
     res.setHeader('Content-Security-Policy', csp);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');
+    // The first thing: before the guard and the proxies, so no route (/healthz included) answers a foreign `Host`
+    // One `Host` only (Node keeps the first of several), and a request target in absolute form (`GET http://name/…`),
+    // which outranks `Host`, must name an allowed host too
+    const hosts = req.rawHeaders.filter((_, i) => i % 2 === 0 && req.rawHeaders[i].toLowerCase() === 'host').length;
+    const absolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(req.url || '') ? /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(req.url)[1] : null;
+    const allowedHost = (h) => hostAllowed(h, auth.enabled ? publicHost : null);
+    if (hosts !== 1 || !allowedHost(req.headers.host) || (absolute !== null && !allowedHost(absolute))) {
+      req.resume();
+      res.writeHead(421, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('421 Misdirected Request: cornfield answers only to localhost, or to its public URL when sign-in is on');
+    }
     let url;
     try {
       url = new URL(req.url, 'http://localhost');
@@ -197,6 +234,7 @@ export function createCornfieldServer(config, opts = {}) {
         return sendJson(res, 422, { error: `${CLOUD_FILE} is not valid JSON` });
       }
     }
+    if (reqPath === '/cornfield/house.json' && haSource) return sendJson(res, 200, { ok: true, data: await haHouse() });
     if (reqPath === '/cornfield/house.json') {
       if (!houseFile || !fs.existsSync(houseFile)) return sendJson(res, 404, { ok: false, error: 'No house file is configured (sources.house.options.file)' });
       try {
