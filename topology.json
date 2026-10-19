@@ -741,6 +741,14 @@
       "desc": "Cloud file (topology.cloud.json)."
     },
     {
+      "id": "store-cornfield-db",
+      "label": "cornfield.db",
+      "type": "store",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "cornfield's own SQLite file, in its data folder, never in a checkout."
+    },
+    {
       "id": "ext-github",
       "label": "GitHub",
       "type": "external",
@@ -809,6 +817,16 @@
       },
       "r": 21,
       "color": "#94a3b8"
+    },
+    {
+      "id": "core-server-db",
+      "label": "db.js",
+      "type": "core",
+      "file": "server/db.js",
+      "summary": "cornfield's own SQLite file: `cornfield.db` in the data folder (`config.dataDir`, never a checkout), over Node's built-in `node:sqlite`, so still no dependency.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge caches; numbered migrations."
     },
     {
       "id": "core-server-forge-github",
@@ -2225,6 +2243,10 @@
       "to": "store-cloud"
     },
     {
+      "from": "root",
+      "to": "store-cornfield-db"
+    },
+    {
       "from": "store-cloud",
       "to": "ext-github"
     },
@@ -2304,6 +2326,15 @@
     },
     {
       "from": "pkg-server",
+      "to": "core-server-db"
+    },
+    {
+      "from": "core-server-db",
+      "to": "store-cornfield-db",
+      "label": "opens it"
+    },
+    {
+      "from": "pkg-server",
       "to": "core-server-forge-github"
     },
     {
@@ -2340,5 +2371,5 @@
       "label": "calls"
     }
   ],
-  "updatedAt": "2026-10-19T21:17:33.029Z"
+  "updatedAt": "2026-10-19T21:20:44.997Z"
 }
