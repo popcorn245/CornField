@@ -1343,6 +1343,16 @@
       "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
     },
     {
+      "id": "page-doc-docs-deploy",
+      "type": "page",
+      "label": "/docs/deploy",
+      "file": "docs/deploy.md",
+      "summary": "Deploy: cornfield always on",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Deploy: cornfield always on (docs/deploy.md)."
+    },
+    {
       "id": "core-server-forge-forgejo",
       "label": "forge-forgejo.js",
       "type": "core",
@@ -2824,7 +2834,7 @@
       "to": "ext-docker-hub",
       "kind": "calls",
       "status": "live",
-      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00",
+      "label": "test.yml: docker run cornfield · test.yml: docker run arguments · test.yml: docker run $@ · test.yml: docker run /tmp",
       "when": "deploy"
     },
     {
@@ -3722,6 +3732,30 @@
       "dashed": true
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-deploy"
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
       "from": "pkg-server",
       "to": "core-server-forge-forgejo"
     },
@@ -3749,5 +3783,5 @@
       "label": "the Forgejo API"
     }
   ],
-  "updatedAt": "2026-10-19T22:18:14.501Z"
+  "updatedAt": "2026-10-19T22:24:36.008Z"
 }

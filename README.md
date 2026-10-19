@@ -52,7 +52,7 @@ docker run -d --name cornfield --network host \
   -v "$PWD:/repo:ro" -v cornfield-data:/data ghcr.io/popcorn245/cornfield
 ```
 
-[compose.example.yml](compose.example.yml) is the same as a compose service. Host networking is what keeps it on the host's loopback without sign-in.
+That form has no sign-in, so it only listens on the host's loopback. For a hosted cornfield, [compose.example.yml](compose.example.yml) adds forge sign-in, the public URL, secrets from the environment and a reverse proxy in front: [docs/deploy.md](docs/deploy.md).
 
 ## Commands
 
