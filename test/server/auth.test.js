@@ -275,6 +275,35 @@ describe('sign-in with GitHub, and the guard', () => {
     expect((await get('/proposals', { accept: 'text/html,application/xhtml+xml' })).body).toContain('Sign in with GitHub');
   });
 
+  it('lists the open spec PRs for a maintainer, asked of the forge with their own token; the forge down leaves the local proposals and says why', async () => {
+    const pulls = 'GET /api/v3/repos/acme/home/pulls?state=open&sort=created&direction=desc&per_page=100';
+    const asked = [];
+    gh.routes[pulls] = (req) => { asked.push(req.headers.authorization); return { body: [{ number: 7, title: 'Meals', state: 'open', draft: false, user: { login: 'agent-four' }, labels: [], head: { ref: 'spec', sha: 'a'.repeat(40) }, base: { ref: 'main' }, html_url: 'https://forge.example/acme/home/pull/7' }] }; };
+    gh.routes['GET /api/v3/repos/acme/home/pulls/7'] = { body: { number: 7, title: 'Meals', state: 'open', draft: false, user: { login: 'agent-four' }, labels: [], head: { ref: 'spec', sha: 'a'.repeat(40) }, base: { ref: 'main' }, html_url: 'https://forge.example/acme/home/pull/7' } };
+    gh.routes['GET /api/v3/repos/acme/home/pulls/7/files?per_page=100'] = { body: [{ filename: 'docs/specs/proposals/0042-meals.json', status: 'added' }] };
+    gh.routes[`GET /api/v3/repos/acme/home/contents/docs/specs/proposals/0042-meals.json?ref=${'a'.repeat(40)}`] = { headers: { 'content-type': 'application/vnd.github.raw' }, body: JSON.stringify({ version: 1, title: 'Meals', summary: 's' }) };
+    try {
+      const cookie = await signIn('c-maint');
+      const list = JSON.parse((await get('/proposals', { cookie })).body);
+      expect(list.find((e) => e.source === 'pull/7')).toMatchObject({ slug: '0042-meals', title: 'Meals', pull: { number: 7, author: 'agent-four' } });
+      expect(list.some((e) => e.source === 'checkout')).toBe(true);
+      expect(asked).toEqual(['Bearer tok-maint']);
+      expect((await get('/proposals/0042-meals.json?source=pull%2F7', { cookie })).status).toBe(200);
+      gh.routes[pulls] = { status: 503, body: { message: 'Unavailable' } };
+      const down = await get('/proposals', { cookie });
+      expect(down.status).toBe(200);
+      expect(decodeURIComponent(down.headers['x-proposals-forge-error'])).toMatch(/could not answer/);
+      expect(JSON.parse(down.body).some((e) => e.source === 'checkout')).toBe(true);
+      // Signed out, nothing reaches the forge
+      asked.length = 0;
+      gh.routes[pulls] = (req) => { asked.push(req.headers.authorization); return { body: [] }; };
+      expect((await get('/proposals')).status).toBe(401);
+      expect(asked).toEqual([]);
+    } finally {
+      delete gh.routes[pulls];
+    }
+  });
+
   it('a cookie that names no session, or one that has ended, is signed out', async () => {
     expect((await get('/topology.json', { cookie: 'cornfield=made-up' })).status).toBe(401);
     const cookie = await signIn('c-maint');

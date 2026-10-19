@@ -130,6 +130,21 @@ describe('the picker', () => {
     expect(rows[0].dataset.source).toBe('topo-09');
   });
 
+  it('names the spec PR of a proposal, and says plainly why the PRs are missing when the forge could not be asked', async () => {
+    const pull = { number: 23, title: 'Meals proposal', url: 'https://forge.example/pull/23', draft: true, author: 'agent-four' };
+    const entry = { slug: '0013-meals', title: 'Meals', summary: 's', spec: '0013', source: 'pull/23', counts: { added: 1, changed: 0, removed: 0 }, errors: 0, review: null, pull };
+    const said = 'GitHub did not accept the sign-in; sign in again.';
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, headers: new Headers({ 'X-Proposals-Forge-Error': encodeURIComponent(said) }), json: async () => [entry] })));
+    await mount();
+    click($('proposal-btn'));
+    await settle();
+    const rows = [...document.querySelectorAll('.hx-proposal-item')]                 ;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Spec PR #23 (draft) by agent-four');
+    expect(rows[0].dataset.source).toBe('pull/23');
+    expect($('proposal-menu').textContent).toContain(`The spec PRs could not be listed: ${said}`);
+  });
+
   it('lists a file that does not parse, with its error, and cannot be opened', async () => {
     fakeHub(LISTING, {});
     await mount();
