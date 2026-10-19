@@ -1262,6 +1262,36 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Light and dark (MAP-01), the half that touches the page. (explorer/theme.js)"
+    },
+    {
+      "id": "core-explorer-keyboard-model",
+      "label": "keyboard-model.js",
+      "type": "core",
+      "file": "explorer/keyboard-model.js",
+      "summary": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told. (explorer/keyboard-model.js)"
+    },
+    {
+      "id": "core-explorer-keyboard",
+      "label": "keyboard.js",
+      "type": "core",
+      "file": "explorer/keyboard.js",
+      "summary": "The map by keyboard, and what a screen reader hears (MAP-02).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard, and what a screen reader hears (MAP-02). (explorer/keyboard.js)"
+    },
+    {
+      "id": "page-doc-docs-accessibility",
+      "type": "page",
+      "label": "/docs/accessibility",
+      "file": "docs/accessibility.md",
+      "summary": "Keyboard and screen readers",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Keyboard and screen readers (docs/accessibility.md)."
     }
   ],
   "edges": [
@@ -3443,7 +3473,77 @@
       "to": "core-explorer-theme-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-keyboard"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-accessibility"
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T21:50:54.740Z"
+  "updatedAt": "2026-10-19T21:54:35.895Z"
 }

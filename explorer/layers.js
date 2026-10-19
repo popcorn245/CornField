@@ -44,14 +44,21 @@ export function onLayersChange(fn) {
   return () => layerListeners.delete(fn);
 }
 
+/** The menu open or shut, and its button saying which (aria-expanded) */
+function setLegendMenu(open) {
+  const menu = document.getElementById('legend-dropdown');
+  if (menu) menu.hidden = !open;
+  const btn = document.getElementById('legend-toggle-btn');
+  if (btn) btn.setAttribute('aria-expanded', String(open));
+}
+
 export function toggleLegendMenu() {
   const menu = document.getElementById('legend-dropdown');
-  if (menu) menu.hidden = !menu.hidden;
+  if (menu) setLegendMenu(menu.hidden);
 }
 
 export function closeLegendMenu() {
-  const menu = document.getElementById('legend-dropdown');
-  if (menu) menu.hidden = true;
+  setLegendMenu(false);
 }
 
 export function renderLayerToggles() {

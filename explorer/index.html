@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>cornfield</title>
   <!-- The server puts the config's import map here (server/server.js), for a repo-local source's bare imports -->
   <!--@importmap-->
@@ -16,19 +16,21 @@
 <body>
   <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->
   <header class="hx-header">
+    <!-- The page's one heading, for a screen reader's list of headings (plugins.js puts the config's title in it) -->
+    <h1 id="cf-heading" class="hx-sr-only">cornfield: the map</h1>
     <div class="hx-header-left">
-      <button type="button" class="hx-brand" data-action="reset-view" title="Reset View">
+      <button type="button" class="hx-brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
         <span class="hx-live-dot"></span>
         <span id="cf-title" class="hx-title gradient-text">cornfield</span>
       </button>
 
       <div class="hx-menu-wrap">
-        <button type="button" id="legend-toggle-btn" class="hx-btn" data-action="toggle-layers-menu" aria-label="Layers" title="Toggle Architecture Layers">
-          <span class="hx-dots">
+        <button type="button" id="legend-toggle-btn" class="hx-btn" data-action="toggle-layers-menu" aria-label="Layers" aria-expanded="false" aria-controls="legend-dropdown" title="Toggle Architecture Layers">
+          <span class="hx-dots" aria-hidden="true">
             <span style="background:#6366f1"></span><span style="background:#06b6d4"></span><span style="background:#38bdf8"></span><span style="background:#10b981"></span><span style="background:#a855f7"></span><span style="background:#ec4899"></span><span style="background:#fb923c"></span>
           </span>
           <span class="hx-only-wide">Layers</span>
-          <span class="hx-faint">▾</span>
+          <span class="hx-faint" aria-hidden="true">▾</span>
         </button>
 
         <!-- Interactive section toggles and the legend -->
@@ -107,22 +109,22 @@
     <div class="hx-header-right">
       <button type="button" id="mobile-search-toggle" class="hx-btn hx-btn--icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes">⌕</button>
 
-      <div class="hx-search hx-only-desktop">
+      <div class="hx-search hx-only-desktop" role="search">
         <input type="text" id="node-search" class="hx-input" placeholder="Search..." aria-label="Search nodes" />
       </div>
 
       <button type="button" id="freeform-toggle-btn" class="hx-btn" data-action="toggle-freeform" title="Toggle between Orbit parent clustering and freeform node dragging">
-        <span id="freeform-toggle-icon">🔒</span>
+        <span id="freeform-toggle-icon" aria-hidden="true">🔒</span>
         <span class="hx-only-wide" id="freeform-toggle-label">Orbit</span>
       </button>
 
       <button type="button" id="reset-positions-btn" class="hx-btn hx-btn--quiet" data-action="reset-positions" title="Reset custom dragged positions back to orbit" hidden>Reset Layout</button>
 
       <div class="hx-zoom hx-only-desktop">
-        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In">+</button>
-        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out">−</button>
-        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View">⟲</button>
-        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen">⛶</button>
+        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
+        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
+        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View" aria-label="Reset the view">⟲</button>
+        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit to the screen">⛶</button>
       </div>
 
       <!-- Light, dark or the system's (theme.js): steps through them; its label says which is on -->
@@ -141,15 +143,19 @@
   </header>
 
   <!-- Mobile search bar -->
-  <div id="mobile-search-bar" class="hx-mobile-search glass-header" hidden>
+  <div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden>
     <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" />
     <button type="button" class="hx-textbtn" data-action="clear-search" aria-label="Clear search">✕</button>
     <button type="button" class="hx-textbtn" data-action="close-mobile-search">Cancel</button>
   </div>
 
   <!-- The map -->
-  <div class="hx-stage">
-    <canvas id="graph-canvas"></canvas>
+  <div class="hx-stage" role="main">
+    <!-- The map takes the keyboard when it has the focus (keyboard.js): its keys are below, read out with its name -->
+    <canvas id="graph-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help"></canvas>
+    <p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>
+    <!-- What the keyboard landed on, said by a screen reader (keyboard.js) -->
+    <p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>
     <!-- Every label, drawn on its own transparent canvas over the map (explorer/labels.js); the map canvas still gets the pointer -->
     <canvas id="label-canvas" aria-hidden="true"></canvas>
 
@@ -180,7 +186,7 @@
     </section>
 
     <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile -->
-    <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details">
+    <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert>
       <div class="hx-drawer-body">
         <div class="hx-drawer-head">
           <span class="hx-drawer-title-wrap">
@@ -218,7 +224,7 @@
     </div>
 
     <div class="hx-hint glass">
-      <span class="hx-accent">👆</span>
+      <span class="hx-accent" aria-hidden="true">👆</span>
       <span id="instruction-badge-text">Tap node to inspect live spec</span>
     </div>
 

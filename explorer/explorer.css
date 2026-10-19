@@ -736,3 +736,12 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 :root[data-theme="light"] .hx-drawer { box-shadow: -10px 0 30px -12px rgba(15, 23, 42, 0.18); }
 :root[data-theme="light"] .hx-drawer:not(.drawer-open) { box-shadow: none; }
 :root[data-theme="light"] .hx-btn--active, :root[data-theme="light"] .hx-btn--active:hover, :root[data-theme="light"] .hx-seg-btn[aria-pressed="true"] { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
+
+/* ---- keyboard and screen reader (MAP-02, keyboard.js) ------------------------------------------
+   Text only a screen reader reads (the heading, the map's keys, the announcer); a focus ring on everything that
+   takes the focus, the map included (the more specific rings above still win where they are set). */
+.hx-sr-only { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+:where(button, a[href], summary, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+#graph-canvas:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: -3px; }
+.hx-drawer-title:focus { outline: none; }
+.hx-drawer-title:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }

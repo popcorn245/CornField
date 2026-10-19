@@ -23,6 +23,7 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
 - The `openapi` deriver: an API's endpoints from its OpenAPI, Swagger or OpenCollection file, as page nodes with their methods under the API's app (SRC-05). `test/fixtures/openapi` is a repo with nothing but an OpenAPI file.
 - The starter deriver reads Python packages, Go modules and Rust crates the way it reads npm workspaces: their manifests, the imports between them, and a dependency declared and never imported (SRC-04). A fixture repo per language in `test/fixtures/python`, `go` and `rust`.
 - Light mode (MAP-01): the explorer follows the system's light or dark setting, and a toggle in the header steps through system, light and dark (kept in the browser; `?theme=light|dark` for one visit). Both renderers and the labels draw the light map, its colours derived from the dark ones: the same hues, deepened to at least 3:1 on the light ground (4.5:1 for text).
+- Keyboard and screen readers (MAP-02): the map takes the focus and its keys (arrows pan, + and - zoom, 0 fits, N and P step through the nodes, Enter and Escape go into and out of the panel, Alt+arrow moves a node in Freeform); a live region says where the keyboard landed; Enter in the search selects the match; a what-if edge can be drawn from a list. The closed panel is inert, the menus say whether they are open, and the page has its landmarks and heading. axe-core (a dev dependency) checks each state of the page in the tests. [docs/accessibility.md](docs/accessibility.md).
 
 ### Changed
 

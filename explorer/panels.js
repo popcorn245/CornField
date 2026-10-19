@@ -180,6 +180,7 @@ export async function selectNode(node) {
   hydrateLivePhotos($('drawer-live'));
 
   $('spec-drawer').classList.add('drawer-open');
+  $('spec-drawer').inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
   $('drawer-backdrop').hidden = false;
 }
 
@@ -188,6 +189,7 @@ export function closeDrawer() {
   state.selectedEdge = null;
   clearScenario();
   $('spec-drawer').classList.remove('drawer-open');
+  $('spec-drawer').inert = true;
   $('drawer-backdrop').hidden = true;
   collapseSheet('drawer'); // the next node opens as a peek on a phone
   state.selectedNode = null;
