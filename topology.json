@@ -827,6 +827,25 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge caches; numbered migrations."
+    },
+    {
+      "id": "pkg-openapi",
+      "label": "plugins/openapi",
+      "type": "pkg",
+      "file": "plugins/openapi",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/openapi workspace package (plugins/openapi)."
+    },
+    {
+      "id": "core-plugins-openapi-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/openapi/index.js",
+      "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
     }
   ],
   "edges": [
@@ -2302,7 +2321,15 @@
       "from": "core-server-db",
       "to": "store-cornfield-db",
       "label": "opens it"
+    },
+    {
+      "from": "root",
+      "to": "pkg-openapi"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "core-plugins-openapi-index"
     }
   ],
-  "updatedAt": "2026-10-19T21:07:46.067Z"
+  "updatedAt": "2026-10-19T21:23:12.409Z"
 }

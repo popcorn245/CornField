@@ -1,6 +1,6 @@
 # Derivers (contract 1)
 
-A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships three: `starter`, `personas` and `cloud`. A repo adds its own by path.
+A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships four: `starter`, `personas`, `openapi` and `cloud`. A repo adds its own by path.
 
 ```js
 // cornfield.config.js
@@ -62,6 +62,7 @@ export default {
 
 - **starter** (`plugins/starter`): packages from npm workspaces (or each top-level folder with code, or `options.packages`), the imports between them, a dependency declared and never imported; with `modules: true`, one node per source file with the first sentence of its doc comment as its summary. Options: `{ packages, modules, tests, extensions }`.
 - **personas** (`plugins/personas`): `topology.personas.json` as a store node and one persona node each. Roles come from `personas.roles` in the config (any kebab-case role when none). See [core/personas.js](../core/personas.js).
+- **openapi** (`plugins/openapi`): an API's endpoints from its OpenAPI 3.x or Swagger 2.0 file (JSON, or YAML with the optional js-yaml), or an OpenCollection: one page node per path, labelled with the path under the API's base (`servers[0]`, `basePath` or `prefix`), with its `methods`, under the API's app (`app-api` unless `app` names another). The app is another deriver's or the map's when it is there; else this deriver makes it from the spec's title. The app's pages are the spec's: an endpoint gone from the file leaves the map. With no options it reads the one `openapi.*`, `swagger.*`, `*.openapi.*` or `opencollection.*` file of the repo. Options: `{ file, app, prefix }`, or `{ specs: [{ file, app, prefix }] }` for several APIs.
 - **cloud** (`plugins/cloud`): `topology.cloud.json` and its detectors. See [cloud.md](cloud.md).
 
 ## Versions
