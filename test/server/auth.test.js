@@ -121,7 +121,8 @@ describe('sign-in with GitHub, and the guard', () => {
     config.forge = { type: 'github', url: fake.url, repo: 'acme/home' };
     config.publicUrl = PUBLIC;
     srv = await serverOn(config, { env: ENV, now: () => clock });
-    plain = await serverOn(await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } }), { env: {} });
+    // The same forge (the sample's own has no adapter yet), so a route that reads it answers alike with and without sign-in
+    plain = await serverOn(Object.assign(await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } }), { forge: config.forge }), { env: {} });
   });
   afterAll(async () => {
     await srv.close();
@@ -245,6 +246,7 @@ describe('sign-in with GitHub, and the guard', () => {
     ['GET', '/'], ['HEAD', '/'], ['GET', '/index.html'], ['GET', '/cornfield/config.json'], ['GET', '/topology.json'], ['GET', '/topology.cloud.json'],
     ['GET', '/cornfield/house.json'], ['GET', '/topology-fixture.json?nodes=300&edges=900&seed=4'], ['GET', '/explorer/main.js'], ['GET', '/explorer/explorer.css'],
     ['GET', '/core/schema.js'], ['GET', '/plugins/house/browser.js'], ['GET', '/repo/packages/api/src/server.js'], ['GET', '/proposals'],
+    ['GET', '/api/forge/issues'], ['GET', '/api/forge/pulls/12'], ['POST', '/api/forge/pulls'],
     ['GET', '/proposals/0002-checkout.json'], ['GET', '/proposals/0002-checkout/review'], ['GET', '/proposals/0002-checkout/mockups'], ['GET', '/proposals/0002-checkout/mockups/0'], ['PUT', '/proposals/0002-checkout/review', own, JSON.stringify({ verdict: 'approved' })],
     ['GET', '/.env'], ['GET', '/nope'], ['POST', '/topology.json'], ['DELETE', '/proposals'],
   ];
@@ -263,7 +265,12 @@ describe('sign-in with GitHub, and the guard', () => {
     expect(without.slice(0, 4)).toEqual([200, 200, 200, 200]);
     expect(await walk(srv.port, null)).toEqual(ROUTES.map(() => 401));
     expect(await walk(srv.port, await signIn('c-reader'))).toEqual(ROUTES.map(() => 403));
-    expect(await walk(srv.port, await signIn('c-maint'))).toEqual(without);
+    // A maintainer gets what Stage 1 gives, except the forge's reads: those need someone to ask as (403 without sign-in)
+    const forgeReads = ROUTES.map(([m, p]) => m === 'GET' && p.startsWith('/api/forge/'));
+    const maint = await walk(srv.port, await signIn('c-maint'));
+    expect(maint.filter((_, i) => !forgeReads[i])).toEqual(without.filter((_, i) => !forgeReads[i]));
+    expect(without.filter((_, i) => forgeReads[i])).toEqual([403, 403]);
+    for (const status of maint.filter((_, i) => forgeReads[i])) expect([401, 403]).not.toContain(status);
     const page = await get('/');
     expect(page.headers['content-type']).toMatch(/^text\/html/);
     expect(page.body).toContain('Sign in with GitHub');
@@ -301,6 +308,69 @@ describe('sign-in with GitHub, and the guard', () => {
       expect(asked).toEqual([]);
     } finally {
       delete gh.routes[pulls];
+    }
+  });
+
+  it('posts a review as the signed-in maintainer onto the PR, reads it back from the comments, and writes the audit row to the SQLite file; a Stage 1 review is carried over once', async () => {
+    const base = '/api/v3/repos/acme/home';
+    const sha = 'b'.repeat(40);
+    const pull = { number: 8, title: 'Plans', state: 'open', draft: false, user: { login: 'agent-four' }, labels: [], head: { ref: 'spec', sha }, base: { ref: 'main' }, html_url: 'https://forge.example/acme/home/pull/8' };
+    const comments = [];
+    const posts = [];
+    const mine = ['GET /user', `GET ${base}/pulls?state=open&sort=created&direction=desc&per_page=100`, `GET ${base}/pulls/8`, `GET ${base}/pulls/8/files?per_page=100`, `GET ${base}/contents/docs/specs/proposals/0043-plans.json?ref=${sha}`, `GET ${base}/issues/8/comments?per_page=100`, `POST ${base}/issues/8/comments`, `GET ${base}/collaborators/reader-two/permission`];
+    gh.routes[mine[1]] = { body: [pull] };
+    gh.routes[mine[2]] = { body: pull };
+    gh.routes[mine[3]] = { body: [{ filename: 'docs/specs/proposals/0043-plans.json', status: 'added' }] };
+    gh.routes[mine[4]] = { headers: { 'content-type': 'application/vnd.github.raw' }, body: JSON.stringify({ version: 1, title: 'Plans', summary: 's' }) };
+    gh.routes[mine[5]] = () => ({ body: comments });
+    gh.routes[mine[6]] = (req) => {
+      expect(req.headers.authorization).toBe('Bearer tok-maint');
+      const c = { id: 7000 + posts.length, user: { login: 'maintainer-one' }, body: JSON.parse(req.body).body, html_url: `https://forge.example/acme/home/pull/8#issuecomment-${7000 + posts.length}`, created_at: '2026-10-19T12:00:00Z', updated_at: '2026-10-19T12:00:00Z' };
+      posts.push(c);
+      comments.push(c);
+      return { status: 201, body: c };
+    };
+    gh.routes[mine[7]] = { body: { permission: 'read', role_name: 'read' } };
+    const kept = path.join(data, 'reviews', 'checkout', '0043-plans.review.json');
+    fs.mkdirSync(path.dirname(kept), { recursive: true });
+    fs.writeFileSync(kept, JSON.stringify({ version: 1, verdict: 'approved', note: 'Carried.', edits: [], at: '2026-10-01T00:00:00.000Z' }));
+    const audit = () => {
+      const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+      const rows = db.prepare("SELECT * FROM actions WHERE action = 'review' ORDER BY id").all();
+      db.close();
+      return rows;
+    };
+    const before = audit().length;
+    try {
+      const cookie = await signIn('c-maint');
+      // Opening the menu carries the Stage 1 review over once
+      expect((await get('/proposals', { cookie })).status).toBe(200);
+      expect(posts).toHaveLength(1);
+      expect(fs.existsSync(kept)).toBe(false);
+      expect(fs.existsSync(`${kept}.migrated`)).toBe(true);
+      await get('/proposals', { cookie });
+      expect(posts).toHaveLength(1);
+      // Send back from the page: the signed-in maintainer's token posts it
+      const own = { cookie, origin: `http://127.0.0.1:${srv.port}`, 'content-type': 'application/json' };
+      const sent = await raw(srv.port, 'PUT', '/proposals/0043-plans/review?source=pull%2F8', own, JSON.stringify({ verdict: 'notes', note: 'Smaller.', edits: [{ op: 'remove-node', id: 'x' }] }));
+      expect(sent.status, sent.body).toBe(200);
+      expect(posts).toHaveLength(2);
+      // A reader's comment after it does not change the review
+      comments.push({ id: 7100, user: { login: 'reader-two' }, body: '```cornfield-review 0043-plans\n{"verdict":"approved","note":"","edits":[]}\n```', html_url: 'x', created_at: '2026-10-19T12:05:00Z', updated_at: '2026-10-19T12:05:00Z' });
+      const back = JSON.parse((await raw(srv.port, 'GET', '/proposals/0043-plans/review?source=pull%2F8', { cookie })).body);
+      expect(back).toMatchObject({ verdict: 'notes', note: 'Smaller.', edits: [{ op: 'remove-node', id: 'x' }], by: 'maintainer-one', comment: { id: '7001' } });
+      // Two audit rows: the migrated one, and the send back; the token is nowhere in them
+      const rows = audit().slice(before);
+      expect(rows.map((r) => [r.login, r.action, r.target, r.status, JSON.parse(r.request).verdict])).toEqual([['maintainer-one', 'review', 'acme/home#8', 201, 'approved'], ['maintainer-one', 'review', 'acme/home#8', 201, 'notes']]);
+      expect(JSON.parse(rows[0].request).migrated).toBe('2026-10-01');
+      expect(JSON.parse(rows[1].answer)).toMatchObject({ comment: '7001' });
+      expect(JSON.stringify(rows)).not.toContain('tok-maint');
+      // A reader cannot post one
+      expect((await raw(srv.port, 'PUT', '/proposals/0043-plans/review?source=pull%2F8', { ...own, cookie: await signIn('c-reader') }, '{"verdict":"approved"}')).status).toBe(403);
+      expect(posts).toHaveLength(2);
+    } finally {
+      for (const k of mine.slice(1)) delete gh.routes[k];
+      fs.rmSync(`${kept}.migrated`, { force: true });
     }
   });
 

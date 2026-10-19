@@ -5,8 +5,8 @@
  * answer; `ForgeError`, in plain words, for anything that is not a 2xx (signed out, not allowed, not found, a rate
  * limit, the forge not answering); and pagination over `Link: <…>; rel="next"` (GitHub and Forgejo both send it).
  *
- * A token is only ever sent to the forge's own API origin: a `next` link to anywhere else ends the listing, and a
- * redirect is not followed (it is an error that says the repo has moved). Nothing here knows which forge it talks to beyond its name (for the words) and how
+ * A token is only ever sent to the forge's own API origin: a `next` link to anywhere else is an error (never followed,
+ * and never a list quietly cut short), and a redirect is not followed (an error that says the repo has moved). Nothing here knows which forge it talks to beyond its name (for the words) and how
  * it reads its rate-limit headers.
  */
 
@@ -205,7 +205,13 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
       if (!Array.isArray(these)) throw new ForgeError(`${forge} answered for ${what} with something that is not a list.`, { code: 'unavailable', forge });
       out.push(...these);
       const link = nextLink(got.get('link'));
-      next = link && new URL(link, base).origin === base.origin ? link : null;
+      next = link;
+      if (link) {
+        // The token never goes elsewhere, and a list is never quietly cut short: a next page on another origin is an
+        // error (a forge behind a proxy that names itself by another address, or a link that is not the forge's)
+        const at = new URL(link, base).origin;
+        if (at !== base.origin) throw new ForgeError(`${forge} says the next page of ${what} is at ${at}, not ${base.origin}, where cornfield sends the sign-in; set forge.url to the address ${forge} calls itself.`, { code: 'unavailable', forge });
+      }
     }
     return out.length > limit ? out.slice(0, limit) : out;
   }

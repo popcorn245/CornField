@@ -3,7 +3,8 @@
  * forge (test/server/fake-forge.js) that serves that forge's recorded answers (test/fixtures/forge/<name>.json).
  *
  * Each forge's recordings describe the same small world, so the answers here are the same for every adapter:
- *   - the repo owner/name; the signed-in user maintainer-one (id 1001), who maintains it; reader-two reads it;
+ *   - the repo owner/name; the signed-in user maintainer-one (id 1001), who maintains it (administers it, where the
+ *     forge has no maintain level); reader-two reads it;
  *     nobody-three is no collaborator
  *   - open issues #5 (labels v1, server) and #3 (on a second page); open PR #12 is not among them; #2 is closed
  *   - open PRs #13 (head def…, a failed lint and a running test) and #12 (head abc…, green); #14 is a draft;
@@ -33,10 +34,11 @@ export async function forgeError(fn, code) {
 }
 
 /**
- * @param {{ name: string, type: 'github' | 'forgejo', recordings: Record<string, any>, canRerun?: boolean }} opts
- *   `canRerun: false` for a forge whose API cannot re-run a check with a user's token: then none is `rerunnable`
+ * @param {{ name: string, type: 'github' | 'forgejo', recordings: Record<string, any>, canRerun?: boolean, maintainerPermission?: 'maintain' | 'admin' }} opts
+ *   `canRerun: false` for a forge whose API cannot re-run a check with a user's token: then none is `rerunnable`;
+ *   `maintainerPermission: 'admin'` for a forge with no `maintain` level: its recordings make maintainer-one an admin
  */
-export function forgeContract({ name, type, recordings, canRerun = true }) {
+export function forgeContract({ name, type, recordings, canRerun = true, maintainerPermission = 'maintain' }) {
   describe(`the forge contract: ${name}`, () => {
     let fake;
     let forge;
@@ -60,8 +62,8 @@ export function forgeContract({ name, type, recordings, canRerun = true }) {
     });
 
     it('permission(): the signed-in user, a reader, and someone who is no collaborator', async () => {
-      expect(await forge.permission('owner/name', 'maintainer-one')).toBe('maintain');
-      expect(await forge.permission('owner/name', 'Maintainer-One')).toBe('maintain');
+      expect(await forge.permission('owner/name', 'maintainer-one')).toBe(maintainerPermission);
+      expect(await forge.permission('owner/name', 'Maintainer-One')).toBe(maintainerPermission);
       expect(await forge.permission('owner/name', 'reader-two')).toBe('read');
       expect(await forge.permission('owner/name', 'nobody-three')).toBe('none');
     });

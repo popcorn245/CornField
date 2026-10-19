@@ -4,7 +4,8 @@
  * A proposal's mockups (server/mockups.js, and the routes of server/proposals.js that use it): the list with where each
  * stands with the review, each file with the headers that keep an untrusted HTML or SVG from running script against
  * cornfield's origin, paths that cannot leave the proposals folder, files of an open spec PR read at its head
- * commit (binary intact), and an approval that records the files so a later change shows as unreviewed.
+ * commit (binary intact), and an approval, posted as a review comment on the spec PR, that records the files' hashes so
+ * a later change shows as changed since the approval.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import fs from 'node:fs';
@@ -62,9 +63,6 @@ describe('mockups of a local proposal', () => {
     });
     req.on('error', reject);
     req.end(body);
-  });
-  const approve = () => call('/proposals/0020-screens/review', {
-    method: 'PUT', headers: { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ verdict: 'approved', note: '', edits: [] }),
   });
   const list = async () => JSON.parse((await call('/proposals/0020-screens/mockups?source=checkout')).text);
 
@@ -189,40 +187,13 @@ describe('mockups of a local proposal', () => {
     for (const method of ['POST', 'PUT', 'DELETE']) expect((await call('/proposals/0020-screens/mockups/0?source=checkout', { method })).status, method).toBe(405);
   });
 
-  it('records the files an approval covers, with their hashes, and nothing the page sends', async () => {
-    expect((await approve()).status).toBe(200);
-    const file = path.join(root, '.cornfield-data/reviews/checkout/0020-screens.review.json');
-    const review = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(review.mockups).toEqual([
-      { node: 'page-screens', path: '0020-screens/list.png', sha256: sha(PNG) },
-      { node: 'page-screens', path: '0020-screens/hostile.svg', sha256: sha(HOSTILE_SVG) },
-      { node: 'page-screens', path: '0020-screens/hostile.html', sha256: sha(HOSTILE_HTML) },
-      { node: 'page-screens', path: '0020-screens/gone.png', sha256: null },
-      { node: 'page-screens', path: '0020-screens/link.png', sha256: null },
-      { node: 'page-screens', path: '0020-screens/huge.png', sha256: null },
-    ]);
-    const forged = await call('/proposals/0020-screens/review', {
-      method: 'PUT', headers: { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ verdict: 'approved', mockups: [{ node: 'x', path: 'y.png', sha256: 'z' }] }),
+  it('has no PR to be reviewed on: its mockups read not reviewed, and nothing is recorded anywhere', async () => {
+    expect((await list()).map((m) => m.state)).toEqual(['unreviewed', 'unreviewed', 'unreviewed', 'missing', 'missing', 'missing']);
+    const put = await call('/proposals/0020-screens/review', {
+      method: 'PUT', headers: { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ verdict: 'approved', note: '', edits: [] }),
     });
-    expect(forged.status).toBe(400);
-  });
-
-  it('reads "reviewed" after an approval and "changed" once a file is not what was approved', async () => {
-    await approve();
-    expect((await list()).map((m) => m.state)).toEqual(['approved', 'approved', 'approved', 'missing', 'missing', 'missing']);
-    fs.writeFileSync(path.join(dir(), '0020-screens/hostile.svg'), `${HOSTILE_SVG}<!-- edited -->`);
-    expect((await list()).map((m) => m.state)).toEqual(['approved', 'changed', 'approved', 'missing', 'missing', 'missing']);
-    await approve(); // approving again covers the file as it is now
-    expect((await list())[1].state).toBe('approved');
-  });
-
-  it('reads "not reviewed" for a proposal sent back, and for a mockup added after an approval', async () => {
-    const sendBack = await call('/proposals/0020-screens/review', {
-      method: 'PUT', headers: { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ verdict: 'notes', note: 'no' }),
-    });
-    expect(sendBack.status).toBe(200);
-    expect(JSON.parse(fs.readFileSync(path.join(root, '.cornfield-data/reviews/checkout/0020-screens.review.json'), 'utf8'))).not.toHaveProperty('mockups');
+    expect(put.status).toBe(409);
+    expect(fs.existsSync(path.join(root, '.cornfield-data'))).toBe(false);
     expect((await list()).map((m) => m.state).slice(0, 3)).toEqual(['unreviewed', 'unreviewed', 'unreviewed']);
   });
 
@@ -250,23 +221,41 @@ describe('mockups of a spec PR', () => {
   let server;
   let port;
   let forgeFor;
+  let comments;
+  const signedIn = { login: 'maintainer-one', record: () => {} };
+  const NEW_PNG = Buffer.concat([PNG, Buffer.from([0x01])]);
+  let png = PNG;
 
   const routes = () => ({
+    'GET /repos/owner/name/issues/7/comments?per_page=100': () => ({ body: comments }),
+    'POST /repos/owner/name/issues/7/comments': (req) => {
+      const c = { id: 9000 + comments.length, user: { login: 'maintainer-one' }, body: JSON.parse(req.body).body, html_url: `https://github.example.com/owner/name/pull/7#issuecomment-${9000 + comments.length}`, created_at: '2026-10-19T12:00:00Z', updated_at: '2026-10-19T12:00:00Z' };
+      comments.push(c);
+      return { status: 201, body: c };
+    },
+    'GET /user': { body: { login: 'maintainer-one', id: 1, html_url: 'https://github.example.com/maintainer-one' } },
+    'GET /repos/owner/name': { body: { full_name: 'owner/name', permissions: { admin: true, maintain: true, push: true, triage: true, pull: true } } },
+    'GET /repos/owner/name/collaborators/maintainer-one/permission': { body: { permission: 'admin', role_name: 'admin' } },
     'GET /repos/owner/name/pulls/7': { body: pull },
     'GET /repos/owner/name/pulls/7/files?per_page=100': { body: [{ sha: 'a', filename: 'docs/specs/proposals/0021-pr.json', status: 'added', additions: 1, deletions: 0, changes: 1 }, { sha: 'b', filename: 'docs/specs/proposals/0021-pr/list.png', status: 'added', additions: 0, deletions: 0, changes: 0 }] },
     [`GET ${FOLDER}/0021-pr.json?ref=${HEAD}`]: { headers: { 'content-type': 'application/vnd.github.raw; charset=utf-8' }, body: JSON.stringify(prProposal) },
-    [`GET ${FOLDER}/0021-pr/list.png?ref=${HEAD}`]: { headers: { 'content-type': 'application/octet-stream' }, body: PNG },
+    [`GET ${FOLDER}/0021-pr/list.png?ref=${HEAD}`]: () => ({ headers: { 'content-type': 'application/octet-stream' }, body: png }),
     [`GET ${FOLDER}/0021-pr/page.html?ref=${HEAD}`]: { headers: { 'content-type': 'text/html' }, body: HOSTILE_HTML },
   });
-  const call = (target, method = 'GET') => new Promise((resolve, reject) => {
-    const req = http.request({ host: '127.0.0.1', port, method, path: target }, (res) => {
+  const call = (target, method = 'GET', body) => new Promise((resolve, reject) => {
+    const headers = body === undefined ? {} : { Origin: `http://127.0.0.1:${port}`, 'Content-Type': 'application/json' };
+    const req = http.request({ host: '127.0.0.1', port, method, path: target, headers }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => { const raw = Buffer.concat(chunks); resolve({ status: res.statusCode || 0, headers: res.headers, raw, text: raw.toString('utf8') }); });
     });
     req.on('error', reject);
-    req.end();
+    req.end(body);
   });
+  const review = (body) => call('/proposals/0021-pr/review?source=pull%2F7', 'PUT', JSON.stringify(body));
+  const states = async () => { const r = await call('/proposals/0021-pr/mockups?source=pull%2F7'); expect(r.status, r.text).toBe(200); return JSON.parse(r.text).map((m) => m.state); };
+  /** The JSON of the review block in the last comment posted */
+  const lastBlock = () => JSON.parse(/```cornfield-review 0021-pr\n([\s\S]*?)\n```/.exec(comments[comments.length - 1].body)[1]);
 
   beforeAll(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-mockups-pr-'));
@@ -274,7 +263,7 @@ describe('mockups of a spec PR', () => {
     fs.mkdirSync(path.join(root, 'docs/specs/proposals'), { recursive: true });
     server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://localhost');
-      if (!serveProposals(req, res, decodeURIComponent(url.pathname), url, whereOf(root), forgeFor)) { res.writeHead(418); res.end('not a proposal route'); }
+      if (!serveProposals(req, res, decodeURIComponent(url.pathname), url, whereOf(root), forgeFor, forgeFor ? signedIn : null)) { res.writeHead(418); res.end('not a proposal route'); }
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
     port = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
@@ -286,17 +275,51 @@ describe('mockups of a spec PR', () => {
   });
   beforeEach(async () => {
     await fake?.close();
+    comments = [];
+    png = PNG;
     fake = await fakeForge(routes());
     forgeFor = () => createForge({ type: 'github', url: 'https://github.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
   });
 
-  it('lists them as not reviewed, without reading the files', async () => {
+  it('lists them with the hash of each file at the head, not reviewed while the PR has no review', async () => {
     const r = await call('/proposals/0021-pr/mockups?source=pull%2F7');
     expect(r.status).toBe(200);
     const got = JSON.parse(r.text);
-    expect(got.map((m) => [m.index, m.type, m.state, m.sha256])).toEqual([[0, 'image', 'unreviewed', null], [1, 'page', 'unreviewed', null], [3, 'image', 'unreviewed', null]]);
+    expect(got.map((m) => [m.index, m.type, m.state, m.sha256])).toEqual([[0, 'image', 'unreviewed', sha(PNG)], [1, 'page', 'unreviewed', sha(HOSTILE_HTML)], [3, 'image', 'missing', null]]);
     expect(got[0].url).toBe('/proposals/0021-pr/mockups/0?source=pull%2F7');
-    expect(fake.requests.filter((q) => /list\.png|page\.html/.test(q.url))).toEqual([]);
+  });
+
+  it('records what an approval covers in the review comment: each file at the head with its SHA-256, hashed by the server', async () => {
+    const posted = await review({ verdict: 'approved', note: '', edits: [] });
+    expect(posted.status, posted.text).toBe(200);
+    expect(lastBlock()).toEqual({
+      verdict: 'approved', note: '', edits: [],
+      mockups: [{ node: 'page-screens', path: '0021-pr/list.png', sha256: sha(PNG) }, { node: 'page-screens', path: '0021-pr/page.html', sha256: sha(HOSTILE_HTML) }],
+    });
+    expect(await states()).toEqual(['approved', 'approved', 'missing']);
+    // The page cannot say what was approved
+    const forged = await review({ verdict: 'approved', mockups: [{ node: 'page-screens', path: '0021-pr/list.png', sha256: 'a'.repeat(64) }] });
+    expect(forged.status).toBe(400);
+    expect(comments).toHaveLength(1);
+  });
+
+  it('reads changed once a file at the head is not what was approved, and approved again after a new approval', async () => {
+    await review({ verdict: 'approved' });
+    png = NEW_PNG;
+    expect(await states()).toEqual(['changed', 'approved', 'missing']);
+    await review({ verdict: 'approved' });
+    expect(lastBlock().mockups[0].sha256).toBe(sha(NEW_PNG));
+    expect(await states()).toEqual(['approved', 'approved', 'missing']);
+  });
+
+  it('records none for a send back, and an edited review comment does not count', async () => {
+    await review({ verdict: 'approved' });
+    await review({ verdict: 'notes', note: 'Not yet.' });
+    expect(lastBlock()).not.toHaveProperty('mockups');
+    expect(await states()).toEqual(['unreviewed', 'unreviewed', 'missing']);
+    await review({ verdict: 'approved' });
+    comments[comments.length - 1].updated_at = '2026-10-19T13:00:00Z'; // someone with write access changed it
+    expect(await states()).toEqual(['unreviewed', 'unreviewed', 'missing']);
   });
 
   it('serves a picture from the PR\'s head commit intact, as the signed-in user, with the same sandbox', async () => {

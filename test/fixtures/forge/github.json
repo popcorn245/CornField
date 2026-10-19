@@ -69,6 +69,12 @@
       { "sha": "f4", "filename": "server/old.js", "status": "removed", "additions": 0, "deletions": 12, "changes": 12 }
     ]
   },
+  "GET /repos/owner/name/pulls/13/files?per_page=100": {
+    "body": [
+      { "sha": "f5", "filename": "server/auth.js", "status": "modified", "additions": 2, "deletions": 2, "changes": 4 },
+      { "sha": "f6", "filename": "test/server/auth.test.js", "status": "modified", "additions": 1, "deletions": 1, "changes": 2 }
+    ]
+  },
   "GET /repos/owner/name/issues/12/comments?per_page=100": {
     "body": [
       { "id": 9001, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "body": "Ready for a look.", "html_url": "https://github.example.com/owner/name/pull/12#issuecomment-9001", "created_at": "2026-10-17T10:10:00Z", "updated_at": "2026-10-17T10:10:00Z" },

@@ -27,6 +27,7 @@ Elsewhere:
 | The search box | `Enter` selects the first node whose name matches; no match is said |
 | The node's panel | `Escape` closes it and gives the focus back to the map |
 | The Layers and Proposals menus | `Escape` closes them, back on their button |
+| The issues and PRs button and panel | `Enter` opens the panel with the focus on its title, `Escape` closes it, back on the button; what it loaded, selected and lit is said ([issues-and-prs.md](issues-and-prs.md)) |
 | A mockup of a proposal | `Enter` on its button in the node's panel opens it in a window that takes the focus and is announced (its title, and where it stands with the review); `Tab` stays inside, `Escape` or Close shuts it and the focus goes back to the button. A picture's alt text is its title. |
 | The scenario player | `Space` plays and pauses, `Left` and `Right` step (the map leaves those keys to it while a scenario plays) |
 | A proposal's what-if edits | `Ctrl+Z` undoes, `Ctrl+Shift+Z` or `Ctrl+Y` redoes, `Escape` backs out of a form or a drawing |
@@ -46,12 +47,14 @@ The sample repo (`node cli/cornfield.js serve --repo test/fixtures/sample --port
 7. On Layers, `Enter` opens the menu (its button says it is expanded); `Tab` goes through the layer toggles; `Escape` closes it, back on the button.
 8. With a proposal open (`/?proposal=0002-checkout`), `Tab` reaches Before / Diff / After, the counts chip and its list of changes (each one takes the map to that change), the scenarios, the what-if controls, the note and Approve / Send back. A scenario's player reads each step as it comes (a polite live region).
 
-While closed, the node panel waits off screen; it is `inert` then, so `Tab` never lands on its buttons out of sight.
+9. With a forge in the config, `Tab` reaches "Issues & PRs" after Proposals. `Enter` opens its panel (the title has the focus; "Issues and pull requests" is said, then "3 pull requests shown"). `Tab` goes through Pull requests / Issues, the state, label and author lists, the search, then each row. `Enter` on a pull request selects it: "Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed." Its files follow, each node a button that selects it on the map. `Escape` closes the panel, back on the button.
+
+While closed, the node panel and the issues and PRs panel wait off screen; they are `inert` then, so `Tab` never lands on their buttons out of sight.
 
 ## How it is checked
 
-- **In the test suite** ([test/explorer/a11y.test.js](../test/explorer/a11y.test.js)): [axe-core](https://github.com/dequelabs/axe-core) runs over the page's own markup and stylesheets in each state (the map, the Layers menu, a node's panel, a proposal open with what-if editing, the scenario player, a proposal's mockups in the panel and open in their window, in both themes) for WCAG 2.2 A and AA and axe's best practices, and finds nothing. The keys above are tested there too. The test runs on happy-dom, which has no layout, so colour contrast is checked in a browser instead (next point).
-- **In a browser**: the same axe rules, colour contrast included, in Chromium over the sample repo, in ten states: the map, the Layers and Proposals menus, a node's panel, a phone with and without the panel, a proposal open, the scenario player, the data-flow view and the House view, each in the dark and the light theme. No violations.
+- **In the test suite** ([test/explorer/a11y.test.js](../test/explorer/a11y.test.js)): [axe-core](https://github.com/dequelabs/axe-core) runs over the page's own markup and stylesheets in each state (the map, the Layers menu, a node's panel, a proposal open with what-if editing, the scenario player, the issues and PRs panel with a pull request selected, a proposal's mockups in the panel and open in their window, in both themes) for WCAG 2.2 A and AA and axe's best practices, and finds nothing. The keys above are tested there too. The test runs on happy-dom, which has no layout, so colour contrast is checked in a browser instead (next point).
+- **In a browser**: the same axe rules, colour contrast included, in Chromium over the sample repo, in twelve states: the map, the Layers and Proposals menus, a node's panel, a phone with and without the panel, a proposal open, the scenario player, the data-flow view and the House view, and the issues and PRs panel open and with a pull request selected (on a desktop and on a phone), each in the dark and the light theme. No violations.
 
 What axe cannot judge, and was looked at by hand: the reading order of the steps, the words said, and that every pointer action has a key. A pass with a real screen reader (NVDA, VoiceOver) is welcome: open an issue with what it reads badly.
 

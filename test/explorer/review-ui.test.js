@@ -51,11 +51,8 @@ function fakeServer(opts                                                        
     const parsed = init.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method, url, headers, body: parsed });
     const u = new URL(url, 'http://localhost');
-    if (u.pathname === '/proposals' && method === 'GET') {
-      const entry = (slug        , source        , r     ) => ({ slug, source, title: slug, summary: '', spec: '0013', counts: null, errors: 0, review: r ? { verdict: r.verdict, at: r.at } : null });
-      return json(200, [entry('0013-meals', 'topo-09', review), entry('0013-meals', 'checkout', review), entry('0013-meals', 'worktree-x', null), entry('0014-other', 'checkout', null)]);
-    }
     if (u.pathname === '/proposals/0013-meals/review') {
+      if (method === 'GET') return review ? json(200, review) : json(404, { error: 'No review yet' });
       if (opts.putStatus && opts.putStatus >= 400) return json(opts.putStatus, { error: opts.putError || 'Nope' });
       review = { version: 1, ...parsed, at: new Date(clock).toISOString() };
       return json(200, review);
@@ -133,7 +130,7 @@ async function mount() {
   initReview();
 }
 
-const open = (proposal         = robot(), slug                = '0013-meals', source                = 'checkout') => showProposal(proposal, { slug, source, view: 'diff', fit: true });
+const open = (proposal         = robot(), slug                = '0013-meals', source                = 'pull/23') => showProposal(proposal, { slug, source, view: 'diff', fit: true });
 
 let alerts                          ;
 beforeEach(async () => {
@@ -177,6 +174,35 @@ describe('the buttons', () => {
   });
 });
 
+describe('a draft that is not on a PR', () => {
+  it('has the buttons and the note off, says to push it as a spec PR, sends nothing, and asks the server for no review', async () => {
+    const s = fakeServer();
+    for (const source of ['checkout', 'topo-09']) {
+      open(robot(), '0013-meals', source);
+      await settle();
+      expect($('review').hidden).toBe(false);
+      expect(approveBtn().disabled).toBe(true);
+      expect(sendBackBtn().disabled).toBe(true);
+      expect(noteBox().disabled).toBe(true);
+      expect(hint().hidden).toBe(false);
+      expect(hint().textContent).toMatch(/comment on the proposal's spec PR.*Push this draft as a spec PR/);
+      click(approveBtn());
+      expect(await sendReview('approved')).toBe(false);
+    }
+    expect(s.calls).toEqual([]);
+  });
+
+  it('turns them on again for a proposal that is on a PR', async () => {
+    fakeServer();
+    open(robot(), '0013-meals', 'checkout');
+    open(robot(), '0013-meals', 'pull/23');
+    await settle();
+    expect(approveBtn().disabled).toBe(false);
+    expect(noteBox().disabled).toBe(false);
+    expect(hint().hidden).toBe(true);
+  });
+});
+
 describe('Send back', () => {
   it('needs a note: an empty one is refused on the bar, nothing is sent, and no dialog opens', async () => {
     const s = fakeServer();
@@ -217,7 +243,7 @@ describe('Send back', () => {
     await settle();
     expect(s.puts()).toHaveLength(1);
     const put = s.puts()[0];
-    expect(put.url).toBe('/proposals/0013-meals/review?source=checkout');
+    expect(put.url).toBe('/proposals/0013-meals/review?source=pull%2F23');
     expect(put.headers['Content-Type']).toBe('application/json');
     expect(put.body).toEqual({ verdict: 'notes', note: 'Drop the cache.', edits: sent });
     expect(status()).toBe('Sent back just now');
@@ -254,7 +280,7 @@ describe('Approve', () => {
     expect(status()).toBe('Approved just now');
     expect(getEdits()).toHaveLength(2); // they are in the file now; the list stays
     expect(hint().hidden).toBe(false);
-    expect(hint().textContent).toBe('Your 2 edits are in the review file. The drafting agent will fold them into the proposal.');
+    expect(hint().textContent).toBe('Your 2 edits are in the review comment on the PR. The drafting agent will fold them into the proposal.');
   });
 
   it('takes a note when there is one', async () => {
@@ -293,20 +319,18 @@ describe('the time', () => {
     await settle();
     expect(status()).toBe('');
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
-    open(robot(), '0013-meals', 'worktree-x');
+    open(robot(), '0013-meals', 'pull/24');
     await settle();
     expect(status()).toBe('');
   });
 
-  it('reads it from the hub listing, for the source the proposal is open from', async () => {
+  it('reads it from the PR through the hub, for the source the proposal is open from', async () => {
     const s = fakeServer({ review: { version: 1, verdict: 'approved', at: new Date(T0 - 60_000).toISOString() } });
-    open(robot(), '0013-meals', 'topo-09');
+    open(robot(), '0013-meals', 'pull/24');
     await settle();
-    expect(s.calls[0].url).toBe('/proposals');
+    expect(s.calls[0].method).toBe('GET');
+    expect(s.calls[0].url).toBe('/proposals/0013-meals/review?source=pull%2F24');
     expect(status()).toBe('Approved 1 minute ago');
-    open(robot(), '0013-meals', 'worktree-x'); // the listing says this copy has none
-    await settle();
-    expect(status()).toBe('');
   });
 
   it('does not carry one proposal\'s review, note or messages to another', async () => {
@@ -317,7 +341,7 @@ describe('the time', () => {
     click(sendBackBtn());
     expect(status()).not.toBe('');
     fakeServer({ review: null });
-    showProposal(robot(), { slug: '0014-other', source: 'checkout', view: 'diff' });
+    showProposal(robot(), { slug: '0014-other', source: 'pull/23', view: 'diff' });
     await settle();
     expect(status()).toBe('');
     expect(noteBox().value).toBe('');
@@ -341,7 +365,7 @@ describe('when the server says no', () => {
     click(sendBackBtn());
     await settle();
     expect(msg().hidden).toBe(false);
-    expect(msg().textContent).toContain('The review was not saved.');
+    expect(msg().textContent).toContain('The review was not posted.');
     expect(msg().textContent).toContain('only taken from the hub');
     expect(status()).toBe('');
     expect(noteBox().value).toBe('Smaller.');
@@ -357,7 +381,7 @@ describe('when the server says no', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
     click(approveBtn());
     await settle();
-    expect(msg().textContent).toMatch(/not saved.*Failed to fetch/);
+    expect(msg().textContent).toMatch(/not posted.*Failed to fetch/);
     expect(approveBtn().disabled).toBe(false);
   });
 

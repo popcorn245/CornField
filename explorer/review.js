@@ -3,19 +3,20 @@
  *
  * Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a
  * click does. "Approve" (a note is optional) and "Send back" (a note is needed) both put the maintainer's what-if
- * edits (`getEdits()`, whatif.js) in the review, which the server keeps in its data folder
- * (`PUT /proposals/<slug>/review`, server/proposals.js). The agent drafting the spec reads it
- * (`cornfield review <slug>`) and folds the edits into the proposal. In v1 the same review is posted as a
- * comment on the spec PR instead (docs/specs/0001-v1.md).
+ * edits (`getEdits()`, whatif.js) in the review, which the server posts as a comment on the spec PR, as the
+ * signed-in maintainer (`PUT /proposals/<slug>/review`, server/proposals.js, server/reviews.js). The agent drafting
+ * the spec reads it (`cornfield review <slug>`) and folds the edits into the proposal. Only a proposal of a spec PR
+ * (source `pull/<n>`) has a PR to hold a review: for a draft in the checkout or a worktree the buttons are off and
+ * the bar says to push it as a spec PR (docs/specs/0001-v1.md).
  *
  *   state.proposalSlug / proposalSource   which proposal the review is for (the server matches them against what it listed)
- *   GET  /proposals                       the listing's `review` of this proposal, when it opens: "Approved 3 minutes ago"
- *   PUT  /proposals/<slug>/review         { verdict, note, edits } -> the file as written
+ *   GET  /proposals/<slug>/review         the latest admin review on the PR, when it opens: "Approved 3 minutes ago"
+ *   PUT  /proposals/<slug>/review         { verdict, note, edits } -> the review as posted
  *
- * An approval also records the proposal's mockup files (server/mockups.js); the panel's mockups then read "Reviewed" (mockups.js).
+ * An approval of a spec PR's proposal also records its mockup files' hashes in the review comment (server/mockups.js); the panel's mockups then read "Reviewed" (mockups.js).
  *
  * After a send back the edits are emptied (`clearEdits()`: they went with the note); after an approval they stay, as they are
- * in the file. Nothing here uses `alert`: every refusal and failure is a line on the bar.
+ * in the comment. Nothing here uses `alert`: every refusal and failure is a line on the bar.
  *
  * The words and the choices (what is sent, what to say) are review-model.js, tested without a page.
  */
@@ -24,7 +25,7 @@ import { state } from './state.js';
 import { hooks } from './proposal.js';
 import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
-import { reviewWords, sendBackProblem, reviewBody, editsHint } from './review-model.js';
+import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,6 +34,7 @@ const TICK_MS = 30_000;
 /** What is shown: the review of the proposal that is open, and the lines under the buttons */
 const ui = {
   key: null, // `${source}/${slug}` of the proposal the review below belongs to
+  reviewable: false, // whether it is on a spec PR
   review: null, // { verdict, at } | null: the last review of it
   busy: false,
   message: '', // an inline refusal or failure
@@ -48,7 +50,6 @@ let now = () => Date.now();
 const slugOf = () => state.proposalSlug || null;
 const keyOf = () => (state.proposal && slugOf() ? `${state.proposalSource || ''}/${slugOf()}` : null);
 const reviewUrl = () => `/proposals/${encodeURIComponent(slugOf())}/review${state.proposalSource ? `?source=${encodeURIComponent(state.proposalSource)}` : ''}`;
-const same = (entry) => entry && entry.slug === slugOf() && (!state.proposalSource || entry.source === state.proposalSource);
 const q = (sel) => (root ? root.querySelector(sel) : null);
 
 /** The note box, the two buttons, and the lines under them; added to the bar once */
@@ -84,8 +85,9 @@ function paint() {
   const status = q('[data-review-status]');
   status.textContent = reviewWords(ui.review, now());
   status.hidden = !status.textContent;
-  for (const btn of root.querySelectorAll('[data-review]')) btn.disabled = ui.busy;
-  for (const [sel, text] of [['[data-review-msg]', ui.message], ['[data-review-hint]', ui.hint]]) {
+  for (const btn of root.querySelectorAll('[data-review]')) btn.disabled = ui.busy || !ui.reviewable;
+  q('#review-note').disabled = !ui.reviewable;
+  for (const [sel, text] of [['[data-review-msg]', ui.message], ['[data-review-hint]', ui.reviewable ? ui.hint : ui.key ? NOT_ON_A_PR : '']]) {
     const el = q(sel);
     el.hidden = !text;
     el.textContent = text;
@@ -99,24 +101,24 @@ function onBar(open) {
   root.hidden = !key;
   if (key === ui.key) { paint(); return; }
   ui.key = key;
+  ui.reviewable = !!key && isReviewable(state.proposalSource);
   ui.review = null;
   ui.busy = false;
   ui.message = ui.hint = '';
   const note = q('#review-note');
   if (note) note.value = '';
   paint();
-  if (key) loadReview(key);
+  if (key && ui.reviewable) loadReview(key);
 }
 
-/** The last review of the proposal that just opened: the `review` the server's listing carries for it (none yet is null) */
+/** The latest admin review on the proposal's PR, as the server reads it from the comments (none yet is a 404) */
 async function loadReview(key) {
   try {
-    const res = await fetch('/proposals', { cache: 'no-store' });
+    const res = await fetch(reviewUrl(), { cache: 'no-store' });
     if (!res.ok) return;
-    const list = await res.json();
-    const found = Array.isArray(list) ? list.find(same) : null;
-    if (key !== ui.key || !found || !found.review || typeof found.review.verdict !== 'string') return; // none, or another proposal has opened since
-    ui.review = { verdict: found.review.verdict, at: found.review.at };
+    const found = await res.json();
+    if (key !== ui.key || !found || typeof found.verdict !== 'string') return; // none, or another proposal has opened since
+    ui.review = { verdict: found.verdict, at: found.at };
     paint();
   } catch { /* the server is not there: no review shown */ }
 }
@@ -132,7 +134,7 @@ function onClick(e) {
  * @returns {Promise<boolean>} whether the server took the review
  */
 export async function sendReview(verdict) {
-  if (!state.proposal || !slugOf() || !mount()) return false;
+  if (!state.proposal || !slugOf() || !mount() || !ui.reviewable) return false;
   const noteEl = q('#review-note');
   const note = noteEl.value;
   ui.hint = '';
@@ -159,7 +161,7 @@ export async function sendReview(verdict) {
     saved = answer;
   } catch (err) {
     ui.busy = false;
-    ui.message = `The review was not saved. ${err.message || String(err)}`;
+    ui.message = `The review was not posted. ${err.message || String(err)}`;
     paint();
     return false;
   }
@@ -199,5 +201,5 @@ export function resetReviewForTests(clock = () => Date.now()) {
   wired = false;
   root = null;
   now = clock;
-  Object.assign(ui, { key: null, review: null, busy: false, message: '', hint: '' });
+  Object.assign(ui, { key: null, reviewable: false, review: null, busy: false, message: '', hint: '' });
 }

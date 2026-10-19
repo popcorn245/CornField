@@ -764,3 +764,105 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 
 /* Sign out (when sign-in is on): a form in the header, inline with the links */
 .cf-sign-out { display: inline-flex; margin: 0; }
+.cf-sign-out-icon { display: none; }
+/* A narrow phone, signed in, with Issues & PRs: the header keeps one row by showing the brand's dot without its
+   title (the button keeps its name) and Sign out as its icon (its words stay for a screen reader), so every control
+   keeps at least a 24px target (WCAG 2.5.8) */
+@media (max-width: 479px) {
+  .hx-brand .hx-title { display: none; }
+  .hx-brand { min-width: 24px; min-height: 24px; justify-content: center; }
+  .hx-header .hx-btn { min-width: 24px; }
+  .cf-sign-out .hx-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
+  .cf-sign-out-icon { display: inline; font-size: 14px; }
+  .cf-sign-out-text { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* Narrower still (320px, the reflow width): the left of the header scrolls sideways rather than running under the
+   right, so nothing overlaps; its menus open fixed under the header, as the Proposals and Live menus already do there,
+   so the scroll cannot clip them. The padding keeps the focus rings inside the scrolled box. */
+@media (max-width: 639px) {
+  .hx-header-left { overflow-x: auto; scrollbar-width: none; padding-block: 4px; }
+  .hx-header-left::-webkit-scrollbar { display: none; }
+  #legend-dropdown.hx-menu { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
+}
+
+/* ---- the issues and PRs panel (forge-panel.js, CF-07) -------------------------------------------
+   A slide-over from the left from 768px (the node panel is the one from the right), a bottom sheet in #sheet-dock below.
+   Closed, it is inert (forge-panel.js), and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
+.hx-btn--forge { border-color: var(--hx-line); }
+.hx-btn--forge[aria-expanded="true"] { background: var(--hx-indigo-strong); border-color: var(--hx-indigo); color: #fff; }
+.hx-forge-lit { padding: 0 6px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-amber); font-family: var(--pop-font-mono); font-size: 10px; }
+@media (max-width: 767px) { .hx-btn--forge { width: 28px; height: 28px; padding: 0; justify-content: center; } .hx-forge-lit { display: none; } }
+.hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--hx-slate-800); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
+.hx-forge * { touch-action: pan-y; }
+.hx-forge.forge-open { pointer-events: auto; }
+@media (min-width: 768px) {
+  .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: min(400px, calc(100% - 24px)); border-left: 0; transform: translateX(-100%); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+  .hx-forge.forge-open { transform: translateX(0); }
+  /* The proposal bar and the player make room for it */
+  .hx-stage:has(.forge-open) .hx-proposal-bar { left: 412px; width: min(720px, calc(100% - 436px)); }
+  .hx-stage:has(.forge-open):has(.drawer-open) .hx-proposal-bar { width: min(720px, calc(100% - 940px)); }
+}
+@media (max-width: 767px) {
+  .hx-forge:not(.forge-open) { display: none; }
+  .hx-forge { max-height: 60dvh; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body { flex: none; padding: 0 16px 10px; gap: 4px; overflow: hidden; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-head):not(#forge-status) { display: none; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-head { padding-bottom: 0; border-bottom: 0; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-head .hx-btn { display: none; }
+}
+.hx-forge-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 20px 16px; overflow-y: auto; user-select: text; font-size: 12px; }
+@media (min-width: 640px) { .hx-forge-body { padding: 24px 20px; } }
+.hx-forge-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--hx-slate-800); }
+.hx-forge-head .hx-drawer-title { flex: 1; min-width: 0; }
+.hx-forge-status, .hx-forge-rate { font-size: 11px; line-height: 1.5; }
+.hx-forge-controls { display: flex; flex-direction: column; gap: 8px; }
+.hx-forge-tabs { display: inline-flex; align-self: flex-start; padding: 2px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well-soft); }
+.hx-forge-tab { padding: 3px 12px; border: 0; border-radius: 6px; background: none; color: var(--hx-slate-400); font-size: 12px; font-weight: 500; }
+.hx-forge-tab:hover { color: var(--hx-ink); }
+.hx-forge-tab[aria-pressed="true"] { background: var(--hx-indigo-strong); color: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.hx-forge-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+.hx-forge-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-400); }
+.hx-forge-field--text { grid-column: 1 / -1; }
+.hx-forge-select, .hx-forge-input { width: 100%; min-width: 0; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well); color: var(--hx-ink); font: inherit; font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
+.hx-forge-input::placeholder { color: var(--hx-slate-500); }
+.hx-forge-input:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+.hx-forge-notice { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-text-2); line-height: 1.5; }
+
+.hx-forge-list, .hx-forge-checks, .hx-forge-files { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-forge-item { display: flex; align-items: stretch; gap: 4px; }
+.hx-forge-row { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--hx-line); border-radius: 10px; background: var(--hx-control); color: var(--hx-ink); text-align: left; text-decoration: none; font-size: 12px; }
+a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-hover); }
+.hx-forge-row[aria-pressed="true"] { border-color: var(--hx-indigo); border-left-width: 4px; background: var(--hx-control-hover); }
+.hx-forge-title { font-weight: 600; overflow-wrap: anywhere; }
+.hx-forge-meta { color: var(--hx-slate-400); font-size: 11px; overflow-wrap: anywhere; }
+.hx-forge-labels { display: flex; flex-wrap: wrap; gap: 4px; }
+.hx-forge-label { padding: 0 6px; border-radius: 9999px; border: 1px solid var(--hx-line); background: var(--hx-well-soft); color: var(--hx-slate-300); font-size: 10px; }
+.hx-forge-out { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; border-radius: 10px; border: 1px solid var(--hx-line); background: var(--hx-control); color: var(--hx-sky); text-decoration: none; }
+.hx-forge-out:hover { background: var(--hx-control-hover); }
+.hx-forge-empty { padding: 8px 2px; }
+
+/* A state is a word as well as a colour: open, merged, a check's result */
+.hx-forge-state { display: inline-block; padding: 0 6px; border-radius: 9999px; border: 1px solid currentColor; font-size: 10px; font-weight: 700; }
+.hx-forge-state--open, .hx-forge-state--success { color: var(--hx-emerald); }
+.hx-forge-state--merged { color: var(--hx-violet-text); }
+.hx-forge-state--closed, .hx-forge-state--failure { color: var(--hx-red); }
+.hx-forge-state--draft, .hx-forge-state--running, .hx-forge-state--queued { color: var(--hx-amber); }
+.hx-forge-state--neutral, .hx-forge-state--skipped, .hx-forge-state--cancelled { color: var(--hx-slate-400); }
+
+.hx-forge-detail { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--hx-line); border-left: 4px solid var(--hx-indigo); border-radius: 10px; background: var(--hx-well-soft); }
+.hx-forge-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hx-forge-detail-title { min-width: 0; font-size: 13px; font-weight: 700; color: var(--hx-ink); overflow-wrap: anywhere; }
+.hx-forge-sub { margin: 4px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-300); }
+.hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
+.hx-forge-lights { flex-basis: 100%; font-size: 11px; line-height: 1.5; }
+.hx-forge-key { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: 11px; }
+.hx-forge-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 4px 0; border-top: 1px solid var(--hx-line-soft); overflow-wrap: anywhere; }
+.hx-forge-fstatus { flex: none; min-width: 56px; color: var(--hx-slate-400); font-size: 11px; }
+.hx-forge-del { color: var(--hx-red); }
+.hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding-left: 62px; }
+.hx-forge-node { padding: 1px 8px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-text-2); font-size: 11px; }
+.hx-forge-node:hover { background: var(--hx-control-hover); }
+:root[data-theme="light"] .hx-forge-tab[aria-pressed="true"] { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
+:root[data-theme="light"] .hx-forge { box-shadow: 10px 0 30px -12px rgba(15, 23, 42, 0.18); }
+:root[data-theme="light"] .hx-forge:not(.forge-open) { box-shadow: none; }

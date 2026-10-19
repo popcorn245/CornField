@@ -2,7 +2,7 @@
  * @module server/server
  *
  * cornfield's HTTP server: zero dependencies, Node's own `http`. It serves the explorer, the target
- * repo's map and proposals, and takes a maintainer's review. What it answers:
+ * repo's map and proposals, and, with sign-in, posts a maintainer's review as a comment on a spec PR. What it answers:
  *
  *   GET  /healthz                       { ok: true } and nothing else: the image's health check, open without a session
  *   *    /auth/…                        sign-in (server/auth.js), when it is configured
@@ -16,7 +16,9 @@
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
- *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js)
+ *   GET  /api/forge/…                   issues, pull requests, their files and checks, read from the forge (server/forge-routes.js)
+ *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
+ *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
  * Before any route, `Host` must be a loopback name, or with sign-in the public URL's host too (else 421): a page on
@@ -38,6 +40,7 @@ import { browserSources, BUILTIN_SOURCES } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
+import { serveForge } from './forge-routes.js';
 import { proxyTo } from './proxy.js';
 import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
 import { assertBind, hostAllowed } from './bind.js';
@@ -205,8 +208,12 @@ export function createCornfieldServer(config, opts = {}) {
     if (gate.done) return;
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
+    // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
+    if (await serveForge(req, res, reqPath, url, { config, session: gate.session, auth, now: opts.now })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
-    if (serveProposals(req, res, reqPath, url, where, gate.session ? () => auth.forgeFor(gate.session) : null)) return;
+    const session = gate.session;
+    const forgeFor = session ? () => auth.forgeFor(session) : null;
+    if (serveProposals(req, res, reqPath, url, where, forgeFor, session ? { login: session.login, record: (entry) => auth.record(entry) } : null)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();

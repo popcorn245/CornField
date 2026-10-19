@@ -1,0 +1,42 @@
+{
+  "_about": "Recorded GitHub REST v3 answers for reviews as PR comments (test/server/reviews.test.js), to lay over github-spec-prs.json: who the signed-in maintainer is, what the commenters may do on the repo, the comments on PR 23 (a send back, an approval by a second maintainer, a forged approval by a reader, malformed and unknown blocks, a deleted account), no comments on PR 20, and the answer to posting one. Hand-written in GitHub's shapes; the people are archetypes, no token appears.",
+
+  "GET /user": {
+    "body": { "login": "maintainer-one", "id": 1001, "html_url": "https://github.example.com/maintainer-one", "name": "Maintainer One" }
+  },
+  "GET /repos/owner/name": {
+    "body": { "id": 1, "full_name": "owner/name", "private": false, "default_branch": "main", "permissions": { "admin": false, "maintain": true, "push": true, "triage": true, "pull": true } }
+  },
+  "GET /repos/owner/name/collaborators/maintainer-two/permission": {
+    "body": { "permission": "write", "role_name": "maintain", "user": { "login": "maintainer-two", "id": 1003 } }
+  },
+  "GET /repos/owner/name/collaborators/agent-four/permission": {
+    "body": { "permission": "write", "role_name": "write", "user": { "login": "agent-four", "id": 1004 } }
+  },
+  "GET /repos/owner/name/collaborators/reader-two/permission": {
+    "body": { "permission": "read", "role_name": "read", "user": { "login": "reader-two", "id": 1002 } }
+  },
+
+  "GET /repos/owner/name/issues/23/comments?per_page=100": {
+    "body": [
+      { "id": 8001, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "body": "Spec for the meals page is ready for a look.", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8001", "created_at": "2026-10-17T09:00:00Z", "updated_at": "2026-10-17T09:00:00Z" },
+      { "id": 8002, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "Sent back `0013-meals` with 1 edit (maintainer-one, in cornfield).\n\n> Drop the cache.\n\n```cornfield-review 0013-meals\n{\n  \"verdict\": \"notes\",\n  \"note\": \"Drop the cache.\",\n  \"edits\": [{ \"op\": \"remove-node\", \"id\": \"page-old\" }]\n}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8002", "created_at": "2026-10-17T09:30:00Z", "updated_at": "2026-10-17T09:30:00Z" },
+      { "id": 8003, "user": { "login": "maintainer-two", "html_url": "https://github.example.com/maintainer-two" }, "body": "Looks right now.\n\n```cornfield-review 0013-meals\n{\"verdict\":\"approved\",\"note\":\"Good.\",\"edits\":[{\"op\":\"add-node\",\"id\":\"page-extra\",\"label\":\"/extra\",\"type\":\"page\",\"parent\":\"app-a\"}]}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8003", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T10:00:00Z" },
+      { "id": 8004, "user": { "login": "reader-two", "html_url": "https://github.example.com/reader-two" }, "body": "```cornfield-review 0013-meals\n{\"verdict\":\"notes\",\"note\":\"I say no.\",\"edits\":[]}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8004", "created_at": "2026-10-17T10:10:00Z", "updated_at": "2026-10-17T10:10:00Z" },
+      { "id": 8005, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "Hm.\n\n```cornfield-review 0013-meals\n{ \"verdict\": \"notes\", \"note\": \n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8005", "created_at": "2026-10-17T10:20:00Z", "updated_at": "2026-10-17T10:20:00Z" },
+      { "id": 8006, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "```cornfield-review 0013-meals\n{\"verdict\":\"approved\",\"note\":\"\",\"edits\":[],\"owner\":\"me\"}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8006", "created_at": "2026-10-17T10:30:00Z", "updated_at": "2026-10-17T10:30:00Z" },
+      { "id": 8007, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "> ```cornfield-review 0013-meals\n> {\"verdict\":\"notes\",\"note\":\"quoted, not a block\",\"edits\":[]}\n> ```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8007", "created_at": "2026-10-17T10:40:00Z", "updated_at": "2026-10-17T10:40:00Z" },
+      { "id": 8008, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "Approved `0099-other` (maintainer-one, in cornfield).\n\n```cornfield-review 0099-other\n{\"verdict\":\"approved\",\"note\":\"\",\"edits\":[]}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8008", "created_at": "2026-10-17T10:50:00Z", "updated_at": "2026-10-17T10:50:00Z" },
+      { "id": 8009, "user": null, "body": "```cornfield-review 0013-meals\n{\"verdict\":\"notes\",\"note\":\"from a deleted account\",\"edits\":[]}\n```", "html_url": "https://github.example.com/owner/name/pull/23#issuecomment-8009", "created_at": "2026-10-17T11:00:00Z", "updated_at": "2026-10-17T11:00:00Z" }
+    ]
+  },
+  "GET /repos/owner/name/issues/20/comments?per_page=100": {
+    "body": [
+      { "id": 8101, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "body": "Planner draft.", "html_url": "https://github.example.com/owner/name/pull/20#issuecomment-8101", "created_at": "2026-10-16T09:00:00Z", "updated_at": "2026-10-16T09:00:00Z" }
+    ]
+  },
+  "POST /repos/owner/name/issues/20/comments": {
+    "status": 201,
+    "body": { "id": 9100, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "(the posted comment)", "html_url": "https://github.example.com/owner/name/pull/20#issuecomment-9100", "created_at": "2026-10-18T12:00:00Z", "updated_at": "2026-10-18T12:00:00Z" }
+  }
+}

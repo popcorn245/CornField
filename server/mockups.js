@@ -22,10 +22,12 @@
  * may frame it; the rest of the server says DENY), and `Cross-Origin-Resource-Policy: same-origin`. The explorer shows
  * images and SVG in an `<img>` and HTML in an `<iframe sandbox>` with no `allow-*` (explorer/mockups.js).
  *
- * **Approve covers them.** `hashMockups` gives each local mockup's SHA-256; an approval records `{ node, path, sha256 }`
- * for each (server/proposals.js), and `mockupStates` compares a later read to it: `approved`, `changed` (the file is
- * not what was approved), `unreviewed` or `missing`. A spec PR's review is not taken here yet, so its mockups are
- * `unreviewed`.
+ * **Approve covers them.** A review is a comment on the spec PR (server/reviews.js), so only a spec PR's mockups are
+ * reviewed. When a maintainer approves, the server reads each mockup at the PR's head and records `{ node, path,
+ * sha256 }` in the review's block (`hashPullMockups`; the page never sends hashes). `mockupStates` compares the files
+ * at the head now with the latest admin review: `approved`, `changed` (the file is not what was approved),
+ * `unreviewed` or `missing`. A proposal in the checkout or a worktree has no PR to be reviewed on: its mockups are
+ * `unreviewed` (or `missing`).
  */
 
 import fs from 'node:fs';
@@ -33,6 +35,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { mockupsOf } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
+import { latestReview } from './reviews.js';
 import { findProposalFile, mime } from './files.js';
 import { findPullProposal, folderOf, forgeWords, pullNumber, readPullProposal } from './proposal-pulls.js';
 
@@ -90,16 +93,6 @@ export function readLocalMockup(entry, rel) {
   }
 }
 
-/**
- * What an approval records of a local proposal: each mockup it lists, with the SHA-256 of the file as it is now
- * (null when the file is not there).
- * @param {{ file: string }} entry a listed proposal
- * @returns {{ node: string, path: string, sha256: string | null }[]}
- */
-export function hashMockups(entry) {
-  return hashItems(entry, mockupsOf(readLocalProposal(entry)));
-}
-
 const hashItems = (entry, items) => items.map((m) => {
   const bytes = readLocalMockup(entry, m.path);
   return { node: m.node, path: m.path, sha256: bytes ? sha256(bytes) : null };
@@ -147,6 +140,35 @@ function sendBytes(req, res, file, bytes) {
   return res.end(req.method === 'HEAD' ? undefined : bytes);
 }
 
+/** The bytes of a mockup at a spec PR's head commit, or null when it is not there or is too big */
+async function pullBytes(forge, where, entry, item) {
+  const bytes = await forge.fileBytes(entry.sha, path.posix.join(folderOf(where), item.path));
+  return bytes && bytes.length <= MOCKUP_MAX_BYTES ? bytes : null;
+}
+
+/** Each mockup a spec PR's proposal lists, with the SHA-256 of the file at its head (null when it is not there) */
+async function hashPullItems(forge, where, entry, items) {
+  const out = [];
+  for (const m of items) {
+    const bytes = await pullBytes(forge, where, entry, m);
+    out.push({ node: m.node, path: m.path, sha256: bytes ? sha256(bytes) : null });
+  }
+  return out;
+}
+
+/**
+ * What an approval of a spec PR's proposal records: each mockup it lists that is at the PR's head, with its SHA-256.
+ * A file that is not there is not covered (it reads as missing, then unreviewed once it is added).
+ * @param {import('./forge.js').Forge} forge as the signed-in maintainer
+ * @param {object} where
+ * @param {{ sha: string }} entry the proposal in the PR (server/proposal-pulls.js `findPullProposal`)
+ * @returns {Promise<{ node: string, path: string, sha256: string }[]>}
+ */
+export async function hashPullMockups(forge, where, entry) {
+  const items = mockupsOf(JSON.parse(await readPullProposal(forge, where, entry)));
+  return /** @type {{ node: string, path: string, sha256: string }[]} */ ((await hashPullItems(forge, where, entry, items)).filter((m) => m.sha256 !== null));
+}
+
 /** The list or one file of a proposal in an open spec PR */
 async function servePull(req, res, where, forgeFor, slug, source, position) {
   let items;
@@ -154,18 +176,22 @@ async function servePull(req, res, where, forgeFor, slug, source, position) {
   let bytes = null;
   try {
     const forge = forgeFor();
-    const entry = await findPullProposal(forge, where, slug, /** @type {number} */ (pullNumber(source)));
+    const n = /** @type {number} */ (pullNumber(source));
+    const entry = await findPullProposal(forge, where, slug, n);
     if (!entry) return refuse(res, 404, 'No such proposal');
     items = mockupsOf(JSON.parse(await readPullProposal(forge, where, entry)));
-    if (position === null) return sendJson(res, 200, describe(slug, source, items, null, null));
+    if (position === null) {
+      const hashes = await hashPullItems(forge, where, entry, items);
+      return sendJson(res, 200, describe(slug, source, items, hashes, items.length ? await latestReview(forge, n, slug) : null));
+    }
     item = items.find((m) => m.index === position);
     if (!item) return refuse(res, 404, 'No such mockup');
-    bytes = await forge.fileBytes(entry.sha, path.posix.join(folderOf(where), item.path));
+    bytes = await pullBytes(forge, where, entry, item);
   } catch (err) {
     if (err instanceof SyntaxError) return refuse(res, 422, `Not valid JSON: ${err.message}`);
     return refuse(res, err instanceof ForgeError ? (err.code === 'not-found' ? 404 : 502) : 500, forgeWords(err));
   }
-  if (!bytes || bytes.length > MOCKUP_MAX_BYTES) return refuse(res, 404, 'No such mockup');
+  if (!bytes) return refuse(res, 404, 'No such mockup');
   return sendBytes(req, res, item.path, bytes);
 }
 
@@ -177,9 +203,8 @@ async function servePull(req, res, where, forgeFor, slug, source, position) {
  * @param {URL} url
  * @param {object} where
  * @param {(() => import('./forge.js').Forge) | null} forgeFor
- * @param {(entry: object) => object | null} reviewOf the latest review of a listed local proposal
  */
-export async function serveMockups(req, res, match, url, where, forgeFor, reviewOf) {
+export async function serveMockups(req, res, match, url, where, forgeFor) {
   const slug = match[1];
   const position = match[2] === undefined ? null : Number(match[2]);
   const source = url.searchParams.get('source') || null;
@@ -191,7 +216,8 @@ export async function serveMockups(req, res, match, url, where, forgeFor, review
   const proposal = readLocalProposal(entry);
   if (!proposal) return refuse(res, 422, 'The proposal could not be read');
   const items = mockupsOf(proposal);
-  if (position === null) return sendJson(res, 200, describe(slug, entry.source, items, hashItems(entry, items), reviewOf(entry)));
+  // A proposal here has no PR to be reviewed on: nothing it lists has been approved
+  if (position === null) return sendJson(res, 200, describe(slug, entry.source, items, hashItems(entry, items), null));
   const item = items.find((m) => m.index === position);
   const bytes = item ? readLocalMockup(entry, item.path) : null;
   if (!item || !bytes) return refuse(res, 404, 'No such mockup');

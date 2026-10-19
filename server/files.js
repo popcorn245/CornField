@@ -173,24 +173,3 @@ export function findProposalFile(where, slug, source) {
   if (typeof slug !== 'string' || (source !== undefined && source !== null && typeof source !== 'string')) return null;
   return listProposalFiles(where).find((e) => e.slug === slug && (source === undefined || source === null || e.source === source)) || null;
 }
-
-/**
- * Where cornfield keeps its own record of the review of a listed proposal: in its data folder, never in a
- * checkout (`<dataDir>/reviews/<source>/<slug>.review.json`, the source percent-encoded). Built from an entry
- * the listing produced, never from a request. Null when the entry does not look like one, or when something
- * that is not a plain file is already at that name.
- * @param {{ slug: string, source: string, file: string }|null|undefined} entry
- * @param {string} dataDir
- * @returns {string|null}
- */
-export function reviewFilePath(entry, dataDir) {
-  if (!entry || typeof entry.slug !== 'string' || typeof entry.source !== 'string' || typeof entry.file !== 'string' || !path.isAbsolute(entry.file)) return null;
-  if (typeof dataDir !== 'string' || !path.isAbsolute(dataDir)) return null;
-  const m = PROPOSAL_FILE.exec(path.basename(entry.file));
-  if (!m || m[1] !== entry.slug || entry.slug.endsWith('.review')) return null;
-  const file = path.join(dataDir, 'reviews', encodeURIComponent(entry.source), `${entry.slug}.review.json`);
-  try {
-    if (!fs.lstatSync(file).isFile()) return null;
-  } catch { /* nothing there yet: fine */ }
-  return file;
-}
