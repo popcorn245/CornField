@@ -857,6 +857,33 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The forge adapter interface: who you are, your permission on the repo, issues, pull requests, files, comments, checks, branches, file contents at a ref."
+    },
+    {
+      "id": "core-server-forge-forgejo",
+      "label": "forge-forgejo.js",
+      "type": "core",
+      "file": "server/forge-forgejo.js",
+      "summary": "The Forgejo adapter (its v1 API, which Gitea shares) behind the forge interface (server/forge.js): an instance at `<url>/api/v1`, which `forge.url` has to name (there is no default host).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Forgejo adapter (its v1 API, which Gitea shares) behind the forge interface (server/forge.js): an instance at `<url>/api/v1`, which `forge.url` has to name (there is no default host). (server/forge-forgejo.js)"
+    },
+    {
+      "id": "ext-forgejo",
+      "label": "Forgejo",
+      "type": "external",
+      "kind": "cloud",
+      "file": "topology.cloud.json",
+      "desc": "A Forgejo instance, when the config's forge is one: sign-in, issues, pull requests, comments, checks.",
+      "roles": [
+        "runtime"
+      ],
+      "breaks": "Now: a Forgejo-hosted repo's sign-in, issues, PRs and reviews stop; the map still shows.",
+      "plan": {
+        "tier": "free"
+      },
+      "r": 21,
+      "color": "#94a3b8"
     }
   ],
   "edges": [
@@ -2369,7 +2396,34 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-forge-forgejo"
+    },
+    {
+      "from": "core-server-forge-forgejo",
+      "to": "core-server-forge-http",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge",
+      "to": "core-server-forge-forgejo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "store-cloud",
+      "to": "ext-forgejo"
+    },
+    {
+      "from": "core-server-forge-forgejo",
+      "to": "ext-forgejo",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
     }
   ],
-  "updatedAt": "2026-10-19T21:20:44.997Z"
+  "updatedAt": "2026-10-19T21:37:32.969Z"
 }

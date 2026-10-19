@@ -11,6 +11,15 @@
       "match": { "actions": ["actions/", "docker/"], "hosts": ["github.com", "api.github.com"] }
     },
     {
+      "id": "forgejo",
+      "label": "Forgejo",
+      "roles": ["runtime"],
+      "desc": "A Forgejo instance, when the config's forge is one: sign-in, issues, pull requests, comments, checks.",
+      "breaks": "Now: a Forgejo-hosted repo's sign-in, issues, PRs and reviews stop; the map still shows.",
+      "plan": { "tier": "free" },
+      "match": { "hosts": ["codeberg.org"] }
+    },
+    {
       "id": "npm",
       "label": "npm registry",
       "roles": ["software"],
