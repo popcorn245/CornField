@@ -829,6 +829,36 @@
       "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge caches; numbered migrations."
     },
     {
+      "id": "core-server-forge-github",
+      "label": "forge-github.js",
+      "type": "core",
+      "file": "server/forge-github.js",
+      "summary": "The GitHub adapter (REST v3) behind the forge interface (server/forge.js): github.com, or GitHub Enterprise Server at `<url>/api/v3`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The GitHub adapter (REST v3)."
+    },
+    {
+      "id": "core-server-forge-http",
+      "label": "forge-http.js",
+      "type": "core",
+      "file": "server/forge-http.js",
+      "summary": "What every forge adapter shares when it talks HTTP to its forge: one request with a time limit and a JSON answer; `ForgeError`, in plain words, for anything that is not a 2xx (signed out, not allow…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the forge adapters share over HTTP: one request with a time limit, errors and rate limits in plain words, pagination that never sends a token off the forge's origin."
+    },
+    {
+      "id": "core-server-forge",
+      "label": "forge.js",
+      "type": "core",
+      "file": "server/forge.js",
+      "summary": "The forge adapter interface: the one shape the rest of the server talks to, whichever forge holds the repo (spec 0001 section 3).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The forge adapter interface: who you are, your permission on the repo, issues, pull requests, files, comments, checks, branches, file contents at a ref."
+    },
+    {
       "id": "core-core-deriver-kit",
       "label": "deriver-kit.js",
       "type": "core",
@@ -2314,6 +2344,43 @@
       "label": "opens it"
     },
     {
+      "from": "pkg-server",
+      "to": "core-server-forge-github"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-forge-http"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-forge"
+    },
+    {
+      "from": "core-server-forge-github",
+      "to": "core-server-forge-http",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge",
+      "to": "core-server-forge-github",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge",
+      "to": "core-server-forge-http",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-github",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-deriver-kit"
     },
@@ -2348,5 +2415,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T21:22:37.723Z"
+  "updatedAt": "2026-10-19T21:31:46.602Z"
 }
