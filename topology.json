@@ -1428,6 +1428,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Issues and pull requests (docs/issues-and-prs.md)."
+    },
+    {
+      "id": "core-server-deploys",
+      "label": "deploys.js",
+      "type": "core",
+      "file": "server/deploys.js",
+      "summary": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md). (server/deploys.js)"
+    },
+    {
+      "id": "page-doc-docs-deploys",
+      "type": "page",
+      "label": "/docs/deploys",
+      "file": "docs/deploys.md",
+      "summary": "Deploys on the map",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Deploys on the map (docs/deploys.md)."
     }
   ],
   "edges": [
@@ -3982,7 +4002,87 @@
       "from": "page-doc-docs-issues-and-prs",
       "to": "page-doc-docs-accessibility",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-deploys"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-deploys",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-deploys"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "core-server-forge",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploys",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-deploys",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:36:42.045Z"
+  "updatedAt": "2026-10-19T22:52:15.605Z"
 }

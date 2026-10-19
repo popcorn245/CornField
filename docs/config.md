@@ -32,6 +32,7 @@ export default {
 | `port`, `host` | where `serve` listens. Without sign-in the host must be loopback; with it and an https `publicUrl`, any address ([sign-in](sign-in.md)) |
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
 | `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
+| `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests |
 | `topology` | the map file |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |

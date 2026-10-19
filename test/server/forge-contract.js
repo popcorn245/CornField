@@ -167,6 +167,25 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(fake.requests.filter((r) => r.method !== 'GET')).toEqual([]);
     });
 
+    it('runs(): the latest workflow runs, newest first, every page, in the interface\'s states', async () => {
+      const runs = await forge.runs();
+      expect(runs.map((r) => [r.id, r.workflow, r.state])).toEqual([
+        ['9003', 'deploy.yml', 'success'], ['9002', 'ci.yml', 'failure'], ['9001', 'deploy-media.yml', 'running'], ['9000', 'release.yml', 'cancelled'],
+      ]);
+      expect(runs[0]).toMatchObject({ title: 'Meals page (#12)', event: 'push', branch: 'main', sha: SHA_GREEN, actor: { login: 'maintainer-one' }, createdAt: '2026-10-18T12:00:05Z', updatedAt: '2026-10-18T12:04:00Z' });
+      expect(runs[0].url).toMatch(/\/owner\/name\/actions\/runs\/\d+$/);
+      expect(runs[2].actor).toBeNull();
+      expect(sent('POST')).toEqual([]);
+    });
+
+    it('runs(): a limit stops the listing, and arguments that are not a limit are refused before the forge is asked', async () => {
+      expect((await forge.runs({ limit: 2 })).map((r) => r.id)).toEqual(['9003', '9002']);
+      fake.requests.length = 0;
+      for (const bad of [0, -1, 1.5, '2', NaN]) await forgeError(() => forge.runs({ limit: bad }), 'invalid');
+      await forgeError(() => forge.runs([]), 'invalid');
+      expect(fake.requests).toEqual([]);
+    });
+
     it('branches(): each with its head and whether it is protected', async () => {
       const branches = await forge.branches();
       expect([...branches].sort((a, b) => a.name.localeCompare(b.name))).toEqual([

@@ -14,7 +14,7 @@ A proposal can carry screens (images or HTML files in the spec branch) shown bes
 
 ### Deploys on the map
 Labels: `enhancement`, `pipeline`
-Read a repo's deploy runs (forge actions, or a deploy log a plugin reads) and light what each deploy restarted. Read-only: cornfield never deploys (ADR 0006). Done when: the last deploys are listed and selecting one lights its nodes.
+Read a repo's deploy runs (forge actions, or a deploy log a plugin reads; [docs/deploys.md](deploys.md): the forge side is built, a plugin's log is not) and light what each deploy restarted. Read-only: cornfield never deploys (ADR 0006). Done when: the last deploys are listed and selecting one lights its nodes.
 
 ### Release notes from the map
 Labels: `enhancement`, `pipeline`

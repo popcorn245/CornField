@@ -11,6 +11,8 @@
  *   GET /api/forge/issues?state=open|closed|all&labels=a,b&limit=100   issues, newest first
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
+ *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
+ *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
  *
  * Every answer is `{ ok: true, forge, repo, at, rate, … }` (`rate`: what is left of the forge's limit, in words, or
  * null) or `{ ok: false, error, code }` with the forge's error in plain words. Answers are kept in `forge_cache`
@@ -22,6 +24,7 @@
 
 import { createHash } from 'node:crypto';
 import { ForgeError, hasAdapter, rateLimitWords } from './forge.js';
+import { deploysOf } from './deploys.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -52,7 +55,7 @@ function listQuery(url, withLabels) {
  * The reads: the request's route, the forge call that answers it, and the key it is kept under.
  * @returns {{ key: string, load: (forge: import('./forge.js').Forge) => Promise<object> } | null}
  */
-function routeOf(reqPath, url) {
+function routeOf(reqPath, url, config) {
   if (reqPath === '/api/forge/issues') {
     const q = listQuery(url, true);
     return { key: `issues?state=${q.state}&limit=${q.limit}&labels=${q.labels.join(',')}`, load: async (forge) => ({ items: await forge.issues(q) }) };
@@ -60,6 +63,13 @@ function routeOf(reqPath, url) {
   if (reqPath === '/api/forge/pulls') {
     const q = listQuery(url, false);
     return { key: `pulls?state=${q.state}&limit=${q.limit}`, load: async (forge) => ({ items: await forge.pulls(q) }) };
+  }
+  if (reqPath === '/api/forge/deploys') {
+    const { limit } = listQuery(url, false);
+    // The runs asked for are the last `limit` of every workflow; the config picks the deploys among them. The config is
+    // in the key, so an answer kept before it changed is never served for the new one.
+    const mapping = createHash('sha256').update(JSON.stringify(config.deploys || null)).digest('hex').slice(0, 12);
+    return { key: `deploys?limit=${limit}&config=${mapping}`, load: async (forge) => ({ items: deploysOf(await forge.runs({ limit }), config.deploys) }) };
   }
   const one = /^\/api\/forge\/pulls\/([1-9]\d{0,8})$/.exec(reqPath);
   if (one) {
@@ -127,7 +137,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     return true;
   }
   try {
-    const route = routeOf(reqPath, url);
+    const route = routeOf(reqPath, url, config);
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;

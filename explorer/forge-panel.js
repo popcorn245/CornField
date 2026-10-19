@@ -13,6 +13,10 @@
  *     `file` holds it (the deepest one), a failing check lights the test files its name names, and the rest of the
  *     map fades back (`state.forgeLit`, painted by scene.js). A file on no node is listed, with the others, as not on
  *     the map. Each node has a button that selects it on the map.
+ *   - A third list, Deploys (PIPE-03, docs/deploys.md): the latest workflow runs that are deploys, each with the nodes
+ *     the config says it restarted. Selecting one lights those nodes (a stack brings its containers; a failed deploy lights
+ *     them red) through the same paint path, turning on the layers they are on; a deploy no `deploys.restarts` names is listed and says it lights nothing.
+ *     Only one thing is selected at a time, a pull request or a deploy.
  *   - Keys: Tab reaches the header button, Enter opens the panel with the focus on its title; Escape closes it and
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
@@ -27,8 +31,10 @@ import { selectNode } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
+import { LAYER_DEFS, toggleLayer } from './layers.js';
 import {
-  STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
+  STATES, defaultFilters, listUrl, listKeyOf, pullUrl, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
+  litForDeploy, nodesForRestarts, deployWords, deployMeta,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -48,6 +54,9 @@ const ui = {
   detail: null, // { pull, files, checks, at, rate, stale } of the selected one
   detailError: '',
   lit: null, // litFor(detail, nodes)
+  deploy: null, // the selected deploy's id; the deploy itself is `deployItem`
+  deployItem: null,
+  litDeploy: null, // litForDeploy(deployItem, nodes)
   nodesSeen: null, // the `state.nodes` the lights were worked out for
 };
 
@@ -59,10 +68,10 @@ let offScene = null;
 let now = () => Date.now();
 
 const forgeName = () => FORGE_NAMES[ui.config && ui.config.forge && ui.config.forge.type] || 'the forge';
-const listKey = () => `${ui.kind}|${serverState(ui.filters.state)}`;
+const listKey = () => listKeyOf(ui.kind, ui.filters.state);
 const current = () => ui.lists[listKey()] || null;
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
-const kindWords = () => (ui.kind === 'pulls' ? 'pull request' : 'issue');
+const kindWords = () => ({ pulls: 'pull request', issues: 'issue', deploys: 'deploy' })[ui.kind];
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
@@ -107,6 +116,9 @@ async function loadList(refresh = false) {
 /** Selects a pull request: asks for its files and checks, then lights what they are on the map */
 async function selectPull(n) {
   const token = ++pullToken;
+  ui.deploy = null;
+  ui.deployItem = null;
+  ui.litDeploy = null;
   ui.selected = n;
   ui.detail = null;
   ui.detailError = '';
@@ -147,7 +159,10 @@ export function clearPull() {
 /** What the selected pull request lights, worked out again: for the nodes now on the map */
 function relight() {
   ui.nodesSeen = state.nodes;
-  if (ui.detail) {
+  if (ui.deployItem) {
+    ui.litDeploy = litForDeploy(ui.deployItem, state.nodes);
+    state.forgeLit = { changed: ui.litDeploy.changed, failing: ui.litDeploy.failing };
+  } else if (ui.detail) {
     ui.lit = litFor(ui.detail, state.nodes);
     state.forgeLit = { changed: ui.lit.changed, failing: ui.lit.failing };
   } else {
@@ -161,7 +176,52 @@ function relight() {
 
 /** A proposal opening, or the live layer, changes the nodes: the lights follow them */
 function onNodesChange() {
-  if (ui.detail && state.nodes !== ui.nodesSeen) relight();
+  if ((ui.detail || ui.deployItem) && state.nodes !== ui.nodesSeen) relight();
+}
+
+/** Selects a deploy: nothing to ask (the list holds what it restarted), so its nodes light at once */
+export function selectDeploy(id) {
+  const found = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === id);
+  if (!found) return;
+  pullToken++;
+  ui.selected = null;
+  ui.detail = null;
+  ui.detailError = '';
+  ui.lit = null;
+  ui.deploy = id;
+  ui.deployItem = found;
+  // A container, a stack or a machine is on a layer that starts off: the layers the deploy's nodes are on come on, or nothing would light
+  const turnedOn = [];
+  for (const n of litForDeploy(found, state.nodes).nodes) {
+    const layer = LAYER_DEFS.find((l) => l.key === n.type);
+    if (layer && state.activeLayers[layer.key] === false) { toggleLayer(layer.key); turnedOn.push(layer.label); }
+  }
+  relight();
+  $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the deploy's nodes are what was asked for, not the row that was tapped
+  announce(deploySelectionWords(turnedOn));
+}
+
+/** Lets go of the selected deploy: nothing is lit any more */
+export function clearDeploy() {
+  const had = ui.deployItem;
+  ui.deploy = null;
+  ui.deployItem = null;
+  ui.litDeploy = null;
+  state.forgeLit = null;
+  touchScene();
+  render();
+  paint();
+  if (had) announce(`Deploy ${had.name} cleared`);
+}
+
+/** What a screen reader hears when a deploy is selected */
+function deploySelectionWords(turnedOn = []) {
+  const { name, branch } = ui.deployItem;
+  const lit = ui.litDeploy;
+  const head = `Deploy ${name}${branch ? ` of ${branch}` : ''}, ${deployWords(ui.deployItem).toLowerCase()}`;
+  if (!ui.deployItem.restarts.length) return `${head}. No node is mapped to it, so nothing is lit.`;
+  const layers = turnedOn.length ? ` Turned on the ${turnedOn.join(' and ')} ${turnedOn.length === 1 ? 'layer' : 'layers'}.` : '';
+  return `${head}: ${plural(lit.nodes.length, 'node')} restarted and lit${lit.missing.length ? `, ${lit.missing.length} named that ${lit.missing.length === 1 ? 'is' : 'are'} not on the map` : ''}.${layers}`;
 }
 
 /** What a screen reader hears when a pull request is selected */
@@ -180,16 +240,36 @@ const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' 
 
 /** The filters' choices: the states of the kind, the labels and authors of what is loaded */
 function paintFilters() {
-  const items = current() ? current().items : [];
+  const items = current() && ui.kind !== 'deploys' ? current().items : [];
   const { labels, authors } = facetsOf(items);
   if (ui.filters.label && !labels.includes(ui.filters.label)) ui.filters.label = '';
   if (ui.filters.author && !authors.includes(ui.filters.author)) ui.filters.author = '';
   $('forge-state').innerHTML = STATES[ui.kind].map(([v, l]) => option(v, l, v === ui.filters.state)).join('');
   $('forge-label').innerHTML = option('', 'Any label', !ui.filters.label) + labels.map((l) => option(l, l, l === ui.filters.label)).join('');
   $('forge-author').innerHTML = option('', 'Anyone', !ui.filters.author) + authors.map((a) => option(a, a, a === ui.filters.author)).join('');
+  // A deploy has no labels and no author to pick: its list is filtered by state and the search
+  $('forge-label').parentElement.hidden = ui.kind === 'deploys';
+  $('forge-author').parentElement.hidden = ui.kind === 'deploys';
+}
+
+/** What a deploy lights, said short, for its row: how many nodes, or that it is not mapped */
+function lightsWords(deploy) {
+  if (!deploy.restarts.length) return 'Not mapped to a node';
+  const { nodes } = nodesForRestarts(deploy.restarts, state.nodes);
+  return nodes.length ? `Lights ${plural(nodes.length, 'node')}` : 'Names nodes not on the map';
+}
+
+function deployHtml(d) {
+  const link = safeUrl(d.url);
+  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open deploy ${escHtml(d.name)} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-deploy="${escHtml(d.id)}" aria-pressed="${ui.deploy === d.id}">
+    <span class="hx-forge-title">${escHtml(d.name)}${d.title && d.title !== d.name ? `<span class="hx-faint"> · ${escHtml(d.title)}</span>` : ''}</span>
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}">${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
+    <span class="hx-forge-labels"><span class="hx-forge-label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
 }
 
 function itemHtml(item) {
+  if (ui.kind === 'deploys') return deployHtml(item);
   const link = safeUrl(item.url);
   const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
@@ -205,7 +285,28 @@ function itemHtml(item) {
 }
 
 /** The selected pull request: its checks, its files and the nodes they are */
+/** The selected deploy: what it was, and the nodes it restarted (each a button that selects it on the map) */
+function deployDetailHtml() {
+  const d = ui.deployItem;
+  const lit = ui.litDeploy;
+  const url = safeUrl(d.url);
+  const head = `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-deploy">Clear</button></div>
+    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}">${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
+  const stale = ui.lists.deploys && ui.lists.deploys.stale;
+  let body;
+  if (!d.restarts.length) {
+    body = '<p class="hx-forge-notice">No node is mapped to this deploy, so nothing is lit. Say what it restarts under <code class="hx-code">deploys.restarts</code> in cornfield.config.js (docs/deploys.md).</p>';
+  } else {
+    const rows = lit.nodes.map((n) => `<li class="hx-forge-file"><button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
+    const missing = lit.missing.length ? `<p class="hx-forge-notice">${escHtml(lit.missing.join(', '))} ${lit.missing.length === 1 ? 'is' : 'are'} named in the config but not on the map.</p>` : '';
+    const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--${d.state === 'failure' ? 'removed' : 'changed'}" aria-hidden="true"></span>${d.state === 'failure' ? 'restarted by a deploy that failed' : 'restarted by this deploy'}</p>` : '';
+    body = `<h4 class="hx-forge-sub">${escHtml(`Restarted: ${plural(lit.nodes.length, 'node')} on the map`)}</h4>${key}${rows ? `<ul class="hx-forge-files">${rows}</ul>` : ''}${missing}`;
+  }
+  return `${head}${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${body}`;
+}
+
 function detailHtml() {
+  if (ui.deployItem) return deployDetailHtml();
   if (ui.selected === null) return '';
   const head = (title, link) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-pr">Clear</button></div>${link || ''}`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice">${escHtml(ui.detailError)}</p>`;
@@ -251,6 +352,7 @@ function detailHtml() {
 function findAgain(el) {
   if (!el || !el.dataset) return null;
   if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
+  if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
   return null;
 }
@@ -285,7 +387,8 @@ function draw(panel) {
   else rows.innerHTML = shown.length ? shown.map(itemHtml).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
 
   const detail = $('forge-detail');
-  detail.hidden = ui.selected === null;
+  detail.hidden = ui.selected === null && !ui.deployItem;
+  detail.setAttribute('aria-label', ui.deployItem ? 'Selected deploy' : 'Selected pull request');
   detail.innerHTML = detailHtml();
 
   const rate = (ui.detail && ui.detail.rate) || (list && list.rate) || '';
@@ -297,11 +400,11 @@ function draw(panel) {
 function paintButton() {
   const btn = $('forge-btn');
   if (!btn) return;
-  const lit = ui.selected !== null;
+  const lit = ui.selected !== null || !!ui.deployItem;
   const tag = $('forge-btn-lit');
   tag.hidden = !lit;
-  tag.textContent = lit ? `#${ui.selected}` : '';
-  btn.setAttribute('aria-label', lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
+  tag.textContent = ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  btn.setAttribute('aria-label', ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
   btn.setAttribute('aria-expanded', String(ui.open));
 }
 
@@ -347,6 +450,12 @@ export async function refreshForge() {
   announce('Asking the forge again');
   const n = ui.selected;
   await loadList(true);
+  if (ui.deployItem) {
+    // The list is read again: the deploy as the forge now has it (still running, now finished), else the last copy
+    const again = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === ui.deploy);
+    if (again) { ui.deployItem = again; relight(); }
+    return;
+  }
   if (n !== null && ui.selected === n) {
     const token = ++pullToken;
     const res = await request(pullUrl(n), true);
@@ -374,7 +483,7 @@ function onClick(e) {
   if (kind) {
     if (kind.dataset.forgeKind === ui.kind) return;
     ui.kind = kind.dataset.forgeKind;
-    ui.filters = defaultFilters();
+    ui.filters = defaultFilters(ui.kind);
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
     return;
@@ -383,6 +492,11 @@ function onClick(e) {
   if (pr) {
     const n = Number(pr.dataset.forgePr);
     if (ui.selected === n) clearPull(); else selectPull(n);
+    return;
+  }
+  const dep = t.closest('[data-forge-deploy]');
+  if (dep) {
+    if (ui.deploy === dep.dataset.forgeDeploy) clearDeploy(); else selectDeploy(dep.dataset.forgeDeploy);
     return;
   }
   const nodeBtn = t.closest('[data-forge-node]');
@@ -400,6 +514,7 @@ function onClick(e) {
   if (action.dataset.action === 'close-forge') closeForge();
   else if (action.dataset.action === 'refresh-forge') refreshForge();
   else if (action.dataset.action === 'clear-forge-pr') { clearPull(); $('forge-title').focus(); }
+  else if (action.dataset.action === 'clear-forge-deploy') { clearDeploy(); $('forge-title').focus(); }
 }
 
 function onChange(e) {
@@ -473,5 +588,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   listToken++;
   pullToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null });
 }

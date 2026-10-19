@@ -20,6 +20,10 @@ Select a pull request and the panel asks for its files and the checks on its hea
 
 Select the pull request again, or press **Clear**, to let go. Closing the panel leaves the lights on, and the button says which pull request they are (`#12`).
 
+## Deploys
+
+A third list, **Deploys**, shows the latest deploys (workflow runs) and lights the nodes a selected one restarted, from a mapping in the config. It has its own page: [deploys](deploys.md).
+
 ## Who it asks as
 
 The server asks the forge as the signed-in maintainer, with their own token ([sign-in](sign-in.md)), through the same adapter as everything else; it only reads. Without sign-in (a tool on your own machine, Stage 1) there is nobody to ask as, so the panel is not offered and the routes answer 403 in words, as the Proposals menu lists no spec PRs then. Asking anonymously would work for a public repo, but every visitor would share the forge's unauthenticated limit (60 requests an hour on GitHub), with nothing kept between them.
@@ -33,6 +37,7 @@ The routes, for the curious (all `GET`, all behind the sign-in guard):
 | `/api/forge/issues?state=open\|closed\|all&labels=a,b&limit=100` | issues (not pull requests) |
 | `/api/forge/pulls?state=open\|closed\|all&limit=100` | pull requests |
 | `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head |
+| `/api/forge/deploys?limit=100` | the workflow runs that are deploys, with what the config says each restarted ([deploys](deploys.md)) |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
 

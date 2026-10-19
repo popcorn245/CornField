@@ -36,6 +36,23 @@ describe('the GitHub adapter', () => {
     expect(Object.isFrozen(forge)).toBe(true);
   });
 
+  it('reads a run\'s own name and its workflow file, a missing title from the head commit, and every status and conclusion', async () => {
+    const forge = await forgeOn({
+      'GET /repos/owner/name/actions/runs?per_page=100': {
+        body: { workflow_runs: [
+          { id: 1, name: 'Deploy web', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'timed_out', head_commit: { message: 'Fix it\n\nlong' } },
+          { id: 2, path: '.github/workflows/ship.yml@refs/heads/main', status: 'queued' },
+          { id: 3, name: 'x', path: 'x.yml', status: 'waiting' },
+          { id: 4, name: 'x', path: 'x.yml', status: 'completed', conclusion: 'skipped' },
+        ] },
+      },
+    });
+    const runs = await forge.runs();
+    expect(runs.map((r) => [r.name, r.workflow, r.state, r.title])).toEqual([
+      ['Deploy web', 'deploy.yml', 'failure', 'Fix it'], ['ship.yml', 'ship.yml', 'queued', ''], ['x', 'x.yml', 'queued', ''], ['x', 'x.yml', 'skipped', ''],
+    ]);
+  });
+
   it('finds the API of github.com and of a GitHub Enterprise Server', () => {
     expect(githubApiUrl()).toBe('https://api.github.com');
     expect(githubApiUrl('https://github.com/')).toBe('https://api.github.com');

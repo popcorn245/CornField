@@ -201,6 +201,75 @@ describe('the issues and PRs panel', () => {
     expect(await audit()).toEqual([]);
   });
 
+  describe('with the deploys list', () => {
+    const run = (id, name, state, restarts) => ({ id, workflow: 'deploy.yml', name, title: `Run ${id}`, event: 'push', branch: 'main', sha: 'abc1234', state, actor: author, url: `https://git.example.test/runs/${id}`, createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', restarts });
+    const DEPLOYS = [run('3', 'Deploy web', 'success', ['app-a', 'ghost']), run('2', 'Deploy media', 'running', []), run('1', 'Deploy web', 'failure', ['table-t'])];
+    const stubDeploys = () => vi.stubGlobal('fetch', vi.fn(async (url) => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', items: new URL(url, 'http://localhost').pathname === '/api/forge/deploys' ? DEPLOYS : [] }) })));
+    const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    it('has no violation listing deploys, with a mapped one selected, an unmapped one, and a failed one (dark theme)', async () => {
+      stubDeploys();
+      start();
+      openForge();
+      await settle();
+      click(document.querySelector('[data-forge-kind="deploys"]'));
+      await settle();
+      expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(3);
+      expect(await audit()).toEqual([]);
+      for (const id of ['3', '2', '1']) {
+        click(document.querySelector(`[data-forge-deploy="${id}"]`));
+        await settle();
+        expect(document.querySelector('#forge-detail').hidden).toBe(false);
+        expect(await audit()).toEqual([]);
+      }
+      expect(state.forgeLit.failing.has('table-t')).toBe(true);
+    });
+
+    it('has none in the light theme either', async () => {
+      stubDeploys();
+      start();
+      document.documentElement.dataset.theme = 'light';
+      openForge();
+      await settle();
+      click(document.querySelector('[data-forge-kind="deploys"]'));
+      await settle();
+      click(document.querySelector('[data-forge-deploy="3"]'));
+      await settle();
+      expect(await audit()).toEqual([]);
+      click(document.querySelector('[data-forge-deploy="2"]'));
+      await settle();
+      expect(await audit()).toEqual([]);
+    });
+
+    it('is by keyboard: the tab, the rows and Clear are buttons in the tab order, the selection is announced, Escape closes', async () => {
+      stubDeploys();
+      start();
+      openForge();
+      await settle();
+      const tab = document.querySelector('[data-forge-kind="deploys"]');
+      expect(tab.tagName).toBe('BUTTON');
+      expect(tab.tabIndex).toBe(0);
+      click(tab); // Enter and Space on a button are a click
+      await settle(40);
+      expect($('map-announcer').textContent).toBe('3 deploys shown');
+      const row = document.querySelector('[data-forge-deploy="3"]');
+      expect([row.tagName, row.tabIndex, row.getAttribute('aria-pressed')]).toEqual(['BUTTON', 0, 'false']);
+      row.focus();
+      click(row);
+      await settle(40);
+      const again = document.querySelector('[data-forge-deploy="3"]'); // the list is drawn anew; the focus is on the same row
+      expect(document.activeElement).toBe(again);
+      expect(again.getAttribute('aria-pressed')).toBe('true');
+      expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted and lit, 1 named that is not on the map.');
+      const clear = document.querySelector('[data-action="clear-forge-deploy"]');
+      expect([clear.tagName, clear.tabIndex]).toEqual(['BUTTON', 0]);
+      expect(document.querySelector('#forge-detail').getAttribute('aria-label')).toBe('Selected deploy');
+      key($('forge-title'), 'Escape');
+      expect(document.activeElement).toBe($('forge-btn'));
+      expect($('forge-btn-lit').textContent).toBe('deploy');
+    });
+  });
+
   it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {
     stub();
     start();
