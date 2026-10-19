@@ -594,6 +594,22 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 .hx-review-msg { margin: 0; padding: 4px 8px; border-radius: var(--radius-md, 8px); background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.35); color: var(--hx-red); line-height: 1.4; }
 .hx-review-line { margin: 0; color: var(--hx-slate-300); line-height: 1.4; }
 .hx-proposal-reviewed { color: var(--hx-teal-text); }
+/* A proposal's mockups (mockups.js): the buttons in a node's panel and the window one opens in. A mockup is untrusted content, shown in an <img> or a sandboxed <iframe>. */
+.hx-mockup-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hx-mockup-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.hx-mockup-open { max-width: 100%; white-space: normal; text-align: left; }
+.hx-mockup-state { margin: 0; font-size: 11px; color: var(--hx-slate-300); }
+.hx-mockup-state--approved { color: var(--hx-teal-text); }
+.hx-mockup-state--changed { color: var(--hx-amber); font-weight: 600; }
+.hx-mockup-state--missing { color: var(--hx-red); }
+.hx-mockup-dialog { position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; width: min(960px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 12px 14px 14px; border-radius: var(--radius-xl, 16px); border: 1px solid var(--border-glass); background: var(--hx-slate-900); color: var(--hx-text); box-shadow: var(--glass-shadow), 0 0 0 100vmax var(--hx-backdrop); }
+.hx-mockup-dialog:focus { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+.hx-mockup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hx-mockup-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--hx-text-1); }
+.hx-mockup-stage { min-height: 0; overflow: auto; display: flex; justify-content: center; border-radius: var(--radius-md, 8px); border: 1px solid var(--hx-line); background: #fff; }
+.hx-mockup-img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+.hx-mockup-frame { display: block; width: 100%; height: min(560px, calc(100vh - 140px)); border: 0; background: #fff; }
+
 /* /?bench=1: the run's numbers, bottom left (bench.js) */
 .bench-readout { position: fixed; left: 12px; bottom: 12px; z-index: 50; max-width: calc(100vw - 24px); padding: 8px 12px; border-radius: var(--radius-md, 8px); border: 1px solid var(--border-glass); background: var(--surface-glass-header); color: var(--hx-text-2); font-family: var(--font-mono, monospace); font-size: 11px; line-height: 1.5; pointer-events: none; }
 .bench-readout p { margin: 0; }

@@ -1,6 +1,6 @@
 # ADR 0005: A review is a comment on the spec PR; the latest wins
 
-Status: accepted (maintainer, 2026-10-17); v1 work (Stage 1 keeps reviews in the data folder)
+Status: accepted (maintainer, 2026-10-17); built in v1 (CF-06)
 
 ## Decision
 
@@ -12,7 +12,9 @@ Approve and Send back post a comment on the spec PR: one human line, then a fenc
 
 The **latest** such comment from an admin is the review. The drafting agent reads it from the PR. Proposals are read from pushed spec branches (the Proposals menu lists open spec PRs) and from the configured local worktrees folder for unpushed drafts.
 
-No review file is ever written into a checkout. Until v1, the server keeps a review in its own data folder (`<dataDir>/reviews/<source>/<slug>.review.json`) and `cornfield review <slug>` prints it.
+No review file is ever written into a checkout. Stage 1 kept a review in the server's data folder (`<dataDir>/reviews/<source>/<slug>.review.json`); v1 posts each such file once as a comment on the matching spec PR and reads no review from the data folder any more. A draft with no PR has no review. `cornfield review <slug>` reads the review from the PR.
+
+Built as: the fence's info string names the proposal (` ```cornfield-review <slug> `), since one PR can hold several; the JSON is exactly `{ verdict, note, edits }`; a comment counts only when its author maintains the repo (admin or maintain).
 
 ## Why
 

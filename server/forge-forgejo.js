@@ -190,6 +190,12 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return status === 404 ? null : /** @type {string} */ (body);
     },
 
+    async defaultBranch() {
+      const { body } = await client.request('GET', `repos/${repo}`, { what: forge.repo });
+      if (typeof body?.default_branch !== 'string' || body.default_branch === '') throw new ForgeError(`Forgejo did not say which branch is ${forge.repo}'s default.`, { code: 'unavailable', forge: NAME });
+      return body.default_branch;
+    },
+
     async tags() {
       return (await client.list(`repos/${repo}/tags?limit=${PER_PAGE}`, { what: `the tags of ${forge.repo}`, limit: MAX_TAGS }))
         .map((t) => ({ name: t.name, sha: t.commit?.sha ?? t.id ?? '' }));
@@ -206,6 +212,11 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       // draft: true always. A draft makes no tag until someone publishes it on Forgejo
       const { body: made } = await client.request('POST', `repos/${repo}/releases`, { body: { tag_name: tag, name, body, draft: true, prerelease: false }, what: `a release draft in ${forge.repo}` });
       return { id: String(made.id), url: made.html_url, draft: made.draft === true };
+    },
+
+    async fileBytes(ref, path) {
+      const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, bytes: true, allow: [404] });
+      return status === 404 || !Buffer.isBuffer(body) ? null : body;
     },
 
     rateLimit: () => client.rateLimit(),

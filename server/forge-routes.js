@@ -53,6 +53,8 @@ const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 
 const DRAFTS = '/api/forge/release-drafts';
 /** What a draft request may carry, in bytes: a tag, a tag to start from and a name */
 const DRAFT_LIMIT = 4096;
+/** The drafts being made now, by `repo@tag` */
+const inFlight = new Set();
 const HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
 
 const send = (req, res, status, body, headers = {}) => {
@@ -239,6 +241,10 @@ async function postDraft(req, res, ctx, name) {
     req.resume();
     return say(403, { ok: false, error: 'A release draft is only posted from cornfield\'s own page.', code: 'forbidden' });
   }
+  if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] || ''))) {
+    req.resume();
+    return say(415, { ok: false, error: 'Send the request as JSON (Content-Type: application/json).', code: 'invalid' });
+  }
   let body;
   try {
     body = await readBody(req, DRAFT_LIMIT);
@@ -262,6 +268,10 @@ async function postDraft(req, res, ctx, name) {
   const request = { tag: asked.tag, since: asked.since ?? null, name: asked.name ?? asked.tag };
   const target = `${config.forge.repo}@${asked.tag}`;
 
+  // One draft at a time for a tag: a double click must not make two drafts
+  const busyKey = `${config.forge.repo}@${asked.tag}`;
+  if (inFlight.has(busyKey)) return say(429, { ok: false, error: `A draft for ${asked.tag} is already being made; wait for it.`, code: 'rate-limited' }, { 'Retry-After': '5' });
+  inFlight.add(busyKey);
   let audit = null;
   const finish = async (status, answer) => { if (audit) await audit.done(status, answer); };
   try {
@@ -296,5 +306,7 @@ async function postDraft(req, res, ctx, name) {
     await finish(err.status, { error: err.message, code: err.code });
     const wait = err.rateLimit && err.rateLimit.retryAfter != null ? { 'Retry-After': String(Math.ceil(err.rateLimit.retryAfter)) } : {};
     say(err.status === 501 ? 501 : STATUS[err.code] || 502, { ok: false, error: err.message, code: err.code }, wait);
+  } finally {
+    inFlight.delete(busyKey);
   }
 }

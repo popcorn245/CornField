@@ -19,6 +19,8 @@
  *   merge(n, { onlyIfGreen: true })   lands an open, ready pull request whose checks are all green, at the head they ran on
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
+ *   fileBytes(ref, path)              the same file's bytes (a picture), or null
+ *   defaultBranch()                   the name of the repo's default branch (where releases are cut from)
  *   tags()                            the tags, as the forge lists them
  *   tag(name)                         one tag with the time of the commit it names
  *   createReleaseDraft({ tag, name, body })   a DRAFT release for a tag name: never published, and it makes no tag
@@ -60,6 +62,8 @@
  *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod }): Promise<{ sha: string }>,
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
+ *   fileBytes(ref: string, path: string): Promise<Buffer | null>,
+ *   defaultBranch(): Promise<string>,
  *   tags(): Promise<Tag[]>,
  *   tag(name: string): Promise<TagInfo>,
  *   createReleaseDraft(input: ReleaseDraftInput): Promise<ReleaseDraft>,
@@ -79,7 +83,7 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'branches', 'file', 'tags', 'tag', 'createReleaseDraft', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -145,6 +149,13 @@ function tagName(v) {
 function text(v, what) {
   if (typeof v !== 'string' || v.trim() === '' || v.includes('\0')) throw invalid(`${what} is missing.`);
   return v;
+}
+
+/** A ref and a path inside the repo (no leading slash, no `.`, `..` or empty part) */
+function inRepo(ref, path) {
+  text(ref, 'The commit');
+  text(path, 'The file');
+  if (path.startsWith('/') || path.split('/').some((p) => p === '..' || p === '.' || p === '')) throw invalid(`${JSON.stringify(path)} is not a path inside the repo.`);
 }
 
 /** A listing's query with the defaults: open, at most `DEFAULT_LIMIT`, any label */
@@ -215,11 +226,14 @@ export function wrap(a, forge) {
     },
     branches: async () => a.branches(),
     file: async (ref, path) => {
-      text(ref, 'The commit');
-      text(path, 'The file');
-      if (path.startsWith('/') || path.split('/').some((p) => p === '..' || p === '.' || p === '')) throw invalid(`${JSON.stringify(path)} is not a path inside the repo.`);
+      inRepo(ref, path);
       return a.file(ref, path);
     },
+    fileBytes: async (ref, path) => {
+      inRepo(ref, path);
+      return a.fileBytes(ref, path);
+    },
+    defaultBranch: async () => a.defaultBranch(),
     tags: async () => a.tags(),
     tag: async (name) => a.tag(tagName(name)),
     createReleaseDraft: async (input) => {

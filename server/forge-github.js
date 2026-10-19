@@ -216,6 +216,12 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return text;
     },
 
+    async defaultBranch() {
+      const { body } = await client.request('GET', `repos/${repo}`, { what: forge.repo });
+      if (typeof body?.default_branch !== 'string' || body.default_branch === '') throw new ForgeError(`GitHub did not say which branch is ${forge.repo}'s default.`, { code: 'unavailable', forge: NAME });
+      return body.default_branch;
+    },
+
     async tags() {
       return (await client.list(`repos/${repo}/tags?per_page=${PER_PAGE}`, { what: `the tags of ${forge.repo}`, limit: MAX_TAGS }))
         .map((t) => ({ name: t.name, sha: t.commit?.sha ?? '' }));
@@ -233,6 +239,15 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       // draft: true always. A draft makes no tag until someone publishes it on GitHub
       const { body: made } = await client.request('POST', `repos/${repo}/releases`, { body: { tag_name: tag, name, body, draft: true, prerelease: false }, what: `a release draft in ${forge.repo}` });
       return { id: String(made.id), url: made.html_url, draft: made.draft === true };
+    },
+
+    async fileBytes(ref, path) {
+      const { status, body, headers } = await client.request('GET', `repos/${repo}/contents/${segments(path)}?ref=${enc(ref)}`, {
+        what: `${path} at ${ref}`, bytes: true, accept: 'application/vnd.github.raw+json', allow: [404],
+      });
+      if (status === 404 || !Buffer.isBuffer(body)) return null;
+      if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(body.toString('utf8'))) return null; // a folder
+      return body;
     },
 
     rateLimit: () => client.rateLimit(),

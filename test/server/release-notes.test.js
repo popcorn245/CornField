@@ -32,7 +32,9 @@ describe.each(FORGES)('the release notes on $type', ({ type, pull }) => {
     const forge = await forgeOn();
     const found = await mergedSince(forge);
     expect(found.since).toEqual({ name: 'v0.2.0', sha: '2'.repeat(40), date: '2026-10-12T09:00:00Z' });
-    expect(found.pulls.map((p) => p.number)).toEqual([23, 22, 21, 20]); // newest merge first; 19 merged before the tag, 24 never landed
+    // Newest merge first; 19 merged before the tag, 24 never landed, 26 landed on release/0.2, not on the default branch
+    expect(found.pulls.map((p) => p.number)).toEqual([23, 22, 21, 20]);
+    expect(found.branch).toBe('main');
     expect(found.pulls[1].files.map((f) => [f.path, f.status, f.previousPath])).toEqual([['packages/web/src/cart.js', 'renamed', 'packages/web/src/basket.js']]);
     expect(found.truncated).toBe(false);
     const files = fake.requests.filter((r) => /\/pulls\/\d+\/files/.test(r.url)).map((r) => Number(/pulls\/(\d+)\//.exec(r.url)[1]));
@@ -98,7 +100,8 @@ describe('the pull requests read for their files', () => {
         repo: 'owner/name',
         tags: async () => [{ name: 'v1.0.0', sha: 'a' }],
         tag: async (name) => ({ name, sha: 'a', date: '2026-01-01T00:00:00Z' }),
-        pulls: async () => Array.from({ length: n }, (_, i) => ({ number: i + 1, title: `PR ${i + 1}`, state: 'merged', labels: [], author: null, url: null, mergedAt: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() })),
+        defaultBranch: async () => 'main',
+        pulls: async () => Array.from({ length: n }, (_, i) => ({ number: i + 1, title: `PR ${i + 1}`, state: 'merged', labels: [], author: null, url: null, base: { ref: 'main' }, mergedAt: new Date(Date.UTC(2026, 1, 1, 0, i)).toISOString() })),
         pullFiles: async (num) => { asked.push(num); return []; },
       },
     };

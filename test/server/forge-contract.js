@@ -182,6 +182,18 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(await forge.file(SHA_GREEN, 'docs/specs/proposals/0099-none.json')).toBeNull();
     });
 
+    it('fileBytes(): the same file as bytes, or null when it is not there', async () => {
+      const bytes = await forge.fileBytes(SHA_GREEN, 'docs/specs/proposals/0013-meals.json');
+      expect(Buffer.isBuffer(bytes)).toBe(true);
+      expect(JSON.parse(bytes.toString('utf8'))).toEqual({ version: 1, title: 'Meals' });
+      expect(await forge.fileBytes(SHA_GREEN, 'docs/specs/proposals/0099-none.json')).toBeNull();
+      await forgeError(() => forge.fileBytes(SHA_GREEN, '../secrets'), 'invalid');
+    });
+
+    it('defaultBranch(): the name of the repo\'s default branch', async () => {
+      expect(await forge.defaultBranch()).toBe('main');
+    });
+
     it('tags(): each with the commit it names, as the forge lists them', async () => {
       expect(await forge.tags()).toEqual([
         { name: 'v0.1.0', sha: '1110000000000000000000000000000000000000' },

@@ -277,6 +277,31 @@ describe('release notes and drafts over HTTP', () => {
       expect(rows('actions')).toEqual([]);
     });
 
+    it('takes JSON only, and one draft at a time for a tag: a double click makes one draft', async () => {
+      const cookie = await signIn();
+      fake.requests.length = 0;
+      const form = await post(cookie, 'tag=v0.3.0', { 'content-type': 'application/x-www-form-urlencoded' });
+      expect([form.status, form.json.code]).toEqual([415, 'invalid']);
+      const plainText = await post(cookie, '{"tag":"v0.3.0"}', { 'content-type': 'text/plain' });
+      expect(plainText.status).toBe(415);
+      expect(fake.requests).toEqual([]);
+      // The forge is slow to make the draft: a second click meanwhile is refused, and only one draft is asked for
+      let letGo;
+      const slow = new Promise((resolve) => { letGo = resolve; });
+      const made = recordings('notes-github')['POST /repos/owner/name/releases'];
+      state.override['POST /api/v3/repos/owner/name/releases'] = async () => { await slow; return made; };
+      const first = post(cookie, { tag: 'v0.3.0' });
+      // Until the first one is waiting on the forge's answer to the draft
+      while (!fake.requests.some((r) => r.method === 'POST' && r.url.endsWith('/releases'))) await new Promise((resolve) => setTimeout(resolve, 5));
+      const second = await post(cookie, { tag: 'v0.3.0' });
+      expect([second.status, second.json.code]).toEqual([429, 'rate-limited']);
+      letGo();
+      expect((await first).status).toBe(201);
+      expect(fake.requests.filter((r) => r.method === 'POST' && r.url.endsWith('/releases'))).toHaveLength(1);
+      // Once it is done, the next one is taken again
+      expect((await post(cookie, { tag: 'v0.3.0' })).status).toBe(201);
+    });
+
     it('says a tag that is not there, and nothing merged, in words, and audits the refusal', async () => {
       const cookie = await signIn();
       const missing = await post(cookie, { tag: 'v0.3.0', since: 'v9.9.9' });
