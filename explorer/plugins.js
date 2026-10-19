@@ -36,18 +36,22 @@ export async function loadClientConfig(fetcher = (...a) => globalThis.fetch(...a
   }
 }
 
-/** Puts the repo's title and links in the header */
+/** Puts the repo's title and links in the header, and Sign out when the server says who is signed in */
 export function applyBranding(doc, config) {
   if (!config || !doc) return;
   const title = doc.getElementById('cf-title');
   if (title && config.title) title.textContent = config.title;
   const links = doc.getElementById('cf-links');
-  if (links && Array.isArray(config.links)) {
-    links.innerHTML = config.links
-      .filter((l) => l && typeof l.label === 'string' && /^(https?:\/\/|\/)/.test(String(l.href)))
-      .map((l) => `<a class="hx-chip-link hx-chip-link--indigo hx-only-xl" href="${escHtml(l.href)}" target="_blank" rel="noreferrer"><span class="hx-dot-sm"></span> ${escHtml(l.label)}</a>`)
-      .join('');
-  }
+  if (!links) return;
+  const html = Array.isArray(config.links) ? config.links
+    .filter((l) => l && typeof l.label === 'string' && /^(https?:\/\/|\/)/.test(String(l.href)))
+    .map((l) => `<a class="hx-chip-link hx-chip-link--indigo hx-only-xl" href="${escHtml(l.href)}" target="_blank" rel="noreferrer"><span class="hx-dot-sm"></span> ${escHtml(l.label)}</a>`)
+    .join('') : '';
+  // A plain form: signing out is a same-origin POST (server/auth.js), no script needed
+  const signOut = config.signIn && typeof config.signIn.login === 'string'
+    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}">Sign out</button></form>`
+    : '';
+  if (html || signOut) links.innerHTML = html + signOut;
 }
 
 /**

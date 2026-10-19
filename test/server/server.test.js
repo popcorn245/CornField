@@ -4,7 +4,7 @@
  * The server serves an allowlist, not the checkout: the explorer, the modules it loads, the repo's map,
  * registry, house file and proposals answer 200; .env files, sources, cornfield's own Node modules and
  * traversal attempts answer 404; no response carries a CORS header; every page has a Content-Security-Policy;
- * and with no sign-in yet it refuses to listen on anything but loopback. Runs `cornfield serve` on the sample repo.
+ * and without sign-in it refuses to listen on anything but loopback. Runs `cornfield serve` on the sample repo.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
@@ -167,12 +167,12 @@ describe('cornfield serve', () => {
   });
 });
 
-describe('until sign-in exists', () => {
+describe('without sign-in', () => {
   it('refuses to listen on anything but loopback, and says why', () => {
     for (const host of ['0.0.0.0', '::', '192.0.2.10']) {
       const res = spawnSync(process.execPath, [CLI, 'serve', '--repo', SAMPLE, '--port', '0'], { env: { ...process.env, CORNFIELD_HOST: host }, encoding: 'utf8', timeout: 20000 });
       expect(res.status, host).toBe(1);
-      expect(res.stderr, host).toMatch(/will not listen on .*no sign-in yet/);
+      expect(res.stderr, host).toMatch(/will not listen on .*sign-in is not configured/);
     }
   });
 });

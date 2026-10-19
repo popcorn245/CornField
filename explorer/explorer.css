@@ -630,3 +630,6 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 .hx-cloud-fold[open] > summary { color: #e2e8f0; }
 .hx-cloud-browser { color: var(--hx-sky); font-size: 10px; }
 .hx-cloud-play { width: 100%; justify-content: center; } /* the cloud panel's "Play: X is down" (spec 0031 section 8) */
+
+/* Sign out (when sign-in is on): a form in the header, inline with the links */
+.cf-sign-out { display: inline-flex; margin: 0; }

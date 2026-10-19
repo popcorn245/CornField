@@ -1,0 +1,60 @@
+# Sign-in
+
+cornfield shows a map of a repo's weak points, so a hosted cornfield shows nothing to anyone who has not signed in, and everything only to the repo's maintainers ([ADR 0004](adr/0004-admins-only-loopback-until-sign-in.md)). Sign-in is with the repo's own forge, GitHub or Forgejo, over OAuth.
+
+- **Signed out:** every route answers 401; a page you open is the sign-in page.
+- **Signed in, not a maintainer:** one page, "this is the dev dashboard; ask a maintainer", and 403 for everything else.
+- **A maintainer:** the dashboard. On GitHub that is the repo's `admin` or `maintain` permission; on Forgejo, which has no maintain level, its admins (and its owner).
+
+The server enforces this on every route, the explorer's own files included; only `/healthz` (`{ "ok": true }`, for health checks) and the sign-in routes under `/auth/` answer without a session. The forge is asked for your permission when you sign in and again once the session is 15 minutes old, so someone who loses maintainer rights loses the dashboard within 15 minutes. While the forge cannot be asked, the answer is 503, never a pass.
+
+## Without sign-in
+
+With no OAuth app configured, cornfield is a tool on your own machine: it shows everything, and it only listens on loopback (`127.0.0.1`, `localhost`, `::1`). It refuses any other address at startup.
+
+## What to set
+
+Sign-in is configured by env only, never by the config file:
+
+| Env | What |
+|---|---|
+| `CORNFIELD_GITHUB_CLIENT_ID`, `CORNFIELD_GITHUB_CLIENT_SECRET` | the OAuth app, when the config's `forge.type` is `github` |
+| `CORNFIELD_FORGEJO_CLIENT_ID`, `CORNFIELD_FORGEJO_CLIENT_SECRET` | the OAuth app, when it is `forgejo` |
+| `CORNFIELD_SESSION_SECRET` | at least 32 random characters: `openssl rand -base64 48` |
+| `CORNFIELD_PUBLIC_URL` | the origin people open cornfield at, like `https://cornfield.example.org` (or `publicUrl` in the config) |
+
+The config's `forge` names the forge and the repo whose maintainers may sign in (`forge: { type: 'github', repo: 'owner/name' }`; a Forgejo, or a GitHub Enterprise Server, also needs its `url`).
+
+Half of it set is an error at startup, not a quiet fallback to no sign-in: an id without its secret, the other forge's pair, no session secret, a short one, or no public URL.
+
+The session secret names sessions and encrypts the forge tokens kept in them; change it and everyone is signed out.
+
+## Where it may listen
+
+- **Loopback:** always.
+- **Any other address** (`CORNFIELD_HOST=0.0.0.0`, as in a container): only with sign-in configured **and** an `https` public URL. Otherwise it refuses at startup and says why. Put a reverse proxy that ends TLS in front of it.
+
+With sign-in on loopback, an `http://127.0.0.1:3350` public URL works for trying it out on your own machine.
+
+## Create the OAuth app on GitHub
+
+1. Open **Settings → Developer settings → OAuth Apps → New OAuth App** (for an organization's repo: the organization's settings, same path), or <https://github.com/settings/applications/new>.
+2. **Homepage URL:** the public URL.
+3. **Authorization callback URL:** the public URL with `/auth/callback`, like `https://cornfield.example.org/auth/callback`.
+4. Register it, then **Generate a new client secret**. Put the client id and the secret in `CORNFIELD_GITHUB_CLIENT_ID` and `CORNFIELD_GITHUB_CLIENT_SECRET`.
+
+cornfield asks for the `repo` scope: it reads a private repo's pull requests and files, posts reviews as comments, and lands green pull requests, all as the signed-in maintainer. For an organization that restricts OAuth apps, an owner approves the app once.
+
+On GitHub Enterprise Server the steps are the same on your instance; set the config's `forge.url` to it.
+
+## Create the OAuth app on Forgejo
+
+1. Open **Settings → Applications → Manage OAuth2 applications** (your user's, or the organization's).
+2. **Application name:** cornfield. **Redirect URIs:** the public URL with `/auth/callback`.
+3. Keep **Confidential client** on, and create it. Put the client id and the secret in `CORNFIELD_FORGEJO_CLIENT_ID` and `CORNFIELD_FORGEJO_CLIENT_SECRET`.
+
+Set the config's `forge.url` to the instance, like `https://forgejo.example.org` (with its path, when it is served under one).
+
+## What it keeps
+
+A session is a row of `cornfield.db` in the data folder ([config](config.md)): who you are, your permission, when it was last asked, and your forge token, encrypted. The cookie holds a random value whose hash names the row, so the file alone opens no session. Sessions last 7 days; **Sign out** in the header ends one at once. The token never reaches the browser.

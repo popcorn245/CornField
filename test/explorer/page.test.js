@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import { EXPLORER, CORNFIELD, explorerPage } from '../helpers.js';
-import { loadSources, combineSources, NO_SOURCE } from '../../explorer/plugins.js';
+import { loadSources, combineSources, applyBranding, NO_SOURCE } from '../../explorer/plugins.js';
 import { create, HOUSE_PATH } from '../../plugins/house/browser.js';
 
 const BROWSER_DIRS = [EXPLORER, path.join(CORNFIELD, 'plugins/house')];
@@ -61,6 +61,25 @@ describe('every browser module', () => {
       const outside = [...code.matchAll(/https?:\/\/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/gi)].map((m) => m[1]).filter((h) => h !== 'www.w3.org');
       expect(outside, file).toEqual([]);
     }
+  });
+});
+
+describe('explorer/plugins.js: the header', () => {
+  const docWith = () => {
+    const els = { 'cf-title': { textContent: '' }, 'cf-links': { innerHTML: '' } };
+    return { els, doc: { getElementById: (id) => els[id] || null } };
+  };
+
+  it('puts the title and the links in, and Sign out (a same-origin POST form) only when someone is signed in', () => {
+    const a = docWith();
+    applyBranding(a.doc, { title: 'Acme', links: [{ label: 'Repo', href: 'https://forge.example.test/acme' }, { label: 'Bad', href: 'javascript:alert(1)' }], signIn: false });
+    expect(a.els['cf-title'].textContent).toBe('Acme');
+    expect(a.els['cf-links'].innerHTML).toContain('href="https://forge.example.test/acme"');
+    expect(a.els['cf-links'].innerHTML).not.toContain('javascript:');
+    expect(a.els['cf-links'].innerHTML).not.toContain('sign-out');
+    const b = docWith();
+    applyBranding(b.doc, { links: [], signIn: { login: 'maint<er>' } });
+    expect(b.els['cf-links'].innerHTML).toBe('<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as maint&lt;er&gt;">Sign out</button></form>');
   });
 });
 

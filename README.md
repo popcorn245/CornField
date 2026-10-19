@@ -26,13 +26,15 @@ npx cornfield serve       # the map on http://127.0.0.1:3350
 
 No config is needed: the starter deriver maps any npm-workspaces repo (or, without workspaces, each top-level folder with code). Add a `cornfield.config.js` when you want more (see [docs/config.md](docs/config.md)).
 
-## Stage 1: local only, until sign-in lands
+## Local, or behind sign-in
 
-**cornfield has no sign-in yet, so it only listens on 127.0.0.1 and refuses any other address.** Everything it serves (your map, your proposals) would be visible to anyone who could reach it. Forge sign-in (GitHub or Forgejo, maintainers only, enforced on the server) is the first piece of v1 ([docs/specs/0001-v1.md](docs/specs/0001-v1.md)). Until then, open it on the machine it runs on, or reach it over an SSH tunnel:
+**Without sign-in, cornfield only listens on 127.0.0.1 and refuses any other address**: everything it serves (your map, your proposals) would be visible to anyone who could reach it. Open it on the machine it runs on, or reach it over an SSH tunnel:
 
 ```sh
 ssh -L 3350:127.0.0.1:3350 you@the-machine
 ```
+
+**With forge sign-in** (a GitHub or Forgejo OAuth app in env, and an https public URL) it may listen on any address behind a reverse proxy, and shows the dashboard to the repo's maintainers only, enforced on the server for every route. Setting it up: [docs/sign-in.md](docs/sign-in.md).
 
 ## What it does today
 
@@ -50,7 +52,7 @@ docker run -d --name cornfield --network host \
   -v "$PWD:/repo:ro" -v cornfield-data:/data ghcr.io/popcorn245/cornfield
 ```
 
-[compose.example.yml](compose.example.yml) is the same as a compose service. Host networking is what keeps it on the host's loopback until v1.
+[compose.example.yml](compose.example.yml) is the same as a compose service. Host networking is what keeps it on the host's loopback without sign-in.
 
 ## Commands
 
