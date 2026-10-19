@@ -27,6 +27,7 @@ Elsewhere:
 | The search box | `Enter` selects the first node whose name matches; no match is said |
 | The node's panel | `Escape` closes it and gives the focus back to the map |
 | The Layers and Proposals menus | `Escape` closes them, back on their button |
+| A mockup of a proposal | `Enter` on its button in the node's panel opens it in a window that takes the focus and is announced (its title, and where it stands with the review); `Tab` stays inside, `Escape` or Close shuts it and the focus goes back to the button. A picture's alt text is its title. |
 | The scenario player | `Space` plays and pauses, `Left` and `Right` step (the map leaves those keys to it while a scenario plays) |
 | A proposal's what-if edits | `Ctrl+Z` undoes, `Ctrl+Shift+Z` or `Ctrl+Y` redoes, `Escape` backs out of a form or a drawing |
 
@@ -49,7 +50,7 @@ While closed, the node panel waits off screen; it is `inert` then, so `Tab` neve
 
 ## How it is checked
 
-- **In the test suite** ([test/explorer/a11y.test.js](../test/explorer/a11y.test.js)): [axe-core](https://github.com/dequelabs/axe-core) runs over the page's own markup and stylesheets in each state (the map, the Layers menu, a node's panel, a proposal open with what-if editing, the scenario player) for WCAG 2.2 A and AA and axe's best practices, and finds nothing. The keys above are tested there too. The test runs on happy-dom, which has no layout, so colour contrast is checked in a browser instead (next point).
+- **In the test suite** ([test/explorer/a11y.test.js](../test/explorer/a11y.test.js)): [axe-core](https://github.com/dequelabs/axe-core) runs over the page's own markup and stylesheets in each state (the map, the Layers menu, a node's panel, a proposal open with what-if editing, the scenario player, a proposal's mockups in the panel and open in their window, in both themes) for WCAG 2.2 A and AA and axe's best practices, and finds nothing. The keys above are tested there too. The test runs on happy-dom, which has no layout, so colour contrast is checked in a browser instead (next point).
 - **In a browser**: the same axe rules, colour contrast included, in Chromium over the sample repo, in ten states: the map, the Layers and Proposals menus, a node's panel, a phone with and without the panel, a proposal open, the scenario player, the data-flow view and the House view, each in the dark and the light theme. No violations.
 
 What axe cannot judge, and was looked at by hand: the reading order of the steps, the words said, and that every pointer action has a key. A pass with a real screen reader (NVDA, VoiceOver) is welcome: open an issue with what it reads badly.

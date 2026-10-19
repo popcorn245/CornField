@@ -212,6 +212,15 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return text;
     },
 
+    async fileBytes(ref, path) {
+      const { status, body, headers } = await client.request('GET', `repos/${repo}/contents/${segments(path)}?ref=${enc(ref)}`, {
+        what: `${path} at ${ref}`, bytes: true, accept: 'application/vnd.github.raw+json', allow: [404],
+      });
+      if (status === 404 || !Buffer.isBuffer(body)) return null;
+      if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(body.toString('utf8'))) return null; // a folder
+      return body;
+    },
+
     rateLimit: () => client.rateLimit(),
   };
 }

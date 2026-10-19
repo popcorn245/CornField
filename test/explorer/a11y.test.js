@@ -30,6 +30,8 @@ import { initProposals, openProposal, closeProposal } from '../../explorer/propo
 // @ts-expect-error plain JS modules, no declarations
 import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initMockups, resetMockupsForTests, openMockup, closeMockup } from '../../explorer/mockups.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
@@ -48,13 +50,20 @@ const PROPOSAL = {
   scenarios: [{ id: 's', title: 'A walk', steps: [{ node: 'page-new', text: 'You open meals.' }, { node: 'table-t', text: 'It reads orders.' }] }],
 };
 
+const MOCKUPS = [
+  { node: 'page-new', path: 'screens/list.png', title: 'The meal list' },
+  { node: 'page-new', path: 'screens/edit.html', title: 'The edit form' },
+];
+const PROPOSAL_WITH_MOCKUPS = { ...PROPOSAL, mockups: MOCKUPS };
+
 const $ = (id) => document.getElementById(id);
 const key = (el, k, opts = {}) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }); el.dispatchEvent(e); return e; };
 const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
 /** axe on the page as it stands, rules that need a layout off; returns the violations as "rule: target" */
 async function audit() {
-  const r = await axe.run(document, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
+  // An iframe is left to its own check below: happy-dom cannot run axe across a frame
+  const r = await axe.run({ include: [document.documentElement], exclude: [['iframe']] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
   return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`));
 }
 
@@ -134,6 +143,52 @@ describe('axe finds no violation', () => {
     await settle();
     expect(document.querySelector('.hx-player')).not.toBe(null);
     expect(await audit()).toEqual([]);
+    clearScenario();
+    closeProposal();
+  });
+});
+
+describe('axe finds no violation with a proposal\'s mockups', () => {
+  /** A node\'s panel with its mockups, then each opened in its window, in the dark and the light theme (contrast is checked in Chromium) */
+  it('in a node\'s panel and in the window a picture and a page open in, in both themes', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const u = new URL(url, 'http://localhost');
+      if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => [{ slug: '0013-meals', title: 'Meals', summary: 'Adds /meals.', source: 'checkout', counts: { added: 1, changed: 0, removed: 0, scenarios: 1 }, errors: 0 }] };
+      if (u.pathname.endsWith('/review')) return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
+      if (u.pathname.endsWith('/mockups')) return { ok: true, status: 200, headers: new Headers(), json: async () => [{ index: 0, state: 'approved' }, { index: 1, state: 'changed' }] };
+      return { ok: true, status: 200, headers: new Headers({ 'X-Proposal-Source': 'checkout' }), json: async () => structuredClone(PROPOSAL_WITH_MOCKUPS) };
+    }));
+    mount();
+    window.happyDOM.settings.disableIframePageLoading = true; // the frame's address is the server's; nothing is fetched here (happy-dom still logs that it declined)
+    resetWhatIfForTests();
+    resetMockupsForTests();
+    initWhatIf();
+    initMockups();
+    await initProposals();
+    expect(await openProposal('0013-meals', 'checkout')).toBe(true);
+    await settle();
+    await selectNode(state.nodes.find((n) => n.id === 'page-new'));
+    const buttons = [...document.querySelectorAll('#drawer-meta-list [data-mockup]')];
+    expect(buttons.map((b) => b.textContent.trim())).toEqual(['The meal list (image, opens in a window)', 'The edit form (page, opens in a window)']);
+    expect(document.querySelector('#drawer-meta-list').textContent).toContain('Changed since you approved');
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      expect(await audit(), `${theme}: the panel`).toEqual([]);
+      for (const b of buttons) {
+        b.click();
+        const dialog = document.querySelector('[role="dialog"]');
+        expect(dialog.getAttribute('aria-modal')).toBe('true');
+        expect(dialog.contains(document.activeElement) || dialog === document.activeElement).toBe(true);
+        const frame = dialog.querySelector('iframe');
+        if (frame) expect([frame.getAttribute('sandbox'), frame.getAttribute('title')]).toEqual(['', 'The edit form']);
+        else expect(dialog.querySelector('img').getAttribute('alt')).toBe('The meal list');
+        expect(await audit(), `${theme}: ${b.textContent.trim()} open`).toEqual([]);
+        closeMockup();
+        expect(document.activeElement).toBe(b);
+      }
+    }
+    delete document.documentElement.dataset.theme;
+    resetMockupsForTests();
     clearScenario();
     closeProposal();
   });

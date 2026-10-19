@@ -11,8 +11,11 @@
  *
  *   PUT /proposals/<slug>/review?source=…   { verdict, note, edits } -> `<dataDir>/reviews/<source>/<slug>.review.json`
  *   GET /proposals/<slug>/review?source=…   that file, or 404
+ *   GET /proposals/<slug>/mockups[/<n>]?source=…   the screens a proposal lists, and each file (server/mockups.js)
  *
- * The file is `{ "version": 1, "verdict": "approved" | "notes", "note": string, "edits": Edit[], "at": ISO string }`.
+ * The file is `{ "version": 1, "verdict": "approved" | "notes", "note": string, "edits": Edit[], "mockups"?: Mockup[], "at": ISO string }`.
+ * An approval of a proposal that lists mockups carries `mockups: [{ node, path, sha256 }]`, the files as they were when
+ * it was approved (server/mockups.js; the client never sends it), so a later change to one shows as unreviewed.
  * The agent drafting the spec reads it (`cornfield review <slug>`), folds the edits into the proposal. The PUT is
  * same-origin only (`sameOrigin`), at most `REVIEW_LIMIT` bytes, checked by `validateReview`, and only
  * for a slug and source the server itself listed.
@@ -37,6 +40,7 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles, reviewFilePath } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
+import { hashMockups, serveMockups } from './mockups.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
@@ -210,7 +214,8 @@ async function putReview(req, res, url, where, slug) {
   if (!checked.ok) return send(res, 400, { error: checked.error });
   const file = reviewFilePath(entry, where.dataDir);
   if (!file) return send(res, 409, { error: 'Something that is not a file is where the review goes' });
-  const review = { version: 1, ...checked.value, at: new Date().toISOString() };
+  const mockups = checked.value.verdict === 'approved' ? hashMockups(entry) : [];
+  const review = { version: 1, ...checked.value, ...(mockups.length ? { mockups } : {}), at: new Date().toISOString() };
   const text = `${JSON.stringify(review, null, 2)}\n`;
   try {
     writeReview(file, text);
@@ -360,6 +365,14 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null) {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     send(res, 405, { error: 'Proposals are read-only here' }, { Allow: 'GET, HEAD' });
+    return true;
+  }
+
+  const mockups = /^\/proposals\/([^/]+)\/mockups(?:\/(\d{1,4}))?$/.exec(reqPath);
+  if (mockups) {
+    serveMockups(req, res, mockups, url, where, forgeFor, (entry) => readReview(entry, where.dataDir)?.review ?? null).catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'The mockups could not be read' });
+    });
     return true;
   }
 
