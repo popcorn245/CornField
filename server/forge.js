@@ -17,6 +17,7 @@
  *   checks(ref)                       the checks on a commit (a branch, a tag or a sha)
  *   rerun(check)                      re-runs one that can be (`check.rerunnable`)
  *   merge(n, { onlyIfGreen: true })   lands an open, ready pull request whose checks are all green, at the head they ran on
+ *                                     (`sha`: the head the caller looked at; a pull request that has moved on since is refused)
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
  *
@@ -50,7 +51,7 @@
  *   comment(n: number, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
  *   rerun(check: Check): Promise<void>,
- *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod }): Promise<{ sha: string }>,
+ *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod, sha?: string }): Promise<{ sha: string }>,
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
  *   rateLimit(): import('./forge-http.js').RateLimit | null,
@@ -98,6 +99,13 @@ export const isMaintainer = (permission) => permission === 'admin' || permission
  * @param {Check[]} checks
  */
 export const isGreen = (checks) => checks.length > 0 && checks.every((c) => GREEN_STATES.includes(c.state));
+
+/**
+ * Whether cornfield may re-run a check: one that failed and that the forge can run again (`check.rerunnable`). A check
+ * that is still running, passed, or was cancelled is not re-run from here.
+ * @param {Check} check
+ */
+export const canRerun = (check) => Boolean(check) && check.rerunnable === true && check.state === 'failure';
 
 /**
  * What keeps a commit from being green, in words: "lint failed; test is still running", or "it has no checks".
@@ -173,17 +181,26 @@ export function wrap(a, forge) {
     checks: async (ref) => a.checks(text(ref, 'The commit')),
     rerun: async (check) => {
       if (!check || typeof check.id !== 'string') throw invalid('Re-run which check?');
-      if (!check.rerunnable) throw invalid(`${check.name || 'That check'} cannot be re-run from cornfield; re-run it on the forge.`);
+      if (!canRerun(check)) {
+        throw invalid(check.rerunnable && check.state !== 'failure'
+          ? `${check.name || 'That check'} has not failed; only a failed check is re-run.`
+          : `${check.name || 'That check'} cannot be re-run from cornfield; re-run it on the forge.`);
+      }
       return a.rerun(check);
     },
     merge: async (n, opts) => {
       number(n);
-      const { onlyIfGreen, method = 'merge' } = opts || {};
+      const { onlyIfGreen, method = 'merge', sha } = opts || {};
       if (onlyIfGreen !== true) throw invalid('cornfield only lands a pull request whose checks are green: pass { onlyIfGreen: true }.');
       if (!MERGE_METHODS.includes(method)) throw invalid(`The merge method is one of ${MERGE_METHODS.join(', ')}.`);
+      if (sha !== undefined && (typeof sha !== 'string' || !/^[0-9a-f]{7,64}$/i.test(sha))) throw invalid('The commit to land is a sha.');
       const pr = await a.pull(n);
       if (pr.state !== 'open') throw new ForgeError(`Pull request #${n} is ${pr.state}; only an open one can land.`, { code: 'conflict' });
       if (pr.draft) throw new ForgeError(`Pull request #${n} is a draft; mark it ready first.`, { code: 'conflict' });
+      // The head the caller looked at, and confirmed, is the head that lands: a push since is for them to look at again
+      if (sha !== undefined && sha.toLowerCase() !== pr.head.sha.toLowerCase()) {
+        throw new ForgeError(`Pull request #${n} has changed since it was looked at (its head is now ${pr.head.sha.slice(0, 7)}); look again before landing it.`, { code: 'conflict' });
+      }
       const checks = await a.checks(pr.head.sha);
       if (!isGreen(checks)) throw new ForgeError(`Pull request #${n} is not green: ${notGreenWords(checks)}.`, { code: 'not-green' });
       // At the sha the checks ran on: a push in between makes the forge refuse rather than land untested code

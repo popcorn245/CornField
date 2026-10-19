@@ -235,7 +235,9 @@ describe('the forge routes', () => {
     expect([big.status, big.json.error]).toEqual([400, 'The limit is at most 300.']);
     expect((await raw(srv.port, 'GET', '/api/forge/pulls?limit=none', { cookie })).status).toBe(400);
     expect((await raw(srv.port, 'GET', '/api/forge/pulls/0', { cookie })).status).toBe(404);
-    expect((await raw(srv.port, 'GET', '/api/forge/pulls/12/merge', { cookie })).status).toBe(404);
+    expect((await raw(srv.port, 'GET', '/api/forge/pulls/12/nothing', { cookie })).status).toBe(404);
+    const act = await raw(srv.port, 'GET', '/api/forge/pulls/12/merge', { cookie });
+    expect([act.status, act.headers.allow]).toEqual([405, 'POST']);
     for (const method of ['POST', 'PUT', 'DELETE']) {
       const res = await raw(srv.port, method, '/api/forge/pulls/12', { cookie, origin: `http://127.0.0.1:${srv.port}` });
       expect([method, res.status, res.headers.allow]).toEqual([method, 405, 'GET, HEAD']);
