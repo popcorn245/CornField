@@ -13,7 +13,9 @@
  *   - **Checks.** Forgejo Actions reports each job as a commit status, so the commit's statuses are all the checks
  *     there are. Its API cannot re-run one: none is `rerunnable`.
  *   - **Merge.** `POST …/pulls/<n>/merge` with `head_commit_id`, so a push after the checks makes Forgejo refuse
- *     (409). It answers nothing, so the merge commit is read back from the pull request.
+ *     (409). Before it, `readiness`: Forgejo says the pull request is `mergeable` (no conflicts). Its API does not say
+ *     which checks branch protection requires, nor list a workflow that has not reported a status yet, so a commit
+ *     whose slow job has not started can look green: branch protection's required checks are the backstop there. It answers nothing, so the merge commit is read back from the pull request.
  *   - **Files.** `raw/<path>?ref=`; a folder or a missing file is null.
  *   - **Limits.** Forgejo sends no rate-limit headers; only a `Retry-After` from the instance or a proxy in front of
  *     it is read. A listing is paged 50 at a time (the most it gives by default) and follows `Link`.
@@ -162,6 +164,12 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
 
     async rerun(check) {
       throw new ForgeError(`${check.name || check.id} cannot be re-run from cornfield; re-run it on Forgejo.`, { code: 'invalid', forge: NAME });
+    },
+
+    async readiness(n) {
+      const { body: p } = await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) });
+      if (p.mergeable === false) return { ready: false, why: 'Forgejo says it cannot be merged (conflicts with its base, or branch protection)' };
+      return { ready: true };
     },
 
     async mergeAt(n, { sha, method }) {

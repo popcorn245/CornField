@@ -99,7 +99,7 @@ export function clientConfig(config, signIn = false) {
     version: PKG.version,
     title: config.title,
     links: config.links || [],
-    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo } : null,
+    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge' } : null,
     sources: browserSources(config),
     signIn,
   };

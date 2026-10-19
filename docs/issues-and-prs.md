@@ -24,8 +24,8 @@ Select the pull request again, or press **Clear**, to let go. Closing the panel 
 
 A selected pull request has two actions, for a signed-in maintainer, and they are the only things cornfield does to a forge. Never a force-merge, never a deploy, nothing that touches anything live.
 
-- **Land it** is there when the pull request is open, not a draft, and every check on its head is green (a check that is neutral or skipped does not stand in the way; no checks at all is not green). Otherwise the panel says why in its place ("Not every check is green: lint failed; test is still running."). It opens a **confirm dialog** that shows exactly what will land: the pull request, its head commit, the branch it comes from and goes into, the merge made by the forge, and each check. **Land it** there lands that commit with the forge's own merge; **Cancel** or Escape does nothing.
-- **Re-run** is on a failed check the forge lets cornfield run again (a GitHub Actions job). A check that passed, is still running or was cancelled has none. A failed check the forge cannot re-run from here (a plain commit status, or anything on Forgejo) says so beside it, and where to do it.
+- **Land it** is there when the pull request is open, not a draft, and every check on its head is green (a check that is neutral or skipped does not stand in the way, but at least one must have passed: no checks, or only skipped and neutral ones, is not green). Otherwise the panel says why in its place ("Not every check is green: lint failed; test is still running."). It opens a **confirm dialog** that shows exactly what will land: the pull request, its head commit, the branch it comes from and goes into, how it lands (the config's `forge.mergeMethod`: a merge commit, squashed, or rebased; `merge` when unset), and each check. **Land it** there lands that commit with the forge's own merge; **Cancel** or Escape does nothing.
+- **Re-run** is on a failed or cancelled check the forge lets cornfield run again (a GitHub Actions job; a cancelled one is usually a newer push's concurrency group stopping it). A check that passed or is still running has none. A failed check the forge cannot re-run from here (a plain commit status, or anything on Forgejo) says so beside it, and where to do it.
 
 Every answer is a line in the panel and is said through the live region ("Pull request #12 landed as fff0000.", "Pull request #12 was not landed: …"), and the panel then asks the forge again so the list and the checks are true.
 
@@ -37,14 +37,22 @@ The page is never trusted. Each action is a `POST` to cornfield's own server, wh
 |---|---|---|
 | Method | not `POST` | 405 |
 | Signed in | no session (or no sign-in configured: nobody to act as) | 401 (403) |
+| Flood | more than 60 attempts of any kind in a minute by one person: refused **without** writing a row, so a page on a sibling subdomain (same-site, so the cookie rides along) cannot grow the audit table | 429, with `Retry-After` |
 | Maintainer | the guard says reader; and again, at that moment, the forge says the permission is no longer admin or maintain | 403 |
-| Origin | the request is not from a page of this server (`Origin` and `Sec-Fetch-Site`, the `Host`), or is not JSON | 403, 415 |
+| Origin | the request is not from a page of this server (`Origin` and `Sec-Fetch-Site`, the `Host`), is not JSON, or is larger than 4 KB (answered at once, the rest not read) | 403, 415, 413 |
 | Twice | the same action on the same target is already running or was asked in the last 5 seconds; more than 20 actions in a minute | 429, with `Retry-After` |
-| State | the pull request is not open, is a draft, or a check is not green | 409 |
+| State | the pull request is not open, is a draft, a check is not green, or the forge says it is not ready (above) | 409 |
 | Head | the commit the page showed is not the pull request's head now (somebody pushed): look again | 409 |
-| Re-run | the check is not on that head, has not failed, or the forge cannot run it again | 409 |
+| Re-run | the check is not on that head, has not failed (or been cancelled), or the forge cannot run it again | 409 |
 
 The merge itself goes through the forge interface's `merge(n, { onlyIfGreen: true, sha })`, which reads the pull request and its checks once more and asks the forge to land that commit only (GitHub's `sha`, Forgejo's `head_commit_id`): a push in between makes the forge refuse rather than land untested code. There is no force option and no admin override to ask for.
+
+Just before it lands, the forge is asked once more what it knows besides the checks:
+
+- **GitHub:** its own `mergeable_state` must be `clean` (branch protection's required checks and reviews met, no conflicts, the branch not behind), and no workflow run on the head may still be queued or running. Just after a push a fast check (a secret scan) can be green before a slow workflow has registered its own check, so "every check is green" alone could pass a commit nothing has tested yet.
+- **Forgejo:** the pull request must be `mergeable`. Its API does not say which checks branch protection requires, nor list a job that has not reported a status yet, so the gap above stays open there.
+
+**Branch protection's required checks are the real backstop**, on both forges: cornfield asks the forge to merge, and the forge refuses what its rules do not allow. Turn on required status checks for the branch pull requests land on.
 
 ### The audit
 
@@ -64,7 +72,7 @@ The routes, for the curious (all behind the sign-in guard):
 | `/api/forge/pulls?state=open\|closed\|all&limit=100` | pull requests |
 | `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head (each check says whether cornfield can re-run it) |
 | `POST /api/forge/pulls/<n>/merge` `{ "sha" }` | lands it at that head, if green |
-| `POST /api/forge/pulls/<n>/rerun` `{ "sha", "check" }` | re-runs one failed check on that head |
+| `POST /api/forge/pulls/<n>/rerun` `{ "sha", "check" }` | re-runs one failed or cancelled check on that head |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
 

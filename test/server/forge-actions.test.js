@@ -85,6 +85,8 @@ describe('the forge actions', () => {
   let plain;
   let clock = Date.parse('2026-10-19T12:00:00Z');
   let cookie;
+  let config;
+  let routes;
   const state = { override: {} };
 
   const start = async (config, opts) => {
@@ -94,12 +96,13 @@ describe('the forge actions', () => {
   };
 
   beforeAll(async () => {
-    fake = await fakeForge(githubRoutes(state));
+    routes = githubRoutes(state);
+    fake = await fakeForge(routes);
     data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-actions-'));
     plainData = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-actions-plain-'));
     const forge = { type: 'github', url: fake.url, repo: 'owner/name' };
-    const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
-    Object.assign(config, { forge, publicUrl: PUBLIC });
+    config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
+    Object.assign(config, { forge: { ...forge }, publicUrl: PUBLIC });
     srv = await start(config, { env: ENV, now: () => clock });
     const open = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: plainData } });
     plain = await start(Object.assign(open, { forge }), { env: {} });
@@ -265,7 +268,7 @@ describe('the forge actions', () => {
     it('refuses a check that has not failed (running, passed)', async () => {
       const running = await act(13, 'rerun', { sha: DEF, check: 'run:43' });
       expect([running.status, running.json.code]).toEqual([409, 'conflict']);
-      expect(running.json.error).toBe('test has not failed; only a failed check is re-run.');
+      expect(running.json.error).toBe('test has not failed; only a failed or cancelled check is re-run.');
       clock += 10_000;
       const passed = await act(12, 'rerun', { sha: ABC, check: 'run:41' });
       expect(passed.status).toBe(409);
@@ -299,7 +302,7 @@ describe('the forge actions', () => {
     it('trusts nothing the page says about a check but its id: the forge\'s own listing decides', async () => {
       state.override[CHECKS(DEF)] = () => ({ body: { total_count: 1, check_runs: [{ id: 42, name: 'lint', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] } });
       const res = await act(13, 'rerun', { sha: DEF, check: 'run:42', rerunnable: true, state: 'failure', canRerun: true });
-      expect([res.status, res.json.error]).toEqual([409, 'lint has not failed; only a failed check is re-run.']);
+      expect([res.status, res.json.error]).toEqual([409, 'lint has not failed; only a failed or cancelled check is re-run.']);
       expect(wrote()).toEqual([]);
     });
   });
@@ -421,6 +424,73 @@ describe('the forge actions', () => {
       }
       expect(statuses.slice(0, 20).every((s) => s === 409)).toBe(true);
       expect(statuses.slice(20)).toEqual([429, 429]);
+    });
+
+    it('writes nothing down past sixty attempts a minute: a same-site page cannot grow the audit table', async () => {
+      const before = rows().length;
+      const statuses = [];
+      for (let i = 0; i < 62; i++) statuses.push((await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } })).status);
+      expect(statuses.slice(0, 60).every((s) => s === 403)).toBe(true);
+      expect(statuses.slice(60)).toEqual([429, 429]);
+      expect(rows()).toHaveLength(before + 60);
+      expect(wrote()).toEqual([]);
+    });
+
+    it('answers a body that is too large at once, and does not read the rest', async () => {
+      const res = await new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: srv.port, method: 'POST', path: '/api/forge/pulls/12/merge', agent: false, headers: { cookie, origin: origin(), 'sec-fetch-site': 'same-origin', 'content-type': 'application/json', 'content-length': String(10 * 1024 * 1024) } }, (answer) => {
+          const chunks = [];
+          answer.on('data', (c) => chunks.push(c));
+          answer.on('end', () => { req.destroy(); resolve({ status: answer.statusCode, headers: answer.headers, json: JSON.parse(Buffer.concat(chunks).toString('utf8')) }); });
+        });
+        req.on('error', () => {});
+        req.write(Buffer.alloc(8192, 0x20)); // a few KB of a 10 MB body: the answer comes before the rest is sent
+        setTimeout(() => reject(new Error('no answer before the body ended')), 3000);
+      });
+      expect([res.status, res.json.code, res.headers.connection]).toEqual([413, 'invalid', 'close']);
+      expect(last()).toMatchObject({ action: 'merge', status: 413 });
+      expect(wrote()).toEqual([]);
+    });
+
+    it('lands by the config\'s merge method, and says so', async () => {
+      config.forge.mergeMethod = 'squash';
+      try {
+        const res = await act(12, 'merge', { sha: ABC });
+        expect([res.status, res.json.method]).toEqual([200, 'squash']);
+        expect(JSON.parse(wrote()[0].body)).toEqual({ sha: ABC, merge_method: 'squash' });
+        expect(last().request).toMatchObject({ method: 'squash' });
+      } finally {
+        delete config.forge.mergeMethod;
+      }
+    });
+
+    it('does not land while a workflow on the head has not reported: only the fast check is green yet', async () => {
+      state.override[CHECKS(ABC)] = () => ({ body: { total_count: 1, check_runs: [{ id: 7, name: 'gitleaks', status: 'completed', conclusion: 'success', app: { slug: 'github-actions' } }] } });
+      state.override[`GET ${GH}/commits/${ABC}/status?per_page=100`] = () => ({ body: { statuses: [] } });
+      routes[`GET ${GH}/actions/runs?head_sha=${ABC}&per_page=100`] = { body: { total_count: 2, workflow_runs: [
+        { name: 'secret-scan', status: 'completed', conclusion: 'success', head_sha: ABC },
+        { name: 'test', status: 'queued', conclusion: null, head_sha: ABC },
+      ] } };
+      try {
+        const res = await act(12, 'merge', { sha: ABC });
+        expect([res.status, res.json.code]).toEqual([409, 'not-green']);
+        expect(res.json.error).toBe('Pull request #12 is not ready to land: test is still running.');
+        expect(wrote()).toEqual([]);
+      } finally {
+        delete routes[`GET ${GH}/actions/runs?head_sha=${ABC}&per_page=100`];
+      }
+    });
+
+    it('does not land what GitHub itself would not: branch protection not met, conflicts, or not worked out yet', async () => {
+      const recorded = recordings('github')['GET /repos/owner/name/pulls/12'].body;
+      for (const [mergeable, words] of [['blocked', 'branch protection is not met'], ['dirty', 'conflicts'], ['behind', 'behind its base'], ['unknown', 'still working out']]) {
+        state.override[`GET ${GH}/pulls/12`] = () => ({ body: { ...recorded, mergeable_state: mergeable } });
+        const res = await act(12, 'merge', { sha: ABC });
+        expect([mergeable, res.status, res.json.code]).toEqual([mergeable, 409, 'not-green']);
+        expect(res.json.error).toContain(words);
+        clock += 10_000;
+      }
+      expect(wrote()).toEqual([]);
     });
 
     it('does not act when it cannot write the audit: 503, the forge not asked', async () => {

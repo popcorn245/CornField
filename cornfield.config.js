@@ -13,7 +13,8 @@ export default {
     // The outside services the code and CI reach, from topology.cloud.json
     { use: 'cloud', options: { code: ['cli', 'core', 'server', 'explorer', 'plugins'] } },
   ],
-  forge: { type: 'github', url: 'https://github.com', repo: 'popcorn245/cornfield' },
+  // cornfield's own pull requests are squash-merged; the forge panel lands them the same way
+  forge: { type: 'github', url: 'https://github.com', repo: 'popcorn245/cornfield', mergeMethod: 'squash' },
   port: 3350,
   worktrees: '.claude/worktrees',
   proposals: 'docs/specs/proposals',

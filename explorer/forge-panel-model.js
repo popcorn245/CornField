@@ -257,15 +257,19 @@ export function mergeBlock(detail) {
  * @param {string} forgeName
  */
 export function rerunWhy(check, forgeName) {
-  if (check.state !== 'failure' || check.canRerun) return null;
+  if (!['failure', 'cancelled'].includes(check.state) || check.canRerun) return null;
   return `${forgeName} does not let cornfield re-run this one: re-run it there.`;
 }
 
+/** How a merge method lands a pull request, in words */
+const HOW = { merge: 'A merge commit', squash: 'Squashed into one commit', rebase: 'Its commits rebased onto the base' };
+
 /**
- * What the confirm step shows of what will land: the pull request, the commit, where it goes and each check.
+ * What the confirm step shows of what will land: the pull request, the commit, where it goes, how (the config's
+ * `forge.mergeMethod`) and each check.
  * @returns {{ title: string, lines: [string, string][], checks: { name: string, words: string }[], note: string }}
  */
-export function confirmMerge(detail, forgeName) {
+export function confirmMerge(detail, forgeName, method = 'merge') {
   const { pull, checks } = detail;
   return {
     title: `Land pull request #${pull.number}?`,
@@ -274,7 +278,7 @@ export function confirmMerge(detail, forgeName) {
       ['Commit', pull.head.sha],
       ['From', pull.head.ref],
       ['Into', pull.base.ref],
-      ['How', 'A merge commit, made by ' + forgeName],
+      ['How', `${HOW[method] || HOW.merge}, made by ${forgeName}`],
       ['Checks', checksWords(checks)],
     ],
     checks: checks.map((c) => ({ name: c.name, words: checkWords(c) })),

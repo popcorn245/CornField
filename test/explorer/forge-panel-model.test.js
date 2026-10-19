@@ -235,10 +235,20 @@ describe('actions: why not, what is confirmed, what is said', () => {
     expect(mergeBlock(detail({ stale: 'GitHub could not be reached.' }))).toBe('This is an older answer from the forge: refresh before landing it.');
   });
 
-  it('says why a failed check has no Re-run, and nothing for the rest', () => {
+  it('says why a failed or cancelled check has no Re-run, and nothing for the rest', () => {
     expect(rerunWhy(check('failure'), 'GitHub')).toBe('GitHub does not let cornfield re-run this one: re-run it there.');
+    expect(rerunWhy(check('cancelled'), 'GitHub')).toBe('GitHub does not let cornfield re-run this one: re-run it there.');
     expect(rerunWhy(check('failure', { canRerun: true }), 'GitHub')).toBe(null);
-    for (const state of ['success', 'running', 'queued', 'cancelled', 'neutral', 'skipped']) expect(rerunWhy(check(state), 'GitHub')).toBe(null);
+    expect(rerunWhy(check('cancelled', { canRerun: true }), 'GitHub')).toBe(null);
+    for (const state of ['success', 'running', 'queued', 'neutral', 'skipped']) expect(rerunWhy(check(state), 'GitHub')).toBe(null);
+  });
+
+  it('says how it will land: the config\'s merge method', () => {
+    const d = detail({}, [check('success', { name: 'test' })]);
+    const how = (m) => Object.fromEntries(confirmMerge(d, 'GitHub', m).lines).How;
+    expect(how(undefined)).toBe('A merge commit, made by GitHub');
+    expect(how('squash')).toBe('Squashed into one commit, made by GitHub');
+    expect(how('rebase')).toBe('Its commits rebased onto the base, made by GitHub');
   });
 
   it('shows what will land: the pull request, the commit, where it goes, each check; and sends only the head shown', () => {

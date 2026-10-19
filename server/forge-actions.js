@@ -15,7 +15,9 @@
  *   2. same origin only (`sameOrigin`, as the sign-out and the review PUT), with a JSON body: a form on another site
  *      can send neither
  *   3. not twice: one attempt at a time for the same action on the same target, a few seconds before it is asked
- *      again, and a ceiling per person per minute (429 with Retry-After)
+ *      again, and a ceiling per person per minute (429 with Retry-After). Before any of this, and before a row is
+ *      written, a ceiling on attempts of any kind per person per minute (`ATTEMPTS_PER_MINUTE`): a page on a sibling
+ *      subdomain is same-site, so the cookie rides along, and refused attempts must not grow the audit table without end
  *   4. the permission asked of the forge now, with their own token, never the session's kept copy: someone who has
  *      stopped being a maintainer a minute ago is refused (403)
  *   5. the forge's own state, read now: the pull request is open and not a draft, every check on its head is green,
@@ -23,25 +25,51 @@
  *      only way in, with `onlyIfGreen` and the sha: there is no force and no admin override to ask for. A re-run
  *      only takes a check the forge just listed as failed on that head, where `canRerun`
  *
- * Every attempt, the ones refused and the ones the forge failed, is a row in `actions` (server/db.js), written before
- * anything is asked of the forge and finished with the answer after. Without a store to write to nothing is done.
+ * Every attempt under that ceiling, the ones refused and the ones the forge failed, is a row in `actions`
+ * (server/db.js), begun before anything is asked of the forge and finished with the answer after (`auth.begin`,
+ * `auth.finish`). Without an audit to write to nothing is done.
+ *
+ * A pull request lands by the config's `forge.mergeMethod` (`merge`, `squash` or `rebase`; `merge` when unset), the way
+ * the repo lands its pull requests; the forge refuses a method the repo does not allow, in its own words.
  */
 
-import { ForgeError, canRerun, isMaintainer } from './forge.js';
+import { ForgeError, RERUN_STATES, canRerun, isMaintainer } from './forge.js';
 import { sameOrigin } from './proposals.js';
 
 /** The same action on the same target is not asked again for this long (a double click, a retry before the forge has caught up) */
 export const COOLDOWN_MS = 5000;
 /** The most actions one person takes in a minute */
 export const PER_MINUTE = 20;
+/** The most attempts of any kind (refused ones too) one person makes in a minute, before any is written down */
+export const ATTEMPTS_PER_MINUTE = 60;
 /** A request body is a sha and a check's id */
 const MAX_BODY = 4096;
 
 const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
 const SHA = /^[0-9a-f]{7,64}$/i;
 
-/** @type {WeakMap<object, { busy: Set<string>, last: Map<string, number>, perUser: Map<string, number[]> }>} */
+/** @type {WeakMap<object, { busy: Set<string>, last: Map<string, number>, perUser: Map<string, number[]>, attempts: Map<string, number[]> }>} */
 const throttles = new WeakMap();
+
+function throttlesOf(auth) {
+  let t = throttles.get(auth);
+  if (!t) throttles.set(auth, (t = { busy: new Set(), last: new Map(), perUser: new Map(), attempts: new Map() }));
+  return t;
+}
+
+/** Counts an attempt of any kind; refuses one past the ceiling, without writing anything down */
+function countAttempt(ctx, userId, at) {
+  const t = throttlesOf(ctx.auth);
+  for (const [k, list] of t.attempts) if (!list.length || at - list[list.length - 1] >= 60_000) t.attempts.delete(k);
+  const mine = (t.attempts.get(userId) || []).filter((when) => at - when < 60_000);
+  if (mine.length >= ATTEMPTS_PER_MINUTE) {
+    t.attempts.set(userId, mine);
+    return new Refused(429, `That is ${ATTEMPTS_PER_MINUTE} attempts in a minute; wait a little.`, 'rate-limited', { 'Retry-After': String(Math.max(1, Math.ceil((60_000 - (at - mine[0])) / 1000))) });
+  }
+  mine.push(at);
+  t.attempts.set(userId, mine);
+  return null;
+}
 
 /** An action's own refusal: the status to answer and the words */
 class Refused extends Error {
@@ -65,13 +93,17 @@ function readJson(req) {
     let size = 0;
     let over = false;
     req.on('data', (c) => {
+      if (over) return;
       size += c.length;
-      if (size > MAX_BODY) over = true;
-      else chunks.push(c);
+      if (size <= MAX_BODY) { chunks.push(c); return; }
+      // Too large: answered now, and the rest is not read (the connection closes once the answer is sent)
+      over = true;
+      req.pause();
+      reject(Object.assign(new Refused(413, 'The request is too large for an action.', 'invalid', { Connection: 'close' }), { closeAfter: true }));
     });
     req.on('error', () => reject(new Refused(400, 'The request could not be read.', 'invalid')));
     req.on('end', () => {
-      if (over) return reject(new Refused(413, 'The request is too large for an action.', 'invalid'));
+      if (over) return;
       try {
         const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new Error('not an object');
@@ -85,8 +117,7 @@ function readJson(req) {
 
 /** Refuses a repeat and a flood; answers the key to release when the attempt is over */
 function throttle(ctx, userId, key, at) {
-  let t = throttles.get(ctx.auth);
-  if (!t) throttles.set(ctx.auth, (t = { busy: new Set(), last: new Map(), perUser: new Map() }));
+  const t = throttlesOf(ctx.auth);
   for (const [k, when] of t.last) if (at - when >= COOLDOWN_MS) t.last.delete(k);
   const mine = (t.perUser.get(userId) || []).filter((when) => at - when < 60_000);
   t.perUser.set(userId, mine);
@@ -113,9 +144,9 @@ async function assertMaintainerNow(forge, session, config) {
 }
 
 /** What an answer from the forge may change: the kept lists and pull requests are old now */
-function forgetKept(db, config) {
+async function forgetKept(auth, config) {
   try {
-    db.prepare('DELETE FROM forge_cache WHERE key LIKE ?').run(`${config.forge.type}|%`);
+    (await auth.store()).prepare('DELETE FROM forge_cache WHERE key LIKE ?').run(`${config.forge.type}|%`);
   } catch { /* a cache that cannot be cleared expires in a minute */ }
 }
 
@@ -148,21 +179,25 @@ export async function serveAction(req, res, what, ctx, send) {
     req.resume();
     return send(403, { ok: false, error: 'Landing and re-running are done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).', code: 'forbidden' });
   }
+  // Past the ceiling nothing is written down: a flood of refused attempts cannot grow the audit table
+  const flood = countAttempt(ctx, session.userId, now());
+  if (flood) {
+    req.resume();
+    return send(flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
+  }
   const target = `${config.forge.repo}#${n}`;
   /** @type {Record<string, unknown>} */
   const request = { action, number: n };
-  let db = null;
+  let rowTarget = target;
   let rowId = null;
+  let closeAfter = false;
   let release = () => {};
   /** @type {{ status: number, body: object, headers?: object, forgeStatus?: number | null }} */
   let out;
   try {
-    // No audit, no action: a store that cannot be written to means the forge is not touched
-    try { db = await auth.store(); } catch { db = null; }
-    if (!db) throw new Refused(503, 'cornfield cannot write its audit log, so it will not act on the forge.', 'unavailable');
-    const at = new Date(now()).toISOString();
+    // No audit, no action: a row that cannot be begun means the forge is not touched
     try {
-      rowId = Number(db.prepare('INSERT INTO actions (at, login, action, target, request) VALUES (?, ?, ?, ?, ?)').run(at, session.login, action, target, JSON.stringify(request)).lastInsertRowid);
+      rowId = await auth.begin({ login: session.login, action, target, request });
     } catch (err) {
       console.error(`[cornfield] the audit row of ${action} ${target} could not be written: ${err instanceof Error ? err.message : err}`);
       throw new Refused(503, 'cornfield cannot write its audit log, so it will not act on the forge.', 'unavailable');
@@ -172,7 +207,13 @@ export async function serveAction(req, res, what, ctx, send) {
       req.resume();
       throw new Refused(403, 'Land and re-run from cornfield\'s own page.', 'forbidden');
     }
-    const body = await readJson(req);
+    let body;
+    try {
+      body = await readJson(req);
+    } catch (err) {
+      closeAfter = Boolean(err && err.closeAfter);
+      throw err;
+    }
     const sha = typeof body.sha === 'string' && SHA.test(body.sha) ? body.sha.toLowerCase() : null;
     if (!sha) throw new Refused(400, 'Say which commit: the head you were looking at.', 'invalid');
     request.sha = sha;
@@ -181,17 +222,19 @@ export async function serveAction(req, res, what, ctx, send) {
       check = typeof body.check === 'string' && body.check.length > 0 && body.check.length <= 200 && !body.check.includes('\0') ? body.check : null;
       if (!check) throw new Refused(400, 'Say which check to re-run.', 'invalid');
       request.check = check;
+      rowTarget = `${target}/${check}`;
     }
-    db.prepare('UPDATE actions SET request = ?, target = ? WHERE id = ?').run(JSON.stringify(request), check ? `${target}/${check}` : target, rowId);
 
     release = throttle(ctx, session.userId, `${session.userId}|${action}|${n}|${check || ''}`, now());
     const forge = auth.forgeFor(session);
     await assertMaintainerNow(forge, session, config);
 
     if (action === 'merge') {
-      const landed = await forge.merge(n, { onlyIfGreen: true, sha });
-      forgetKept(db, config);
-      out = { status: 200, body: { ok: true, merged: true, number: n, sha: landed.sha, head: sha } };
+      const method = config.forge.mergeMethod || 'merge';
+      request.method = method;
+      const landed = await forge.merge(n, { onlyIfGreen: true, sha, method });
+      await forgetKept(auth, config);
+      out = { status: 200, body: { ok: true, merged: true, number: n, sha: landed.sha, head: sha, method } };
     } else {
       const pull = await forge.pull(n);
       if (pull.state !== 'open') throw new ForgeError(`Pull request #${n} is ${pull.state}; its checks are not re-run from here.`, { code: 'conflict' });
@@ -199,10 +242,10 @@ export async function serveAction(req, res, what, ctx, send) {
       const found = (await forge.checks(pull.head.sha)).find((c) => c.id === check);
       if (!found) throw new ForgeError(`${check} is not a check on the head of pull request #${n}; look again.`, { code: 'conflict' });
       if (!canRerun(found)) {
-        throw new ForgeError(found.state === 'failure' ? `${found.name} cannot be re-run from cornfield; re-run it on the forge.` : `${found.name} has not failed; only a failed check is re-run.`, { code: 'conflict' });
+        throw new ForgeError(RERUN_STATES.includes(found.state) ? `${found.name} cannot be re-run from cornfield; re-run it on the forge.` : `${found.name} has not failed; only a failed or cancelled check is re-run.`, { code: 'conflict' });
       }
       await forge.rerun(found);
-      forgetKept(db, config);
+      await forgetKept(auth, config);
       out = { status: 202, body: { ok: true, rerun: true, number: n, check: found.id, name: found.name, head: sha } };
     }
   } catch (err) {
@@ -217,12 +260,13 @@ export async function serveAction(req, res, what, ctx, send) {
   } finally {
     release();
   }
-  if (db && rowId !== null) {
+  if (rowId !== null) {
     try {
-      db.prepare('UPDATE actions SET status = ?, answer = ? WHERE id = ?').run('forgeStatus' in out ? out.forgeStatus : out.status, JSON.stringify(out.body), rowId);
+      await auth.finish(rowId, { target: rowTarget, request, status: 'forgeStatus' in out ? out.forgeStatus ?? null : out.status, answer: out.body });
     } catch (err) {
       console.error(`[cornfield] the audit row of ${action} ${target} could not be finished: ${err instanceof Error ? err.message : err}`);
     }
   }
+  if (closeAfter) res.on('finish', () => req.destroy());
   send(out.status, out.body, out.headers);
 }

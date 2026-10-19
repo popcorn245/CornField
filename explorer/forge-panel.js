@@ -17,9 +17,9 @@
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
  *   - Actions (CF-08), on a selected pull request, for a signed-in maintainer: Land it, when it is open, ready and every
- *     check is green, and Re-run on a failed check the forge can run again. Where a button is not shown the panel says
+ *     check is green, and Re-run on a failed or cancelled check the forge can run again. Where a button is not shown the panel says
  *     why. Land it opens a confirm dialog that shows exactly what will land (the pull request, its head commit, where
- *     it goes, each check); the page behind it is inert, Tab stays inside, Escape and Cancel close it and give the
+ *     it goes, how, each check); a scrim covers the page, the dialog is `aria-modal`, Tab stays inside, Escape and Cancel close it and give the
  *     focus back, and it is announced. What is sent is the head that was shown: a push since is refused by the server,
  *     which checks everything again (server/forge-actions.js). While one is in flight the buttons are off.
  *   - Errors and rate limits are a line in the panel, in the words the server gives; a stale answer says it is old.
@@ -387,7 +387,7 @@ function keepFocusIn(e) {
 function openConfirm(opener) {
   const el = confirmEl();
   if (!el || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
-  const what = confirmMerge(ui.detail, forgeName());
+  const what = confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod);
   $('forge-confirm-title').textContent = what.title;
   $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${k === 'Commit' ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
     <ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>

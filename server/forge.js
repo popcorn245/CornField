@@ -23,8 +23,10 @@
  *
  * An adapter module (server/forge-github.js, server/forge-forgejo.js) implements these at its forge's level, with
  * `mergeAt(n, { sha, method })` in place of `merge`; `wrap` checks the arguments and builds `merge` once for every
- * forge, so the green-only rule cannot differ between them. There is no force-merge and no call that deploys or
- * touches anything live (ADR 0006). Admins are the repo's maintainers: `isMaintainer(permission)` (ADR 0003).
+ * forge, so the green-only rule cannot differ between them. Green is every check finished green and at least one
+ * passed; an adapter may add what its forge knows besides (`readiness(n, sha)`: required checks, a workflow that has not
+ * reported yet, conflicts). There is no force-merge and no call that deploys or touches anything live (ADR 0006).
+ * Admins are the repo's maintainers: `isMaintainer(permission)` (ADR 0003).
  *
  * @typedef {'admin' | 'maintain' | 'write' | 'triage' | 'read' | 'none'} Permission
  * @typedef {{ id: string, login: string, name: string | null, url: string | null, avatarUrl: string | null }} User
@@ -60,6 +62,7 @@
  *   issues(query: Required<IssueQuery>): Promise<Issue[]>,
  *   pulls(query: Required<PullQuery>): Promise<Pull[]>,
  *   mergeAt(n: number, opts: { sha: string, method: MergeMethod }): Promise<{ sha: string }>,
+ *   readiness?(n: number, sha: string): Promise<{ ready: boolean, why?: string }>,
  * }} Adapter
  */
 
@@ -94,18 +97,21 @@ export const hasAdapter = (type) => Object.hasOwn(ADAPTERS, type);
 export const isMaintainer = (permission) => permission === 'admin' || permission === 'maintain';
 
 /**
- * Whether a commit's checks let it land: at least one check, and every one finished green. A commit with no checks
- * is not green: nothing says it works.
+ * Whether a commit's checks let it land: every one finished green, and at least one of them passed. A commit with no
+ * checks, or whose checks were all skipped or neutral, is not green: nothing says it works.
  * @param {Check[]} checks
  */
-export const isGreen = (checks) => checks.length > 0 && checks.every((c) => GREEN_STATES.includes(c.state));
+export const isGreen = (checks) => checks.some((c) => c.state === 'success') && checks.every((c) => GREEN_STATES.includes(c.state));
+
+/** The states a check is re-run from: it failed, or it was cancelled (a newer push or a concurrency group stopped it) */
+export const RERUN_STATES = Object.freeze(['failure', 'cancelled']);
 
 /**
- * Whether cornfield may re-run a check: one that failed and that the forge can run again (`check.rerunnable`). A check
- * that is still running, passed, or was cancelled is not re-run from here.
+ * Whether cornfield may re-run a check: one that failed or was cancelled, and that the forge can run again
+ * (`check.rerunnable`). A check that is still running, or passed, is not re-run from here.
  * @param {Check} check
  */
-export const canRerun = (check) => Boolean(check) && check.rerunnable === true && check.state === 'failure';
+export const canRerun = (check) => Boolean(check) && check.rerunnable === true && RERUN_STATES.includes(check.state);
 
 /**
  * What keeps a commit from being green, in words: "lint failed; test is still running", or "it has no checks".
@@ -113,6 +119,7 @@ export const canRerun = (check) => Boolean(check) && check.rerunnable === true &
  */
 export function notGreenWords(checks) {
   if (!checks.length) return 'it has no checks';
+  if (checks.every((c) => GREEN_STATES.includes(c.state))) return 'no check has passed (they were all skipped or neutral)';
   const words = { queued: 'is waiting to run', running: 'is still running', failure: 'failed', cancelled: 'was cancelled' };
   return checks.filter((c) => !GREEN_STATES.includes(c.state)).map((c) => `${c.name} ${words[c.state] || c.state}`).join('; ');
 }
@@ -182,8 +189,8 @@ export function wrap(a, forge) {
     rerun: async (check) => {
       if (!check || typeof check.id !== 'string') throw invalid('Re-run which check?');
       if (!canRerun(check)) {
-        throw invalid(check.rerunnable && check.state !== 'failure'
-          ? `${check.name || 'That check'} has not failed; only a failed check is re-run.`
+        throw invalid(check.rerunnable && !RERUN_STATES.includes(check.state)
+          ? `${check.name || 'That check'} has not failed; only a failed or cancelled check is re-run.`
           : `${check.name || 'That check'} cannot be re-run from cornfield; re-run it on the forge.`);
       }
       return a.rerun(check);
@@ -203,6 +210,11 @@ export function wrap(a, forge) {
       }
       const checks = await a.checks(pr.head.sha);
       if (!isGreen(checks)) throw new ForgeError(`Pull request #${n} is not green: ${notGreenWords(checks)}.`, { code: 'not-green' });
+      // What the forge itself says about landing it: its required checks, a workflow that has not reported yet, conflicts
+      if (a.readiness) {
+        const ready = await a.readiness(n, pr.head.sha);
+        if (!ready.ready) throw new ForgeError(`Pull request #${n} is not ready to land: ${ready.why}.`, { code: 'not-green' });
+      }
       // At the sha the checks ran on: a push in between makes the forge refuse rather than land untested code
       return a.mergeAt(n, { sha: pr.head.sha, method });
     },
