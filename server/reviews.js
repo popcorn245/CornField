@@ -16,6 +16,12 @@
  * it is parsed, never rendered as HTML, and never joined into a path. A PR holds several proposals, so the slug is
  * in the fence's info string; the JSON is exactly the review.
  *
+ * **An edited review is not trusted.** On both forges someone with write access may edit anyone's comment, and the
+ * comment keeps its author: a writer could turn a maintainer's "Sent back" into "Approved". cornfield never edits a
+ * comment it posted, so a review comment changed after it was posted (`updatedAt` more than `EDIT_GRACE_MS` after
+ * `createdAt`) does not count, and neither does anything older on that proposal: there is no review until a
+ * maintainer posts a new one. (A maintainer who wants to change their mind posts a new review.)
+ *
  * Everything goes through the forge interface as the signed-in maintainer (their own token). Posting is recorded in
  * the `actions` audit table by the caller's `record` (server/auth.js), whatever the forge answered.
  *
@@ -49,6 +55,11 @@ const REVIEW_KEYS = ['verdict', 'note', 'edits'];
 
 /** The tag of the fenced block */
 export const REVIEW_TAG = 'cornfield-review';
+/** How long after it was posted a comment may show a later `updatedAt` and still count as never edited */
+export const EDIT_GRACE_MS = 5_000;
+
+/** Whether a comment was changed after it was posted */
+const wasEdited = (c) => Date.parse(c.updatedAt) - Date.parse(c.createdAt) > EDIT_GRACE_MS;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -145,7 +156,10 @@ export async function latestReview(forge, n, slug, comments) {
     if (!found) continue;
     const login = c.author.login;
     if (!admins.has(login)) admins.set(login, isMaintainer(await forge.permission(forge.repo, login)));
-    if (admins.get(login)) return { version: 1, slug, ...found.review, at: c.createdAt, by: login, comment: { id: c.id, url: c.url } };
+    if (!admins.get(login)) continue;
+    // A maintainer's review someone may have rewritten: it does not stand, and an older one does not take its place
+    if (wasEdited(c)) return null;
+    return { version: 1, slug, ...found.review, at: c.createdAt, by: login, comment: { id: c.id, url: c.url } };
   }
   return null;
 }

@@ -131,6 +131,28 @@ describe('the latest admin comment is the review', () => {
     expect(asked()).toEqual([]); // the signed-in maintainer's own permission is asked of the repo itself, not per login
   });
 
+  it('on Forgejo, which has no maintain level, its admins review and its writers do not', async () => {
+    const at = '2026-10-18T00:00:00Z';
+    const c = (id, login, verdict) => ({ id: String(id), author: { login, url: null }, body: block('0013-meals', { verdict, note: verdict === 'notes' ? 'x' : '', edits: [] }), url: `u${id}`, createdAt: at, updatedAt: at });
+    // Forgejo's adapter answers admin (owner or admin), write or read: never maintain
+    const levels = { 'fj-admin': 'admin', 'fj-writer': 'write' };
+    const forge = { repo: 'owner/name', permission: async (_, login) => levels[login] ?? 'none' };
+    expect(await latestReview(forge, 23, '0013-meals', [c(1, 'fj-admin', 'notes'), c(2, 'fj-writer', 'approved')])).toMatchObject({ verdict: 'notes', by: 'fj-admin' });
+  });
+
+  it('does not trust a maintainer\'s review that was edited after it was posted, nor let an older one stand in', async () => {
+    const edited = (c, later) => ({ ...c, updated_at: later });
+    const sentBack = comment(1, 'maintainer-one', block('0013-meals', { verdict: 'notes', note: 'No.', edits: [] }), '2026-10-18T00:00:00Z');
+    const approved = comment(2, 'maintainer-one', block('0013-meals', { verdict: 'approved', note: '', edits: [] }), '2026-10-18T01:00:00Z');
+    // Someone with write access turned a later send-back into an approval: the comment keeps its author
+    const forge = await on({ [COMMENTS_23]: { body: [approved, edited({ ...sentBack, id: 3, created_at: '2026-10-18T02:00:00Z', updated_at: '2026-10-18T02:00:00Z', body: block('0013-meals', { verdict: 'approved', note: '', edits: [] }) }, '2026-10-18T03:00:00Z')] } });
+    expect(await latestReview(forge, 23, '0013-meals')).toBeNull();
+    // Within the grace of a forge stamping its own write, it still counts; an edited reader's comment is just ignored
+    await fake.close();
+    const fine = await on({ [COMMENTS_23]: { body: [edited(approved, '2026-10-18T01:00:03Z'), edited(comment(4, 'reader-two', block('0013-meals', { verdict: 'notes', note: 'x', edits: [] }), '2026-10-18T05:00:00Z'), '2026-10-18T06:00:00Z')] } });
+    expect(await latestReview(fine, 23, '0013-meals')).toMatchObject({ verdict: 'approved', comment: { id: '2' } });
+  });
+
   it('does not let an older review stand in when the forge cannot say who may review', async () => {
     const forge = await on({ 'GET /repos/owner/name/collaborators/maintainer-two/permission': { status: 503, body: { message: 'Unavailable' } } });
     await expect(latestReview(forge, 23, '0013-meals')).rejects.toBeInstanceOf(ForgeError);
