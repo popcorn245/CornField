@@ -857,6 +857,294 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The forge adapter interface: who you are, your permission on the repo, issues, pull requests, files, comments, checks, branches, file contents at a ref."
+    },
+    {
+      "id": "pkg-docs",
+      "label": "plugins/docs",
+      "type": "pkg",
+      "file": "plugins/docs",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/docs workspace package (plugins/docs)."
+    },
+    {
+      "id": "core-plugins-docs-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/docs/index.js",
+      "summary": "The docs deriver: a repo's Markdown docs as one app on the map (`app-docs`) with a page per document, and the links between them.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The docs deriver: a repo's Markdown docs as one app on the map (`app-docs`) with a page per document, and the links between them. (plugins/docs/index.js)"
+    },
+    {
+      "id": "core-plugins-docs-markdown",
+      "label": "markdown.js",
+      "type": "core",
+      "file": "plugins/docs/markdown.js",
+      "summary": "A small Markdown renderer, enough for a repo's docs: headings (with GitHub-style anchors), paragraphs, fenced code, block quotes, lists (nested), tables, rules, links, images, code spans, bold and …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A small Markdown renderer, enough for a repo's docs: headings (with GitHub-style anchors), paragraphs, fenced code, block quotes, lists (nested), tables, rules, links, images, code spans, bold and … (plugins/docs/markdown.js)"
+    },
+    {
+      "id": "core-plugins-docs-site",
+      "label": "site.js",
+      "type": "core",
+      "file": "plugins/docs/site.js",
+      "summary": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links… (plugins/docs/site.js)"
+    },
+    {
+      "id": "app-docs",
+      "type": "app",
+      "label": "docs",
+      "file": "README.md",
+      "r": 24,
+      "color": "#6366f1",
+      "desc": "cornfield's own docs, mapped by the docs deriver: a page per document, the links between them and to the code they describe. cornfield docs builds them as the site GitHub Pages serves."
+    },
+    {
+      "id": "page-doc-changelog",
+      "type": "page",
+      "label": "/CHANGELOG",
+      "file": "CHANGELOG.md",
+      "summary": "Changelog",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Changelog (CHANGELOG.md)."
+    },
+    {
+      "id": "page-doc-contributing",
+      "type": "page",
+      "label": "/CONTRIBUTING",
+      "file": "CONTRIBUTING.md",
+      "summary": "Contributing to cornfield",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Contributing to cornfield (CONTRIBUTING.md)."
+    },
+    {
+      "id": "page-doc-readme",
+      "type": "page",
+      "label": "/",
+      "file": "README.md",
+      "summary": "cornfield",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "cornfield (README.md)."
+    },
+    {
+      "id": "page-doc-releasing",
+      "type": "page",
+      "label": "/RELEASING",
+      "file": "RELEASING.md",
+      "summary": "Releasing cornfield",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Releasing cornfield (RELEASING.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0001-home-and-licence",
+      "type": "page",
+      "label": "/docs/adr/0001-home-and-licence",
+      "file": "docs/adr/0001-home-and-licence.md",
+      "summary": "ADR 0001: The home is github.com/popcorn245/cornfield, MIT, two npm names",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0001: The home is github.com/popcorn245/cornfield, MIT, two npm names (docs/adr/0001-home-and-licence.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0002-buildless-one-codebase-two-ways",
+      "type": "page",
+      "label": "/docs/adr/0002-buildless-one-codebase-two-ways",
+      "file": "docs/adr/0002-buildless-one-codebase-two-ways.md",
+      "summary": "ADR 0002: One buildless Node codebase, shipped as a Docker image and an npm CLI",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0002: One buildless Node codebase, shipped as a Docker image and an npm CLI (docs/adr/0002-buildless-one-codebase-two-ways.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "type": "page",
+      "label": "/docs/adr/0003-own-server-sqlite-forge-adapters",
+      "file": "docs/adr/0003-own-server-sqlite-forge-adapters.md",
+      "summary": "ADR 0003: Its own small server, a SQLite file, and forge adapters",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0003: Its own small server, a SQLite file, and forge adapters (docs/adr/0003-own-server-sqlite-forge-adapters.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "type": "page",
+      "label": "/docs/adr/0004-admins-only-loopback-until-sign-in",
+      "file": "docs/adr/0004-admins-only-loopback-until-sign-in.md",
+      "summary": "ADR 0004: Admins only, enforced on the server; loopback only until sign-in exists",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0004: Admins only, enforced on the server; loopback only until sign-in exists (docs/adr/0004-admins-only-loopback-until-sign-in.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "type": "page",
+      "label": "/docs/adr/0005-reviews-are-pr-comments",
+      "file": "docs/adr/0005-reviews-are-pr-comments.md",
+      "summary": "ADR 0005: A review is a comment on the spec PR; the latest wins",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0005: A review is a comment on the spec PR; the latest wins (docs/adr/0005-reviews-are-pr-comments.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0006-safe-actions-only",
+      "type": "page",
+      "label": "/docs/adr/0006-safe-actions-only",
+      "file": "docs/adr/0006-safe-actions-only.md",
+      "summary": "ADR 0006: Show everything, act only in a few safe ways",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0006: Show everything, act only in a few safe ways (docs/adr/0006-safe-actions-only.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "type": "page",
+      "label": "/docs/adr/0007-track-agents-do-not-launch",
+      "file": "docs/adr/0007-track-agents-do-not-launch.md",
+      "summary": "ADR 0007: v1 tracks agents by what they leave; it does not launch them",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0007: v1 tracks agents by what they leave; it does not launch them (docs/adr/0007-track-agents-do-not-launch.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "type": "page",
+      "label": "/docs/adr/0008-house-is-an-optional-read-only-plugin",
+      "file": "docs/adr/0008-house-is-an-optional-read-only-plugin.md",
+      "summary": "ADR 0008: The house is an optional plugin, read-only from a source",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0008: The house is an optional plugin, read-only from a source (docs/adr/0008-house-is-an-optional-read-only-plugin.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "type": "page",
+      "label": "/docs/adr/0009-generic-here-facts-in-config",
+      "file": "docs/adr/0009-generic-here-facts-in-config.md",
+      "summary": "ADR 0009: Generic logic in cornfield, a repo's facts in its config and plugins",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0009: Generic logic in cornfield, a repo's facts in its config and plugins (docs/adr/0009-generic-here-facts-in-config.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "type": "page",
+      "label": "/docs/adr/0010-cornfield-uses-its-own-gate",
+      "file": "docs/adr/0010-cornfield-uses-its-own-gate.md",
+      "summary": "ADR 0010: cornfield proposes its own changes on its own map",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0010: cornfield proposes its own changes on its own map (docs/adr/0010-cornfield-uses-its-own-gate.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0011-vitest-for-tests",
+      "type": "page",
+      "label": "/docs/adr/0011-vitest-for-tests",
+      "file": "docs/adr/0011-vitest-for-tests.md",
+      "summary": "ADR 0011: Tests run on vitest, a dev dependency only",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0011: Tests run on vitest, a dev dependency only (docs/adr/0011-vitest-for-tests.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-readme",
+      "type": "page",
+      "label": "/docs/adr/",
+      "file": "docs/adr/README.md",
+      "summary": "Architecture decision records",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Architecture decision records (docs/adr/README.md)."
+    },
+    {
+      "id": "page-doc-docs-cloud",
+      "type": "page",
+      "label": "/docs/cloud",
+      "file": "docs/cloud.md",
+      "summary": "The cloud: what you depend on and do not control",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The cloud: what you depend on and do not control (docs/cloud.md)."
+    },
+    {
+      "id": "page-doc-docs-config",
+      "type": "page",
+      "label": "/docs/config",
+      "file": "docs/config.md",
+      "summary": "cornfield.config.js",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "cornfield.config.js (docs/config.md)."
+    },
+    {
+      "id": "page-doc-docs-derivers",
+      "type": "page",
+      "label": "/docs/derivers",
+      "file": "docs/derivers.md",
+      "summary": "Derivers (contract 1)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Derivers (contract 1) (docs/derivers.md)."
+    },
+    {
+      "id": "page-doc-docs-house",
+      "type": "page",
+      "label": "/docs/house",
+      "file": "docs/house.md",
+      "summary": "The house",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The house (docs/house.md)."
+    },
+    {
+      "id": "page-doc-docs-proposals",
+      "type": "page",
+      "label": "/docs/proposals",
+      "file": "docs/proposals.md",
+      "summary": "Proposals in your own repo",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Proposals in your own repo (docs/proposals.md)."
+    },
+    {
+      "id": "page-doc-docs-roadmap",
+      "type": "page",
+      "label": "/docs/roadmap",
+      "file": "docs/roadmap.md",
+      "summary": "Roadmap: after v1",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Roadmap: after v1 (docs/roadmap.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0001-v1",
+      "type": "page",
+      "label": "/docs/specs/0001-v1",
+      "file": "docs/specs/0001-v1.md",
+      "summary": "Spec 0001: cornfield v1",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0001: cornfield v1 (docs/specs/0001-v1.md)."
+    },
+    {
+      "id": "page-doc-docs-vision",
+      "type": "page",
+      "label": "/docs/vision",
+      "file": "docs/vision.md",
+      "summary": "cornfield: the vision",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "cornfield: the vision (docs/vision.md)."
     }
   ],
   "edges": [
@@ -2297,7 +2585,7 @@
       "to": "ext-github",
       "kind": "calls",
       "status": "live",
-      "label": "uses actions/checkout · uses actions/setup-node · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
+      "label": "uses actions/checkout · uses actions/setup-node · uses actions/upload-pages-artifact · uses actions/deploy-pages · uses docker/setup-buildx-action · uses docker/login-action · uses docker/metadata-action · uses docker/build-push-action · secret-scan.yml: downloads from github.com",
       "when": "deploy"
     },
     {
@@ -2305,7 +2593,7 @@
       "to": "ext-npm",
       "kind": "calls",
       "status": "live",
-      "label": "release.yml: npm ci · test.yml: npm ci",
+      "label": "pages.yml: npm ci · release.yml: npm ci · test.yml: npm ci",
       "when": "deploy"
     },
     {
@@ -2369,7 +2657,505 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "root",
+      "to": "pkg-docs"
+    },
+    {
+      "from": "pkg-docs",
+      "to": "core-plugins-docs-index"
+    },
+    {
+      "from": "pkg-docs",
+      "to": "core-plugins-docs-markdown"
+    },
+    {
+      "from": "pkg-docs",
+      "to": "core-plugins-docs-site"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "pkg-docs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-docs",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-plugins-docs-site",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-index",
+      "to": "core-plugins-docs-markdown",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-markdown",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-plugins-docs-index",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-plugins-docs-markdown",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "app-docs"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-changelog"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-contributing"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-readme"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-releasing"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0001-home-and-licence"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0002-buildless-one-codebase-two-ways"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0006-safe-actions-only"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0009-generic-here-facts-in-config"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0011-vitest-for-tests"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-readme"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-cloud"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-config"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-derivers"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-house"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-proposals"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-roadmap"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0001-v1"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-vision"
+    },
+    {
+      "from": "page-doc-contributing",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-contributing",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-contributing",
+      "to": "core-core-proposal",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-proposals",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "core-core-proposal",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-cloud",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-house",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-vision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-adr-readme",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-contributing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-releasing",
+      "to": "core-cli-release-guard",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "to": "core-server-bind",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "to": "core-plugins-house-browser",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "to": "page-doc-docs-house",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "to": "page-doc-contributing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0001-home-and-licence",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0002-buildless-one-codebase-two-ways",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0011-vitest-for-tests",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "core-plugins-house-browser",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-derivers",
+      "to": "core-core-sync",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-derivers",
+      "to": "core-core-personas",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-derivers",
+      "to": "page-doc-docs-cloud",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-house",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-contributing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "core-core-proposal",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-contributing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0001-v1",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0001-v1",
+      "to": "page-doc-docs-vision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0001-v1",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0001-v1",
+      "to": "page-doc-releasing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0001-home-and-licence",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0002-buildless-one-codebase-two-ways",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0004-admins-only-loopback-until-sign-in",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0008-house-is-an-optional-read-only-plugin",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-readme",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "ext-github",
+      "kind": "calls",
+      "status": "live",
+      "label": "calls"
     }
   ],
-  "updatedAt": "2026-10-19T21:20:44.997Z"
+  "updatedAt": "2026-10-19T21:31:08.510Z"
 }

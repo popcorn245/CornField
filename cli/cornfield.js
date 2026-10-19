@@ -10,6 +10,7 @@
  *   cornfield status             what the map holds, the warnings, and the validation
  *   cornfield proposal <file>    one proposal against the map: its summary, its errors, what has landed
  *   cornfield review <slug>      the last review of a proposal (approve or send back, with the edits)
+ *   cornfield docs               the docs as a static site, from the docs deriver's map of them (--out, default _site)
  *   cornfield help | --version
  *
  * Options: `--repo <dir>`, `--config <file>`, `--port <n>`. Env: CORNFIELD_PORT, CORNFIELD_HOST,
@@ -39,6 +40,7 @@ Commands:
   status             what the map holds, the warnings, and the validation
   proposal <file>    check one proposal against the map
   review <slug>      print the last review of a proposal (--source <worktree> for a worktree's copy)
+  docs               build the docs as a static site from their map (--out <dir>, default _site)
   help               this text
 
 Options:
@@ -196,6 +198,17 @@ async function review(flags, slug) {
   return 0;
 }
 
+async function docs(flags) {
+  const { config, derivers } = await setup(flags);
+  const { buildSite } = await import('../plugins/docs/site.js');
+  const out = path.resolve(config.root, flags.out || '_site');
+  const { pages, files, warnings, problems } = await buildSite({ config, derivers, out });
+  warnings.forEach((w) => console.warn(`  warning: ${w}`));
+  problems.forEach((p) => console.warn(`  problem: ${p}`));
+  console.log(`\nBuilt ${plural(pages, 'page')} (${plural(files.length, 'file')}) into ${path.relative(process.cwd(), out) || out}.\n`);
+  return 0;
+}
+
 async function serve(flags) {
   const { config } = await setup(flags);
   const { listen } = await import('../server/server.js');
@@ -211,7 +224,7 @@ export async function main(argv = process.argv.slice(2)) {
   const [command = 'help', arg] = rest;
   if (flags.version) { console.log(PKG.version); return 0; }
   if (flags.help || command === 'help') { console.log(HELP); return 0; }
-  const commands = { serve, sync, validate, status, proposal: (f) => proposal(f, arg), review: (f) => review(f, arg) };
+  const commands = { serve, sync, validate, status, proposal: (f) => proposal(f, arg), review: (f) => review(f, arg), docs };
   if (!commands[command]) {
     console.error(`Unknown command: ${command}\n\n${HELP}`);
     return 1;
