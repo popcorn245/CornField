@@ -24,7 +24,7 @@
  * The pure packing (`packNodes`, `packEdges`, `packDecor`, `styleTables`) is what the tests read: there is no GPU in CI.
  */
 
-import { ARROW, CORE_COLOR, CORE_RATIO, EDGE_STRIKE, HALO, MARK, MARK_MIN_PX, edgePoint, parseColor } from './scene.js';
+import { ARROW, CORE_RATIO, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
 import {
   CURVE_SEGMENTS, EDGE_FRAG, GRID_FRAG, GRID_VERT, LANE_FRAG, LANE_VERT, NODE_FRAG, NODE_VERT, PACKET_FRAG, PACKET_VERT,
   RING_FRAG, RING_VERT, TIP_FRAG, TIP_VERT, edgeVert,
@@ -176,8 +176,10 @@ export const packScene = (scene) => ({ ...packDecor(scene), nodes: packNodes(sce
 /**
  * The looks of scene.js (halo, mark, core) as flat float arrays for uniforms, indexed by the codes
  * above, so the shaders hold no colour of their own and cannot drift from the Canvas 2D renderer.
+ * `theme` picks `looksFor(theme)`: the renderer sets them again when a scene's theme differs from the last.
  */
-export function styleTables() {
+export function styleTables(theme = 'dark') {
+  const { halo: HALO, mark: MARK, core: CORE_COLOR } = looksFor(theme);
   const haloFill = new Float32Array(16);
   const haloRing = new Float32Array(16);
   const haloGeom = new Float32Array(16);
@@ -284,12 +286,22 @@ function link(gl, vertSource, fragSource, label) {
   return program;
 }
 
-/** Programs, vertex arrays and buffers for every pass, on this context. Throws when a shader fails. */
-function buildGpu(gl) {
+/** Sets the one-time uniforms of every pass that has them, for `theme`'s looks */
+function setConstants(gl, gpu, theme) {
+  const tables = styleTables(theme);
+  gpu.passes.forEach((pass) => {
+    if (!pass.spec.constants) return;
+    gl.useProgram(pass.program);
+    CONSTANTS[pass.spec.constants](gl, pass.at, tables);
+  });
+  gpu.theme = theme;
+}
+
+/** Programs, vertex arrays and buffers for every pass, on this context, with `theme`'s looks. Throws when a shader fails. */
+function buildGpu(gl, theme = 'dark') {
   const corners = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, corners);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const tables = styleTables();
 
   const passes = PASSES.map((spec) => {
     const program = link(gl, spec.vert, spec.frag, spec.name);
@@ -311,14 +323,11 @@ function buildGpu(gl) {
     gl.bindVertexArray(null);
 
     const at = (name) => gl.getUniformLocation(program, name);
-    const pass = { spec, program, vao, buffer, count: 0, uniforms: { viewport: at('u_viewport'), cam: at('u_cam'), dpr: at('u_dpr'), time: spec.time ? at('u_time') : null } };
-    if (spec.constants) {
-      gl.useProgram(program);
-      CONSTANTS[spec.constants](gl, at, tables);
-    }
-    return pass;
+    return { spec, program, vao, buffer, at, count: 0, uniforms: { viewport: at('u_viewport'), cam: at('u_cam'), dpr: at('u_dpr'), time: spec.time ? at('u_time') : null } };
   });
-  return { corners, passes };
+  const gpu = { corners, passes, theme };
+  setConstants(gl, gpu, theme);
+  return gpu;
 }
 
 function destroyGpu(gl, gpu) {
@@ -375,6 +384,8 @@ export function createWebglRenderer(canvas, opts = {}) {
       packedVersion = scene.version;
       upload();
     }
+    const theme = scene.theme || 'dark';
+    if (gpu.theme !== theme) setConstants(gl, gpu, theme); // the halos, mark rings and core of the other ground
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0);
@@ -402,7 +413,7 @@ export function createWebglRenderer(canvas, opts = {}) {
   };
   const onRestored = () => {
     try {
-      gpu = buildGpu(gl);
+      gpu = buildGpu(gl, lastArgs ? lastArgs[0].theme || 'dark' : 'dark');
       lost = false;
       if (packed) upload();
       if (lastArgs) draw(...lastArgs);

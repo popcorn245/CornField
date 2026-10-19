@@ -809,6 +809,35 @@
       },
       "r": 21,
       "color": "#94a3b8"
+    },
+    {
+      "id": "core-explorer-theme-boot",
+      "label": "theme-boot.js",
+      "type": "core",
+      "file": "explorer/theme-boot.js",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Puts light or dark on the page before its first paint (MAP-01). (explorer/theme-boot.js)"
+    },
+    {
+      "id": "core-explorer-theme-model",
+      "label": "theme-model.js",
+      "type": "core",
+      "file": "explorer/theme-model.js",
+      "summary": "Light and dark, the pure half (MAP-01).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark, the pure half (MAP-01). (explorer/theme-model.js)"
+    },
+    {
+      "id": "core-explorer-theme",
+      "label": "theme.js",
+      "type": "core",
+      "file": "explorer/theme.js",
+      "summary": "Light and dark (MAP-01), the half that touches the page.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Light and dark (MAP-01), the half that touches the page. (explorer/theme.js)"
     }
   ],
   "edges": [
@@ -2271,7 +2300,73 @@
       "status": "live",
       "label": "the release pushes the image",
       "when": "deploy"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-boot"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-17T08:54:54.992Z"
+  "updatedAt": "2026-10-19T21:20:42.427Z"
 }

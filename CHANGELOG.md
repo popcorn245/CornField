@@ -14,3 +14,4 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
   - The CLI: `serve`, `sync`, `validate`, `status`, `proposal`, `review`.
   - The server: an allowlist, never a folder; a strict Content-Security-Policy; loopback only until forge sign-in exists.
   - A Dockerfile, `compose.example.yml`, GitHub Actions for tests, secret scanning and (inert until switched on) releases.
+- Light mode (MAP-01): the explorer follows the system's light or dark setting, and a toggle in the header steps through system, light and dark (kept in the browser; `?theme=light|dark` for one visit). Both renderers and the labels draw the light map, its colours derived from the dark ones: the same hues, deepened to at least 3:1 on the light ground (4.5:1 for text).

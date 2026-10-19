@@ -96,7 +96,7 @@ export function cloudUsedBy(node, nodes, edges) {
 export const FOLD_AT = 8;
 
 const sec = (title, body) => `<div class="hx-sec"><strong class="hx-strong">${title}</strong>${body}</div>`;
-const row = (color, arrow, body) => `<div class="hx-line"><span style="color:${color}">${arrow}</span><span>${body}</span></div>`;
+const row = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
 const name = (label) => `<span class="hx-name">${esc(label)}</span>`;
 
 function userRow(item, color) {
@@ -112,7 +112,7 @@ function groupHtml(group) {
   }).join('');
   return `<div class="hx-cloud-when hx-cloud-when--${group.when}">`
     + `<div class="hx-cloud-when-head"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${group.when}"></span>`
-    + `<span style="color:${group.color}">${esc(group.title)}</span><span class="hx-count">${group.count}</span></div>${lists}</div>`;
+    + `<span class="hx-glyph" style="--glyph:${group.color}">${esc(group.title)}</span><span class="hx-count">${group.count}</span></div>${lists}</div>`;
 }
 
 /** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node */
