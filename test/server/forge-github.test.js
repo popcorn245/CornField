@@ -160,11 +160,12 @@ describe('the GitHub adapter', () => {
     expect(await forge.branches()).toHaveLength(MAX_PAGES);
   });
 
-  it('never follows a next link to another origin, so the token stays with GitHub', async () => {
+  it('never follows a next link to another origin, so the token stays with GitHub, and says so rather than cut the list short', async () => {
     const forge = await forgeOn({
       'GET /repos/owner/name/branches?per_page=100': { headers: { link: '<https://elsewhere.example.com/steal?page=2>; rel="next"' }, body: [{ name: 'main', commit: { sha: 's' } }] },
     });
-    expect((await forge.branches()).map((b) => b.name)).toEqual(['main']);
+    const err = await forgeError(() => forge.branches(), 'unavailable');
+    expect(err.message).toBe(`GitHub says the next page of the branches of owner/name is at https://elsewhere.example.com, not ${fake.url}, where cornfield sends the sign-in; set forge.url to the address GitHub calls itself.`);
     expect(fake.requests).toHaveLength(1);
   });
 

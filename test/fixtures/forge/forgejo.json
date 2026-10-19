@@ -1,0 +1,117 @@
+{
+  "_about": "Recorded Forgejo v1 API answers for the forge contract (test/server/forge-contract.js), trimmed to the fields the adapter reads plus a few it ignores. Hand-written in Forgejo's (Gitea's) shapes, not captured from an instance: the repo is owner/name, the people are archetypes, no token appears. Forgejo has no maintain level, so maintainer-one administers the repo.",
+
+  "GET /user": {
+    "body": { "id": 1001, "login": "maintainer-one", "full_name": "Maintainer One", "email": "maintainer-one@noreply.example.com", "avatar_url": "https://forgejo.example.com/avatars/1001", "html_url": "https://forgejo.example.com/maintainer-one", "is_admin": false }
+  },
+
+  "GET /repos/owner/name": {
+    "body": { "id": 1, "full_name": "owner/name", "private": false, "default_branch": "main", "permissions": { "admin": true, "push": true, "pull": true } }
+  },
+  "GET /repos/owner/name/collaborators/reader-two/permission": {
+    "body": { "permission": "read", "role_name": "read", "user": { "id": 1002, "login": "reader-two" } }
+  },
+  "GET /repos/owner/name/collaborators/nobody-three/permission": {
+    "status": 404,
+    "body": { "message": "user does not exist [uid: 0, name: nobody-three]", "url": "https://forgejo.example.com/api/swagger" }
+  },
+
+  "GET /repos/owner/name/issues?state=open&type=issues&limit=50": {
+    "headers": { "link": "<{origin}/api/v1/repos/owner/name/issues?limit=50&page=2&state=open&type=issues>; rel=\"next\",<{origin}/api/v1/repos/owner/name/issues?limit=50&page=2&state=open&type=issues>; rel=\"last\"", "x-total-count": "2" },
+    "body": [
+      { "id": 501, "number": 5, "title": "Sign-in", "state": "open", "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 1, "html_url": "https://forgejo.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T12:00:00Z", "closed_at": null, "pull_request": null }
+    ]
+  },
+  "GET /api/v1/repos/owner/name/issues?limit=50&page=2&state=open&type=issues": {
+    "headers": { "link": "<{origin}/api/v1/repos/owner/name/issues?limit=50&page=1&state=open&type=issues>; rel=\"first\",<{origin}/api/v1/repos/owner/name/issues?limit=50&page=1&state=open&type=issues>; rel=\"prev\"", "x-total-count": "2" },
+    "body": [
+      { "id": 301, "number": 3, "title": "Forge adapters", "state": "open", "user": null, "labels": [], "comments": 0, "html_url": "https://forgejo.example.com/owner/name/issues/3", "created_at": "2026-10-15T10:00:00Z", "updated_at": "2026-10-15T10:00:00Z", "closed_at": null, "pull_request": null }
+    ]
+  },
+  "GET /repos/owner/name/issues?state=all&type=issues&limit=50&labels=v1%2Cserver": {
+    "headers": { "x-total-count": "2" },
+    "body": [
+      { "id": 501, "number": 5, "title": "Sign-in", "state": "open", "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 1, "html_url": "https://forgejo.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T12:00:00Z", "closed_at": null, "pull_request": null },
+      { "id": 201, "number": 2, "title": "SQLite store", "state": "closed", "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 0, "html_url": "https://forgejo.example.com/owner/name/issues/2", "created_at": "2026-10-14T10:00:00Z", "updated_at": "2026-10-15T09:00:00Z", "closed_at": "2026-10-15T09:00:00Z", "pull_request": null }
+    ]
+  },
+
+  "GET /repos/owner/name/pulls?state=open&limit=50": {
+    "headers": { "x-total-count": "2" },
+    "body": [
+      { "id": 1301, "number": 13, "title": "Lint everything", "state": "open", "draft": false, "merged": false, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "labels": [{ "id": 3, "name": "agent" }], "head": { "label": "claude/13-lint", "ref": "claude/13-lint", "sha": "def0000000000000000000000000000000000000" }, "base": { "label": "main", "ref": "main", "sha": "0000000000000000000000000000000000000001" }, "html_url": "https://forgejo.example.com/owner/name/pulls/13", "created_at": "2026-10-17T12:00:00Z", "updated_at": "2026-10-17T12:30:00Z", "merged_at": null },
+      { "id": 1201, "number": 12, "title": "Meals page", "state": "open", "draft": false, "merged": false, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "labels": [], "head": { "label": "feature/meals", "ref": "feature/meals", "sha": "abc0000000000000000000000000000000000000" }, "base": { "label": "main", "ref": "main", "sha": "0000000000000000000000000000000000000001" }, "html_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repos/owner/name/pulls?state=closed&limit=50": {
+    "headers": { "x-total-count": "2" },
+    "body": [
+      { "id": 901, "number": 9, "title": "Old work", "state": "closed", "draft": false, "merged": true, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [], "head": { "ref": "old", "sha": "9990000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/9", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z", "merge_commit_sha": "9990000000000000000000000000000000000009" },
+      { "id": 801, "number": 8, "title": "Dropped", "state": "closed", "draft": false, "merged": false, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [], "head": { "ref": "dropped", "sha": "8880000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/8", "created_at": "2026-10-09T10:00:00Z", "updated_at": "2026-10-09T11:00:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repos/owner/name/pulls/12": {
+    "body": { "id": 1201, "number": 12, "title": "Meals page", "state": "open", "draft": false, "merged": false, "mergeable": true, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "labels": [], "head": { "label": "feature/meals", "ref": "feature/meals", "sha": "abc0000000000000000000000000000000000000" }, "base": { "label": "main", "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "merged_at": null, "merge_commit_sha": null }
+  },
+  "GET /repos/owner/name/pulls/13": {
+    "body": { "id": 1301, "number": 13, "title": "Lint everything", "state": "open", "draft": false, "merged": false, "mergeable": true, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "labels": [{ "id": 3, "name": "agent" }], "head": { "label": "claude/13-lint", "ref": "claude/13-lint", "sha": "def0000000000000000000000000000000000000" }, "base": { "label": "main", "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/13", "created_at": "2026-10-17T12:00:00Z", "updated_at": "2026-10-17T12:30:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/14": {
+    "body": { "id": 1401, "number": 14, "title": "WIP: Half done", "state": "open", "draft": true, "merged": false, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "labels": [], "head": { "label": "wip", "ref": "wip", "sha": "abc0000000000000000000000000000000000000" }, "base": { "label": "main", "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/14", "created_at": "2026-10-17T13:00:00Z", "updated_at": "2026-10-17T13:00:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/9": {
+    "body": { "id": 901, "number": 9, "title": "Old work", "state": "closed", "draft": false, "merged": true, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [], "head": { "ref": "old", "sha": "9990000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/9", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z", "merge_commit_sha": "9990000000000000000000000000000000000009" }
+  },
+  "GET /repos/owner/name/pulls/12/files?limit=50": {
+    "headers": { "x-total-count": "4" },
+    "body": [
+      { "filename": "docs/specs/proposals/0013-meals.json", "status": "added", "additions": 40, "deletions": 0, "changes": 40 },
+      { "filename": "server/server.js", "status": "modified", "additions": 3, "deletions": 1, "changes": 4 },
+      { "filename": "server/meals.js", "previous_filename": "server/food.js", "status": "renamed", "additions": 0, "deletions": 0, "changes": 0 },
+      { "filename": "server/old.js", "status": "deleted", "additions": 0, "deletions": 12, "changes": 12 }
+    ]
+  },
+  "GET /repos/owner/name/issues/12/comments?limit=50": {
+    "body": [
+      { "id": 9001, "user": { "id": 1004, "login": "agent-four", "html_url": "https://forgejo.example.com/agent-four" }, "body": "Ready for a look.", "html_url": "https://forgejo.example.com/owner/name/pulls/12#issuecomment-9001", "pull_request_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-17T10:10:00Z", "updated_at": "2026-10-17T10:10:00Z" },
+      { "id": 9002, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "body": "Sent back: split the page.\n\n```cornfield-review\n{\"verdict\":\"notes\",\"note\":\"split the page\",\"edits\":[]}\n```", "html_url": "https://forgejo.example.com/owner/name/pulls/12#issuecomment-9002", "pull_request_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-17T10:20:00Z", "updated_at": "2026-10-17T10:25:00Z" }
+    ]
+  },
+  "POST /repos/owner/name/issues/12/comments": {
+    "status": 201,
+    "body": { "id": 9003, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "body": "Approved.", "html_url": "https://forgejo.example.com/owner/name/pulls/12#issuecomment-9003", "pull_request_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-17T11:00:00Z", "updated_at": "2026-10-17T11:00:00Z" }
+  },
+
+  "GET /repos/owner/name/commits/abc0000000000000000000000000000000000000/status?limit=50": {
+    "headers": { "x-total-count": "2" },
+    "body": { "state": "success", "sha": "abc0000000000000000000000000000000000000", "total_count": 2, "statuses": [
+      { "id": 71, "status": "success", "context": "ci / test (pull_request)", "description": "Successful in 41s", "target_url": "https://forgejo.example.com/owner/name/actions/runs/7/jobs/0" },
+      { "id": 72, "status": "success", "context": "ci/legacy", "description": "Build passed", "target_url": "https://ci.example.com/build/1" }
+    ] }
+  },
+  "GET /repos/owner/name/commits/def0000000000000000000000000000000000000/status?limit=50": {
+    "headers": { "x-total-count": "2" },
+    "body": { "state": "failure", "sha": "def0000000000000000000000000000000000000", "total_count": 2, "statuses": [
+      { "id": 81, "status": "failure", "context": "lint", "description": "Failing after 9s", "target_url": "https://forgejo.example.com/owner/name/actions/runs/8/jobs/0" },
+      { "id": 82, "status": "pending", "context": "test", "description": "Has started running", "target_url": "https://forgejo.example.com/owner/name/actions/runs/8/jobs/1" }
+    ] }
+  },
+  "POST /repos/owner/name/pulls/12/merge": { "status": 200 },
+
+  "GET /repos/owner/name/branches?limit=50": {
+    "headers": { "x-total-count": "2" },
+    "body": [
+      { "name": "feature/meals", "commit": { "id": "abc0000000000000000000000000000000000000", "message": "Meals page\n" }, "protected": false },
+      { "name": "main", "commit": { "id": "0000000000000000000000000000000000000001", "message": "Start\n" }, "protected": true }
+    ]
+  },
+
+  "GET /repos/owner/name/raw/docs/specs/proposals/0013-meals.json?ref=abc0000000000000000000000000000000000000": {
+    "headers": { "content-type": "text/plain; charset=utf-8" },
+    "body": "{\n  \"version\": 1,\n  \"title\": \"Meals\"\n}\n"
+  },
+  "GET /repos/owner/name/raw/docs/specs/proposals/0099-none.json?ref=abc0000000000000000000000000000000000000": {
+    "status": 404,
+    "body": { "message": "object does not exist [id: , rel_path: docs/specs/proposals/0099-none.json]", "url": "https://forgejo.example.com/api/swagger" }
+  }
+}

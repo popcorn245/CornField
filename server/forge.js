@@ -63,6 +63,7 @@
  */
 
 import { createGitHubForge } from './forge-github.js';
+import { createForgejoForge } from './forge-forgejo.js';
 import { ForgeError } from './forge-http.js';
 
 export { ForgeError, rateLimitWords } from './forge-http.js';
@@ -82,6 +83,7 @@ const REPO = /^[\w.-]+\/[\w.-]+$/;
 /** The adapters, by `forge.type` */
 const ADAPTERS = {
   github: createGitHubForge,
+  forgejo: createForgejoForge,
 };
 
 /** Whether a permission makes its holder an admin of cornfield: they maintain the repo */
