@@ -11,6 +11,7 @@ import { render } from './render.js';
 import { FLOW_STYLES, flowSummary } from './flows.js';
 import { clearScenario } from './scenario-ui.js';
 import { proposalPanelHtml } from './proposal-model.js';
+import { nodeMockupsHtml } from './mockups-model.js';
 import { collapseSheet } from './sheets.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
@@ -174,6 +175,9 @@ export async function selectNode(node) {
   // A node a proposal touches: why, and what changes (before and after), above the rest
   const proposed = proposalPanelHtml(node);
   if (proposed) metaList.insertAdjacentHTML('afterbegin', proposed);
+  // The screens the proposal lists for it, which open from here (mockups.js)
+  const mockups = nodeMockupsHtml(node.id);
+  if (mockups) (proposed ? metaList.firstElementChild : metaList).insertAdjacentHTML(proposed ? 'afterend' : 'afterbegin', mockups);
 
   // What the live layer knows of it (spec 0029): a count, a linked machine's item, contents and sets; repainted in place by live.js
   metaList.insertAdjacentHTML('beforeend', `<div id="drawer-live">${liveSection(node)}</div>`);

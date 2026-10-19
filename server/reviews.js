@@ -29,7 +29,12 @@
  * `migrateStage1Reviews` posts each such file once, as a comment on the one open spec PR that holds its slug, and
  * renames it to `<slug>.review.json.migrated` (left alone, never read again). It is safe to run any number of times.
  *
- * @typedef {{ verdict: 'approved' | 'notes', note: string, edits: object[] }} Review
+ * An approval of a proposal that lists mockups also carries `mockups: [{ node, path, sha256 }]` in the same block: the
+ * files it covers as the server hashed them (server/mockups.js `hashPullMockups`). A later file that is not that one
+ * reads as changed since the approval.
+ *
+ * @typedef {{ node: string, path: string, sha256: string }} ReviewedMockup
+ * @typedef {{ verdict: 'approved' | 'notes', note: string, edits: object[], mockups?: ReviewedMockup[] }} Review
  * @typedef {Review & { version: 1, slug: string, at: string, by: string, comment: { id: string, url: string } }} FoundReview
  * @typedef {{ login: string, action: string, target: string, request: object, status: number | null, answer: object | null }} AuditEntry
  */
@@ -38,6 +43,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isMaintainer, ForgeError } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
+import { MAX_MOCKUPS, mockupPathProblem } from '../core/proposal.js';
 
 // ---------------------------------------------------------------------------
 //  The review a person sends
@@ -51,7 +57,9 @@ export const MAX_NOTE_CHARS = 20000;
 /** What a comment may hold: GitHub refuses 65536 characters, and the human line comes with it */
 export const MAX_COMMENT_CHARS = 60000;
 const VERDICTS = ['approved', 'notes'];
-const REVIEW_KEYS = ['verdict', 'note', 'edits'];
+const REVIEW_KEYS = ['verdict', 'note', 'edits', 'mockups'];
+const MOCKUP_KEYS = ['node', 'path', 'sha256'];
+const SHA256 = /^[0-9a-f]{64}$/;
 
 /** The tag of the fenced block */
 export const REVIEW_TAG = 'cornfield-review';
@@ -74,7 +82,7 @@ export function validateReview(body) {
   const no = (error) => ({ ok: false, error });
   if (!isObject(body)) return no('A review is a JSON object with a verdict, a note and edits.');
   const extra = Object.keys(body).find((k) => !REVIEW_KEYS.includes(k));
-  if (extra !== undefined) return no(`A review has only a verdict, a note and edits, not "${extra}".`);
+  if (extra !== undefined) return no(`A review has only a verdict, a note, edits and mockups, not "${extra}".`);
   if (!VERDICTS.includes(body.verdict)) return no('The verdict is "approved" or "notes".');
   if (body.note !== undefined && typeof body.note !== 'string') return no('The note is text.');
   const note = body.note ?? '';
@@ -85,7 +93,21 @@ export function validateReview(body) {
   if (edits.length > MAX_REVIEW_EDITS) return no(`At most ${MAX_REVIEW_EDITS} edits in one review.`);
   const bad = edits.findIndex((e) => !isObject(e) || typeof e.op !== 'string' || e.op === '');
   if (bad >= 0) return no(`Edit ${bad + 1} is not an object with an op.`);
-  return { ok: true, value: { verdict: body.verdict, note, edits: structuredClone(edits) } };
+  let mockups;
+  if (body.mockups !== undefined) {
+    if (body.verdict !== 'approved') return no('Only an approval covers mockups.');
+    if (!Array.isArray(body.mockups)) return no('The mockups are a list.');
+    if (body.mockups.length > MAX_MOCKUPS) return no(`At most ${MAX_MOCKUPS} mockups in one review.`);
+    for (const [i, m] of body.mockups.entries()) {
+      const at = `Mockup ${i + 1}`;
+      if (!isObject(m) || Object.keys(m).some((k) => !MOCKUP_KEYS.includes(k))) return no(`${at} is { node, path, sha256 } and nothing else.`);
+      if (typeof m.node !== 'string' || !m.node.trim() || m.node.length > 200) return no(`${at} needs the node it is beside.`);
+      if (mockupPathProblem(m.path) !== null) return no(`${at}: ${mockupPathProblem(m.path)}`);
+      if (typeof m.sha256 !== 'string' || !SHA256.test(m.sha256)) return no(`${at}: "sha256" is the file's SHA-256, 64 lower-case hex digits.`);
+    }
+    mockups = body.mockups.map((m) => ({ node: m.node, path: m.path, sha256: m.sha256 }));
+  }
+  return { ok: true, value: { verdict: body.verdict, note, edits: structuredClone(edits), ...(mockups ? { mockups } : {}) } };
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +130,7 @@ export function reviewComment(slug, review, { login, carriedOver }) {
   const how = carriedOver ? `${login}, in cornfield on ${carriedOver}; carried over from before reviews were comments` : `${login}, in cornfield`;
   const line = `${verdict} \`${slug}\`${withEdits} (${how}).`;
   const quoted = review.note.trim() ? `\n\n${review.note.trim().split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
-  const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits }, null, 2);
+  const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits, ...(review.mockups ? { mockups: review.mockups } : {}) }, null, 2);
   return `${line}${quoted}\n\n${FENCE}${REVIEW_TAG} ${slug}\n${json}\n${FENCE}`;
 }
 

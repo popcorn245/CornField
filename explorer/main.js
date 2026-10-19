@@ -34,6 +34,7 @@ import { bindCanvasInput } from './input.js';
 import { initProposals } from './proposal.js';
 import { initWhatIf } from './whatif.js';
 import { initReview } from './review.js';
+import { initMockups } from './mockups.js';
 import { benchMeta, measureParams, readoutLines, resultLine, runBench, showReadout } from './bench.js';
 import { initLive } from './live.js';
 import { initHouse } from './house.js';
@@ -208,6 +209,7 @@ loadTopology().then(async (ok) => {
   initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
   initWhatIf(); // before a proposal can open, so its edits come with it
   initReview(); // after it: the review controls sit under the edit controls on the bar
+  initMockups(); // a proposal's screens open from the node they name
   await initProposals();
   // The live layer (live.js): loads only once a live layer goes on in the Layers menu; with no source it stays off
   initLive({ source: liveSource, onSelectionGone: closeDrawer });

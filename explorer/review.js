@@ -13,6 +13,8 @@
  *   GET  /proposals/<slug>/review         the latest admin review on the PR, when it opens: "Approved 3 minutes ago"
  *   PUT  /proposals/<slug>/review         { verdict, note, edits } -> the review as posted
  *
+ * An approval of a spec PR's proposal also records its mockup files' hashes in the review comment (server/mockups.js); the panel's mockups then read "Reviewed" (mockups.js).
+ *
  * After a send back the edits are emptied (`clearEdits()`: they went with the note); after an approval they stay, as they are
  * in the comment. Nothing here uses `alert`: every refusal and failure is a line on the bar.
  *
@@ -21,6 +23,7 @@
 
 import { state } from './state.js';
 import { hooks } from './proposal.js';
+import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
 import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
 
@@ -168,6 +171,7 @@ export async function sendReview(verdict) {
   ui.hint = editsHint(verdict, body.edits.length);
   noteEl.value = '';
   paint();
+  refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;
 }

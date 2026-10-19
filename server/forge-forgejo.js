@@ -186,6 +186,11 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return status === 404 ? null : /** @type {string} */ (body);
     },
 
+    async fileBytes(ref, path) {
+      const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, bytes: true, allow: [404] });
+      return status === 404 || !Buffer.isBuffer(body) ? null : body;
+    },
+
     rateLimit: () => client.rateLimit(),
   };
 }
