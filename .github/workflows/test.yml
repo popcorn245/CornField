@@ -67,7 +67,8 @@ jobs:
           SIGN_IN: -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00
         run: |
           set -eu
-          docker run --rm -d --name cf -p 127.0.0.1:3397:3397 -v "$PWD:/repo:ro" -e CORNFIELD_HOST=0.0.0.0 -e CORNFIELD_PORT=3397 -e CORNFIELD_PUBLIC_URL=https://cornfield-ci $SIGN_IN cornfield:ci
+          # Hardened as compose.example.yml runs it: read-only root, no capabilities, no new privileges
+          docker run --rm -d --name cf -p 127.0.0.1:3397:3397 --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true -v "$PWD:/repo:ro" -e CORNFIELD_HOST=0.0.0.0 -e CORNFIELD_PORT=3397 -e CORNFIELD_PUBLIC_URL=https://cornfield-ci $SIGN_IN cornfield:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3397/healthz >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3397/healthz
           for p in / /topology.json /cornfield/config.json /explorer/main.js /proposals; do
@@ -75,4 +76,28 @@ jobs:
             [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker stop cf; exit 1; }
           done
           curl -s http://127.0.0.1:3397/ | grep -q 'Sign in with GitHub'
+          # Behind a proxy that passes Host through, the public name reaches the guard too
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: cornfield-ci' http://127.0.0.1:3397/topology.json)
+          [ "$code" = 401 ] || { echo "the public Host answered $code" >&2; docker stop cf; exit 1; }
+          # cornfield.db is opened on the first request that looks up a session: ask with a cookie that names none
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: __Host-cornfield=no-such-session' http://127.0.0.1:3397/topology.json)
+          [ "$code" = 401 ] || { echo "an unknown session answered $code" >&2; docker stop cf; exit 1; }
+          # The image runs as a non-root user, and the data folder is that user's, 0700, with cornfield.db 0600 inside
+          [ "$(docker exec cf id -u)" != 0 ] || { echo 'the image runs as root' >&2; docker stop cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data)" = 'node 700' ] || { docker exec cf stat -c '%U %a' /data >&2; docker stop cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data/cornfield.db)" = 'node 600' ] || { docker exec cf stat -c '%U %a' /data/cornfield.db >&2; docker stop cf; exit 1; }
+          # The image's own health check (/healthz, which needs no session) turns healthy
+          for i in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] && break; sleep 2; done
+          [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] || { docker inspect -f '{{json .State.Health}}' cf >&2; docker stop cf; exit 1; }
           docker stop cf
+      - name: The example compose file is valid, and stops without its secrets
+        env:
+          CORNFIELD_PUBLIC_URL: https://cornfield-ci
+          CORNFIELD_GITHUB_CLIENT_ID: ci-placeholder-id
+          CORNFIELD_GITHUB_CLIENT_SECRET: placeholder
+          CORNFIELD_SESSION_SECRET: placeholderplaceholderplaceholder00
+        run: |
+          set -eu
+          docker compose -f compose.example.yml config --quiet
+          if out=$(env -u CORNFIELD_SESSION_SECRET docker compose -f compose.example.yml config 2>&1); then echo 'compose accepted a missing session secret' >&2; exit 1; fi
+          echo "$out" | grep -q CORNFIELD_SESSION_SECRET
