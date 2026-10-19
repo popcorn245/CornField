@@ -667,10 +667,10 @@
       "label": "index.js",
       "type": "core",
       "file": "plugins/starter/index.js",
-      "summary": "The starter deriver: a map of any JavaScript repo with zero plugin code.",
+      "summary": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code.",
       "r": 20,
       "color": "#14b8a6",
-      "desc": "The starter deriver: a map of any JavaScript repo with zero plugin code. (plugins/starter/index.js)"
+      "desc": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code. (plugins/starter/index.js)"
     },
     {
       "id": "core-server-bind",
@@ -1213,6 +1213,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
+    },
+    {
+      "id": "core-plugins-starter-languages",
+      "label": "languages.js",
+      "type": "core",
+      "file": "plugins/starter/languages.js",
+      "summary": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl… (plugins/starter/languages.js)"
+    },
+    {
+      "id": "core-plugins-starter-toml",
+      "label": "toml.js",
+      "type": "core",
+      "file": "plugins/starter/toml.js",
+      "summary": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
     }
   ],
   "edges": [
@@ -3308,7 +3328,27 @@
     {
       "from": "pkg-openapi",
       "to": "core-plugins-openapi-index"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-languages"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "core-plugins-starter-toml"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-plugins-starter-languages",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-languages",
+      "to": "core-plugins-starter-toml",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T21:44:46.935Z"
+  "updatedAt": "2026-10-19T21:47:40.769Z"
 }
