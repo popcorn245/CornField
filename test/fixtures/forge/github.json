@@ -1,0 +1,122 @@
+{
+  "_about": "Recorded GitHub REST v3 answers for the forge contract (test/server/forge-contract.js), trimmed to the fields the adapter reads plus a few it ignores. Hand-written in GitHub's shapes: the repo is owner/name, the people are archetypes, no token appears.",
+
+  "GET /user": {
+    "headers": { "x-ratelimit-limit": "5000", "x-ratelimit-remaining": "4990", "x-ratelimit-reset": "1792443240" },
+    "body": { "login": "maintainer-one", "id": 1001, "node_id": "U_1001", "avatar_url": "https://avatars.example.com/u/1001", "html_url": "https://github.example.com/maintainer-one", "type": "User", "name": "Maintainer One" }
+  },
+
+  "GET /repos/owner/name": {
+    "body": { "id": 1, "full_name": "owner/name", "private": false, "default_branch": "main", "permissions": { "admin": false, "maintain": true, "push": true, "triage": true, "pull": true } }
+  },
+  "GET /repos/owner/name/collaborators/reader-two/permission": {
+    "body": { "permission": "read", "role_name": "read", "user": { "login": "reader-two", "id": 1002 } }
+  },
+  "GET /repos/owner/name/collaborators/nobody-three/permission": {
+    "status": 404,
+    "body": { "message": "Not Found", "documentation_url": "https://docs.github.com/rest", "status": "404" }
+  },
+
+  "GET /repos/owner/name/issues?state=open&sort=created&direction=desc&per_page=100": {
+    "headers": { "link": "<{origin}/repositories/1/issues?state=open&sort=created&direction=desc&per_page=100&page=2>; rel=\"next\", <{origin}/repositories/1/issues?state=open&sort=created&direction=desc&per_page=100&page=2>; rel=\"last\"" },
+    "body": [
+      { "number": 12, "title": "Meals page", "state": "open", "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "comments": 2, "html_url": "https://github.example.com/owner/name/pull/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "closed_at": null, "pull_request": { "url": "https://api.github.example.com/repos/owner/name/pulls/12" } },
+      { "number": 5, "title": "Sign-in", "state": "open", "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 1, "html_url": "https://github.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T12:00:00Z", "closed_at": null }
+    ]
+  },
+  "GET /repositories/1/issues?state=open&sort=created&direction=desc&per_page=100&page=2": {
+    "headers": { "link": "<{origin}/repositories/1/issues?state=open&sort=created&direction=desc&per_page=100&page=1>; rel=\"prev\", <{origin}/repositories/1/issues?state=open&sort=created&direction=desc&per_page=100&page=1>; rel=\"first\"" },
+    "body": [
+      { "number": 3, "title": "Forge adapters", "state": "open", "user": null, "labels": [], "comments": 0, "html_url": "https://github.example.com/owner/name/issues/3", "created_at": "2026-10-15T10:00:00Z", "updated_at": "2026-10-15T10:00:00Z", "closed_at": null }
+    ]
+  },
+  "GET /repos/owner/name/issues?state=all&sort=created&direction=desc&per_page=100&labels=v1%2Cserver": {
+    "body": [
+      { "number": 5, "title": "Sign-in", "state": "open", "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 1, "html_url": "https://github.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T12:00:00Z", "closed_at": null },
+      { "number": 2, "title": "SQLite store", "state": "closed", "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [{ "id": 1, "name": "v1", "color": "ededed" }, { "id": 2, "name": "server", "color": "ededed" }], "comments": 0, "html_url": "https://github.example.com/owner/name/issues/2", "created_at": "2026-10-14T10:00:00Z", "updated_at": "2026-10-15T09:00:00Z", "closed_at": "2026-10-15T09:00:00Z" }
+    ]
+  },
+
+  "GET /repos/owner/name/pulls?state=open&sort=created&direction=desc&per_page=100": {
+    "body": [
+      { "number": 13, "title": "Lint everything", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [{ "name": "agent" }], "head": { "ref": "claude/13-lint", "sha": "def0000000000000000000000000000000000000" }, "base": { "ref": "main", "sha": "0000000000000000000000000000000000000001" }, "html_url": "https://github.example.com/owner/name/pull/13", "created_at": "2026-10-17T12:00:00Z", "updated_at": "2026-10-17T12:30:00Z", "merged_at": null },
+      { "number": 12, "title": "Meals page", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "feature/meals", "sha": "abc0000000000000000000000000000000000000" }, "base": { "ref": "main", "sha": "0000000000000000000000000000000000000001" }, "html_url": "https://github.example.com/owner/name/pull/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repos/owner/name/pulls?state=closed&sort=created&direction=desc&per_page=100": {
+    "body": [
+      { "number": 9, "title": "Old work", "state": "closed", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "old", "sha": "9990000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/9", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z" },
+      { "number": 8, "title": "Dropped", "state": "closed", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "dropped", "sha": "8880000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/8", "created_at": "2026-10-09T10:00:00Z", "updated_at": "2026-10-09T11:00:00Z", "merged_at": null }
+    ]
+  },
+  "GET /repos/owner/name/pulls/12": {
+    "body": { "number": 12, "title": "Meals page", "state": "open", "draft": false, "merged": false, "mergeable": true, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "feature/meals", "sha": "abc0000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/13": {
+    "body": { "number": 13, "title": "Lint everything", "state": "open", "draft": false, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [{ "name": "agent" }], "head": { "ref": "claude/13-lint", "sha": "def0000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/13", "created_at": "2026-10-17T12:00:00Z", "updated_at": "2026-10-17T12:30:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/14": {
+    "body": { "number": 14, "title": "Half done", "state": "open", "draft": true, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "wip", "sha": "abc0000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/14", "created_at": "2026-10-17T13:00:00Z", "updated_at": "2026-10-17T13:00:00Z", "merged_at": null }
+  },
+  "GET /repos/owner/name/pulls/9": {
+    "body": { "number": 9, "title": "Old work", "state": "closed", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "old", "sha": "9990000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/9", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z" }
+  },
+  "GET /repos/owner/name/pulls/12/files?per_page=100": {
+    "body": [
+      { "sha": "f1", "filename": "docs/specs/proposals/0013-meals.json", "status": "added", "additions": 40, "deletions": 0, "changes": 40 },
+      { "sha": "f2", "filename": "server/server.js", "status": "modified", "additions": 3, "deletions": 1, "changes": 4 },
+      { "sha": "f3", "filename": "server/meals.js", "previous_filename": "server/food.js", "status": "renamed", "additions": 0, "deletions": 0, "changes": 0 },
+      { "sha": "f4", "filename": "server/old.js", "status": "removed", "additions": 0, "deletions": 12, "changes": 12 }
+    ]
+  },
+  "GET /repos/owner/name/issues/12/comments?per_page=100": {
+    "body": [
+      { "id": 9001, "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "body": "Ready for a look.", "html_url": "https://github.example.com/owner/name/pull/12#issuecomment-9001", "created_at": "2026-10-17T10:10:00Z", "updated_at": "2026-10-17T10:10:00Z" },
+      { "id": 9002, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "Sent back: split the page.\n\n```cornfield-review\n{\"verdict\":\"notes\",\"note\":\"split the page\",\"edits\":[]}\n```", "html_url": "https://github.example.com/owner/name/pull/12#issuecomment-9002", "created_at": "2026-10-17T10:20:00Z", "updated_at": "2026-10-17T10:25:00Z" }
+    ]
+  },
+  "POST /repos/owner/name/issues/12/comments": {
+    "status": 201,
+    "body": { "id": 9003, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "body": "Approved.", "html_url": "https://github.example.com/owner/name/pull/12#issuecomment-9003", "created_at": "2026-10-17T11:00:00Z", "updated_at": "2026-10-17T11:00:00Z" }
+  },
+
+  "GET /repos/owner/name/commits/abc0000000000000000000000000000000000000/check-runs?per_page=100": {
+    "body": { "total_count": 1, "check_runs": [
+      { "id": 41, "name": "test", "status": "completed", "conclusion": "success", "html_url": "https://github.example.com/owner/name/actions/runs/7/job/41", "details_url": "https://github.example.com/owner/name/actions/runs/7/job/41", "app": { "slug": "github-actions" } }
+    ] }
+  },
+  "GET /repos/owner/name/commits/abc0000000000000000000000000000000000000/status?per_page=100": {
+    "body": { "state": "success", "sha": "abc0000000000000000000000000000000000000", "total_count": 1, "statuses": [
+      { "context": "ci/legacy", "state": "success", "target_url": "https://ci.example.com/build/1", "description": "Build passed" }
+    ] }
+  },
+  "GET /repos/owner/name/commits/def0000000000000000000000000000000000000/check-runs?per_page=100": {
+    "body": { "total_count": 2, "check_runs": [
+      { "id": 42, "name": "lint", "status": "completed", "conclusion": "failure", "html_url": "https://github.example.com/owner/name/actions/runs/8/job/42", "app": { "slug": "github-actions" } },
+      { "id": 43, "name": "test", "status": "in_progress", "conclusion": null, "html_url": "https://github.example.com/owner/name/actions/runs/8/job/43", "app": { "slug": "github-actions" } }
+    ] }
+  },
+  "GET /repos/owner/name/commits/def0000000000000000000000000000000000000/status?per_page=100": {
+    "body": { "state": "pending", "sha": "def0000000000000000000000000000000000000", "total_count": 0, "statuses": [] }
+  },
+  "POST /repos/owner/name/actions/jobs/42/rerun": { "status": 201, "body": {} },
+  "PUT /repos/owner/name/pulls/12/merge": {
+    "body": { "sha": "fff0000000000000000000000000000000000000", "merged": true, "message": "Pull Request successfully merged" }
+  },
+
+  "GET /repos/owner/name/branches?per_page=100": {
+    "body": [
+      { "name": "feature/meals", "commit": { "sha": "abc0000000000000000000000000000000000000" }, "protected": false },
+      { "name": "main", "commit": { "sha": "0000000000000000000000000000000000000001" }, "protected": true }
+    ]
+  },
+
+  "GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=abc0000000000000000000000000000000000000": {
+    "headers": { "content-type": "application/vnd.github.raw; charset=utf-8" },
+    "body": "{\n  \"version\": 1,\n  \"title\": \"Meals\"\n}\n"
+  },
+  "GET /repos/owner/name/contents/docs/specs/proposals/0099-none.json?ref=abc0000000000000000000000000000000000000": {
+    "status": 404,
+    "body": { "message": "Not Found", "documentation_url": "https://docs.github.com/rest/repos/contents#get-repository-content", "status": "404" }
+  }
+}
