@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_COLOR, CORE_RATIO, HALO, ARROW, MARK, MARK_MIN_PX, packetPoint } from './scene.js';
+import { CORE_RATIO, ARROW, MARK_MIN_PX, looksFor, packetPoint } from './scene.js';
 
 const TAU = Math.PI * 2;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
@@ -109,12 +109,12 @@ function drawEdge(ctx, edge, timeMs, zoom) {
 // ---------------------------------------------------------------------------
 //  Nodes
 // ---------------------------------------------------------------------------
-function drawNode(ctx, node, zoom) {
+function drawNode(ctx, node, zoom, looks) {
   ctx.save();
   ctx.globalAlpha = node.alpha;
 
   // Selection / search highlight halos
-  const halo = HALO[node.halo];
+  const halo = looks.halo[node.halo];
   if (halo) {
     if (halo.fill) {
       circle(ctx, node.x, node.y, node.r + halo.fillR);
@@ -128,7 +128,7 @@ function drawNode(ctx, node, zoom) {
   }
 
   // A proposal's mark: a ring just outside the node, dashed for an addition (drawn a little stronger than the node, so a faded removal is still plain)
-  const mark = MARK[node.mark];
+  const mark = looks.mark[node.mark];
   if (mark) {
     ctx.globalAlpha = Math.min(1, node.alpha * 1.8);
     circle(ctx, node.x, node.y, node.r + Math.max(mark.ringR, MARK_MIN_PX.gap / zoom));
@@ -150,7 +150,7 @@ function drawNode(ctx, node, zoom) {
   ctx.fill();
   ctx.shadowBlur = 0;
   circle(ctx, node.x, node.y, node.r * CORE_RATIO);
-  ctx.fillStyle = CORE_COLOR;
+  ctx.fillStyle = looks.core;
   ctx.fill();
   ctx.restore();
 }
@@ -191,7 +191,8 @@ export function createCanvas2dRenderer(canvas) {
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
       scene.edges.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
-      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom));
+      const looks = looksFor(scene.theme); // the halos, mark rings and core for the scene's ground
+      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 
       ctx.restore();

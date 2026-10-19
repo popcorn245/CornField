@@ -23,7 +23,9 @@ describe('the page', () => {
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
 
   it('loads explorer/main.js as its one module, and its stylesheets, from this origin', () => {
-    expect(scripts.map(([, attrs]) => attrs.trim())).toEqual(['type="module" src="/explorer/main.js"']);
+    // theme-boot.js is the one classic script, in the head: it puts the theme on <html> before the first paint (MAP-01)
+    expect(scripts.map(([, attrs]) => attrs.trim())).toEqual(['src="/explorer/theme-boot.js"', 'type="module" src="/explorer/main.js"']);
+    expect(html.indexOf('/explorer/theme-boot.js')).toBeLessThan(html.indexOf('/explorer/explorer.css'));
     expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/explorer\.css" \/>/);
     expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/house\.css" \/>/);
     expect(html).toContain('<!--@importmap-->');

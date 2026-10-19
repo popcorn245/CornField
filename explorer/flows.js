@@ -13,6 +13,7 @@
  */
 
 import { state, nameOf, escHtml } from './state.js';
+import { themed } from './theme-model.js';
 
 export const FLOW_STYLES = {
   outbox: { color: '#f59e0b', label: 'Outbox → API (writes)' },
@@ -139,7 +140,7 @@ export function renderFlowLegend() {
       <div class="hx-menu-title">
         <span>Data Flow</span>
       </div>
-      ${Object.values(FLOW_STYLES).map((s) => row(`<span class="hx-swatch-line" style="background:${s.color}"></span>`, s.label)).join('')}
+      ${Object.values(FLOW_STYLES).map((s) => row(`<span class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
       ${row('<span class="hx-swatch-line hx-swatch-solid"></span>', '<span class="hx-faint">Solid: live today</span>')}
       ${row('<span class="hx-swatch-line hx-swatch-dashed"></span>', '<span class="hx-faint">Dashed: proposed</span>')}
     </div>`;
@@ -152,6 +153,6 @@ export function flowSummary(node) {
     ${flows.map((e) => {
       const out = e.from === node.id;
       const s = FLOW_STYLES[e.flow] || FLOW_STYLES.sync;
-      return `<div class="hx-line"><span style="color:${s.color}">${out ? '→' : '←'}</span><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`;
+      return `<div class="hx-line"><span class="hx-glyph" style="--glyph:${s.color}">${out ? '→' : '←'}</span><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`;
     }).join('')}</div>`;
 }

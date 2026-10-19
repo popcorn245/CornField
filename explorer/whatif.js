@@ -531,6 +531,23 @@ function removalIndex(op, match) {
   return -1;
 }
 
+/**
+ * Drawing an edge without a drag (MAP-02): pick the other end from the visible nodes, and the edge form opens as it
+ * does at the end of a drag. The list is the map's nodes by name, at most EDGE_TO_MAX of them.
+ */
+const EDGE_TO_MAX = 300;
+function edgeToHtml(n) {
+  const others = state.nodes
+    .filter((o) => o.id !== n.id && isNodeVisible(o) && kindOfMark(o) !== 'removed')
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+    .slice(0, EDGE_TO_MAX);
+  if (!others.length) return '';
+  return `<div class="hx-whatif-addstep hx-whatif-edgeto">
+      <label class="hx-whatif-field">Edge to <select data-edge-to>${others.map((o) => `<option value="${escHtml(o.id)}">${escHtml(o.label)} (${escHtml(o.type)})</option>`).join('')}</select></label>
+      <button type="button" class="hx-btn" data-whatif="edge-to" data-from="${escHtml(n.id)}" title="Draw an edge from this node to the one picked, without dragging">Draw an edge</button>
+    </div>`;
+}
+
 function paintDrawer() {
   const box = mountDrawerBox();
   if (!box) return;
@@ -568,6 +585,7 @@ function paintDrawer() {
   const help = n.mark === 'edit' || n.mark === 'added' ? 'Takes it out of this proposal, with whatever hangs on it.' : 'Shows the map without it.';
   box.innerHTML = `${title}
     <button type="button" class="hx-btn" data-whatif="remove-node" data-id="${escHtml(n.id)}" title="${escHtml(help)}">Remove in this proposal</button>
+    ${edgeToHtml(n)}
     ${edges.length ? `<details class="hx-whatif-edges"><summary>Its edges (${edges.length})</summary><ul class="hx-whatif-list">${rows.join('')}</ul>${edges.length > shown.length ? `<p class="hx-faint">and ${edges.length - shown.length} more</p>` : ''}</details>` : ''}
     ${message}`;
   paintMessages();
@@ -590,6 +608,13 @@ const ACTIONS = {
   redo: () => redoEdit(),
   edits: () => setPanel('edits'),
   steps: () => setPanel('steps'),
+  'edge-to': (el) => {
+    const pick = el.parentElement && el.parentElement.querySelector('[data-edge-to]');
+    if (!pick || !pick.value) return;
+    openForm({ kind: 'edge', from: el.dataset.from, to: pick.value });
+    const kind = q('[data-form="edge"] [name="kind"]');
+    if (kind && typeof kind.focus === 'function') kind.focus(); // the keyboard goes on into the form
+  },
   'cancel-form': () => { closeForm(); if (ui.drawing) setDrawing(false); renderUi(); },
   'remove-edit': (el) => removeEditAt(Number(el.dataset.index)),
   'remove-node': (el) => doIntent({ type: 'remove-node', id: el.dataset.id }, 'drawer'),

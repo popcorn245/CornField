@@ -38,7 +38,7 @@ ssh -L 3350:127.0.0.1:3350 you@the-machine
 
 ## What it does today
 
-- **The map.** WebGL2 (Canvas 2D fallback), 5,000 nodes and 15,000 edges at frame rate. Orbit, data-flow and House views, layers, search, focus, freeform drag. `/?fixture=5k&bench=1` measures it.
+- **The map.** WebGL2 (Canvas 2D fallback), 5,000 nodes and 15,000 edges at frame rate. Orbit, data-flow and House views, layers, search, focus, freeform drag. `/?fixture=5k&bench=1` measures it. All of it works by keyboard, and a screen reader is told where you are: [docs/accessibility.md](docs/accessibility.md).
 - **Derived, not drawn by hand.** `cornfield sync` runs the derivers named in your config and merges what they find into `topology.json`; hand-written parts (descriptions, flows, anything of a type no deriver owns) are kept. `cornfield validate` fails on drift, so CI keeps the map honest.
 - **Proposals.** `docs/specs/proposals/NNNN-slug.json` says what a change would add, change and remove, with scenarios. cornfield lists them from your checkout and from every git worktree in the configured worktrees folder, and shows Before / Diff / After, the scenario player, what-if edits, and Approve / Send back. Writing, reviewing and landing one in your repo: [docs/proposals.md](docs/proposals.md). The format and its validator: [core/proposal.js](core/proposal.js).
 - **Personas, not people.** `topology.personas.json` holds archetypes (Admin, Member, Guest); scenarios act as them, never as a real person.

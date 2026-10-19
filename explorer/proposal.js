@@ -22,7 +22,8 @@ import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
 import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld } from './render.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
-import { MARK, edgePoint } from './scene.js';
+import { edgePoint, looksFor } from './scene.js';
+import { onThemeChange } from './theme.js';
 import {
   PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, parseProposalQuery, proposalPanelHtml, touchedIds,
 } from './proposal-model.js';
@@ -341,13 +342,13 @@ export function proposalRowHtml(entry, current) {
   const meta = [`<span class="hx-proposal-where">${escHtml(where(entry.source))}</span>`];
   if (entry.spec) meta.push(`<span>spec ${escHtml(entry.spec)}</span>`);
   if (entry.error) {
-    return `<div class="hx-proposal-item is-broken" role="listitem">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
+    return `<div class="hx-proposal-item is-broken">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
   }
   if (entry.counts) meta.push(`<span>${escHtml(chipText(entry.counts))}</span>`);
   const reviewed = reviewWords(entry.review, Date.now()); // "Approved 3 minutes ago", from the listing
   if (reviewed) meta.push(`<span class="hx-proposal-reviewed">${escHtml(reviewed)}</span>`);
   if (entry.errors) meta.push(`<span class="hx-warn">${escHtml(plural(entry.errors, 'problem'))}</span>`);
-  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" role="listitem" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
+  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
 }
 
 function renderMenu(loading = false) {
@@ -358,7 +359,7 @@ function renderMenu(loading = false) {
   if (loading && !listing) body = '<p class="hx-faint hx-proposal-empty">Looking for proposals …</p>';
   else if (listingProblem) body = `<p class="hx-error-text hx-proposal-empty">The list could not be loaded: ${escHtml(listingProblem)}</p>`;
   else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
-  else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => proposalRowHtml(e, current)).join('')}</div>`;
+  else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
   menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>Proposals</span></div>${body}`;
 }
 
@@ -458,6 +459,14 @@ function onKey(e) {
   if (e.key === 'Escape' && menuOpen()) closeMenu();
 }
 
+/** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
+function setMarkColours(theme) {
+  const root = document.documentElement.style;
+  const { mark: looks } = looksFor(theme);
+  for (const mark of Object.keys(looks)) root.setProperty(`--hx-mark-${mark}`, looks[mark].color);
+}
+let stopMarkColours = null;
+
 /**
  * Starts the overlay: the mark colours the legend and the panel use, the buttons, picking an
  * edge, and `/?proposal=<slug>` (and `&source=`, `&proposalView=`) when the address asks for one.
@@ -465,8 +474,8 @@ function onKey(e) {
  * @returns {Promise<boolean>} whether a proposal from the address opened (false when it asked for none)
  */
 export async function initProposals() {
-  const root = document.documentElement.style;
-  for (const mark of Object.keys(MARK)) root.setProperty(`--hx-mark-${mark}`, MARK[mark].color);
+  setMarkColours(state.theme);
+  if (!stopMarkColours) stopMarkColours = onThemeChange(setMarkColours);
 
   // Once, however many times this runs
   document.removeEventListener('click', onClick);
