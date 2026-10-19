@@ -34,12 +34,17 @@
  * reads as changed since the approval.
  *
  * @typedef {{ node: string, path: string, sha256: string }} ReviewedMockup
- * @typedef {{ verdict: 'approved' | 'notes', note: string, edits: object[], mockups?: ReviewedMockup[] }} Review
+ * An approval also carries `proposal`: the SHA-256 of the proposal file as the PR's head held it when it was approved
+ * (`proposalHash`), so a later push that changes the file is not taken as approved (server/pipeline.js refuses the build
+ * issue until a maintainer approves it again). The page never sends either; the server reads the files.
+ *
+ * @typedef {{ verdict: 'approved' | 'notes', note: string, edits: object[], mockups?: ReviewedMockup[], proposal?: string }} Review
  * @typedef {Review & { version: 1, slug: string, at: string, by: string, comment: { id: string, url: string } }} FoundReview
  * @typedef {{ login: string, action: string, target: string, request: object, status: number | null, answer: object | null }} AuditEntry
  */
 
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { isMaintainer, ForgeError } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
@@ -57,7 +62,7 @@ export const MAX_NOTE_CHARS = 20000;
 /** What a comment may hold: GitHub refuses 65536 characters, and the human line comes with it */
 export const MAX_COMMENT_CHARS = 60000;
 const VERDICTS = ['approved', 'notes'];
-const REVIEW_KEYS = ['verdict', 'note', 'edits', 'mockups'];
+const REVIEW_KEYS = ['verdict', 'note', 'edits', 'mockups', 'proposal'];
 const MOCKUP_KEYS = ['node', 'path', 'sha256'];
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -82,7 +87,7 @@ export function validateReview(body) {
   const no = (error) => ({ ok: false, error });
   if (!isObject(body)) return no('A review is a JSON object with a verdict, a note and edits.');
   const extra = Object.keys(body).find((k) => !REVIEW_KEYS.includes(k));
-  if (extra !== undefined) return no(`A review has only a verdict, a note, edits and mockups, not "${extra}".`);
+  if (extra !== undefined) return no(`A review has only a verdict, a note, edits, mockups and the proposal's hash, not "${extra}".`);
   if (!VERDICTS.includes(body.verdict)) return no('The verdict is "approved" or "notes".');
   if (body.note !== undefined && typeof body.note !== 'string') return no('The note is text.');
   const note = body.note ?? '';
@@ -107,7 +112,16 @@ export function validateReview(body) {
     }
     mockups = body.mockups.map((m) => ({ node: m.node, path: m.path, sha256: m.sha256 }));
   }
-  return { ok: true, value: { verdict: body.verdict, note, edits: structuredClone(edits), ...(mockups ? { mockups } : {}) } };
+  if (body.proposal !== undefined) {
+    if (body.verdict !== 'approved') return no('Only an approval records the proposal it covers.');
+    if (typeof body.proposal !== 'string' || !SHA256.test(body.proposal)) return no('"proposal" is the proposal file\'s SHA-256, 64 lower-case hex digits.');
+  }
+  return { ok: true, value: { verdict: body.verdict, note, edits: structuredClone(edits), ...(mockups ? { mockups } : {}), ...(body.proposal !== undefined ? { proposal: body.proposal } : {}) } };
+}
+
+/** The SHA-256 of a proposal file's text, as an approval records it */
+export function proposalHash(text) {
+  return createHash('sha256').update(String(text)).digest('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +144,7 @@ export function reviewComment(slug, review, { login, carriedOver }) {
   const how = carriedOver ? `${login}, in cornfield on ${carriedOver}; carried over from before reviews were comments` : `${login}, in cornfield`;
   const line = `${verdict} \`${slug}\`${withEdits} (${how}).`;
   const quoted = review.note.trim() ? `\n\n${review.note.trim().split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
-  const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits, ...(review.mockups ? { mockups: review.mockups } : {}) }, null, 2);
+  const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits, ...(review.mockups ? { mockups: review.mockups } : {}), ...(review.proposal ? { proposal: review.proposal } : {}) }, null, 2);
   return `${line}${quoted}\n\n${FENCE}${REVIEW_TAG} ${slug}\n${json}\n${FENCE}`;
 }
 

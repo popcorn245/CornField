@@ -293,7 +293,7 @@ describe('mockups of a spec PR', () => {
     const posted = await review({ verdict: 'approved', note: '', edits: [] });
     expect(posted.status, posted.text).toBe(200);
     expect(lastBlock()).toEqual({
-      verdict: 'approved', note: '', edits: [],
+      verdict: 'approved', note: '', edits: [], proposal: sha(JSON.stringify(prProposal)),
       mockups: [{ node: 'page-screens', path: '0021-pr/list.png', sha256: sha(PNG) }, { node: 'page-screens', path: '0021-pr/page.html', sha256: sha(HOSTILE_HTML) }],
     });
     expect(await states()).toEqual(['approved', 'approved', 'missing']);

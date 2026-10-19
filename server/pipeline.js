@@ -4,8 +4,9 @@
  * The pipeline's own steps (PIPE-05, ADR 0006): what the two steps between stages make, worked out from the forge's
  * own state. Landing a green pull request is the third step and is not here: it is server/forge-actions.js's merge.
  *
- *   1. **Start a spec** on an open issue: a branch `spec/<n>-<slug>`, one commit adding a stub proposal
- *      `<proposals folder>/<n>-<slug>.json`, and a draft pull request "Spec: <title>" whose body says `Refs #<n>`.
+ *   1. **Start a spec** on an open issue: a branch `spec/<nnnn>-<slug>`, one commit adding a stub proposal
+ *      `<proposals folder>/<nnnn>-<slug>.json` (`nnnn` the issue's number, four digits at least, so it reads and sorts
+ *      like the other proposals, `0013-meals`), and a draft pull request "Spec: <title>" whose body says `Refs #<n>`.
  *   2. **Open the build issue** for a spec pull request whose latest review by a maintainer approves the proposal
  *      (server/reviews.js `latestReview`): an issue that links the pull request and the proposal and lists the nodes
  *      and edges to build as a checklist, from the proposal as approved (the review's edits folded in).
@@ -14,7 +15,9 @@
  * now and built here, never from the request. The page shows the plan in its confirm step; asking for the action sends
  * back the plan's `digest`, and the server plans again and refuses (409) when it is not the same, so what is created is
  * what was shown. Both steps are **idempotent**: a plan says what the first run made (`existing`), and a second run
- * returns that instead of making another. Nothing here launches or talks to an agent (ADR 0007), and nothing changes
+ * returns that instead of making another. What a first run made is only trusted when a maintainer made it: an open spec
+ * pull request, or a build issue with the marker, by anyone else (who can open one) is not taken for it, so nobody can
+ * block a step by planting one. Nothing here launches or talks to an agent (ADR 0007), and nothing changes
  * what is on the forge already: a branch, a file, a pull request and an issue are only ever added.
  *
  * Text that comes from the forge or from a proposal (a title, a node's label) is untrusted: it goes into the new issue
@@ -26,10 +29,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { ForgeError, MAX_BODY, MAX_TITLE } from './forge.js';
+import { ForgeError, MAX_BODY, MAX_TITLE, isMaintainer } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
 import { findPullProposal, folderOf, readPullProposal } from './proposal-pulls.js';
-import { latestReview } from './reviews.js';
+import { latestReview, proposalHash } from './reviews.js';
 import { applyEdits, slug as slugOf, validateProposal } from '../core/proposal.js';
 
 /** The longest slug of a proposal's name made from an issue's title, before its number */
@@ -62,10 +65,23 @@ export function code(value, max = 100) {
   return `\`${one || ' '}\``;
 }
 
-/** The name of the proposal an issue starts: `<n>-<slug of the title>`, a plain file name in the proposals folder */
+/** The number part of a spec's name: the issue's number, four digits at least (`0007`), as the proposals are numbered */
+export const specNumber = (n) => String(n).padStart(4, '0');
+
+/** The name of the proposal an issue starts: `<nnnn>-<slug of the title>`, a plain file name in the proposals folder */
 export function specSlug(n, title) {
   const words = slugOf(clip(String(title), 200)).slice(0, MAX_SLUG).replace(/-+$/, '') || 'spec';
-  return `${n}-${words}`;
+  return `${specNumber(n)}-${words}`;
+}
+
+/** Whether something on the forge was made by a maintainer of the repo: asked once per login (a forge that cannot say throws) */
+function maintainers(forge) {
+  const known = new Map();
+  return async (author) => {
+    if (!author || typeof author.login !== 'string') return false;
+    if (!known.has(author.login)) known.set(author.login, isMaintainer(await forge.permission(forge.repo, author.login)));
+    return known.get(author.login);
+  };
 }
 
 /** A web address the forge gave, as it is, or '' (it is the forge's data, but it is only ever linked when it is plainly one) */
@@ -114,8 +130,13 @@ export async function planSpec(forge, config, where, n) {
   ].join('\n');
   const message = `Start a spec for #${n}`;
   const pulls = await forge.pulls({ state: 'open' });
-  // The spec of this issue, whatever its title was when it was started: every branch cornfield makes for it starts `spec/<n>-`
-  const found = pulls.find((p) => p.head.ref === branch || p.head.ref.startsWith(`spec/${n}-`));
+  // The spec of this issue, whatever its title was when it was started: every branch cornfield makes for it starts
+  // `spec/<nnnn>-`. Only a maintainer's pull request counts (cornfield opens it as one): anyone else's is not it
+  const byMaintainer = maintainers(forge);
+  let found = null;
+  for (const p of pulls) {
+    if ((p.head.ref === branch || p.head.ref.startsWith(`spec/${specNumber(n)}-`)) && (await byMaintainer(p.author))) { found = p; break; }
+  }
   const existing = found ? { number: found.number, title: found.title, url: found.url, draft: found.draft, headRef: found.head.ref } : null;
   const facts = { n, base, branch, path, title, body, message, content: text, proposal };
   return { kind: 'spec', digest: digestOf(facts), issue: { number: n, title: issue.title, url: issue.url }, base, branch, path, message, title, body, content: text, existing };
@@ -209,7 +230,9 @@ export function checklist(proposal) {
  * @param {{ proposals: string }} where
  * @param {{ number: number }} pull
  * @param {import('./forge.js').PullFile[]} files
- * @returns {Promise<{ slug: string, path: string, approved: boolean }[]>}
+ * `approved` is true only when the latest maintainer review approves the file as the head holds it now; `changed` says
+ * the file was approved and has changed since.
+ * @returns {Promise<{ slug: string, path: string, approved: boolean, changed: boolean }[]>}
  */
 export async function pullSpecs(forge, where, pull, files) {
   const folder = folderOf(where);
@@ -221,7 +244,10 @@ export async function pullSpecs(forge, where, pull, files) {
   const out = [];
   for (const f of mine) {
     const review = await latestReview(forge, pull.number, f.slug, comments);
-    out.push({ slug: f.slug, path: f.path, approved: Boolean(review && review.verdict === 'approved') });
+    const yes = Boolean(review && review.verdict === 'approved');
+    const text = yes ? await forge.file(pull.head.sha, f.path) : null;
+    const same = yes && text !== null && review.proposal === proposalHash(text);
+    out.push({ slug: f.slug, path: f.path, approved: same, changed: yes && !same });
   }
   return out;
 }
@@ -244,6 +270,12 @@ export async function planBuild(forge, where, n, slug) {
   if (!review) throw conflict(`${slug} has no review by a maintainer yet; approve it first.`);
   if (review.verdict !== 'approved') throw conflict(`The latest review of ${slug} by a maintainer (${review.by}) sent it back; the build issue waits for an approval.`);
   const raw = await readPullProposal(forge, where, entry);
+  // The approval covers the proposal as it was approved: a push that changed the file since waits for a new one
+  if (review.proposal !== proposalHash(raw)) {
+    throw conflict(review.proposal
+      ? `${entry.path} has changed since ${review.by} approved it; the build issue waits for an approval of it as it is now.`
+      : `The approval of ${slug} does not say which version of ${entry.path} it covers (it was made before cornfield recorded that); approve it again.`);
+  }
   if (Buffer.byteLength(raw) > MAX_PROPOSAL) throw conflict(`${entry.path} is too large to list in an issue.`);
   let proposal;
   try {
@@ -274,7 +306,12 @@ export async function planBuild(forge, where, n, slug) {
   ].join('\n'), MAX_BODY);
   const issues = await forge.issues({ state: 'all', limit: 200 });
   const marker = buildMarker(n, slug);
-  const found = issues.find((i) => i.body.includes(marker));
+  // The issue the first run made: one with the marker, opened by a maintainer (anyone who can open an issue could copy it)
+  const byMaintainer = maintainers(forge);
+  let found = null;
+  for (const i of issues) {
+    if (i.body.includes(marker) && (await byMaintainer(i.author))) { found = i; break; }
+  }
   const existing = found ? { number: found.number, url: found.url, state: found.state } : null;
   const facts = { n, slug, sha: entry.sha, path: entry.path, title, body, by: review.by };
   return {

@@ -416,7 +416,7 @@ export function specBlock(issue) {
 
 /**
  * The proposals of the selected pull request a build issue can be opened for, and the ones that wait for an approval.
- * @param {{ pull: { state: string }, specs?: { slug: string, path: string, approved: boolean }[], stale?: string }} detail
+ * @param {{ pull: { state: string }, specs?: { slug: string, path: string, approved: boolean, changed?: boolean }[], stale?: string }} detail
  * @returns {{ slug: string, path: string, approved: boolean, offer: boolean, why: string }[]}
  */
 export function buildOffers(detail) {
@@ -424,7 +424,8 @@ export function buildOffers(detail) {
   return (detail.specs || []).map((s) => ({
     ...s,
     offer: s.approved && !detail.stale,
-    why: !s.approved ? 'No approval yet: a maintainer approves it in the proposal\'s review first.' : detail.stale ? 'This is an older answer from the forge: refresh first.' : '',
+    why: s.changed ? 'Changed since it was approved: a maintainer approves it again as it is now.'
+      : !s.approved ? 'No approval yet: a maintainer approves it in the proposal\'s review first.' : detail.stale ? 'This is an older answer from the forge: refresh first.' : '',
   }));
 }
 

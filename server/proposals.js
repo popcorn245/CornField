@@ -16,7 +16,8 @@
  *
  * The answer is `{ version: 1, slug, verdict, note, edits, mockups?, at, by, comment: { id, url } }`. An approval of a
  * proposal that lists mockups carries `mockups: [{ node, path, sha256 }]`: the server hashes each file as the PR's head
- * holds it when the maintainer approves (`hashPullMockups`); the page never sends it, and a PUT that does is refused. The agent drafting the spec
+ * holds it when the maintainer approves (`hashPullMockups`); every approval also carries `proposal`, the SHA-256 of the
+ * proposal file at the head (`proposalHash`). The page never sends either, and a PUT that does is refused. The agent drafting the spec
  * reads it (`cornfield review <slug>`) and folds the edits into the proposal. The PUT is same-origin only
  * (`sameOrigin`), at most `REVIEW_LIMIT` bytes, checked by `validateReview`, and only for a proposal the forge
  * says the PR holds; it is written to the `actions` audit table. A proposal in the checkout or a worktree has no
@@ -42,7 +43,7 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
-import { REVIEW_LIMIT, validateReview, latestReview, postReview, migrateStage1Reviews } from './reviews.js';
+import { REVIEW_LIMIT, validateReview, latestReview, postReview, migrateStage1Reviews, proposalHash } from './reviews.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
 import { hashPullMockups, serveMockups } from './mockups.js';
 
@@ -258,7 +259,7 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
     return send(res, 400, { error: `Not valid JSON: ${err.message}` });
   }
   // What an approval covers is the server's to record, from the files themselves, never the page's word
-  if (parsed !== null && typeof parsed === 'object' && 'mockups' in parsed) return send(res, 400, { error: 'The mockups an approval covers are recorded by the server; a review does not send them.' });
+  if (parsed !== null && typeof parsed === 'object' && ('mockups' in parsed || 'proposal' in parsed)) return send(res, 400, { error: 'What an approval covers (the proposal and its mockups) is recorded by the server; a review does not send it.' });
   const checked = validateReview(parsed);
   if (!checked.ok) return send(res, 400, { error: checked.error });
   try {
@@ -267,6 +268,8 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
     if (!entry) return send(res, 404, { error: 'No such proposal' });
     let review = checked.value;
     if (review.verdict === 'approved') {
+      // The proposal as the head holds it now: a later push that changes it is not this approval's
+      review = { ...review, proposal: proposalHash(await readPullProposal(forge, where, entry)) };
       const mockups = await hashPullMockups(forge, where, entry);
       if (mockups.length) review = { ...review, mockups };
     }

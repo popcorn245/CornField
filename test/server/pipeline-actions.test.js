@@ -22,7 +22,7 @@ import { loadConfig } from '../../core/config.js';
 // @ts-expect-error plain JS module, no declarations
 import { validateProposal } from '../../core/proposal.js';
 // @ts-expect-error plain JS module, no declarations
-import { reviewComment } from '../../server/reviews.js';
+import { reviewComment, proposalHash } from '../../server/reviews.js';
 // @ts-expect-error plain JS module, no declarations
 import { specSlug, plain, code, checklist, buildMarker } from '../../server/pipeline.js';
 import { SAMPLE } from '../helpers.js';
@@ -40,8 +40,8 @@ let heads = 0;
 const API = '/api/v3';
 const GH = `${API}/repos/owner/name`;
 const FOLDER = 'docs/specs/proposals';
-const SPEC_BRANCH = 'spec/7-meals-page-with-caf';
-const SPEC_PATH = `${FOLDER}/7-meals-page-with-caf.json`;
+const SPEC_BRANCH = 'spec/0007-meals-page-with-caf';
+const SPEC_PATH = `${FOLDER}/0007-meals-page-with-caf.json`;
 const BUILD_PATH = `${FOLDER}/0040-meals.json`;
 
 const proposal = () => ({
@@ -85,7 +85,9 @@ const user = { login: 'maintainer-one', html_url: 'https://github.example.com/ma
 const issue = (number, title, extra = {}) => ({ number, title, state: 'open', user, labels: [], body: '', comments: 0, html_url: `https://github.example.com/owner/name/issues/${number}`, created_at: '2026-10-19T09:00:00Z', updated_at: '2026-10-19T09:00:00Z', closed_at: null, ...extra });
 const pullOf = (number, title, head, sha, extra = {}) => ({ number, title, state: 'open', draft: false, user, labels: [], head: { ref: head, sha }, base: { ref: 'main' }, html_url: `https://github.example.com/owner/name/pull/${number}`, created_at: '2026-10-19T09:00:00Z', updated_at: '2026-10-19T09:00:00Z', merged_at: null, ...extra });
 const comment = (id, login, body, at = '2026-10-19T10:00:00Z', updated = at) => ({ id, user: { login, html_url: `https://github.example.com/${login}` }, body, html_url: `https://github.example.com/owner/name/pull/40#issuecomment-${id}`, created_at: at, updated_at: updated });
-const approval = (edits = []) => reviewComment('0040-meals', { verdict: 'approved', note: '', edits }, { login: 'maintainer-one' });
+/** The proposal file's text as the PR's head holds it, and an approval that covers that text (as the server records it) */
+const proposalText = () => `${JSON.stringify(proposal(), null, 2)}\n`;
+const approval = (edits = [], covers = proposalText()) => reviewComment('0040-meals', { verdict: 'approved', note: '', edits, ...(covers === null ? {} : { proposal: proposalHash(covers) }) }, { login: 'maintainer-one' });
 const sentBack = () => reviewComment('0040-meals', { verdict: 'notes', note: 'Not yet.', edits: [] }, { login: 'maintainer-one' });
 
 /** What the fake forge holds, and what it was asked to make */
@@ -96,7 +98,7 @@ function freshWorld() {
     pulls: [pullOf(40, 'Meals spec', 'spec/0040-meals', H1, { draft: true })],
     madePulls: [],
     branches: [{ name: 'main', sha: MAIN }, { name: 'spec/0040-meals', sha: H1 }],
-    files: { [`${H1}:${BUILD_PATH}`]: `${JSON.stringify(proposal(), null, 2)}\n` },
+    files: { [`${H1}:${BUILD_PATH}`]: proposalText() },
     changed: { 40: [{ filename: BUILD_PATH, status: 'added', additions: 20, deletions: 0 }] },
     comments: { 40: [comment(9001, 'maintainer-one', approval())] },
     writes: [],
@@ -235,6 +237,8 @@ describe('the pipeline steps', () => {
     const sha = `${H1.slice(0, 20)}${String(bump).padStart(20, 'e')}`;
     world.pulls[0].head.sha = sha;
     world.files[`${sha}:${BUILD_PATH}`] = typeof text === 'string' ? text : JSON.stringify(text);
+    // …and a maintainer approves the proposal as it now is
+    world.comments[40] = [comment(9100 + bump, 'maintainer-one', approval([], world.files[`${sha}:${BUILD_PATH}`]))];
     return sha;
   };
   const SPEC = '/api/forge/issues/7/spec';
@@ -289,6 +293,14 @@ describe('the pipeline steps', () => {
       expect(world.writes).toEqual([]);
       expect(world.madePulls).toHaveLength(1);
       expect(last()).toMatchObject({ action: 'spec', status: 200 });
+    });
+
+    it('takes only a maintainer\'s pull request for the issue\'s spec: one someone else opened from a spec/0007- branch does not block it', async () => {
+      state.override[`GET ${GH}/collaborators/reader-two/permission`] = () => ({ body: { permission: 'read', role_name: 'read' } });
+      world.pulls.push(pullOf(45, 'Not the spec', 'spec/0007-planted', H2, { user: { login: 'reader-two', html_url: 'https://github.example.com/reader-two' } }));
+      expect((await plan(SPEC)).json.plan.existing).toBe(null);
+      expect((await startSpec()).status).toBe(201);
+      expect(world.madePulls).toHaveLength(1);
     });
 
     it('finds the pull request even with a plan that was shown before it changed', async () => {
@@ -409,10 +421,29 @@ describe('the pipeline steps', () => {
   describe('step 2: open the build issue of an approved spec', () => {
     it('lists the specs a pull request changes, and whether a maintainer approved each, with its detail', async () => {
       const res = await plan('/api/forge/pulls/40');
-      expect(res.json.specs).toEqual([{ slug: '0040-meals', path: BUILD_PATH, approved: true }]);
+      expect(res.json.specs).toEqual([{ slug: '0040-meals', path: BUILD_PATH, approved: true, changed: false }]);
       world.comments[40] = [comment(9001, 'maintainer-one', sentBack())];
       clock += 120_000;
-      expect((await plan('/api/forge/pulls/40')).json.specs).toEqual([{ slug: '0040-meals', path: BUILD_PATH, approved: false }]);
+      expect((await plan('/api/forge/pulls/40')).json.specs).toEqual([{ slug: '0040-meals', path: BUILD_PATH, approved: false, changed: false }]);
+      // Approved, then the file changed at the head: not approved any more, and said so
+      world.comments[40] = [comment(9001, 'maintainer-one', approval([], '{ "version": 1, "title": "Older" }\n'))];
+      clock += 120_000;
+      expect((await plan('/api/forge/pulls/40')).json.specs).toEqual([{ slug: '0040-meals', path: BUILD_PATH, approved: false, changed: true }]);
+    });
+
+    it('needs the approval to cover the proposal as the head holds it now: a push that changed it, or an approval that does not say, waits for a new one', async () => {
+      world.comments[40] = [comment(9001, 'maintainer-one', approval([], '{ "version": 1, "title": "Older" }\n'))];
+      const changed = await plan(`${BUILD}?slug=0040-meals`);
+      expect([changed.status, changed.json.code]).toEqual([409, 'conflict']);
+      expect(changed.json.error).toContain('has changed since maintainer-one approved it');
+      clock += 10_000;
+      world.comments[40] = [comment(9002, 'maintainer-one', approval([], null))];
+      const unsaid = await plan(`${BUILD}?slug=0040-meals`);
+      expect([unsaid.status, unsaid.json.code]).toEqual([409, 'conflict']);
+      expect(unsaid.json.error).toContain('approve it again');
+      clock += 10_000;
+      expect((await post(BUILD, { slug: '0040-meals', sha: H1, digest: 'a'.repeat(32) })).status).toBe(409);
+      expect(wrote()).toEqual([]);
     });
 
     it('shows the plan first: links the spec pull request and the proposal, the nodes and edges as a checklist, and writes nothing', async () => {
@@ -454,6 +485,14 @@ describe('the pipeline steps', () => {
       expect([second.status, second.json.created, second.json.issue.number]).toEqual([200, false, 60]);
       expect(world.writes).toEqual([]);
       expect(world.builds).toHaveLength(1);
+    });
+
+    it('takes only a maintainer\'s issue for the one the first run made: a planted marker does not block the step', async () => {
+      state.override[`GET ${GH}/collaborators/reader-two/permission`] = () => ({ body: { permission: 'read', role_name: 'read' } });
+      world.builds.unshift(issue(59, 'Not the build', { body: `Blocked!\n${buildMarker(40, '0040-meals')}`, user: { login: 'reader-two', html_url: 'https://github.example.com/reader-two' } }));
+      expect((await buildPlan()).existing).toBe(null);
+      const res = await openBuild();
+      expect([res.status, res.json.created, res.json.issue.number]).toEqual([201, true, 61]);
     });
 
     it('applies the approval\'s own edits: the checklist is the proposal as approved', async () => {
@@ -550,12 +589,13 @@ describe('the pipeline steps', () => {
   });
 
   describe('the pieces that make the text', () => {
-    it('names a spec from the issue: its number, then a plain slug of the title', () => {
-      expect(specSlug(7, 'Meals page, with café!')).toBe('7-meals-page-with-caf');
-      expect(specSlug(18, '[PIPE-05] The pipeline\'s own steps')).toBe('18-pipe-05-the-pipeline-s-own-steps');
-      expect(specSlug(3, '日本語')).toBe('3-node');
-      expect(specSlug(9, 'x'.repeat(300))).toBe(`9-${'x'.repeat(48)}`);
-      expect(specSlug(4, '---')).toMatch(/^4-[a-z]+$/);
+    it('names a spec from the issue: its number in four digits at least, as proposals are numbered, then a plain slug of the title', () => {
+      expect(specSlug(7, 'Meals page, with café!')).toBe('0007-meals-page-with-caf');
+      expect(specSlug(18, '[PIPE-05] The pipeline\'s own steps')).toBe('0018-pipe-05-the-pipeline-s-own-steps');
+      expect(specSlug(3, '日本語')).toBe('0003-node');
+      expect(specSlug(9, 'x'.repeat(300))).toBe(`0009-${'x'.repeat(48)}`);
+      expect(specSlug(4, '---')).toMatch(/^0004-[a-z]+$/);
+      expect(specSlug(12345, 'Big')).toBe('12345-big');
     });
 
     it('plain() turns markup, mentions and references into entities, and code() cannot be ended', () => {

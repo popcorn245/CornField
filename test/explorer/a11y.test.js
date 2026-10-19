@@ -401,7 +401,7 @@ describe('the issues and PRs panel', () => {
 
   it('has none with the pipeline\'s steps: Start a spec on an issue and Open the build issue on an approved spec, each with its confirm step open, in both themes', async () => {
     const spec = { number: 40, title: 'Meals spec', state: 'open', draft: true, author, labels: [], head: { ref: 'spec/0040-meals', sha: 'abc' }, base: { ref: 'main' }, url: 'https://git.example.test/pull/40', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null };
-    const SPEC_PLAN = { kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/issues/7' }, base: 'main', branch: 'spec/7-meals-page', path: 'docs/specs/proposals/7-meals-page.json', message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft pull request.', content: '{\n  "version": 1,\n  "title": "Meals page"\n}\n', existing: null };
+    const SPEC_PLAN = { kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/issues/7' }, base: 'main', branch: 'spec/0007-meals-page', path: 'docs/specs/proposals/0007-meals-page.json', message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft pull request.', content: '{\n  "version": 1,\n  "title": "Meals page"\n}\n', existing: null };
     const BUILD_PLAN = { kind: 'build', digest: 'b'.repeat(32), pull: { number: 40, title: 'Meals spec', url: spec.url }, slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', sha: 'abc', review: { by: 'maintainer-one', url: 'https://git.example.test/c/1', at: '2026-10-19T10:00:00Z' }, title: 'Build: Meals', body: 'Build the approved proposal `0040-meals`.\n\n## Nodes\n\n- [ ] Add `page-meals`\n', items: 1, existing: null };
     vi.stubGlobal('fetch', vi.fn(async (url) => {
       const u = new URL(url, 'http://localhost');
@@ -410,7 +410,7 @@ describe('the issues and PRs panel', () => {
         '/api/forge/issues': { items: [pr(7, 'Meals page', { head: undefined }), pr(8, 'Closed one', { state: 'closed' })] },
         '/api/forge/issues/7/spec': { plan: SPEC_PLAN },
         '/api/forge/pulls/40/build': { plan: BUILD_PLAN },
-        '/api/forge/pulls/40': { pull: spec, files: [{ path: 'docs/specs/proposals/0040-meals.json', status: 'added', previousPath: null, additions: 5, deletions: 0 }], checks: [], specs: [{ slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', approved: true }, { slug: '0041-other', path: 'docs/specs/proposals/0041-other.json', approved: false }] },
+        '/api/forge/pulls/40': { pull: spec, files: [{ path: 'docs/specs/proposals/0040-meals.json', status: 'added', previousPath: null, additions: 5, deletions: 0 }], checks: [], specs: [{ slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', approved: true }, { slug: '0041-other', path: 'docs/specs/proposals/0041-other.json', approved: false, changed: false }, { slug: '0042-moved', path: 'docs/specs/proposals/0042-moved.json', approved: false, changed: true }] },
       }[u.pathname];
       return { ok: !!data, status: data ? 200 : 404, headers: new Headers(), json: async () => (data ? { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...data } : { ok: false, error: 'No.' }) };
     }));
