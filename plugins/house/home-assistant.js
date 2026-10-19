@@ -13,8 +13,8 @@
  *  - **Devices** with their area's room, the number of their enabled entities, maker and model. A service
  *    (an integration, not a thing in a room) carries `service: true` and the host of its configuration
  *    URL when that is a name; at an address it carries only `address: true`, never the address.
- *  - A **`mobile_app` device** (a person's phone) is never named: it is "Phone (Home Assistant app)",
- *    with no maker or model.
+ *  - A **`mobile_app` device** (a person's phone) is left out entirely: not named, not counted, not placed;
+ *    its entities are not counted either.
  *
  * The token is only ever sent to Home Assistant in the auth message; it is never logged, put in an answer,
  * a URL or an error. Neither is the Home Assistant URL.
@@ -26,7 +26,6 @@ export const HA_ENV = Object.freeze({ url: 'CORNFIELD_HA_URL', token: 'CORNFIELD
 export const HA_TIMEOUT_MS = 10_000;
 /** The registries read, in order */
 export const HA_COMMANDS = ['config/floor_registry/list', 'config/area_registry/list', 'config/device_registry/list', 'config/entity_registry/list'];
-export const PHONE_NAME = 'Phone (Home Assistant app)';
 const NO_FLOOR = { id: 'home', name: 'Home', level: 0 };
 
 /** An error whose message is safe to show: it never holds the URL or the token */
@@ -138,17 +137,17 @@ export function registriesToHouse({ floors = [], areas = [], devices = [], entit
   for (const e of entities) if (e && e.device_id && !e.disabled_by) entityCount.set(e.device_id, (entityCount.get(e.device_id) || 0) + 1);
   const out = [];
   for (const d of devices) {
-    if (!d || !d.id || d.disabled_by) continue;
-    const phone = isMobileApp(d);
+    // A person's phone is never on the map
+    if (!d || !d.id || d.disabled_by || isMobileApp(d)) continue;
     const area = d.area_id ? areaName.get(d.area_id) ?? null : null;
     const device = {
       id: d.id,
-      name: phone ? PHONE_NAME : d.name_by_user || d.name || 'Device',
+      name: d.name_by_user || d.name || 'Device',
       room_id: d.area_id ? roomOf.get(d.area_id) ?? null : null,
       area,
       entities: entityCount.get(d.id) || 0,
-      manufacturer: phone ? null : d.manufacturer || null,
-      model: phone ? null : d.model || null,
+      manufacturer: d.manufacturer || null,
+      model: d.model || null,
     };
     if (d.entry_type === 'service') Object.assign(device, { service: true }, hostOf(d.configuration_url) || {});
     out.push(device);

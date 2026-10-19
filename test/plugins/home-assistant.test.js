@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import {
-  HA_COMMANDS, PHONE_NAME, fetchRegistries, haWebSocketUrl, homeAssistantHouse, registriesToHouse, sameName,
+  HA_COMMANDS, fetchRegistries, haWebSocketUrl, homeAssistantHouse, registriesToHouse, sameName,
 } from '../../plugins/house/home-assistant.js';
 import { createCornfieldServer } from '../../server/server.js';
 import { loadConfig, browserSources, configProblems } from '../../core/config.js';
@@ -148,18 +148,21 @@ describe('registriesToHouse', () => {
     expect(house.rooms.map((r) => `${r.id}@${r.floor_id} ${r.name}`)).toEqual(['kitchen@ground Kitchen', 'lounge@ground Lounge', 'office@upstairs Office', 'garage@home Garage']);
   });
 
-  it('places devices in their area, counts enabled entities, and never names a mobile_app device', () => {
+  it('places devices in their area, counts enabled entities, and leaves a mobile_app device out entirely', () => {
     const { home_assistant: ha } = registriesToHouse(registries);
     expect(ha.status).toBe('ok');
     expect(ha.devices).toEqual([
       { id: 'd-light', name: 'Kitchen light', room_id: 'kitchen', area: 'Kitchen', entities: 2, manufacturer: 'Signify', model: 'LCA001' },
       { id: 'd-tv', name: 'TV', room_id: 'lounge', area: 'Lounge', entities: 1, manufacturer: 'Acme', model: 'T1' },
-      { id: 'd-phone', name: PHONE_NAME, room_id: null, area: null, entities: 1, manufacturer: null, model: null },
       { id: 'd-nextcloud', name: 'Nextcloud', room_id: null, area: null, entities: 0, manufacturer: 'Nextcloud', model: null, service: true, host: 'cloud.example.test' },
       { id: 'd-router', name: 'Router', room_id: null, area: null, entities: 0, manufacturer: 'Acme', model: 'R', service: true, address: true },
     ]);
     const text = JSON.stringify(ha);
+    // A mobile_app device (a person's phone) is not there at all
+    expect(ha.devices.map((d) => d.id)).not.toContain('d-phone');
+    expect(text).not.toContain('d-phone');
     expect(text).not.toContain("Someone's phone");
+    expect(text).not.toContain('Apple');
     expect(text).not.toContain('iPhone');
     expect(text).not.toContain('192.168');
   });
@@ -178,11 +181,11 @@ describe('registriesToHouse', () => {
     expect(sameName('', '')).toBe(false);
   });
 
-  it('is an answer the house plugin draws: rooms, devices under them, the phone unnamed', () => {
+  it('is an answer the house plugin draws: rooms, devices under them, no phone', () => {
     const live = worldToLive({ at: '2026-10-19T00:00:00.000Z', ...registriesToHouse(registries) });
     expect(live.nodes.filter((n) => n.type === 'room').map((n) => n.label)).toEqual(['Kitchen', 'Lounge', 'Office', 'Garage']);
     expect(live.edges).toContainEqual({ from: 'live-room-kitchen', to: 'live-device-home-assistant-d-light' });
-    expect(live.nodes.find((n) => n.id === 'live-device-home-assistant-d-phone').label).toBe(`${PHONE_NAME} · 1 entity`);
+    expect(live.nodes.some((n) => n.id.includes('d-phone'))).toBe(false);
   });
 });
 
@@ -264,7 +267,8 @@ describe('a repo with only a Home Assistant URL and token', () => {
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.data.house.rooms.map((r) => r.id)).toEqual(['kitchen', 'lounge', 'office', 'garage']);
-    expect(body.data.home_assistant.devices).toHaveLength(5);
+    expect(body.data.home_assistant.devices).toHaveLength(4);
+    expect(JSON.stringify(body)).not.toContain('d-phone');
     expect(JSON.stringify(body)).not.toContain(TOKEN);
     // Without the env vars there is no house source at all
     expect((await loadConfig(root, { env: {} })).sources.house).toBeNull();

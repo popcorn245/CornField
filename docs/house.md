@@ -75,6 +75,6 @@ The server reads Home Assistant's floor, area, device and entity registries over
 
 - Floors come from the floor registry, and each area is a room on its floor (an area on no floor goes on a "Home" floor). With a house file (`options.file`), the file's plan is the house instead, and each area maps to the room whose name is the area's name or one of its aliases (case and spacing aside); an area no room matches is listed as an HA area with no room. The file's other parts (accounts, hardware…) are kept.
 - Devices are placed in their area's room, with the number of their enabled entities. A service (an integration, not a thing in a room) is placed by the host of its configuration URL; one at an IP address is never given its address.
-- A `mobile_app` device, a person's phone, is never named: it is "Phone (Home Assistant app)", with no maker or model.
+- A `mobile_app` device, a person's phone, is left out entirely: it is never named, counted or placed.
 
 The token stays on the server: it is never in the config (`validate` refuses one there), never sent to the browser, never in an answer or an error. The Home Assistant URL (`options.url` or `CORNFIELD_HA_URL`) is not sent to the browser either. When Home Assistant is unreachable, slow (10 s) or refuses the token, the House view says so and shows the file's plan, if any.
