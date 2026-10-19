@@ -42,7 +42,10 @@ export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta
 export const BUILTIN_DERIVERS = {
   starter: 'plugins/starter/index.js',
   personas: 'plugins/personas/index.js',
+  compose: 'plugins/compose/index.js',
+  openapi: 'plugins/openapi/index.js',
   cloud: 'plugins/cloud/index.js',
+  docs: 'plugins/docs/index.js',
 };
 /** The browser sources cornfield ships, by name: the module the explorer imports */
 export const BUILTIN_SOURCES = {

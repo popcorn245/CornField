@@ -16,4 +16,15 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
   - A Dockerfile, `compose.example.yml`, GitHub Actions for tests, secret scanning and (inert until switched on) releases.
 - The SQLite store (`server/db.js`, #2): `cornfield.db` in the data folder over Node's built-in `node:sqlite`, numbered migrations, and the four tables of v1: `sessions`, `reviews`, `actions`, `forge_cache`.
 - The forge interface and the GitHub adapter (`server/forge.js`, `server/forge-github.js`, `server/forge-http.js`, #3): who is signed in and their permission, issues, pull requests and their files, comments, checks, re-running a failed Actions job, landing a green pull request at the head its checks ran on, branches, a file at a ref; pagination, rate limits and errors in plain words. Tests run against recorded answers and a fake forge.
+- The `docs` deriver: a repo's Markdown on the map as an app with a page per document, its links to other docs and to the code they describe; a broken link fails `validate`.
+- `cornfield docs`: the docs as a small static site built from that map (a page per document, the links around it, a map of the docs' links), published for cornfield itself to GitHub Pages by `.github/workflows/pages.yml`.
+- The deriver kit, `cornfield/deriver-kit`: the deriver contract as JSDoc types, `defineDeriver`, and a test kit (`fixtureRepo`, `runDeriver`, `checkDeriver`) that runs a repo's own deriver on a fixture repo as `sync` and `validate` would and lists everything `validate` would fail on. Guide: `docs/deriver-kit.md`.
+- The `compose` deriver: stacks and containers from Docker compose files, and an app with a `runs-on` edge per host a Caddyfile or Traefik labels route to them (SRC-02). The sample repo's stack now comes from its compose file.
+- The `openapi` deriver: an API's endpoints from its OpenAPI, Swagger or OpenCollection file, as page nodes with their methods under the API's app (SRC-05). `test/fixtures/openapi` is a repo with nothing but an OpenAPI file.
+- The starter deriver reads Python packages, Go modules and Rust crates the way it reads npm workspaces: their manifests, the imports between them, and a dependency declared and never imported (SRC-04). A fixture repo per language in `test/fixtures/python`, `go` and `rust`.
 - Light mode (MAP-01): the explorer follows the system's light or dark setting, and a toggle in the header steps through system, light and dark (kept in the browser; `?theme=light|dark` for one visit). Both renderers and the labels draw the light map, its colours derived from the dark ones: the same hues, deepened to at least 3:1 on the light ground (4.5:1 for text).
+
+### Changed
+
+- `sync` takes away an edge of a derived kind only for the deriver that emits that kind, at the end where it puts its own nodes (`madeBy` and `claims` from `deriveTopology`), so a hand-written edge into a derived node of another deriver stays.
+- A container's `selfHosted` and `summary` are hand-written, no longer fields the code decides.
