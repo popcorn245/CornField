@@ -278,3 +278,35 @@ describe('what the adapters share', () => {
     expect(rateLimitWords('GitHub', r({ remaining: 7 }), NOW)).toBe('7 GitHub calls left.');
   });
 });
+
+describe('release drafts on GitHub', () => {
+  let fake;
+  afterEach(async () => { await fake?.close(); fake = undefined; });
+  const forgeOn = async (routes) => {
+    fake = await fakeForge(routes);
+    return createForge({ type: 'github', url: 'https://github.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
+  };
+
+  it('is a fault, not a success, when GitHub keeps the release as anything but a draft', async () => {
+    const forge = await forgeOn({ 'POST /repos/owner/name/releases': { status: 201, body: { id: 5, draft: false, html_url: 'https://github.example.com/owner/name/releases/tag/v1' } } });
+    const err = await forgeError(() => forge.createReleaseDraft({ tag: 'v1.0.0', name: 'v1.0.0', body: 'notes' }), 'unavailable');
+    expect(err.message).toContain('did not keep v1.0.0 as a draft');
+  });
+
+  it('sends a tag with slashes as one name in the body, and reads a tag\'s time by its path', async () => {
+    const forge = await forgeOn({
+      'POST /repos/owner/name/releases': { status: 201, body: { id: 6, draft: true, html_url: 'https://github.example.com/r/6' } },
+      'GET /repos/owner/name/commits/rel/v1.0.0': { body: { sha: 'f'.repeat(40), commit: { author: { date: '2026-10-01T00:00:00Z' } } } },
+    });
+    await forge.createReleaseDraft({ tag: 'rel/v1.0.0', name: 'One', body: 'x' });
+    expect(JSON.parse(fake.requests[0].body).tag_name).toBe('rel/v1.0.0');
+    // the author's time when there is no committer's
+    expect(await forge.tag('rel/v1.0.0')).toEqual({ name: 'rel/v1.0.0', sha: 'f'.repeat(40), date: '2026-10-01T00:00:00Z' });
+  });
+
+  it('says plainly when the sign-in may not create releases', async () => {
+    const forge = await forgeOn({ 'POST /repos/owner/name/releases': { status: 403, body: { message: 'Resource not accessible by personal access token' } } });
+    const err = await forgeError(() => forge.createReleaseDraft({ tag: 'v1.0.0', name: 'v1.0.0', body: 'x' }), 'forbidden');
+    expect(err.message).toContain('does not let this sign-in do that to a release draft in owner/name');
+  });
+});

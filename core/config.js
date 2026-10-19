@@ -19,6 +19,7 @@
  *     proposals: 'docs/specs/proposals',      // where proposal files live, in the checkout and in each worktree
  *     topology: 'topology.json',
  *     personas: { roles: null },              // the roles a persona may have (null: any)
+ *     releaseNotes: { breakingLabel: 'breaking' },   // the pull request label that lists a change under "Breaking" in the release notes
  *     links: [],                              // [{ label, href }] shown in the explorer's header
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
@@ -72,6 +73,7 @@ export const DEFAULTS = Object.freeze({
   topology: 'topology.json',
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
+  releaseNotes: { breakingLabel: 'breaking' },
   links: [],
   proxy: {},
   importMap: {},
@@ -135,6 +137,10 @@ export function configProblems(c) {
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || ''))) out.push('forge.repo is "owner/name".');
     }
   }
+  if (c.releaseNotes !== undefined) {
+    if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
+    else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
+  }
   for (const key of ['worktrees', 'proposals', 'topology']) {
     if (c[key] !== undefined && c[key] !== null && !inRepo(c[key])) out.push(`"${key}" is a folder or file inside the repo, written relative to it.`);
   }
@@ -185,11 +191,12 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     if (problems.length) throw new Error(`${path.relative(absRoot, configFile) || CONFIG_FILE}:\n  ${problems.join('\n  ')}`);
   }
   const config = {
-    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud } }),
+    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, releaseNotes: { ...DEFAULTS.releaseNotes } }),
     ...raw,
     sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
     personas: { ...DEFAULTS.personas, ...(raw.personas || {}) },
     cloud: { ...DEFAULTS.cloud, ...(raw.cloud || {}) },
+    releaseNotes: { ...DEFAULTS.releaseNotes, ...(raw.releaseNotes || {}) },
   };
   if (env.CORNFIELD_PORT) config.port = Number(env.CORNFIELD_PORT);
   if (env.PORT && !env.CORNFIELD_PORT) config.port = Number(env.PORT);

@@ -150,9 +150,15 @@ describe('the issues and PRs panel', () => {
     files: [{ path: 'app-a', status: 'modified', previousPath: null, additions: 2, deletions: 1 }, { path: 'README.md', status: 'added', previousPath: null, additions: 5, deletions: 0 }],
     checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: false }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false }],
   };
-  const stub = () => vi.stubGlobal('fetch', vi.fn(async (url) => {
+  const NOTES = {
+    since: { name: 'v0.2.0', date: '2026-10-12T09:00:00Z' }, tags: ['v0.2.0', 'v0.1.0'], suggestedTag: 'v0.3.0', count: 2, truncated: false,
+    groups: [{ kind: 'area', id: 'app-a', title: 'a', items: [{ number: 13 }] }, { kind: 'other', id: 'other', title: 'Other', items: [{ number: 12 }] }],
+    markdown: '### a\n\n- Lint everything ([#13](https://git.example.test/pull/13) by @agent-four) · `/orders`\n\n### Other\n\n- Meals page ([#12](https://git.example.test/pull/12))\n',
+  };
+  const stub = () => vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
     const u = new URL(url, 'http://localhost');
-    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : DETAIL;
+    if (init.method === 'POST') return { ok: true, status: 201, headers: new Headers(), json: async () => ({ ok: true, count: 2, release: { id: '1', url: 'https://git.example.test/releases/1', draft: true } }) };
+    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname === '/api/forge/release-notes' ? NOTES : DETAIL;
     return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
   }));
   const start = () => {
@@ -199,6 +205,65 @@ describe('the issues and PRs panel', () => {
     document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
     expect(await audit()).toEqual([]);
+  });
+
+  /** The Release notes tab through its states: the draft, the confirm step, a message after Copy and after Post */
+  async function auditNotes() {
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="notes"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect($('notes-preview').value).toContain('### a');
+    expect(await audit()).toEqual([]);
+    $('notes-post').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect($('notes-confirm').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+    $('notes-confirm-yes').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect($('notes-message').textContent).toMatch(/^Draft release v0\.3\.0 created/);
+    expect(await audit()).toEqual([]);
+    $('notes-copy').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle(40);
+    expect($('notes-message').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+  }
+
+  it('has none on the Release notes tab: the draft, the confirm step, and the words after Copy and Post', async () => {
+    stub();
+    start();
+    await auditNotes();
+  });
+
+  it('has none on the Release notes tab in the light theme either', async () => {
+    stub();
+    start();
+    document.documentElement.dataset.theme = 'light';
+    await auditNotes();
+  });
+
+  it('reaches every control of the Release notes tab with Tab, names them, and says what the draft is', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="notes"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    $('notes-post').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    const controls = ['notes-since', 'notes-preview', 'notes-copy', 'notes-post', 'notes-tag', 'notes-confirm-yes'].map($);
+    for (const el of controls) {
+      expect(el.tabIndex, el.id).toBe(0);
+      expect(el.disabled, el.id).toBeFalsy();
+      expect(el.closest('[inert]'), el.id).toBeNull();
+    }
+    expect($('notes-preview').closest('label').textContent).toContain('Draft, in Markdown');
+    expect($('notes-since').closest('label').textContent).toContain('Since tag');
+    expect($('notes-tag').closest('label').textContent).toContain('Tag for the draft');
+    expect($('notes-post').getAttribute('aria-controls')).toBe('notes-confirm');
+    expect($('notes-post').getAttribute('aria-expanded')).toBe('true');
+    expect($('notes-confirm').getAttribute('aria-labelledby')).toBe('notes-confirm-title');
+    expect($('notes-confirm-title').textContent).toBe('Post as a draft release');
   });
 
   it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {

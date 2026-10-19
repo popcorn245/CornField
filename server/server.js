@@ -16,7 +16,8 @@
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
- *   GET  /api/forge/…                   issues, pull requests, their files and checks, read from the forge (server/forge-routes.js)
+ *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
+ *   POST /api/forge/release-drafts      the one write there: the notes kept as a DRAFT release, for a signed-in maintainer, from cornfield's own page
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
  *
@@ -208,7 +209,7 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
-    if (await serveForge(req, res, reqPath, url, { config, session: gate.session, auth, now: opts.now })) return;
+    if (await serveForge(req, res, reqPath, url, { config, session: gate.session, auth, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     if (serveProposals(req, res, reqPath, url, where, gate.session ? () => auth.forgeFor(gate.session) : null)) return;
 

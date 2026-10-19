@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   listUrl, serverState, matches, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, nodesForFile, isTestPath, testFilesOf, litFor,
   paintForge, errorWords, FORGE_DIM_ALPHA, FORGE_FAIL_COLOR, defaultFilters,
+  KINDS, DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/forge-panel-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -215,5 +216,51 @@ describe('the picture', () => {
     const light = buildScene({ ...st(lit([], [nodes[1].id])), theme: 'light' });
     expect(light.nodes.find((n) => n.id === nodes[1].id).color).not.toBe(dark.nodes.find((n) => n.id === nodes[1].id).color);
     expect(paintForge({ nodes: [], edges: [] }, null)).toBeUndefined();
+  });
+});
+
+describe('the Release notes view', () => {
+  const notes = (extra = {}) => ({ count: 4, since: { name: 'v0.2.0', date: '2026-10-12T09:00:00Z' }, tags: ['v0.2.0', 'v0.1.0'], groups: [{}, {}, {}], truncated: false, ...extra });
+
+  it('asks the server for the notes since a tag, the latest when none is named, and posts to one address', () => {
+    expect(KINDS).toContain('notes');
+    expect(notesUrl('')).toBe('/api/forge/release-notes');
+    expect(notesUrl(null)).toBe('/api/forge/release-notes');
+    expect(notesUrl('v0.1.0')).toBe('/api/forge/release-notes?since=v0.1.0');
+    expect(notesUrl('rel/v1 0&x')).toBe('/api/forge/release-notes?since=rel%2Fv1%200%26x');
+    expect(DRAFTS_URL).toBe('/api/forge/release-drafts');
+  });
+
+  it('offers the latest tag first, then each version tag', () => {
+    expect(sinceChoices(notes())).toEqual([['', 'Latest tag (v0.2.0)'], ['v0.2.0', 'v0.2.0'], ['v0.1.0', 'v0.1.0']]);
+    expect(sinceChoices(notes({ since: { name: 'v0.1.0', date: 'x' } }))).toEqual([['', 'Latest tag (v0.2.0)'], ['v0.2.0', 'v0.2.0'], ['v0.1.0', 'v0.1.0']]);
+    expect(sinceChoices(notes({ since: null, tags: [] }))).toEqual([['', 'No version tag yet: every merged pull request']]);
+  });
+
+  it('sums a draft up in a line', () => {
+    expect(notesSummary(notes())).toBe('4 pull requests merged since v0.2.0 (2026-10-12), in 3 groups.');
+    expect(notesSummary(notes({ count: 1, groups: [{}] }))).toBe('1 pull request merged since v0.2.0 (2026-10-12), in one group.');
+    expect(notesSummary(notes({ truncated: true }))).toBe('4 pull requests merged since v0.2.0 (2026-10-12), in 3 groups. Only the newest are in the draft.');
+    expect(notesSummary(notes({ count: 0, groups: [] }))).toBe('No pull requests merged since v0.2.0 (2026-10-12).');
+    expect(notesSummary(notes({ since: null }))).toBe('4 pull requests merged (no version tag yet), in 3 groups.');
+  });
+
+  it('knows a tag name the server will take, by the server\'s own rule', async () => {
+    // @ts-expect-error plain JS module, no declarations
+    const { isTagName } = await import('../../server/forge.js');
+    for (const tag of ['v0.3.0', '1.2.3-rc.1', 'rel/v1.0', 'a', 'x'.repeat(100), 'v1+build', '', ' v1', 'v 1', '-x', '.x', 'v1..2', 'v1/', 'v1.', 'x'.repeat(101), null, 4]) {
+      expect(validTag(tag), JSON.stringify(tag)).toBe(isTagName(tag));
+    }
+  });
+
+  it('says in words what a draft is before it is made, and after', () => {
+    expect(confirmWords({ forge: 'GitHub', repo: 'owner/name', tag: '', count: 1 })).toBe('This creates a draft release on GitHub for owner/name, with the notes of 1 pull request. It stays a draft: nothing is published and no tag is made. Publishing it is done on GitHub.');
+    expect(confirmWords({ forge: 'Forgejo', repo: 'a/b', tag: 'v1.0.0', count: 3 })).toContain('a draft release for v1.0.0 on Forgejo for a/b, with the notes of 3 pull requests');
+    expect(postedWords({ forge: 'GitHub', tag: 'v1.0.0', count: 3 })).toBe('Draft release v1.0.0 created on GitHub, with 3 pull requests. It is not published.');
+  });
+
+  it('sends the tag and the tag to start from, never the notes', () => {
+    expect(draftRequest(' v0.3.0 ', '')).toEqual({ tag: 'v0.3.0' });
+    expect(draftRequest('v0.3.0', 'v0.1.0')).toEqual({ tag: 'v0.3.0', since: 'v0.1.0' });
   });
 });

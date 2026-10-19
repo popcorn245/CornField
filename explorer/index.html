@@ -205,8 +205,9 @@
           <div class="hx-forge-tabs" role="group" aria-label="Show">
             <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true">Pull requests</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false">Issues</button>
+            <button type="button" class="hx-forge-tab" data-forge-kind="notes" aria-pressed="false">Release notes</button>
           </div>
-          <div class="hx-forge-filters">
+          <div id="forge-filters" class="hx-forge-filters">
             <label class="hx-forge-field">State<select id="forge-state" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Label<select id="forge-label" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Author<select id="forge-author" class="hx-forge-select"></select></label>
@@ -214,6 +215,25 @@
           </div>
         </div>
         <p id="forge-notice" class="hx-forge-notice" hidden></p>
+        <!-- Release notes (forge-panel.js): the pull requests merged since a tag, grouped by the map; copy them, or have the forge keep them as a draft release -->
+        <section id="forge-notes" class="hx-forge-notes" aria-label="Release notes" hidden>
+          <label class="hx-forge-field">Since tag<select id="notes-since" class="hx-forge-select"></select></label>
+          <label class="hx-forge-field">Draft, in Markdown<textarea id="notes-preview" class="hx-forge-preview" rows="14" readonly spellcheck="false"></textarea></label>
+          <div class="hx-forge-actions">
+            <button type="button" id="notes-copy" class="hx-btn" data-action="copy-notes">Copy</button>
+            <button type="button" id="notes-post" class="hx-btn hx-btn--approve" data-action="post-notes" aria-expanded="false" aria-controls="notes-confirm">Post as draft …</button>
+          </div>
+          <p id="notes-message" class="hx-forge-msg" hidden></p>
+          <div id="notes-confirm" class="hx-forge-confirm" role="group" aria-labelledby="notes-confirm-title" hidden>
+            <h3 id="notes-confirm-title" class="hx-forge-confirm-title">Post as a draft release</h3>
+            <p id="notes-confirm-words"></p>
+            <label class="hx-forge-field">Tag for the draft<input type="text" id="notes-tag" class="hx-forge-input" autocomplete="off" spellcheck="false" /></label>
+            <div class="hx-forge-actions">
+              <button type="button" id="notes-confirm-yes" class="hx-btn hx-btn--approve" data-action="confirm-notes">Create the draft</button>
+              <button type="button" class="hx-btn hx-btn--quiet" data-action="cancel-notes">Cancel</button>
+            </div>
+          </div>
+        </section>
         <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
         <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
         <p id="forge-rate" class="hx-forge-rate hx-faint"></p>

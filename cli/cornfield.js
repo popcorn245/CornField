@@ -10,6 +10,7 @@
  *   cornfield status             what the map holds, the warnings, and the validation
  *   cornfield proposal <file>    one proposal against the map: its summary, its errors, what has landed
  *   cornfield review <slug>      the last review of a proposal (approve or send back, with the edits)
+ *   cornfield notes              release notes from the pull requests merged since the last tag, grouped by the map (read-only; Markdown)
  *   cornfield docs               the docs as a static site, from the docs deriver's map of them (--out, default _site)
  *   cornfield help | --version
  *
@@ -40,6 +41,9 @@ Commands:
   status             what the map holds, the warnings, and the validation
   proposal <file>    check one proposal against the map
   review <slug>      print the last review of a proposal (--source <worktree> for a worktree's copy)
+  notes              draft release notes from the pull requests merged since the last tag, grouped by what they changed
+                     on the map, as Markdown on stdout (--since <tag>, --breaking-label <label>; reads the forge,
+                     as the token in CORNFIELD_FORGE_TOKEN; changes nothing)
   docs               build the docs as a static site from their map (--out <dir>, default _site)
   help               this text
 
@@ -198,6 +202,39 @@ async function review(flags, slug) {
   return 0;
 }
 
+async function notes(flags) {
+  const { config } = await setup(flags);
+  if (!config.forge) {
+    console.error('\nNo forge is configured: set `forge` in cornfield.config.js, so there are pull requests to read.\n');
+    return 1;
+  }
+  if (['since', 'breaking-label'].some((k) => k in flags && !flags[k])) {
+    console.error('Usage: cornfield notes [--since <tag>] [--breaking-label <label>]');
+    return 1;
+  }
+  const topology = readTopology(config);
+  if (!topology) {
+    console.error(`\n${config.topology} is not there yet: run cornfield sync, so the notes can follow the map.\n`);
+    return 1;
+  }
+  const { createForge, ForgeError } = await import('../server/forge.js');
+  const { releaseNotes } = await import('../server/release-notes.js');
+  // Reads only. The token is the person's own; without one only a public repo answers, with the forge's lower limit
+  const token = process.env.CORNFIELD_FORGE_TOKEN || null;
+  try {
+    const forge = createForge(config.forge, { token });
+    const found = await releaseNotes(forge, { topology, since: flags.since || null, breakingLabel: flags['breaking-label'] || config.releaseNotes.breakingLabel });
+    console.error(`${plural(found.count, 'pull request')} merged${found.since ? ` since ${found.since.name}` : ' (no version tag yet)'}.`);
+    if (found.truncated) console.error('  There are more than the newest 100; only those are in the notes.');
+    process.stdout.write(found.markdown);
+    return 0;
+  } catch (err) {
+    if (!(err instanceof ForgeError)) throw err;
+    console.error(`\n${err.message}\n`);
+    return 1;
+  }
+}
+
 async function docs(flags) {
   const { config, derivers } = await setup(flags);
   const { buildSite } = await import('../plugins/docs/site.js');
@@ -225,7 +262,7 @@ export async function main(argv = process.argv.slice(2)) {
   const [command = 'help', arg] = rest;
   if (flags.version) { console.log(PKG.version); return 0; }
   if (flags.help || command === 'help') { console.log(HELP); return 0; }
-  const commands = { serve, sync, validate, status, proposal: (f) => proposal(f, arg), review: (f) => review(f, arg), docs };
+  const commands = { serve, sync, validate, status, proposal: (f) => proposal(f, arg), review: (f) => review(f, arg), notes, docs };
   if (!commands[command]) {
     console.error(`Unknown command: ${command}\n\n${HELP}`);
     return 1;

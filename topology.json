@@ -1428,6 +1428,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Issues and pull requests (docs/issues-and-prs.md)."
+    },
+    {
+      "id": "core-core-release-notes",
+      "label": "release-notes.js",
+      "type": "core",
+      "file": "core/release-notes.js",
+      "summary": "Release notes from the map (PIPE-04), the pure half: no I/O, no clock, no DOM.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Release notes from the map (PIPE-04), the pure half: no I/O, no clock, no DOM. (core/release-notes.js)"
+    },
+    {
+      "id": "core-server-release-notes",
+      "label": "release-notes.js",
+      "type": "core",
+      "file": "server/release-notes.js",
+      "summary": "The forge half of the release notes (PIPE-04; the drafting itself is core/release-notes.js): which pull requests were merged since a tag, and the notes for them.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The forge half of the release notes (PIPE-04; the drafting itself is core/release-notes.js): which pull requests were merged since a tag, and the notes for them. (server/release-notes.js)"
     }
   ],
   "edges": [
@@ -3982,7 +4002,67 @@
       "from": "page-doc-docs-issues-and-prs",
       "to": "page-doc-docs-accessibility",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-release-notes"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-release-notes"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-server-release-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-release-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-release-notes",
+      "to": "core-core-release-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-release-notes",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-releasing",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-roadmap",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T22:36:42.045Z"
+  "updatedAt": "2026-10-19T22:58:07.506Z"
 }

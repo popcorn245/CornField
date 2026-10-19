@@ -152,7 +152,7 @@ function readReview(entry, dataDir) {
 }
 
 /** Reads a request body up to `limit` bytes; `tooLarge` when it is more (the rest is drained and dropped, so the answer can be heard) */
-function readBody(req, limit) {
+export function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const declared = Number(req.headers['content-length']);
     let size = 0;

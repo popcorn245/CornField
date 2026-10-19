@@ -279,6 +279,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       /** Stage 1: everything passes; the routes under /auth/ are not there */
       gate: async () => ({ done: false, session: null }),
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
+      record: async () => { throw new Error('Sign-in is not configured.'); },
       store: null,
       close() {},
     };
@@ -544,6 +545,25 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const token = session.row.token === NO_TOKEN ? null : openToken(keys.enc, session.row.token);
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
       return forgeWith(token);
+    },
+    /**
+     * The audit of an action cornfield takes on the forge: a row in `actions` (who, what, to what, when), written
+     * BEFORE the forge is asked, so an action that cannot be recorded does not happen. `done` adds the forge's answer.
+     * @param {{ login: string, action: string, target: string, request?: object }} entry
+     * @returns {Promise<{ id: number, done: (status: number | null, answer?: object | null) => Promise<void> }>}
+     */
+    async record({ login, action, target, request = {} }) {
+      const file = await store();
+      const { lastInsertRowid } = file.prepare('INSERT INTO actions (at, login, action, target, request) VALUES (?, ?, ?, ?, ?)').run(iso(now()), login, action, target, JSON.stringify(request));
+      const id = Number(lastInsertRowid);
+      return {
+        id,
+        done: async (status, answer = null) => {
+          try {
+            file.prepare('UPDATE actions SET status = ?, answer = ? WHERE id = ?').run(status, answer === null ? null : JSON.stringify(answer), id);
+          } catch { /* the row of the attempt is there; its outcome is the forge's to say */ }
+        },
+      };
     },
     /** The SQLite file (opened on first use), for the routes that keep answers in it (server/forge-routes.js) */
     store,

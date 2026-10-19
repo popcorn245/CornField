@@ -17,6 +17,11 @@
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
  *   - Errors and rate limits are a line in the panel, in the words the server gives; a stale answer says it is old.
+ *   - A third tab, Release notes (PIPE-04): the pull requests merged since a tag, grouped by what they changed on the
+ *     map, as Markdown to preview and Copy (the clipboard, else the selected text to copy by hand). "Post as draft"
+ *     asks first (the tag, and in words what will and will not happen), then POSTs once to the server, which makes the
+ *     notes again itself and has the forge keep them as a DRAFT release; nothing is published and no tag is made. The
+ *     page never sends the text of the notes, only the tag. The result, or the forge's refusal, is a line in words.
  *
  * What is asked, which words and which nodes are forge-panel-model.js, tested without a page.
  */
@@ -29,6 +34,7 @@ import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js'
 import { relativeTime } from './review-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
+  DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -49,11 +55,18 @@ const ui = {
   detailError: '',
   lit: null, // litFor(detail, nodes)
   nodesSeen: null, // the `state.nodes` the lights were worked out for
+  notes: freshNotes(), // the Release notes view
 };
+
+/** The Release notes view: the draft loaded for a tag, and where the confirm step is */
+function freshNotes() {
+  return { since: '', data: null, loading: false, error: '', confirm: false, posting: false, message: '', bad: false, link: null };
+}
 
 let wired = false;
 let listToken = 0;
 let pullToken = 0;
+let notesToken = 0;
 let searchTimer = null;
 let offScene = null;
 let now = () => Date.now();
@@ -70,11 +83,12 @@ const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : n
 //  Asking the server
 // ---------------------------------------------------------------------------
 
-/** One GET; `{ ok, status, body }`, with a status of null when the server did not answer */
-async function request(url, refresh) {
+/** One GET (or the one POST, with its JSON); `{ ok, status, body }`, with a status of null when the server did not answer */
+async function request(url, refresh, post) {
   try {
     // Refresh sends `Cache-Control: no-cache`, which the server takes as "ask the forge again"
-    const res = await fetch(url, refresh ? { cache: 'reload' } : {});
+    const init = post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) } : refresh ? { cache: 'reload' } : {};
+    const res = await fetch(url, init);
     let body = null;
     try { body = await res.json(); } catch { /* no body */ }
     return { ok: !!res.ok && !!body && body.ok !== false, status: res.status, body };
@@ -173,6 +187,139 @@ function selectionWords() {
 }
 
 // ---------------------------------------------------------------------------
+//  Release notes
+// ---------------------------------------------------------------------------
+
+/** Loads the draft for the tag chosen (again, past the server's cache, on a refresh) */
+async function loadNotes(refresh = false) {
+  const token = ++notesToken;
+  const n = ui.notes;
+  n.loading = true;
+  n.error = '';
+  n.message = '';
+  closeConfirm(false);
+  paint();
+  const res = await request(notesUrl(n.since), refresh);
+  if (token !== notesToken) return;
+  n.loading = false;
+  if (res.ok) {
+    n.data = res.body;
+    announce(`Release notes drafted. ${notesSummary(n.data)}${n.data.stale ? ' This is an older answer' : ''}`);
+  } else {
+    n.error = errorWords(res.status, res.body);
+    announce(n.error);
+  }
+  paint();
+}
+
+/** Says something about the last Copy or Post, on the page and to a screen reader */
+function say(words, bad = false, link = null) {
+  ui.notes.message = words;
+  ui.notes.bad = bad;
+  ui.notes.link = link;
+  paintNotes();
+  announce(words);
+}
+
+/** Copies the draft: the clipboard, else the text selected for the person to copy */
+async function copyNotes() {
+  const data = ui.notes.data;
+  if (!data) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(data.markdown);
+      say('Copied the release notes.');
+      return;
+    }
+  } catch { /* blocked: try the old way */ }
+  const area = $('notes-preview');
+  area.focus();
+  area.select();
+  let copied = false;
+  try { copied = typeof document.execCommand === 'function' && document.execCommand('copy'); } catch { copied = false; }
+  say(copied ? 'Copied the release notes.' : 'Copying was blocked. The draft is selected: press Ctrl+C, or Command+C on a Mac.', !copied);
+}
+
+/** The confirm step: what will happen in words, and the tag to ask for (the one the server suggests, to change) */
+function openConfirm() {
+  const n = ui.notes;
+  if (!n.data || n.posting) return;
+  if (!n.data.count) { say('There are no merged pull requests to put in a draft.', true); return; }
+  n.confirm = true;
+  n.message = '';
+  $('notes-tag').value = n.data.suggestedTag || '';
+  paintNotes();
+  $('notes-tag').focus();
+  announce('Post as a draft release. Check the tag, then create the draft.');
+}
+
+/** Closes the confirm step; the focus goes back to the button that opened it unless told not to */
+function closeConfirm(restoreFocus = true) {
+  const n = ui.notes;
+  if (!n.confirm) return;
+  n.confirm = false;
+  paintNotes();
+  if (restoreFocus) $('notes-post').focus();
+}
+
+/** The one write: asks the server to have the forge keep the notes as a draft release for the tag typed */
+async function postDraft() {
+  const n = ui.notes;
+  if (!n.confirm || n.posting || !n.data) return;
+  const tag = $('notes-tag').value.trim();
+  if (!validTag(tag)) { say('Give the tag the draft is for, like v0.2.0: letters, digits, dots, dashes and slashes, no spaces.', true); $('notes-tag').focus(); return; }
+  n.posting = true;
+  n.message = '';
+  paintNotes();
+  announce('Creating the draft release');
+  const res = await request(DRAFTS_URL, false, draftRequest(tag, n.since));
+  n.posting = false;
+  if (res.ok) {
+    n.confirm = false;
+    say(postedWords({ forge: forgeName(), tag, count: res.body.count }), false, res.body.release && res.body.release.url);
+    $('notes-post').focus();
+    return;
+  }
+  say(res.status === 401 ? 'Your sign-in has ended. Sign in again to post a draft.' : errorWords(res.status, res.body), true);
+  $('notes-tag').focus();
+}
+
+/** The Release notes view, from `ui.notes`; the typed tag and the focus are left alone */
+function paintNotes() {
+  const n = ui.notes;
+  const data = n.data;
+  const since = $('notes-since');
+  // The choices are drawn again only when they change, so the select keeps the focus while a draft is loaded for it
+  const choices = (data ? sinceChoices(data) : [['', 'Latest tag']]).map(([v, l]) => option(v, l, false)).join('');
+  if (since.dataset.choices !== choices) { since.innerHTML = choices; since.dataset.choices = choices; }
+  since.value = n.since;
+  const area = $('notes-preview');
+  if (area.value !== (data ? data.markdown : '')) area.value = data ? data.markdown : '';
+  $('notes-copy').disabled = !data;
+  $('notes-post').disabled = !data;
+  $('notes-post').setAttribute('aria-expanded', String(n.confirm));
+  const confirm = $('notes-confirm');
+  confirm.hidden = !n.confirm;
+  if (n.confirm && data) {
+    $('notes-confirm-words').textContent = confirmWords({ forge: forgeName(), repo: ui.config.forge.repo, tag: '', count: data.count });
+    $('notes-confirm-yes').textContent = n.posting ? 'Creating …' : 'Create the draft';
+  }
+  const message = $('notes-message');
+  message.hidden = !n.message;
+  message.classList.toggle('hx-forge-msg--bad', n.bad);
+  message.textContent = n.message;
+  if (n.message && n.link && safeUrl(n.link)) {
+    const link = document.createElement('a');
+    link.className = 'hx-link';
+    link.href = n.link;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.textContent = `Open the draft on ${forgeName()} (new tab)`;
+    message.append(' ', link);
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  Drawing
 // ---------------------------------------------------------------------------
 
@@ -180,6 +327,7 @@ const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' 
 
 /** The filters' choices: the states of the kind, the labels and authors of what is loaded */
 function paintFilters() {
+  if (ui.kind === 'notes') return;
   const items = current() ? current().items : [];
   const { labels, authors } = facetsOf(items);
   if (ui.filters.label && !labels.includes(ui.filters.label)) ui.filters.label = '';
@@ -267,6 +415,14 @@ function paint() {
 
 function draw(panel) {
   for (const btn of panel.querySelectorAll('[data-forge-kind]')) btn.setAttribute('aria-pressed', String(btn.dataset.forgeKind === ui.kind));
+  const notes = ui.kind === 'notes';
+  $('forge-filters').hidden = notes;
+  $('forge-list').hidden = notes;
+  $('forge-notes').hidden = !notes;
+  if (notes) {
+    drawNotes();
+    return;
+  }
 
   const list = current();
   const shown = list ? filterItems(list.items, ui.kind, ui.filters) : [];
@@ -290,6 +446,20 @@ function draw(panel) {
 
   const rate = (ui.detail && ui.detail.rate) || (list && list.rate) || '';
   $('forge-rate').textContent = rate;
+  paintButton();
+}
+
+/** The panel's lines for the Release notes view: the status, a failure, the rate limit; the rest is paintNotes */
+function drawNotes() {
+  const n = ui.notes;
+  $('forge-status').textContent = n.loading && !n.data ? `Drafting the release notes from ${forgeName()} …` : n.data ? notesSummary(n.data) : '';
+  const notice = $('forge-notice');
+  const words = n.error || (n.data && n.data.stale ? `Showing an older answer. ${n.data.stale}` : '');
+  notice.hidden = !words;
+  notice.textContent = words;
+  $('forge-detail').hidden = true;
+  $('forge-rate').textContent = (n.data && n.data.rate) || '';
+  paintNotes();
   paintButton();
 }
 
@@ -323,6 +493,7 @@ export function openForge() {
   const title = $('forge-title');
   title.focus();
   announce('Issues and pull requests');
+  if (ui.kind === 'notes') { if (!ui.notes.data && !ui.notes.loading) loadNotes(); else paint(); return; }
   if (!current()) { paintFilters(); loadList(); } else paint();
 }
 
@@ -345,6 +516,7 @@ export const toggleForge = () => (ui.open ? closeForge() : openForge());
 /** Asks the forge again, past the server's cache: the list, and the selected pull request */
 export async function refreshForge() {
   announce('Asking the forge again');
+  if (ui.kind === 'notes') { await loadNotes(true); return; }
   const n = ui.selected;
   await loadList(true);
   if (n !== null && ui.selected === n) {
@@ -373,6 +545,11 @@ function onClick(e) {
   const kind = t.closest('[data-forge-kind]');
   if (kind) {
     if (kind.dataset.forgeKind === ui.kind) return;
+    if (kind.dataset.forgeKind === 'notes') {
+      ui.kind = 'notes';
+      if (ui.notes.data || ui.notes.loading) { paint(); announce(`Release notes. ${ui.notes.data ? notesSummary(ui.notes.data) : ''}`); } else loadNotes();
+      return;
+    }
     ui.kind = kind.dataset.forgeKind;
     ui.filters = defaultFilters();
     paintFilters();
@@ -399,12 +576,20 @@ function onClick(e) {
   if (!action) return;
   if (action.dataset.action === 'close-forge') closeForge();
   else if (action.dataset.action === 'refresh-forge') refreshForge();
+  else if (action.dataset.action === 'copy-notes') copyNotes();
+  else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeConfirm(); else openConfirm(); }
+  else if (action.dataset.action === 'confirm-notes') postDraft();
+  else if (action.dataset.action === 'cancel-notes') { closeConfirm(); announce('Cancelled. Nothing was posted.'); }
   else if (action.dataset.action === 'clear-forge-pr') { clearPull(); $('forge-title').focus(); }
 }
 
 function onChange(e) {
   const id = e.target.id;
-  if (id === 'forge-state') {
+  if (id === 'notes-since') {
+    ui.notes.since = e.target.value;
+    ui.notes.message = '';
+    loadNotes();
+  } else if (id === 'forge-state') {
     ui.filters.state = e.target.value;
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
@@ -427,6 +612,13 @@ function onInput(e) {
 
 /** Escape anywhere in the panel closes it, and the button has the focus again (a field's own Escape comes first) */
 function onKey(e) {
+  if (e.key === 'Enter' && e.target.id === 'notes-tag' && !e.defaultPrevented) { e.preventDefault(); postDraft(); return; }
+  if (e.key === 'Escape' && !e.defaultPrevented && ui.notes.confirm && e.target.closest && e.target.closest('#notes-confirm')) {
+    e.preventDefault();
+    closeConfirm();
+    announce('Cancelled. Nothing was posted.');
+    return;
+  }
   if (e.key !== 'Escape' || e.defaultPrevented) return;
   if (e.target.closest && e.target.closest('select, input, textarea')) return;
   e.preventDefault();
@@ -472,6 +664,7 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   now = clock;
   listToken++;
   pullToken++;
+  notesToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null, notes: freshNotes() });
 }
