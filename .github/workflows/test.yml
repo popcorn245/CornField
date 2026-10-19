@@ -47,4 +47,32 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3399/cornfield/config.json >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3399/topology.json | node -e "const t = JSON.parse(require('fs').readFileSync(0, 'utf8')); if (!t.nodes.length) process.exit(1); console.log(t.nodes.length, 'nodes')"
           docker stop cf
-          if docker run --rm -e CORNFIELD_HOST=0.0.0.0 cornfield:ci serve --port 3398; then echo 'it listened on 0.0.0.0' >&2; exit 1; fi
+      - name: Beyond loopback it refuses, for the right reason, unless sign-in is configured with an https URL
+        env:
+          # Placeholders: no OAuth app has these, and nothing here signs in
+          SIGN_IN: -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00
+        run: |
+          set -eu
+          refuses() { # $1: the words it must give; the rest: docker run arguments
+            words="$1"; shift
+            if out=$(docker run --rm -v "$PWD:/repo:ro" -e CORNFIELD_HOST=0.0.0.0 "$@" cornfield:ci serve --repo /repo --port 3398 2>&1); then echo "it listened on 0.0.0.0: $*" >&2; exit 1; fi
+            echo "$out" | grep -q "$words" || { echo "refused, but not because $words:" >&2; echo "$out" >&2; exit 1; }
+          }
+          refuses 'sign-in is not configured'
+          refuses 'sign-in is not configured' -e CORNFIELD_PUBLIC_URL=https://cornfield-ci
+          refuses 'not https' $SIGN_IN -e CORNFIELD_PUBLIC_URL=http://cornfield-ci
+          refuses 'needs both CORNFIELD_GITHUB_CLIENT_ID and CORNFIELD_GITHUB_CLIENT_SECRET' -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_PUBLIC_URL=https://cornfield-ci
+      - name: With sign-in it listens on 0.0.0.0, and shows nothing without a session
+        env:
+          SIGN_IN: -e CORNFIELD_GITHUB_CLIENT_ID=ci-placeholder-id -e CORNFIELD_GITHUB_CLIENT_SECRET=placeholder -e CORNFIELD_SESSION_SECRET=placeholderplaceholderplaceholder00
+        run: |
+          set -eu
+          docker run --rm -d --name cf -p 127.0.0.1:3397:3397 -v "$PWD:/repo:ro" -e CORNFIELD_HOST=0.0.0.0 -e CORNFIELD_PORT=3397 -e CORNFIELD_PUBLIC_URL=https://cornfield-ci $SIGN_IN cornfield:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3397/healthz >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3397/healthz
+          for p in / /topology.json /cornfield/config.json /explorer/main.js /proposals; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3397$p")
+            [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker stop cf; exit 1; }
+          done
+          curl -s http://127.0.0.1:3397/ | grep -q 'Sign in with GitHub'
+          docker stop cf

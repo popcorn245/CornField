@@ -13,8 +13,8 @@
  *     },
  *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'
  *     port: 3350,
- *     host: '127.0.0.1',                      // Stage 1: localhost only (server/bind.js refuses anything else)
- *     publicUrl: null,                        // where people open it, once it is served for them
+ *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
+ *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
  *     worktrees: '.claude/worktrees',         // a folder of git worktrees whose unpushed proposals are listed too
  *     proposals: 'docs/specs/proposals',      // where proposal files live, in the checkout and in each worktree
  *     topology: 'topology.json',
