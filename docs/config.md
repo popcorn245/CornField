@@ -26,7 +26,7 @@ export default {
 | Key | What it is |
 |---|---|
 | `title` | the explorer's title (default: the package name) |
-| `derivers` | built-in names (`starter`, `personas`, `cloud`), paths (`./tools/deriver.js`), or `{ use, options }`; run in order. [derivers.md](derivers.md) |
+| `derivers` | built-in names (`starter`, `personas`, `compose`, `cloud`), paths (`./tools/deriver.js`), or `{ use, options }`; run in order. [derivers.md](derivers.md) |
 | `sources` | browser modules for the live layer, the house, devices and the permission checker (below) |
 | `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name' }`: where issues, PRs and (v1) sign-in live |
 | `port`, `host` | where `serve` listens. Until sign-in exists the host must be loopback |

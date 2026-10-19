@@ -14,3 +14,9 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
   - The CLI: `serve`, `sync`, `validate`, `status`, `proposal`, `review`.
   - The server: an allowlist, never a folder; a strict Content-Security-Policy; loopback only until forge sign-in exists.
   - A Dockerfile, `compose.example.yml`, GitHub Actions for tests, secret scanning and (inert until switched on) releases.
+- The `compose` deriver: stacks and containers from Docker compose files, and an app with a `runs-on` edge per host a Caddyfile or Traefik labels route to them (SRC-02). The sample repo's stack now comes from its compose file.
+
+### Changed
+
+- `sync` takes away an edge of a derived kind only for the deriver that emits that kind, at the end where it puts its own nodes (`madeBy` and `claims` from `deriveTopology`), so a hand-written edge into a derived node of another deriver stays.
+- A container's `selfHosted` and `summary` are hand-written, no longer fields the code decides.

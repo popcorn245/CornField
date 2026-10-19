@@ -29,11 +29,18 @@ export const DERIVED_FIELDS = {
   stack: ['label', 'file', 'services'],
   persona: ['label', 'file', 'desc', 'role', 'groups', 'account'],
   machine: ['label', 'file', 'hostname', 'virtual', 'code'],
-  container: ['label', 'file', 'stack', 'service', 'image', 'ports', 'selfHosted', 'summary'],
+  // `selfHosted` and `summary` on a container are a person's call (an outside system you run yourself), so they stay hand-written
+  container: ['label', 'file', 'stack', 'service', 'image', 'ports'],
   device: ['label', 'file', 'kind', 'camera', 'enabled'],
   tool: ['label', 'file', 'url'],
   store: ['label', 'file'],
 };
+
+/** An edge's category: `own` (ownership), `dashed` (a usage link), `flow:<flow>`, or its kind */
+export const edgeCategory = (e) => (e.kind === 'flow' ? `flow:${e.flow}` : e.kind || (e.dashed ? 'dashed' : 'own'));
+
+/** A deriver's claim: it emits `category` edges with a node of its own, of `type`, at `end` ('from' or 'to') */
+export const claimKey = (deriver, category, end, type) => `${deriver}|${category}|${end}|${type}`;
 
 /** How an edge is told apart when the map is compared with the code */
 export const syncEdgeKey = (e) => `${e.from}|${e.to}|${e.kind === 'flow' ? `flow:${e.flow}` : e.kind || (e.dashed ? 'dashed' : 'own')}`;
@@ -114,9 +121,10 @@ export function placeholderCounts(topology) {
  * What `sync` would change to make topology.json match the code: derived nodes added, updated or
  * removed, derived edges replaced, and hand-written edges that lost an end.
  * @param {{ nodes: any[], edges: any[] }} topology the map as committed (an empty one for a first sync)
- * @param {{ nodes: any[], edges: any[], ownedTypes?: string[], ownedIds?: string[], pageOwners?: string[] }} derived
+ * @param {{ nodes: any[], edges: any[], ownedTypes?: string[], ownedIds?: string[], pageOwners?: string[], madeBy?: Record<string, string>, claims?: string[] }} derived
  *   what core/derive.js returned: `ownedTypes` are the types whose every node comes from a deriver,
- *   `ownedIds` single nodes a deriver owns, `pageOwners` the apps whose pages a deriver reads
+ *   `ownedIds` single nodes a deriver owns, `pageOwners` the apps whose pages a deriver reads, `madeBy`
+ *   the deriver that made each node, `claims` which edges each deriver speaks for (`claimKey`)
  * @returns {{ next: object, changes: string[] }} the next topology and one line per change (empty when in sync)
  */
 export function planSync(topology, derived) {
@@ -180,21 +188,31 @@ export function planSync(topology, derived) {
   // Which edges are the derivers': an edge of a category some deriver emits (an ownership edge, a usage link,
   // `reads`, a `flow` of one kind …) that touches what they derive. Ownership: the child is derived (a parent,
   // derived or hand-written, owning a derived node). A usage link (dashed): both ends are derived. Any other
-  // kind: either end is. Everything else is hand-written and stays, unless an end is gone.
-  const category = (e) => (e.kind === 'flow' ? `flow:${e.flow}` : e.kind || (e.dashed ? 'dashed' : 'own'));
+  // kind: an end is a node of the deriver that emits the kind, at the end where that deriver puts such a node
+  // (`claims`, from core/derive.js). The cloud deriver's `calls` go into its externals, so a hand-written
+  // `calls` into a compose container stays; the compose deriver's `runs-on` go from an app into its stacks,
+  // so a hand-written `runs-on` from a stack to a machine stays. Without `claims` (a plan built by hand),
+  // either end being derived is enough. Everything else is hand-written and stays, unless an end is gone.
+  const category = edgeCategory;
   const derivedKinds = new Set(derived.edges.map(category));
+  const claims = Array.isArray(derived.claims) ? new Set(derived.claims) : null;
+  const madeBy = derived.madeBy || {};
+  const typeOf = (id) => dById.get(id)?.type || typeOfNode.get(id);
+  const claimed = (e, c, end) => !!madeBy[e[end]] && claims.has(claimKey(madeBy[e[end]], c, end, typeOf(e[end])));
   const derivedCategory = (e) => {
     const c = category(e);
     if (!derivedKinds.has(c)) return false;
     if (c === 'own') return dById.has(e.to);
     if (c === 'dashed') return dById.has(e.from) && dById.has(e.to);
+    if (claims) return claimed(e, c, 'from') || claimed(e, c, 'to');
     return dById.has(e.from) || dById.has(e.to);
   };
   const wanted = new Map(derived.edges.map((e) => [syncEdgeKey(e), e]));
   const edges = [];
   const kept = new Set();
   for (const e of topology.edges) {
-    if (derivedCategory(e)) {
+    // An edge a deriver makes as it stands is the deriver's, whatever its ends
+    if (derivedCategory(e) || wanted.has(syncEdgeKey(e))) {
       const d = wanted.get(syncEdgeKey(e));
       if (!d) { changes.push(`remove edge ${syncEdgeKey(e)}`); continue; }
       if (kept.has(syncEdgeKey(e))) continue;

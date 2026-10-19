@@ -809,6 +809,35 @@
       },
       "r": 21,
       "color": "#94a3b8"
+    },
+    {
+      "id": "pkg-compose",
+      "label": "plugins/compose",
+      "type": "pkg",
+      "file": "plugins/compose",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/compose workspace package (plugins/compose)."
+    },
+    {
+      "id": "core-plugins-compose-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/compose/index.js",
+      "summary": "The compose deriver: the Software band of a self-hosted repo with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The compose deriver: the Software band of a self-hosted repo with zero plugin code. (plugins/compose/index.js)"
+    },
+    {
+      "id": "core-plugins-compose-routes",
+      "label": "routes.js",
+      "type": "core",
+      "file": "plugins/compose/routes.js",
+      "summary": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
     }
   ],
   "edges": [
@@ -2271,7 +2300,31 @@
       "status": "live",
       "label": "the release pushes the image",
       "when": "deploy"
+    },
+    {
+      "from": "root",
+      "to": "pkg-compose"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-index"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-routes"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-plugins-compose-routes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-derive",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-17T08:54:54.992Z"
+  "updatedAt": "2026-10-19T21:18:21.312Z"
 }
