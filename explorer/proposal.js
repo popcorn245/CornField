@@ -22,7 +22,8 @@ import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
 import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld } from './render.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
-import { MARK, edgePoint } from './scene.js';
+import { edgePoint, looksFor } from './scene.js';
+import { onThemeChange } from './theme.js';
 import {
   PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, parseProposalQuery, proposalPanelHtml, touchedIds,
 } from './proposal-model.js';
@@ -458,6 +459,14 @@ function onKey(e) {
   if (e.key === 'Escape' && menuOpen()) closeMenu();
 }
 
+/** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
+function setMarkColours(theme) {
+  const root = document.documentElement.style;
+  const { mark: looks } = looksFor(theme);
+  for (const mark of Object.keys(looks)) root.setProperty(`--hx-mark-${mark}`, looks[mark].color);
+}
+let stopMarkColours = null;
+
 /**
  * Starts the overlay: the mark colours the legend and the panel use, the buttons, picking an
  * edge, and `/?proposal=<slug>` (and `&source=`, `&proposalView=`) when the address asks for one.
@@ -465,8 +474,8 @@ function onKey(e) {
  * @returns {Promise<boolean>} whether a proposal from the address opened (false when it asked for none)
  */
 export async function initProposals() {
-  const root = document.documentElement.style;
-  for (const mark of Object.keys(MARK)) root.setProperty(`--hx-mark-${mark}`, MARK[mark].color);
+  setMarkColours(state.theme);
+  if (!stopMarkColours) stopMarkColours = onThemeChange(setMarkColours);
 
   // Once, however many times this runs
   document.removeEventListener('click', onClick);

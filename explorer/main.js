@@ -17,6 +17,7 @@
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
+ *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
 
 import { state, nodeById, touchScene } from './state.js';
@@ -38,6 +39,7 @@ import { initHouse } from './house.js';
 import { initChecks } from './check.js';
 import { initKeyboard } from './keyboard.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
+import { cycleTheme, initTheme } from './theme.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -127,6 +129,7 @@ const ACTIONS = {
   'select-node': (el) => selectNode(nodeById(el.dataset.id)),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),
+  'cycle-theme': () => cycleTheme(),
 };
 
 document.addEventListener('click', (e) => {
@@ -175,6 +178,7 @@ async function runPageBench(frames, zoomFactor, sync) {
 // ---------------------------------------------------------------------------
 //  Start
 // ---------------------------------------------------------------------------
+initTheme(); // light or dark, before the first scene is built (theme.js)
 state.canvas = $('graph-canvas');
 state.labelCanvas = $('label-canvas');
 // A 2d context that only measures text (layout.js labelWidth): the map canvas may be WebGL, and a

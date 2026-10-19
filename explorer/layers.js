@@ -11,6 +11,8 @@ import { render, ensureFlowLoop } from './render.js';
 import { renderFlowLegend } from './flows.js';
 import { layerOf } from './live-model.js';
 import { WHEN_STYLES, externalLayer } from './cloud-model.js';
+import { themed } from './theme-model.js';
+import { onThemeChange } from './theme.js';
 
 export const LAYER_DEFS = [
   { key: 'app', label: 'Apps', color: '#6366f1', desc: 'Subdomains' },
@@ -69,10 +71,11 @@ export function renderLayerToggles() {
 
   container.innerHTML = LAYER_DEFS.map((layer) => {
     const on = state.activeLayers[layer.key] !== false;
+    const color = themed(layer.color, state.theme); // the dot is the colour the map draws on this ground
     return `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}">
         <span class="hx-toggle-label">
-          <span class="hx-dot" style="background-color: ${layer.color}; box-shadow: ${on ? `0 0 8px ${layer.color}90` : 'none'}"></span>
+          <span class="hx-dot" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
           <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">
@@ -114,3 +117,6 @@ export function toggleAllLayers(on) {
   LAYER_DEFS.forEach((l) => { state.activeLayers[l.key] = on; });
   changed();
 }
+
+// The dots and the legends are drawn in the theme's colours: drawn again when it changes (theme.js)
+onThemeChange(() => renderLayerToggles());

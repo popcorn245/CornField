@@ -87,6 +87,14 @@ describe('axe finds no violation', () => {
     expect(await audit()).toEqual([]);
   });
 
+  it('in the light theme too, the toggle named by what is on (contrast is checked in Chromium, in both themes)', async () => {
+    mount();
+    document.documentElement.dataset.theme = 'light';
+    expect($('theme-toggle-btn').getAttribute('aria-label')).toMatch(/^Theme: /);
+    expect(await audit()).toEqual([]);
+    delete document.documentElement.dataset.theme;
+  });
+
   it('with the Layers menu open, which says it is open', async () => {
     mount();
     renderLayerToggles();

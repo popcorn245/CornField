@@ -36,7 +36,7 @@ Drawing an edge in a what-if edit is a drag on the map. Without one: select the 
 
 The sample repo (`node cli/cornfield.js serve --repo test/fixtures/sample --port 3351`), keyboard only:
 
-1. `Tab` goes through the header in order: reset the view, Layers, Data flow, House, Proposals, search, Orbit, the zoom buttons, then the map.
+1. `Tab` goes through the header in order: reset the view, Layers, Data flow, House, Proposals, search, Orbit, the zoom buttons, the theme toggle (system, light, dark; its name says which is on), then the map.
 2. On the map, `→` pans, `+` zooms in ("Zoom 47 percent"), `0` fits ("The whole map. Zoom 37 percent").
 3. `N` selects the first node: "CI workflows, tool, 3 connections, 1 of 38". `N` again: "cloud.example.test, app, 2 connections, 2 of 38". `P` goes back; `End` goes to the last, "@acme/shared, pkg, 3 connections, 38 of 38".
 4. `Enter` moves the focus to the panel's title, so a screen reader reads the panel from its start; `Tab` goes on to its close button, its links and buttons.
@@ -50,7 +50,7 @@ While closed, the node panel waits off screen; it is `inert` then, so `Tab` neve
 ## How it is checked
 
 - **In the test suite** ([test/explorer/a11y.test.js](../test/explorer/a11y.test.js)): [axe-core](https://github.com/dequelabs/axe-core) runs over the page's own markup and stylesheets in each state (the map, the Layers menu, a node's panel, a proposal open with what-if editing, the scenario player) for WCAG 2.2 A and AA and axe's best practices, and finds nothing. The keys above are tested there too. The test runs on happy-dom, which has no layout, so colour contrast is checked in a browser instead (next point).
-- **In a browser**: the same axe rules, colour contrast included, in Chromium over the sample repo, in ten states: the map, the Layers and Proposals menus, a node's panel, a phone with and without the panel, a proposal open, the scenario player, the data-flow view and the House view. No violations.
+- **In a browser**: the same axe rules, colour contrast included, in Chromium over the sample repo, in ten states: the map, the Layers and Proposals menus, a node's panel, a phone with and without the panel, a proposal open, the scenario player, the data-flow view and the House view, each in the dark and the light theme. No violations.
 
 What axe cannot judge, and was looked at by hand: the reading order of the steps, the words said, and that every pointer action has a key. A pass with a real screen reader (NVDA, VoiceOver) is welcome: open an issue with what it reads badly.
 
