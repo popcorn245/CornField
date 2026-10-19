@@ -1,6 +1,6 @@
 # Derivers (contract 1)
 
-A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships three: `starter`, `personas` and `cloud`. A repo adds its own by path.
+A deriver reads a repo's code and says which nodes and edges the map must hold. `cornfield sync` runs every deriver the config names, in order, and merges what they find into `topology.json`; `cornfield validate` runs them again and fails when the map has drifted. cornfield ships four: `starter`, `personas`, `cloud` and `docs`. A repo adds its own by path, and tests it with the deriver kit (`cornfield/deriver-kit`, see [deriver-kit.md](deriver-kit.md)).
 
 ```js
 // cornfield.config.js
@@ -63,6 +63,15 @@ export default {
 - **starter** (`plugins/starter`): packages from npm workspaces (or each top-level folder with code, or `options.packages`), the imports between them, a dependency declared and never imported; with `modules: true`, one node per source file with the first sentence of its doc comment as its summary. Options: `{ packages, modules, tests, extensions }`.
 - **personas** (`plugins/personas`): `topology.personas.json` as a store node and one persona node each. Roles come from `personas.roles` in the config (any kebab-case role when none). See [core/personas.js](../core/personas.js).
 - **cloud** (`plugins/cloud`): `topology.cloud.json` and its detectors. See [cloud.md](cloud.md).
+- **docs** (`plugins/docs`): the repo's Markdown as an app (`app-docs`) with a page per document, a usage link per link between two docs, and one from a doc to each file another deriver mapped that it links to (a module, a package), so the map shows which docs describe which code. A link to a file that is not in the repo fails `validate`; a link to a missing heading is a warning. Options: `{ paths, app, label, parent }` (`paths` default `['README.md', 'docs']`). List it after the derivers whose nodes the docs point at. `cornfield docs` builds the docs as a static site from this map: see [the docs site](#the-docs-site).
+
+## The docs site
+
+`cornfield docs [--out _site]` runs the derivers (the docs deriver with its defaults when the config does not name it) and writes a small static site: a page per document at its route (`docs/config.md` → `docs/config.html`, a README → its folder's `index.html`), a sidebar of every page, the links around each page (what it links to, what links to it, the code it describes), and `map.html`, the map of the docs' links. Links between docs go to the other page, images are copied beside it, and a link to any other file goes to the file on the forge (`forge` in the config). Every link is relative, so the folder serves from anywhere. cornfield's own docs are built this way and published to GitHub Pages by `.github/workflows/pages.yml`.
+
+## Testing one
+
+`import { defineDeriver, checkDeriver } from 'cornfield/deriver-kit'`: `defineDeriver` checks a deriver against this contract when it loads and types it for the editor; `checkDeriver(deriver, { files, before, options })` runs it on a throwaway repo as `sync` and `validate` would, and throws a list of everything `validate` would fail on. The guide: [deriver-kit.md](deriver-kit.md).
 
 ## Versions
 
