@@ -276,6 +276,18 @@
 
   </div>
 
+  <!-- The confirm step of landing a pull request (forge-panel.js): a modal dialog over a scrim; the focus stays in it while it is open -->
+  <div id="forge-confirm" class="hx-confirm-scrim" hidden>
+    <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="forge-confirm-title" aria-describedby="forge-confirm-body">
+      <h2 id="forge-confirm-title" class="hx-confirm-title"></h2>
+      <div id="forge-confirm-body"></div>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-action="forge-confirm-cancel">Cancel</button>
+        <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go">Land it</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/explorer/main.js"></script>
 </body>
 </html>

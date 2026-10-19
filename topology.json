@@ -1414,7 +1414,7 @@
       "label": "forge-routes.js",
       "type": "core",
       "file": "server/forge-routes.js",
-      "summary": "The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4).",
+      "summary": "The surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). (server/forge-routes.js)"
@@ -1468,6 +1468,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The mockups of a proposal (its `mockups` list, core/proposal.js): screens kept beside the proposal, images or HTML in the spec branch, that the explorer opens from the node they name. (server/mockups.js)"
+    },
+    {
+      "id": "core-server-forge-actions",
+      "label": "forge-actions.js",
+      "type": "core",
+      "file": "server/forge-actions.js",
+      "summary": "The two things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08): land a green pull request and re-run a failed check.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The two things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08): land a green pull request and re-run a failed check. (server/forge-actions.js)"
     }
   ],
   "edges": [
@@ -4164,7 +4174,29 @@
       "to": "core-core-proposal",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-forge-actions"
+    },
+    {
+      "from": "core-server-forge-actions",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-actions",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-forge-actions",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T22:57:03.875Z"
+  "updatedAt": "2026-10-19T23:07:24.858Z"
 }

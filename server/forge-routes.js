@@ -1,8 +1,9 @@
 /**
  * @module server/forge-routes
  *
- * The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). Nothing
- * here writes to the forge: it only calls the interface's reads (server/forge.js), as the signed-in maintainer, with
+ * The surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). The GETs below
+ * only call the interface's reads (server/forge.js); the two POSTs that act (land, re-run) are server/forge-actions.js.
+ * All as the signed-in maintainer, with
  * their own token (`auth.forgeFor`), never one from the config. Without sign-in (Stage 1, loopback) there is nobody to
  * ask as, so the routes answer 403 and say so, and the explorer does not offer the panel (as the Proposals menu does
  * not list spec PRs without sign-in, server/proposal-pulls.js): no anonymous calls, so no unauthenticated rate limit
@@ -11,6 +12,8 @@
  *   GET /api/forge/issues?state=open|closed|all&labels=a,b&limit=100   issues, newest first
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
+ *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
+ *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
  *
  * Every answer is `{ ok: true, forge, repo, at, rate, … }` (`rate`: what is left of the forge's limit, in words, or
  * null) or `{ ok: false, error, code }` with the forge's error in plain words. Answers are kept in `forge_cache`
@@ -21,7 +24,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { ForgeError, hasAdapter, rateLimitWords } from './forge.js';
+import { ForgeError, canRerun, hasAdapter, rateLimitWords } from './forge.js';
+import { actionOf, serveAction } from './forge-actions.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -69,7 +73,7 @@ function routeOf(reqPath, url) {
       load: async (forge) => {
         const pull = await forge.pull(n);
         const [files, checks] = await Promise.all([forge.pullFiles(n), pull.head.sha ? forge.checks(pull.head.sha) : []]);
-        return { pull, files, checks };
+        return { pull, files, checks: checks.map((c) => ({ ...c, canRerun: canRerun(c) })) };
       },
     };
   }
@@ -101,18 +105,28 @@ function keep(db, key, etag, body, now) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, session: { userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
 export async function serveForge(req, res, reqPath, url, ctx) {
   if (reqPath !== '/api/forge' && !reqPath.startsWith('/api/forge/')) return false;
-  req.resume();
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    send(req, res, 405, { ok: false, error: 'The forge routes only read.' }, { Allow: 'GET, HEAD' });
+  const { config, session, auth, now = Date.now } = ctx;
+  const act = actionOf(reqPath);
+  if (act) {
+    if (!config.forge || !hasAdapter(config.forge.type)) {
+      req.resume();
+      send(req, res, config.forge ? 501 : 404, { ok: false, error: config.forge ? `cornfield has no adapter for the forge type ${JSON.stringify(config.forge.type)} yet.` : 'No forge is configured: set `forge` in cornfield.config.js.', code: config.forge ? 'unavailable' : 'not-found' });
+      return true;
+    }
+    await serveAction(req, res, act, ctx, (status, body, headers) => send(req, res, status, body, headers));
     return true;
   }
-  const { config, session, auth, now = Date.now } = ctx;
+  req.resume();
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    send(req, res, 405, { ok: false, error: 'The forge routes only read, but for landing and re-running a pull request.' }, { Allow: 'GET, HEAD' });
+    return true;
+  }
   if (!config.forge) {
     send(req, res, 404, { ok: false, error: 'No forge is configured: set `forge` in cornfield.config.js.', code: 'not-found' });
     return true;

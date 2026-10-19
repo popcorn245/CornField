@@ -60,8 +60,8 @@ const DETAIL = {
     pull: PULLS.open[0],
     files: [{ path: 'server/server.js', status: 'modified', previousPath: null, additions: 2, deletions: 2 }],
     checks: [
-      { id: 'run:42', name: 'vitest test/server/auth.test.js', state: 'failure', url: 'https://git.example.test/runs/42', rerunnable: true },
-      { id: 'run:43', name: 'lint', state: 'failure', url: null, rerunnable: true },
+      { id: 'run:42', name: 'vitest test/server/auth.test.js', state: 'failure', url: 'https://git.example.test/runs/42', rerunnable: true, canRerun: true },
+      { id: 'run:43', name: 'lint', state: 'failure', url: null, rerunnable: false, canRerun: false },
       { id: 'run:44', name: 'build', state: 'running', url: null, rerunnable: false },
     ],
   },
@@ -86,6 +86,10 @@ function fakeServer(opts = {}) {
     calls.push({ url, init });
     if (opts.down) throw new TypeError('Failed to fetch');
     const u = new URL(url, 'http://localhost');
+    if (init.method === 'POST') {
+      const answer = opts.posts && opts.posts[u.pathname];
+      return answer ? json(answer.status ?? 200, answer.body) : json(404, { ok: false, error: 'No such action.' });
+    }
     const override = opts.answers && opts.answers[u.pathname + u.search];
     if (override) return json(override.status ?? 200, override.body);
     const at = '2026-10-19T11:58:00.000Z';
@@ -509,5 +513,192 @@ describe('on a phone', () => {
     await settle();
     expect(sheetState('forge')).toBe('peek');
     expect(state.selectedNode.id).toBe('core-server');
+  });
+});
+
+describe('actions: landing a green pull request and re-running a failed check', () => {
+  const LANDED = { status: 200, body: { ok: true, merged: true, number: 12, sha: 'fff0000000000000000000000000000000000000', head: 'sha12' } };
+  const mockCalls = () => /** @type {any} */ (globalThis.fetch).mock.calls.map(([url, init]) => ({ url, init: init || {} }));
+  const posts = () => mockCalls().filter((c) => c.init.method === 'POST');
+
+  const select = async (n) => {
+    openForge();
+    await settle();
+    click(q(`[data-forge-pr="${n}"]`));
+    await settle();
+  };
+
+  it('a green, open, ready pull request has Land it; the others say why not, in words', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    expect(q('[data-forge-merge]').textContent).toBe('Land it …');
+    expect(qa('.hx-forge-why')[0].textContent).toMatch(/Never forced, never deployed/);
+    click(q('[data-action="clear-forge-pr"]'));
+    click(q('[data-forge-pr="13"]'));
+    await settle();
+    expect(q('[data-forge-merge]')).toBe(null);
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. Not every check is green: vitest test/server/auth.test.js failed; lint failed; build is still running.');
+  });
+
+  it('a draft says it is a draft', async () => {
+    fakeServer({ answers: { '/api/forge/pulls/14': { body: { ok: true, pull: PULLS.open[2], files: [], checks: [{ id: 'run:1', name: 'test', state: 'success', url: null, rerunnable: false, canRerun: false }] } } } });
+    mount();
+    await select(14);
+    expect(q('[data-forge-merge]')).toBe(null);
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. It is a draft: mark it ready on the forge first.');
+  });
+
+  it('Land it opens a confirm dialog that shows exactly what will land, announced, with the focus on Cancel', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const dialog = q('#forge-confirm [role="dialog"]');
+    expect($('forge-confirm').hidden).toBe(false);
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('forge-confirm-title');
+    expect($('forge-confirm-title').textContent).toBe('Land pull request #12?');
+    const facts = qa('#forge-confirm dt').map((dt) => [dt.textContent, dt.nextElementSibling.textContent]);
+    expect(facts).toEqual([
+      ['Pull request', '#12 Meals page'], ['Commit', 'sha12'], ['From', 'branch-12'], ['Into', 'main'], ['How', 'A merge commit, made by GitHub'], ['Checks', '1 check passed'],
+    ]);
+    expect(qa('#forge-confirm .hx-confirm-checks li').map((li) => li.textContent.trim())).toEqual(['passed test']);
+    expect($('forge-confirm').textContent).toMatch(/Nothing is deployed/);
+    expect(document.activeElement).toBe(q('[data-action="forge-confirm-cancel"]'));
+    expect(await said()).toMatch(/^Land pull request #12\? Pull request: #12 Meals page\. Commit: sha12\./);
+    expect(posts()).toEqual([]);
+  });
+
+  it('the focus cannot leave the dialog; Escape or Cancel closes it, the focus back on the button', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    $('forge-btn').focus();
+    expect(document.activeElement).toBe(q('[data-action="forge-confirm-cancel"]'));
+    expect(key(q('[data-action="forge-confirm-cancel"]'), 'Escape').defaultPrevented).toBe(true);
+    expect($('forge-confirm').hidden).toBe(true);
+    $('forge-btn').focus();
+    expect(document.activeElement).toBe($('forge-btn'));
+    q('[data-forge-merge]').focus();
+    expect(document.activeElement).toBe(q('[data-forge-merge]'));
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-cancel"]'));
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(document.activeElement).toBe(q('[data-forge-merge]'));
+    expect(posts()).toEqual([]);
+  });
+
+  it('Tab stays inside the dialog, both ways, and a map key does not reach the map', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const cancel = q('[data-action="forge-confirm-cancel"]');
+    const go = q('[data-action="forge-confirm-go"]');
+    const tab = (el, shiftKey = false) => { const e = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }); el.dispatchEvent(e); return e; };
+    expect(tab(cancel).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(go);
+    tab(go);
+    expect(document.activeElement).toBe(cancel);
+    tab(cancel, true);
+    expect(document.activeElement).toBe(go);
+    const seen = vi.fn();
+    document.addEventListener('keydown', seen);
+    key(go, 'ArrowLeft');
+    document.removeEventListener('keydown', seen);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('confirming posts the head that was shown, says it landed, and looks at the forge again', async () => {
+    const server = fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    const sent = posts();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('/api/forge/pulls/12/merge');
+    expect(JSON.parse(sent[0].init.body)).toEqual({ sha: 'sha12' });
+    expect(sent[0].init.headers['Content-Type']).toBe('application/json');
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 landed as fff0000.');
+    expect(await said()).toBe('Pull request #12 landed as fff0000.');
+    expect(server.urls().filter((u) => u === '/api/forge/pulls/12')).toHaveLength(2);
+  });
+
+  it('three clicks on Land it send one request', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    const go = q('[data-action="forge-confirm-go"]');
+    click(go);
+    click(go);
+    click(go);
+    await settle();
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('a refusal is said in the server\'s words and nothing is shown as landed', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/12/merge': { status: 409, body: { ok: false, code: 'conflict', error: 'Pull request #12 has changed since it was looked at (its head is now abc0000); look again before landing it.' } } } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 was not landed: Pull request #12 has changed since it was looked at (its head is now abc0000); look again before landing it.');
+    expect(q('.hx-forge-detail .hx-forge-notice--ok')).toBe(null);
+    expect(await said()).toMatch(/^Pull request #12 was not landed/);
+  });
+
+  it('a server that is gone is said, and the panel does not claim it landed', async () => {
+    const server = fakeServer({ posts: { '/api/forge/pulls/12/merge': LANDED } });
+    mount();
+    await select(12);
+    click(q('[data-forge-merge]'));
+    server.mock.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    click(q('[data-action="forge-confirm-go"]'));
+    await settle();
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('Pull request #12 was not landed: cornfield could not be reached. Look at the forge before trying again.');
+  });
+
+  it('a failed check the forge can re-run has Re-run, which posts the head and the check; one it cannot says why', async () => {
+    fakeServer({ posts: { '/api/forge/pulls/13/rerun': { status: 202, body: { ok: true, rerun: true, number: 13, check: 'run:42', name: 'vitest test/server/auth.test.js' } } } });
+    mount();
+    await select(13);
+    const buttons = qa('[data-forge-rerun]');
+    expect(buttons.map((b) => b.dataset.forgeRerun)).toEqual(['run:42']);
+    expect(buttons[0].getAttribute('aria-label')).toBe('Re-run vitest test/server/auth.test.js');
+    const checks = qa('.hx-forge-check');
+    expect(checks[1].textContent).toMatch(/GitHub does not let cornfield re-run this one: re-run it there\./);
+    expect(checks[2].querySelector('button')).toBe(null);
+    expect(checks[2].textContent).not.toMatch(/re-run/);
+    click(buttons[0]);
+    await settle();
+    const sent = posts();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe('/api/forge/pulls/13/rerun');
+    expect(JSON.parse(sent[0].init.body)).toEqual({ sha: 'sha13', check: 'run:42' });
+    expect(q('.hx-forge-detail .hx-forge-notice').textContent).toBe('vitest test/server/auth.test.js is running again.');
+    expect(await said()).toBe('vitest test/server/auth.test.js is running again.');
+  });
+
+  it('a passing check has no Re-run and nothing to explain', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    expect(q('[data-forge-rerun]')).toBe(null);
+    expect(q('.hx-forge-check').textContent).not.toMatch(/re-run/i);
+  });
+
+  it('the buttons are real buttons, in the tab order', async () => {
+    fakeServer();
+    mount();
+    await select(12);
+    const merge = q('[data-forge-merge]');
+    expect([merge.tagName, merge.getAttribute('type'), merge.tabIndex]).toEqual(['BUTTON', 'button', 0]);
   });
 });

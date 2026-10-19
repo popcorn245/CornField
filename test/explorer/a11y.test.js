@@ -179,7 +179,7 @@ describe('axe finds no violation with a proposal\'s mockups', () => {
       expect(await audit(), `${theme}: the panel`).toEqual([]);
       for (const b of buttons) {
         b.click();
-        const dialog = document.querySelector('[role="dialog"]');
+        const dialog = document.querySelector('.hx-mockup-dialog[role="dialog"]');
         expect(dialog.getAttribute('aria-modal')).toBe('true');
         expect(dialog.contains(document.activeElement) || dialog === document.activeElement).toBe(true);
         const frame = dialog.querySelector('iframe');
@@ -203,11 +203,12 @@ describe('the issues and PRs panel', () => {
   const DETAIL = {
     pull: pr(13, 'Lint everything'),
     files: [{ path: 'app-a', status: 'modified', previousPath: null, additions: 2, deletions: 1 }, { path: 'README.md', status: 'added', previousPath: null, additions: 5, deletions: 0 }],
-    checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: false }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false }],
+    checks: [{ id: 'run:1', name: 'lint', state: 'failure', url: 'https://git.example.test/runs/1', rerunnable: true, canRerun: true }, { id: 'run:2', name: 'test', state: 'running', url: null, rerunnable: false, canRerun: false }, { id: 'status:ci', name: 'ci', state: 'failure', url: null, rerunnable: false, canRerun: false }],
   };
+  const GREEN = { pull: pr(12, 'Meals page'), files: DETAIL.files, checks: [{ id: 'run:7', name: 'test', state: 'success', url: 'https://git.example.test/runs/7', rerunnable: false, canRerun: false }] };
   const stub = () => vi.stubGlobal('fetch', vi.fn(async (url) => {
     const u = new URL(url, 'http://localhost');
-    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : DETAIL;
+    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname.endsWith('/12') ? GREEN : DETAIL;
     return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
   }));
   const start = () => {
@@ -253,6 +254,35 @@ describe('the issues and PRs panel', () => {
     await settle();
     document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none with the actions shown (Re-run, the reasons why not, Land it) and with the confirm dialog open, in both themes', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    click('[data-forge-pr="13"]');
+    await settle();
+    expect(document.querySelectorAll('[data-forge-rerun]').length).toBe(1);
+    expect(document.querySelectorAll('.hx-forge-lights').length).toBeGreaterThan(1);
+    expect(await audit()).toEqual([]);
+    click('[data-forge-pr="13"]');
+    click('[data-forge-pr="12"]');
+    await settle();
+    expect(document.querySelector('[data-forge-merge]')).not.toBe(null);
+    expect(await audit()).toEqual([]);
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      click('[data-forge-merge]');
+      expect($('forge-confirm').hidden).toBe(false);
+      expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
+      expect(await audit()).toEqual([]);
+      key(document.activeElement, 'Escape');
+      expect($('forge-confirm').hidden).toBe(true);
+      expect(document.activeElement).toBe(document.querySelector('[data-forge-merge]'));
+    }
     expect(await audit()).toEqual([]);
   });
 
