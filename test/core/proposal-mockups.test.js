@@ -85,3 +85,23 @@ describe('mockups in a proposal', () => {
     for (const m of list) expect(fs.statSync(path.join(dir, m.path)).isFile(), m.path).toBe(true);
   });
 });
+
+describe('validate and the mockup files', () => {
+  it('fails a proposal whose mockup is not a file beside it, and passes the sample, whose files are there', async () => {
+    const os = await import('node:os');
+    const { validateProposalFiles } = await import('../../core/validate.js');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-mockups-'));
+    try {
+      fs.mkdirSync(path.join(dir, '0013-meals'));
+      fs.writeFileSync(path.join(dir, '0013-meals', 'list.png'), 'png');
+      fs.mkdirSync(path.join(dir, '0013-meals', 'folder.png'));
+      fs.writeFileSync(path.join(dir, '0013-meals.json'), JSON.stringify(proposal([ok, { ...ok, path: '0013-meals/typo.png' }, { ...ok, path: '0013-meals/folder.png' }])));
+      expect(validateProposalFiles(topology, dir, path.dirname(dir)).filter((p) => p.includes('mockups'))).toEqual([
+        `${path.basename(dir)}/0013-meals.json: mockups[1].path: "0013-meals/typo.png" is not a file in ${path.basename(dir)}.`,
+        `${path.basename(dir)}/0013-meals.json: mockups[2].path: "0013-meals/folder.png" is not a file in ${path.basename(dir)}.`,
+      ]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    const sample = JSON.parse(fs.readFileSync(path.join(SAMPLE, 'topology.json'), 'utf8'));
+    expect(validateProposalFiles(sample, path.join(SAMPLE, 'docs/specs/proposals'), SAMPLE).filter((p) => p.includes('mockups'))).toEqual([]);
+  });
+});
