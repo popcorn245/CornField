@@ -12,7 +12,8 @@ All notable changes to cornfield. The format follows [Keep a Changelog](https://
   - Personas, the cloud registry and its detectors, outage scenarios, the House view over a house source.
   - The deriver contract (version 1) and three derivers: `starter` (npm workspaces, modules and imports), `personas`, `cloud`.
   - The CLI: `serve`, `sync`, `validate`, `status`, `proposal`, `review`.
-- The `docs` deriver: a repo's Markdown on the map as an app with a page per document, its links to other docs and to the code they describe; a broken link fails `validate`.
-- `cornfield docs`: the docs as a small static site built from that map (a page per document, the links around it, a map of the docs' links), published for cornfield itself to GitHub Pages by `.github/workflows/pages.yml`.
   - The server: an allowlist, never a folder; a strict Content-Security-Policy; loopback only until forge sign-in exists.
   - A Dockerfile, `compose.example.yml`, GitHub Actions for tests, secret scanning and (inert until switched on) releases.
+- The SQLite store (`server/db.js`, #2): `cornfield.db` in the data folder over Node's built-in `node:sqlite`, numbered migrations, and the four tables of v1: `sessions`, `reviews`, `actions`, `forge_cache`.
+- The `docs` deriver: a repo's Markdown on the map as an app with a page per document, its links to other docs and to the code they describe; a broken link fails `validate`.
+- `cornfield docs`: the docs as a small static site built from that map (a page per document, the links around it, a map of the docs' links), published for cornfield itself to GitHub Pages by `.github/workflows/pages.yml`.

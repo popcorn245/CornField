@@ -741,6 +741,14 @@
       "desc": "Cloud file (topology.cloud.json)."
     },
     {
+      "id": "store-cornfield-db",
+      "label": "cornfield.db",
+      "type": "store",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "cornfield's own SQLite file, in its data folder, never in a checkout."
+    },
+    {
       "id": "ext-github",
       "label": "GitHub",
       "type": "external",
@@ -811,6 +819,16 @@
       "color": "#94a3b8"
     },
     {
+      "id": "core-server-db",
+      "label": "db.js",
+      "type": "core",
+      "file": "server/db.js",
+      "summary": "cornfield's own SQLite file: `cornfield.db` in the data folder (`config.dataDir`, never a checkout), over Node's built-in `node:sqlite`, so still no dependency.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge caches; numbered migrations."
+    },
+    {
       "id": "pkg-docs",
       "label": "plugins/docs",
       "type": "pkg",
@@ -838,6 +856,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "A small Markdown renderer, enough for a repo's docs: headings (with GitHub-style anchors), paragraphs, fenced code, block quotes, lists (nested), tables, rules, links, images, code spans, bold and … (plugins/docs/markdown.js)"
+    },
+    {
+      "id": "core-plugins-docs-site",
+      "label": "site.js",
+      "type": "core",
+      "file": "plugins/docs/site.js",
+      "summary": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links… (plugins/docs/site.js)"
     },
     {
       "id": "app-docs",
@@ -1049,6 +1077,16 @@
       "desc": "The house (docs/house.md)."
     },
     {
+      "id": "page-doc-docs-proposals",
+      "type": "page",
+      "label": "/docs/proposals",
+      "file": "docs/proposals.md",
+      "summary": "Proposals in your own repo",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Proposals in your own repo (docs/proposals.md)."
+    },
+    {
       "id": "page-doc-docs-roadmap",
       "type": "page",
       "label": "/docs/roadmap",
@@ -1077,26 +1115,6 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "cornfield: the vision (docs/vision.md)."
-    },
-    {
-      "id": "core-plugins-docs-site",
-      "label": "site.js",
-      "type": "core",
-      "file": "plugins/docs/site.js",
-      "summary": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links…",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links… (plugins/docs/site.js)"
-    },
-    {
-      "id": "page-doc-docs-proposals",
-      "type": "page",
-      "label": "/docs/proposals",
-      "file": "docs/proposals.md",
-      "summary": "Proposals in your own repo",
-      "r": 18,
-      "color": "#38bdf8",
-      "desc": "Proposals in your own repo (docs/proposals.md)."
     }
   ],
   "edges": [
@@ -2483,6 +2501,10 @@
       "to": "store-cloud"
     },
     {
+      "from": "root",
+      "to": "store-cornfield-db"
+    },
+    {
       "from": "store-cloud",
       "to": "ext-github"
     },
@@ -2561,6 +2583,15 @@
       "when": "deploy"
     },
     {
+      "from": "pkg-server",
+      "to": "core-server-db"
+    },
+    {
+      "from": "core-server-db",
+      "to": "store-cornfield-db",
+      "label": "opens it"
+    },
+    {
       "from": "root",
       "to": "pkg-docs"
     },
@@ -2574,7 +2605,23 @@
     },
     {
       "from": "pkg-docs",
+      "to": "core-plugins-docs-site"
+    },
+    {
+      "from": "pkg-cli",
+      "to": "pkg-docs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-docs",
       "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-plugins-docs-site",
       "dashed": true,
       "label": "imports"
     },
@@ -2587,6 +2634,36 @@
     {
       "from": "core-plugins-docs-markdown",
       "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-plugins-docs-index",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-plugins-docs-markdown",
       "dashed": true,
       "label": "imports"
     },
@@ -2676,6 +2753,10 @@
     },
     {
       "from": "app-docs",
+      "to": "page-doc-docs-proposals"
+    },
+    {
+      "from": "app-docs",
       "to": "page-doc-docs-roadmap"
     },
     {
@@ -2709,6 +2790,11 @@
     {
       "from": "page-doc-readme",
       "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-proposals",
       "dashed": true
     },
     {
@@ -2877,6 +2963,31 @@
       "dashed": true
     },
     {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-contributing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "core-core-proposal",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-proposals",
+      "to": "page-doc-docs-specs-0001-v1",
+      "dashed": true
+    },
+    {
       "from": "page-doc-docs-roadmap",
       "to": "page-doc-docs-specs-0001-v1",
       "dashed": true
@@ -2972,92 +3083,12 @@
       "dashed": true
     },
     {
-      "from": "pkg-docs",
-      "to": "core-plugins-docs-site"
-    },
-    {
-      "from": "pkg-cli",
-      "to": "pkg-docs",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-cli-cornfield",
-      "to": "core-plugins-docs-site",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-plugins-docs-site",
-      "to": "core-core-derive",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-plugins-docs-site",
-      "to": "core-core-text",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-plugins-docs-site",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-plugins-docs-site",
-      "to": "core-plugins-docs-index",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-plugins-docs-site",
-      "to": "core-plugins-docs-markdown",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-plugins-docs-site",
       "to": "ext-github",
       "kind": "calls",
       "status": "live",
       "label": "calls"
-    },
-    {
-      "from": "app-docs",
-      "to": "page-doc-docs-proposals"
-    },
-    {
-      "from": "page-doc-readme",
-      "to": "page-doc-docs-proposals",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-proposals",
-      "to": "page-doc-contributing",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-proposals",
-      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-proposals",
-      "to": "page-doc-docs-config",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-proposals",
-      "to": "core-core-proposal",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-proposals",
-      "to": "page-doc-docs-specs-0001-v1",
-      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-19T21:19:02.828Z"
+  "updatedAt": "2026-10-19T21:21:43.137Z"
 }
