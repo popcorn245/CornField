@@ -286,6 +286,59 @@ describe('the issues and PRs panel', () => {
     expect(await audit()).toEqual([]);
   });
 
+  it('has none with the pipeline\'s steps: Start a spec on an issue and Open the build issue on an approved spec, each with its confirm step open, in both themes', async () => {
+    const spec = { number: 40, title: 'Meals spec', state: 'open', draft: true, author, labels: [], head: { ref: 'spec/0040-meals', sha: 'abc' }, base: { ref: 'main' }, url: 'https://git.example.test/pull/40', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null };
+    const SPEC_PLAN = { kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/issues/7' }, base: 'main', branch: 'spec/7-meals-page', path: 'docs/specs/proposals/7-meals-page.json', message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft pull request.', content: '{\n  "version": 1,\n  "title": "Meals page"\n}\n', existing: null };
+    const BUILD_PLAN = { kind: 'build', digest: 'b'.repeat(32), pull: { number: 40, title: 'Meals spec', url: spec.url }, slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', sha: 'abc', review: { by: 'maintainer-one', url: 'https://git.example.test/c/1', at: '2026-10-19T10:00:00Z' }, title: 'Build: Meals', body: 'Build the approved proposal `0040-meals`.\n\n## Nodes\n\n- [ ] Add `page-meals`\n', items: 1, existing: null };
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const u = new URL(url, 'http://localhost');
+      const data = {
+        '/api/forge/pulls': { items: [spec] },
+        '/api/forge/issues': { items: [pr(7, 'Meals page', { head: undefined }), pr(8, 'Closed one', { state: 'closed' })] },
+        '/api/forge/issues/7/spec': { plan: SPEC_PLAN },
+        '/api/forge/pulls/40/build': { plan: BUILD_PLAN },
+        '/api/forge/pulls/40': { pull: spec, files: [{ path: 'docs/specs/proposals/0040-meals.json', status: 'added', previousPath: null, additions: 5, deletions: 0 }], checks: [], specs: [{ slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', approved: true }, { slug: '0041-other', path: 'docs/specs/proposals/0041-other.json', approved: false }] },
+      }[u.pathname];
+      return { ok: !!data, status: data ? 200 : 404, headers: new Headers(), json: async () => (data ? { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...data } : { ok: false, error: 'No.' }) };
+    }));
+    start();
+    openForge();
+    await settle();
+    const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    click('[data-forge-kind="issues"]');
+    await settle();
+    expect(document.querySelectorAll('[data-forge-spec]').length).toBe(1);
+    expect(await audit()).toEqual([]);
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      click('[data-forge-spec="7"]');
+      await settle();
+      expect($('forge-confirm').hidden).toBe(false);
+      expect(document.querySelectorAll('#forge-confirm-body pre').length).toBe(2);
+      expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
+      expect(await audit()).toEqual([]);
+      key(document.activeElement, 'Escape');
+      expect($('forge-confirm').hidden).toBe(true);
+      expect(document.activeElement).toBe(document.querySelector('[data-forge-spec="7"]'));
+    }
+    click('[data-forge-kind="pulls"]');
+    await settle();
+    click('[data-forge-pr="40"]');
+    await settle();
+    expect(document.querySelectorAll('[data-forge-build]').length).toBe(1);
+    expect(await audit()).toEqual([]);
+    for (const theme of ['light', 'dark']) {
+      if (theme === 'dark') delete document.documentElement.dataset.theme;
+      click('[data-forge-build="0040-meals"]');
+      await settle();
+      expect($('forge-confirm').hidden).toBe(false);
+      expect(await audit()).toEqual([]);
+      key(document.activeElement, 'Escape');
+      expect($('forge-confirm').hidden).toBe(true);
+    }
+    expect(await audit()).toEqual([]);
+  });
+
   it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {
     stub();
     start();

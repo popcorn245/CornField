@@ -10,6 +10,7 @@ import {
   listUrl, serverState, matches, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, nodesForFile, isTestPath, testFilesOf, litFor,
   paintForge, errorWords, FORGE_DIM_ALPHA, FORGE_FAIL_COLOR, defaultFilters,
   mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
+  specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/forge-panel-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -274,5 +275,76 @@ describe('actions: why not, what is confirmed, what is said', () => {
     expect(actionWords('merge', 401, null, 12)).toBe('Pull request #12 was not landed: your sign-in has ended. Sign in again.');
     expect(actionWords('merge', 500, null, 12)).toBe('Pull request #12 was not landed: cornfield answered 500.');
     expect(actionWords('merge', null, null, 12)).toBe('Pull request #12 was not landed: cornfield could not be reached. Look at the forge before trying again.');
+  });
+});
+
+describe('the pipeline\'s steps', () => {
+  const specPlan = {
+    kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/owner/name/issues/7' }, base: 'main', branch: 'spec/7-meals-page', path: 'docs/specs/proposals/7-meals-page.json',
+    message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft.', content: '{\n  "version": 1\n}\n', existing: null,
+  };
+  const buildPlan = {
+    kind: 'build', digest: 'b'.repeat(32), pull: { number: 40, title: 'Meals spec', url: 'https://git.example.test/owner/name/pull/40' }, slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json',
+    sha: '4040000000000000000000000000000000000000', review: { by: 'maintainer-one', url: 'https://git.example.test/c/1', at: '2026-10-19T10:00:00Z' }, title: 'Build: Meals', body: 'Build it.\n- [ ] Add `page-meals`', items: 1, existing: null,
+  };
+
+  it('asks for a plan at the address the step is done at, and posts a spec to its issue', () => {
+    expect(planUrl('spec', 7)).toBe('/api/forge/issues/7/spec');
+    expect(planUrl('build', 40, '0040-meals')).toBe('/api/forge/pulls/40/build?slug=0040-meals');
+    expect(planUrl('build', 40, 'a b&c')).toBe('/api/forge/pulls/40/build?slug=a%20b%26c');
+    expect(actionUrl(7, 'spec')).toBe('/api/forge/issues/7/spec');
+    expect(actionUrl(40, 'build')).toBe('/api/forge/pulls/40/build');
+  });
+
+  it('offers a spec on an open issue only', () => {
+    expect(specBlock({ state: 'open' })).toBe(null);
+    expect(specBlock({ state: 'closed' })).toBe('It is closed, so no spec is started for it.');
+  });
+
+  it('offers the build issue for an approved proposal of an open pull request, and says why not for the others', () => {
+    const detail = (specs, extra = {}, state = 'open') => ({ pull: { state }, specs, ...extra });
+    expect(buildOffers(detail([{ slug: 'a', path: 'p/a.json', approved: true }, { slug: 'b', path: 'p/b.json', approved: false }]))).toEqual([
+      { slug: 'a', path: 'p/a.json', approved: true, offer: true, why: '' },
+      { slug: 'b', path: 'p/b.json', approved: false, offer: false, why: 'No approval yet: a maintainer approves it in the proposal\'s review first.' },
+    ]);
+    expect(buildOffers(detail([{ slug: 'a', path: 'p/a.json', approved: true }], { stale: 'GitHub is away' }))[0]).toMatchObject({ offer: false, why: 'This is an older answer from the forge: refresh first.' });
+    expect(buildOffers(detail([{ slug: 'a', path: 'p/a.json', approved: true }], {}, 'merged'))).toEqual([]);
+    expect(buildOffers(detail(undefined))).toEqual([]);
+    expect(buildOffers(null)).toEqual([]);
+  });
+
+  it('shows everything a spec makes: the issue, the branch, the file, the pull request, a draft; the file and the description in full', () => {
+    const c = confirmSpec(specPlan, 'GitHub');
+    expect(c.title).toBe('Start a spec for issue #7?');
+    expect(c.lines).toEqual([
+      ['Issue', '#7 Meals page'], ['Branch', 'spec/7-meals-page'], ['Starts from', 'main'], ['File', 'docs/specs/proposals/7-meals-page.json'], ['Pull request', 'Spec: Meals page'], ['Draft', 'Yes'],
+    ]);
+    expect(c.previews).toEqual([{ label: 'docs/specs/proposals/7-meals-page.json (the stub proposal)', text: specPlan.content }, { label: 'The pull request\'s description', text: specPlan.body }]);
+    expect(c.note).toBe('Makes this branch, adds this one file in one commit, and opens the draft pull request on GitHub, as you. Nothing else changes and no agent is started.');
+    expect(c.go).toBe('Start the spec');
+    expect(specBody(specPlan)).toEqual({ digest: 'a'.repeat(32) });
+  });
+
+  it('shows everything a build issue makes, and sends the proposal, the commit it was read at and the plan\'s digest', () => {
+    const c = confirmBuild(buildPlan, 'Forgejo');
+    expect(c.title).toBe('Open the build issue for 0040-meals?');
+    expect(Object.fromEntries(c.lines)).toEqual({ 'Spec pull request': '#40 Meals spec', Proposal: 'docs/specs/proposals/0040-meals.json', 'At commit': buildPlan.sha, 'Approved by': 'maintainer-one', Issue: 'Build: Meals', Checklist: '1 item' });
+    expect(c.previews).toEqual([{ label: 'The issue\'s description', text: buildPlan.body }]);
+    expect(c.note).toContain('on Forgejo');
+    expect(c.note).toContain('no agent is started');
+    expect(buildBody(buildPlan)).toEqual({ slug: '0040-meals', sha: buildPlan.sha, digest: 'b'.repeat(32) });
+  });
+
+  it('says what is made already, and each answer: made, found, refused, unreachable', () => {
+    expect(existingWords('spec', { ...specPlan, existing: { number: 50, draft: true } })).toBe('Issue #7 has its spec already: pull request #50 (a draft). Nothing new is made.');
+    expect(existingWords('build', { ...buildPlan, existing: { number: 60, state: 'closed' } })).toBe('0040-meals has its build issue already: #60 (closed). Nothing new is made.');
+    expect(existingWords('build', { ...buildPlan, existing: { number: 60, state: 'open' } })).toBe('0040-meals has its build issue already: #60. Nothing new is made.');
+    expect(actionWords('spec', 201, { ok: true, created: true, pull: { number: 50 } }, 7)).toBe('Spec started for issue #7: draft pull request #50.');
+    expect(actionWords('spec', 200, { ok: true, created: false, pull: { number: 50 } }, 7)).toBe('Issue #7 has its spec already: pull request #50. Nothing new was made.');
+    expect(actionWords('build', 201, { ok: true, created: true, slug: '0040-meals', issue: { number: 60 } }, 40)).toBe('Build issue #60 opened for 0040-meals.');
+    expect(actionWords('build', 200, { ok: true, created: false, slug: '0040-meals', issue: { number: 60 } }, 40)).toBe('0040-meals has its build issue already: #60. Nothing new was made.');
+    expect(actionWords('spec', 409, { ok: false, error: 'It changed.' }, 7)).toBe('No spec was started for issue #7: It changed.');
+    expect(actionWords('build', 403, { ok: false, error: 'Only the repo\'s maintainers open build issues; x is not one now.' }, 40)).toMatch(/^No build issue was opened for pull request #40: Only the repo's maintainers/);
+    expect(actionWords('spec', null, null, 7)).toBe('No spec was started for issue #7: cornfield could not be reached. Look at the forge before trying again.');
   });
 });

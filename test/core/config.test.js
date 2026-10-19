@@ -35,6 +35,12 @@ describe('configProblems', () => {
     for (const m of ['force', 'fast-forward', '', 1]) expect(configProblems(forge(m))).toEqual(['forge.mergeMethod is one of merge, squash, rebase.']);
   });
 
+  it('takes a forge\'s base branch for specs: a plain branch name, nothing that could be a path out or an option', () => {
+    const forge = (baseBranch) => ({ forge: { type: 'github', repo: 'o/n', baseBranch } });
+    for (const b of [undefined, 'main', 'release/1.x', 'v1.0_rc']) expect(configProblems(forge(b)), b).toEqual([]);
+    for (const b of ['', '-x', '../x', 'a..b', '/main', 'a b', 'main/', 1, null]) expect(configProblems(forge(b)), String(b)).toEqual(['forge.baseBranch is the branch spec pull requests go into, like "main".']);
+  });
+
   it('names what is wrong: unknown keys, a bad port, a deriver or source that is neither built in nor a path, a path out of the repo', () => {
     const out = configProblems({
       colour: 'red', port: 70000, derivers: ['nope', './../x.js', { use: 'starter', options: 3 }],

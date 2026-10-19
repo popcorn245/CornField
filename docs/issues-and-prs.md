@@ -6,7 +6,7 @@ When the config names a forge (`forge: { type: 'github', repo: 'owner/name' }`, 
 
 - **Pull requests** and **Issues** are two lists, newest first, read through cornfield's server (the browser never talks to the forge, and never sees a token).
 - **Filters** on what is loaded: state (a pull request is open, merged, or closed without landing; an issue open or closed), label, author, and a search over the title, number, author and labels. The line under the title says how many pass.
-- A row links out to the forge. An issue's whole row is the link; a pull request's row selects it, with a link beside it.
+- A row links out to the forge. An issue's whole row is the link (an open one also has **Start a spec**, below); a pull request's row selects it, with a link beside it.
 - Rate limits and errors are a line in the panel in words ("GitHub's limit for this sign-in is used up; it resets at 21:14 UTC"), never a blank list. While the forge cannot be asked, the last answer cornfield saw is shown and says it is old. **Refresh** asks the forge again.
 
 ## A pull request lights the map
@@ -20,9 +20,23 @@ Select a pull request and the panel asks for its files and the checks on its hea
 
 Select the pull request again, or press **Clear**, to let go. Closing the panel leaves the lights on, and the button says which pull request they are (`#12`).
 
+## The pipeline's own steps
+
+Between an idea and a release there are three steps cornfield does for you, each **one button with a confirm step**, each guarded and audited like the actions below (they are [ADR 0006](adr/0006-safe-actions-only.md)'s "the pipeline's own steps"). None of them starts an agent ([ADR 0007](adr/0007-track-agents-do-not-launch.md)): they only make a branch, a file, a pull request or an issue on the forge, as you.
+
+1. **Start a spec**, on an open issue in the Issues list. It makes a branch `spec/<n>-<slug>` (the slug is the issue's title, lower case, at most 48 characters) from the config's `forge.baseBranch` (`main` when unset), one commit adding a stub proposal `<proposals folder>/<n>-<slug>.json` (a title and a one-sentence summary that point back at the issue, and nothing a proposal would claim; it passes the proposal validator), and a **draft** pull request "Spec: <title>" whose description starts `Refs #<n>`. The spec then shows in the Proposals menu like any other spec PR, and the Proposals review applies.
+2. **Open the build issue**, on a selected spec pull request that changes a proposal whose latest review by a maintainer is an approval ([reviews](proposals.md)). It opens an issue "Build: <proposal title>" that links the spec pull request, names the proposal and the commit it was read at, says who approved it, and lists the proposal as approved (the review's what-if edits folded in) as a checklist: each node to add, change and remove, then each edge. A proposal that is sent back, has no review, whose approval someone edited, or that a non-maintainer "approved" has no button; the panel says why.
+3. **Land it**, on a green pull request: the same action as below, not a second one.
+
+**The confirm step shows exactly what will be made.** Clicking the button asks the server for the *plan* (`GET`, read from the forge now) and shows it in the dialog: the issue or pull request, the branch, the file's whole text and the description in full. Confirming sends back only the plan's digest (and, for the build issue, the proposal and the commit that were shown); the server plans again from the forge and refuses (409) if it is not the same plan, so what is made is what was shown. A page cannot name the branch, the path or the text.
+
+**A second click makes nothing twice.** If the plan finds what an earlier ask made (an open pull request from a `spec/<n>-` branch for that issue; an issue whose description carries the step's `cornfield-build` marker for that pull request and proposal, closed or open), the panel says so, with a link, and shows no dialog; the action answers 200 with `created: false`. A half-made spec (the branch and the file are there, the pull request failed) is picked up where it stopped. A branch of that name with other work on it and no pull request is refused rather than committed onto: cornfield only ever *adds* a branch, a file, a pull request, an issue.
+
+Both steps go through the checks of the table below (method, signed in, flood, maintainer now, same origin, JSON and 4 KB, twice, state) and are rows in the audit as `spec` (target `owner/name#<issue>`) and `build` (target `owner/name#<pull>/<proposal>`). Text from the forge or from a proposal (a node's label, a `why`) goes into the new issue only as a code span or with its markup, mentions and references turned into entities, so a proposal cannot ping anyone or close an issue from there.
+
 ## Land a green pull request, re-run a failed check
 
-A selected pull request has two actions, for a signed-in maintainer, and they are the only things cornfield does to a forge. Never a force-merge, never a deploy, nothing that touches anything live.
+A selected pull request has two actions, for a signed-in maintainer; with the pipeline's two steps above they are the only things cornfield does to a forge. Never a force-merge, never a deploy, nothing that touches anything live.
 
 - **Land it** is there when the pull request is open, not a draft, and every check on its head is green (a check that is neutral or skipped does not stand in the way, but at least one must have passed: no checks, or only skipped and neutral ones, is not green). Otherwise the panel says why in its place ("Not every check is green: lint failed; test is still running."). It opens a **confirm dialog** that shows exactly what will land: the pull request, its head commit, the branch it comes from and goes into, how it lands (the config's `forge.mergeMethod`: a merge commit, squashed, or rebased; `merge` when unset), and each check. **Land it** there lands that commit with the forge's own merge; **Cancel** or Escape does nothing.
 - **Re-run** is on a failed or cancelled check the forge lets cornfield run again (a GitHub Actions job; a cancelled one is usually a newer push's concurrency group stopping it). A check that passed or is still running has none. A failed check the forge cannot re-run from here (a plain commit status, or anything on Forgejo) says so beside it, and where to do it.
@@ -44,6 +58,8 @@ The page is never trusted. Each action is a `POST` to cornfield's own server, wh
 | State | the pull request is not open, is a draft, a check is not green, or the forge says it is not ready (above) | 409 |
 | Head | the commit the page showed is not the pull request's head now (somebody pushed): look again | 409 |
 | Re-run | the check is not on that head, has not failed (or been cancelled), or the forge cannot run it again | 409 |
+| Spec | the issue is closed or is a pull request; the plan is not the one the page showed (the issue was edited); the base branch is not there; the branch holds other work | 409 (404) |
+| Build issue | the pull request is closed or does not hold the proposal; no approval by a maintainer now; the commit or the plan is not the one shown (a push, a new review) | 409 |
 
 The merge itself goes through the forge interface's `merge(n, { onlyIfGreen: true, sha })`, which reads the pull request and its checks once more and asks the forge to land that commit only (GitHub's `sha`, Forgejo's `head_commit_id`): a push in between makes the forge refuse rather than land untested code. There is no force option and no admin override to ask for.
 
@@ -56,11 +72,11 @@ Just before it lands, the forge is asked once more what it knows besides the che
 
 ### The audit
 
-Every attempt is a row in the `actions` table of `cornfield.db`: when, who, `merge` or `rerun`, the target (`owner/name#12`, or `owner/name#13/run:42`), the request (the number, the commit, the check), and the status and answer. It is written before the forge is asked and finished after, so a refusal, a forge error and a success are all there; a row with no status is an attempt that did not get an answer. If the table cannot be written, nothing is done (503). Read it with any SQLite tool: `SELECT at, login, action, target, status FROM actions ORDER BY id DESC`.
+Every attempt is a row in the `actions` table of `cornfield.db`: when, who, `merge`, `rerun`, `spec` or `build`, the target (`owner/name#12`, or `owner/name#13/run:42`), the request (the number, the commit, the check), and the status and answer. It is written before the forge is asked and finished after, so a refusal, a forge error and a success are all there; a row with no status is an attempt that did not get an answer. If the table cannot be written, nothing is done (503). Read it with any SQLite tool: `SELECT at, login, action, target, status FROM actions ORDER BY id DESC`.
 
 ## Who it asks as
 
-The server asks the forge as the signed-in maintainer, with their own token ([sign-in](sign-in.md)), through the same adapter as everything else. The lists and details only read; the two actions above are the only writes. Without sign-in (a tool on your own machine, Stage 1) there is nobody to ask as, so the panel is not offered and the routes answer 403 in words, as the Proposals menu lists no spec PRs then. Asking anonymously would work for a public repo, but every visitor would share the forge's unauthenticated limit (60 requests an hour on GitHub), with nothing kept between them.
+The server asks the forge as the signed-in maintainer, with their own token ([sign-in](sign-in.md)), through the same adapter as everything else. The lists and details only read; the actions above are the only writes. Without sign-in (a tool on your own machine, Stage 1) there is nobody to ask as, so the panel is not offered and the routes answer 403 in words, as the Proposals menu lists no spec PRs then. Asking anonymously would work for a public repo, but every visitor would share the forge's unauthenticated limit (60 requests an hour on GitHub), with nothing kept between them.
 
 Answers are kept in `cornfield.db` for a minute per user and request, with an ETag, so opening the panel is not a dozen API calls; **Refresh** goes past it.
 
@@ -70,9 +86,13 @@ The routes, for the curious (all behind the sign-in guard):
 |---|---|
 | `/api/forge/issues?state=open\|closed\|all&labels=a,b&limit=100` | issues (not pull requests) |
 | `/api/forge/pulls?state=open\|closed\|all&limit=100` | pull requests |
-| `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head (each check says whether cornfield can re-run it) |
+| `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head (each check says whether cornfield can re-run it), and `specs`: the proposals it changes and whether a maintainer has approved each |
 | `POST /api/forge/pulls/<n>/merge` `{ "sha" }` | lands it at that head, if green |
 | `POST /api/forge/pulls/<n>/rerun` `{ "sha", "check" }` | re-runs one failed or cancelled check on that head |
+| `GET /api/forge/issues/<n>/spec` | the plan of step 1: the branch, the file's text and the pull request it would make, or the pull request it made already (never kept) |
+| `POST /api/forge/issues/<n>/spec` `{ "digest" }` | starts the spec, if the plan is still that one |
+| `GET /api/forge/pulls/<n>/build?slug=<proposal>` | the plan of step 2: the issue it would open, or the one it opened already (never kept) |
+| `POST /api/forge/pulls/<n>/build` `{ "slug", "sha", "digest" }` | opens the build issue, if the plan is still that one |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
 

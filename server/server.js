@@ -18,6 +18,7 @@
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, read from the forge (server/forge-routes.js)
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
+ *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
  *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
@@ -210,7 +211,7 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
-    if (await serveForge(req, res, reqPath, url, { config, session: gate.session, auth, now: opts.now, publicHost })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;

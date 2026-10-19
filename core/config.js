@@ -11,7 +11,7 @@
  *     sources: {                              // browser modules for the live layer, the house and devices
  *       live: null, house: null, devices: null, checker: null,
  *     },
- *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'
+ *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'; baseBranch: 'main'
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
@@ -136,6 +136,7 @@ export function configProblems(c) {
       if (c.forge.url !== undefined && !/^https?:\/\/[^/\s]+\/?$/.test(String(c.forge.url))) out.push('forge.url is the forge\'s origin, like https://github.com.');
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || ''))) out.push('forge.repo is "owner/name".');
       if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);
+      if (c.forge.baseBranch !== undefined && !(typeof c.forge.baseBranch === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(c.forge.baseBranch) && !c.forge.baseBranch.includes('..'))) out.push('forge.baseBranch is the branch spec pull requests go into, like "main".');
     }
   }
   for (const key of ['worktrees', 'proposals', 'topology']) {

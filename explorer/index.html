@@ -214,6 +214,7 @@
           </div>
         </div>
         <p id="forge-notice" class="hx-forge-notice" hidden></p>
+        <p id="forge-act-note" class="hx-forge-notice" hidden></p>
         <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
         <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
         <p id="forge-rate" class="hx-forge-rate hx-faint"></p>
@@ -276,7 +277,7 @@
 
   </div>
 
-  <!-- The confirm step of landing a pull request (forge-panel.js): a modal dialog over a scrim; the focus stays in it while it is open -->
+  <!-- The confirm step of landing a pull request, starting a spec and opening a build issue (forge-panel.js): a modal dialog over a scrim; the focus stays in it while it is open -->
   <div id="forge-confirm" class="hx-confirm-scrim" hidden>
     <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="forge-confirm-title" aria-describedby="forge-confirm-body">
       <h2 id="forge-confirm-title" class="hx-confirm-title"></h2>

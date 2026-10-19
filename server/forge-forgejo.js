@@ -48,7 +48,7 @@ const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' 
 
 /** @returns {import('./forge.js').Issue} */
 const toIssue = (i) => ({
-  number: i.number, title: i.title, state: i.state === 'closed' ? 'closed' : 'open', author: author(i.user), labels: labelNames(i.labels),
+  number: i.number, title: i.title, state: i.state === 'closed' ? 'closed' : 'open', author: author(i.user), labels: labelNames(i.labels), body: typeof i.body === 'string' ? i.body : '',
   comments: i.comments ?? 0, url: i.html_url, createdAt: i.created_at, updatedAt: i.updated_at, closedAt: i.closed_at ?? null,
 });
 
@@ -143,6 +143,38 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
 
     async pull(n) {
       return toPull((await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) })).body);
+    },
+
+    async issue(n) {
+      const { body } = await client.request('GET', `repos/${repo}/issues/${n}`, { what: `issue #${n} in ${forge.repo}` });
+      if (body.pull_request) throw new ForgeError(`#${n} in ${forge.repo} is a pull request, not an issue.`, { code: 'not-found', forge: NAME });
+      return toIssue(body);
+    },
+
+    async createBranch(name, { from }) {
+      let made;
+      try {
+        made = (await client.request('POST', `repos/${repo}/branches`, { body: { new_branch_name: name, old_branch_name: from }, what: `the branch ${name}` })).body;
+      } catch (err) {
+        if (err instanceof ForgeError && err.status === 409) throw new ForgeError(`The branch ${name} is there already.`, { code: 'conflict', status: 409, forge: NAME });
+        throw err;
+      }
+      return { name, sha: made?.commit?.id ?? made?.commit?.sha ?? '' };
+    },
+
+    async createFile({ branch, path, content, message }) {
+      // A POST adds a file; Forgejo refuses (422) one that is there already (replacing is a PUT with its sha, which is not asked)
+      const { body } = await client.request('POST', `repos/${repo}/contents/${segments(path)}`, { body: { message, content: Buffer.from(content, 'utf8').toString('base64'), branch }, what: `${path} on ${branch}` });
+      return { sha: body?.commit?.sha ?? '' };
+    },
+
+    async createPull({ title, body, head, base, draft }) {
+      // Forgejo has no draft flag in this call: its marker is the title prefix it reads back (`isDraft`)
+      return toPull((await client.request('POST', `repos/${repo}/pulls`, { body: { title: draft ? `WIP: ${title}` : title, body, head, base }, what: `a pull request in ${forge.repo}` })).body);
+    },
+
+    async createIssue({ title, body }) {
+      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body }, what: `an issue in ${forge.repo}` })).body);
     },
 
     async pullFiles(n) {

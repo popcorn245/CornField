@@ -49,7 +49,7 @@ const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' 
 
 /** @returns {import('./forge.js').Issue} */
 const toIssue = (i) => ({
-  number: i.number, title: i.title, state: i.state === 'closed' ? 'closed' : 'open', author: author(i.user), labels: labelNames(i.labels),
+  number: i.number, title: i.title, state: i.state === 'closed' ? 'closed' : 'open', author: author(i.user), labels: labelNames(i.labels), body: typeof i.body === 'string' ? i.body : '',
   comments: i.comments ?? 0, url: i.html_url, createdAt: i.created_at, updatedAt: i.updated_at, closedAt: i.closed_at ?? null,
 });
 
@@ -166,6 +166,40 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
 
     async pull(n) {
       return toPull((await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) })).body);
+    },
+
+    async issue(n) {
+      const { body } = await client.request('GET', `repos/${repo}/issues/${n}`, { what: `issue #${n} in ${forge.repo}` });
+      // GitHub answers a pull request at its issue's address too
+      if (body.pull_request) throw new ForgeError(`#${n} in ${forge.repo} is a pull request, not an issue.`, { code: 'not-found', forge: NAME });
+      return toIssue(body);
+    },
+
+    async createBranch(name, { from }) {
+      const { body: base } = await client.request('GET', `repos/${repo}/branches/${segments(from)}`, { what: `the branch ${from} in ${forge.repo}` });
+      const sha = base.commit?.sha;
+      if (typeof sha !== 'string' || !sha) throw new ForgeError(`GitHub did not say where ${from} is.`, { code: 'unavailable', forge: NAME });
+      try {
+        await client.request('POST', `repos/${repo}/git/refs`, { body: { ref: `refs/heads/${name}`, sha }, what: `the branch ${name}` });
+      } catch (err) {
+        if (err instanceof ForgeError && err.status === 422) throw new ForgeError(`The branch ${name} is there already.`, { code: 'conflict', status: 422, forge: NAME });
+        throw err;
+      }
+      return { name, sha };
+    },
+
+    async createFile({ branch, path, content, message }) {
+      // No `sha` in the body: GitHub refuses (422) to replace a file it already has, so this only ever adds
+      const { body } = await client.request('PUT', `repos/${repo}/contents/${segments(path)}`, { body: { message, content: Buffer.from(content, 'utf8').toString('base64'), branch }, what: `${path} on ${branch}` });
+      return { sha: body?.commit?.sha ?? '' };
+    },
+
+    async createPull({ title, body, head, base, draft }) {
+      return toPull((await client.request('POST', `repos/${repo}/pulls`, { body: { title, body, head, base, draft }, what: `a pull request in ${forge.repo}` })).body);
+    },
+
+    async createIssue({ title, body }) {
+      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body }, what: `an issue in ${forge.repo}` })).body);
     },
 
     async pullFiles(n) {
