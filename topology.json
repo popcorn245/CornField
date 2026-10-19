@@ -1312,6 +1312,25 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Sign-in (docs/sign-in.md)."
+    },
+    {
+      "id": "pkg-world",
+      "label": "plugins/world",
+      "type": "pkg",
+      "file": "plugins/world",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/world workspace package (plugins/world)."
+    },
+    {
+      "id": "core-plugins-world-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/world/index.js",
+      "summary": "The world deriver: which machine each stack runs on.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The world deriver: which machine each stack runs on. (plugins/world/index.js)"
     }
   ],
   "edges": [
@@ -3628,7 +3647,27 @@
       "kind": "calls",
       "status": "live",
       "label": "calls"
+    },
+    {
+      "from": "root",
+      "to": "pkg-world"
+    },
+    {
+      "from": "pkg-world",
+      "to": "core-plugins-world-index"
+    },
+    {
+      "from": "pkg-world",
+      "to": "pkg-compose",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-world-index",
+      "to": "core-plugins-compose-index",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T22:02:16.896Z"
+  "updatedAt": "2026-10-19T22:07:48.021Z"
 }

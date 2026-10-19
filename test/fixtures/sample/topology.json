@@ -333,7 +333,10 @@
       "file": "stacks/world.json",
       "hostname": "engine-1",
       "virtual": true,
-      "desc": "The container engine, a virtual machine on server-1."
+      "desc": "The container engine, a virtual machine on server-1.",
+      "code": [
+        "stacks/app-stack"
+      ]
     },
     {
       "id": "device-camera-porch_cam",
@@ -978,7 +981,7 @@
       "from": "stack-app-stack",
       "to": "machine-engine-1",
       "kind": "runs-on",
-      "label": "runs on the engine"
+      "label": "runs on engine-1"
     },
     {
       "from": "machine-engine-1",
@@ -1244,5 +1247,5 @@
       "when": "renew"
     }
   ],
-  "updatedAt": "2026-10-19T21:13:38.338Z"
+  "updatedAt": "2026-10-19T21:47:23.695Z"
 }
