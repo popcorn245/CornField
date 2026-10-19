@@ -205,8 +205,13 @@
           <div class="hx-forge-tabs" role="group" aria-label="Show">
             <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true">Pull requests</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false">Issues</button>
+            <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Work grouped by issue and proposal, agent-made work marked">Agents</button>
           </div>
-          <div class="hx-forge-filters">
+          <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-agents" /> Agent-made only</label>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
+          </div>
+          <div id="forge-filters" class="hx-forge-filters">
             <label class="hx-forge-field">State<select id="forge-state" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Label<select id="forge-label" class="hx-forge-select"></select></label>
             <label class="hx-forge-field">Author<select id="forge-author" class="hx-forge-select"></select></label>

@@ -14,6 +14,7 @@
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
  *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
  *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
+ *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
  *
  * Every answer is `{ ok: true, forge, repo, at, rate, … }` (`rate`: what is left of the forge's limit, in words, or
  * null) or `{ ok: false, error, code }` with the forge's error in plain words. Answers are kept in `forge_cache`
@@ -26,6 +27,7 @@
 import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, rateLimitWords } from './forge.js';
 import { actionOf, serveAction } from './forge-actions.js';
+import { listPullProposals } from './proposal-pulls.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -34,6 +36,12 @@ export const KEEP_MS = 24 * 60 * 60 * 1000;
 /** The most a listing may ask for, and what it asks for unless told */
 export const MAX_LIMIT = 300;
 export const DEFAULT_LIMIT = 100;
+/** What the agents view reads: the newest pull requests and issues, any state, and the most branches */
+export const WORK_PULLS = 100;
+export const WORK_ISSUES = 200;
+export const WORK_BRANCHES = 300;
+/** A pull request's text is read for "Closes #n": the first of it is enough, and the answer stays small */
+export const WORK_BODY_MAX = 4000;
 
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
 const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
@@ -56,7 +64,7 @@ function listQuery(url, withLabels) {
  * The reads: the request's route, the forge call that answers it, and the key it is kept under.
  * @returns {{ key: string, load: (forge: import('./forge.js').Forge) => Promise<object> } | null}
  */
-function routeOf(reqPath, url) {
+function routeOf(reqPath, url, config) {
   if (reqPath === '/api/forge/issues') {
     const q = listQuery(url, true);
     return { key: `issues?state=${q.state}&limit=${q.limit}&labels=${q.labels.join(',')}`, load: async (forge) => ({ items: await forge.issues(q) }) };
@@ -64,6 +72,25 @@ function routeOf(reqPath, url) {
   if (reqPath === '/api/forge/pulls') {
     const q = listQuery(url, false);
     return { key: `pulls?state=${q.state}&limit=${q.limit}`, load: async (forge) => ({ items: await forge.pulls(q) }) };
+  }
+  if (reqPath === '/api/forge/work') {
+    return {
+      key: 'work',
+      load: async (forge) => {
+        const [pulls, issues, branches, specs] = await Promise.all([
+          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, config),
+        ]);
+        return {
+          pulls: pulls.map((p) => ({ ...p, body: p.body.slice(0, WORK_BODY_MAX) })),
+          issues,
+          branches: branches.slice(0, WORK_BRANCHES),
+          specs: specs.entries.map((e) => ({ pull: e.pull.number, slug: e.slug })),
+          specsProblem: specs.problem,
+          // In the kept answer, so a changed config is a changed ETag
+          agents: config.agents,
+        };
+      },
+    };
   }
   const one = /^\/api\/forge\/pulls\/([1-9]\d{0,8})$/.exec(reqPath);
   if (one) {
@@ -141,7 +168,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     return true;
   }
   try {
-    const route = routeOf(reqPath, url);
+    const route = routeOf(reqPath, url, config);
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;

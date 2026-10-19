@@ -338,4 +338,26 @@ describe('the Forgejo adapter', () => {
     await forgeError(() => forge.me(), 'unavailable');
     expect((await forge.me()).login).toBe('maintainer-one');
   });
+
+  it('marks an account the forge calls a Bot, and its Actions user, and only those', async () => {
+    const pull = (number, user) => ({ number, title: `t${number}`, state: 'open', user, labels: [], head: { ref: 'b', sha: 's' }, base: { ref: 'main' }, html_url: 'u', body: `Closes #${number}` });
+    const forge = await forgeOn({
+      'GET /repos/owner/name/pulls?state=all&limit=50': {
+        body: [
+          pull(1, { id: 7, login: 'renovate', type: 'Bot' }),
+          pull(2, { id: -2, login: 'forgejo-actions' }),
+          pull(3, { id: 9, login: 'agent-four', type: 'User' }),
+          pull(4, { id: 10, login: 'someone[bot]' }),
+        ],
+      },
+    });
+    const pulls = await forge.pulls({ state: 'all' });
+    expect(pulls.map((p) => p.author)).toEqual([
+      { login: 'renovate', url: null, bot: true },
+      { login: 'forgejo-actions', url: null, bot: true },
+      { login: 'agent-four', url: null },
+      { login: 'someone[bot]', url: null }, // the name is the agent rule's to read, not the adapter's
+    ]);
+    expect(pulls[0].body).toBe('Closes #1');
+  });
 });

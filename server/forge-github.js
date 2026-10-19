@@ -44,7 +44,8 @@ const enc = encodeURIComponent;
 const segments = (p) => p.split('/').map(enc).join('/');
 const repoPath = (repo) => segments(repo);
 
-const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null } : null);
+// `bot` is set only when the forge says the account is a bot (GitHub's user type `Bot`): the agent-made rule reads it
+const author = (u) => (u && typeof u.login === 'string' ? { login: u.login, url: u.html_url ?? null, ...(u.type === 'Bot' ? { bot: true } : {}) } : null);
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === 'string' ? l : l.name)).filter((l) => typeof l === 'string');
 
 /** @returns {import('./forge.js').Issue} */
@@ -55,7 +56,7 @@ const toIssue = (i) => ({
 
 /** @returns {import('./forge.js').Pull} */
 const toPull = (p) => ({
-  number: p.number, title: p.title, state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
+  number: p.number, title: p.title, body: p.body ?? '', state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });

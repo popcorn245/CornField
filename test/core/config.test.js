@@ -49,6 +49,27 @@ describe('configProblems', () => {
   });
 });
 
+describe('the agents rules', () => {
+  it('are empty by default, with bot accounts counted', async () => {
+    expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    const c = await loadConfig(repo(), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    expect(c.agents).not.toBe(DEFAULTS.agents);
+  });
+
+  it('take the keys of the file over the defaults, and the rest stay', async () => {
+    const c = await loadConfig(repo("export default { agents: { branchPrefixes: ['claude/'], labels: ['agent', 'needs human'], bots: false } };"), { env: {} });
+    expect(c.agents).toEqual({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false });
+  });
+
+  it('are checked: the shape, the keys, and what a name may be', () => {
+    expect(configProblems({ agents: { authors: ['claude-bot', 'renovate[bot]'], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false } })).toEqual([]);
+    const text = configProblems({ agents: { authors: ['two words', ''], labels: 'agent', branchPrefixes: [1], bots: 'yes', colour: 1 } }).join('\n');
+    for (const want of ['agents.authors is a list of account names', 'agents.labels is a list of label names', 'agents.branchPrefixes is a list of branch name starts', 'agents.bots is true or false', 'agents.colour']) expect(text, want).toContain(want);
+    expect(configProblems({ agents: [] }).join()).toContain('"agents" is { authors');
+  });
+});
+
 describe('loadConfig', () => {
   it('fills the defaults, names the title from package.json, and keeps the data folder out of the repo', async () => {
     const root = repo();

@@ -208,7 +208,14 @@ describe('the issues and PRs panel', () => {
   const GREEN = { pull: pr(12, 'Meals page'), files: DETAIL.files, checks: [{ id: 'run:7', name: 'test', state: 'success', url: 'https://git.example.test/runs/7', rerunnable: false, canRerun: false }] };
   const stub = () => vi.stubGlobal('fetch', vi.fn(async (url) => {
     const u = new URL(url, 'http://localhost');
-    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname.endsWith('/12') ? GREEN : DETAIL;
+    const work = {
+      agents: { authors: [], labels: ['agent'], branchPrefixes: ['claude/'], bots: true },
+      pulls: [pr(13, 'Lint everything', { body: 'Closes #5' }), pr(12, 'Meals page', { draft: true, labels: [], body: '' }), pr(9, 'Old work', { state: 'merged', labels: [], body: 'Closes #5' })],
+      issues: [{ number: 5, title: 'Sign-in', state: 'open', author, labels: [], comments: 0, url: 'https://git.example.test/issues/5', createdAt: '2026-10-16T10:00:00Z', updatedAt: '2026-10-16T10:00:00Z', closedAt: null }],
+      branches: [{ name: 'claude/5-notes', sha: 'n', protected: false }, { name: 'claude/lone', sha: 'l', protected: false }],
+      specs: [{ pull: 12, slug: '0013-meals' }], specsProblem: null,
+    };
+    const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname === '/api/forge/work' ? work : u.pathname.endsWith('/12') ? GREEN : DETAIL;
     return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
   }));
   const start = () => {
@@ -254,6 +261,43 @@ describe('the issues and PRs panel', () => {
     await settle();
     document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none on the Agents tab: its groups, the marks, a selected pull request, the finished work shown (dark)', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-group').length).toBe(3);
+    expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
+    expect(await audit()).toEqual([]);
+    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('.hx-forge-file').length).toBe(2);
+    expect(await audit()).toEqual([]);
+    const finished = $('forge-work-finished');
+    finished.checked = true;
+    finished.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(document.querySelector('[data-forge-pr="9"]')).not.toBe(null);
+    expect(await audit()).toEqual([]);
+  });
+
+  it('has none on the Agents tab in the light theme either', async () => {
+    stub();
+    start();
+    document.documentElement.dataset.theme = 'light';
+    openForge();
+    await settle();
+    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle();
+    expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
+    expect(await audit()).toEqual([]);
+    const agents = $('forge-work-agents');
+    agents.checked = true;
+    agents.dispatchEvent(new Event('change', { bubbles: true }));
     expect(await audit()).toEqual([]);
   });
 

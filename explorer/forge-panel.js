@@ -13,6 +13,9 @@
  *     `file` holds it (the deepest one), a failing check lights the test files its name names, and the rest of the
  *     map fades back (`state.forgeLit`, painted by scene.js). A file on no node is listed, with the others, as not on
  *     the map. Each node has a button that selects it on the map.
+ *   - The third tab, Agents, groups the work by what it belongs to (explorer/agents-model.js): one group per proposal
+ *     (the spec PR and the work on it), per issue (its pull requests and branches) and one for the rest, with the work
+ *     made by an agent marked and why. Nothing is launched (ADR 0007); a pull request there selects like any other.
  *   - Keys: Tab reaches the header button, Enter opens the panel with the focus on its title; Escape closes it and
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
@@ -33,6 +36,7 @@ import { selectNode } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
+import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
   mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
@@ -49,6 +53,8 @@ const ui = {
   kind: 'pulls',
   filters: defaultFilters(),
   lists: {}, // `${kind}|${server state}` -> { items, at, rate, stale }
+  work: null, // { grouped, problem, at, rate, stale } of the Agents tab
+  workFilters: { agentsOnly: false, finished: false },
   loading: false,
   error: '',
   selected: null, // the pull request's number
@@ -70,9 +76,10 @@ let now = () => Date.now();
 
 const forgeName = () => FORGE_NAMES[ui.config && ui.config.forge && ui.config.forge.type] || 'the forge';
 const listKey = () => `${ui.kind}|${serverState(ui.filters.state)}`;
-const current = () => ui.lists[listKey()] || null;
+const current = () => (ui.kind === 'work' ? ui.work : ui.lists[listKey()]) || null;
+const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
-const kindWords = () => (ui.kind === 'pulls' ? 'pull request' : 'issue');
+const kindWords = () => (ui.kind === 'pulls' ? 'pull request' : ui.kind === 'issues' ? 'issue' : 'piece of work');
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
@@ -93,9 +100,29 @@ async function request(url, refresh) {
   }
 }
 
+/** Loads the Agents tab: everything it groups, in one answer */
+async function loadWork(refresh, token) {
+  ui.loading = true;
+  ui.error = '';
+  paint();
+  const res = await request(WORK_URL, refresh);
+  if (token !== listToken) return;
+  ui.loading = false;
+  if (res.ok) {
+    const b = res.body;
+    ui.work = { grouped: groupWork(b), problem: b.specsProblem || '', at: b.at, rate: b.rate || '', stale: b.stale || '' };
+    announce(`${workStatus(groupsShown(), '', now())}${ui.work.stale ? '. This is an older answer' : ''}`);
+  } else {
+    ui.error = errorWords(res.status, res.body);
+    announce(ui.error);
+  }
+  paint();
+}
+
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
 async function loadList(refresh = false, quiet = false) {
   const token = ++listToken;
+  if (ui.kind === 'work') return loadWork(refresh, token);
   const key = listKey();
   ui.loading = true;
   ui.error = '';
@@ -193,6 +220,11 @@ const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' 
 
 /** The filters' choices: the states of the kind, the labels and authors of what is loaded */
 function paintFilters() {
+  $('forge-filters').hidden = ui.kind === 'work';
+  $('forge-work-filters').hidden = ui.kind !== 'work';
+  $('forge-work-agents').checked = ui.workFilters.agentsOnly;
+  $('forge-work-finished').checked = ui.workFilters.finished;
+  if (ui.kind === 'work') return;
   const items = current() ? current().items : [];
   const { labels, authors } = facetsOf(items);
   if (ui.filters.label && !labels.includes(ui.filters.label)) ui.filters.label = '';
@@ -202,19 +234,38 @@ function paintFilters() {
   $('forge-author').innerHTML = option('', 'Anyone', !ui.filters.author) + authors.map((a) => option(a, a, a === ui.filters.author)).join('');
 }
 
-function itemHtml(item) {
+function itemHtml(item, before = '', after = '') {
   const link = safeUrl(item.url);
   const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}">${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${labels}`;
-  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(kindWords())} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
-  if (ui.kind === 'pulls') {
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}">${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${before}${after}${labels}`;
+  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(item.head ? 'pull request' : 'issue')} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  if (ui.kind !== 'issues') {
     return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-pr="${item.number}" aria-pressed="${ui.selected === item.number}">${inner}</button>${out}</li>`;
   }
   // An issue has no more to show here: its row is the link out
   return link
     ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a></li>`
     : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div></li>`;
+}
+
+/** One piece of work in a group: a pull request (a row that selects it, as in the Pull requests tab) or a branch with none */
+function workHtml(e) {
+  const mark = e.mark ? `<span class="hx-forge-agentline"><span class="hx-forge-agent" title="Agent-made: ${escHtml(markWords(e.mark))}">Agent</span><span class="hx-forge-why hx-faint">${escHtml(markWords(e.mark))}</span></span>` : '';
+  if (e.type === 'pull') {
+    const also = e.issues.slice(1);
+    const note = [e.proposal ? `Spec PR for ${e.proposal}` : '', also.length ? `Also closes ${also.map((n) => `#${n}`).join(', ')}` : ''].filter(Boolean);
+    return itemHtml(e.pull, mark, note.length ? `<span class="hx-forge-meta">${escHtml(note.join(' · '))}</span>` : '');
+  }
+  return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-branch"><span class="hx-forge-title"><span class="hx-sr-only">Branch </span><code class="hx-code">${escHtml(e.branch.name)}</code></span><span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--draft">Branch</span> no pull request yet</span>${mark}</div></li>`;
+}
+
+/** The Agents tab's groups, each a heading and its work */
+function groupsHtml(groups) {
+  return groups.map((g, i) => {
+    const link = g.issue && safeUrl(g.issue.url) ? ` <a class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+    return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3><p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
+  }).join('');
 }
 
 /** The selected pull request: its checks, its files and the nodes they are */
@@ -298,20 +349,24 @@ function draw(panel) {
   for (const btn of panel.querySelectorAll('[data-forge-kind]')) btn.setAttribute('aria-pressed', String(btn.dataset.forgeKind === ui.kind));
 
   const list = current();
-  const shown = list ? filterItems(list.items, ui.kind, ui.filters) : [];
+  const work = ui.kind === 'work';
+  const groups = work ? groupsShown() : [];
+  const shown = list && !work ? filterItems(list.items, ui.kind, ui.filters) : [];
   const status = $('forge-status');
-  if (ui.loading && !list) status.textContent = `Loading ${kindWords()}s from ${forgeName()} …`;
+  if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : `Loading ${kindWords()}s from ${forgeName()} …`;
   else if (!list) status.textContent = '';
+  else if (work) status.textContent = workStatus(groups, list.at, now());
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
-  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '');
+  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '');
   notice.hidden = !words;
   notice.textContent = words;
 
   const rows = $('forge-list');
   if (!list) rows.innerHTML = '';
-  else rows.innerHTML = shown.length ? shown.map(itemHtml).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
+  else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : `<li class="hx-forge-empty hx-faint">${ui.work.grouped.groups.length ? 'No work matches these filters.' : 'No work here yet.'}</li>`;
+  else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
 
   const detail = $('forge-detail');
   detail.hidden = ui.selected === null;
@@ -357,8 +412,12 @@ async function finishAction(action, res, n) {
   ui.note = { text, ok: res.ok };
   announce(text);
   paint();
+  if (res.status === null) return;
+  // The other tabs' answers are from before it: they are read again when next shown (the server let go of its own copies)
+  if (ui.kind === 'work') ui.lists = {};
+  else { ui.lists = { [listKey()]: ui.lists[listKey()] }; ui.work = null; }
   // Whatever it came to (a refusal says the pull request is not what was shown), the panel looks again
-  if (res.status !== null && ui.selected === n) await refreshForge({ quiet: true });
+  if (ui.selected === n) await refreshForge({ quiet: true });
 }
 
 /** Re-runs one failed check on the head that is shown */
@@ -518,7 +577,8 @@ export async function refreshForge({ quiet = false } = {}) {
 function filtersChanged(announceNow = true) {
   paint();
   const list = current();
-  if (announceNow && list) announce(`${filterItems(list.items, ui.kind, ui.filters).length} of ${plural(list.items.length, kindWords())} shown`);
+  if (announceNow && list && ui.kind === 'work') announce(workStatus(groupsShown(), '', now()));
+  else if (announceNow && list) announce(`${filterItems(list.items, ui.kind, ui.filters).length} of ${plural(list.items.length, kindWords())} shown`);
 }
 
 function onClick(e) {
@@ -566,6 +626,11 @@ function onChange(e) {
     ui.filters.state = e.target.value;
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
+  } else if (id === 'forge-work-agents' || id === 'forge-work-finished') {
+    if (id === 'forge-work-agents') ui.workFilters.agentsOnly = e.target.checked;
+    else ui.workFilters.finished = e.target.checked;
+    paint();
+    announce(workStatus(groupsShown(), '', now()));
   } else if (id === 'forge-label') {
     ui.filters.label = e.target.value;
     filtersChanged();
@@ -637,5 +702,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   listToken++;
   pullToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null, busy: '', note: null, confirm: null });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, nodesSeen: null, busy: '', note: null, confirm: null });
 }
