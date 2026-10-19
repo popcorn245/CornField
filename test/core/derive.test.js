@@ -72,6 +72,45 @@ describe('planSync and what derivers own', () => {
     expect(next.edges).toContainEqual({ from: 'app-hand', to: 'pkg-a', kind: 'flow', flow: 'api', status: 'live', label: 'calls' });
   });
 
+  it('takes away an edge only for the deriver that emits its kind, at the end where that deriver puts its own nodes', async () => {
+    // Like compose (runs-on from an app into its stack) and cloud (calls into its externals)
+    const stacks = deriver({
+      name: 'stacks', owns: ['stack', 'container'],
+      derive: () => ({
+        nodes: [{ id: 'app-a', type: 'app', label: 'a' }, { id: 'stack-s', type: 'stack', label: 's' }, { id: 'container-c', type: 'container', label: 'c' }],
+        edges: [{ from: 'stack-s', to: 'container-c' }, { from: 'app-a', to: 'stack-s', kind: 'runs-on', label: 'serves a', mappings: [{ host: 'a', upstream: 'c:1', service: 'c' }] }],
+        ownedIds: ['app-a'],
+      }),
+    });
+    const cloud = deriver({
+      name: 'cloud', owns: ['external'],
+      derive: () => ({ nodes: [{ id: 'ext-x', type: 'external', label: 'x' }], edges: [{ from: 'container-c', to: 'ext-x', kind: 'calls', label: 'pulls' }] }),
+    });
+    const derived = await deriveTopology({ root: SAMPLE, derivers: [{ deriver: stacks }, { deriver: cloud }] });
+    expect(derived.madeBy).toEqual({ 'app-a': 'stacks', 'stack-s': 'stacks', 'container-c': 'stacks', 'ext-x': 'cloud' });
+    expect([...derived.claims].sort()).toEqual(['cloud|calls|to|external', 'stacks|own|from|stack', 'stacks|own|to|container', 'stacks|runs-on|from|app', 'stacks|runs-on|to|stack']);
+    const map = {
+      nodes: [...derived.nodes, { id: 'machine-m', type: 'machine', label: 'm' }, { id: 'svc-j', type: 'service', label: 'j' }],
+      edges: [
+        // Hand-written: the stack's machine, and a call into the container
+        { from: 'stack-s', to: 'machine-m', kind: 'runs-on', label: 'runs on m' },
+        { from: 'svc-j', to: 'container-c', kind: 'calls', label: 'asks it' },
+        // The derivers': one changed, one as it is, one the code no longer shows
+        { from: 'app-a', to: 'stack-s', kind: 'runs-on', label: 'old' },
+        { from: 'container-c', to: 'ext-x', kind: 'calls', label: 'pulls' },
+        { from: 'svc-j', to: 'ext-x', kind: 'calls', label: 'stale' },
+      ],
+    };
+    const { next, changes } = planSync(map, derived);
+    expect(next.edges.map((e) => `${e.from}|${e.to}|${e.kind || 'own'}|${e.label || ''}`)).toEqual([
+      'stack-s|machine-m|runs-on|runs on m', 'svc-j|container-c|calls|asks it', 'app-a|stack-s|runs-on|serves a', 'container-c|ext-x|calls|pulls', 'stack-s|container-c|own|',
+    ]);
+    expect(changes).toEqual(['update edge app-a|stack-s|runs-on', 'remove edge svc-j|ext-x|calls', 'add edge stack-s|container-c|own']);
+    // A plan built by hand (no claims) keeps the plain rule: either end derived
+    const plain = planSync(map, { ...derived, claims: undefined, madeBy: undefined });
+    expect(plain.changes).toContain('remove edge stack-s|machine-m|runs-on');
+  });
+
   it('keeps a hand-written description and drops a stored position', () => {
     const map = planSync({ nodes: [], edges: [] }, derived).next;
     map.nodes[1] = { ...map.nodes[1], desc: 'Written by a person.', x: 10, y: 20 };

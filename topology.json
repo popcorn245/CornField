@@ -1147,6 +1147,74 @@
       "desc": "cornfield: the vision (docs/vision.md)."
     },
     {
+      "id": "core-core-deriver-kit",
+      "label": "deriver-kit.js",
+      "type": "core",
+      "file": "core/deriver-kit.js",
+      "summary": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know). (core/deriver-kit.js)"
+    },
+    {
+      "id": "page-doc-docs-deriver-kit",
+      "type": "page",
+      "label": "/docs/deriver-kit",
+      "file": "docs/deriver-kit.md",
+      "summary": "The deriver kit: put your own code on the map",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The deriver kit: put your own code on the map (docs/deriver-kit.md)."
+    },
+    {
+      "id": "pkg-compose",
+      "label": "plugins/compose",
+      "type": "pkg",
+      "file": "plugins/compose",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/compose workspace package (plugins/compose)."
+    },
+    {
+      "id": "core-plugins-compose-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/compose/index.js",
+      "summary": "The compose deriver: the Software band of a self-hosted repo with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The compose deriver: the Software band of a self-hosted repo with zero plugin code. (plugins/compose/index.js)"
+    },
+    {
+      "id": "core-plugins-compose-routes",
+      "label": "routes.js",
+      "type": "core",
+      "file": "plugins/compose/routes.js",
+      "summary": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
+    },
+    {
+      "id": "pkg-openapi",
+      "label": "plugins/openapi",
+      "type": "pkg",
+      "file": "plugins/openapi",
+      "r": 24,
+      "color": "#06b6d4",
+      "desc": "The plugins/openapi workspace package (plugins/openapi)."
+    },
+    {
+      "id": "core-plugins-openapi-index",
+      "label": "index.js",
+      "type": "core",
+      "file": "plugins/openapi/index.js",
+      "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
+    },
+    {
       "id": "core-plugins-starter-languages",
       "label": "languages.js",
       "type": "core",
@@ -3177,6 +3245,91 @@
       "label": "calls"
     },
     {
+      "from": "pkg-core",
+      "to": "core-core-deriver-kit"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-derive",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-deriver-kit",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-deriver-kit"
+    },
+    {
+      "from": "page-doc-readme",
+      "to": "page-doc-docs-deriver-kit",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deriver-kit",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-derivers",
+      "to": "page-doc-docs-deriver-kit",
+      "dashed": true
+    },
+    {
+      "from": "root",
+      "to": "pkg-compose"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-index"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "core-plugins-compose-routes"
+    },
+    {
+      "from": "core-core-derive",
+      "to": "core-core-sync",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-plugins-compose-routes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "root",
+      "to": "pkg-openapi"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "core-plugins-openapi-index"
+    },
+    {
       "from": "pkg-starter",
       "to": "core-plugins-starter-languages"
     },
@@ -3197,5 +3350,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-10-19T21:37:02.850Z"
+  "updatedAt": "2026-10-19T21:47:40.769Z"
 }
