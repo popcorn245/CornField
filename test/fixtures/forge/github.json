@@ -49,6 +49,18 @@
       { "number": 8, "title": "Dropped", "state": "closed", "draft": false, "user": { "login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one" }, "labels": [], "head": { "ref": "dropped", "sha": "8880000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/8", "created_at": "2026-10-09T10:00:00Z", "updated_at": "2026-10-09T11:00:00Z", "merged_at": null }
     ]
   },
+  "GET /search/issues?q=%220013-meals%22+in%3Abody+repo%3Aowner%2Fname+is%3Aissue&sort=created&order=desc&per_page=100": {
+    "body": {"total_count": 2, "incomplete_results": false, "items": [{"number": 61, "title": "Build: Meals", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one"}, "labels": [], "body": "Build the approved proposal `0013-meals`.\n", "comments": 0, "html_url": "https://github.example.com/owner/name/issues/61", "created_at": "2026-10-18T10:00:00Z", "updated_at": "2026-10-18T10:00:00Z", "closed_at": null}, {"number": 12, "title": "Meals page", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one"}, "labels": [], "body": "0013-meals", "comments": 1, "html_url": "https://github.example.com/owner/name/pulls/12", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T11:00:00Z", "closed_at": null, "pull_request": {"url": "https://github.example.com/owner/name/pulls/12"}}]}
+  },
+  "GET /repos/owner/name/issues/5": {
+    "body": {"number": 5, "title": "Sign-in", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one"}, "labels": [{"name": "v1"}], "body": "Sign in with the forge.\n", "comments": 1, "html_url": "https://github.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T11:00:00Z", "closed_at": null}
+  },
+  "GET /repos/owner/name/issues/12": {
+    "body": {"number": 12, "title": "Meals page", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://github.example.com/maintainer-one"}, "labels": [{"name": "v1"}], "body": "", "comments": 1, "html_url": "https://github.example.com/owner/name/pulls/12", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T11:00:00Z", "closed_at": null, "pull_request": {"url": "https://github.example.com/owner/name/pulls/12"}}
+  },
+  "GET /repos/owner/name/branches/main": {
+    "body": {"name": "main", "commit": {"sha": "0000000000000000000000000000000000000001"}, "protected": true}
+  },
   "GET /repos/owner/name/pulls/12": {
     "body": { "number": 12, "title": "Meals page", "state": "open", "draft": false, "merged": false, "mergeable": true, "mergeable_state": "clean", "user": { "login": "agent-four", "html_url": "https://github.example.com/agent-four" }, "labels": [], "head": { "ref": "feature/meals", "sha": "abc0000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://github.example.com/owner/name/pull/12", "created_at": "2026-10-17T10:00:00Z", "updated_at": "2026-10-17T11:00:00Z", "merged_at": null }
   },

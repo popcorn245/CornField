@@ -93,7 +93,7 @@ describe('parseReviewBlocks', () => {
 
   it("carries an approval's mockups in the same block, round-trip, and refuses any that are not exactly { node, path, sha256 }", () => {
     const mockups = [{ node: 'page-meals', path: '0013-meals/list.png', sha256: 'a'.repeat(64) }];
-    const approved = { ...ok, mockups };
+    const approved = { ...ok, mockups, proposal: 'b'.repeat(64) };
     const text = reviewComment('0013-meals', approved, { login: 'maintainer-one' });
     expect(JSON.parse(/```cornfield-review 0013-meals\n([\s\S]*?)\n```/.exec(text)[1])).toEqual(approved);
     expect(parseReviewBlocks(text)).toEqual([{ slug: '0013-meals', review: approved }]);
@@ -111,6 +111,10 @@ describe('parseReviewBlocks', () => {
       { ...ok, mockups: [{ ...m, sha256: 'a'.repeat(63) }] },
       { ...ok, mockups: [{ ...m, sha256: null }] },
       { ...ok, mockups: Array.from({ length: 41 }, () => m) },
+      { verdict: 'notes', note: 'x', proposal: 'a'.repeat(64) }, // only an approval records the proposal
+      { ...ok, proposal: 'A'.repeat(64) },
+      { ...ok, proposal: 'abc' },
+      { ...ok, proposal: null },
     ]) expect(parseReviewBlocks(block('a', bad)), JSON.stringify(bad).slice(0, 80)).toEqual([]);
   });
 });

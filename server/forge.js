@@ -11,6 +11,8 @@
  *   issues({ state, labels, limit })  issues, not pull requests, newest first
  *   pulls({ state, limit })           pull requests, newest first
  *   pull(n)                           one pull request (its head, its state)
+ *   issue(n)                          one issue (not a pull request: that is `not-found`)
+ *   searchIssues(words)               the issues whose text holds the words (one page; the forge's search, which can lag a moment)
  *   pullFiles(n)                      the files a pull request changes
  *   comments(n)                       the comments on an issue or pull request, oldest first
  *   comment(n, body)                  posts one, and answers it
@@ -27,6 +29,15 @@
  *   tag(name)                         one tag with the time of the commit it names
  *   createReleaseDraft({ tag, name, body })   a DRAFT release for a tag name: never published, and it makes no tag
  *
+ * The pipeline's own steps (ADR 0006, spec 0001 section 3) add four calls that make something new, and nothing else:
+ * none of them changes or removes what is there (a branch that exists, a file that exists, are refused), so each is as
+ * safe to ask as a comment:
+ *
+ *   createBranch(name, { from })      a branch at the head of the branch `from` (`conflict` when it exists)
+ *   createFile({ branch, path, content, message })   one new file on a branch, as one commit (`invalid` when it exists)
+ *   createPull({ title, body, head, base, draft })   a pull request; a draft one is `draft: true` (Forgejo: the "WIP: " title it uses)
+ *   createIssue({ title, body })      an issue
+ *
  * An adapter module (server/forge-github.js, server/forge-forgejo.js) implements these at its forge's level, with
  * `mergeAt(n, { sha, method })` in place of `merge`; `wrap` checks the arguments and builds `merge` once for every
  * forge, so the green-only rule cannot differ between them. Green is every check finished green and at least one
@@ -37,7 +48,7 @@
  * @typedef {'admin' | 'maintain' | 'write' | 'triage' | 'read' | 'none'} Permission
  * @typedef {{ id: string, login: string, name: string | null, url: string | null, avatarUrl: string | null }} User
  * @typedef {{ login: string, url: string | null, bot?: true }} Author
- * @typedef {{ number: number, title: string, state: 'open' | 'closed', author: Author | null, labels: string[], comments: number, url: string, createdAt: string, updatedAt: string, closedAt: string | null }} Issue
+ * @typedef {{ number: number, title: string, state: 'open' | 'closed', author: Author | null, labels: string[], body: string, comments: number, url: string, createdAt: string, updatedAt: string, closedAt: string | null }} Issue
  * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
@@ -62,6 +73,12 @@
  *   issues(query?: IssueQuery): Promise<Issue[]>,
  *   pulls(query?: PullQuery): Promise<Pull[]>,
  *   pull(n: number): Promise<Pull>,
+ *   issue(n: number): Promise<Issue>,
+ *   searchIssues(words: string): Promise<Issue[]>,
+ *   createBranch(name: string, opts: { from: string }): Promise<{ name: string, sha: string }>,
+ *   createFile(file: { branch: string, path: string, content: string, message: string }): Promise<{ sha: string }>,
+ *   createPull(pull: { title: string, body: string, head: string, base: string, draft: boolean }): Promise<Pull>,
+ *   createIssue(issue: { title: string, body: string }): Promise<Issue>,
  *   pullFiles(n: number): Promise<PullFile[]>,
  *   comments(n: number): Promise<Comment[]>,
  *   comment(n: number, body: string): Promise<Comment>,
@@ -94,7 +111,7 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -175,6 +192,27 @@ function text(v, what) {
   return v;
 }
 
+/** The most a title, a body, a commit message and a new file may hold: what a stub or a checklist is, with room */
+export const MAX_TITLE = 256;
+export const MAX_BODY = 60000;
+export const MAX_FILE = 256 * 1024;
+
+/** A text with a ceiling on its length */
+function bounded(v, what, max) {
+  text(v, what);
+  if (v.length > max) throw invalid(`${what} is at most ${max} characters.`);
+  return v;
+}
+
+/** A branch's name: plain segments of letters, digits, `.`, `_` and `-`, no `..`, no `.lock`, no empty part */
+function branchName(v, what = 'The branch') {
+  text(v, what);
+  if (v.length > 200 || !/^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(v) || v.includes('..') || v.endsWith('.') || /\.lock(?:\/|$)/.test(v)) {
+    throw invalid(`${JSON.stringify(v)} is not a branch name cornfield will make.`);
+  }
+  return v;
+}
+
 /** A ref and a path inside the repo (no leading slash, no `.`, `..` or empty part) */
 function inRepo(ref, path) {
   text(ref, 'The commit');
@@ -226,6 +264,11 @@ export function wrap(a, forge) {
     issues: async (q) => a.issues(/** @type {Required<IssueQuery>} */ (query(q, true))),
     pulls: async (q) => a.pulls(/** @type {Required<PullQuery>} */ (query(q, false))),
     pull: async (n) => a.pull(number(n)),
+    issue: async (n) => a.issue(number(n)),
+    searchIssues: async (words) => {
+      if (typeof words !== 'string' || !/^[\w./ -]{3,200}$/.test(words) || !words.trim()) throw invalid('Search for plain words: letters, digits, spaces, ".", "/", "-", "_".');
+      return a.searchIssues(words.trim());
+    },
     pullFiles: async (n) => a.pullFiles(number(n)),
     comments: async (n) => a.comments(number(n)),
     comment: async (n, body) => a.comment(number(n), text(body, 'The comment')),
@@ -276,6 +319,26 @@ export function wrap(a, forge) {
     fileBytes: async (ref, path) => {
       inRepo(ref, path);
       return a.fileBytes(ref, path);
+    },
+    createBranch: async (name, opts) => {
+      if (!opts || typeof opts !== 'object') throw invalid('Make the branch from which branch?');
+      return a.createBranch(branchName(name), { from: branchName(opts.from, 'The branch to start from') });
+    },
+    createFile: async (file) => {
+      if (!file || typeof file !== 'object') throw invalid('Create which file?');
+      branchName(file.branch);
+      inRepo(file.branch, file.path);
+      if (typeof file.content !== 'string' || file.content.includes('\0') || Buffer.byteLength(file.content) > MAX_FILE) throw invalid(`The file's text is at most ${MAX_FILE} bytes.`);
+      return a.createFile({ branch: file.branch, path: file.path, content: file.content, message: bounded(file.message, 'The commit message', MAX_TITLE) });
+    },
+    createPull: async (pull) => {
+      if (!pull || typeof pull !== 'object') throw invalid('Open which pull request?');
+      if (typeof pull.draft !== 'boolean') throw invalid('Say whether the pull request is a draft.');
+      return a.createPull({ title: bounded(pull.title, 'The title', MAX_TITLE), body: bounded(pull.body ?? ' ', 'The description', MAX_BODY), head: branchName(pull.head, 'The head branch'), base: branchName(pull.base, 'The base branch'), draft: pull.draft });
+    },
+    createIssue: async (issue) => {
+      if (!issue || typeof issue !== 'object') throw invalid('Open which issue?');
+      return a.createIssue({ title: bounded(issue.title, 'The title', MAX_TITLE), body: bounded(issue.body ?? ' ', 'The description', MAX_BODY) });
     },
     defaultBranch: async () => a.defaultBranch(),
     tags: async () => a.tags(),

@@ -19,6 +19,9 @@
  *   mergeBlock, rerunWhy      the actions (CF-08): why a pull request cannot be landed now, why a failed check cannot be re-run
  *   confirmMerge, mergeBody   what the confirm step shows of what will land, and what is sent when it is confirmed
  *   actionUrl, actionWords    where an action is posted, and how the answer is said
+ *   specBlock, buildOffers    the pipeline's steps (PIPE-05): why a spec cannot be started on an issue; which proposals of a spec pull request can have a build issue
+ *   planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords
+ *                             where a step's plan is read, what the confirm step shows of it, what is sent to confirm it, and what is said of one that is made already
  *   notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest
  *                             the Release notes view: what to ask, the tags to start from, and the words around a draft
  */
@@ -298,8 +301,8 @@ export function paintForge(scene, lit) {
 /** The states of a check that let a pull request land (the same rule as server/forge.js: finished, and not failed) */
 const GREEN = ['success', 'neutral', 'skipped'];
 
-/** The address an action is posted to */
-export const actionUrl = (n, action) => `/api/forge/pulls/${n}/${action}`;
+/** The address an action is posted to (a spec is started on an issue; everything else is done to a pull request) */
+export const actionUrl = (n, action) => (action === 'spec' ? `/api/forge/issues/${n}/spec` : `/api/forge/pulls/${n}/${action}`);
 
 /**
  * Why a pull request cannot be landed from here now, in words; null when it can (the button is shown). The server
@@ -366,11 +369,17 @@ export const mergeBody = (detail) => ({ sha: detail.pull.head.sha });
  */
 export function actionWords(action, status, body, number) {
   if (status !== null && body && body.ok) {
+    if (action === 'spec') return body.created ? `Spec started for issue #${number}: draft pull request #${body.pull && body.pull.number}.` : `Issue #${number} has its spec already: pull request #${body.pull && body.pull.number}. Nothing new was made.`;
+    if (action === 'build') return body.created ? `Build issue #${body.issue && body.issue.number} opened for ${body.slug}.` : `${body.slug} has its build issue already: #${body.issue && body.issue.number}. Nothing new was made.`;
     return action === 'merge'
       ? `Pull request #${number} landed${body.sha ? ` as ${String(body.sha).slice(0, 7)}` : ''}.`
       : `${body.name || 'The check'} is running again.`;
   }
-  const what = action === 'merge' ? `Pull request #${number} was not landed` : 'The check was not re-run';
+  const what = {
+    merge: `Pull request #${number} was not landed`,
+    spec: `No spec was started for issue #${number}`,
+    build: `No build issue was opened for pull request #${number}`,
+  }[action] || 'The check was not re-run';
   if (status === null) return `${what}: cornfield could not be reached. Look at the forge before trying again.`;
   if (status === 401) return `${what}: your sign-in has ended. Sign in again.`;
   return `${what}: ${body && typeof body.error === 'string' && body.error ? body.error : `cornfield answered ${status}.`}`;
@@ -391,6 +400,91 @@ export function errorWords(status, body) {
   if (status === 401) return 'Your sign-in has ended. Sign in again to see issues and pull requests.';
   if (body && typeof body.error === 'string' && body.error) return body.error;
   return `cornfield answered ${status} for the forge.`;
+}
+
+// ---------------------------------------------------------------------------
+//  The pipeline's steps (PIPE-05): start a spec on an issue, open the build issue of an approved spec
+//  The server plans each one (server/pipeline.js) and decides again when it is confirmed; this is only what is shown
+// ---------------------------------------------------------------------------
+
+/** Where a step's plan is read: what it would make, from the forge now */
+export const planUrl = (action, n, slug) => (action === 'spec' ? `/api/forge/issues/${n}/spec` : `/api/forge/pulls/${n}/build?slug=${encodeURIComponent(slug)}`);
+
+/** Why a spec cannot be started on an issue from here; null when it can (the button is shown). The server checks again. */
+export function specBlock(issue) {
+  if (issue.state !== 'open') return 'It is closed, so no spec is started for it.';
+  return null;
+}
+
+/**
+ * The proposals of the selected pull request a build issue can be opened for, and the ones that wait for an approval.
+ * @param {{ pull: { state: string }, specs?: { slug: string, path: string, approved: boolean, changed?: boolean }[], stale?: string }} detail
+ * @returns {{ slug: string, path: string, approved: boolean, offer: boolean, why: string }[]}
+ */
+export function buildOffers(detail) {
+  if (!detail || detail.pull.state !== 'open') return [];
+  return (detail.specs || []).map((s) => ({
+    ...s,
+    offer: s.approved && !detail.stale,
+    why: s.changed ? 'Changed since it was approved: a maintainer approves it again as it is now.'
+      : !s.approved ? 'No approval yet: a maintainer approves it in the proposal\'s review first.' : detail.stale ? 'This is an older answer from the forge: refresh first.' : '',
+  }));
+}
+
+const yes = (v) => (v ? 'Yes' : 'No');
+
+/**
+ * What the confirm step shows of a spec that would be started: every thing that is made, with the file and the
+ * description in full.
+ * @returns {{ title: string, go: string, lines: [string, string][], previews: { label: string, text: string }[], note: string }}
+ */
+export function confirmSpec(plan, forgeName) {
+  return {
+    title: `Start a spec for issue #${plan.issue.number}?`,
+    go: 'Start the spec',
+    lines: [
+      ['Issue', `#${plan.issue.number} ${plan.issue.title}`],
+      ['Branch', plan.branch],
+      ['Starts from', plan.base],
+      ['File', plan.path],
+      ['Pull request', plan.title],
+      ['Draft', yes(true)],
+    ],
+    previews: [{ label: `${plan.path} (the stub proposal)`, text: plan.content }, { label: 'The pull request\'s description', text: plan.body }],
+    note: `Makes this branch, adds this one file in one commit, and opens the draft pull request on ${forgeName}, as you. Nothing else changes and no agent is started.`,
+  };
+}
+
+/**
+ * What the confirm step shows of a build issue that would be opened.
+ * @returns {{ title: string, go: string, lines: [string, string][], previews: { label: string, text: string }[], note: string }}
+ */
+export function confirmBuild(plan, forgeName) {
+  return {
+    title: `Open the build issue for ${plan.slug}?`,
+    go: 'Open the issue',
+    lines: [
+      ['Spec pull request', `#${plan.pull.number} ${plan.pull.title}`],
+      ['Proposal', plan.path],
+      ['At commit', plan.sha],
+      ['Approved by', plan.review.by],
+      ['Issue', plan.title],
+      ['Checklist', `${plan.items} ${plan.items === 1 ? 'item' : 'items'}`],
+    ],
+    previews: [{ label: 'The issue\'s description', text: plan.body }],
+    note: `Opens this issue on ${forgeName}, as you, linking the pull request and the proposal. It builds nothing and no agent is started.`,
+  };
+}
+
+/** What is posted to start a spec: the digest of the plan that was shown (the server plans again and must find the same) */
+export const specBody = (plan) => ({ digest: plan.digest });
+/** What is posted to open a build issue: the proposal, the commit it was read at, and the digest of the plan shown */
+export const buildBody = (plan) => ({ slug: plan.slug, sha: plan.sha, digest: plan.digest });
+
+/** What is said when the plan finds what an earlier ask made: nothing is asked of the person, nothing is made */
+export function existingWords(action, plan) {
+  if (action === 'spec') return `Issue #${plan.issue.number} has its spec already: pull request #${plan.existing.number}${plan.existing.draft ? ' (a draft)' : ''}. Nothing new is made.`;
+  return `${plan.slug} has its build issue already: #${plan.existing.number}${plan.existing.state === 'closed' ? ' (closed)' : ''}. Nothing new is made.`;
 }
 
 // ---------------------------------------------------------------------------

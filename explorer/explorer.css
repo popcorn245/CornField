@@ -863,6 +863,8 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-act { align-self: flex-start; min-height: 24px; padding: 2px 10px; }
 .hx-forge-detail > .hx-forge-act { padding: 6px 14px; }
 .hx-forge-why { margin: 0; font-size: 11px; line-height: 1.5; }
+.hx-forge-step { display: flex; flex-direction: column; gap: 4px; }
+.hx-forge-startspec { flex: none; align-self: center; }
 .hx-forge-notice--ok { border-color: var(--hx-emerald); }
 .hx-confirm-scrim { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 6, 23, 0.6); }
 .hx-confirm-scrim[hidden] { display: none; }
@@ -872,6 +874,9 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-confirm-facts dt { color: var(--hx-slate-400); }
 .hx-confirm-facts dd { margin: 0; overflow-wrap: anywhere; color: var(--hx-ink); }
 .hx-confirm-checks { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hx-confirm-label { margin: 0; color: var(--hx-slate-400); }
+.hx-confirm-pre { margin: 0; max-height: 140px; overflow: auto; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well); color: var(--hx-ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.hx-confirm-pre:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
 .hx-confirm-note { margin: 0; color: var(--hx-text-2); line-height: 1.5; }
 .hx-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding-left: 62px; }

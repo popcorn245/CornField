@@ -13,6 +13,8 @@
  *   - branches main (protected) and feature/meals; docs/specs/proposals/0013-meals.json at abc…
  *   - tags v0.1.0, nightly and v0.2.0 (made 2026-10-12T09:00:00Z; v9.9.9 is no tag); a release draft posted for v0.3.0
  *     answers id 7001 and is a draft
+ *   - the writes of the pipeline's steps (`writeRoutes`): a new branch, file, pull request and issue are made; a branch or a
+ *     file that is there already is refused. They answer by what they were sent, the same for both forges
  *
  * An adapter's own test calls `forgeContract({ name, type, recordings })`; what only one forge does (its URLs, its
  * headers, its rate limits) is tested beside it.
@@ -25,6 +27,26 @@ import { fakeForge } from './fake-forge.js';
 const SHA_GREEN = 'abc0000000000000000000000000000000000000';
 const SHA_RED = 'def0000000000000000000000000000000000000';
 const TOKEN = 'test-token-not-a-secret';
+
+/** What the forges answer to the writes of the pipeline's steps, in each forge's shapes */
+function writeRoutes(type) {
+  const github = type === 'github';
+  const base = github ? 'https://github.example.com' : 'https://forgejo.example.com';
+  const json = (req) => JSON.parse(req.body);
+  const pull = (number, title, head, into, draft) => ({ number, title, state: 'open', draft: github ? draft : false, user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, labels: [], head: { ref: head, sha: 'eee0000000000000000000000000000000000000' }, base: { ref: into }, html_url: `${base}/owner/name/pulls/${number}`, created_at: '2026-10-19T10:00:00Z', updated_at: '2026-10-19T10:00:00Z', merged_at: null });
+  const taken = { status: 422, body: { message: 'Validation Failed' } };
+  const make = (path) => (req) => (json(req).branch === 'feature/meals' && path.endsWith('0013-meals.json') ? taken : { status: 201, body: { commit: { sha: 'ccc0000000000000000000000000000000000000' }, content: { path } } });
+  const verb = github ? 'PUT' : 'POST';
+  return {
+    ...(github
+      ? { 'POST /repos/owner/name/git/refs': (req) => (json(req).ref === 'refs/heads/feature/meals' ? taken : { status: 201, body: { ref: json(req).ref, object: { sha: json(req).sha } } }) }
+      : { 'POST /repos/owner/name/branches': (req) => (json(req).new_branch_name === 'feature/meals' ? { status: 409, body: { message: 'branch already exists' } } : { status: 201, body: { name: json(req).new_branch_name, commit: { id: '0000000000000000000000000000000000000001' } } }) }),
+    [`${verb} /repos/owner/name/contents/docs/specs/proposals/7-new.json`]: make('docs/specs/proposals/7-new.json'),
+    [`${verb} /repos/owner/name/contents/docs/specs/proposals/0013-meals.json`]: make('docs/specs/proposals/0013-meals.json'),
+    'POST /repos/owner/name/pulls': (req) => ({ status: 201, body: pull(30, json(req).title, json(req).head, json(req).base, json(req).draft === true) }),
+    'POST /repos/owner/name/issues': (req) => ({ status: 201, body: { number: 31, title: json(req).title, state: 'open', user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, labels: [], body: json(req).body, comments: 0, html_url: `${base}/owner/name/issues/31`, created_at: '2026-10-19T10:00:00Z', updated_at: '2026-10-19T10:00:00Z', closed_at: null } }),
+  };
+}
 
 /** Calls `fn`, expects a ForgeError with `code`, and answers it */
 export async function forgeError(fn, code) {
@@ -44,7 +66,7 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
   describe(`the forge contract: ${name}`, () => {
     let fake;
     let forge;
-    beforeAll(async () => { fake = await fakeForge(recordings); });
+    beforeAll(async () => { fake = await fakeForge({ ...recordings, ...writeRoutes(type) }); });
     afterAll(async () => { await fake.close(); });
     beforeEach(() => {
       fake.requests.length = 0;
@@ -167,6 +189,71 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       await forgeError(() => forge.merge(12, { onlyIfGreen: 'yes' }), 'invalid');
       await forgeError(() => forge.merge(12, { onlyIfGreen: true, method: 'force' }), 'invalid');
       expect(fake.requests.filter((r) => r.method !== 'GET')).toEqual([]);
+    });
+
+    it('searchIssues(): the issues whose text holds the words, never a pull request; words that are not plain are refused before the forge is asked', async () => {
+      const found = await forge.searchIssues('0013-meals');
+      expect(found.map((i) => [i.number, i.title, i.author && i.author.login])).toEqual([[61, 'Build: Meals', 'maintainer-one']]);
+      expect(found[0].body).toContain('0013-meals');
+      fake.requests.length = 0;
+      for (const bad of ['', 'ab', '"quoted"', 'a\nb', 'x'.repeat(201), 7]) await forgeError(() => forge.searchIssues(bad), 'invalid');
+      expect(fake.requests).toEqual([]);
+    });
+
+    it('issue(): one, with its text; a pull request at that number, and a number that is not there, are not-found', async () => {
+      expect(await forge.issue(5)).toMatchObject({ number: 5, title: 'Sign-in', state: 'open', body: 'Sign in with the forge.\n', labels: ['v1'] });
+      expect((await forgeError(() => forge.issue(12), 'not-found')).message).toContain('is a pull request');
+      await forgeError(() => forge.issue(404), 'not-found');
+    });
+
+    it('createBranch(): a new branch where another is, never over one that is there', async () => {
+      expect(await forge.createBranch('spec/7-new', { from: 'main' })).toEqual({ name: 'spec/7-new', sha: '0000000000000000000000000000000000000001' });
+      const [write] = fake.requests.filter((r) => r.method === 'POST');
+      expect(JSON.parse(write.body)).toEqual(type === 'github' ? { ref: 'refs/heads/spec/7-new', sha: '0000000000000000000000000000000000000001' } : { new_branch_name: 'spec/7-new', old_branch_name: 'main' });
+      expect((await forgeError(() => forge.createBranch('feature/meals', { from: 'main' }), 'conflict')).message).toBe('The branch feature/meals is there already.');
+    });
+
+    it('createFile(): one new file as one commit, its text sent as base64; a file that is there is refused, not replaced', async () => {
+      const text = '{ "version": 1, "title": "Caf\u00e9" }\n';
+      expect(await forge.createFile({ branch: 'spec/7-new', path: 'docs/specs/proposals/7-new.json', content: text, message: 'Start a spec' })).toEqual({ sha: 'ccc0000000000000000000000000000000000000' });
+      const [write] = fake.requests.filter((r) => r.method !== 'GET');
+      expect(write.method).toBe(type === 'github' ? 'PUT' : 'POST');
+      const body = JSON.parse(write.body);
+      expect(Buffer.from(body.content, 'base64').toString('utf8')).toBe(text);
+      expect(body).toMatchObject({ branch: 'spec/7-new', message: 'Start a spec' });
+      expect(body.sha).toBeUndefined();
+      await forgeError(() => forge.createFile({ branch: 'feature/meals', path: 'docs/specs/proposals/0013-meals.json', content: '{}', message: 'again' }), 'invalid');
+    });
+
+    it('createPull(): a draft one answers as a draft, an open one does not', async () => {
+      const draft = await forge.createPull({ title: 'Spec: Meals', body: 'Refs #5', head: 'spec/7-new', base: 'main', draft: true });
+      expect(draft).toMatchObject({ number: 30, draft: true, state: 'open', head: { ref: 'spec/7-new' }, base: { ref: 'main' } });
+      const [write] = fake.requests.filter((r) => r.method === 'POST');
+      expect(JSON.parse(write.body)).toMatchObject(type === 'github' ? { title: 'Spec: Meals', body: 'Refs #5', draft: true } : { title: 'WIP: Spec: Meals', body: 'Refs #5' });
+      expect((await forge.createPull({ title: 'Ready', body: 'x', head: 'spec/7-new', base: 'main', draft: false })).draft).toBe(false);
+    });
+
+    it('createIssue(): an issue with its title and text', async () => {
+      expect(await forge.createIssue({ title: 'Build: Meals', body: '- [ ] a node' })).toMatchObject({ number: 31, title: 'Build: Meals', body: '- [ ] a node', state: 'open' });
+      expect(JSON.parse(sent('POST')[0].body)).toEqual({ title: 'Build: Meals', body: '- [ ] a node' });
+    });
+
+    it('refuses the arguments of a write that are not what the interface takes, before the forge is asked', async () => {
+      await forgeError(() => forge.createBranch('../x', { from: 'main' }), 'invalid');
+      await forgeError(() => forge.createBranch('a b', { from: 'main' }), 'invalid');
+      await forgeError(() => forge.createBranch('x.lock', { from: 'main' }), 'invalid');
+      await forgeError(() => forge.createBranch('/x', { from: 'main' }), 'invalid');
+      await forgeError(() => forge.createBranch('x', {}), 'invalid');
+      await forgeError(() => forge.createFile({ branch: 'x', path: '../secrets', content: 'a', message: 'm' }), 'invalid');
+      await forgeError(() => forge.createFile({ branch: 'x', path: 'a/b.json', content: 1, message: 'm' }), 'invalid');
+      await forgeError(() => forge.createFile({ branch: 'x', path: 'a/b.json', content: 'a', message: ' ' }), 'invalid');
+      await forgeError(() => forge.createFile({ branch: 'x', path: 'a/b.json', content: 'x'.repeat(256 * 1024 + 1), message: 'm' }), 'invalid');
+      await forgeError(() => forge.createPull({ title: 't', body: 'b', head: 'x', base: 'main' }), 'invalid');
+      await forgeError(() => forge.createPull({ title: '', body: 'b', head: 'x', base: 'main', draft: true }), 'invalid');
+      await forgeError(() => forge.createPull({ title: 't'.repeat(257), body: 'b', head: 'x', base: 'main', draft: true }), 'invalid');
+      await forgeError(() => forge.createIssue({ title: '  ', body: 'b' }), 'invalid');
+      await forgeError(() => forge.createIssue({ title: 't', body: 'b'.repeat(60001) }), 'invalid');
+      await forgeError(() => forge.issue(0), 'invalid');
     });
 
     it('runs(): the latest workflow runs, newest first, every page, in the interface\'s states', async () => {

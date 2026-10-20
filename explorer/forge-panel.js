@@ -29,6 +29,13 @@
  *     it goes, how, each check); a scrim covers the page, the dialog is `aria-modal`, Tab stays inside, Escape and Cancel close it and give the
  *     focus back, and it is announced. What is sent is the head that was shown: a push since is refused by the server,
  *     which checks everything again (server/forge-actions.js). While one is in flight the buttons are off.
+ *   - The pipeline's own steps (PIPE-05, server/pipeline.js), each one button with a confirm step that shows exactly what
+ *     will be made, read from the server first (the plan, with a digest the server must find again):
+ *       1. an open issue in the Issues list has **Start a spec …**: a branch, a stub proposal and a draft spec pull request;
+ *       2. a selected spec pull request whose latest maintainer review approves a proposal has **Open the build issue …**:
+ *          an issue linking the pull request and the proposal, with the node changes as a checklist;
+ *       3. **Land it** (above) is the third step.
+ *     Asking a step again finds what the first ask made and says so; it makes nothing twice. No step starts an agent.
  *   - Errors and rate limits are a line in the panel, in the words the server gives; a stale answer says it is old.
  *   - A third tab, Release notes (PIPE-04): the pull requests merged since a tag, grouped by what they changed on the
  *     map, as Markdown to preview and Copy (the clipboard, else the selected text to copy by hand). "Post as draft"
@@ -50,6 +57,7 @@ import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } 
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
   mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
+  specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
 } from './forge-panel-model.js';
@@ -79,7 +87,8 @@ const ui = {
   nodesSeen: null, // the `state.nodes` the lights were worked out for
   busy: '', // the action in flight ('merge', or 'rerun:<check id>'), so a second click does nothing
   note: null, // { text, ok }: what the last action came to, for the selected pull request
-  confirm: null, // { opener: selector } while the confirm dialog is open
+  confirm: null, // { opener: selector, kind: 'merge' | 'spec' | 'build', plan?, n?, slug? } while the confirm dialog is open
+  actNote: null, // { text, ok, url }: what the last pipeline step came to
   notes: freshNotes(), // the Release notes view
 };
 
@@ -187,7 +196,7 @@ async function selectPull(n) {
     paint();
     return;
   }
-  ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+  ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
   relight();
   $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the pull request's files are what was asked for, not the row that was tapped
   announce(selectionWords());
@@ -472,10 +481,13 @@ function itemHtml(item, before = '', after = '') {
   if (ui.kind !== 'issues') {
     return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-pr="${item.number}" aria-pressed="${ui.selected === item.number}">${inner}</button>${out}</li>`;
   }
-  // An issue has no more to show here: its row is the link out
+  // An issue has no more to show here: its row is the link out; an open one also starts its spec (step 1 of the pipeline)
+  const spec = specBlock(item) === null
+    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${item.number}" aria-label="Start a spec for issue ${item.number}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
+    : '';
   return link
-    ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a></li>`
-    : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div></li>`;
+    ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a>${spec}</li>`
+    : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div>${spec}</li>`;
 }
 
 /** One piece of work in a group: a pull request (a row that selects it, as in the Pull requests tab) or a branch with none */
@@ -559,6 +571,13 @@ function detailHtml() {
     ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
     : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''}>Land it …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
   const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}">${escHtml(ui.note.text)}</p>` : '';
+  // Step 2 of the pipeline: a spec pull request with an approved proposal opens its build issue
+  const offers = buildOffers(ui.detail);
+  const build = offers.length
+    ? `<h4 class="hx-forge-subact">Build issue</h4>${offers.map((o) => (o.offer
+      ? `<div class="hx-forge-step"><button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-build="${escHtml(o.slug)}" aria-label="Open the build issue for ${escHtml(o.slug)}"${ui.busy ? ' disabled' : ''}>Open the build issue …</button><p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code> is approved. Opens a confirm step that shows the issue. Nothing is built.</p></div>`
+      : `<p class="hx-forge-why hx-faint"><code class="hx-code">${escHtml(o.slug)}</code>: ${escHtml(o.why)}</p>`)).join('')}`
+    : '';
 
   const key = lit.changed.size || lit.failing.size
     ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
@@ -567,6 +586,7 @@ function detailHtml() {
     ${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
     <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
     ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
+    ${build}
     <h4 class="hx-forge-subact">Land it</h4>
     ${note}
     ${act}
@@ -582,6 +602,8 @@ function findAgain(el) {
   if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
   if (el.dataset.forgeMerge) return '[data-forge-merge]';
+  if (el.dataset.forgeSpec) return `[data-forge-spec="${el.dataset.forgeSpec}"]`;
+  if (el.dataset.forgeBuild) return `[data-forge-build="${el.dataset.forgeBuild}"]`;
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   return null;
 }
@@ -622,6 +644,14 @@ function draw(panel) {
   const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '');
   notice.hidden = !words;
   notice.textContent = words;
+
+  const act = $('forge-act-note');
+  if (act) {
+    act.hidden = !ui.actNote;
+    const link = ui.actNote && safeUrl(ui.actNote.url);
+    act.className = `hx-forge-notice${ui.actNote && ui.actNote.ok ? ' hx-forge-notice--ok' : ''}`;
+    act.innerHTML = ui.actNote ? `${escHtml(ui.actNote.text)}${link ? ` <a class="hx-link" href="${escHtml(link)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}` : '';
+  }
 
   const rows = $('forge-list');
   if (!list) rows.innerHTML = '';
@@ -717,25 +747,97 @@ function keepFocusIn(e) {
   if (ui.confirm && el && !el.contains(e.target)) el.querySelector('[data-action="forge-confirm-cancel"]').focus();
 }
 
-/** Opens the confirm step for landing the selected pull request: what will land, exactly; the focus goes to Cancel */
-function openConfirm(opener) {
+/** Fills and opens the confirm step; the focus goes to Cancel. `what` is the model's: title, lines, checks, previews, note */
+function showConfirm(what, goLabel, state) {
   const el = confirmEl();
-  if (!el || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
-  const what = confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod);
+  const asCode = ['Commit', 'At commit', 'Branch', 'File', 'Proposal'];
   $('forge-confirm-title').textContent = what.title;
-  $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${k === 'Commit' ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
-    <ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>
+  $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${asCode.includes(k) ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
+    ${(what.checks || []).length ? `<ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>` : ''}
+    ${(what.previews || []).map((pv) => `<p class="hx-confirm-label">${escHtml(pv.label)}</p><pre class="hx-confirm-pre" tabindex="0" role="region" aria-label="${escHtml(pv.label)}">${escHtml(pv.text)}</pre>`).join('')}
     <p class="hx-confirm-note">${escHtml(what.note)}</p>`;
   const go = el.querySelector('[data-action="forge-confirm-go"]');
   go.disabled = false;
-  go.textContent = 'Land it';
+  go.textContent = goLabel;
   go.removeAttribute('aria-busy');
   // The scrim covers the page for the pointer, aria-modal tells a reader the rest is out of play, and the focus stays in
-  ui.confirm = { opener };
+  ui.confirm = state;
   document.addEventListener('focusin', keepFocusIn);
   el.hidden = false;
   el.querySelector('[data-action="forge-confirm-cancel"]').focus();
-  announce(`${what.title} ${what.lines.map(([k, v]) => `${k}: ${v}`).join('. ')}. ${what.note} Cancel or Land it.`);
+  announce(`${what.title} ${what.lines.map(([k, v]) => `${k}: ${v}`).join('. ')}. ${what.note} Cancel or ${goLabel}.`);
+}
+
+/** Opens the confirm step for landing the selected pull request: what will land, exactly */
+function openConfirm(opener) {
+  if (!confirmEl() || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
+  showConfirm(confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod), 'Land it', { opener, kind: 'merge' });
+}
+
+/** What a pipeline step came to, on the panel (with a link to what it made) and through the live region */
+function stepNote(text, ok, url = null) {
+  ui.actNote = { text, ok, url };
+  announce(text);
+  paint();
+}
+
+/** Forgets the lists of the other kind (a step made something there), so they are asked again when shown */
+function forgetOtherLists() {
+  for (const key of Object.keys(ui.lists)) if (!key.startsWith(`${ui.kind}|`)) delete ui.lists[key];
+}
+
+/**
+ * A pipeline step, first half: reads the plan from the server (what would be made, from the forge now). A step that
+ * was done before says so and stops; otherwise the confirm step shows the plan and nothing is made until it is confirmed.
+ */
+async function askPlan(action, n, slug, opener) {
+  if (ui.busy || ui.confirm || !confirmEl()) return;
+  ui.busy = `plan:${action}`;
+  ui.actNote = null;
+  announce(action === 'spec' ? `Looking at what a spec for issue ${n} would make` : `Looking at the build issue for ${slug}`);
+  paint();
+  const res = await request(planUrl(action, n, slug), true);
+  ui.busy = '';
+  // The button was off while it asked; it has the focus again whatever the answer is
+  const refocus = () => { const back = $('forge-panel').querySelector(opener); if (back && !back.disabled && !ui.confirm) back.focus(); };
+  if (!res.ok || !res.body || !res.body.plan) {
+    stepNote(actionWords(action, res.status, res.body, n), false);
+    refocus();
+    return;
+  }
+  const { plan } = res.body;
+  if (plan.existing) {
+    stepNote(existingWords(action, plan), true, plan.existing.url);
+    refocus();
+    return;
+  }
+  paint();
+  const what = action === 'spec' ? confirmSpec(plan, forgeName()) : confirmBuild(plan, forgeName());
+  showConfirm(what, what.go, { opener, kind: action, plan, n, slug });
+}
+
+/** A pipeline step, second half: the plan that was shown is confirmed; the server plans again and must find the same */
+async function confirmedStep() {
+  if (ui.busy || !ui.confirm || !ui.confirm.plan) return;
+  const { kind, plan, n } = ui.confirm;
+  ui.busy = kind;
+  ui.actNote = null;
+  const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
+  go.disabled = true;
+  go.setAttribute('aria-busy', 'true');
+  go.textContent = 'Working …';
+  announce(kind === 'spec' ? `Starting the spec for issue ${n}` : `Opening the build issue for ${plan.slug}`);
+  const res = await post(actionUrl(n, kind), kind === 'spec' ? specBody(plan) : buildBody(plan));
+  closeConfirm();
+  ui.busy = '';
+  const made = res.body && (kind === 'spec' ? res.body.pull : res.body.issue);
+  stepNote(actionWords(kind, res.status, res.body, n), res.ok, res.ok && made ? made.url : null);
+  // Whatever it came to, it is read again: a refusal says the issue or the pull request is not what was shown
+  if (res.status !== null) {
+    forgetOtherLists();
+    if (kind === 'build' && ui.selected === n) await refreshForge({ quiet: true });
+    else await loadList(true, true);
+  }
 }
 
 /** Closes the confirm step; the focus goes back to the button that opened it (or the panel's title if that is gone) */
@@ -753,7 +855,7 @@ function closeConfirm({ restoreFocus = true } = {}) {
 
 /** Land it, confirmed: posts the head that was shown */
 async function confirmedMerge() {
-  if (ui.busy || !ui.detail || !ui.confirm) return;
+  if (ui.busy || !ui.detail || !ui.confirm || ui.confirm.kind !== 'merge') return;
   const { pull } = ui.detail;
   const body = mergeBody(ui.detail);
   ui.busy = 'merge';
@@ -790,7 +892,7 @@ function onConfirmClick(e) {
   if (t === confirmEl()) { if (!ui.busy) closeConfirm(); return; } // the scrim
   const action = t.closest && t.closest('[data-action]');
   if (!action) return;
-  if (action.dataset.action === 'forge-confirm-cancel') { if (!ui.busy) closeConfirm(); } else if (action.dataset.action === 'forge-confirm-go') confirmedMerge();
+  if (action.dataset.action === 'forge-confirm-cancel') { if (!ui.busy) closeConfirm(); } else if (action.dataset.action === 'forge-confirm-go') { if (ui.confirm && ui.confirm.kind === 'merge') confirmedMerge(); else confirmedStep(); }
 }
 
 // ---------------------------------------------------------------------------
@@ -847,7 +949,7 @@ export async function refreshForge({ quiet = false } = {}) {
     const token = ++pullToken;
     const res = await request(pullUrl(n), true);
     if (token !== pullToken || !res.ok) return;
-    ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+    ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
     relight();
   }
 }
@@ -876,6 +978,7 @@ function onClick(e) {
       return;
     }
     ui.kind = kind.dataset.forgeKind;
+    ui.actNote = null;
     ui.filters = defaultFilters(ui.kind);
     paintFilters();
     if (current()) filtersChanged(); else { paint(); loadList(); }
@@ -904,6 +1007,10 @@ function onClick(e) {
   }
   const merge = t.closest('[data-forge-merge]');
   if (merge) { openConfirm('[data-forge-merge]'); return; }
+  const spec = t.closest('[data-forge-spec]');
+  if (spec) { askPlan('spec', Number(spec.dataset.forgeSpec), null, `[data-forge-spec="${spec.dataset.forgeSpec}"]`); return; }
+  const build = t.closest('[data-forge-build]');
+  if (build && ui.selected !== null) { askPlan('build', ui.selected, build.dataset.forgeBuild, `[data-forge-build="${build.dataset.forgeBuild}"]`); return; }
   const rerun = t.closest('[data-forge-rerun]');
   if (rerun) { rerunCheck(rerun.dataset.forgeRerun); return; }
   const action = t.closest('[data-action]');
@@ -1012,5 +1119,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   pullToken++;
   notesToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, notes: freshNotes() });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
 }

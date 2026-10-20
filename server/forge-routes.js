@@ -13,7 +13,11 @@
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
  *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
+ *                                                                      (and `specs`: the proposals it changes and whether each is approved, for the pipeline's step 2)
  *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
+ *   GET  /api/forge/issues/<n>/spec                                    the plan of step 1: what starting a spec on the issue would make (server/pipeline.js), never kept
+ *   GET  /api/forge/pulls/<n>/build?slug=<proposal>                    the plan of step 2: the build issue of an approved proposal, never kept
+ *   POST /api/forge/issues/<n>/spec | /pulls/<n>/build                 do them, with the plan's digest (server/forge-actions.js)
  *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
  *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
  *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
@@ -43,6 +47,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
 import { actionOf, countAttempt, serveAction } from './forge-actions.js';
+import { planSpec, planBuild, pullSpecs } from './pipeline.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { deploysOf } from './deploys.js';
 import { readBody, sameOrigin } from './proposals.js';
@@ -106,7 +111,7 @@ function notesInput(config, since) {
  * The reads: the request's route, the forge call that answers it, and the key it is kept under.
  * @returns {{ key: string, load: (forge: import('./forge.js').Forge) => Promise<object> } | null}
  */
-function routeOf(reqPath, url, config) {
+function routeOf(reqPath, url, config, where) {
   if (reqPath === '/api/forge/release-notes') {
     const since = sinceOf(url.searchParams.get('since'));
     return { key: `release-notes?since=${since ?? ''}&label=${config.releaseNotes?.breakingLabel ?? ''}`, load: (forge) => releaseNotes(forge, notesInput(config, since)) };
@@ -153,7 +158,13 @@ function routeOf(reqPath, url, config) {
       load: async (forge) => {
         const pull = await forge.pull(n);
         const [files, checks] = await Promise.all([forge.pullFiles(n), pull.head.sha ? forge.checks(pull.head.sha) : []]);
-        return { pull, files, checks: checks.map((c) => ({ ...c, canRerun: canRerun(c) })) };
+        // The proposals this pull request changes and whether a maintainer has approved each: step 2 of the pipeline is offered on one that is.
+        // A forge that cannot say leaves it out; the panel just does not offer the step then
+        let specs = [];
+        if (where && pull.state === 'open') {
+          try { specs = await pullSpecs(forge, where, pull, files); } catch { specs = []; }
+        }
+        return { pull, files, checks: checks.map((c) => ({ ...c, canRerun: canRerun(c) })), specs };
       },
     };
   }
@@ -180,12 +191,36 @@ function keep(db, key, etag, body, now) {
 }
 
 /**
+ * The plan of a pipeline step, read from the forge now and never kept: what the confirm step shows. A signed-in
+ * maintainer's own token asks; nothing is written.
+ * @param {{ n: number, action: 'spec' | 'build' }} act
+ */
+async function servePlan(req, res, act, url, ctx) {
+  const { config, session, auth, now = Date.now } = ctx;
+  if (!session) {
+    send(req, res, 403, { ok: false, error: 'The pipeline\'s steps are done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).', code: 'forbidden' });
+    return;
+  }
+  try {
+    const forge = auth.forgeFor(session);
+    const where = ctx.where || { proposals: config.proposals };
+    const plan = act.action === 'spec' ? await planSpec(forge, config, where, act.n) : await planBuild(forge, where, act.n, url.searchParams.get('slug') ?? '');
+    const rate = forge.rateLimit();
+    send(req, res, 200, { ok: true, forge: config.forge.type, repo: config.forge.repo, at: new Date(now()).toISOString(), rate: rate && (rate.remaining != null || rate.retryAfter != null) ? rateLimitWords(FORGE_NAMES[config.forge.type] || config.forge.type, rate, new Date(now())) : null, plan });
+  } catch (err) {
+    if (!(err instanceof ForgeError)) throw err;
+    const wait = err.rateLimit && err.rateLimit.retryAfter != null ? { 'Retry-After': String(Math.ceil(err.rateLimit.retryAfter)) } : {};
+    send(req, res, STATUS[err.code] || 502, { ok: false, error: err.message, code: err.code }, wait);
+  }
+}
+
+/**
  * Answers a request for `/api/forge/…`; false for any other path (the caller goes on).
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, where?: { proposals: string }, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
@@ -197,6 +232,12 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     if (!config.forge || !hasAdapter(config.forge.type)) {
       req.resume();
       send(req, res, config.forge ? 501 : 404, { ok: false, error: config.forge ? `cornfield has no adapter for the forge type ${JSON.stringify(config.forge.type)} yet.` : 'No forge is configured: set `forge` in cornfield.config.js.', code: config.forge ? 'unavailable' : 'not-found' });
+      return true;
+    }
+    // The plan of a pipeline step is read at the same address the step is done at
+    if ((req.method === 'GET' || req.method === 'HEAD') && (act.action === 'spec' || act.action === 'build')) {
+      req.resume();
+      await servePlan(req, res, act, url, ctx);
       return true;
     }
     await serveAction(req, res, act, ctx, (status, body, headers) => send(req, res, status, body, headers));
@@ -229,7 +270,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     return true;
   }
   try {
-    const route = routeOf(reqPath, url, config);
+    const route = routeOf(reqPath, url, config, ctx.where);
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;

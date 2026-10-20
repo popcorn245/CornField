@@ -1,12 +1,18 @@
 /**
  * @module server/forge-actions
  *
- * The two things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08): land a green pull request
- * and re-run a failed check. These are the first routes that change anything, so every rule is checked here, on the
- * server, whatever the page showed:
+ * The things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08 and PIPE-05; ADR 0006): land a
+ * green pull request, re-run a failed check, and the pipeline's own two steps (server/pipeline.js). These are the routes
+ * that change anything, so every rule is checked here, on the server, whatever the page showed:
  *
- *   POST /api/forge/pulls/<n>/merge   { sha }          lands the pull request at head `sha`
+ *   POST /api/forge/pulls/<n>/merge   { sha }          lands the pull request at head `sha` (step 3 of the pipeline)
  *   POST /api/forge/pulls/<n>/rerun   { sha, check }   re-runs one failed check on head `sha`
+ *   POST /api/forge/issues/<n>/spec   { digest }       step 1: a branch, a stub proposal and a draft spec pull request for the issue
+ *   POST /api/forge/pulls/<n>/build   { slug, sha, digest }   step 2: the build issue of an approved proposal of the spec pull request
+ *
+ * The two steps first show their plan (`GET` on the same address, server/forge-routes.js) and are asked for with that
+ * plan's `digest`: the server plans again and refuses (409) a plan that is not the one confirmed. They are idempotent: a
+ * second ask answers 200 with what the first made (`created: false`) instead of making it again.
  *
  * In this order, each step refusing in words and the refusal written down:
  *
@@ -23,7 +29,9 @@
  *   5. the forge's own state, read now: the pull request is open and not a draft, every check on its head is green,
  *      and `sha` is that head (409 otherwise: a push since they looked means they look again). `forge.merge` is the
  *      only way in, with `onlyIfGreen` and the sha: there is no force and no admin override to ask for. A re-run
- *      only takes a check the forge just listed as failed on that head, where `canRerun`
+ *      only takes a check the forge just listed as failed on that head, where `canRerun`. A pipeline step plans
+ *      again from the forge (the issue is open; the review that approves is a maintainer's and was not edited) and
+ *      only adds: a branch, a file, a pull request, an issue, never changes or removes one
  *
  * Every attempt under that ceiling, the ones refused and the ones the forge failed, is a row in `actions`
  * (server/db.js), begun before anything is asked of the forge and finished with the answer after (`auth.begin`,
@@ -35,6 +43,8 @@
 
 import { ForgeError, RERUN_STATES, canRerun, isMaintainer } from './forge.js';
 import { sameOrigin } from './proposals.js';
+import { planSpec, planBuild, startSpec, openBuildIssue } from './pipeline.js';
+import { PROPOSAL_FILE } from './files.js';
 
 /** The same action on the same target is not asked again for this long (a double click, a retry before the forge has caught up) */
 export const COOLDOWN_MS = 5000;
@@ -47,6 +57,10 @@ const MAX_BODY = 4096;
 
 const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
 const SHA = /^[0-9a-f]{7,64}$/i;
+const DIGEST = /^[0-9a-f]{32}$/;
+/** What each action is called in the words of a refusal, and what it asks of the person */
+const DOING = { merge: 'Landing', rerun: 'Re-running', spec: 'Starting a spec', build: 'Opening the build issue' };
+const ONLY_MAINTAINERS = { merge: 'land pull requests or re-run checks', rerun: 'land pull requests or re-run checks', spec: 'start specs', build: 'open build issues' };
 
 /** @type {WeakMap<object, { busy: Set<string>, last: Map<string, number>, perUser: Map<string, number[]>, attempts: Map<string, number[]> }>} */
 const throttles = new WeakMap();
@@ -136,11 +150,11 @@ function throttle(ctx, userId, key, at) {
  * The permission of the signed-in user on the repo, asked of the forge now with their own token. Refuses unless it is
  * the same forge user as the session's and a maintainer.
  */
-async function assertMaintainerNow(forge, session, config) {
+async function assertMaintainerNow(forge, session, config, action) {
   const me = await forge.me();
   if (String(me.id) !== String(session.userId)) throw new Refused(403, 'The forge says this sign-in is someone else now; sign in again.', 'forbidden');
   const permission = await forge.permission(config.forge.repo, me.login);
-  if (!isMaintainer(permission)) throw new Refused(403, `Only the repo's maintainers land pull requests or re-run checks; ${me.login} is not one now.`, 'forbidden');
+  if (!isMaintainer(permission)) throw new Refused(403, `Only the repo's maintainers ${ONLY_MAINTAINERS[action]}; ${me.login} is not one now.`, 'forbidden');
 }
 
 /** What an answer from the forge may change: the kept lists and pull requests are old now */
@@ -153,19 +167,21 @@ async function forgetKept(auth, config) {
 /**
  * The action the request is, or null for any other path.
  * @param {string} reqPath
- * @returns {{ n: number, action: 'merge' | 'rerun' } | null}
+ * @returns {{ n: number, action: 'merge' | 'rerun' | 'spec' | 'build' } | null}
  */
 export function actionOf(reqPath) {
-  const m = /^\/api\/forge\/pulls\/([1-9]\d{0,8})\/(merge|rerun)$/.exec(reqPath);
-  return m ? { n: Number(m[1]), action: /** @type {'merge' | 'rerun'} */ (m[2]) } : null;
+  const m = /^\/api\/forge\/(pulls|issues)\/([1-9]\d{0,8})\/(merge|rerun|build|spec)$/.exec(reqPath);
+  // A spec is started on an issue; everything else is done to a pull request
+  if (!m || (m[1] === 'issues') !== (m[3] === 'spec')) return null;
+  return { n: Number(m[2]), action: /** @type {'merge' | 'rerun' | 'spec' | 'build'} */ (m[3]) };
 }
 
 /**
  * Answers an action request. The caller has found `reqPath` to be an action's.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {{ n: number, action: 'merge' | 'rerun' }} what
- * @param {{ config: object, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null }} ctx
+ * @param {{ n: number, action: 'merge' | 'rerun' | 'spec' | 'build' }} what
+ * @param {{ config: object, where?: { proposals: string }, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveAction(req, res, what, ctx, send) {
@@ -173,11 +189,11 @@ export async function serveAction(req, res, what, ctx, send) {
   const { n, action } = what;
   if (req.method !== 'POST') {
     req.resume();
-    return send(405, { ok: false, error: `${action === 'merge' ? 'Landing' : 'Re-running'} is done with POST.`, code: 'invalid' }, { Allow: 'POST' });
+    return send(405, { ok: false, error: `${DOING[action]} is done with POST.`, code: 'invalid' }, { Allow: action === 'spec' || action === 'build' ? 'GET, HEAD, POST' : 'POST' });
   }
   if (!session || !auth.store) {
     req.resume();
-    return send(403, { ok: false, error: 'Landing and re-running are done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).', code: 'forbidden' });
+    return send(403, { ok: false, error: `${DOING[action]} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
   }
   // Past the ceiling nothing is written down: a flood of refused attempts cannot grow the audit table
   const flood = countAttempt(ctx, session.userId, now());
@@ -205,7 +221,7 @@ export async function serveAction(req, res, what, ctx, send) {
 
     if (!sameOrigin(req, ctx.publicHost ?? null)) {
       req.resume();
-      throw new Refused(403, 'Land and re-run from cornfield\'s own page.', 'forbidden');
+      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     }
     let body;
     try {
@@ -215,8 +231,21 @@ export async function serveAction(req, res, what, ctx, send) {
       throw err;
     }
     const sha = typeof body.sha === 'string' && SHA.test(body.sha) ? body.sha.toLowerCase() : null;
-    if (!sha) throw new Refused(400, 'Say which commit: the head you were looking at.', 'invalid');
-    request.sha = sha;
+    if (action !== 'spec' && !sha) throw new Refused(400, 'Say which commit: the head you were looking at.', 'invalid');
+    if (sha) request.sha = sha;
+    // The pipeline's steps confirm a plan: the digest of what the person was shown
+    const digest = typeof body.digest === 'string' && DIGEST.test(body.digest) ? body.digest : null;
+    let slug = null;
+    if (action === 'spec' || action === 'build') {
+      if (!digest) throw new Refused(400, 'Say which plan: the digest of what you were shown.', 'invalid');
+      request.digest = digest;
+    }
+    if (action === 'build') {
+      slug = typeof body.slug === 'string' && body.slug.length <= 200 && PROPOSAL_FILE.test(`${body.slug}.json`) ? body.slug : null;
+      if (!slug) throw new Refused(400, 'Say which proposal: its name in the proposals folder.', 'invalid');
+      request.slug = slug;
+      rowTarget = `${target}/${slug}`;
+    }
     let check = null;
     if (action === 'rerun') {
       check = typeof body.check === 'string' && body.check.length > 0 && body.check.length <= 200 && !body.check.includes('\0') ? body.check : null;
@@ -225,11 +254,30 @@ export async function serveAction(req, res, what, ctx, send) {
       rowTarget = `${target}/${check}`;
     }
 
-    release = throttle(ctx, session.userId, `${session.userId}|${action}|${n}|${check || ''}`, now());
+    // Per target, not per person: two maintainers asking the same thing at once get one, not two
+    release = throttle(ctx, session.userId, `${action}|${n}|${check || slug || ''}`, now());
     const forge = auth.forgeFor(session);
-    await assertMaintainerNow(forge, session, config);
+    await assertMaintainerNow(forge, session, config, action);
 
-    if (action === 'merge') {
+    if (action === 'spec') {
+      // What would be made is worked out again from the forge; it has to be what was shown
+      const plan = await planSpec(forge, config, ctx.where || { proposals: config.proposals }, n);
+      request.branch = plan.branch;
+      request.path = plan.path;
+      if (!plan.existing && plan.digest !== digest) throw new ForgeError(`What starting a spec for #${n} would make has changed since it was shown (the issue was edited); look again.`, { code: 'conflict' });
+      const done = await startSpec(forge, plan);
+      await forgetKept(auth, config);
+      out = { status: done.created ? 201 : 200, body: { ok: true, action, created: done.created, number: n, pull: done.pull, branch: plan.branch, path: plan.path } };
+    } else if (action === 'build') {
+      const plan = await planBuild(forge, ctx.where || { proposals: config.proposals }, n, /** @type {string} */ (slug));
+      request.path = plan.path;
+      // An issue the first ask made is found whatever has changed since; a new one is made only for the plan that was shown
+      if (!plan.existing && plan.sha.toLowerCase() !== sha) throw new ForgeError(`Pull request #${n} has changed since it was looked at (its proposal is now at ${plan.sha.slice(0, 7)}); look again.`, { code: 'conflict' });
+      if (!plan.existing && plan.digest !== digest) throw new ForgeError(`What the build issue for ${slug} would say has changed since it was shown (a new review, or a push); look again.`, { code: 'conflict' });
+      const done = await openBuildIssue(forge, plan);
+      await forgetKept(auth, config);
+      out = { status: done.created ? 201 : 200, body: { ok: true, action, created: done.created, number: n, slug, issue: done.issue, path: plan.path } };
+    } else if (action === 'merge') {
       const method = config.forge.mergeMethod || 'merge';
       request.method = method;
       const landed = await forge.merge(n, { onlyIfGreen: true, sha, method });

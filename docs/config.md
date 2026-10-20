@@ -29,7 +29,7 @@ export default {
 | `title` | the explorer's title (default: the package name) |
 | `derivers` | built-in names (`starter`, `personas`, `compose`, `world`, `openapi`, `cloud`, `docs`), paths (`./tools/deriver.js`), or `{ use, options }`; run in order. [derivers.md](derivers.md) |
 | `sources` | browser modules for the live layer, the house, devices and the permission checker (below) |
-| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name', mergeMethod? }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md). `mergeMethod` is how the panel lands a green pull request: `merge` (the default), `squash` or `rebase`, the way the repo lands its own |
+| `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name', mergeMethod?, baseBranch? }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md). `mergeMethod` is how the panel lands a green pull request: `merge` (the default), `squash` or `rebase`, the way the repo lands its own. `baseBranch` is the branch the pipeline's "Start a spec" branches from and opens its draft pull request into (`main` when unset) |
 | `port`, `host` | where `serve` listens. Without sign-in the host must be loopback; with it and an https `publicUrl`, any address ([sign-in](sign-in.md)) |
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
 | `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
