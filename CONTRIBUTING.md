@@ -12,6 +12,12 @@ Thanks for helping. cornfield is built in the open, by people and by coding agen
 3. **Build it** on a branch: plain ES modules, no build step, no new runtime dependency (ask first if you think one is needed). Small commits, tests first where you can.
 4. **Keep the map true:** `node cli/cornfield.js sync`, then commit `topology.json` with the code. The docs are on the map too (the `docs` deriver): a new doc, or a link added or removed, needs a sync as well, and a broken link fails `validate`.
 5. **Before the PR:** `npm test` and `node cli/cornfield.js validate` (CI runs both, and gitleaks). A proposal that has landed is deleted in the PR that lands it.
+6. **Title the PR as a conventional commit:** `type(scope): summary`, like `feat(forge): land a green pull request` or `fix(auth): keep the session on a rename`. A PR is squash-merged under its title, and every merge to main is released from those titles ([RELEASING.md](RELEASING.md)), so the title decides the version:
+   - `feat` is a minor release (0.**x**.0), `fix`, `perf` and `revert` a patch (0.1.**x**); `docs`, `test`, `refactor`, `style`, `build`, `ci` and `chore` release nothing on their own;
+   - a breaking change is `type!:` (`feat(core)!: drop contract 1`), or a `BREAKING CHANGE:` line in the description. While cornfield is 0.x that is a minor release too, never 1.0;
+   - the scope is optional and lower case (an area: `forge`, `auth`, `explorer`, `release`…); the issue key (`[CF-11]`, `Closes #5`) goes in the description.
+
+   CI checks the title (`.github/workflows/pr-title.yml`). Do not edit `CHANGELOG.md` by hand: the release writes it from the titles.
 
 Bug fixes and docs that change no architecture skip step 2.
 

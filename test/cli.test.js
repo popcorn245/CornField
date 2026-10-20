@@ -104,6 +104,10 @@ describe('the release guard (prepublishOnly)', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(CORNFIELD, 'package.json'), 'utf8'));
     expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: 'v0.0.0-other' } })).toEqual([`the release tag is "v0.0.0-other", not v${pkg.version}.`]);
     expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: `v${pkg.version}` } })).toEqual([]);
+    // A release run on main: the workflow names the tag semantic-release made, and it is that tag that counts
+    expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: 'main', CORNFIELD_RELEASE_TAG: `v${pkg.version}` } })).toEqual([]);
+    expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: 'main' } })).toEqual([`the release tag is "main", not v${pkg.version}.`]);
+    expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: `v${pkg.version}`, CORNFIELD_RELEASE_TAG: 'v9.9.9' } })).toEqual([`the release tag is "v9.9.9", not v${pkg.version}.`]);
   });
 
   it('is what npm runs before a publish, and the package ships only its own folders', () => {
