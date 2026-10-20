@@ -57,8 +57,8 @@ function throttlesOf(auth) {
   return t;
 }
 
-/** Counts an attempt of any kind; refuses one past the ceiling, without writing anything down */
-function countAttempt(ctx, userId, at) {
+/** Counts an attempt of any kind; refuses one past the ceiling, without writing anything down (the release draft shares it) */
+export function countAttempt(ctx, userId, at) {
   const t = throttlesOf(ctx.auth);
   for (const [k, list] of t.attempts) if (!list.length || at - list[list.length - 1] >= 60_000) t.attempts.delete(k);
   const mine = (t.attempts.get(userId) || []).filter((when) => at - when < 60_000);

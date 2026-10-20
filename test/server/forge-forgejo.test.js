@@ -390,3 +390,23 @@ describe('the Forgejo adapter', () => {
     expect(pulls[0].body).toBe('Closes #1');
   });
 });
+
+describe('release drafts on Forgejo', () => {
+  let fake;
+  afterEach(async () => { await fake?.close(); fake = undefined; });
+  const forgeOn = async (routes) => {
+    fake = await fakeForge(routes);
+    return createForge({ type: 'forgejo', url: 'https://forgejo.example.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
+  };
+
+  it('is a fault, not a success, when Forgejo keeps the release as anything but a draft', async () => {
+    const forge = await forgeOn({ 'POST /repos/owner/name/releases': { status: 201, body: { id: 5, draft: false, html_url: 'https://forgejo.example.com/owner/name/releases/tag/v1' } } });
+    await forgeError(() => forge.createReleaseDraft({ tag: 'v1.0.0', name: 'v1.0.0', body: 'notes' }), 'unavailable');
+  });
+
+  it('says plainly when a tag has no commit time', async () => {
+    const forge = await forgeOn({ 'GET /repos/owner/name/tags/v1.0.0': { body: { name: 'v1.0.0', commit: { sha: 'f'.repeat(40) } } } });
+    const err = await forgeError(() => forge.tag('v1.0.0'), 'unavailable');
+    expect(err.message).toBe('Forgejo did not say when v1.0.0 was made.');
+  });
+});

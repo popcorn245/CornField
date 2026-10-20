@@ -11,6 +11,8 @@
  *     closed: #9 merged, #8 not
  *   - #12 changes four files and has two comments; a comment posted to it answers id 9003
  *   - branches main (protected) and feature/meals; docs/specs/proposals/0013-meals.json at abc…
+ *   - tags v0.1.0, nightly and v0.2.0 (made 2026-10-12T09:00:00Z; v9.9.9 is no tag); a release draft posted for v0.3.0
+ *     answers id 7001 and is a draft
  *
  * An adapter's own test calls `forgeContract({ name, type, recordings })`; what only one forge does (its URLs, its
  * headers, its rate limits) is tested beside it.
@@ -205,6 +207,44 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(JSON.parse(bytes.toString('utf8'))).toEqual({ version: 1, title: 'Meals' });
       expect(await forge.fileBytes(SHA_GREEN, 'docs/specs/proposals/0099-none.json')).toBeNull();
       await forgeError(() => forge.fileBytes(SHA_GREEN, '../secrets'), 'invalid');
+    });
+
+    it('defaultBranch(): the name of the repo\'s default branch', async () => {
+      expect(await forge.defaultBranch()).toBe('main');
+    });
+
+    it('tags(): each with the commit it names, as the forge lists them', async () => {
+      expect(await forge.tags()).toEqual([
+        { name: 'v0.1.0', sha: '1110000000000000000000000000000000000000' },
+        { name: 'nightly', sha: '3330000000000000000000000000000000000000' },
+        { name: 'v0.2.0', sha: '2220000000000000000000000000000000000000' },
+      ]);
+    });
+
+    it('tag(): the time of the commit a tag names, and not-found for one that is not there', async () => {
+      expect(await forge.tag('v0.2.0')).toEqual({ name: 'v0.2.0', sha: '2220000000000000000000000000000000000000', date: expect.any(String) });
+      expect(Date.parse((await forge.tag('v0.2.0')).date)).toBe(Date.parse('2026-10-12T09:00:00Z'));
+      await forgeError(() => forge.tag('v9.9.9'), 'not-found');
+    });
+
+    it('createReleaseDraft(): posts a draft, never a published release, and answers it', async () => {
+      const made = await forge.createReleaseDraft({ tag: 'v0.3.0', name: 'v0.3.0', body: '### server\n\n- Meals (#12)\n' });
+      expect(made).toEqual({ id: '7001', url: expect.stringMatching(/^https:\/\/\w+\.example\.com\/owner\/name\/releases\//), draft: true });
+      const writes = fake.requests.filter((r) => r.method !== 'GET');
+      expect(writes).toHaveLength(1);
+      expect(writes[0].method).toBe('POST');
+      expect(writes[0].url).toMatch(/\/repos\/owner\/name\/releases$/);
+      expect(JSON.parse(writes[0].body)).toEqual({ tag_name: 'v0.3.0', name: 'v0.3.0', body: '### server\n\n- Meals (#12)\n', draft: true, prerelease: false });
+    });
+
+    it('createReleaseDraft(): refuses what is not a tag name, a name or a body, before the forge is asked', async () => {
+      for (const tag of ['', ' ', '-x', 'a b', 'v1..2', 'v1/', 'x'.repeat(101), null, 4]) await forgeError(() => forge.createReleaseDraft({ tag, name: 'n', body: 'b' }), 'invalid');
+      await forgeError(() => forge.createReleaseDraft({ tag: 'v1', name: '  ', body: 'b' }), 'invalid');
+      await forgeError(() => forge.createReleaseDraft({ tag: 'v1', name: 'n', body: 5 }), 'invalid');
+      await forgeError(() => forge.createReleaseDraft({ tag: 'v1', name: 'n', body: 'x'.repeat(125_001) }), 'invalid');
+      await forgeError(() => forge.createReleaseDraft(null), 'invalid');
+      await forgeError(() => forge.tag('a b'), 'invalid');
+      expect(fake.requests).toEqual([]);
     });
 
     it('refuses arguments that are not what the interface takes, before the forge is asked', async () => {

@@ -20,6 +20,8 @@
  *     which checks branch protection requires, nor list a workflow that has not reported a status yet, so a commit
  *     whose slow job has not started can look green: branch protection's required checks are the backstop there. It answers nothing, so the merge commit is read back from the pull request.
  *   - **Files.** `raw/<path>?ref=`; a folder or a missing file is null.
+ *   - **Tags and releases.** `tags` and `tags/<name>` (the commit carries the time); a release is created with `draft: true`,
+ *     which Forgejo keeps as a draft until it is published on the instance.
  *   - **Limits.** Forgejo sends no rate-limit headers; only a `Retry-After` from the instance or a proxy in front of
  *     it is read. A listing is paged 50 at a time (the most it gives by default) and follows `Link`.
  */
@@ -28,6 +30,8 @@ import { createClient, ForgeError } from './forge-http.js';
 
 const NAME = 'Forgejo';
 const PER_PAGE = 50;
+/** The most tags read */
+const MAX_TAGS = 300;
 const NO_URL = 'forge.url is required for Forgejo: the instance\'s address, like "https://forgejo.example.org".';
 
 /** Where a forge's API is: `<url>/api/v1`, under a path too when the instance is served from one */
@@ -229,6 +233,30 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
     async file(ref, path) {
       const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, raw: true, allow: [404] });
       return status === 404 ? null : /** @type {string} */ (body);
+    },
+
+    async defaultBranch() {
+      const { body } = await client.request('GET', `repos/${repo}`, { what: forge.repo });
+      if (typeof body?.default_branch !== 'string' || body.default_branch === '') throw new ForgeError(`Forgejo did not say which branch is ${forge.repo}'s default.`, { code: 'unavailable', forge: NAME });
+      return body.default_branch;
+    },
+
+    async tags() {
+      return (await client.list(`repos/${repo}/tags?limit=${PER_PAGE}`, { what: `the tags of ${forge.repo}`, limit: MAX_TAGS }))
+        .map((t) => ({ name: t.name, sha: t.commit?.sha ?? t.id ?? '' }));
+    },
+
+    async tag(name) {
+      const { body } = await client.request('GET', `repos/${repo}/tags/${segments(name)}`, { what: `the tag ${name} in ${forge.repo}` });
+      const date = body.commit?.created ?? body.commit?.committer?.date;
+      if (typeof date !== 'string') throw new ForgeError(`Forgejo did not say when ${name} was made.`, { code: 'unavailable', forge: NAME });
+      return { name, sha: body.commit?.sha ?? body.id ?? '', date };
+    },
+
+    async createReleaseDraft({ tag, name, body }) {
+      // draft: true always. A draft makes no tag until someone publishes it on Forgejo
+      const { body: made } = await client.request('POST', `repos/${repo}/releases`, { body: { tag_name: tag, name, body, draft: true, prerelease: false }, what: `a release draft in ${forge.repo}` });
+      return { id: String(made.id), url: made.html_url, draft: made.draft === true };
     },
 
     async fileBytes(ref, path) {

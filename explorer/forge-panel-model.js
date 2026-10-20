@@ -19,11 +19,13 @@
  *   mergeBlock, rerunWhy      the actions (CF-08): why a pull request cannot be landed now, why a failed check cannot be re-run
  *   confirmMerge, mergeBody   what the confirm step shows of what will land, and what is sent when it is confirmed
  *   actionUrl, actionWords    where an action is posted, and how the answer is said
+ *   notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest
+ *                             the Release notes view: what to ask, the tags to start from, and the words around a draft
  */
 
 import { relativeTime } from './review-model.js';
 
-export const KINDS = Object.freeze(['pulls', 'issues', 'deploys']);
+export const KINDS = Object.freeze(['pulls', 'issues', 'deploys', 'notes']);
 /** The states a list offers: [value, label]; a pull request that landed is "merged", one closed without landing "closed" */
 export const STATES = Object.freeze({
   pulls: [['open', 'Open'], ['merged', 'Merged'], ['closed', 'Closed'], ['all', 'All']],
@@ -390,3 +392,52 @@ export function errorWords(status, body) {
   if (body && typeof body.error === 'string' && body.error) return body.error;
   return `cornfield answered ${status} for the forge.`;
 }
+
+// ---------------------------------------------------------------------------
+//  Release notes
+// ---------------------------------------------------------------------------
+
+/** Where a draft release is posted (server/forge-routes.js); the one POST of the panel */
+export const DRAFTS_URL = '/api/forge/release-drafts';
+
+/** The address of the notes since a tag ('' for the latest version tag) */
+export const notesUrl = (since) => `/api/forge/release-notes${since ? `?since=${encodeURIComponent(since)}` : ''}`;
+
+/**
+ * The tags the notes can start from: the latest version tag first (what the server picks when told none), then each
+ * version tag, newest first.
+ * @param {{ tags: string[] }} notes `tags` are the version tags, newest first
+ * @returns {[string, string][]} [value, label]
+ */
+export function sinceChoices(notes) {
+  const tags = Array.isArray(notes.tags) ? notes.tags : [];
+  const first = ['', tags.length ? `Latest tag (${tags[0]})` : 'No version tag yet: every merged pull request'];
+  return [first, ...tags.map((t) => [t, t])];
+}
+
+const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
+
+/**
+ * One line about a draft: how many pull requests, since which tag and when, in how many groups.
+ * @param {{ count: number, since: { name: string, date: string } | null, groups: unknown[], truncated?: boolean }} notes
+ */
+export function notesSummary(notes) {
+  const since = notes.since ? ` since ${notes.since.name} (${String(notes.since.date).slice(0, 10)})` : ' (no version tag yet)';
+  if (!notes.count) return `No pull requests merged${since}.`;
+  const groups = notes.groups.length === 1 ? 'one group' : `${notes.groups.length} groups`;
+  return `${plural(notes.count, 'pull request')} merged${since}, in ${groups}.${notes.truncated ? ' Only the newest are in the draft.' : ''}`;
+}
+
+/** Whether a tag name is one the server will take for a draft (the same rule as server/forge.js `isTagName`) */
+export const validTag = (tag) => typeof tag === 'string' && /^[\w][\w./+-]{0,99}$/.test(tag) && !tag.includes('..') && !tag.endsWith('/') && !tag.endsWith('.');
+
+/** What the confirm step says before anything is sent */
+export function confirmWords({ forge, repo, tag, count }) {
+  return `This creates a draft release${tag ? ` for ${tag}` : ''} on ${forge} for ${repo}, with the notes of ${plural(count, 'pull request')}. It stays a draft: nothing is published and no tag is made. Publishing it is done on ${forge}.`;
+}
+
+/** What is said once the forge has the draft */
+export const postedWords = ({ forge, tag, count }) => `Draft release ${tag} created on ${forge}, with ${plural(count, 'pull request')}. It is not published.`;
+
+/** The body of the POST: the tag the draft is for, and the tag the notes start from (null for the latest) */
+export const draftRequest = (tag, since) => ({ tag: tag.trim(), ...(since ? { since } : {}) });

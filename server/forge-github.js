@@ -15,6 +15,8 @@
  *     conflicts), and no workflow run on the head is still queued or running: just after a push, a fast check can be
  *     green before a slow workflow has registered its own.
  *   - **Files.** `contents/<path>?ref=` as raw text; a folder or a missing file is null.
+ *   - **Tags and releases.** `tags`, and `commits/<tag>` for the time a tag was made; a release is created with `draft: true`,
+ *     which GitHub keeps as a draft, with no tag, until it is published on GitHub.
  */
 
 import { createClient, ForgeError } from './forge-http.js';
@@ -22,6 +24,8 @@ import { createClient, ForgeError } from './forge-http.js';
 const NAME = 'GitHub';
 const GITHUB_API = 'https://api.github.com';
 const PER_PAGE = 100;
+/** The most tags read (newest releases are among them on any repo that tags in order) */
+const MAX_TAGS = 300;
 
 /** Where a forge's API is: api.github.com for github.com, `<origin>/api/v3` for GitHub Enterprise Server */
 export function githubApiUrl(url = 'https://github.com') {
@@ -247,6 +251,31 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       // A folder answers its listing as JSON, whatever was asked for: a list of entries with a type and a path
       if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(text)) return null;
       return text;
+    },
+
+    async defaultBranch() {
+      const { body } = await client.request('GET', `repos/${repo}`, { what: forge.repo });
+      if (typeof body?.default_branch !== 'string' || body.default_branch === '') throw new ForgeError(`GitHub did not say which branch is ${forge.repo}'s default.`, { code: 'unavailable', forge: NAME });
+      return body.default_branch;
+    },
+
+    async tags() {
+      return (await client.list(`repos/${repo}/tags?per_page=${PER_PAGE}`, { what: `the tags of ${forge.repo}`, limit: MAX_TAGS }))
+        .map((t) => ({ name: t.name, sha: t.commit?.sha ?? '' }));
+    },
+
+    async tag(name) {
+      // The commit the tag names: its sha and when it was made
+      const { body } = await client.request('GET', `repos/${repo}/commits/${segments(name)}`, { what: `the tag ${name} in ${forge.repo}` });
+      const date = body.commit?.committer?.date ?? body.commit?.author?.date;
+      if (typeof date !== 'string') throw new ForgeError(`GitHub did not say when ${name} was made.`, { code: 'unavailable', forge: NAME });
+      return { name, sha: body.sha ?? '', date };
+    },
+
+    async createReleaseDraft({ tag, name, body }) {
+      // draft: true always. A draft makes no tag until someone publishes it on GitHub
+      const { body: made } = await client.request('POST', `repos/${repo}/releases`, { body: { tag_name: tag, name, body, draft: true, prerelease: false }, what: `a release draft in ${forge.repo}` });
+      return { id: String(made.id), url: made.html_url, draft: made.draft === true };
     },
 
     async fileBytes(ref, path) {

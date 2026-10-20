@@ -852,7 +852,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-detail { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--hx-line); border-left: 4px solid var(--hx-indigo); border-radius: 10px; background: var(--hx-well-soft); }
 .hx-forge-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .hx-forge-detail-title { min-width: 0; font-size: 13px; font-weight: 700; color: var(--hx-ink); overflow-wrap: anywhere; }
-.hx-forge-sub, .hx-forge-subact { margin: 4px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-300); }
+.hx-forge-sub, .hx-forge-subact, .hx-forge-confirm-title { margin: 4px 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-300); }
 .hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
 .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
 .hx-forge-lights { flex-basis: 100%; font-size: 11px; line-height: 1.5; }
@@ -888,6 +888,13 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-forge-agentline { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
 .hx-forge-agent { display: inline-block; padding: 0 6px; border-radius: 9999px; border: 1px solid currentColor; color: var(--hx-violet-text); font-size: 10px; font-weight: 700; }
 .hx-forge-why { font-size: 11px; overflow-wrap: anywhere; }
+.hx-forge-notes, .hx-forge-confirm { display: flex; flex-direction: column; gap: 8px; }
+.hx-forge-preview { width: 100%; min-height: 12em; resize: vertical; padding: 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well); color: var(--hx-ink); font-family: var(--pop-font-mono); font-size: 11px; line-height: 1.5; font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
+.hx-forge-preview:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
+.hx-forge-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hx-forge-msg { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well-soft); color: var(--hx-text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.hx-forge-msg--bad { border-color: var(--hx-amber); }
+.hx-forge-confirm { padding: 10px; border: 1px solid var(--hx-line); border-left: 4px solid var(--hx-teal-strong); border-radius: 10px; background: var(--hx-well-soft); line-height: 1.5; }
 :root[data-theme="light"] .hx-forge-tab[aria-pressed="true"] { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
 :root[data-theme="light"] .hx-forge { box-shadow: 10px 0 30px -12px rgba(15, 23, 42, 0.18); }
 :root[data-theme="light"] .hx-forge:not(.forge-open) { box-shadow: none; }
