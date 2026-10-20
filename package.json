@@ -4,13 +4,13 @@
   "description": "A self-hostable dev dashboard with the topology map at its centre: proposals on the map, scenarios, outages and what-if edits, for any repo.",
   "license": "MIT",
   "author": "popcorn245 (https://github.com/popcorn245)",
-  "homepage": "https://github.com/popcorn245/cornfield#readme",
+  "homepage": "https://github.com/popcorn245/CornField#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/popcorn245/cornfield.git"
+    "url": "git+https://github.com/popcorn245/CornField.git"
   },
   "bugs": {
-    "url": "https://github.com/popcorn245/cornfield/issues"
+    "url": "https://github.com/popcorn245/CornField/issues"
   },
   "keywords": [
     "topology",
