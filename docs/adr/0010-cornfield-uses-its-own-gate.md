@@ -4,7 +4,7 @@ Status: accepted (maintainer, 2026-10-17)
 
 ## Decision
 
-cornfield maps itself: `topology.json` at the root is derived by the starter deriver (each folder a package, each module a node, imports as lines) plus the cloud deriver, and CI fails when it drifts. A change that adds, changes or removes a module, a route, a store or a flow is proposed on that map first (`docs/specs/proposals/NNNN-slug.json`, with scenarios) and reviewed on the map before it is built. [CONTRIBUTING.md](../../CONTRIBUTING.md) has the steps. The v1 spec was approved in chat, so it skipped the gate; its proposal ([0001-v1.json](../specs/proposals/0001-v1.json)) is the worked example.
+cornfield maps itself: `topology.json` at the root is derived by the starter deriver (each folder a package, each module a node, imports as lines) plus the cloud deriver, and CI fails when it drifts. A change that adds, changes or removes a module, a route, a store or a flow is proposed on that map first (`docs/specs/proposals/NNNN-slug.json`, with scenarios) and reviewed on the map before it is built. [CONTRIBUTING.md](../../CONTRIBUTING.md) has the steps. The v1 spec was approved in chat, so it skipped the gate; its proposal ([0001-v1.json](https://github.com/popcorn245/CornField/blob/ede6b6e/docs/specs/proposals/0001-v1.json), deleted once v1 landed) is the worked example.
 
 ## Why
 
