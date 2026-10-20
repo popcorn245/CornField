@@ -12,6 +12,7 @@
  *   pulls({ state, limit })           pull requests, newest first
  *   pull(n)                           one pull request (its head, its state)
  *   issue(n)                          one issue (not a pull request: that is `not-found`)
+ *   searchIssues(words)               the issues whose text holds the words (one page; the forge's search, which can lag a moment)
  *   pullFiles(n)                      the files a pull request changes
  *   comments(n)                       the comments on an issue or pull request, oldest first
  *   comment(n, body)                  posts one, and answers it
@@ -73,6 +74,7 @@
  *   pulls(query?: PullQuery): Promise<Pull[]>,
  *   pull(n: number): Promise<Pull>,
  *   issue(n: number): Promise<Issue>,
+ *   searchIssues(words: string): Promise<Issue[]>,
  *   createBranch(name: string, opts: { from: string }): Promise<{ name: string, sha: string }>,
  *   createFile(file: { branch: string, path: string, content: string, message: string }): Promise<{ sha: string }>,
  *   createPull(pull: { title: string, body: string, head: string, base: string, draft: boolean }): Promise<Pull>,
@@ -109,7 +111,7 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -263,6 +265,10 @@ export function wrap(a, forge) {
     pulls: async (q) => a.pulls(/** @type {Required<PullQuery>} */ (query(q, false))),
     pull: async (n) => a.pull(number(n)),
     issue: async (n) => a.issue(number(n)),
+    searchIssues: async (words) => {
+      if (typeof words !== 'string' || !/^[\w./ -]{3,200}$/.test(words) || !words.trim()) throw invalid('Search for plain words: letters, digits, spaces, ".", "/", "-", "_".');
+      return a.searchIssues(words.trim());
+    },
     pullFiles: async (n) => a.pullFiles(number(n)),
     comments: async (n) => a.comments(number(n)),
     comment: async (n, body) => a.comment(number(n), text(body, 'The comment')),

@@ -24,7 +24,7 @@ import { validateProposal } from '../../core/proposal.js';
 // @ts-expect-error plain JS module, no declarations
 import { reviewComment, proposalHash } from '../../server/reviews.js';
 // @ts-expect-error plain JS module, no declarations
-import { specSlug, plain, code, checklist, buildMarker } from '../../server/pipeline.js';
+import { specSlug, plain, code, checklist, buildMarker, defuse } from '../../server/pipeline.js';
 import { SAMPLE } from '../helpers.js';
 import { fakeForge, recordings } from './fake-forge.js';
 
@@ -33,6 +33,7 @@ const ENV = { CORNFIELD_GITHUB_CLIENT_ID: 'test-client-id', CORNFIELD_GITHUB_CLI
 const PUBLIC = 'http://127.0.0.1:3350';
 const MAINT = 'tok-maint';
 const READER = 'tok-reader';
+const MAINT2 = 'tok-maint-two';
 const MAIN = '0000000000000000000000000000000000000001';
 let H1 = '';
 let H2 = '';
@@ -121,9 +122,17 @@ describe('the pipeline steps', () => {
     const [method, target] = [key.slice(0, key.indexOf(' ')), key.slice(key.indexOf(' ') + 1)];
     if (state.override[key]) return state.override[key](req);
     const reader = req.headers.authorization === `Bearer ${READER}`;
-    if (key === 'POST /login/oauth/access_token') return { body: { access_token: req.body.includes('c-reader') ? READER : MAINT, token_type: 'bearer' } };
+    const second = req.headers.authorization === `Bearer ${MAINT2}`;
+    if (key === 'POST /login/oauth/access_token') return { body: { access_token: req.body.includes('c-reader') ? READER : req.body.includes('c-maint2') ? MAINT2 : MAINT, token_type: 'bearer' } };
+    if (key === `GET ${API}/user` && second) return { body: { login: 'maintainer-two', id: 1003 } };
     if (key === `GET ${API}/user`) return reader ? { body: { login: 'reader-two', id: 1002 } } : base['GET /user'];
     if (key === `GET ${GH}`) return reader ? { body: { id: 1, full_name: 'owner/name', permissions: { admin: false, maintain: false, push: false, triage: false, pull: true } } } : base['GET /repos/owner/name'];
+    // The search API: the issues whose body holds the words (q is `"<words>" in:body repo:… is:issue`)
+    if (method === 'GET' && target.startsWith(`${API}/search/issues?`)) {
+      const words = /^"([^"]+)"/.exec(new URL(target, 'http://x').searchParams.get('q') || '')?.[1] || '';
+      if (state.searchLag) return { body: { total_count: 0, items: [] } };
+      return { body: { total_count: 0, items: [...world.builds, ...Object.values(world.issues)].filter((i) => i.body.includes(words)) } };
+    }
     if (!target.startsWith(GH)) return { status: 404, body: { message: 'Not Found' } };
     const url = new URL(target.slice(GH.length), 'http://x');
     const p = decodeURIComponent(url.pathname);
@@ -473,6 +482,47 @@ describe('the pipeline steps', () => {
       expect(last()).toMatchObject({ login: 'maintainer-one', action: 'build', target: 'owner/name#40/0040-meals', status: 201, request: { action: 'build', number: 40, slug: '0040-meals', sha: H1, digest: shown.digest } });
     });
 
+    it('keeps the marker however long the checklist is, so a retry finds the issue and opens no second one', async () => {
+      const huge = proposal();
+      const long = (i) => `${'@everyone#1'.repeat(30)}-${i}`;
+      huge.edges = { add: Array.from({ length: 150 }, (_, i) => ({ from: long(i), to: long(i + 1), kind: '@'.repeat(30) })), change: Array.from({ length: 150 }, (_, i) => ({ from: long(i), to: long(i), why: '<@#>'.repeat(40) })) };
+      retarget(huge);
+      const shown = await buildPlan();
+      expect(shown.body.length).toBeLessThanOrEqual(60_000);
+      expect(shown.body.startsWith(buildMarker(40, '0040-meals'))).toBe(true);
+      expect((await post(BUILD, { slug: '0040-meals', sha: shown.sha, digest: shown.digest })).status).toBe(201);
+      clock += 10_000;
+      expect((await buildPlan()).existing).toMatchObject({ number: 60 });
+      expect(world.builds).toHaveLength(1);
+    });
+
+    it('finds the issue the first run made among many: by the forge\'s search, and among the newest while the search lags', async () => {
+      expect((await openBuild()).status).toBe(201);
+      // A hundred and fifty newer issues: the first run's is not among the newest any more, the search finds it
+      for (let i = 0; i < 150; i++) world.builds.unshift(issue(100 + i, `Other ${i}`));
+      clock += 10_000;
+      expect((await buildPlan()).existing).toMatchObject({ number: 60 });
+      expect(fake.requests.some((r) => r.url.startsWith(`${API}/search/issues?`) && new URL(r.url, 'http://x').searchParams.get('q') === '"0040-meals" in:body repo:owner/name is:issue')).toBe(true);
+      // Just made, and not in the search index yet: the newest issues have it
+      world.builds = world.builds.filter((i) => i.number === 60);
+      state.searchLag = true;
+      clock += 10_000;
+      expect((await buildPlan()).existing).toMatchObject({ number: 60 });
+      state.searchLag = false;
+    });
+
+    it('takes one ask per target, whoever asks: two maintainers at once open one issue', async () => {
+      const other = await signedIn(srv.port, 'c-maint2');
+      state.override[`GET ${GH}/collaborators/maintainer-two/permission`] = () => ({ body: { permission: 'admin', role_name: 'admin' } });
+      const p = await buildPlan();
+      const [a, b] = await Promise.all([
+        post(BUILD, { slug: '0040-meals', sha: p.sha, digest: p.digest }),
+        post(BUILD, { slug: '0040-meals', sha: p.sha, digest: p.digest }, { as: other }),
+      ]);
+      expect([a.status, b.status].sort()).toEqual([201, 429]);
+      expect(world.builds).toHaveLength(1);
+    });
+
     it('is idempotent: a second ask finds the issue the first made, even after a push', async () => {
       expect((await openBuild()).status).toBe(201);
       clock += 10_000;
@@ -577,6 +627,9 @@ describe('the pipeline steps', () => {
       retarget(nasty);
       const p = await buildPlan();
       expect(p.body).not.toMatch(/@everyone|@someone|@team/);
+      expect(p.body).not.toMatch(/@[\w-]/);
+      // The one reference the issue makes on purpose is to its own spec pull request
+      expect(p.body.replace('Spec pull request: #40', '')).not.toMatch(/(^|[^&])#\d/m); // an entity (&#60;) is no reference
       expect(p.body).not.toContain('<script>');
       expect(p.body).not.toContain('<img');
       expect(p.body).not.toContain('Closes #99');
@@ -598,8 +651,19 @@ describe('the pipeline steps', () => {
       expect(specSlug(12345, 'Big')).toBe('12345-big');
     });
 
-    it('plain() turns markup, mentions and references into entities, and code() cannot be ended', () => {
-      expect(plain('@a #1 <b> `c` [d](e) *f* _g_ \\ | ~ !')).toBe('&#64;a &#35;1 &lt;b&gt; &#96;c&#96; &#91;d&#93;(e) &#42;f&#42; &#95;g&#95; &#92; &#124; &#126; &#33;'.replace('&lt;', '&#60;').replace('&gt;', '&#62;'));
+    it('plain() turns markup into entities and breaks mentions and references with a zero-width space, and code() cannot be ended', () => {
+      const ZW = '\u200B';
+      expect(plain('@a #1 <b> `c` [d](e) *f* _g_ \\ | ~ !')).toBe(`@${ZW}a #${ZW}1 &#60;b&#62; &#96;c&#96; &#91;d&#93;(e) &#42;f&#42; &#95;g&#95; &#92; &#124; &#126; &#33;`);
+      // Markdown turns an entity back into its character before the forge looks for mentions: only a character that is not one breaks them
+      const said = plain('ping @octocat and @org/team, see other/repo#1, #2, GH-3, gh-4, https://evil.example/x and www.evil.example');
+      expect(said).not.toMatch(/@[\w-]/);
+      expect(said).not.toMatch(/#\d/);
+      expect(said).not.toMatch(/\bGH-\d/i);
+      expect(said).not.toMatch(/https?:\/\//);
+      expect(said).not.toMatch(/www\./i);
+      expect(said).not.toContain('&#64;');
+      expect(said.replaceAll(ZW, '')).toBe('ping @octocat and @org/team, see other/repo#1, #2, GH-3, gh-4, https://evil.example/x and www.evil.example');
+      expect(defuse('Build: fix #12 for @team')).toBe(`Build: fix #${ZW}12 for @${ZW}team`);
       expect(plain('a\n\nb\u0000 c')).toBe('a b c');
       expect(plain('x'.repeat(500), 10)).toHaveLength(10);
       expect(code('a`b\nc')).toBe("`a'b c`");

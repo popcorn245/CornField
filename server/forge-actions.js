@@ -254,7 +254,8 @@ export async function serveAction(req, res, what, ctx, send) {
       rowTarget = `${target}/${check}`;
     }
 
-    release = throttle(ctx, session.userId, `${session.userId}|${action}|${n}|${check || slug || ''}`, now());
+    // Per target, not per person: two maintainers asking the same thing at once get one, not two
+    release = throttle(ctx, session.userId, `${action}|${n}|${check || slug || ''}`, now());
     const forge = auth.forgeFor(session);
     await assertMaintainerNow(forge, session, config, action);
 

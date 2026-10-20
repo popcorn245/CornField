@@ -50,6 +50,9 @@
       { "id": 801, "number": 8, "title": "Dropped", "state": "closed", "draft": false, "merged": false, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [], "head": { "ref": "dropped", "sha": "8880000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/8", "created_at": "2026-10-09T10:00:00Z", "updated_at": "2026-10-09T11:00:00Z", "merged_at": null }
     ]
   },
+  "GET /repos/owner/name/issues?state=all&type=issues&q=0013-meals&limit=50": {
+    "body": [{"number": 61, "title": "Build: Meals", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one", "id": 1001}, "labels": [], "body": "Build the approved proposal `0013-meals`.\n", "comments": 0, "html_url": "https://forgejo.example.com/owner/name/issues/61", "created_at": "2026-10-18T10:00:00Z", "updated_at": "2026-10-18T10:00:00Z", "closed_at": null}, {"number": 12, "title": "Meals page", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one", "id": 1001}, "labels": [], "body": "0013-meals", "comments": 1, "html_url": "https://forgejo.example.com/owner/name/pulls/12", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T11:00:00Z", "closed_at": null, "pull_request": {"url": "https://forgejo.example.com/owner/name/pulls/12"}}]
+  },
   "GET /repos/owner/name/issues/5": {
     "body": {"number": 5, "title": "Sign-in", "state": "open", "user": {"login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one", "id": 1001}, "labels": [{"name": "v1"}], "body": "Sign in with the forge.\n", "comments": 1, "html_url": "https://forgejo.example.com/owner/name/issues/5", "created_at": "2026-10-16T10:00:00Z", "updated_at": "2026-10-16T11:00:00Z", "closed_at": null}
   },

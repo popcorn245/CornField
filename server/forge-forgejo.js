@@ -164,6 +164,13 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return all.map(toIssue);
     },
 
+    async searchIssues(words) {
+      // The issues' keyword search (`q`, the instance's indexer): one page; the caller still checks each body
+      const q = new URLSearchParams({ state: 'all', type: 'issues', q: words, limit: String(PER_PAGE) });
+      const { body } = await client.request('GET', `repos/${repo}/issues?${q}`, { what: `the issues of ${forge.repo} that say ${words}` });
+      return (Array.isArray(body) ? body : []).filter((i) => !i.pull_request).map(toIssue);
+    },
+
     async pulls({ state, limit }) {
       const q = new URLSearchParams({ state, limit: String(PER_PAGE) });
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);

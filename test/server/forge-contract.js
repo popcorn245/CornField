@@ -191,6 +191,15 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(fake.requests.filter((r) => r.method !== 'GET')).toEqual([]);
     });
 
+    it('searchIssues(): the issues whose text holds the words, never a pull request; words that are not plain are refused before the forge is asked', async () => {
+      const found = await forge.searchIssues('0013-meals');
+      expect(found.map((i) => [i.number, i.title, i.author && i.author.login])).toEqual([[61, 'Build: Meals', 'maintainer-one']]);
+      expect(found[0].body).toContain('0013-meals');
+      fake.requests.length = 0;
+      for (const bad of ['', 'ab', '"quoted"', 'a\nb', 'x'.repeat(201), 7]) await forgeError(() => forge.searchIssues(bad), 'invalid');
+      expect(fake.requests).toEqual([]);
+    });
+
     it('issue(): one, with its text; a pull request at that number, and a number that is not there, are not-found', async () => {
       expect(await forge.issue(5)).toMatchObject({ number: 5, title: 'Sign-in', state: 'open', body: 'Sign in with the forge.\n', labels: ['v1'] });
       expect((await forgeError(() => forge.issue(12), 'not-found')).message).toContain('is a pull request');

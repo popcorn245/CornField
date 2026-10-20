@@ -175,6 +175,13 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return all.map(toIssue);
     },
 
+    async searchIssues(words) {
+      // The search API: the issues of this repo whose text holds the words (one page, newest first; the index can lag a moment)
+      const q = new URLSearchParams({ q: `"${words}" in:body repo:${forge.repo} is:issue`, sort: 'created', order: 'desc', per_page: String(PER_PAGE) });
+      const { body } = await client.request('GET', `search/issues?${q}`, { what: `the issues of ${forge.repo} that say ${words}` });
+      return (Array.isArray(body?.items) ? body.items : []).filter((i) => !i.pull_request).map(toIssue);
+    },
+
     async pulls({ state, limit }) {
       const q = new URLSearchParams({ state, sort: 'created', direction: 'desc', per_page: String(PER_PAGE) });
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);

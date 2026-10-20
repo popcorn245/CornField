@@ -21,7 +21,9 @@
  * what is on the forge already: a branch, a file, a pull request and an issue are only ever added.
  *
  * Text that comes from the forge or from a proposal (a title, a node's label) is untrusted: it goes into the new issue
- * only as a code span or with its markup, mentions and references defused (`plain`, `code`).
+ * only as a code span or with its markup, mentions and references defused (`plain`, `code`). Mentions and references are
+ * broken with a zero-width space after `@` and `#` (and in `GH-1`, `://`, `www.`), not an HTML entity: Markdown turns an
+ * entity back into the character before the forge looks for mentions, so `&#64;someone` would still notify them.
  *
  * @typedef {{ number: number, title: string, url: string, draft: boolean, headRef: string }} PullRef
  * @typedef {{ kind: 'spec', digest: string, issue: { number: number, title: string, url: string }, base: string, branch: string, path: string, message: string, title: string, body: string, content: string, existing: PullRef | null }} SpecPlan
@@ -56,7 +58,19 @@ const CONTROL = /[\u0000-\u001f\u007f\u2028\u2029]/g;
  */
 export function plain(value, max = 200) {
   const one = String(value ?? '').replace(CONTROL, ' ').replace(/\s+/g, ' ').trim();
-  return clip(one, max).replace(/[&<>#@\\`*_[\]|~!]/g, (c) => `&#${c.charCodeAt(0)};`);
+  // Mentions and references first (the entities below hold a `#` of their own, which must stay one)
+  return defuse(clip(one, max)).replace(/[&<>\\`*_[\]|~!]/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** A zero-width space: it ends a mention or a reference without showing */
+const ZW = '\u200B';
+
+/**
+ * Text with every mention and reference broken: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and links the forge
+ * would make of `https://…` or `www.…`. A zero-width space after the character keeps the text as it reads.
+ */
+export function defuse(text) {
+  return String(text).replace(/[@#]/g, (c) => `${c}${ZW}`).replace(/\b(GH)-(?=\d)/gi, `$1${ZW}-`).replace(/:\/\//g, `:${ZW}//`).replace(/\b(www)\./gi, `$1${ZW}.`);
 }
 
 /** Untrusted text as a code span: no backtick or control character can end it */
@@ -291,8 +305,11 @@ export async function planBuild(forge, where, n, slug) {
     throw conflict(`The edits of the approval cannot be applied to ${entry.path}: ${err instanceof Error ? err.message : err}`);
   }
   const { lines, count } = checklist(approved);
-  const title = `Build: ${oneLine(proposal.title, 160)}`;
+  const title = `Build: ${defuse(oneLine(proposal.title, 160))}`;
+  const marker = buildMarker(n, slug);
+  // The marker comes first, so clipping a long checklist can never cut it off (a retry finds the issue by it)
   const body = clip([
+    marker,
     `Build the approved proposal ${code(slug)}.`,
     '',
     `- Spec pull request: #${n}`,
@@ -302,14 +319,15 @@ export async function planBuild(forge, where, n, slug) {
     ...(typeof approved.summary === 'string' && approved.summary.trim() ? [`> ${plain(approved.summary, 300)}`, ''] : []),
     ...lines,
     'Opened from cornfield, which builds nothing and runs no agent: land the work in a pull request that closes this issue.',
-    buildMarker(n, slug),
   ].join('\n'), MAX_BODY);
-  const issues = await forge.issues({ state: 'all', limit: 200 });
-  const marker = buildMarker(n, slug);
-  // The issue the first run made: one with the marker, opened by a maintainer (anyone who can open an issue could copy it)
+  // The issue the first run made, however long ago: the forge's search for the proposal's name (it is in every build
+  // issue's text), and the newest issues too, since a search index can lag a moment behind an issue just opened. Only
+  // one with the marker, opened by a maintainer, counts: anyone who can open an issue could copy the marker
+  const [searched, recent] = await Promise.all([forge.searchIssues(slug), forge.issues({ state: 'all', limit: 100 })]);
+  const candidates = [...new Map([...searched, ...recent].map((i) => [i.number, i])).values()].sort((a, b) => a.number - b.number);
   const byMaintainer = maintainers(forge);
   let found = null;
-  for (const i of issues) {
+  for (const i of candidates) {
     if (i.body.includes(marker) && (await byMaintainer(i.author))) { found = i; break; }
   }
   const existing = found ? { number: found.number, url: found.url, state: found.state } : null;
