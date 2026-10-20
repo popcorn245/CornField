@@ -1,24 +1,44 @@
 name: release
-# A release: on a version tag (v1.2.3), the tests, then the Docker image to GHCR and the package to npm
-# (as `cornfield` and as `@popcorn245/cornfield`).
+# A release on every merge to main (RELEASING.md): the tests, then semantic-release works out the version from the
+# conventional commit titles since the last tag (release.config.js), writes CHANGELOG.md and the version, commits them
+# back with a skip-CI marker in the message, tags v<version> and makes the GitHub release; then, in this same run (a tag pushed with
+# GITHUB_TOKEN starts no other workflow), the Docker image goes to GHCR and the package to npm, as `cornfield` and as
+# `@popcorn245/cornfield`.
 #
-# INERT until the maintainer turns it on (RELEASING.md):
-#   - nothing runs without a tag v*; tags are pushed by hand, on the maintainer's go;
-#   - both publish jobs also need the repository variable CORNFIELD_RELEASE = "on";
+# OFF until the maintainer turns it on (RELEASING.md):
+#   - every job needs the repository variable CORNFIELD_RELEASE = "on"; without it a merge releases nothing;
 #   - the npm job needs the NPM_TOKEN secret, and stops with a clear message without it;
-#   - package.json's prepublishOnly (cli/release-guard.js) refuses any publish that is not this workflow's,
-#     on this tag, from the repo root.
+#   - package.json's prepublishOnly (cli/release-guard.js) refuses any publish that is not this workflow's, for the tag
+#     this run made, from the repo root.
+#
+# semantic-release and its plugins run with npx at the exact versions below; none of them is a dependency of cornfield.
 
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
+# One release at a time, and never one cancelled half way (a tag without its packages)
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
+
+env:
+  SEMANTIC_RELEASE: >-
+    -p semantic-release@24.2.3
+    -p @semantic-release/commit-analyzer@13.0.1
+    -p @semantic-release/release-notes-generator@14.0.3
+    -p @semantic-release/changelog@6.0.3
+    -p @semantic-release/npm@12.0.1
+    -p @semantic-release/git@10.0.1
+    -p @semantic-release/github@11.0.1
+    -p conventional-changelog-conventionalcommits@8.0.0
+  # The first tag, made from the 0.1.0 release commit when the repo has no v* tag yet
+  BASELINE_TAG: v0.1.0
+  BASELINE_COMMIT: 64eec0b
 
 jobs:
   check:
@@ -33,17 +53,63 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: node cli/cornfield.js validate
-      - name: The tag is the package's version
-        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
+
+  version:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # the version commit, the tag and the GitHub release
+    outputs:
+      tag: ${{ steps.made.outputs.tag }}
+      version: ${{ steps.made.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # every tag and commit: semantic-release reads the history since the last one
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The baseline tag is there
+        run: |
+          set -eu
+          if [ -z "$(git tag --list 'v*')" ]; then
+            test "$(git show "${BASELINE_COMMIT}:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')" = "${BASELINE_TAG#v}"
+            git tag "${BASELINE_TAG}" "${BASELINE_COMMIT}"
+            git push origin "refs/tags/${BASELINE_TAG}"
+            echo "Made ${BASELINE_TAG} on ${BASELINE_COMMIT}."
+          fi
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: npx --yes ${SEMANTIC_RELEASE} semantic-release
+      - id: made
+        name: The tag this run made, if any
+        run: |
+          set -eu
+          tag="$(git tag --points-at HEAD --list 'v*' | head -n 1)"
+          if [ -n "${tag}" ] && [ "${tag}" = "v$(node -p "require('./package.json').version")" ]; then
+            echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+            echo "version=${tag#v}" >> "${GITHUB_OUTPUT}"
+            echo "Released ${tag}."
+          else
+            echo 'No release: no commit since the last tag calls for one.'
+          fi
 
   image:
-    needs: check
+    needs: version
+    if: ${{ needs.version.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -55,8 +121,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/cornfield
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
             type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
@@ -66,13 +132,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   npm:
-    needs: check
+    needs: version
+    if: ${{ needs.version.outputs.tag != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write   # provenance
+    env:
+      CORNFIELD_RELEASE_TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -82,6 +153,8 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "${NPM_TOKEN}" ]; then echo "NPM_TOKEN is not set: add it as a repository secret (RELEASING.md)." >&2; exit 1; fi
+      - name: The tag is the package's version
+        run: test "${CORNFIELD_RELEASE_TAG}" = "v$(node -p "require('./package.json').version")"
       - name: Publish cornfield
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

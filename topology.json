@@ -4558,7 +4558,17 @@
       "from": "page-doc-docs-issues-and-prs",
       "to": "page-doc-docs-proposals",
       "dashed": true
+    },
+    {
+      "from": "page-doc-contributing",
+      "to": "page-doc-releasing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-releasing",
+      "to": "page-doc-contributing",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-20T16:48:57.443Z"
+  "updatedAt": "2026-10-20T18:26:35.998Z"
 }
