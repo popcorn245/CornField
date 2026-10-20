@@ -16,6 +16,7 @@ export default {
   topology: 'topology.json',
   personas: { roles: ['admin', 'member'], parent: 'root' },
   cloud: { parent: 'root' },
+  releaseNotes: { breakingLabel: 'breaking' },
   links: [{ label: 'Docs', href: 'https://example.org/docs' }],
   proxy: { '/api/': 'http://127.0.0.1:3245' },
   importMap: {},
@@ -38,6 +39,7 @@ export default {
 | `agents` | what marks work as made by an agent: `authors`, `labels`, `branchPrefixes` (lists, empty by default) and `bots` (default true: `[bot]` accounts count). The Agents tab of the issues and PRs panel uses it: [agents](agents.md) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
+| `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
 | `links` | extra links in the explorer's header |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |

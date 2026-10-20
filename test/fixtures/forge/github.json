@@ -140,6 +140,25 @@
     ]
   },
 
+  "GET /repos/owner/name/tags?per_page=100": {
+    "body": [
+      { "name": "v0.1.0", "commit": { "sha": "1110000000000000000000000000000000000000" }, "zipball_url": "https://github.example.com/owner/name/zipball/v0.1.0" },
+      { "name": "nightly", "commit": { "sha": "3330000000000000000000000000000000000000" } },
+      { "name": "v0.2.0", "commit": { "sha": "2220000000000000000000000000000000000000" } }
+    ]
+  },
+  "GET /repos/owner/name/commits/v0.2.0": {
+    "body": { "sha": "2220000000000000000000000000000000000000", "commit": { "author": { "date": "2026-10-12T08:00:00Z" }, "committer": { "date": "2026-10-12T09:00:00Z" } } }
+  },
+  "GET /repos/owner/name/commits/v9.9.9": {
+    "status": 404,
+    "body": { "message": "No commit found for SHA: v9.9.9", "status": "404" }
+  },
+  "POST /repos/owner/name/releases": {
+    "status": 201,
+    "body": { "id": 7001, "tag_name": "v0.3.0", "name": "v0.3.0", "draft": true, "prerelease": false, "html_url": "https://github.example.com/owner/name/releases/tag/untagged-7001" }
+  },
+
   "GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=abc0000000000000000000000000000000000000": {
     "headers": { "content-type": "application/vnd.github.raw; charset=utf-8" },
     "body": "{\n  \"version\": 1,\n  \"title\": \"Meals\"\n}\n"

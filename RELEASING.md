@@ -10,7 +10,7 @@ A release publishes the Docker image to GHCR (`ghcr.io/popcorn245/cornfield`) an
 
 ## Making a release
 
-1. Update `CHANGELOG.md` (move Unreleased under the new version) and bump `version` in `package.json`, in a PR. Merge it.
+1. Update `CHANGELOG.md` (move Unreleased under the new version) and bump `version` in `package.json`, in a PR. Merge it. The pull requests since the last tag, grouped by what they changed on the map, are drafted for you: `cornfield notes` prints them as Markdown, and the explorer's Release notes tab can copy them or keep them as a draft release on the forge ([docs/issues-and-prs.md](docs/issues-and-prs.md#release-notes)). That only drafts: it does not publish, and it makes no tag.
 2. Tag the merge commit and push the tag:
 
    ```sh

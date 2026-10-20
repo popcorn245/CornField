@@ -23,6 +23,10 @@
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
  *   fileBytes(ref, path)              the same file's bytes (a picture), or null
+ *   defaultBranch()                   the name of the repo's default branch (where releases are cut from)
+ *   tags()                            the tags, as the forge lists them
+ *   tag(name)                         one tag with the time of the commit it names
+ *   createReleaseDraft({ tag, name, body })   a DRAFT release for a tag name: never published, and it makes no tag
  *
  * The pipeline's own steps (ADR 0006, spec 0001 section 3) add four calls that make something new, and nothing else:
  * none of them changes or removes what is there (a branch that exists, a file that exists, are refused), so each is as
@@ -53,6 +57,10 @@
  * @typedef {{ id: string, workflow: string, name: string, title: string, event: string, branch: string, sha: string, state: CheckState, actor: Author | null, url: string | null, createdAt: string, updatedAt: string }} Run
  *   `workflow` is the workflow file's name ("deploy.yml"), `name` the workflow's own name ("Deploy web"; the file's
  *   name where the forge has none), `title` what the run was for (a commit message, a release)
+ * @typedef {{ name: string, sha: string }} Tag
+ * @typedef {{ name: string, sha: string, date: string }} TagInfo
+ * @typedef {{ tag: string, name: string, body: string }} ReleaseDraftInput
+ * @typedef {{ id: string, url: string, draft: true }} ReleaseDraft
  * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number }} IssueQuery
  * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number }} PullQuery
  * @typedef {{ limit?: number }} RunQuery
@@ -79,6 +87,10 @@
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
  *   fileBytes(ref: string, path: string): Promise<Buffer | null>,
+ *   defaultBranch(): Promise<string>,
+ *   tags(): Promise<Tag[]>,
+ *   tag(name: string): Promise<TagInfo>,
+ *   createReleaseDraft(input: ReleaseDraftInput): Promise<ReleaseDraft>,
  *   rateLimit(): import('./forge-http.js').RateLimit | null,
  * }} Forge
  * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls' | 'runs'> & {
@@ -97,7 +109,7 @@ import { ForgeError } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -109,6 +121,10 @@ export const DEFAULT_RUN_LIMIT = 100;
 const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 const STATES = ['open', 'closed', 'all'];
 const REPO = /^[\w.-]+\/[\w.-]+$/;
+/** A tag name a release draft may carry: no spaces, no `..`, no leading dash, at most 100 characters */
+const TAG_NAME = /^[\w][\w./+-]{0,99}$/;
+/** The most a release's body may hold (GitHub's own limit) */
+export const RELEASE_BODY_LIMIT = 125_000;
 
 /** The adapters, by `forge.type` */
 const ADAPTERS = {
@@ -156,6 +172,16 @@ const invalid = (message) => new ForgeError(message, { code: 'invalid' });
 function number(n) {
   if (!Number.isSafeInteger(n) || n < 1) throw invalid(`${JSON.stringify(n) ?? String(n)} is not an issue or pull request number.`);
   return n;
+}
+
+/** Whether a value is a tag name a path or a draft may carry */
+export const isTagName = (v) => typeof v === 'string' && TAG_NAME.test(v) && !v.includes('..') && !v.endsWith('/') && !v.endsWith('.');
+
+/** A tag name, so a path or a draft never carries anything else */
+function tagName(v) {
+  const t = text(v, 'The tag');
+  if (!isTagName(t)) throw invalid(`${JSON.stringify(t)} is not a tag name cornfield will use.`);
+  return t;
 }
 
 /** A non-empty string without a NUL: a ref, a path, a login, a comment */
@@ -307,6 +333,20 @@ export function wrap(a, forge) {
     createIssue: async (issue) => {
       if (!issue || typeof issue !== 'object') throw invalid('Open which issue?');
       return a.createIssue({ title: bounded(issue.title, 'The title', MAX_TITLE), body: bounded(issue.body ?? ' ', 'The description', MAX_BODY) });
+    },
+    defaultBranch: async () => a.defaultBranch(),
+    tags: async () => a.tags(),
+    tag: async (name) => a.tag(tagName(name)),
+    createReleaseDraft: async (input) => {
+      if (!input || typeof input !== 'object') throw invalid('A release draft is { tag, name, body }.');
+      const tag = tagName(input.tag);
+      const name = text(input.name, 'The release name');
+      if (name.length > 200) throw invalid('The release name is at most 200 characters.');
+      if (typeof input.body !== 'string' || input.body.includes('\0') || input.body.length > RELEASE_BODY_LIMIT) throw invalid(`The release notes are text of at most ${RELEASE_BODY_LIMIT} characters.`);
+      const draft = await a.createReleaseDraft({ tag, name, body: input.body });
+      // Whatever the adapter was told, a release that came back published is a fault: nothing here ever publishes
+      if (!draft || draft.draft !== true) throw new ForgeError(`The forge did not keep ${tag} as a draft; check ${forge.repo}'s releases on the forge.`, { code: 'unavailable', forge: forge.type });
+      return draft;
     },
     rateLimit: () => a.rateLimit(),
   });

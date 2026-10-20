@@ -130,6 +130,25 @@
     ]
   },
 
+  "GET /repos/owner/name/tags?limit=50": {
+    "body": [
+      { "name": "v0.1.0", "id": "aaa0000000000000000000000000000000000000", "commit": { "sha": "1110000000000000000000000000000000000000", "created": "2026-10-01T09:00:00Z" } },
+      { "name": "nightly", "id": "bbb0000000000000000000000000000000000000", "commit": { "sha": "3330000000000000000000000000000000000000", "created": "2026-10-14T09:00:00Z" } },
+      { "name": "v0.2.0", "id": "ccc0000000000000000000000000000000000000", "commit": { "sha": "2220000000000000000000000000000000000000", "created": "2026-10-12T09:00:00Z" } }
+    ]
+  },
+  "GET /repos/owner/name/tags/v0.2.0": {
+    "body": { "name": "v0.2.0", "id": "ccc0000000000000000000000000000000000000", "commit": { "sha": "2220000000000000000000000000000000000000", "created": "2026-10-12T09:00:00Z" } }
+  },
+  "GET /repos/owner/name/tags/v9.9.9": {
+    "status": 404,
+    "body": { "message": "tag does not exist [name: v9.9.9]", "url": "https://forgejo.example.com/api/swagger" }
+  },
+  "POST /repos/owner/name/releases": {
+    "status": 201,
+    "body": { "id": 7001, "tag_name": "v0.3.0", "name": "v0.3.0", "draft": true, "prerelease": false, "html_url": "https://forgejo.example.com/owner/name/releases/tag/v0.3.0" }
+  },
+
   "GET /repos/owner/name/raw/docs/specs/proposals/0013-meals.json?ref=abc0000000000000000000000000000000000000": {
     "headers": { "content-type": "text/plain; charset=utf-8" },
     "body": "{\n  \"version\": 1,\n  \"title\": \"Meals\"\n}\n"
