@@ -2,6 +2,8 @@
 
 Status: accepted (maintainer, 2026-10-17)
 
+Amended 2026-10-20 (maintainer): one more safe action, post a release draft (drafts only: never published, never tagged), for the release notes ([#17](https://github.com/popcorn245/cornfield/issues/17)).
+
 ## Decision
 
 cornfield shows everything it can read. It acts only in these ways: approve or send back a proposal; land a PR whose required checks are green (the forge's own merge, never an override); re-run a failed check; and the pipeline's own steps. It never force-merges, never deploys by hand, never touches anything live.
