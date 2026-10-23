@@ -2,7 +2,7 @@
 
 All notable changes to cornfield. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+**From 0.1.1 on, each release's notes are on [GitHub Releases](https://github.com/popcorn245/cornfield/releases)**, written by the release workflow from the pull request titles ([RELEASING.md](RELEASING.md)). This file keeps the history up to 0.1.0.
 
 ## [0.1.0] - 2026-10-20
 
@@ -62,5 +62,4 @@ The first release: the map and its proposals, forge sign-in for GitHub and Forge
 
 - `cornfield docs`: the docs as a small static site built from that map (a page per document, the links around it, a map of the docs' links), published for cornfield itself to GitHub Pages by `.github/workflows/pages.yml`.
 
-[Unreleased]: https://github.com/popcorn245/CornField/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/popcorn245/CornField/releases/tag/v0.1.0
