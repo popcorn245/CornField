@@ -13,7 +13,7 @@ import { createForge, isMaintainer, isGreen, notGreenWords, canRerun, wrap, FORG
 // @ts-expect-error plain JS module, no declarations
 import { githubApiUrl, githubRateLimit } from '../../server/forge-github.js';
 // @ts-expect-error plain JS module, no declarations
-import { nextLink, rateLimitWords, MAX_PAGES } from '../../server/forge-http.js';
+import { createClient, nextLink, rateLimitWords, MAX_PAGES, FILE_MAX_BYTES } from '../../server/forge-http.js';
 import { fakeForge, recordings } from './fake-forge.js';
 import { forgeContract, forgeError, TOKEN } from './forge-contract.js';
 
@@ -317,6 +317,49 @@ describe('what the adapters share', () => {
     expect(['failure', 'cancelled', 'success', 'running', 'queued', 'neutral', 'skipped'].map((s) => canRerun(c(s)))).toEqual([true, true, false, false, false, false, false]);
     expect(canRerun(c('failure', false))).toBe(false);
     expect(canRerun(null)).toBe(false);
+  });
+
+  it('fileBytes refuses a file whose Content-Length is over the limit, without reading it', async () => {
+    let read = false;
+    const stream = new ReadableStream({ pull(c) { read = true; c.enqueue(new Uint8Array(10)); } }, { highWaterMark: 0 });
+    const doFetch = async () => new Response(stream, { headers: { 'content-length': String(FILE_MAX_BYTES + 1) } });
+    const client = createClient({ forge: 'GitHub', apiUrl: 'https://api.github.com', fetch: doFetch });
+    const err = await forgeError(() => client.request('GET', 'repos/o/n/contents/big.png', { what: 'big.png at main', bytes: true }), 'too-large');
+    expect(err.message).toBe(`big.png at main is more than ${FILE_MAX_BYTES} bytes, too big to read.`);
+    expect(read).toBe(false);
+  });
+
+  it('fileBytes counts a body that sends no length and stops reading at the limit', async () => {
+    let pulled = 0;
+    const stream = new ReadableStream({ pull(c) { pulled++; c.enqueue(new Uint8Array(10)); } }, { highWaterMark: 0 });
+    const client = createClient({ forge: 'GitHub', apiUrl: 'https://api.github.com', fetch: async () => new Response(stream) });
+    await forgeError(() => client.request('GET', 'repos/o/n/contents/big.png', { what: 'big.png at main', bytes: true, maxBytes: 25 }), 'too-large');
+    expect(pulled).toBeLessThan(10); // cut off a little past 25 bytes, not read to the end of a stream that has none
+    const fits = createClient({ forge: 'GitHub', apiUrl: 'https://api.github.com', fetch: async () => new Response(new Uint8Array(25)) });
+    expect((await fits.request('GET', 'x', { bytes: true, maxBytes: 25 })).body.length).toBe(25);
+  });
+
+  it('fileBytes takes the limit from its options, 5 MB when none, and passes it down', async () => {
+    const big = Buffer.alloc(100, 1);
+    const routes = {
+      'GET /repos/owner/name/contents/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'content-length': '100' }, body: big },
+      'GET /repos/owner/name/contents/secret.png?ref=main': { status: 401, body: { message: 'Bad credentials', documentation_url: 'https://docs.github.com/rest' } },
+      'GET /repos/owner/name/contents/b.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' }, body: big },
+    };
+    const fake = await fakeForge(routes);
+    try {
+      const forge = createForge({ type: 'github', url: 'https://github.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
+      expect((await forge.fileBytes('main', 'a.png')).length).toBe(100);
+      expect((await forge.fileBytes('main', 'a.png', { maxBytes: 100 })).length).toBe(100);
+      await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 99 }), 'too-large'); // Content-Length
+      await forgeError(() => forge.fileBytes('main', 'b.png', { maxBytes: 99 }), 'too-large'); // chunked, no length
+      await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 0 }), 'invalid');
+      // The limit is the file's, not the forge's answer when there is no file: a 404 or a 401 keeps its meaning
+      expect(await forge.fileBytes('main', 'none.png', { maxBytes: 5 })).toBeNull();
+      await forgeError(() => forge.fileBytes('main', 'secret.png', { maxBytes: 5 }), 'unauthorized');
+    } finally {
+      await fake.close();
+    }
   });
 
   it('nextLink reads rel="next" wherever it is in the header', () => {

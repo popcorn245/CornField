@@ -19,7 +19,7 @@
  *     which GitHub keeps as a draft, with no tag, until it is published on GitHub.
  */
 
-import { createClient, ForgeError } from './forge-http.js';
+import { createClient, ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 
 const NAME = 'GitHub';
 const GITHUB_API = 'https://api.github.com';
@@ -319,9 +319,9 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return { id: String(made.id), url: made.html_url, draft: made.draft === true };
     },
 
-    async fileBytes(ref, path) {
+    async fileBytes(ref, path, { maxBytes = FILE_MAX_BYTES } = {}) {
       const { status, body, headers } = await client.request('GET', `repos/${repo}/contents/${segments(path)}?ref=${enc(ref)}`, {
-        what: `${path} at ${ref}`, bytes: true, accept: 'application/vnd.github.raw+json', allow: [404],
+        what: `${path} at ${ref}`, bytes: true, maxBytes, accept: 'application/vnd.github.raw+json', allow: [404],
       });
       if (status === 404 || !Buffer.isBuffer(body)) return null;
       if (/^application\/json/i.test(headers.get('content-type') || '') && isListing(body.toString('utf8'))) return null; // a folder

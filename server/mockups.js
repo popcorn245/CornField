@@ -140,9 +140,9 @@ function sendBytes(req, res, file, bytes) {
   return res.end(req.method === 'HEAD' ? undefined : bytes);
 }
 
-/** The bytes of a mockup at a spec PR's head commit, or null when it is not there or is too big */
+/** The bytes of a mockup at a spec PR's head commit, or null when it is not there; a 'too-large' ForgeError when it is too big */
 async function pullBytes(forge, where, entry, item) {
-  const bytes = await forge.fileBytes(entry.sha, path.posix.join(folderOf(where), item.path));
+  const bytes = await forge.fileBytes(entry.sha, path.posix.join(folderOf(where), item.path), { maxBytes: MOCKUP_MAX_BYTES });
   return bytes && bytes.length <= MOCKUP_MAX_BYTES ? bytes : null;
 }
 
@@ -150,7 +150,8 @@ async function pullBytes(forge, where, entry, item) {
 async function hashPullItems(forge, where, entry, items) {
   const out = [];
   for (const m of items) {
-    const bytes = await pullBytes(forge, where, entry, m);
+    // Too big to serve reads as not there, as before
+    const bytes = await pullBytes(forge, where, entry, m).catch((err) => { if (err instanceof ForgeError && err.code === 'too-large') return null; throw err; });
     out.push({ node: m.node, path: m.path, sha256: bytes ? sha256(bytes) : null });
   }
   return out;
@@ -189,7 +190,7 @@ async function servePull(req, res, where, forgeFor, slug, source, position) {
     bytes = await pullBytes(forge, where, entry, item);
   } catch (err) {
     if (err instanceof SyntaxError) return refuse(res, 422, `Not valid JSON: ${err.message}`);
-    return refuse(res, err instanceof ForgeError ? (err.code === 'not-found' ? 404 : 502) : 500, forgeWords(err));
+    return refuse(res, err instanceof ForgeError ? ({ 'not-found': 404, 'too-large': 413 }[err.code] ?? 502) : 500, forgeWords(err));
   }
   if (!bytes) return refuse(res, 404, 'No such mockup');
   return sendBytes(req, res, item.path, bytes);
