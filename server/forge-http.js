@@ -14,9 +14,11 @@
 export const REQUEST_TIMEOUT_MS = 15_000;
 /** The most pages one listing follows (at 100 a page, 5000 items), so a runaway `next` cannot loop */
 export const MAX_PAGES = 50;
+/** The most bytes `fileBytes` reads of one file unless it is told otherwise (5 MB) */
+export const FILE_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * @typedef {'unauthorized' | 'forbidden' | 'not-found' | 'conflict' | 'invalid' | 'rate-limited' | 'unavailable' | 'not-green'} ForgeErrorCode
+ * @typedef {'unauthorized' | 'forbidden' | 'not-found' | 'conflict' | 'invalid' | 'rate-limited' | 'unavailable' | 'not-green' | 'too-large'} ForgeErrorCode
  * @typedef {{ limit: number | null, remaining: number | null, resetAt: string | null, retryAfter: number | null }} RateLimit
  */
 
@@ -49,6 +51,37 @@ export function nextLink(header) {
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * A body as bytes, never holding more than `max` and one chunk: refused up front when `Content-Length` is over, and
+ * cut off as soon as the chunks read pass it (a body that sends no length, or a wrong one).
+ * @param {Response} res
+ * @param {number} max
+ * @param {() => ForgeError} tooLarge
+ * @returns {Promise<Buffer>}
+ */
+async function readCapped(res, max, tooLarge) {
+  const declared = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > max) {
+    await res.body?.cancel();
+    throw tooLarge();
+  }
+  if (!res.body) return Buffer.alloc(0);
+  const chunks = [];
+  let size = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 
 /** "in about 6 minutes", "in 40 seconds", "now" */
 function inWords(seconds) {
@@ -154,10 +187,10 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
    * empty); anything else throws a ForgeError, except a status in `allow`, which answers too (a 404 that means "none").
    * @param {string} method
    * @param {string} pathOrUrl a path under the API root, or a full URL on its origin (a `next` link)
-   * @param {{ body?: unknown, what?: string, raw?: boolean, bytes?: boolean, accept?: string, allow?: number[] }} [opts]
-   *   `bytes`: the body is a Buffer, not decoded (a picture)
+   * @param {{ body?: unknown, what?: string, raw?: boolean, bytes?: boolean, maxBytes?: number, accept?: string, allow?: number[] }} [opts]
+   *   `bytes`: the body is a Buffer, not decoded (a picture); `maxBytes` (with `bytes`): a longer body is a 'too-large' error
    */
-  async function request(method, pathOrUrl, { body, what = 'that', raw = false, bytes = false, accept, allow = [] } = {}) {
+  async function request(method, pathOrUrl, { body, what = 'that', raw = false, bytes = false, maxBytes = FILE_MAX_BYTES, accept, allow = [] } = {}) {
     const url = urlOf(pathOrUrl);
     /** @type {Record<string, string>} */
     const h = { 'User-Agent': 'cornfield', ...headers };
@@ -169,9 +202,12 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
     let buffer = null;
     try {
       res = await doFetch(url, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
-      if (bytes) buffer = Buffer.from(await res.arrayBuffer());
+      if (bytes) {
+        buffer = await readCapped(res, maxBytes, () => new ForgeError(`${what} is more than ${plural(maxBytes, 'byte')}, too big to read.`, { code: 'too-large', status: res.status, forge }));
+      }
       text = buffer ? buffer.toString('utf8') : await res.text();
     } catch (err) {
+      if (err instanceof ForgeError) throw err;
       const timedOut = err?.name === 'TimeoutError';
       throw new ForgeError(`${forge} did not answer${timedOut ? ` within ${plural(Math.max(1, Math.round(timeoutMs / 1000)), 'second')}` : ''}; try again in a minute.`, { code: 'unavailable', forge, cause: err });
     }

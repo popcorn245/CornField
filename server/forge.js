@@ -23,7 +23,7 @@
  *   runs({ limit })                   the latest workflow (Actions) runs, newest first: what the deploys on the map are read from
  *   branches()                        the branches
  *   file(ref, path)                   a file's text at a ref, or null when it is not there
- *   fileBytes(ref, path)              the same file's bytes (a picture), or null
+ *   fileBytes(ref, path, { maxBytes })  the same file's bytes (a picture), or null; a longer file (default 5 MB) is a 'too-large' error
  *   defaultBranch()                   the name of the repo's default branch (where releases are cut from)
  *   tags()                            the tags, as the forge lists them
  *   tag(name)                         one tag with the time of the commit it names
@@ -88,7 +88,7 @@
  *   runs(query?: RunQuery): Promise<Run[]>,
  *   branches(): Promise<Branch[]>,
  *   file(ref: string, path: string): Promise<string | null>,
- *   fileBytes(ref: string, path: string): Promise<Buffer | null>,
+ *   fileBytes(ref: string, path: string, opts?: { maxBytes?: number }): Promise<Buffer | null>,
  *   defaultBranch(): Promise<string>,
  *   tags(): Promise<Tag[]>,
  *   tag(name: string): Promise<TagInfo>,
@@ -106,7 +106,7 @@
 
 import { createGitHubForge } from './forge-github.js';
 import { createForgejoForge } from './forge-forgejo.js';
-import { ForgeError } from './forge-http.js';
+import { ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
@@ -316,9 +316,10 @@ export function wrap(a, forge) {
       inRepo(ref, path);
       return a.file(ref, path);
     },
-    fileBytes: async (ref, path) => {
+    fileBytes: async (ref, path, { maxBytes = FILE_MAX_BYTES } = {}) => {
       inRepo(ref, path);
-      return a.fileBytes(ref, path);
+      if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw invalid('The size limit is a whole number of bytes above 0.');
+      return a.fileBytes(ref, path, { maxBytes });
     },
     createBranch: async (name, opts) => {
       if (!opts || typeof opts !== 'object') throw invalid('Make the branch from which branch?');

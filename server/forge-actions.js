@@ -55,7 +55,7 @@ export const ATTEMPTS_PER_MINUTE = 60;
 /** A request body is a sha and a check's id */
 const MAX_BODY = 4096;
 
-const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
+const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409, 'too-large': 413 };
 const SHA = /^[0-9a-f]{7,64}$/i;
 const DIGEST = /^[0-9a-f]{32}$/;
 /** What each action is called in the words of a refusal, and what it asks of the person */

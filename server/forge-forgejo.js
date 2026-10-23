@@ -26,7 +26,7 @@
  *     it is read. A listing is paged 50 at a time (the most it gives by default) and follows `Link`.
  */
 
-import { createClient, ForgeError } from './forge-http.js';
+import { createClient, ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 
 const NAME = 'Forgejo';
 const PER_PAGE = 50;
@@ -298,8 +298,8 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return { id: String(made.id), url: made.html_url, draft: made.draft === true };
     },
 
-    async fileBytes(ref, path) {
-      const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, bytes: true, allow: [404] });
+    async fileBytes(ref, path, { maxBytes = FILE_MAX_BYTES } = {}) {
+      const { status, body } = await client.request('GET', `repos/${repo}/raw/${segments(path)}?ref=${enc(ref)}`, { what: `${path} at ${ref}`, bytes: true, maxBytes, allow: [404] });
       return status === 404 || !Buffer.isBuffer(body) ? null : body;
     },
 

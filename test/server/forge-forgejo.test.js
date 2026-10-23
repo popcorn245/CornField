@@ -249,6 +249,17 @@ describe('the Forgejo adapter', () => {
     expect(await forge.file('main', 'docs')).toBeNull();
   });
 
+  it('refuses a file over the limit, by Content-Length or counted as it streams', async () => {
+    const big = Buffer.alloc(100, 1);
+    const forge = await forgeOn({
+      'GET /repos/owner/name/raw/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream' }, body: big },
+      'GET /repos/owner/name/raw/b.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' }, body: big },
+    });
+    expect((await forge.fileBytes('main', 'a.png', { maxBytes: 100 })).length).toBe(100);
+    await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 99 }), 'too-large');
+    await forgeError(() => forge.fileBytes('main', 'b.png', { maxBytes: 99 }), 'too-large');
+  });
+
   it('follows Link when its parts have no space between them, and keeps X-Total-Count to itself', async () => {
     const forge = await forgeOn({
       'GET /repos/owner/name/branches?limit=50': { headers: { link: '<{origin}/api/v1/repos/owner/name/branches?limit=50&page=2>; rel="next",<{origin}/api/v1/repos/owner/name/branches?limit=50&page=2>; rel="last"', 'x-total-count': '51' }, body: [{ name: 'a', commit: { id: '1' } }] },

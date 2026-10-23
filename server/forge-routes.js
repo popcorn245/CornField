@@ -69,7 +69,7 @@ export const WORK_BRANCHES = 300;
 export const WORK_BODY_MAX = 4000;
 
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
-const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409 };
+const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409, 'too-large': 413 };
 const DRAFTS = '/api/forge/release-drafts';
 /** What a draft request may carry, in bytes: a tag, a tag to start from and a name */
 const DRAFT_LIMIT = 4096;

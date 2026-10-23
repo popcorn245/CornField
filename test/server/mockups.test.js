@@ -362,6 +362,14 @@ describe('mockups of a spec PR', () => {
     expect(fake.requests).toEqual([]);
   });
 
+  it('answers 413 for a file over the limit, and lists it as missing', async () => {
+    png = Buffer.alloc(5 * 1024 * 1024 + 1);
+    const r = await call('/proposals/0021-pr/mockups/0?source=pull%2F7');
+    expect(r.status).toBe(413);
+    expect(JSON.parse(r.text).error).toMatch(/too big/);
+    expect(await states()).toEqual(['missing', 'unreviewed', 'missing']);
+  });
+
   it('says so plainly when the forge cannot answer', async () => {
     await fake.close();
     fake = await fakeForge({ 'GET /repos/owner/name/pulls/7': { status: 503, body: { message: 'down' } } });
