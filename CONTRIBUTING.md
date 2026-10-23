@@ -17,7 +17,7 @@ Thanks for helping. cornfield is built in the open, by people and by coding agen
    - a breaking change is `type!:` (`feat(core)!: drop contract 1`), or a `BREAKING CHANGE:` line in the description. While cornfield is 0.x that is a minor release too, never 1.0;
    - the scope is optional and lower case (an area: `forge`, `auth`, `explorer`, `release`…); the issue key (`[CF-11]`, `Closes #5`) goes in the description.
 
-   CI checks the title (`.github/workflows/pr-title.yml`). Do not edit `CHANGELOG.md` by hand: the release writes it from the titles.
+   CI checks the title (`.github/workflows/pr-title.yml`). The release notes are made from the titles too, on [GitHub Releases](https://github.com/popcorn245/cornfield/releases): there is no changelog entry to write, and `CHANGELOG.md` keeps only the history up to 0.1.0.
 
 Bug fixes and docs that change no architecture skip step 2.
 

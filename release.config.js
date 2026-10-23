@@ -6,23 +6,13 @@
  * release someone makes on purpose. feat is a minor release, fix and perf a patch; anything else (docs, chore, ci,
  * refactor, test…) makes no release on its own.
  *
- * What it does, in order: works out the version; writes the notes into CHANGELOG.md under [Unreleased], in the file's
- * own Keep a Changelog form; sets the version in package.json and package-lock.json (it does not publish: the
- * workflow's npm job does, behind cli/release-guard.js); commits those three files back to main with a skip-CI marker in the message (below); tags
- * v<version>; and makes the GitHub release. The image and the npm packages are published by the same workflow run,
- * from that tag.
+ * Nothing is committed back to main (it is locked): the tag is the only record of a version. semantic-release works
+ * out the version, tags the merge commit itself v<version> (a tag-only push) and makes the GitHub release, which
+ * carries the notes. The workflow's image and npm jobs then check that tag out and set the version in package.json
+ * from it (`npm version --no-git-tag-version`) before they build and publish.
  */
 
-/** The top of CHANGELOG.md, kept as it is: the notes of a release go right under it, above the last release */
-const CHANGELOG_TOP = [
-  '# Changelog',
-  '',
-  'All notable changes to cornfield. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).',
-  '',
-  '## [Unreleased]',
-].join('\n');
-
-/** Commit types and the Keep a Changelog section each goes under; the hidden ones are left out of the notes */
+/** Commit types and the Keep a Changelog section each goes under in the release's notes; the hidden ones are left out */
 const TYPES = [
   { type: 'feat', section: 'Added' },
   { type: 'fix', section: 'Fixed' },
@@ -56,20 +46,13 @@ export default {
       preset: 'conventionalcommits',
       presetConfig: { types: TYPES },
       writerOpts: {
-        // "## [0.2.0] - 2026-10-20", as the releases already in CHANGELOG.md
+        // "## [0.2.0] - 2026-10-20", the form of the releases in CHANGELOG.md
         headerPartial: '## [{{version}}] - {{date}}\n',
         // "- **forge:** what changed (abc1234)": one line each, the scope in bold
         commitPartial: '- {{#if scope}}**{{scope}}:** {{/if}}{{#if subject}}{{subject}}{{else}}{{header}}{{/if}}{{#if shortHash}} ({{shortHash}}){{/if}}\n',
       },
     }],
-    ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md', changelogTitle: CHANGELOG_TOP }],
-    // The version in package.json and package-lock.json; publishing is the workflow's npm job (cli/release-guard.js)
-    ['@semantic-release/npm', { npmPublish: false }],
-    ['@semantic-release/git', {
-      assets: ['CHANGELOG.md', 'package.json', 'package-lock.json'],
-      message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
-    }],
-    // The GitHub release; no comments on pull requests or issues, so the job needs no write access to them
+    // The GitHub release, with the notes; no comments on pull requests or issues, so the job needs no write access to them
     ['@semantic-release/github', { successComment: false, failComment: false, releasedLabels: false }],
   ],
 };

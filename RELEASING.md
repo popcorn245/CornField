@@ -7,7 +7,7 @@ A release publishes the Docker image to GHCR (`ghcr.io/popcorn245/cornfield`) an
 1. **npm:** create an automation token on the npm account that owns both names (`cornfield`, and the `@popcorn245` scope). Add it to the GitHub repo as the secret `NPM_TOKEN` (Settings, Secrets and variables, Actions).
 2. **GHCR:** nothing to add: the workflow pushes with the repo's own `GITHUB_TOKEN` (`packages: write`). After the first push, set the package's visibility to public in the account's Packages settings if wanted.
 3. **Squash merges under the PR title:** in Settings, General, Pull Requests, allow squash merging with the default message "Pull request title and description", so the merge commit is the conventional title (and a `BREAKING CHANGE:` line in the description comes with it).
-4. **The bot may push to main:** the release commits `CHANGELOG.md`, `package.json` and `package-lock.json` back to `main` as `github-actions[bot]`, and pushes the tag. A branch protection rule or ruleset on `main` that requires pull requests or status checks blocks that push: add GitHub Actions to its bypass list (a ruleset can), or the release stops after working out the version, with nothing tagged or published.
+4. **Nothing to unlock on main:** a release commits nothing back. `main` stays locked; the release pushes only a tag (`v<version>`, on the merge commit itself) with the workflow's `GITHUB_TOKEN`. Only a rule that stops the token creating `v*` tags would block it.
 5. **The switch:** add the repository variable `CORNFIELD_RELEASE` with the value `on`. Without it, a merge releases nothing. Setting it to anything else switches releases off again.
 
 The first run makes the baseline tag itself: when the repo has no `v*` tag, it tags `v0.1.0` on the 0.1.0 release commit (`64eec0b`, "[CF-11] Release 0.1.0") before semantic-release looks at the history.
@@ -30,15 +30,15 @@ semantic-release reads the commit titles on `main` since the last tag. Pull requ
 The workflow, on a merge to `main` with `CORNFIELD_RELEASE` on:
 
 1. **check:** `npm ci`, the tests and `cornfield validate`. Nothing is tagged when they fail.
-2. **version:** semantic-release works out the version and writes the release's notes into `CHANGELOG.md`, under `## [Unreleased]`, in the file's own form (`## [0.2.0] - 2026-10-20`, then Added / Fixed / Changed). It sets the version in `package.json` and `package-lock.json`, commits the three files to `main` as `chore(release): 0.2.0` with a skip-CI marker in its message (so the commit starts no other workflow), tags `v0.2.0` and makes the GitHub release with the same notes. It publishes nothing itself.
-3. **image** and **npm**, in the same run (a tag pushed with `GITHUB_TOKEN` starts no other workflow), from the new tag: the image is pushed as `0.2.0`, `0.2` and `latest`, and both npm names are published with provenance. Both start only when step 2 made a release.
+2. **version:** semantic-release works out the version, tags the merge commit itself `v0.2.0` (a tag-only push: nothing is committed to `main`) and makes the GitHub release, whose notes are the record of the release (`## [0.2.0] - 2026-10-20`, then Added / Fixed / Changed, a line per pull request). It publishes nothing itself. The tag is the only record of a version: `package.json` on `main` keeps the version last set by hand (0.1.0).
+3. **image** and **npm**, in the same run (a tag pushed with `GITHUB_TOKEN` starts no other workflow), from the new tag, with the version set in `package.json` from it first (`npm version --no-git-tag-version`): the image is pushed as `0.2.0`, `0.2` and `latest`, and both npm names are published with provenance. Both start only when step 2 made a release.
 
 semantic-release and its plugins run with `npx` at exact versions pinned in the workflow; none of them is one of cornfield's dependencies.
 
 To try what the next release would be, from a clone with the tags (the GitHub plugin checks a token even in a dry run: set `GITHUB_TOKEN` to one that can read the repo):
 
 ```sh
-npx -p semantic-release@24.2.3 -p @semantic-release/changelog@6.0.3 -p @semantic-release/git@10.0.1 \
+npx -p semantic-release@24.2.3 \
   -p conventional-changelog-conventionalcommits@8.0.0 semantic-release --dry-run --no-ci
 ```
 

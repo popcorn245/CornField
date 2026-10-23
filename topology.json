@@ -4568,7 +4568,12 @@
       "from": "page-doc-releasing",
       "to": "page-doc-contributing",
       "dashed": true
+    },
+    {
+      "from": "page-doc-changelog",
+      "to": "page-doc-releasing",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-10-20T18:26:35.998Z"
+  "updatedAt": "2026-10-23T09:24:51.710Z"
 }

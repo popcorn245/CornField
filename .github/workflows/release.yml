@@ -1,9 +1,10 @@
 name: release
 # A release on every merge to main (RELEASING.md): the tests, then semantic-release works out the version from the
-# conventional commit titles since the last tag (release.config.js), writes CHANGELOG.md and the version, commits them
-# back with a skip-CI marker in the message, tags v<version> and makes the GitHub release; then, in this same run (a tag pushed with
-# GITHUB_TOKEN starts no other workflow), the Docker image goes to GHCR and the package to npm, as `cornfield` and as
-# `@popcorn245/cornfield`.
+# conventional commit titles since the last tag (release.config.js), tags the merge commit itself v<version> and makes
+# the GitHub release with the notes. Nothing is committed back to main (it is locked): the tag is the only record of a
+# version. Then, in this same run (a tag pushed with GITHUB_TOKEN starts no other workflow), the image and npm jobs
+# check that tag out, set the version in package.json from it, and publish: the Docker image to GHCR and the package
+# to npm, as `cornfield` and as `@popcorn245/cornfield`.
 #
 # OFF until the maintainer turns it on (RELEASING.md):
 #   - every job needs the repository variable CORNFIELD_RELEASE = "on"; without it a merge releases nothing;
@@ -31,9 +32,6 @@ env:
     -p semantic-release@24.2.3
     -p @semantic-release/commit-analyzer@13.0.1
     -p @semantic-release/release-notes-generator@14.0.3
-    -p @semantic-release/changelog@6.0.3
-    -p @semantic-release/npm@12.0.1
-    -p @semantic-release/git@10.0.1
     -p @semantic-release/github@11.0.1
     -p conventional-changelog-conventionalcommits@8.0.0
   # The first tag, made from the 0.1.0 release commit when the repo has no v* tag yet
@@ -58,7 +56,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # the version commit, the tag and the GitHub release
+      contents: write   # the tag (a tag-only push) and the GitHub release; nothing is pushed to a branch
     outputs:
       tag: ${{ steps.made.outputs.tag }}
       version: ${{ steps.made.outputs.version }}
@@ -78,23 +76,25 @@ jobs:
             git push origin "refs/tags/${BASELINE_TAG}"
             echo "Made ${BASELINE_TAG} on ${BASELINE_COMMIT}."
           fi
+      - name: The tags before
+        run: git tag --list 'v*' | sort > "${RUNNER_TEMP}/tags-before"
       - name: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: npx --yes ${SEMANTIC_RELEASE} semantic-release
       - id: made
         name: The tag this run made, if any
         run: |
           set -eu
-          tag="$(git tag --points-at HEAD --list 'v*' | head -n 1)"
-          if [ -n "${tag}" ] && [ "${tag}" = "v$(node -p "require('./package.json').version")" ]; then
+          # Only a tag this run made, on the commit it released: a re-run of a run that already released publishes nothing again
+          git tag --list 'v*' | sort > "${RUNNER_TEMP}/tags-after"
+          tag="$(comm -13 "${RUNNER_TEMP}/tags-before" "${RUNNER_TEMP}/tags-after" | head -n 1)"
+          if [ -n "${tag}" ]; then
+            test "$(git rev-list -n 1 "${tag}")" = "$(git rev-parse HEAD)"
+            echo "${tag}" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+$'
             echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
             echo "version=${tag#v}" >> "${GITHUB_OUTPUT}"
-            echo "Released ${tag}."
+            echo "Released ${tag} on $(git rev-parse --short HEAD)."
           else
             echo 'No release: no commit since the last tag calls for one.'
           fi
@@ -110,6 +110,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: The version, from the tag (main's package.json keeps the version last set by hand)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: npm version --no-git-tag-version --allow-same-version "${VERSION}"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -153,6 +160,8 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "${NPM_TOKEN}" ]; then echo "NPM_TOKEN is not set: add it as a repository secret (RELEASING.md)." >&2; exit 1; fi
+      - name: The version, from the tag (main's package.json keeps the version last set by hand)
+        run: npm version --no-git-tag-version --allow-same-version "${CORNFIELD_RELEASE_TAG#v}"
       - name: The tag is the package's version
         run: test "${CORNFIELD_RELEASE_TAG}" = "v$(node -p "require('./package.json').version")"
       - name: Publish cornfield
