@@ -252,12 +252,13 @@ describe('the Forgejo adapter', () => {
   it('refuses a file over the limit, by Content-Length or counted as it streams', async () => {
     const big = Buffer.alloc(100, 1);
     const forge = await forgeOn({
-      'GET /repos/owner/name/raw/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream' }, body: big },
+      'GET /repos/owner/name/raw/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'content-length': '100' }, body: big },
       'GET /repos/owner/name/raw/b.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' }, body: big },
     });
     expect((await forge.fileBytes('main', 'a.png', { maxBytes: 100 })).length).toBe(100);
     await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 99 }), 'too-large');
     await forgeError(() => forge.fileBytes('main', 'b.png', { maxBytes: 99 }), 'too-large');
+    expect(await forge.fileBytes('main', 'none.png', { maxBytes: 5 })).toBeNull(); // a 404's own words are not the file
   });
 
   it('follows Link when its parts have no space between them, and keeps X-Total-Count to itself', async () => {

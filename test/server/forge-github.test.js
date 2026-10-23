@@ -342,7 +342,8 @@ describe('what the adapters share', () => {
   it('fileBytes takes the limit from its options, 5 MB when none, and passes it down', async () => {
     const big = Buffer.alloc(100, 1);
     const routes = {
-      'GET /repos/owner/name/contents/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream' }, body: big },
+      'GET /repos/owner/name/contents/a.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'content-length': '100' }, body: big },
+      'GET /repos/owner/name/contents/secret.png?ref=main': { status: 401, body: { message: 'Bad credentials', documentation_url: 'https://docs.github.com/rest' } },
       'GET /repos/owner/name/contents/b.png?ref=main': { headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' }, body: big },
     };
     const fake = await fakeForge(routes);
@@ -353,6 +354,9 @@ describe('what the adapters share', () => {
       await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 99 }), 'too-large'); // Content-Length
       await forgeError(() => forge.fileBytes('main', 'b.png', { maxBytes: 99 }), 'too-large'); // chunked, no length
       await forgeError(() => forge.fileBytes('main', 'a.png', { maxBytes: 0 }), 'invalid');
+      // The limit is the file's, not the forge's answer when there is no file: a 404 or a 401 keeps its meaning
+      expect(await forge.fileBytes('main', 'none.png', { maxBytes: 5 })).toBeNull();
+      await forgeError(() => forge.fileBytes('main', 'secret.png', { maxBytes: 5 }), 'unauthorized');
     } finally {
       await fake.close();
     }

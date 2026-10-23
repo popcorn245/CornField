@@ -61,24 +61,29 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * @returns {Promise<Buffer>}
  */
 async function readCapped(res, max, tooLarge) {
+  // Cancelling only lets go of the connection: its failure is not the answer, and is never left unhandled
   const declared = Number(res.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > max) {
-    await res.body?.cancel();
+    res.body?.cancel().catch(() => {});
     throw tooLarge();
   }
   if (!res.body) return Buffer.alloc(0);
   const chunks = [];
   let size = 0;
   const reader = res.body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel();
-      throw tooLarge();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > max) {
+        reader.cancel().catch(() => {});
+        throw tooLarge();
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } finally {
+    reader.releaseLock();
   }
   return Buffer.concat(chunks);
 }
@@ -202,7 +207,8 @@ export function createClient({ forge, apiUrl, token = null, authScheme = 'Bearer
     let buffer = null;
     try {
       res = await doFetch(url, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
-      if (bytes) {
+      // Only a 2xx is the file: any other answer is the forge's own (small) words, read as text for its message
+      if (bytes && res.ok) {
         buffer = await readCapped(res, maxBytes, () => new ForgeError(`${what} is more than ${plural(maxBytes, 'byte')}, too big to read.`, { code: 'too-large', status: res.status, forge }));
       }
       text = buffer ? buffer.toString('utf8') : await res.text();
