@@ -8,7 +8,8 @@ name: release
 #
 # OFF until the maintainer turns it on (RELEASING.md):
 #   - every job needs the repository variable CORNFIELD_RELEASE = "on"; without it a merge releases nothing;
-#   - the npm job needs the NPM_TOKEN secret, and stops with a clear message without it;
+#   - the npm job publishes with npm trusted publishing (OIDC, no token): each package names this repo and release.yml
+#     as its trusted publisher on npmjs.com, or npm refuses the publish;
 #   - package.json's prepublishOnly (cli/release-guard.js) refuses any publish that is not this workflow's, for the tag
 #     this run made, from the repo root.
 #
@@ -144,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # provenance
+      id-token: write   # trusted publishing: the OIDC token npm exchanges for a short-lived publish token, and provenance
     env:
       CORNFIELD_RELEASE_TAG: ${{ needs.version.outputs.tag }}
     steps:
@@ -155,24 +156,23 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - name: The npm token is there
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted publishing needs npm 11.5.1 or later (and Node 22.14 or later, which node-version 22 resolves to)
+      - name: npm, at a pinned version that does trusted publishing
         run: |
-          if [ -z "${NPM_TOKEN}" ]; then echo "NPM_TOKEN is not set: add it as a repository secret (RELEASING.md)." >&2; exit 1; fi
+          npm install -g npm@11.21.0
+          npm --version
       - name: The version, from the tag (main's package.json keeps the version last set by hand)
         run: npm version --no-git-tag-version --allow-same-version "${CORNFIELD_RELEASE_TAG#v}"
       - name: The tag is the package's version
         run: test "${CORNFIELD_RELEASE_TAG}" = "v$(node -p "require('./package.json').version")"
+      # No token: npm finds the job's OIDC token and exchanges it for a short-lived one, and generates provenance by itself
       - name: Publish cornfield
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           CORNFIELD_RELEASE: '1'
-        run: npm publish --provenance --access public
+        run: npm publish --access public
       - name: Publish @popcorn245/cornfield (the same files under the scoped name)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           CORNFIELD_RELEASE: '1'
         run: |
           npm pkg set name=@popcorn245/cornfield
-          npm publish --provenance --access public
+          npm publish --access public

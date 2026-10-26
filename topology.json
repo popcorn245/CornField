@@ -2990,7 +2990,7 @@
       "to": "ext-npm",
       "kind": "calls",
       "status": "live",
-      "label": "pages.yml: npm ci · release.yml: npm ci · test.yml: npm ci",
+      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · test.yml: npm ci",
       "when": "deploy"
     },
     {
@@ -4575,5 +4575,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-10-23T09:24:51.710Z"
+  "updatedAt": "2026-10-26T06:35:49.482Z"
 }
