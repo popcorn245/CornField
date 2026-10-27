@@ -8,8 +8,9 @@ name: release
 #
 # OFF until the maintainer turns it on (RELEASING.md):
 #   - every job needs the repository variable CORNFIELD_RELEASE = "on"; without it a merge releases nothing;
-#   - the npm job publishes with npm trusted publishing (OIDC, no token): each package names this repo and release.yml
-#     as its trusted publisher on npmjs.com, or npm refuses the publish;
+#   - the npm job publishes with npm trusted publishing (OIDC) once each package names this repo and release.yml as its
+#     trusted publisher on npmjs.com; until then (a name never published has no settings to name one in) npm falls back
+#     to the NPM_TOKEN secret, which can be removed once both trusted publishers are set up;
 #   - package.json's prepublishOnly (cli/release-guard.js) refuses any publish that is not this workflow's, for the tag
 #     this run made, from the repo root.
 #
@@ -145,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # trusted publishing: the OIDC token npm exchanges for a short-lived publish token, and provenance
+      id-token: write   # trusted publishing (the OIDC token npm exchanges for a short-lived publish token) and provenance
     env:
       CORNFIELD_RELEASE_TAG: ${{ needs.version.outputs.tag }}
     steps:
@@ -165,14 +166,20 @@ jobs:
         run: npm version --no-git-tag-version --allow-same-version "${CORNFIELD_RELEASE_TAG#v}"
       - name: The tag is the package's version
         run: test "${CORNFIELD_RELEASE_TAG}" = "v$(node -p "require('./package.json').version")"
-      # No token: npm finds the job's OIDC token and exchanges it for a short-lived one, and generates provenance by itself
+      # Trusted publishing first: npm exchanges the job's OIDC token for a short-lived one when the package names this
+      # workflow as its trusted publisher. When it does not (or the package does not exist yet), the exchange fails
+      # quietly and npm uses NODE_AUTH_TOKEN, the NPM_TOKEN secret: that is how each name gets its first publish. An
+      # empty or missing secret changes nothing for the OIDC path. --provenance: npm turns provenance on by itself only
+      # after a successful OIDC exchange, so it is asked for here (as publishConfig does too) for the token path as well.
       - name: Publish cornfield
         env:
           CORNFIELD_RELEASE: '1'
-        run: npm publish --access public
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
       - name: Publish @popcorn245/cornfield (the same files under the scoped name)
         env:
           CORNFIELD_RELEASE: '1'
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm pkg set name=@popcorn245/cornfield
-          npm publish --access public
+          npm publish --access public --provenance
