@@ -16,7 +16,7 @@ import { openStore, migrate, schemaVersion, MIGRATIONS, DB_FILE } from '../../se
 import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
-const TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'reviews', 'sessions'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -39,7 +39,7 @@ describe('openStore', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('makes the data folder and a fresh file with the four tables at the latest version', () => {
+  it('makes the data folder and a fresh file with its tables at the latest version', () => {
     const dataDir = path.join(tmp, 'data', 'nested');
     db = openStore(dataDir);
     expect(fs.existsSync(path.join(dataDir, DB_FILE))).toBe(true);
@@ -49,6 +49,7 @@ describe('openStore', () => {
     expect(columns(db, 'reviews')).toEqual(['repo', 'pr', 'slug', 'verdict', 'note', 'edits', 'author', 'comment_id', 'at']);
     expect(columns(db, 'actions')).toEqual(['id', 'at', 'login', 'action', 'target', 'request', 'status', 'answer']);
     expect(columns(db, 'forge_cache')).toEqual(['key', 'etag', 'body', 'fetched_at', 'expires_at']);
+    expect(columns(db, 'hook_seen')).toEqual(['repo', 'pr', 'head_sha', 'slug', 'at']);
     expect(db.prepare('PRAGMA journal_mode').get().journal_mode).toBe('wal');
   });
 

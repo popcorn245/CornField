@@ -22,6 +22,7 @@
  *     topology: 'topology.json',
  *     personas: { roles: null },              // the roles a persona may have (null: any)
  *     releaseNotes: { breakingLabel: 'breaking' },   // the pull request label that lists a change under "Breaking" in the release notes
+ *     hooks: [],                              // [{ url, events }]: signed JSON events posted to outside code (docs/config.md#hooks); the secret is env only
  *     links: [],                              // [{ label, href }] shown in the explorer's header
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
@@ -63,6 +64,10 @@ export const SOURCE_SLOTS = ['live', 'house', 'devices', 'checker'];
 export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
+/** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed']);
+/** The most hooks a config lists */
+export const MAX_HOOKS = 20;
 
 export const DEFAULTS = Object.freeze({
   title: null,
@@ -80,6 +85,7 @@ export const DEFAULTS = Object.freeze({
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
   agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
+  hooks: [],
   links: [],
   proxy: {},
   importMap: {},
@@ -173,6 +179,24 @@ export function configProblems(c) {
       }
     }
   }
+  if (c.hooks !== undefined) {
+    if (!Array.isArray(c.hooks)) out.push('"hooks" is a list of { url, events }.');
+    else {
+      if (c.hooks.length > MAX_HOOKS) out.push(`"hooks" lists at most ${MAX_HOOKS} hooks.`);
+      c.hooks.forEach((h, i) => {
+        if (!isObject(h)) { out.push(`hooks[${i}] is { url, events }.`); return; }
+        for (const k of Object.keys(h)) if (k !== 'url' && k !== 'events') out.push(`hooks[${i}].${k}: the keys are url, events (the secret is CORNFIELD_HOOK_SECRET in env, never the config).`);
+        const bad = hookUrlProblem(h.url);
+        if (bad) out.push(`hooks[${i}].url ${bad}`);
+        if (h.events === '*') return;
+        if (!Array.isArray(h.events) || h.events.length === 0) out.push(`hooks[${i}].events is "*" or a non-empty list of ${HOOK_EVENTS.join(', ')}.`);
+        else {
+          for (const e of h.events) if (!HOOK_EVENTS.includes(e)) out.push(`hooks[${i}].events: ${JSON.stringify(e)} is not an event; the events are ${HOOK_EVENTS.join(', ')}.`);
+          if (new Set(h.events).size !== h.events.length) out.push(`hooks[${i}].events names an event twice.`);
+        }
+      });
+    }
+  }
   if (c.releaseNotes !== undefined) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
@@ -201,6 +225,26 @@ export function configProblems(c) {
     out.push('"personas" is { roles: ["admin", …] | null, parent? }.');
   }
   return out;
+}
+
+/** Whether a host is the machine itself: `localhost`, 127.x.x.x or ::1 */
+const isLoopbackHost = (host) => host === 'localhost' || host === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(host);
+
+/** What is wrong with a hook's URL, in words that follow "hooks[i].url", or null: https, or http for the machine itself; no login in it */
+function hookUrlProblem(value) {
+  const say = 'is an https URL, like https://chat.example.org/hooks/cornfield.';
+  if (typeof value !== 'string') return say;
+  let u;
+  try {
+    u = new URL(value);
+  } catch {
+    return say;
+  }
+  if (u.protocol === 'http:' && !isLoopbackHost(u.hostname)) return 'is https; http is only for localhost, 127.0.0.1 and [::1].';
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return 'is an https URL.';
+  if (u.username || u.password) return 'has a user name or password in it; a hook is signed with CORNFIELD_HOOK_SECRET instead.';
+  if (u.hash) return 'has a # fragment, which is never sent.';
+  return null;
 }
 
 /** A short, file-safe name for a repo root, for the default data folder */

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS } from '../../core/config.js';
+import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
 
 const made = [];
@@ -39,6 +39,54 @@ describe('configProblems', () => {
     const forge = (baseBranch) => ({ forge: { type: 'github', repo: 'o/n', baseBranch } });
     for (const b of [undefined, 'main', 'release/1.x', 'v1.0_rc']) expect(configProblems(forge(b)), b).toEqual([]);
     for (const b of ['', '-x', '../x', 'a..b', '/main', 'a b', 'main/', 1, null]) expect(configProblems(forge(b)), String(b)).toEqual(['forge.baseBranch is the branch spec pull requests go into, like "main".']);
+  });
+
+  describe('hooks', () => {
+    const hooks = (...list) => ({ hooks: list });
+    const url = (u) => hooks({ url: u, events: '*' });
+
+    it('takes { url, events } with events from the five names, or "*"', () => {
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed']);
+      expect(configProblems({ hooks: [] })).toEqual([]);
+      expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
+      expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
+    });
+
+    it('takes http only for the machine itself', () => {
+      for (const u of ['http://localhost:9000/x', 'http://127.0.0.1:9000', 'http://127.1.2.3/x', 'http://[::1]:9000/x']) expect(configProblems(url(u)), u).toEqual([]);
+      for (const u of ['http://chat.example.org/x', 'http://127.0.0.1.evil.example/x', 'http://10.0.0.5/x', 'http://localhost.evil.example/x']) expect(configProblems(url(u)).join(), u).toMatch(/hooks\[0\]\.url is https/);
+    });
+
+    it('refuses anything else as a url: other schemes, no url, text that is no URL, a login in it, a fragment', () => {
+      for (const u of ['ftp://x.example.org', 'file:///etc/passwd', 'javascript:alert(1)', 'chat.example.org/hook', '', undefined, null, 5, ['https://a.example.org']]) {
+        expect(configProblems(url(u)).length, String(u)).toBeGreaterThan(0);
+      }
+      expect(configProblems(url('https://user:pass@chat.example.org/x'))[0]).toMatch(/user name or password/);
+      expect(configProblems(url('https://chat.example.org/x#frag'))[0]).toMatch(/fragment/);
+    });
+
+    it('refuses events that are empty, unknown, repeated, or not a list (and "*" inside a list)', () => {
+      const ev = (events) => configProblems(hooks({ url: 'https://a.example.org', events }));
+      for (const events of [[], 'spec.ready', undefined, null, 'all', 5, {}]) expect(ev(events)[0], JSON.stringify(events)).toMatch(/events is "\*" or a non-empty list/);
+      expect(ev(['spec.ready', 'spec.merged'])).toEqual([expect.stringMatching(/"spec\.merged" is not an event/)]);
+      expect(ev(['*'])).toEqual([expect.stringMatching(/"\*" is not an event/)]);
+      expect(ev(['pr.landed', 'pr.landed'])[0]).toMatch(/twice/);
+    });
+
+    it('refuses a hook that is not an object, a key it does not have (a secret does not go in the file), and a list that is too long or not a list', () => {
+      expect(configProblems({ hooks: 'https://a.example.org' })).toEqual(['"hooks" is a list of { url, events }.']);
+      expect(configProblems({ hooks: ['https://a.example.org'] })).toEqual(['hooks[0] is { url, events }.']);
+      expect(configProblems(hooks({ url: 'https://a.example.org', events: '*', secret: 'x'.repeat(40) }))[0]).toMatch(/hooks\[0\]\.secret: the keys are url, events.*CORNFIELD_HOOK_SECRET/);
+      expect(configProblems({ hooks: Array.from({ length: 21 }, () => ({ url: 'https://a.example.org', events: '*' })) })[0]).toMatch(/at most 20/);
+    });
+
+    it('defaults to no hooks, and loads the ones the file lists', async () => {
+      expect(DEFAULTS.hooks).toEqual([]);
+      const root = repo('export default { hooks: [{ url: "https://a.example.org/h", events: ["pr.landed"] }] };');
+      expect((await loadConfig(root, { env: {} })).hooks).toEqual([{ url: 'https://a.example.org/h', events: ['pr.landed'] }]);
+      expect((await loadConfig(repo('export default {};'), { env: {} })).hooks).toEqual([]);
+      await expect(loadConfig(repo('export default { hooks: [{ url: "http://a.example.org", events: "*" }] };'), { env: {} })).rejects.toThrow(/hooks\[0\]\.url is https/);
+    });
   });
 
   it('names what is wrong: unknown keys, a bad port, a deriver or source that is neither built in nor a path, a path out of the repo', () => {
