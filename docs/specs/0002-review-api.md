@@ -1,6 +1,6 @@
 # Spec 0002: a review API for outside callers
 
-Status: proposed ([#67](https://github.com/popcorn245/CornField/issues/67)). Its proposal is `proposals/0002-review-api.json`, deleted in the PR that lands it.
+Status: built ([#67](https://github.com/popcorn245/CornField/issues/67)). Its proposal, `proposals/0002-review-api.json`, was deleted in the PR that landed it; `git log` keeps it.
 
 Approve and Send back are buttons today ([ADR 0005](../adr/0005-reviews-are-pr-comments.md), [ADR 0006](../adr/0006-safe-actions-only.md)). A maintainer who reviews from somewhere else, a chat reaction or a script, has no way in. This adds one: `POST /api/reviews`, called with a **review token** the maintainer mints in the dashboard. It adds no new kind of action: it is the same Approve or Send back, through the same checks.
 
