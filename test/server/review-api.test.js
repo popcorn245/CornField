@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 // @ts-expect-error plain JS module, no declarations
 import { createCornfieldServer } from '../../server/server.js';
@@ -235,6 +235,39 @@ describe('the review API', () => {
         request: { slug: SLUG, verdict: 'approved', note: 'Ship it.', edits: [], proposal: head(), via: 'api', token: { id: token.id, label: 'chat bot' } },
         answer: { comment: '9100', url: 'https://github.example.com/owner/name/pull/40#issuecomment-9100' },
       })]);
+    });
+
+    it('fires the spec.approved hook, as the button does, with the token\'s owner as the actor', async () => {
+      const HOOK_SECRET = 'h'.repeat(40);
+      const got = [];
+      const receiver = http.createServer((req, res) => {
+        const chunks = [];
+        req.on('data', (c) => chunks.push(c));
+        req.on('end', () => {
+          const body = Buffer.concat(chunks);
+          got.push({ valid: req.headers['x-cornfield-signature'] === `sha256=${createHmac('sha256', HOOK_SECRET).update(body).digest('hex')}`, body: JSON.parse(body.toString('utf8')) });
+          res.writeHead(200);
+          res.end('ok');
+        });
+      });
+      await new Promise((resolve) => receiver.listen(0, '127.0.0.1', () => resolve(undefined)));
+      try {
+        // This test's server lists a hook; the one beforeEach made does not
+        await srv.close();
+        config.hooks = [{ url: `http://127.0.0.1:${receiver.address().port}/hook`, events: ['spec.approved', 'spec.sentBack'] }];
+        srv = await start(config, { env: { ...ENV, CORNFIELD_HOOK_SECRET: HOOK_SECRET }, now: () => clock });
+        cookie = await signedIn(srv.port, 'c-maint');
+        const { secret } = await mint('chat bot');
+        const res = await call(secret, approve({ note: 'Good to build.' }));
+        expect(res.status, res.text).toBe(200);
+        for (let i = 0; i < 400 && !got.length; i++) await new Promise((r) => setTimeout(r, 5));
+        expect(got).toHaveLength(1);
+        expect(got[0].valid).toBe(true);
+        expect(got[0].body).toMatchObject({ event: 'spec.approved', slug: SLUG, pull: 40, headSha: world.pull.head.sha, proposalSha256: head(), actor: 'maintainer-one', note: 'Good to build.', edits: [] });
+        expect(JSON.stringify(got[0].body)).not.toContain(secret);
+      } finally {
+        await new Promise((resolve) => { receiver.closeAllConnections(); receiver.close(() => resolve(undefined)); });
+      }
     });
 
     it('sends back with a note and edits, the same block the button writes', async () => {
