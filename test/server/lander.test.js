@@ -129,7 +129,7 @@ describe('landing on approval', () => {
     world.asked.push(`${method} ${p}`);
     if (world.down && /\/check-runs$/.test(p)) return { status: 503, body: { message: 'Service Unavailable' } };
     if (method === 'GET' && p === '/pulls/40') return { body: { ...world.pull, mergeable_state: world.mergeState } };
-    if (method === 'GET' && p === '/pulls/40/files') return { body: [{ filename: PATH, status: 'modified', additions: 1, deletions: 0, changes: 1 }] };
+    if (method === 'GET' && p === '/pulls/40/files') return { body: [PATH, ...Object.keys(world.others)].map((filename) => ({ filename, status: 'modified', additions: 1, deletions: 0, changes: 1 })) };
     if (method === 'GET' && p === '/issues/40/comments') return { body: world.comments };
     if (method === 'POST' && p === '/issues/40/comments') {
       const text = JSON.parse(req.body).body;
@@ -139,7 +139,8 @@ describe('landing on approval', () => {
       return { status: 201, body: c };
     }
     if (method === 'GET' && p.startsWith('/contents/')) {
-      const text = p.slice('/contents/'.length) === PATH && url.searchParams.get('ref') === HEAD ? world.text : undefined;
+      const at = p.slice('/contents/'.length);
+      const text = url.searchParams.get('ref') !== HEAD ? undefined : at === PATH ? world.text : world.others[at];
       return text === undefined ? { status: 404, body: { message: 'Not Found' } } : { headers: { 'content-type': 'application/vnd.github.raw; charset=utf-8' }, body: text };
     }
     if (method === 'GET' && /^\/commits\/[0-9a-f]+\/check-runs$/.test(p)) {
@@ -168,6 +169,8 @@ describe('landing on approval', () => {
     asked: [],
     checks: [check('test', 'completed', 'success')],
     demoted: false,
+    /** More proposal files the PR holds at HEAD, by path */
+    others: {},
   });
 
   const start = async (cfg, opts) => {
@@ -291,6 +294,68 @@ describe('landing on approval', () => {
       world.down = false;
       timer.fire();
       await until('the merge', () => world.merges.length === 1);
+    });
+
+    it('does not land a PR that holds several proposals until every one is approved at its current hash, and says nothing meanwhile', async () => {
+      const OTHER = '0041-planner';
+      world.others = { [`docs/specs/proposals/${OTHER}.json`]: proposalOf('Planner') };
+      await boot();
+      await approveByButton(); // 0040 only
+      await settle();
+      expect(world.merges).toEqual([]);
+      expect(notes()).toEqual([]);
+      expect(landings()).toEqual([]); // not started: another proposal of the PR is not approved
+      expect(timer.waiting()).toEqual([]);
+      // the other one approved too: that approval starts the landing, and it lands
+      const res = await page('PUT', `/proposals/${OTHER}/review?source=pull%2F40`, { verdict: 'approved', note: '', edits: [] });
+      expect(res.status, res.text).toBe(200);
+      await until('the merge', () => world.merges.length === 1);
+      expect(world.merges[0].sha).toBe(HEAD);
+      expect(notes()).toEqual([]);
+    });
+
+    it('a landing that started waits, and does not merge, once another proposal of the PR is no longer approved', async () => {
+      const OTHER = '0041-planner';
+      world.others = { [`docs/specs/proposals/${OTHER}.json`]: proposalOf('Planner') };
+      world.checks = [check('test', 'in_progress', null)];
+      await boot();
+      await page('PUT', `/proposals/${OTHER}/review?source=pull%2F40`, { verdict: 'approved', note: '', edits: [] });
+      await approveByButton(); // both approved: the landing starts, and waits for the checks
+      await until('waiting', () => landings()[0]?.state === 'pending' && timer.waiting().length === 1);
+      // the other proposal is sent back meanwhile, then the checks pass
+      expect((await page('PUT', `/proposals/${OTHER}/review?source=pull%2F40`, { verdict: 'notes', note: 'Not yet.', edits: [] })).status).toBe(200);
+      world.checks = [check('test', 'completed', 'success')];
+      timer.fire();
+      await until('the next look to wait', () => timer.waiting().length === 1);
+      expect(world.merges).toEqual([]);
+      expect(notes()).toEqual([]);
+      expect(landings()[0].state).toBe('pending');
+    });
+
+    it('looks every 20 seconds for the first five minutes, then every minute', async () => {
+      world.checks = [check('test', 'in_progress', null)];
+      await boot();
+      await approveByButton();
+      await until('the first look', () => timer.waiting().length === 1);
+      expect(timer.waiting()[0].ms).toBe(20_000);
+      clock += 5 * 60_000;
+      timer.fire();
+      await until('the next look', () => timer.waiting().length === 1 && timer.waiting()[0].ms !== 20_000);
+      expect(timer.waiting()[0].ms).toBe(60_000);
+    });
+
+    it('a look in flight when the server shuts down merges nothing', async () => {
+      await boot();
+      let release;
+      world.gate = new Promise((r) => { release = r; });
+      await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] });
+      await until('the look to ask for the checks', () => world.asked.some((a) => a.includes('check-runs')));
+      await srv.close();
+      release();
+      await settle();
+      expect(world.merges).toEqual([]);
+      srv = await start(config); // for afterEach to close (the pending row is picked up again: the same head, green)
+      await until('the resumed landing', () => world.merges.length === 1);
     });
 
     it('waits while checks are running, and lands at the look after they pass', async () => {

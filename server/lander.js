@@ -11,7 +11,9 @@
  *
  * **One polled path, for both forges.** Forgejo has a server-side "merge when checks succeed" and GitHub does not; using it
  * would mean two code paths, and the pinned sha and the green rule would be the forge's to enforce rather than ours. So
- * both are polled, every `POLL_MS` for up to `TIMEOUT_MS`, and the landing is `landPull` (server/forge-actions.js): the same
+ * both are polled (every `POLL_MS` for the first `FAST_FOR_MS`, then every `SLOW_POLL_MS`, for up to `TIMEOUT_MS`; each
+ * look reads the PR, its head and its checks fresh from the forge, never a kept answer, since they decide the merge), and the
+ * landing is `landPull` (server/forge-actions.js): the same
  * `forge.merge(n, { onlyIfGreen: true, sha })` Land it uses, with the same `pr.landed` hook.
  *
  * Each look stops at the first terminal state, in this order:
@@ -20,6 +22,8 @@
  *   the PR is closed or merged        done (landed elsewhere, or closed: nothing to say)
  *   its head is not the approved sha  cancelled, "a push after approval" (the approval covered another version)
  *   a check is red                    left open: <check> failed
+ *   another proposal not approved     waits, saying nothing (a PR with several proposals lands only once every one of them
+ *                                     is approved by a maintainer at its current SHA-256, `allApproved`)
  *   green, not a draft, mergeable     lands, pinned to the approved sha
  *   the time is up                    left open: timed out
  *
@@ -37,12 +41,16 @@
 
 import { ForgeError, isGreen, isMaintainer } from './forge.js';
 import { landPull, mergeMethodOf } from './forge-actions.js';
-import { postNote } from './reviews.js';
+import { latestReview, postNote, proposalHash } from './reviews.js';
+import { pullProposals, readPullProposal } from './proposal-pulls.js';
 import { sameOrigin } from './proposals.js';
 import { Refused, countAttempt } from './throttle.js';
 
-/** How often a pending landing looks at its PR */
+/** How often a pending landing looks at its PR, for its first `FAST_FOR_MS` */
 export const POLL_MS = 20_000;
+/** How long a landing is looked at every `POLL_MS`; after that, every `SLOW_POLL_MS` (most checks finish in minutes) */
+export const FAST_FOR_MS = 5 * 60_000;
+export const SLOW_POLL_MS = 60_000;
 /** How long a landing waits for its checks before it is left open */
 export const TIMEOUT_MS = 60 * 60_000;
 /** The most of a check's name that goes into a comment */
@@ -66,8 +74,9 @@ const oneLine = (v, max) => String(v).replace(/\s+/g, ' ').trim().slice(0, max);
  *   timeoutMs?: number,
  * }} opts `timer`, `pollMs` and `timeoutMs` are the tests' clock
  */
-export function createLander({ config, where, auth, hooks = null, now = Date.now, timer = { setTimeout, clearTimeout }, pollMs = POLL_MS, timeoutMs = TIMEOUT_MS }) {
+export function createLander({ config, where, auth, hooks = null, now = Date.now, timer = { setTimeout, clearTimeout }, pollMs = POLL_MS, slowPollMs = SLOW_POLL_MS, fastForMs = FAST_FOR_MS, timeoutMs = TIMEOUT_MS }) {
   const repo = config.forge.repo;
+  const folder = where || { proposals: config.proposals };
   const targetOf = (pull) => `${repo}#${pull}`;
   /** The landings being waited for in this process, by pull request */
   const jobs = new Map();
@@ -114,6 +123,24 @@ export function createLander({ config, where, auth, hooks = null, now = Date.now
     forge, comment: `Left open: ${why}. cornfield will not land \`${job.slug}\` on its own now; land it with Land it once it is green.`,
   });
 
+  /**
+   * Whether every proposal the PR holds at its head has, as its latest review by a maintainer, an approval of the file as it
+   * is now (its SHA-256). Approving one proposal of a PR that holds several does not land the others.
+   * @param {import('./forge.js').Forge} forge
+   * @param {import('./forge.js').Pull} pull read fresh from the forge
+   */
+  async function allApproved(forge, pull) {
+    const entries = await pullProposals(forge, folder, pull);
+    if (!entries.length) return false;
+    const comments = await forge.comments(pull.number);
+    for (const e of entries) {
+      const review = await latestReview(forge, pull.number, e.slug, comments);
+      if (!review || review.verdict !== 'approved' || typeof review.proposal !== 'string') return false;
+      if (review.proposal !== proposalHash(await readPullProposal(forge, folder, e))) return false;
+    }
+    return true;
+  }
+
   /** One look at the PR. Resolves when it has ended the landing or decided to wait. */
   async function look(job) {
     if (job.over) return;
@@ -147,9 +174,11 @@ export function createLander({ config, where, auth, hooks = null, now = Date.now
       const me = await forge.me();
       if (String(me.id) !== job.userId) return end(job, 'left-open', 'sign in to land');
       if (!isMaintainer(await forge.permission(repo, me.login))) return leftOpen(job, `${oneLine(me.login, NAME_MAX)} is not a maintainer of the repo now`, forge);
+      // Every proposal of the PR approved as it is now, not only the one that started this: else it waits, saying nothing
+      if (!(await allApproved(forge, pull))) return;
       const method = mergeMethodOf(config);
-      // Stopped (cancelled, or approved again) while the forge was being asked: nothing more is done
-      if (job.over) return;
+      // Stopped (cancelled, approved again, or the server shutting down) while the forge was being asked: nothing more is done
+      if (job.over || closed) return;
       let landed;
       try {
         landed = await landPull({ forge, config, where, hooks, auth }, job.pull, job.sha, me.login);
@@ -207,7 +236,9 @@ export function createLander({ config, where, auth, hooks = null, now = Date.now
   }
 
   function schedule(job) {
-    const t = timer.setTimeout(() => { job.timer = null; run(job); }, pollMs);
+    // Often at first, while checks usually finish; then less, so an hour's wait is not a request every 20 seconds
+    const waited = now() - Date.parse(job.started);
+    const t = timer.setTimeout(() => { job.timer = null; run(job); }, waited < fastForMs ? pollMs : slowPollMs);
     if (t && typeof t.unref === 'function') t.unref();
     job.timer = t;
   }
@@ -232,6 +263,13 @@ export function createLander({ config, where, auth, hooks = null, now = Date.now
    */
   async function start({ pull, slug, sha, who }) {
     if (closed) return;
+    // A PR that holds other proposals not approved as they are now: this approval does not start a landing (the last
+    // approval does). Asked fresh of the forge; a forge that cannot say now is asked again at every look before the merge.
+    try {
+      const forge = await auth.forgeForUser(String(who.userId));
+      const now_ = await forge.pull(pull);
+      if (now_.state === 'open' && now_.head.sha.toLowerCase() === sha.toLowerCase() && !(await allApproved(forge, now_))) return;
+    } catch { /* the looks decide */ }
     const row = { repo, pull, slug, sha: sha.toLowerCase(), user_id: String(who.userId), login: who.login, started: iso(now()), state: /** @type {LandingState} */ ('pending') };
     (await auth.store()).prepare("INSERT INTO landings (repo, pull, slug, sha, user_id, login, started, state) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending') ON CONFLICT(repo, pull) DO UPDATE SET slug = excluded.slug, sha = excluded.sha, user_id = excluded.user_id, login = excluded.login, started = excluded.started, state = 'pending'")
       .run(repo, pull, row.slug, row.sha, row.user_id, row.login, row.started);
