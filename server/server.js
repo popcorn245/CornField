@@ -53,6 +53,7 @@ import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
 import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
+import { createLander } from './lander.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -106,7 +107,7 @@ export function clientConfig(config, signIn = false) {
     version: PKG.version,
     title: config.title,
     links: config.links || [],
-    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge' } : null,
+    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.approveLands ? { approveLands: true } : {}) } : null,
     sources: browserSources(config),
     signIn,
   };
@@ -125,10 +126,10 @@ export const HA_CACHE_MS = 30_000;
 /**
  * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
- * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
+ * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function }, landTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
  *   see server/auth.js); the Home Assistant URL and token are read from the same `env`, and `homeAssistant` is what
  *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket); `hookFetch` and `hookTimer` are the
- *   tests' fake network and clock for the event hooks (server/hooks.js)
+ *   tests' fake network and clock for the event hooks (server/hooks.js); `landTimer` is the clock of landing on approval (server/lander.js)
  * @returns {import('node:http').Server}
  */
 export function createCornfieldServer(config, opts = {}) {
@@ -139,6 +140,8 @@ export function createCornfieldServer(config, opts = {}) {
   const hooks = hookSettings
     ? createHooks({ hooks: config.hooks, secret: hookSettings.secret, fetch: opts.hookFetch, record: (entry) => auth.record(entry), store: auth.store, now: opts.now, publicUrl: config.publicUrl, timer: opts.hookTimer })
     : null;
+  // Landing on approval needs somebody signed in to land as, like the hooks' events: a half-set key is a startup error
+  if (config.approveLands && !auth.enabled) throw new Error('The config says proposals.approveLands, but sign-in is not set up. An approval is a signed-in maintainer\'s, and it lands as them, so without sign-in nothing would ever land: set up sign-in (docs/sign-in.md), or remove approveLands.');
   const root = config.root;
   const importMap = importMapOf(config);
   const csp = cspOf(importMap);
@@ -146,6 +149,11 @@ export function createCornfieldServer(config, opts = {}) {
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, topology: config.topology, dataDir: config.dataDir, publicHost };
   const fixtureCache = new Map();
+  const lander = config.approveLands ? createLander({ config, where, auth, hooks, now: opts.now, timer: opts.landTimer }) : null;
+  if (lander) {
+    // What a restart left waiting: looked at again, in the background
+    lander.resume().catch((err) => console.error(`[cornfield] pending landings could not be picked up: ${err instanceof Error ? err.message : err}`));
+  }
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
   const houseFile = houseSource && houseSource.options && houseSource.options.file ? inside(root, houseSource.options.file) : null;
@@ -183,7 +191,7 @@ export function createCornfieldServer(config, opts = {}) {
       else res.end();
     }
   });
-  server.on('close', () => { hooks?.close(); auth.close(); });
+  server.on('close', () => { lander?.close(); hooks?.close(); auth.close(); });
   return server;
 
   async function answer(req, res) {
@@ -219,18 +227,18 @@ export function createCornfieldServer(config, opts = {}) {
       return sendJson(res, 200, { ok: true });
     }
     // The review API takes a token, not a session: it is the one route before the guard (and it reads no cookie)
-    if (reqPath === REVIEWS_PATH) return serveReviewCall(req, res, { config, where, auth, hooks, now: opts.now });
+    if (reqPath === REVIEWS_PATH) return serveReviewCall(req, res, { config, where, auth, hooks, lander, now: opts.now });
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
     if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost })) return;
-    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, now: opts.now, publicHost })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
-    const reviewer = session ? { login: session.login, userId: session.userId, repo: config.forge.repo, record: (entry) => auth.record(entry), limits: { auth, now: opts.now }, hooks } : null;
+    const reviewer = session ? { login: session.login, userId: session.userId, repo: config.forge.repo, record: (entry) => auth.record(entry), limits: { auth, now: opts.now }, hooks, lander } : null;
     if (serveProposals(req, res, reqPath, url, where, forgeFor, reviewer)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {

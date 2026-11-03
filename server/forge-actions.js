@@ -113,6 +113,27 @@ async function forgetKept(auth, config) {
   } catch { /* a cache that cannot be cleared expires in a minute */ }
 }
 
+/** How a pull request cornfield lands is merged: the config's `forge.mergeMethod`, `merge` when unset */
+export const mergeMethodOf = (config) => config.forge.mergeMethod || 'merge';
+
+/**
+ * Lands pull request `n` at head `sha`, the one way cornfield lands anything: `forge.merge` with `onlyIfGreen` and the
+ * sha (the forge adapter checks open, not a draft, still at `sha`, every check green and its own readiness), then the
+ * `pr.landed` hook, then the kept forge answers are let go. Land it (above) and landing on approval (server/lander.js)
+ * both call this, so the two cannot differ. Throws what `forge.merge` throws.
+ * @param {{ forge: import('./forge.js').Forge, config: any, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>) } }} ctx
+ * @param {number} n
+ * @param {string} sha
+ * @param {string} login who landed it, for the hook
+ * @returns {Promise<{ sha: string }>}
+ */
+export async function landPull({ forge, config, where, hooks, auth }, n, sha, login) {
+  const landed = await forge.merge(n, { onlyIfGreen: true, sha, method: mergeMethodOf(config) });
+  hooks?.emit('pr.landed', () => landedPayload(forge, where || { proposals: config.proposals }, n, sha, login));
+  await forgetKept(auth, config);
+  return landed;
+}
+
 /**
  * The action the request is, or null for any other path.
  * @param {string} reqPath
@@ -229,11 +250,9 @@ export async function serveAction(req, res, what, ctx, send) {
       await forgetKept(auth, config);
       out = { status: done.created ? 201 : 200, body: { ok: true, action, created: done.created, number: n, slug, issue: done.issue, path: plan.path } };
     } else if (action === 'merge') {
-      const method = config.forge.mergeMethod || 'merge';
+      const method = mergeMethodOf(config);
       request.method = method;
-      const landed = await forge.merge(n, { onlyIfGreen: true, sha, method });
-      ctx.hooks?.emit('pr.landed', () => landedPayload(forge, ctx.where || { proposals: config.proposals }, n, /** @type {string} */ (sha), session.login));
-      await forgetKept(auth, config);
+      const landed = await landPull({ forge, config, where: ctx.where, hooks: ctx.hooks, auth }, n, /** @type {string} */ (sha), session.login);
       out = { status: 200, body: { ok: true, merged: true, number: n, sha: landed.sha, head: sha, method } };
     } else {
       const pull = await forge.pull(n);
