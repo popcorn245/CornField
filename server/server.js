@@ -20,6 +20,9 @@
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
  *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
  *   POST /api/forge/release-drafts      the release notes kept as a DRAFT release on the forge (never published, no tag made)
+ *   POST /api/reviews                   Approve or Send back with a review token (`Authorization: Bearer cf_rt_…`), no cookie: the one
+ *                                       route that answers before the sign-in guard, and takes the token alone (server/review-api.js)
+ *   *    /api/review-tokens…            make, list and revoke review tokens: the signed-in maintainer only (server/review-api.js)
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
  *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
@@ -44,6 +47,7 @@ import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
+import { REVIEWS_PATH, serveReviewCall, serveTokenRoutes } from './review-api.js';
 import { proxyTo } from './proxy.js';
 import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
 import { assertBind, hostAllowed } from './bind.js';
@@ -214,16 +218,20 @@ export function createCornfieldServer(config, opts = {}) {
       req.resume();
       return sendJson(res, 200, { ok: true });
     }
+    // The review API takes a token, not a session: it is the one route before the guard (and it reads no cookie)
+    if (reqPath === REVIEWS_PATH) return serveReviewCall(req, res, { config, where, auth, hooks, now: opts.now });
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
+    if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost })) return;
     if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
-    if (serveProposals(req, res, reqPath, url, where, forgeFor, session ? { login: session.login, record: (entry) => auth.record(entry), hooks } : null)) return;
+    const reviewer = session ? { login: session.login, userId: session.userId, repo: config.forge.repo, record: (entry) => auth.record(entry), limits: { auth, now: opts.now }, hooks } : null;
+    if (serveProposals(req, res, reqPath, url, where, forgeFor, reviewer)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();

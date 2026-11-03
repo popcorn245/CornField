@@ -102,6 +102,29 @@ With a `forge` and [sign-in](sign-in.md) configured, the list also holds the pro
 
 **Mockups are untrusted.** A branch can put anything in an HTML or SVG file, so cornfield never lets one run script against its own page. Every mockup is served at `/proposals/<slug>/mockups/<n>` (by its position in the list, never by a path in the request; behind the sign-in and the Host check like every route) with the type its extension names, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: sandbox; default-src 'none'; …` (no script, no network, an opaque origin, even if the address is opened on its own), and only cornfield's own page may frame it. The explorer shows pictures and SVG in an `<img>`, and HTML in an `<iframe sandbox>` with no `allow-` keyword at all. A file is at most 5 MB, and a link that leads out of the proposals folder is not followed. Do not put a secret in a mockup: it is read by everyone who can open the proposal.
 
+**Review from a script or a chat: the review API.** The buttons are not the only way in. A maintainer makes a **review token** in the dashboard (**Review tokens** in the header: a label, optionally a number of days, then **Make a token**; the token is shown once, so copy it then) and a script, a chat bot or a reaction handler sends the same Approve or Send back with it:
+
+```sh
+curl -X POST https://cornfield.example.org/api/reviews \
+  -H "Authorization: Bearer cf_rt_…" -H "Content-Type: application/json" \
+  -d '{ "pull": 23, "slug": "0002-checkout", "sha256": "<the SHA-256 of the proposal file you read>", "verdict": "approved", "note": "Ship it." }'
+```
+
+The body is `{ pull, slug, sha256, verdict, note?, edits? }`: the spec PR's number, the proposal's slug, the SHA-256 of the proposal file **as you read it** (`sha256sum` of the file at the PR's head), `"approved"` or `"notes"`, a note (needed to send back), and edits in the viewer's terms. The answer is `{ "ok": true, … }` and then the review as the PR now shows it, the same as the button's. A call goes through the same checks as the button, because it is the same code (`submitReview`, [server/submit-review.js](../server/submit-review.js)), and each is refused in words:
+
+| Status | When |
+|---|---|
+| 400 | not a review: a send-back with no note, a verdict that is not `approved` or `notes`, a `sha256` that is not 64 lower-case hex digits, a key the call does not have (what an approval covers, the proposal's hash and its mockups, is recorded by the server from the files, never taken from the caller) |
+| 401 | no token, a token nobody holds, or a token whose owner has no live sign-in to cornfield (below) |
+| 403 | a token that was revoked or has expired, or an owner who is **not a maintainer now** (the forge is asked on every call, not the sign-in's 15-minute-old answer) |
+| 404 | the PR is not open, or does not hold that proposal |
+| 409 | `sha256` is not the proposal at the PR's head: the file changed since you read it, so the review does not count for the new version; read it again and review that |
+| 429 | the same review of the same proposal again within 5 seconds, or more than 20 actions in a minute by the same person (the button and the API are counted together), with `Retry-After` |
+
+The comment on the PR is the usual one, and its first line says where it came from and names the token's label (never the token): "Approved `0002-checkout` (maintainer-one, through the review API with the token `chat bot`)." It is posted **as the token's owner**, with the forge token their dashboard sign-in keeps ([sign-in.md](sign-in.md)): a review only counts when a maintainer wrote the comment, and cornfield keeps no forge token of its own. So a token works while its owner has a live sign-in (7 days, ended by Sign out) and is refused with a 401 that says so when they have none; signing in again makes the same token work again. Every call, accepted or refused, is a row in the audit table (`actions`, action `review`, with the token's id and label in the request), and so is making or revoking a token (`review-token`).
+
+A token belongs to the maintainer who made it, lasts 30 days unless they ask for fewer or more (90 at most), can be revoked in the same dialog (a revoked token is refused at once), and is kept only as a SHA-256 hash: lose it and make another. A maintainer holds at most 20 live tokens. A token can do one thing: send reviews. It cannot make or revoke tokens (those routes take a signed-in maintainer from cornfield's own page only), and a session cookie is never taken in its place. The route takes no cookie, so it needs no same-origin check, but the `Host` check of [sign-in.md](sign-in.md#which-host-it-answers) applies as to every route: call it at your public URL.
+
 Whoever is writing the proposal reads the review from the PR with:
 
 ```sh

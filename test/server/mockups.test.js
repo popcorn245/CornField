@@ -22,6 +22,7 @@ import { MOCKUP_CSP, mockupStates } from '../../server/mockups.js';
 import { fakeForge } from './fake-forge.js';
 import { TOKEN } from './forge-contract.js';
 import { whereOf } from './where.js';
+import { reviewerOf } from './reviewer.js';
 
 const topology = { nodes: [{ id: 'root', label: 'root', type: 'root' }, { id: 'app-a', label: 'a', type: 'app' }], edges: [{ from: 'root', to: 'app-a' }] };
 /** Bytes that are not text: a PNG signature, then values that are not valid UTF-8 */
@@ -222,7 +223,7 @@ describe('mockups of a spec PR', () => {
   let port;
   let forgeFor;
   let comments;
-  const signedIn = { login: 'maintainer-one', record: () => {} };
+  const signedIn = reviewerOf(() => {}, { userId: '1' });
   const NEW_PNG = Buffer.concat([PNG, Buffer.from([0x01])]);
   let png = PNG;
 

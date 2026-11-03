@@ -19,8 +19,9 @@
  * holds it when the maintainer approves (`hashPullMockups`); every approval also carries `proposal`, the SHA-256 of the
  * proposal file at the head (`proposalHash`). The page never sends either, and a PUT that does is refused. The agent drafting the spec
  * reads it (`cornfield review <slug>`) and folds the edits into the proposal. The PUT is same-origin only
- * (`sameOrigin`), at most `REVIEW_LIMIT` bytes, checked by `validateReview`, and only for a proposal the forge
- * says the PR holds; it is written to the `actions` audit table. A proposal in the checkout or a worktree has no
+ * (`sameOrigin`), at most `REVIEW_LIMIT` bytes, and goes through `submitReview` (server/submit-review.js), the one path the review
+ * API shares: the review is checked, the maintainer asked of the forge now, and only a proposal the forge says the PR
+ * holds is reviewed; every attempt is written to the `actions` audit table. A proposal in the checkout or a worktree has no
  * PR yet, so there is nothing to review it on: the PUT answers 409 and says to push it as a spec PR. Stage 1 kept
  * the review in the data folder; `migrateStage1Reviews` carries those over once, when the menu is opened.
  *
@@ -43,10 +44,10 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
-import { REVIEW_LIMIT, validateReview, latestReview, postReview, migrateStage1Reviews, proposalHash } from './reviews.js';
-import { proposalPayload } from './hooks.js';
+import { REVIEW_LIMIT, latestReview, migrateStage1Reviews } from './reviews.js';
+import { submitReview, refusal } from './submit-review.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
-import { hashPullMockups, serveMockups } from './mockups.js';
+import { serveMockups } from './mockups.js';
 
 // The review's checks live in server/reviews.js; these are re-exported for the callers that always had them here
 export { REVIEW_LIMIT, MAX_REVIEW_EDITS, MAX_NOTE_CHARS, validateReview } from './reviews.js';
@@ -261,28 +262,19 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
   }
   // What an approval covers is the server's to record, from the files themselves, never the page's word
   if (parsed !== null && typeof parsed === 'object' && ('mockups' in parsed || 'proposal' in parsed)) return send(res, 400, { error: 'What an approval covers (the proposal and its mockups) is recorded by the server; a review does not send it.' });
-  const checked = validateReview(parsed);
-  if (!checked.ok) return send(res, 400, { error: checked.error });
   try {
-    const forge = forgeFor();
-    const entry = await findPullProposal(forge, where, slug, n);
-    if (!entry) return send(res, 404, { error: 'No such proposal' });
-    let review = checked.value;
-    if (review.verdict === 'approved') {
-      // The proposal as the head holds it now: a later push that changes it is not this approval's
-      review = { ...review, proposal: proposalHash(await readPullProposal(forge, where, entry)) };
-      const mockups = await hashPullMockups(forge, where, entry);
-      if (mockups.length) review = { ...review, mockups };
-    }
-    const posted = await postReview(forge, n, slug, review, { login: signedIn.login, record: signedIn.record });
-    signedIn.hooks?.emit(review.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, where, entry, { actor: signedIn.login, note: review.note, edits: review.edits }));
-    return send(res, 200, posted);
+    // The checks and the post are submitReview's, shared with the review API (server/submit-review.js)
+    const found = await submitReview({
+      forge: forgeFor, where, repo: signedIn.repo, who: { login: signedIn.login, userId: signedIn.userId }, record: signedIn.record, limits: signedIn.limits, hooks: signedIn.hooks,
+    }, { pull: n, slug, review: parsed });
+    return send(res, 200, found);
   } catch (err) {
-    return send(res, forgeStatus(err), { error: forgeWords(err) });
+    const out = refusal(err);
+    return send(res, out.status, { error: out.body.error }, out.headers);
   }
 }
 
-/** @typedef {{ login: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void, hooks?: import('./hooks.js').Hooks | null }} SignedIn */
+/** @typedef {{ login: string, userId: string, repo: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void, limits: { auth: object, now?: () => number }, hooks?: import('./hooks.js').Hooks | null }} SignedIn who is signed in, the repo, where their actions are recorded, and what the flood and repeat limits count by */
 
 /**
  * Answers a request under `/proposals`, or returns false when it is not one.

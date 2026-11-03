@@ -8,6 +8,7 @@
  *   reviews       a cache of the latest review per spec PR and proposal (the PR comment is the truth)
  *   actions       the audit of every action cornfield takes on the forge: who, what, when, the forge's answer
  *   forge_cache   forge answers kept for a while (an ETag and a body), so a page load is not a dozen API calls
+ *   review_tokens the review API's tokens: a SHA-256 hash, owner, label, expiry, revoked, last used (never the token)
  *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
  *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
  *
@@ -93,6 +94,21 @@ export const MIGRATIONS = Object.freeze([
     at          TEXT NOT NULL,
     PRIMARY KEY (repo, pr, head_sha, slug)
   ) STRICT;
+  `,
+  // 3: review tokens, for the review API (server/review-tokens.js)
+  `
+  CREATE TABLE review_tokens (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash  TEXT NOT NULL UNIQUE,           -- the SHA-256 of the token, hex; the token itself is never kept
+    user_id     TEXT NOT NULL,                  -- the owner, by the forge's id (a rename is followed)
+    login       TEXT NOT NULL,                  -- the owner's login when it was made
+    label       TEXT NOT NULL,                  -- what the owner calls it; the review comment names it
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    revoked_at  TEXT,
+    last_used   TEXT
+  ) STRICT;
+  CREATE INDEX review_tokens_user_id ON review_tokens (user_id);
   `,
 ]);
 

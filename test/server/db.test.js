@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  *
- * cornfield's SQLite file (server/db.js): a fresh data folder gets the four tables at the latest version; an old
+ * cornfield's SQLite file (server/db.js): a fresh data folder gets its tables at the latest version; an old
  * file (test/fixtures/db/v1.sql, as version 1 left it) opens with its rows kept and the later migrations run; a
  * migration that fails leaves the file where it was; a file from a newer cornfield is refused; the folder and the
  * file are private to their owner. Every test works in its own temporary folder.
@@ -16,7 +16,8 @@ import { openStore, migrate, schemaVersion, MIGRATIONS, DB_FILE } from '../../se
 import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
-const TABLES = ['actions', 'forge_cache', 'hook_seen', 'reviews', 'sessions'];
+const V1_TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'review_tokens', 'reviews', 'sessions'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -49,6 +50,7 @@ describe('openStore', () => {
     expect(columns(db, 'reviews')).toEqual(['repo', 'pr', 'slug', 'verdict', 'note', 'edits', 'author', 'comment_id', 'at']);
     expect(columns(db, 'actions')).toEqual(['id', 'at', 'login', 'action', 'target', 'request', 'status', 'answer']);
     expect(columns(db, 'forge_cache')).toEqual(['key', 'etag', 'body', 'fetched_at', 'expires_at']);
+    expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used']);
     expect(columns(db, 'hook_seen')).toEqual(['repo', 'pr', 'head_sha', 'slug', 'at']);
     expect(db.prepare('PRAGMA journal_mode').get().journal_mode).toBe('wal');
   });
@@ -69,6 +71,7 @@ describe('openStore', () => {
     expect(db.prepare('SELECT pr, slug, verdict, edits FROM reviews').get()).toEqual({ pr: 7, slug: '0013-meals', verdict: 'notes', edits: '[{"op":"remove-edge","from":"a","to":"b"}]' });
     expect(db.prepare('SELECT count(*) AS n FROM actions').get().n).toBe(1);
     expect(db.prepare('SELECT etag FROM forge_cache').get().etag).toBe('"etag-1"');
+    expect(db.prepare('SELECT count(*) AS n FROM review_tokens').get().n).toBe(0); // migration 2 added the table, empty
     db.close();
     db = openStore(tmp);
     expect(migrate(db)).toEqual({ from: MIGRATIONS.length, to: MIGRATIONS.length });
@@ -137,7 +140,7 @@ describe('the migrations', () => {
     b.exec(V1_SQL);
     const schema = (db) => db.prepare("SELECT type, name, tbl_name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY name").all();
     expect(schema(a)).toEqual(schema(b));
-    for (const t of TABLES) expect(a.prepare(`PRAGMA table_xinfo(${t})`).all()).toEqual(b.prepare(`PRAGMA table_xinfo(${t})`).all());
+    for (const t of V1_TABLES) expect(a.prepare(`PRAGMA table_xinfo(${t})`).all()).toEqual(b.prepare(`PRAGMA table_xinfo(${t})`).all());
     a.close();
     b.close();
   });

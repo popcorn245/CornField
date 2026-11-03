@@ -45,14 +45,12 @@ import { ForgeError, RERUN_STATES, canRerun, isMaintainer } from './forge.js';
 import { sameOrigin } from './proposals.js';
 import { planSpec, planBuild, startSpec, openBuildIssue } from './pipeline.js';
 import { PROPOSAL_FILE } from './files.js';
+import { Refused, throttle, countAttempt } from './throttle.js';
+
+// The limits live in server/throttle.js (reviews share them); these are re-exported for the callers that always had them here
+export { COOLDOWN_MS, PER_MINUTE, ATTEMPTS_PER_MINUTE, countAttempt } from './throttle.js';
 import { proposalPayload, landedPayload } from './hooks.js';
 
-/** The same action on the same target is not asked again for this long (a double click, a retry before the forge has caught up) */
-export const COOLDOWN_MS = 5000;
-/** The most actions one person takes in a minute */
-export const PER_MINUTE = 20;
-/** The most attempts of any kind (refused ones too) one person makes in a minute, before any is written down */
-export const ATTEMPTS_PER_MINUTE = 60;
 /** A request body is a sha and a check's id */
 const MAX_BODY = 4096;
 
@@ -62,39 +60,6 @@ const DIGEST = /^[0-9a-f]{32}$/;
 /** What each action is called in the words of a refusal, and what it asks of the person */
 const DOING = { merge: 'Landing', rerun: 'Re-running', spec: 'Starting a spec', build: 'Opening the build issue' };
 const ONLY_MAINTAINERS = { merge: 'land pull requests or re-run checks', rerun: 'land pull requests or re-run checks', spec: 'start specs', build: 'open build issues' };
-
-/** @type {WeakMap<object, { busy: Set<string>, last: Map<string, number>, perUser: Map<string, number[]>, attempts: Map<string, number[]> }>} */
-const throttles = new WeakMap();
-
-function throttlesOf(auth) {
-  let t = throttles.get(auth);
-  if (!t) throttles.set(auth, (t = { busy: new Set(), last: new Map(), perUser: new Map(), attempts: new Map() }));
-  return t;
-}
-
-/** Counts an attempt of any kind; refuses one past the ceiling, without writing anything down (the release draft shares it) */
-export function countAttempt(ctx, userId, at) {
-  const t = throttlesOf(ctx.auth);
-  for (const [k, list] of t.attempts) if (!list.length || at - list[list.length - 1] >= 60_000) t.attempts.delete(k);
-  const mine = (t.attempts.get(userId) || []).filter((when) => at - when < 60_000);
-  if (mine.length >= ATTEMPTS_PER_MINUTE) {
-    t.attempts.set(userId, mine);
-    return new Refused(429, `That is ${ATTEMPTS_PER_MINUTE} attempts in a minute; wait a little.`, 'rate-limited', { 'Retry-After': String(Math.max(1, Math.ceil((60_000 - (at - mine[0])) / 1000))) });
-  }
-  mine.push(at);
-  t.attempts.set(userId, mine);
-  return null;
-}
-
-/** An action's own refusal: the status to answer and the words */
-class Refused extends Error {
-  constructor(status, message, code, headers = {}) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.headers = headers;
-  }
-}
 
 /** Reads a small JSON object body, or refuses */
 function readJson(req) {
@@ -128,23 +93,6 @@ function readJson(req) {
       }
     });
   });
-}
-
-/** Refuses a repeat and a flood; answers the key to release when the attempt is over */
-function throttle(ctx, userId, key, at) {
-  const t = throttlesOf(ctx.auth);
-  for (const [k, when] of t.last) if (at - when >= COOLDOWN_MS) t.last.delete(k);
-  const mine = (t.perUser.get(userId) || []).filter((when) => at - when < 60_000);
-  t.perUser.set(userId, mine);
-  const wait = (ms, words) => new Refused(429, words, 'rate-limited', { 'Retry-After': String(Math.max(1, Math.ceil(ms / 1000))) });
-  if (t.busy.has(key)) throw wait(COOLDOWN_MS, 'That is already being done; wait for it to finish.');
-  const before = t.last.get(key);
-  if (before !== undefined && at - before < COOLDOWN_MS) throw wait(COOLDOWN_MS - (at - before), 'That was just asked; wait a few seconds before asking again.');
-  if (mine.length >= PER_MINUTE) throw wait(60_000 - (at - mine[0]), `That is ${PER_MINUTE} actions in a minute; wait a little.`);
-  t.busy.add(key);
-  t.last.set(key, at);
-  mine.push(at);
-  return () => { t.busy.delete(key); };
 }
 
 /**

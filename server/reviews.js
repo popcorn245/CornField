@@ -41,6 +41,7 @@
  * @typedef {{ verdict: 'approved' | 'notes', note: string, edits: object[], mockups?: ReviewedMockup[], proposal?: string }} Review
  * @typedef {Review & { version: 1, slug: string, at: string, by: string, comment: { id: string, url: string } }} FoundReview
  * @typedef {{ login: string, action: string, target: string, request: object, status: number | null, answer: object | null }} AuditEntry
+ * @typedef {{ token: { id: number, label: string } }} ApiVia how a review reached cornfield when it was not the button: the review token it came with
  */
 
 import fs from 'node:fs';
@@ -49,6 +50,7 @@ import path from 'node:path';
 import { isMaintainer, ForgeError } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
 import { MAX_MOCKUPS, mockupPathProblem } from '../core/proposal.js';
+import { defuse } from './defuse.js';
 
 // ---------------------------------------------------------------------------
 //  The review a person sends
@@ -136,14 +138,19 @@ const FENCE = '```';
  * then the fenced block.
  * @param {string} slug
  * @param {Review} review
- * @param {{ login: string, carriedOver?: string }} by who sent it; `carriedOver` is the day of a Stage 1 review being migrated
+ * @param {{ login: string, carriedOver?: string, via?: ApiVia }} by who sent it; `carriedOver` is the day of a Stage 1 review being migrated;
+ *   `via` says it came through the review API (server/review-api.js) with the token of that label, which the line names (never the token)
  */
-export function reviewComment(slug, review, { login, carriedOver }) {
+export function reviewComment(slug, review, { login, carriedOver, via }) {
   const verdict = review.verdict === 'approved' ? 'Approved' : 'Sent back';
   const withEdits = review.edits.length ? ` with ${plural(review.edits.length, 'edit')}` : '';
-  const how = carriedOver ? `${login}, in cornfield on ${carriedOver}; carried over from before reviews were comments` : `${login}, in cornfield`;
+  const how = carriedOver ? `${login}, in cornfield on ${carriedOver}; carried over from before reviews were comments`
+    : via ? `${login}, through the review API with the token \`${via.token.label}\`` : `${login}, in cornfield`;
   const line = `${verdict} \`${slug}\`${withEdits} (${how}).`;
-  const quoted = review.note.trim() ? `\n\n${review.note.trim().split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
+  // A note that came through the API may be relayed from anywhere (a chat): in the quote people read, its mentions and
+  // references are broken so it pings and links nobody. The block keeps the note as it was sent, for the agent.
+  const shown = via ? defuse(review.note.trim()) : review.note.trim();
+  const quoted = shown ? `\n\n${shown.split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
   const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits, ...(review.mockups ? { mockups: review.mockups } : {}), ...(review.proposal ? { proposal: review.proposal } : {}) }, null, 2);
   return `${line}${quoted}\n\n${FENCE}${REVIEW_TAG} ${slug}\n${json}\n${FENCE}`;
 }
@@ -207,12 +214,12 @@ export async function latestReview(forge, n, slug, comments) {
  * @param {number} n
  * @param {string} slug
  * @param {Review} review a checked review (`validateReview`)
- * @param {{ login: string, record?: (entry: AuditEntry) => Promise<void> | void, carriedOver?: string }} who
+ * @param {{ login: string, record?: (entry: AuditEntry) => Promise<void> | void, carriedOver?: string, via?: ApiVia }} who `via`: the review came through the API, with this token (its id and label go in the comment and the audit row)
  * @returns {Promise<FoundReview>}
  */
-export async function postReview(forge, n, slug, review, { login, record, carriedOver }) {
+export async function postReview(forge, n, slug, review, { login, record, carriedOver, via }) {
   const target = `${forge.repo}#${n}`;
-  const request = { slug, ...review, ...(carriedOver ? { migrated: carriedOver } : {}) };
+  const request = { slug, ...review, ...(carriedOver ? { migrated: carriedOver } : {}), ...(via ? { via: 'api', token: via.token } : {}) };
   const audit = async (status, answer) => {
     if (!record) return;
     try {
@@ -221,7 +228,7 @@ export async function postReview(forge, n, slug, review, { login, record, carrie
       console.error(`[cornfield] the review of ${target} was posted but could not be written to the audit table: ${err.message}`);
     }
   };
-  const body = reviewComment(slug, review, { login, carriedOver });
+  const body = reviewComment(slug, review, { login, carriedOver, via });
   try {
     if (body.length > MAX_COMMENT_CHARS) throw new ForgeError(`That review is too long for a comment (${body.length} characters, at most ${MAX_COMMENT_CHARS}); shorten the note or send fewer edits.`, { code: 'invalid' });
     const comment = await forge.comment(n, body);

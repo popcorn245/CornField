@@ -465,7 +465,8 @@ describe('event hooks', () => {
     // a review the forge refuses
     state.override[`POST ${GH}/issues/40/comments`] = () => ({ status: 403, body: { message: 'Resource not accessible' } });
     expect((await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT' })).status).toBeGreaterThanOrEqual(400);
-    // a review that is not valid, and a proposal that is not there
+    // a review that is not valid, and a proposal that is not there (past the repeat limit on the same proposal's review)
+    clock += 10_000;
     expect((await post(REVIEW, { verdict: 'notes' }, { method: 'PUT' })).status).toBe(400);
     expect((await post('/proposals/0099-none/review?source=pull%2F40', { verdict: 'approved' }, { method: 'PUT' })).status).toBe(404);
     // a build issue from a plan that is not the one shown
