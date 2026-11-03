@@ -27,6 +27,7 @@ import { review as reviewCommand } from '../../cli/cornfield.js';
 import { fakeForge, recordings } from './fake-forge.js';
 import { TOKEN } from './forge-contract.js';
 import { whereOf } from './where.js';
+import { reviewerOf } from './reviewer.js';
 import { SAMPLE } from '../helpers.js';
 
 const answers = () => ({ ...recordings('github-spec-prs'), ...recordings('github-reviews') });
@@ -274,7 +275,7 @@ describe('the review routes, on a spec PR', () => {
   beforeEach(async () => {
     posts = [];
     rows = [];
-    signedIn = { login: 'maintainer-one', record: (e) => { rows.push(e); } };
+    signedIn = reviewerOf((e) => { rows.push(e); });
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-reviews-'));
     fs.writeFileSync(path.join(root, 'topology.json'), JSON.stringify({ nodes: [{ id: 'root', label: 'root', type: 'root' }], edges: [] }));
     fake = await fakeForge(routes());
@@ -353,15 +354,20 @@ describe('the review routes, on a spec PR', () => {
     }]);
   });
 
-  it('refuses a bad review in words, before it asks the forge anything', async () => {
+  it('refuses a bad review in words, before it asks the forge anything, and writes each refusal down', async () => {
     fake.requests.length = 0;
     expect((await call('PUT', PUT23, { verdict: 'notes', note: '  ', edits: [] })).json.error).toMatch(/note is needed/);
     expect((await call('PUT', PUT23, { verdict: 'maybe' })).status).toBe(400);
     expect((await call('PUT', PUT23, { verdict: 'approved', extra: 1 })).status).toBe(400);
+    expect((await call('PUT', PUT23, { verdict: 'approved', proposal: 'a'.repeat(64) })).status).toBe(400); // the server records what an approval covers
+    expect(fake.requests).toEqual([]);
+    // a refusal of the review is a row (as for every action); a body that is not JSON, or too large, never reaches the shared function
+    expect(rows.map((r) => [r.action, r.target, r.status])).toEqual([['review', 'owner/name#23', 400], ['review', 'owner/name#23', 400], ['review', 'owner/name#23', 400]]);
+    expect(rows[0].answer.error).toMatch(/note is needed/);
     expect((await call('PUT', PUT23, '{ nope')).status).toBe(400);
     expect((await call('PUT', PUT23, 'x'.repeat(300 * 1024))).status).toBe(413);
     expect(fake.requests).toEqual([]);
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(3);
   });
 
   it('is only taken from cornfield\'s own page', async () => {

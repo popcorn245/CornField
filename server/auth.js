@@ -279,6 +279,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       /** Stage 1: everything passes; the routes under /auth/ are not there */
       gate: async () => ({ done: false, session: null }),
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
+      forgeForUser: async () => { throw new Error('Sign-in is not configured.'); },
       record: async () => { throw new Error('Sign-in is not configured.'); },
       begin: async () => { throw new Error('Sign-in is not configured.'); },
       finish: async () => { throw new Error('Sign-in is not configured.'); },
@@ -576,6 +577,20 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     forgeFor(session) {
       const token = session.row.token === NO_TOKEN ? null : openToken(keys.enc, session.row.token);
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
+      return forgeWith(token);
+    },
+    /**
+     * The forge as a user who may not be at the dashboard now, with the token their newest live sign-in keeps (a
+     * maintainer's session row holds it, encrypted, until the session ends: sign-out, expiry, or a demotion). This is how
+     * a review that came through the API (server/review-api.js) is posted as its token's owner. Throws a ForgeError
+     * `unauthorized` when they have no live sign-in, so there is nothing to post with. It does not check the permission:
+     * the caller asks the forge, with this token, every time.
+     * @param {string} userId the forge's id for the user
+     */
+    async forgeForUser(userId) {
+      const row = /** @type {SessionRow | undefined} */ ((await store()).prepare('SELECT * FROM sessions WHERE user_id = ? AND token <> ? AND expires_at > ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get(String(userId), NO_TOKEN, iso(now())));
+      const token = row ? openToken(keys.enc, row.token) : null;
+      if (token === null) throw new ForgeError(`The token's owner has no live sign-in to ${forgeName}; they sign in to cornfield again, then the token works again.`, { code: 'unauthorized', forge: forgeName });
       return forgeWith(token);
     },
     /** The SQLite file (opened on first use), for the routes that keep answers in it (server/forge-routes.js) */
