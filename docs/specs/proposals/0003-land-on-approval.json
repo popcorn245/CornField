@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "spec": "0003",
+  "title": "Approving a spec can land it (opt-in)",
+  "summary": "With proposals.approveLands on, an approval also lands the spec PR once every check is green: one polled path for both forges, pinned to the approved head, as the approver.",
+  "nodes": {
+    "add": [
+      {
+        "id": "core-server-lander",
+        "label": "lander.js",
+        "type": "core",
+        "parent": "pkg-server",
+        "desc": "Landing on approval: polls an approved spec PR and lands it with Land it's merge once it is mergeable and green; stops on a push, a red check, a closed PR, a lost sign-in or the time."
+      }
+    ],
+    "change": [
+      {
+        "id": "core-server-submit-review",
+        "set": {
+          "desc": "The one place a review is checked and posted; after an approval it starts a landing in the background when the config asks for one."
+        },
+        "why": "the one hook point of landing on approval"
+      },
+      {
+        "id": "core-server-forge-actions",
+        "set": {
+          "desc": "Land a green pull request and the pipeline's steps; landPull is the one merge path Land it and landing on approval share."
+        },
+        "why": "landPull is shared with the lander"
+      },
+      {
+        "id": "core-server-db",
+        "set": {
+          "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge answers, hook memory, review tokens and pending landings."
+        },
+        "why": "a landings table, so a restart resumes a pending landing"
+      }
+    ]
+  },
+  "edges": {
+    "add": [
+      {
+        "from": "core-server-submit-review",
+        "to": "core-server-lander",
+        "dashed": true,
+        "label": "starts a landing"
+      },
+      {
+        "from": "core-server-lander",
+        "to": "core-server-forge-actions",
+        "dashed": true,
+        "label": "lands with"
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "approval-lands",
+      "title": "A maintainer approves a spec and it lands with no second click",
+      "steps": [
+        {
+          "node": "core-server-submit-review",
+          "text": "The approval is posted as a review comment; the response goes back at once."
+        },
+        {
+          "node": "core-server-lander",
+          "text": "A landing is remembered (a row) and the spec PR is looked at: closed, moved on to another head, red, still running, or green."
+        },
+        {
+          "node": "core-server-db",
+          "text": "The row survives a restart, and the landing is picked up again when cornfield starts."
+        },
+        {
+          "node": "core-server-forge-actions",
+          "text": "Green and mergeable: the same merge as Land it, pinned to the approved head, as the approver, and the pr.landed hook."
+        },
+        {
+          "node": "core-server-lander",
+          "text": "A push, a red check or a lost sign-in leaves the PR open and says so once on the PR."
+        }
+      ]
+    }
+  ]
+}
