@@ -18,7 +18,7 @@
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
  *     worktrees: '.claude/worktrees',         // a folder of git worktrees whose unpushed proposals are listed too
- *     proposals: 'docs/specs/proposals',      // where proposal files live, in the checkout and in each worktree
+ *     proposals: 'docs/specs/proposals',      // where proposal files live, in the checkout and in each worktree; or { dir, approveLands } (docs/config.md#proposals)
  *     topology: 'topology.json',
  *     personas: { roles: null },              // the roles a persona may have (null: any)
  *     releaseNotes: { breakingLabel: 'breaking' },   // the pull request label that lists a change under "Breaking" in the release notes
@@ -93,6 +93,8 @@ export const DEFAULTS = Object.freeze({
 });
 
 const KEYS = Object.keys(DEFAULTS);
+/** The keys of `proposals` when it is an object: the folder, and whether an approval also lands the spec PR (opt-in, off unless true) */
+export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
 const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots'];
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -201,8 +203,16 @@ export function configProblems(c) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
   }
-  for (const key of ['worktrees', 'proposals', 'topology']) {
+  for (const key of ['worktrees', 'topology']) {
     if (c[key] !== undefined && c[key] !== null && !inRepo(c[key])) out.push(`"${key}" is a folder or file inside the repo, written relative to it.`);
+  }
+  // The folder as a string (always so), or { dir?, approveLands? }: the object form is how the folder's options are set
+  if (c.proposals !== undefined && c.proposals !== null) {
+    if (isObject(c.proposals)) {
+      for (const k of Object.keys(c.proposals)) if (!PROPOSALS_KEYS.includes(k)) out.push(`proposals.${k}: the keys are ${PROPOSALS_KEYS.join(', ')}.`);
+      if (c.proposals.dir !== undefined && !inRepo(c.proposals.dir)) out.push('proposals.dir is the proposals folder, inside the repo and written relative to it.');
+      if (c.proposals.approveLands !== undefined && typeof c.proposals.approveLands !== 'boolean') out.push('proposals.approveLands is true or false: whether approving a spec also lands its pull request once every check is green.');
+    } else if (!inRepo(c.proposals)) out.push('"proposals" is the proposals folder inside the repo, written relative to it (or { dir, approveLands }).');
   }
   if (c.links !== undefined) {
     if (!Array.isArray(c.links)) out.push('"links" is a list of { label, href }.');
@@ -280,6 +290,9 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
     agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
+  // `proposals` is the folder to everything downstream, whichever way the file wrote it; the options are read from `approveLands`
+  config.approveLands = isObject(raw.proposals) && raw.proposals.approveLands === true;
+  config.proposals = (isObject(raw.proposals) ? raw.proposals.dir : raw.proposals) ?? DEFAULTS.proposals;
   if (env.CORNFIELD_PORT) config.port = Number(env.CORNFIELD_PORT);
   if (env.PORT && !env.CORNFIELD_PORT) config.port = Number(env.PORT);
   if (env.CORNFIELD_HOST) config.host = env.CORNFIELD_HOST;

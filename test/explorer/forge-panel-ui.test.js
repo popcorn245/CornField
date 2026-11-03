@@ -1078,3 +1078,53 @@ describe('deploys light the map', () => {
     expect(state.selectedNode.id).toBe('stack-web');
   });
 });
+
+describe('a spec pull request waiting to land on its approval (proposals.approveLands)', () => {
+  const FORGE_ON = { type: 'github', url: 'https://github.com', repo: 'owner/name', approveLands: true };
+  const landing = { pull: 12, slug: '0013-meals', sha: 'abc1234', by: 'maintainer-one', since: '2026-10-19T11:50:00Z' };
+  async function select(n) {
+    click(q(`[data-forge-pr="${n}"]`));
+    await settle();
+  }
+
+  it('says "Will land when checks pass" with a Cancel, and Cancel is a POST from the page that stops it', async () => {
+    const server = fakeServer({
+      answers: { '/api/forge/pulls/12/landing': { body: { ok: true, enabled: true, landing } } },
+      posts: { '/api/forge/pulls/12/landing/cancel': { body: { ok: true, cancelled: true, number: 12 } } },
+    });
+    mount({ forge: FORGE_ON });
+    openForge();
+    await settle();
+    await select(12);
+    expect(server.urls()).toContain('/api/forge/pulls/12/landing');
+    expect(q('[role="status"].hx-forge-notice').textContent).toBe('Will land when checks pass. 0013-meals was approved by maintainer-one 10 minutes ago; it lands at that head only, and a push cancels it.');
+    // it is the server's word that the landing is gone now
+    server.mock.mockImplementation(async (url, init = {}) => {
+      const answer = init.method === 'POST' ? { ok: true, cancelled: true, number: 12 } : /landing$/.test(url) ? { ok: true, enabled: true, landing: null } : { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...DETAIL[12] };
+      return { ok: true, status: 200, headers: new Headers(), json: async () => answer };
+    });
+    click(q('[data-forge-landing-cancel="12"]'));
+    await settle();
+    const post = server.mock.mock.calls.find(([, init]) => init && init.method === 'POST');
+    expect(post[0]).toBe('/api/forge/pulls/12/landing/cancel');
+    expect(q('[data-forge-landing-cancel]')).toBeNull();
+    expect(q('.hx-forge-notice--ok').textContent).toBe('Pull request #12 will not land on its own. It stays open.');
+  });
+
+  it('shows nothing, and asks nothing, with the key off or nothing waiting', async () => {
+    const off = fakeServer();
+    mount();
+    openForge();
+    await settle();
+    await select(12);
+    expect(off.urls().some((u) => u.endsWith('/landing'))).toBe(false);
+    expect(q('[data-forge-landing-cancel]')).toBeNull();
+    closeForge({ restoreFocus: false });
+    fakeServer({ answers: { '/api/forge/pulls/12/landing': { body: { ok: true, enabled: true, landing: null } } } });
+    mount({ forge: FORGE_ON });
+    openForge();
+    await settle();
+    await select(12);
+    expect(q('[data-forge-landing-cancel]')).toBeNull();
+  });
+});

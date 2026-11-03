@@ -11,6 +11,7 @@
  *   review_tokens the review API's tokens: a SHA-256 hash, owner, label, expiry, revoked, last used (never the token)
  *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
  *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
+ *   landings      the spec PRs an approval is waiting to land (`proposals.approveLands`), so a restart picks them up (server/lander.js)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
  * the last one it has. `openStore` runs the ones a file lacks, each in its own transaction, so a fresh file and one
@@ -109,6 +110,20 @@ export const MIGRATIONS = Object.freeze([
     last_used   TEXT
   ) STRICT;
   CREATE INDEX review_tokens_user_id ON review_tokens (user_id);
+  `,
+  // 4: landing on approval (server/lander.js): a spec PR waiting for its checks, to be landed as the approver
+  `
+  CREATE TABLE landings (
+    repo        TEXT NOT NULL,                  -- 'owner/name'
+    pull        INTEGER NOT NULL,
+    slug        TEXT NOT NULL,                  -- the proposal that was approved
+    sha         TEXT NOT NULL,                  -- the head that was approved: the only one that may land
+    user_id     TEXT NOT NULL,                  -- the approver, by the forge's id: it lands as them, with their own sign-in
+    login       TEXT NOT NULL,                  -- their login when they approved (for the audit)
+    started     TEXT NOT NULL,
+    state       TEXT NOT NULL CHECK (state IN ('pending', 'landed', 'cancelled', 'left-open', 'done')),
+    PRIMARY KEY (repo, pull)
+  ) STRICT;
   `,
 ]);
 

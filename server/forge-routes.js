@@ -15,6 +15,7 @@
  *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
  *                                                                      (and `specs`: the proposals it changes and whether each is approved, for the pipeline's step 2)
  *   POST /api/forge/pulls/<n>/merge | /rerun                           land it, re-run a failed check (server/forge-actions.js)
+ *   GET  /api/forge/pulls/<n>/landing, POST …/landing/cancel           a landing waiting on an approval (`proposals.approveLands`), and stopping it (server/lander.js)
  *   GET  /api/forge/issues/<n>/spec                                    the plan of step 1: what starting a spec on the issue would make (server/pipeline.js), never kept
  *   GET  /api/forge/pulls/<n>/build?slug=<proposal>                    the plan of step 2: the build issue of an approved proposal, never kept
  *   POST /api/forge/issues/<n>/spec | /pulls/<n>/build                 do them, with the plan's digest (server/forge-actions.js)
@@ -47,6 +48,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
 import { actionOf, countAttempt, serveAction } from './forge-actions.js';
+import { landingOf, serveLanding } from './lander.js';
 import { planSpec, planBuild, pullSpecs } from './pipeline.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { deploysOf } from './deploys.js';
@@ -220,13 +222,20 @@ async function servePlan(req, res, act, url, ctx) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
 export async function serveForge(req, res, reqPath, url, ctx) {
   if (reqPath !== '/api/forge' && !reqPath.startsWith('/api/forge/')) return false;
   const { config, session, auth, now = Date.now } = ctx;
+  const landing = landingOf(reqPath);
+  if (landing) {
+    // What is waiting to land on its approval, and stopping it: nothing is asked of the forge to read, and it is never kept
+    const out = await serveLanding(req, landing, ctx);
+    send(req, res, out.status, out.body, out.headers);
+    return true;
+  }
   const act = actionOf(reqPath);
   if (act) {
     if (!config.forge || !hasAdapter(config.forge.type)) {

@@ -28,7 +28,10 @@
  * only its id and label.
  *
  * `submitReview` is the one place a review has been posted, so the event hooks' `spec.approved` and `spec.sentBack`
- * (server/hooks.js) are emitted here, after `postReview`, not in either caller.
+ * (server/hooks.js) are emitted here, after `postReview`, not in either caller. So is landing on approval
+ * (`proposals.approveLands`, server/lander.js): after an approval is posted, and never for a send-back, `lander.start` is
+ * begun in the background with the head that was approved. It is not awaited and cannot fail the review: the review is
+ * already on the PR, and what goes wrong in landing is the lander's to say on the PR.
  */
 
 import { ForgeError, isMaintainer } from './forge.js';
@@ -52,6 +55,7 @@ const MAX_PULL = 999_999_999;
  * @property {{ auth: object, now?: () => number }} limits what `server/throttle.js` counts by (one `auth` per server)
  * @property {import('./reviews.js').ApiVia} [via] set when the review came through the API: the token it came with
  * @property {import('./hooks.js').Hooks | null} [hooks] the event hooks (server/hooks.js): `spec.approved` or `spec.sentBack` after a post
+ * @property {import('./lander.js').Lander | null} [lander] landing on approval (server/lander.js), set only when the config says `proposals.approveLands`
  * @property {boolean} [requireSha256] the caller must name the version it read (the API does; the button reads the head itself)
  * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the post, after every
  *   forge call: null to go on, or the words for why not (the API's token was revoked or expired meanwhile), refused 403
@@ -129,6 +133,12 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
     // The one place a review is posted, so the button and the API fire the same event; the actor is who the forge says
     // the poster is (with the API, the token's owner), never a name the caller sent
     ctx.hooks?.emit(posted.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, ctx.where, entry, { actor: me.login, note: checkedReview.note, edits: checkedReview.edits }));
+    if (posted.verdict === 'approved' && ctx.lander) {
+      const { lander } = ctx;
+      Promise.resolve()
+        .then(() => lander.start({ pull, slug, sha: entry.sha, who: { userId: who.userId, login: me.login } }))
+        .catch((err) => console.error(`[cornfield] landing ${target} on approval could not begin: ${err instanceof Error ? err.message : err}`));
+    }
     return posted;
   } catch (err) {
     if (!(err instanceof Refused) && !(err instanceof ForgeError)) console.error(`[cornfield] the review of ${target}: ${err instanceof Error ? err.stack || err.message : err}`);

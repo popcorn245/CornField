@@ -240,6 +240,22 @@ export async function postReview(forge, n, slug, review, { login, record, carrie
   }
 }
 
+/**
+ * Posts a plain note on PR `n`, as the token's user: the other thing cornfield says on a spec PR besides a review (server/lander.js:
+ * a landing on approval that was cancelled or left open). It goes by the same comment call as a review, with every mention and
+ * reference in it defused, since part of it (a check's name) is the forge's text and not cornfield's. The caller records it.
+ * Throws what the forge throws.
+ * @param {import('./forge.js').Forge} forge
+ * @param {number} n
+ * @param {string} text
+ * @returns {Promise<import('./forge.js').Comment>}
+ */
+export async function postNote(forge, n, text) {
+  const body = defuse(text);
+  if (body.length > MAX_COMMENT_CHARS) throw new ForgeError(`That note is too long for a comment (${body.length} characters, at most ${MAX_COMMENT_CHARS}).`, { code: 'invalid' });
+  return forge.comment(n, body);
+}
+
 // ---------------------------------------------------------------------------
 //  Stage 1 reviews, once
 // ---------------------------------------------------------------------------

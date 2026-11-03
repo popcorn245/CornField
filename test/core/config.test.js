@@ -142,6 +142,40 @@ describe('the agents rules', () => {
   });
 });
 
+describe('the proposals key', () => {
+  it('is the folder as a string, as it always was, and landing on approval is off', async () => {
+    expect(configProblems({ proposals: 'docs/specs/proposals' })).toEqual([]);
+    const plain = await loadConfig(repo(), { env: {} });
+    expect(plain).toMatchObject({ proposals: 'docs/specs/proposals', approveLands: false });
+    const named = await loadConfig(repo("export default { proposals: 'specs/proposals' };"), { env: {} });
+    expect(named).toMatchObject({ proposals: 'specs/proposals', approveLands: false });
+  });
+
+  it('may be { dir?, approveLands? }: the folder stays what the rest of cornfield reads as `proposals`', async () => {
+    for (const ok of [{}, { dir: 'specs' }, { approveLands: true }, { approveLands: false }, { dir: 'specs/p', approveLands: true }]) expect(configProblems({ proposals: ok }), JSON.stringify(ok)).toEqual([]);
+    const on = await loadConfig(repo('export default { proposals: { approveLands: true } };'), { env: {} });
+    expect(on).toMatchObject({ proposals: 'docs/specs/proposals', approveLands: true });
+    const both = await loadConfig(repo("export default { proposals: { dir: 'specs/p', approveLands: true } };"), { env: {} });
+    expect(both).toMatchObject({ proposals: 'specs/p', approveLands: true });
+    const off = await loadConfig(repo("export default { proposals: { dir: 'specs/p' } };"), { env: {} });
+    expect(off).toMatchObject({ proposals: 'specs/p', approveLands: false });
+  });
+
+  it('is checked strictly: an unknown key, a flag that is not true or false, a folder that leaves the repo', () => {
+    expect(configProblems({ proposals: { approveLands: 'yes' } })).toEqual(['proposals.approveLands is true or false: whether approving a spec also lands its pull request once every check is green.']);
+    for (const bad of [1, 'true', null, []]) expect(configProblems({ proposals: { approveLands: bad } }).join(), JSON.stringify(bad)).toContain('proposals.approveLands is true or false');
+    expect(configProblems({ proposals: { approveland: true } })).toEqual(['proposals.approveland: the keys are dir, approveLands.']);
+    for (const dir of ['../out', '/abs', '']) expect(configProblems({ proposals: { dir } }).join(), dir).toContain('proposals.dir is the proposals folder');
+    expect(configProblems({ proposals: '../out' }).join()).toContain('"proposals" is the proposals folder inside the repo');
+    expect(configProblems({ proposals: ['docs'] }).join()).toContain('"proposals" is the proposals folder');
+    expect(configProblems({ proposals: 7 }).join()).toContain('"proposals"');
+  });
+
+  it('refuses a bad object, naming the file', async () => {
+    await expect(loadConfig(repo('export default { proposals: { approveLands: 1 } };'), { env: {} })).rejects.toThrow(/cornfield\.config\.js:\n {2}proposals\.approveLands/);
+  });
+});
+
 describe('loadConfig', () => {
   it('fills the defaults, names the title from package.json, and keeps the data folder out of the repo', async () => {
     const root = repo();
