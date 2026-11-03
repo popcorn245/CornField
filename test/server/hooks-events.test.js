@@ -1,0 +1,506 @@
+/**
+ * @vitest-environment node
+ *
+ * Event hooks (PIPE-07), from the outside: a running server with `hooks` in its config, a fake forge, and a test receiver on
+ * loopback that checks every signature. One test per event proves it arrives once, signed, with the right payload; an action
+ * that fails sends nothing; a dead URL, a receiver that refuses the signature, and a fetch that throws change nothing about
+ * the action (its route still answers success); and `spec.ready` is sent once per head, also across a restart on the same
+ * data folder. The hooks themselves (retries, headers, limits) are test/server/hooks.test.js.
+ */
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { createHmac } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+// @ts-expect-error plain JS module, no declarations
+import { createCornfieldServer } from '../../server/server.js';
+// @ts-expect-error plain JS module, no declarations
+import { loadConfig } from '../../core/config.js';
+// @ts-expect-error plain JS module, no declarations
+import { reviewComment, proposalHash } from '../../server/reviews.js';
+import { SAMPLE, freePort } from '../helpers.js';
+import { fakeForge, recordings } from './fake-forge.js';
+
+const HOOK_SECRET = 'hook-secret-for-tests-'.padEnd(40, 'z');
+const SESSION_SECRET = 'x'.repeat(40);
+const ENV = { CORNFIELD_GITHUB_CLIENT_ID: 'test-client-id', CORNFIELD_GITHUB_CLIENT_SECRET: 'not-real', CORNFIELD_SESSION_SECRET: SESSION_SECRET, CORNFIELD_HOOK_SECRET: HOOK_SECRET };
+const PUBLIC = 'http://127.0.0.1:3350';
+const MAINT = 'tok-maint';
+const READER = 'tok-reader';
+const MAINT2 = 'tok-maint-two';
+const MAIN = '0000000000000000000000000000000000000001';
+let H1 = '';
+let H2 = '';
+let heads = 0;
+const API = '/api/v3';
+const GH = `${API}/repos/owner/name`;
+const FOLDER = 'docs/specs/proposals';
+const SPEC_BRANCH = 'spec/0007-meals-page-with-caf';
+const SPEC_PATH = `${FOLDER}/0007-meals-page-with-caf.json`;
+const BUILD_PATH = `${FOLDER}/0040-meals.json`;
+
+const proposal = () => ({
+  version: 1, title: 'Meals', summary: 'Plan the week.',
+  nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'app-a' }] },
+});
+
+function raw(port, method, target, { headers = {}, body } = {}) {
+  const sent = Object.fromEntries(Object.entries(headers).filter(([, v]) => v !== undefined));
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method, path: target, headers: sent, agent: false }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        let json = null;
+        try { json = JSON.parse(text); } catch { /* not JSON */ }
+        resolve({ status: res.statusCode || 0, headers: res.headers, text, json });
+      });
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+async function signedIn(port, code_) {
+  const started = await raw(port, 'GET', '/auth/start');
+  const to = new URL(started.headers.location);
+  const stateCookie = started.headers['set-cookie'].find((c) => c.startsWith('cornfield-oauth=')).split(';')[0];
+  const back = await raw(port, 'GET', `/auth/callback?code=${code_}&state=${to.searchParams.get('state')}`, { headers: { cookie: stateCookie } });
+  expect(back.status, back.text).toBe(303);
+  return back.headers['set-cookie'].find((c) => c.startsWith('cornfield=')).split(';')[0];
+}
+
+/** A clock for the hooks that the test never winds: retries wait, and a hung request is never cut off */
+const frozenTimer = () => ({ setTimeout: () => 0, clearTimeout: () => {} });
+const settle = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
+
+/** A receiver on loopback: it keeps what it is sent, checks each signature, and answers `status` (switchable) */
+async function receiver() {
+  const got = [];
+  const me = { got, status: 200, url: '', close: null, of: null, next: null };
+  const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      const body = Buffer.concat(chunks);
+      const sig = `sha256=${createHmac('sha256', HOOK_SECRET).update(body).digest('hex')}`;
+      const valid = req.headers['x-cornfield-signature'] === sig;
+      got.push({ headers: req.headers, valid, body: JSON.parse(body.toString('utf8')) });
+      res.writeHead(valid ? me.status : 401);
+      res.end('ok');
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
+  me.url = `http://127.0.0.1:${server.address().port}/cornfield-hook`;
+  me.close = () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve(undefined)); });
+  /** The events of one name received so far */
+  me.of = (event) => got.filter((g) => g.body.event === event);
+  /** Waits until `n` events of that name have arrived (and then a moment, for one more that should not) */
+  me.next = async (event, n = 1) => {
+    for (let i = 0; i < 300 && me.of(event).length < n; i++) await new Promise((r) => setTimeout(r, 10));
+    await settle();
+    return me.of(event);
+  };
+  return me;
+}
+
+const user = { login: 'maintainer-one', html_url: 'https://github.example.com/maintainer-one' };
+const issue = (number, title, extra = {}) => ({ number, title, state: 'open', user, labels: [], body: '', comments: 0, html_url: `https://github.example.com/owner/name/issues/${number}`, created_at: '2026-10-19T09:00:00Z', updated_at: '2026-10-19T09:00:00Z', closed_at: null, ...extra });
+const pullOf = (number, title, head, sha, extra = {}) => ({ number, title, state: 'open', draft: false, user, labels: [], head: { ref: head, sha }, base: { ref: 'main' }, html_url: `https://github.example.com/owner/name/pull/${number}`, created_at: '2026-10-19T09:00:00Z', updated_at: '2026-10-19T09:00:00Z', merged_at: null, ...extra });
+const comment = (id, login, body, at = '2026-10-19T10:00:00Z', updated = at) => ({ id, user: { login, html_url: `https://github.example.com/${login}` }, body, html_url: `https://github.example.com/owner/name/pull/40#issuecomment-${id}`, created_at: at, updated_at: updated });
+/** The proposal file's text as the PR's head holds it, and an approval that covers that text (as the server records it) */
+const proposalText = () => `${JSON.stringify(proposal(), null, 2)}\n`;
+const approval = (edits = [], covers = proposalText()) => reviewComment('0040-meals', { verdict: 'approved', note: '', edits, ...(covers === null ? {} : { proposal: proposalHash(covers) }) }, { login: 'maintainer-one' });
+const sentBack = () => reviewComment('0040-meals', { verdict: 'notes', note: 'Not yet.', edits: [] }, { login: 'maintainer-one' });
+
+/** What the fake forge holds, and what it was asked to make */
+function freshWorld() {
+  return {
+    issues: { 7: issue(7, 'Meals page, with café!', { body: 'People want to plan meals.' }), 8: issue(8, 'Old', { state: 'closed' }) },
+    builds: [], // issues made by createIssue, newest first
+    pulls: [pullOf(40, 'Meals spec', 'spec/0040-meals', H1, { draft: true })],
+    madePulls: [],
+    branches: [{ name: 'main', sha: MAIN }, { name: 'spec/0040-meals', sha: H1 }],
+    files: { [`${H1}:${BUILD_PATH}`]: proposalText() },
+    changed: { 40: [{ filename: BUILD_PATH, status: 'added', additions: 20, deletions: 0 }] },
+    comments: { 40: [comment(9001, 'maintainer-one', approval())] },
+    writes: [],
+  };
+}
+
+describe('event hooks', () => {
+  let fake;
+  let data;
+  let srv;
+  let rcv;
+  let clock = Date.parse('2026-11-03T09:30:00Z');
+  let cookie;
+  let world;
+  let config;
+  let deadUrl;
+  const state = { override: {} };
+  const base = recordings('github');
+  const timer = frozenTimer();
+
+  /** The fake forge: the recorded user and repo, and a repo that remembers what was made */
+  const dispatch = (key, req) => {
+    const [method, target] = [key.slice(0, key.indexOf(' ')), key.slice(key.indexOf(' ') + 1)];
+    if (state.override[key]) return state.override[key](req);
+    const reader = req.headers.authorization === `Bearer ${READER}`;
+    const second = req.headers.authorization === `Bearer ${MAINT2}`;
+    if (key === 'POST /login/oauth/access_token') return { body: { access_token: req.body.includes('c-reader') ? READER : req.body.includes('c-maint2') ? MAINT2 : MAINT, token_type: 'bearer' } };
+    if (key === `GET ${API}/user` && second) return { body: { login: 'maintainer-two', id: 1003 } };
+    if (key === `GET ${API}/user`) return reader ? { body: { login: 'reader-two', id: 1002 } } : base['GET /user'];
+    if (key === `GET ${GH}`) return reader ? { body: { id: 1, full_name: 'owner/name', permissions: { admin: false, maintain: false, push: false, triage: false, pull: true } } } : base['GET /repos/owner/name'];
+    // The search API: the issues whose body holds the words (q is `"<words>" in:body repo:… is:issue`)
+    if (method === 'GET' && target.startsWith(`${API}/search/issues?`)) {
+      const words = /^"([^"]+)"/.exec(new URL(target, 'http://x').searchParams.get('q') || '')?.[1] || '';
+      if (state.searchLag) return { body: { total_count: 0, items: [] } };
+      return { body: { total_count: 0, items: [...world.builds, ...Object.values(world.issues)].filter((i) => i.body.includes(words)) } };
+    }
+    if (!target.startsWith(GH)) return { status: 404, body: { message: 'Not Found' } };
+    const url = new URL(target.slice(GH.length), 'http://x');
+    const p = decodeURIComponent(url.pathname);
+    const body = req.body ? JSON.parse(req.body) : null;
+    let m;
+    if (method === 'GET' && (m = /^\/issues\/(\d+)$/.exec(p))) {
+      const n = Number(m[1]);
+      if (n === 12) return { body: { ...issue(12, 'A pull request'), pull_request: { url: 'x' } } };
+      return world.issues[n] ? { body: world.issues[n] } : { status: 404, body: { message: 'Not Found' } };
+    }
+    if (method === 'GET' && p === '/issues') return { body: [...world.builds, ...Object.values(world.issues)] };
+    if (method === 'GET' && p === '/pulls') return { body: [...world.madePulls, ...world.pulls] };
+    if (method === 'GET' && (m = /^\/pulls\/(\d+)$/.exec(p))) {
+      const found = [...world.madePulls, ...world.pulls].find((x) => x.number === Number(m[1]));
+      return found ? { body: found } : { status: 404, body: { message: 'Not Found' } };
+    }
+    if (method === 'GET' && (m = /^\/pulls\/(\d+)\/files$/.exec(p))) return { body: world.changed[Number(m[1])] || [] };
+    if (method === 'GET' && (m = /^\/issues\/(\d+)\/comments$/.exec(p))) return { body: world.comments[Number(m[1])] || [] };
+    if (method === 'GET' && p === '/branches') return { body: world.branches.map((b) => ({ name: b.name, commit: { sha: b.sha }, protected: b.name === 'main' })) };
+    if (method === 'GET' && (m = /^\/branches\/(.+)$/.exec(p))) {
+      const b = world.branches.find((x) => x.name === m[1]);
+      return b ? { body: { name: b.name, commit: { sha: b.sha } } } : { status: 404, body: { message: 'Not Found' } };
+    }
+    if (method === 'GET' && p.startsWith('/contents/')) {
+      const text = world.files[`${url.searchParams.get('ref')}:${p.slice('/contents/'.length)}`];
+      return text === undefined ? { status: 404, body: { message: 'Not Found' } } : { headers: { 'content-type': 'application/vnd.github.raw; charset=utf-8' }, body: text };
+    }
+    if (method === 'GET' && p.startsWith('/commits/')) return p.endsWith('/status') ? { body: { statuses: [] } } : { body: { check_runs: [] } };
+    if (method === 'POST' && p === '/git/refs') {
+      world.writes.push(`${method} ${p}`);
+      const name = body.ref.replace('refs/heads/', '');
+      if (world.branches.some((b) => b.name === name)) return { status: 422, body: { message: 'Reference already exists' } };
+      world.branches.push({ name, sha: body.sha });
+      return { status: 201, body: { ref: body.ref, object: { sha: body.sha } } };
+    }
+    if (method === 'PUT' && p.startsWith('/contents/')) {
+      world.writes.push(`${method} ${p}`);
+      const at = p.slice('/contents/'.length);
+      if (world.files[`${body.branch}:${at}`] !== undefined) return { status: 422, body: { message: '"sha" wasn\'t supplied.' } };
+      world.files[`${body.branch}:${at}`] = Buffer.from(body.content, 'base64').toString('utf8');
+      const branch = world.branches.find((b) => b.name === body.branch);
+      if (branch) branch.sha = 'c'.repeat(40);
+      return { status: 201, body: { commit: { sha: 'c'.repeat(40) } } };
+    }
+    if (method === 'POST' && p === '/pulls') {
+      world.writes.push(`${method} ${p}`);
+      const made = pullOf(50 + world.madePulls.length, body.title, body.head, 'c'.repeat(40), { draft: body.draft, body: body.body, base: { ref: body.base } });
+      world.madePulls.unshift(made);
+      return { status: 201, body: made };
+    }
+    if (method === 'POST' && p === '/issues') {
+      world.writes.push(`${method} ${p}`);
+      const made = issue(60 + world.builds.length, body.title, { body: body.body });
+      world.builds.unshift(made);
+      return { status: 201, body: made };
+    }
+    return { status: 404, body: { message: 'Not Found' } };
+  };
+  const routes = new Proxy({}, { get: (_, key) => (typeof key === 'string' ? (req) => dispatch(key, req) : undefined) });
+
+  const start = async (cfg, opts) => {
+    const server = createCornfieldServer(cfg, { env: ENV, now: () => clock, hookTimer: timer, ...opts });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
+    return { port: /** @type {import('node:net').AddressInfo} */ (server.address()).port, close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve(undefined)); }) };
+  };
+  const hooksFor = (...urls) => urls.map((url) => ({ url, events: '*' }));
+
+  beforeAll(async () => {
+    fake = await fakeForge(routes);
+    rcv = await receiver();
+    data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-hooks-'));
+    config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
+    // the second hook is dead: nothing listens on that port
+    deadUrl = `http://127.0.0.1:${await freePort()}/dead`;
+    Object.assign(config, { forge: { type: 'github', url: fake.url, repo: 'owner/name' }, publicUrl: PUBLIC, hooks: hooksFor(rcv.url, deadUrl) });
+    srv = await start(config);
+    cookie = await signedIn(srv.port, 'c-maint');
+  });
+  afterAll(async () => {
+    await srv.close();
+    await fake.close();
+    await rcv.close();
+    fs.rmSync(data, { recursive: true, force: true });
+  });
+  beforeEach(() => {
+    clock += 120_000;
+    state.override = {};
+    heads += 1;
+    H1 = `${heads.toString(16).padStart(4, '0')}`.padEnd(40, 'a');
+    H2 = `${heads.toString(16).padStart(4, '0')}`.padEnd(40, 'b');
+    world = freshWorld();
+    world.pulls.push(pullOf(41, 'Docs fix', 'fix/docs', 'd'.repeat(40)));
+    world.changed[41] = [{ filename: 'README.md', status: 'modified', additions: 1, deletions: 0 }];
+    rcv.got.length = 0;
+    rcv.status = 200;
+    fake.requests.length = 0;
+  });
+
+  const post = (target, body, { method = 'POST', port = srv.port, as = cookie } = {}) => {
+    const text = JSON.stringify(body);
+    return raw(port, method, target, {
+      headers: { cookie: as, origin: `http://127.0.0.1:${port}`, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(text)) },
+      body: text,
+    });
+  };
+  const get = (target, { port = srv.port, as = cookie } = {}) => raw(port, 'GET', target, { headers: { cookie: as } });
+  const rows = (action) => {
+    const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+    const out = db.prepare('SELECT * FROM actions WHERE action = ? ORDER BY id').all(action);
+    db.close();
+    return out.map((r) => ({ ...r, request: JSON.parse(String(r.request)), answer: r.answer ? JSON.parse(String(r.answer)) : null }));
+  };
+  const wrote = () => fake.requests.filter((r) => r.method !== 'GET' && !r.url.startsWith('/login/'));
+  const text = () => world.files[`${H1}:${BUILD_PATH}`];
+  const AT = () => new Date(clock).toISOString();
+  /** The forge takes a review comment, and lands green pull requests */
+  const allowWrites = () => {
+    state.override[`POST ${GH}/issues/40/comments`] = (req) => ({ status: 201, body: comment(9500, 'maintainer-one', JSON.parse(req.body).body, '2026-11-03T09:30:00Z') });
+    for (const [n, sha] of [[40, H1], [41, 'd'.repeat(40)]]) {
+      state.override[`PUT ${GH}/pulls/${n}/merge`] = () => ({ body: { sha: 'f'.repeat(40), merged: true } });
+      state.override[`GET ${GH}/commits/${sha}/check-runs?per_page=100`] = () => ({ body: { check_runs: [{ id: 1, name: 'test', status: 'completed', conclusion: 'success', html_url: 'https://ci.example.test/1' }] } });
+    }
+    world.pulls[0].draft = false;
+    for (const p of world.pulls) p.mergeable_state = 'clean';
+  };
+  const REVIEW = '/proposals/0040-meals/review?source=pull%2F40';
+  const BUILD = '/api/forge/pulls/40/build';
+  const buildPlan = async () => (await get(`${BUILD}?slug=0040-meals`)).json.plan;
+
+  it('spec.ready: a spec PR seen for the first time is announced once, signed, with its head and the proposal\'s hash and no contents', async () => {
+    world.pulls[0].head.sha = H1;
+    const res = await get('/proposals');
+    expect(res.status, res.text).toBe(200);
+    const got = await rcv.next('spec.ready');
+    expect(got).toHaveLength(1);
+    expect(got[0].valid).toBe(true);
+    expect(got[0].headers).toMatchObject({ 'content-type': 'application/json', 'x-cornfield-event': 'spec.ready', 'x-cornfield-timestamp': AT() });
+    expect(got[0].headers['x-cornfield-delivery']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(got[0].body).toEqual({ event: 'spec.ready', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', mapUrl: PUBLIC });
+    expect(JSON.stringify(got[0].body)).not.toContain('Plan the week');
+    // looking again changes nothing…
+    await get('/proposals');
+    await get('/api/forge/work');
+    expect(await rcv.next('spec.ready')).toHaveLength(1);
+    // …and a push is a new head, announced once
+    const pushed = `${H1.slice(0, 30)}${'c'.repeat(10)}`;
+    world.pulls[0].head.sha = pushed;
+    world.files[`${pushed}:${BUILD_PATH}`] = JSON.stringify({ ...proposal(), title: 'Meals, again' });
+    await get('/proposals');
+    await get('/api/forge/work');
+    const again = await rcv.next('spec.ready', 2);
+    expect(again.map((g) => g.body.headSha)).toEqual([H1, pushed]);
+    expect(again[1].body.proposalSha256).toBe(proposalHash(world.files[`${pushed}:${BUILD_PATH}`]));
+  });
+
+  it('spec.ready is not sent twice across a restart on the same data folder', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-hooks-restart-'));
+    const mine = await receiver();
+    const cfg = { ...config, dataDir: dir, hooks: hooksFor(mine.url) };
+    try {
+      let one = await start(cfg);
+      let c = await signedIn(one.port, 'c-maint');
+      await get('/proposals', { port: one.port, as: c });
+      expect(await mine.next('spec.ready')).toHaveLength(1);
+      await one.close();
+      one = await start(cfg); // a restart: nothing in memory, the same db
+      c = await signedIn(one.port, 'c-maint');
+      await get('/proposals', { port: one.port, as: c });
+      await get('/api/forge/work', { port: one.port, as: c });
+      expect(await mine.next('spec.ready')).toHaveLength(1);
+      // a push after the restart is still news
+      const pushed = `${H1.slice(0, 30)}${'9'.repeat(10)}`;
+      world.pulls[0].head.sha = pushed;
+      world.files[`${pushed}:${BUILD_PATH}`] = text();
+      await get('/proposals', { port: one.port, as: c });
+      expect((await mine.next('spec.ready', 2)).map((g) => g.body.headSha)).toEqual([H1, pushed]);
+      await one.close();
+    } finally {
+      await mine.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('spec.approved: once, after the review comment is posted, with the note, the edits and who acted', async () => {
+    allowWrites();
+    const edits = [{ op: 'remove-edge', from: 'a', to: 'b' }];
+    const res = await post(REVIEW, { verdict: 'approved', note: 'Looks right.', edits }, { method: 'PUT' });
+    expect(res.status, res.text).toBe(200);
+    const got = await rcv.next('spec.approved');
+    expect(got).toHaveLength(1);
+    expect(got[0].valid).toBe(true);
+    expect(got[0].body).toEqual({ event: 'spec.approved', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', note: 'Looks right.', edits, mapUrl: PUBLIC });
+    expect(rcv.of('spec.sentBack')).toHaveLength(0);
+    expect(wrote().map((r) => `${r.method} ${r.url}`)).toEqual([`POST ${GH}/issues/40/comments`]);
+    expect(rows('hook').filter((r) => r.request.event === 'spec.approved' && r.answer.ok)).toHaveLength(1);
+  });
+
+  it('spec.sentBack: once, with the note', async () => {
+    allowWrites();
+    const res = await post(REVIEW, { verdict: 'notes', note: 'Drop the cache.', edits: [] }, { method: 'PUT' });
+    expect(res.status, res.text).toBe(200);
+    const got = await rcv.next('spec.sentBack');
+    expect(got).toHaveLength(1);
+    expect(got[0].valid).toBe(true);
+    expect(got[0].body).toEqual({ event: 'spec.sentBack', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', note: 'Drop the cache.', edits: [], mapUrl: PUBLIC });
+    expect(rcv.of('spec.approved')).toHaveLength(0);
+  });
+
+  it('build.opened: once, when the issue is made, and not when a second ask only finds it', async () => {
+    const plan = await buildPlan();
+    const res = await post(BUILD, { slug: '0040-meals', sha: H1, digest: plan.digest });
+    expect(res.status, res.text).toBe(201);
+    const got = await rcv.next('build.opened');
+    expect(got).toHaveLength(1);
+    expect(got[0].valid).toBe(true);
+    expect(got[0].body).toEqual({ event: 'build.opened', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', mapUrl: PUBLIC });
+    clock += 120_000;
+    const second = await post(BUILD, { slug: '0040-meals', sha: H1, digest: (await buildPlan()).digest });
+    expect(second.json).toMatchObject({ created: false });
+    expect(await rcv.next('build.opened')).toHaveLength(1);
+  });
+
+  it('pr.landed: once, with the spec PR\'s slug and hash, and a null slug for a pull request that is not a spec', async () => {
+    allowWrites();
+    const spec = await post('/api/forge/pulls/40/merge', { sha: H1 });
+    expect(spec.status, spec.text).toBe(200);
+    const got = await rcv.next('pr.landed');
+    expect(got).toHaveLength(1);
+    expect(got[0].valid).toBe(true);
+    expect(got[0].body).toEqual({ event: 'pr.landed', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', mapUrl: PUBLIC });
+    clock += 120_000;
+    const plain = await post('/api/forge/pulls/41/merge', { sha: 'd'.repeat(40) });
+    expect(plain.status, plain.text).toBe(200);
+    const two = await rcv.next('pr.landed', 2);
+    expect(two).toHaveLength(2);
+    expect(two[1].body).toEqual({ event: 'pr.landed', at: AT(), slug: null, pull: 41, headSha: 'd'.repeat(40), proposalSha256: null, actor: 'maintainer-one', mapUrl: PUBLIC });
+  });
+
+  it('sends nothing for an action that failed', async () => {
+    allowWrites();
+    const before = rows('hook').length;
+    // a review the forge refuses
+    state.override[`POST ${GH}/issues/40/comments`] = () => ({ status: 403, body: { message: 'Resource not accessible' } });
+    expect((await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT' })).status).toBeGreaterThanOrEqual(400);
+    // a review that is not valid, and a proposal that is not there
+    expect((await post(REVIEW, { verdict: 'notes' }, { method: 'PUT' })).status).toBe(400);
+    expect((await post('/proposals/0099-none/review?source=pull%2F40', { verdict: 'approved' }, { method: 'PUT' })).status).toBe(404);
+    // a build issue from a plan that is not the one shown
+    expect((await post(BUILD, { slug: '0040-meals', sha: H1, digest: 'f'.repeat(32) })).status).toBe(409);
+    // landing: not green, and a head that moved
+    state.override[`GET ${GH}/commits/${H1}/check-runs?per_page=100`] = () => ({ body: { check_runs: [] } });
+    expect((await post('/api/forge/pulls/40/merge', { sha: H1 })).status).toBe(409);
+    expect((await post('/api/forge/pulls/41/merge', { sha: 'e'.repeat(40) })).status).toBe(409);
+    await settle();
+    expect(rcv.got).toEqual([]);
+    expect(rows('hook')).toHaveLength(before);
+  });
+
+  it('a dead URL changes nothing: the second hook refuses connections, and every action still answers success', async () => {
+    allowWrites();
+    const firstRow = Math.max(0, ...rows('hook').map((r) => r.id));
+    const plan = await buildPlan();
+    expect((await post(BUILD, { slug: '0040-meals', sha: H1, digest: plan.digest })).status).toBe(201);
+    expect((await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT' })).status).toBe(200);
+    clock += 120_000;
+    expect((await post('/api/forge/pulls/40/merge', { sha: H1 })).status).toBe(200);
+    await rcv.next('pr.landed');
+    await settle();
+    expect(rcv.got.map((g) => g.body.event).sort()).toEqual(['build.opened', 'pr.landed', 'spec.approved']);
+    const dead = rows('hook').filter((r) => r.request.origin === new URL(deadUrl).origin && r.id > firstRow);
+    expect(dead).toHaveLength(3);
+    for (const r of dead) expect(r).toMatchObject({ login: 'cornfield', status: null, answer: { ok: false, reason: 'ECONNREFUSED', retryInMs: 1000 }, request: { attempt: 1 } });
+    // the forge saw exactly the writes of the three actions, and the actions' own audit rows are as they are without hooks
+    expect(wrote().map((r) => `${r.method} ${r.url}`)).toEqual([`POST ${GH}/issues`, `POST ${GH}/issues/40/comments`, `PUT ${GH}/pulls/40/merge`]);
+    expect(rows('merge').at(-1)).toMatchObject({ status: 200, answer: { ok: true, merged: true } });
+    expect(rows('review').at(-1)).toMatchObject({ status: 201 });
+    expect(rows('build').at(-1)).toMatchObject({ status: 201 });
+  });
+
+  it('a receiver that refuses the signature changes nothing either: its 401 is written down, the action is as it was', async () => {
+    allowWrites();
+    const bad = await receiver();
+    const wrongKey = await start({ ...config, hooks: hooksFor(bad.url) }, { env: { ...ENV, CORNFIELD_HOOK_SECRET: 'another-secret-'.padEnd(40, 'q') } });
+    try {
+      const c = await signedIn(wrongKey.port, 'c-maint');
+      const res = await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: wrongKey.port, as: c });
+      expect(res.status, res.text).toBe(200);
+      const got = await bad.next('spec.approved');
+      expect(got).toHaveLength(1);
+      expect(got[0].valid).toBe(false); // signed with another key than the receiver's
+      await settle();
+      const mine = rows('hook').filter((r) => r.request.origin === new URL(bad.url).origin);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]).toMatchObject({ status: 401, answer: { ok: false, reason: 'status', retryInMs: 1000 } });
+      expect(wrote().map((r) => `${r.method} ${r.url}`)).toEqual([`POST ${GH}/issues/40/comments`]);
+    } finally {
+      await wrongKey.close();
+      await bad.close();
+    }
+  });
+
+  it('a fetch that throws changes nothing', async () => {
+    allowWrites();
+    const throwing = await start(config, { hookFetch: () => { throw new Error('no network'); } });
+    try {
+      const c = await signedIn(throwing.port, 'c-maint');
+      const res = await post(REVIEW, { verdict: 'notes', note: 'No.', edits: [] }, { method: 'PUT', port: throwing.port, as: c });
+      expect(res.status, res.text).toBe(200);
+      expect(res.json).toMatchObject({ slug: '0040-meals', verdict: 'notes' });
+      await settle();
+      expect(rcv.got).toEqual([]);
+    } finally {
+      await throwing.close();
+    }
+  });
+
+  it('is off without hooks: no secret is asked for and nothing is sent', async () => {
+    allowWrites();
+    const none = await start({ ...config, hooks: [] }, { env: { ...ENV, CORNFIELD_HOOK_SECRET: undefined } });
+    try {
+      const c = await signedIn(none.port, 'c-maint');
+      const res = await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: none.port, as: c });
+      expect(res.status, res.text).toBe(200);
+      await settle();
+      expect(rcv.got).toEqual([]);
+    } finally {
+      await none.close();
+    }
+  });
+
+  it('refuses to start with hooks and no secret, a short one, or no sign-in', () => {
+    const hooks = hooksFor('https://chat.example.org/h');
+    expect(() => createCornfieldServer({ ...config, hooks }, { env: { ...ENV, CORNFIELD_HOOK_SECRET: undefined } })).toThrow(/CORNFIELD_HOOK_SECRET is needed/);
+    expect(() => createCornfieldServer({ ...config, hooks }, { env: { ...ENV, CORNFIELD_HOOK_SECRET: 'short' } })).toThrow(/too short/);
+    expect(() => createCornfieldServer({ ...config, hooks }, { env: { CORNFIELD_HOOK_SECRET: HOOK_SECRET } })).toThrow(/sign-in/);
+  });
+
+  it('keeps the hooks out of what the browser is told', async () => {
+    const res = await get('/cornfield/config.json');
+    expect(res.text).not.toContain('cornfield-hook');
+    expect(res.text).not.toContain(HOOK_SECRET);
+  });
+});

@@ -79,11 +79,14 @@ function entryOf(pull, file) {
 /**
  * The proposals of every open PR that touches the proposals folder, newest PR first. A forge that cannot answer
  * gives `problem` in words, with what was found before it; the caller shows both.
+ * With `hooks` (server/hooks.js), the spec PRs found are handed over to announce the new ones (`spec.ready`); that runs
+ * in the background and changes nothing about the answer.
  * @param {import('./forge.js').Forge} forge
  * @param {{ proposals: string }} where
+ * @param {{ hooks?: { specsSeen: Function } | null }} [opts]
  * @returns {Promise<{ entries: PullEntry[], problem: string | null }>}
  */
-export async function listPullProposals(forge, where) {
+export async function listPullProposals(forge, where, { hooks = null } = {}) {
   const folder = folderOf(where);
   let pulls;
   try {
@@ -105,7 +108,21 @@ export async function listPullProposals(forge, where) {
     }
   };
   await Promise.all(Array.from({ length: Math.min(PARALLEL, pulls.length) }, worker));
-  return { entries: found.flat(), problem };
+  const entries = found.flat();
+  if (hooks) hooks.specsSeen(forge.repo, entries, (entry) => readPullProposal(forge, where, entry));
+  return { entries, problem };
+}
+
+/**
+ * The proposals a pull request holds (open or not), read at its head.
+ * @param {import('./forge.js').Forge} forge
+ * @param {{ proposals: string }} where
+ * @param {{ number: number, title: string, url: string, draft: boolean, author: { login: string } | null, head: { sha: string } }} pull
+ * @returns {Promise<PullEntry[]>}
+ */
+export async function pullProposals(forge, where, pull) {
+  const folder = folderOf(where);
+  return (await filesAt(forge, where, pull)).filter((f) => isProposal(f, folder)).map((f) => entryOf(pull, f));
 }
 
 /**
