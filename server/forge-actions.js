@@ -45,6 +45,7 @@ import { ForgeError, RERUN_STATES, canRerun, isMaintainer } from './forge.js';
 import { sameOrigin } from './proposals.js';
 import { planSpec, planBuild, startSpec, openBuildIssue } from './pipeline.js';
 import { PROPOSAL_FILE } from './files.js';
+import { proposalPayload, landedPayload } from './hooks.js';
 
 /** The same action on the same target is not asked again for this long (a double click, a retry before the forge has caught up) */
 export const COOLDOWN_MS = 5000;
@@ -181,7 +182,7 @@ export function actionOf(reqPath) {
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {{ n: number, action: 'merge' | 'rerun' | 'spec' | 'build' }} what
- * @param {{ config: object, where?: { proposals: string }, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveAction(req, res, what, ctx, send) {
@@ -275,12 +276,15 @@ export async function serveAction(req, res, what, ctx, send) {
       if (!plan.existing && plan.sha.toLowerCase() !== sha) throw new ForgeError(`Pull request #${n} has changed since it was looked at (its proposal is now at ${plan.sha.slice(0, 7)}); look again.`, { code: 'conflict' });
       if (!plan.existing && plan.digest !== digest) throw new ForgeError(`What the build issue for ${slug} would say has changed since it was shown (a new review, or a push); look again.`, { code: 'conflict' });
       const done = await openBuildIssue(forge, plan);
+      // Only an issue this ask made is news: a second ask that found the first one's says nothing again
+      if (done.created) ctx.hooks?.emit('build.opened', () => proposalPayload(forge, ctx.where || { proposals: config.proposals }, plan, { actor: session.login }));
       await forgetKept(auth, config);
       out = { status: done.created ? 201 : 200, body: { ok: true, action, created: done.created, number: n, slug, issue: done.issue, path: plan.path } };
     } else if (action === 'merge') {
       const method = config.forge.mergeMethod || 'merge';
       request.method = method;
       const landed = await forge.merge(n, { onlyIfGreen: true, sha, method });
+      ctx.hooks?.emit('pr.landed', () => landedPayload(forge, ctx.where || { proposals: config.proposals }, n, /** @type {string} */ (sha), session.login));
       await forgetKept(auth, config);
       out = { status: 200, body: { ok: true, merged: true, number: n, sha: landed.sha, head: sha, method } };
     } else {

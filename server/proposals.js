@@ -44,6 +44,7 @@ import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
 import { REVIEW_LIMIT, validateReview, latestReview, postReview, migrateStage1Reviews, proposalHash } from './reviews.js';
+import { proposalPayload } from './hooks.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
 import { hashPullMockups, serveMockups } from './mockups.js';
 
@@ -195,7 +196,7 @@ async function listWithPulls(where, forgeFor, signedIn) {
   } catch (err) {
     return { list: local, problem: forgeWords(err) };
   }
-  const { entries, problem } = await listPullProposals(forge, where);
+  const { entries, problem } = await listPullProposals(forge, where, { hooks: signedIn?.hooks });
   if (signedIn && entries.length) await migrateStage1Reviews({ forge, dataDir: where.dataDir, entries, login: signedIn.login, record: signedIn.record });
   const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, where, topology)));
   const list = [...local, ...pulls].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
@@ -273,13 +274,15 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
       const mockups = await hashPullMockups(forge, where, entry);
       if (mockups.length) review = { ...review, mockups };
     }
-    return send(res, 200, await postReview(forge, n, slug, review, { login: signedIn.login, record: signedIn.record }));
+    const posted = await postReview(forge, n, slug, review, { login: signedIn.login, record: signedIn.record });
+    signedIn.hooks?.emit(review.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, where, entry, { actor: signedIn.login, note: review.note, edits: review.edits }));
+    return send(res, 200, posted);
   } catch (err) {
     return send(res, forgeStatus(err), { error: forgeWords(err) });
   }
 }
 
-/** @typedef {{ login: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void }} SignedIn */
+/** @typedef {{ login: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void, hooks?: import('./hooks.js').Hooks | null }} SignedIn */
 
 /**
  * Answers a request under `/proposals`, or returns false when it is not one.

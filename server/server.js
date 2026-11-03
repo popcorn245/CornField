@@ -48,6 +48,7 @@ import { proxyTo } from './proxy.js';
 import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
 import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
+import { createHooks, hooksSettings } from './hooks.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -120,14 +121,20 @@ export const HA_CACHE_MS = 30_000;
 /**
  * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
- * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object }} [opts] what sign-in reads (`env`, and tests' fakes;
+ * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
  *   see server/auth.js); the Home Assistant URL and token are read from the same `env`, and `homeAssistant` is what
- *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket)
+ *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket); `hookFetch` and `hookTimer` are the
+ *   tests' fake network and clock for the event hooks (server/hooks.js)
  * @returns {import('node:http').Server}
  */
 export function createCornfieldServer(config, opts = {}) {
   const { env = process.env, homeAssistant = {} } = opts;
   const auth = createAuth(config, opts);
+  // Hooks listed without a secret (or without sign-in) are a startup error, like a half-configured sign-in
+  const hookSettings = hooksSettings(config, env, auth.enabled);
+  const hooks = hookSettings
+    ? createHooks({ hooks: config.hooks, secret: hookSettings.secret, fetch: opts.hookFetch, record: (entry) => auth.record(entry), store: auth.store, now: opts.now, publicUrl: config.publicUrl, timer: opts.hookTimer })
+    : null;
   const root = config.root;
   const importMap = importMapOf(config);
   const csp = cspOf(importMap);
@@ -172,7 +179,7 @@ export function createCornfieldServer(config, opts = {}) {
       else res.end();
     }
   });
-  server.on('close', () => auth.close());
+  server.on('close', () => { hooks?.close(); auth.close(); });
   return server;
 
   async function answer(req, res) {
@@ -212,11 +219,11 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
-    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, now: opts.now, publicHost })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
-    if (serveProposals(req, res, reqPath, url, where, forgeFor, session ? { login: session.login, record: (entry) => auth.record(entry) } : null)) return;
+    if (serveProposals(req, res, reqPath, url, where, forgeFor, session ? { login: session.login, record: (entry) => auth.record(entry), hooks } : null)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       req.resume();
