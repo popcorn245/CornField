@@ -109,7 +109,9 @@ export async function listPullProposals(forge, where, { hooks = null } = {}) {
   };
   await Promise.all(Array.from({ length: Math.min(PARALLEL, pulls.length) }, worker));
   const entries = found.flat();
-  if (hooks) hooks.specsSeen(forge.repo, entries, (entry) => readPullProposal(forge, where, entry));
+  if (hooks) {
+    try { hooks.specsSeen(forge.repo, entries, (entry) => readPullProposal(forge, where, entry)); } catch { /* a hook never gets in the way */ }
+  }
   return { entries, problem };
 }
 

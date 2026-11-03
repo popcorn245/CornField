@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import http from 'node:http';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 // @ts-expect-error plain JS module, no declarations
 import { createHooks, hooksSettings, sign, BACKOFF_MS, TIMEOUT_MS, MAX_RESPONSE_BYTES, MAX_PENDING } from '../../server/hooks.js';
 
@@ -72,7 +72,7 @@ describe('hooksSettings', () => {
     expect(() => hooksSettings(config, {})).toThrow(/CORNFIELD_HOOK_SECRET is needed/);
     expect(() => hooksSettings(config, { CORNFIELD_HOOK_SECRET: '' })).toThrow(/is needed/);
     expect(() => hooksSettings(config, { CORNFIELD_HOOK_SECRET: 'x'.repeat(31) })).toThrow(/too short/);
-    expect(() => hooksSettings(config, { CORNFIELD_HOOK_SECRET: SECRET }, false)).toThrow(/sign-in/);
+    expect(() => hooksSettings(config, { CORNFIELD_HOOK_SECRET: SECRET }, false)).toThrow(/sign-in is not set up. Every event comes from something a signed-in maintainer does in cornfield .* so without sign-in no hook would ever fire/);
     expect(hooksSettings(config, { CORNFIELD_HOOK_SECRET: 'x'.repeat(32) }, true)).toEqual({ secret: 'x'.repeat(32) });
   });
   it('never puts the secret in an error', () => {
@@ -321,6 +321,21 @@ describe('retries', () => {
     await settle();
     expect(fetch.calls).toHaveLength(1);
   });
+
+  it('close() during a request in flight leaves nothing behind: no row, no retry, no timer', async () => {
+    let answer;
+    const rows = [];
+    const timer = fakeTimer();
+    const h = createHooks({ hooks: [{ url: 'https://a.example.org/h', events: '*' }], secret: SECRET, record: async (e) => { rows.push(e); }, timer, fetch: () => new Promise((ok) => { answer = ok; }) });
+    h.emit('pr.landed', { pull: 3 });
+    for (let i = 0; i < 50 && !answer; i++) await settle();
+    h.close();
+    answer(new Response('down', { status: 500 }));
+    await settle();
+    await settle();
+    expect(rows).toEqual([]);
+    expect(timer.waiting).toEqual([]);
+  });
 });
 
 describe('a hook that cannot hurt', () => {
@@ -366,17 +381,26 @@ describe('against a receiver on loopback', () => {
     const rows = [];
     const timer = fakeTimer();
     const h = createHooks({ hooks: [{ url: receiver.url, events: '*' }], secret: SECRET, record: async (e) => { rows.push(e); }, now: () => NOW, timer });
-    h.emit('pr.landed', { slug: null, pull: 11, headSha: 'f'.repeat(40), actor: 'maintainer-one' });
+    // Not ASCII: the signature is over the exact bytes sent, so a receiver that hashes what it got agrees
+    h.emit('spec.sentBack', { slug: '0014-planner', pull: 11, headSha: 'f'.repeat(40), actor: 'maintainer-one', note: 'Café, 中文, «quotes» and \u2028 a line separator' });
     for (let i = 0; i < 100 && !got.length; i++) await new Promise((r) => setTimeout(r, 10));
     await timer.tick(1000); // the retry, after the redirect was refused
     for (let i = 0; i < 100 && got.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
     expect(got).toHaveLength(2);
     expect(elsewhere).toEqual([]);
+    // The verify function docs/config.md gives a receiver, as it is written there
+    const verify = (raw, header, secret, maxAgeMs = 300_000) => {
+      const want = Buffer.from(`sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`), have = Buffer.from(String(header));
+      return want.length === have.length && timingSafeEqual(want, have) && Math.abs(NOW - Date.parse(JSON.parse(raw).at)) < maxAgeMs;
+    };
     for (const g of got) {
       expect(g.headers['content-type']).toBe('application/json');
-      expect(g.headers['x-cornfield-event']).toBe('pr.landed');
+      expect(g.headers['x-cornfield-event']).toBe('spec.sentBack');
       expect(g.headers['x-cornfield-signature']).toBe(`sha256=${createHmac('sha256', SECRET).update(g.raw).digest('hex')}`);
-      expect(JSON.parse(g.raw.toString()).pull).toBe(11);
+      expect(verify(g.raw, g.headers['x-cornfield-signature'], SECRET)).toBe(true);
+      expect(verify(g.raw, g.headers['x-cornfield-signature'], `${SECRET}x`)).toBe(false);
+      expect(verify(Buffer.concat([g.raw, Buffer.from(' ')]), g.headers['x-cornfield-signature'], SECRET)).toBe(false);
+      expect(JSON.parse(g.raw.toString('utf8'))).toMatchObject({ pull: 11, note: 'Café, 中文, «quotes» and \u2028 a line separator' });
     }
     expect(got[0].headers['x-cornfield-delivery']).toBe(got[1].headers['x-cornfield-delivery']);
     await new Promise((r) => setTimeout(r, 50));

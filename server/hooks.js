@@ -5,11 +5,14 @@
  * `hooks: [{ url, events }]` lists where; when something happens, `emit(event, payload)` posts one JSON body to each
  * hook that asked for that event:
  *
- *   spec.ready      a spec PR was first seen, or was seen at a new head (cornfield has no webhook receiver: it notices
- *                   when it next lists the PRs, so this fires when cornfield next looks, not at the push)
+ *   spec.ready      a spec PR that is not a draft was first seen, or was seen at a new head: it is waiting for review.
+ *                   A draft (a "Start a spec" stub among them) is never announced; one marked ready is, at its head.
+ *                   cornfield has no webhook receiver: it notices when it next lists the PRs, so this fires when
+ *                   cornfield next looks, not at the push. The first look at a repo after hooks are added announces
+ *                   nothing: it records what is open, so only what changes after it is news
  *   spec.approved   a maintainer approved a proposal          spec.sentBack   a maintainer sent one back
  *   build.opened    the build issue of an approved proposal was opened
- *   pr.landed       a pull request was landed
+ *   pr.landed       a pull request was landed through cornfield (its Land it); a merge made on the forge sends nothing
  *
  * **A hook never gets in the way.** `emit` returns at once and never throws; the delivery runs in the background, from a
  * queue in memory. A failed delivery (a network error, a timeout, anything but a 2xx) is tried again after 1s, 5s and 30s
@@ -62,7 +65,7 @@ export function hooksSettings(config, env = process.env, signIn = true) {
   const secret = env[HOOK_SECRET_ENV];
   if (typeof secret !== 'string' || secret === '') throw new Error(`The config lists hooks, so ${HOOK_SECRET_ENV} is needed: a random value of at least ${MIN_HOOK_SECRET} characters that signs every event (openssl rand -base64 48). Never put it in the config.`);
   if (secret.length < MIN_HOOK_SECRET) throw new Error(`${HOOK_SECRET_ENV} is too short: use at least ${MIN_HOOK_SECRET} random characters (openssl rand -base64 48).`);
-  if (!signIn) throw new Error('The config lists hooks, but events come from a signed-in maintainer\'s actions and from the spec PRs cornfield lists for them: set up sign-in first (docs/sign-in.md), or remove `hooks`.');
+  if (!signIn) throw new Error('The config lists hooks, but sign-in is not set up. Every event comes from something a signed-in maintainer does in cornfield (a review, a build issue, a landing) or from the spec PRs cornfield lists for them, so without sign-in no hook would ever fire: set up sign-in (docs/sign-in.md), or remove `hooks`.');
   return { secret };
 }
 
@@ -136,6 +139,8 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   async function post(t, headers, body) {
     const ctl = new AbortController();
     const cut = timer.setTimeout(() => ctl.abort(), TIMEOUT_MS);
+    // A request still in flight at shutdown must not keep the process alive for its last seconds
+    if (cut && typeof cut.unref === 'function') cut.unref();
     try {
       // A redirect is never followed: the address is the maintainer's, and only it
       const res = await doFetch(t.url, { method: 'POST', headers, body, redirect: 'manual', signal: ctl.signal });
@@ -161,6 +166,8 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     const attempt = async (n) => {
       if (closed) { pending -= 1; return; }
       const out = await post(t, headers, body);
+      // Shut down while the request was in flight: nothing more is written or scheduled
+      if (closed) { pending -= 1; return; }
       const last = out.failed !== null && n > backoff.length;
       const request = { event, delivery, hook: t.index, origin: t.origin, attempt: n };
       await audit(target, request, out.status, out.failed === null ? { ok: true } : { ok: false, reason: out.failed, ...(last ? { gaveUp: true } : { retryInMs: backoff[n - 1] }) });
@@ -217,23 +224,33 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   }
 
   /**
-   * `spec.ready`: the spec PRs a listing just showed. A (pull request, head, proposal) not seen before is announced
-   * once, and remembered in the SQLite file so a restart does not announce it again. Returns at once, never throws.
+   * `spec.ready`: the spec PRs a listing just showed. A (pull request, head, proposal) that is not a draft and was not
+   * seen before is announced once, and remembered in the SQLite file so a restart does not announce it again. A draft is
+   * not recorded, so marking it ready announces it at its head. The first listing of a repo (no `hook_seen` row for it,
+   * not even the `pr = 0` row that says it has been looked at) records what is open and announces nothing. Returns at
+   * once, never throws.
    * @param {string} repo 'owner/name'
    * @param {import('./proposal-pulls.js').PullEntry[]} entries
    * @param {(entry: import('./proposal-pulls.js').PullEntry) => Promise<string>} read the proposal's text at its head
    */
   function specsSeen(repo, entries, read) {
-    if (closed || !store || !entries.length) return;
+    // Even an empty listing counts: it is what makes the first spec PR opened afterwards news
+    if (closed || !store || !Array.isArray(entries)) return;
     (async () => {
       const db = await store();
+      const at = new Date(now()).toISOString();
+      const looked = db.prepare('SELECT 1 FROM hook_seen WHERE repo = ? AND pr = 0').get(repo) !== undefined;
       const insert = db.prepare('INSERT OR IGNORE INTO hook_seen (repo, pr, head_sha, slug, at) VALUES (?, ?, ?, ?, ?)');
       for (const e of entries) {
-        if (insert.run(repo, e.pull.number, e.sha, e.slug, new Date(now()).toISOString()).changes !== 1) continue;
+        // Waiting for review is not a draft: a draft is left out, so it is news once it is marked ready
+        if (e.pull.draft) continue;
+        if (insert.run(repo, e.pull.number, e.sha, e.slug, at).changes !== 1 || !looked) continue;
         emit('spec.ready', async () => ({
           slug: e.slug, pull: e.pull.number, headSha: e.sha, proposalSha256: await hashOf(read, e), actor: e.pull.author,
         }));
       }
+      // The repo has been looked at: from now on, what is new is announced
+      if (!looked) insert.run(repo, 0, '', '', at);
     })().catch((err) => console.error(`[cornfield] the spec PRs could not be checked for spec.ready: ${err instanceof Error ? err.message : err}`));
   }
 

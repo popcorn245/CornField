@@ -62,15 +62,15 @@ hooks: [
 ],
 ```
 
-A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it holds no user name or password. The signing secret is `CORNFIELD_HOOK_SECRET` in env, at least 32 characters (`openssl rand -base64 48`), never the file. With `hooks` and no secret, a short one, or no [sign-in](sign-in.md), cornfield refuses to start: events come from a signed-in maintainer's actions and from the spec PRs cornfield lists for them.
+A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it holds no user name or password. The signing secret is `CORNFIELD_HOOK_SECRET` in env, at least 32 characters (`openssl rand -base64 48`), never the file. With `hooks` and no secret, a short one, or no [sign-in](sign-in.md), cornfield refuses to start, and says which. Without sign-in no hook could ever fire: every event comes from something a signed-in maintainer does in cornfield, or from the spec PRs cornfield lists for them.
 
 | Event | When |
 |---|---|
-| `spec.ready` | a spec PR was opened, or pushed to. cornfield has no webhook receiver, so it notices when it next lists the open spec PRs (a maintainer opening the proposals menu or the issues and PRs panel): it fires **when cornfield next looks, not at the push**. Once per (pull request, head commit, proposal), and a restart does not repeat it. The first look after `hooks` is added announces the spec PRs already open |
+| `spec.ready` | a spec PR is waiting for review: a spec PR that is **not a draft** was opened, pushed to, or marked ready. A draft, a "Start a spec" stub among them, is never announced; once it is marked ready it is, at its head. cornfield has no webhook receiver, so it notices when it next lists the open spec PRs (a maintainer opening the proposals menu or the issues and PRs panel): it fires **when cornfield next looks, not at the push**. Once per (pull request, head commit, proposal), and a restart does not repeat it. **The first look after `hooks` is added announces nothing**: it records the spec PRs already open, and only what changes after it is sent |
 | `spec.approved` | a maintainer approved a proposal (the review comment was posted) |
 | `spec.sentBack` | a maintainer sent a proposal back |
 | `build.opened` | the build issue of an approved proposal was opened (not when a second ask only found it) |
-| `pr.landed` | a pull request was landed from cornfield; `slug` is its proposal when it is a spec PR (the first, when it holds several), else `null` |
+| `pr.landed` | a pull request was landed **through cornfield** (the issues and PRs panel's Land it). A merge made on the forge itself, or by anything else, sends nothing. `slug` is its proposal when it is a spec PR (the first, when it holds several), else `null` |
 
 Each event is a POST of one JSON body:
 

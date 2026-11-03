@@ -290,60 +290,96 @@ describe('event hooks', () => {
   const BUILD = '/api/forge/pulls/40/build';
   const buildPlan = async () => (await get(`${BUILD}?slug=0040-meals`)).json.plan;
 
-  it('spec.ready: a spec PR seen for the first time is announced once, signed, with its head and the proposal\'s hash and no contents', async () => {
+  /** What has arrived of an event after a moment: for a check that nothing more came */
+  const settled = async (r, event) => { await new Promise((ok) => setTimeout(ok, 300)); return r.of(event); };
+  /** A push to spec PR #40: a new head with the proposal at it */
+  const push = (tag, proposalText = text()) => {
+    const sha = `${H1.slice(0, 30)}${tag.repeat(10)}`;
+    world.pulls[0].head.sha = sha;
+    world.files[`${sha}:${BUILD_PATH}`] = proposalText;
+    return sha;
+  };
+
+  it('spec.ready: the first look records what is open and says nothing; a push after it is announced once, signed, with its head and the proposal\'s hash and no contents', async () => {
     world.pulls[0].head.sha = H1;
+    world.pulls[0].draft = false;
     const res = await get('/proposals');
     expect(res.status, res.text).toBe(200);
+    // The first look after hooks were added: no flood of what was open already
+    expect(await settled(rcv, 'spec.ready')).toEqual([]);
+    await get('/api/forge/work');
+    expect(await settled(rcv, 'spec.ready')).toEqual([]);
+    // A push is a new head: waiting for review again, announced once
+    const pushed = push('c', JSON.stringify({ ...proposal(), title: 'Meals, again' }));
+    await get('/proposals');
     const got = await rcv.next('spec.ready');
     expect(got).toHaveLength(1);
     expect(got[0].valid).toBe(true);
     expect(got[0].headers).toMatchObject({ 'content-type': 'application/json', 'x-cornfield-event': 'spec.ready', 'x-cornfield-timestamp': AT() });
     expect(got[0].headers['x-cornfield-delivery']).toMatch(/^[0-9a-f-]{36}$/);
-    expect(got[0].body).toEqual({ event: 'spec.ready', at: AT(), slug: '0040-meals', pull: 40, headSha: H1, proposalSha256: proposalHash(text()), actor: 'maintainer-one', mapUrl: PUBLIC });
-    expect(JSON.stringify(got[0].body)).not.toContain('Plan the week');
-    // looking again changes nothing…
+    expect(got[0].body).toEqual({ event: 'spec.ready', at: AT(), slug: '0040-meals', pull: 40, headSha: pushed, proposalSha256: proposalHash(world.files[`${pushed}:${BUILD_PATH}`]), actor: 'maintainer-one', mapUrl: PUBLIC });
+    expect(JSON.stringify(got[0].body)).not.toContain('Meals, again');
+    // Looking again changes nothing
     await get('/proposals');
     await get('/api/forge/work');
-    expect(await rcv.next('spec.ready')).toHaveLength(1);
-    // …and a push is a new head, announced once
-    const pushed = `${H1.slice(0, 30)}${'c'.repeat(10)}`;
-    world.pulls[0].head.sha = pushed;
-    world.files[`${pushed}:${BUILD_PATH}`] = JSON.stringify({ ...proposal(), title: 'Meals, again' });
+    expect(await settled(rcv, 'spec.ready')).toHaveLength(1);
+  });
+
+  it('spec.ready is never sent for a draft (a "Start a spec" stub among them), and is sent at its head once it is marked ready', async () => {
+    world.pulls[0].draft = false;
+    world.pulls[0].head.sha = H1;
+    await get('/proposals'); // looked at (the first look may have been an earlier test's)
+    await settled(rcv, 'spec.ready');
+    rcv.got.length = 0;
+    // Back to a draft, and pushed to: a draft is not waiting for review
+    world.pulls[0].draft = true;
+    const head = push('e');
     await get('/proposals');
     await get('/api/forge/work');
-    const again = await rcv.next('spec.ready', 2);
-    expect(again.map((g) => g.body.headSha)).toEqual([H1, pushed]);
-    expect(again[1].body.proposalSha256).toBe(proposalHash(world.files[`${pushed}:${BUILD_PATH}`]));
+    expect(await settled(rcv, 'spec.ready')).toEqual([]);
+    // A draft made from the panel's Start a spec: a stub, never announced
+    world.madePulls.unshift(pullOf(55, 'Spec: Planner', 'spec/0055-planner', 'c'.repeat(40), { draft: true }));
+    world.changed[55] = [{ filename: 'docs/specs/proposals/0055-planner.json', status: 'added', additions: 3, deletions: 0 }];
+    world.files[`${'c'.repeat(40)}:docs/specs/proposals/0055-planner.json`] = '{ "version": 1, "title": "Planner", "summary": "A stub." }\n';
+    await get('/proposals');
+    expect(await settled(rcv, 'spec.ready')).toEqual([]);
+    // #40 marked ready, at the same head: now it is waiting for review
+    world.pulls[0].draft = false;
+    await get('/proposals');
+    const got = await rcv.next('spec.ready');
+    expect(got.map((g) => [g.body.pull, g.body.headSha])).toEqual([[40, head]]);
   });
 
   it('spec.ready is not sent twice across a restart on the same data folder', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-hooks-restart-'));
     const mine = await receiver();
     const cfg = { ...config, dataDir: dir, hooks: hooksFor(mine.url) };
+    world.pulls[0].draft = false;
+    world.pulls[0].head.sha = H1;
     try {
       let one = await start(cfg);
       let c = await signedIn(one.port, 'c-maint');
+      await get('/proposals', { port: one.port, as: c }); // the first look: recorded, not announced
+      expect(await settled(mine, 'spec.ready')).toEqual([]);
+      const first = push('8');
       await get('/proposals', { port: one.port, as: c });
-      expect(await mine.next('spec.ready')).toHaveLength(1);
+      expect((await mine.next('spec.ready')).map((g) => g.body.headSha)).toEqual([first]);
       await one.close();
       one = await start(cfg); // a restart: nothing in memory, the same db
       c = await signedIn(one.port, 'c-maint');
       await get('/proposals', { port: one.port, as: c });
       await get('/api/forge/work', { port: one.port, as: c });
-      expect(await mine.next('spec.ready')).toHaveLength(1);
+      expect(await settled(mine, 'spec.ready')).toHaveLength(1);
       // a push after the restart is still news
-      const pushed = `${H1.slice(0, 30)}${'9'.repeat(10)}`;
-      world.pulls[0].head.sha = pushed;
-      world.files[`${pushed}:${BUILD_PATH}`] = text();
+      const pushed = push('9');
       await get('/proposals', { port: one.port, as: c });
-      expect((await mine.next('spec.ready', 2)).map((g) => g.body.headSha)).toEqual([H1, pushed]);
+      expect((await mine.next('spec.ready', 2)).map((g) => g.body.headSha)).toEqual([first, pushed]);
       await one.close();
     } finally {
       await mine.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
-
   it('spec.approved: once, after the review comment is posted, with the note, the edits and who acted', async () => {
     allowWrites();
     const edits = [{ op: 'remove-edge', from: 'a', to: 'b' }];

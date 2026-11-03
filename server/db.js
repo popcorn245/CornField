@@ -8,7 +8,8 @@
  *   reviews       a cache of the latest review per spec PR and proposal (the PR comment is the truth)
  *   actions       the audit of every action cornfield takes on the forge: who, what, when, the forge's answer
  *   forge_cache   forge answers kept for a while (an ETag and a body), so a page load is not a dozen API calls
- *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice
+ *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
+ *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
  * the last one it has. `openStore` runs the ones a file lacks, each in its own transaction, so a fresh file and one
