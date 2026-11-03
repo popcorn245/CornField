@@ -50,6 +50,7 @@ import path from 'node:path';
 import { isMaintainer, ForgeError } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
 import { MAX_MOCKUPS, mockupPathProblem } from '../core/proposal.js';
+import { defuse } from './defuse.js';
 
 // ---------------------------------------------------------------------------
 //  The review a person sends
@@ -146,7 +147,10 @@ export function reviewComment(slug, review, { login, carriedOver, via }) {
   const how = carriedOver ? `${login}, in cornfield on ${carriedOver}; carried over from before reviews were comments`
     : via ? `${login}, through the review API with the token \`${via.token.label}\`` : `${login}, in cornfield`;
   const line = `${verdict} \`${slug}\`${withEdits} (${how}).`;
-  const quoted = review.note.trim() ? `\n\n${review.note.trim().split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
+  // A note that came through the API may be relayed from anywhere (a chat): in the quote people read, its mentions and
+  // references are broken so it pings and links nobody. The block keeps the note as it was sent, for the agent.
+  const shown = via ? defuse(review.note.trim()) : review.note.trim();
+  const quoted = shown ? `\n\n${shown.split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
   const json = JSON.stringify({ verdict: review.verdict, note: review.note, edits: review.edits, ...(review.mockups ? { mockups: review.mockups } : {}), ...(review.proposal ? { proposal: review.proposal } : {}) }, null, 2);
   return `${line}${quoted}\n\n${FENCE}${REVIEW_TAG} ${slug}\n${json}\n${FENCE}`;
 }

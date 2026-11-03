@@ -124,6 +124,11 @@ export async function serveReviewCall(req, res, ctx) {
     const found = await submitReview({
       forge: () => auth.forgeForUser(row.user_id), where, repo, who: { login: row.login, userId: row.user_id },
       record: (entry) => auth.record(entry), limits: { auth, now: ctx.now }, via: { token }, requireSha256: true,
+      stillAllowed: async () => {
+        const again = findToken(await auth.store(), /** @type {string} */ (presented), now());
+        if (again && again.state === 'active') return null;
+        return again && again.state === 'expired' ? 'This review token expired while the review was being checked; nothing was posted.' : 'This review token was revoked while the review was being checked; nothing was posted.';
+      },
     }, input);
     return send(res, 200, { ok: true, ...found });
   } catch (err) {
@@ -137,8 +142,9 @@ function inputOf(text) {
   let parsed;
   try {
     parsed = JSON.parse(text);
-  } catch (err) {
-    return { problem: { status: 400, message: `Not valid JSON: ${err.message}` } };
+  } catch {
+    // Not the parser's words: they quote the body, which the audit row would then keep (a token pasted in by mistake)
+    return { problem: { status: 400, message: 'The body is not valid JSON.' } };
   }
   if (!plainObject(parsed)) return { problem: { status: 400, message: 'A review call is a JSON object: { pull, slug, sha256, verdict, note?, edits? }.' } };
   const extra = Object.keys(parsed).find((k) => !CALL_KEYS.includes(k));

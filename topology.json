@@ -1618,6 +1618,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The review API (spec 0002, issue #67): Approve or Send back from somewhere that is not the button, a script or a chat reaction, with a review token the maintainer made in the dashboard. (server/review-api.js)"
+    },
+    {
+      "id": "core-server-defuse",
+      "label": "defuse.js",
+      "type": "core",
+      "file": "server/defuse.js",
+      "summary": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or … (server/defuse.js)"
     }
   ],
   "edges": [
@@ -4811,7 +4821,23 @@
       "to": "core-server-review-api",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-defuse"
+    },
+    {
+      "from": "core-server-pipeline",
+      "to": "core-server-defuse",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-reviews",
+      "to": "core-server-defuse",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-03T18:58:36.958Z"
+  "updatedAt": "2026-11-03T19:39:25.046Z"
 }

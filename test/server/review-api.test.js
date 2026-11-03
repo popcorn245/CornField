@@ -103,6 +103,12 @@ describe('the review API', () => {
       if (auth === `Bearer ${MAINT2}`) return { body: { login: 'maintainer-two', id: 1003 } };
       return base['GET /user'];
     }
+    if (key === `GET ${GH}` && world.gate) {
+      // A test holds the forge here, mid-review, to change something before the post
+      const gate = world.gate;
+      world.gate = null;
+      return gate.then(() => dispatch(key, req));
+    }
     if (key === `GET ${GH}`) {
       const maintains = auth === `Bearer ${MAINT}` ? !world.demoted.has('maintainer-one') : auth === `Bearer ${MAINT2}` ? !world.demoted.has('maintainer-two') : false;
       return { body: { id: 1, full_name: 'owner/name', permissions: { admin: false, maintain: maintains, push: maintains, triage: maintains, pull: true } } };
@@ -315,6 +321,49 @@ describe('the review API', () => {
       expect(reviewRows().at(-1)).toMatchObject({ login: 'maintainer-one', status: 403, target: 'owner/name', request: { via: 'api', reason: 'revoked', token: { id: token.id, label: 'old bot' } } });
     });
 
+    it('does not post when the token is revoked while the review is being checked (403, nothing posted)', async () => {
+      const { secret, token } = await mint('slow bot');
+      let release = () => {};
+      world.gate = new Promise((resolve) => { release = resolve; });
+      const asked = fake.requests.length;
+      const pending = call(secret, approve());
+      // Wait until the review is at the forge (its token already looked up and found live), then revoke it
+      for (let i = 0; i < 200 && !fake.requests.slice(asked).some((r) => r.url === GH); i++) await new Promise((r) => setTimeout(r, 5));
+      expect((await page('POST', `/api/review-tokens/${token.id}/revoke`, {})).status).toBe(200);
+      release();
+      const res = await pending;
+      expect(res.status, res.text).toBe(403);
+      expect(res.json.error).toMatch(/revoked while the review was being checked; nothing was posted/);
+      expect(world.posted).toEqual([]);
+      expect(reviewRows().at(-1)).toMatchObject({ status: 403, request: { via: 'api', token: { id: token.id } } });
+    });
+
+    it('breaks the mentions and references in a note that came through the API, in the quote people read; the block keeps it as sent', async () => {
+      const { secret } = await mint();
+      const note = 'Looks fine, @owner/team and @someone; see #12 and https://example.org/x';
+      expect((await call(secret, approve({ verdict: 'notes', note }))).status).toBe(200);
+      const body = world.posted[0].body;
+      const quote = body.split('\n').filter((l) => l.startsWith('> ')).join('\n');
+      expect(quote).not.toMatch(/@[A-Za-z]/);
+      expect(quote).not.toMatch(/#\d/);
+      expect(quote).not.toContain('https://');
+      expect(quote.replaceAll('\u200B', '')).toBe(`> ${note}`);
+      expect(parseReviewBlocks(body)[0].review.note).toBe(note);
+    });
+
+    it('keeps nothing of a body it cannot read: not the parser\'s words, which quote it, nor a slug that is not one', async () => {
+      const { secret } = await mint();
+      const pasted = 'cf_rt_this-was-pasted-into-the-body-by-mistake-000000000000';
+      const bad = await call(secret, `${pasted} {`);
+      expect([bad.status, bad.json.error]).toEqual([400, 'The body is not valid JSON.']);
+      clock += 10_000;
+      const slugged = await call(secret, approve({ slug: `${pasted}/../x` }));
+      expect(slugged.status).toBe(400);
+      const all = JSON.stringify(rows());
+      expect(all).not.toContain(pasted);
+      expect(fs.readFileSync(path.join(data, 'cornfield.db')).includes(pasted)).toBe(false);
+    });
+
     it('refuses an expired token (403)', async () => {
       const { secret, token } = await mint('short', 1);
       expect(token.expires).toBe(new Date(clock + DAY).toISOString());
@@ -404,6 +453,14 @@ describe('the review API', () => {
       world.demoted.clear();
       clock += 60_000;
       expect((await call(secret, approve())).status).toBe(200);
+    });
+
+    it('does not post with a sign-in that has expired, though the token is still live (401)', async () => {
+      const { secret } = await mint('weekly bot', 30);
+      clock += 8 * DAY; // past the session's 7 days, within the token's 30
+      const res = await call(secret, approve());
+      expect([res.status, res.json.code]).toEqual([401, 'unauthorized']);
+      expect(world.posted).toEqual([]);
     });
 
     it('cannot post for an owner who has signed out: there is no sign-in to post with (401)', async () => {

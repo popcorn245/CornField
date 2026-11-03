@@ -35,6 +35,7 @@ import { ForgeError, MAX_BODY, MAX_TITLE, isMaintainer } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
 import { findPullProposal, folderOf, readPullProposal } from './proposal-pulls.js';
 import { latestReview, proposalHash } from './reviews.js';
+import { defuse } from './defuse.js';
 import { applyEdits, slug as slugOf, validateProposal } from '../core/proposal.js';
 
 /** The longest slug of a proposal's name made from an issue's title, before its number */
@@ -62,16 +63,8 @@ export function plain(value, max = 200) {
   return defuse(clip(one, max)).replace(/[&<>\\`*_[\]|~!]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-/** A zero-width space: it ends a mention or a reference without showing */
-const ZW = '\u200B';
-
-/**
- * Text with every mention and reference broken: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and links the forge
- * would make of `https://…` or `www.…`. A zero-width space after the character keeps the text as it reads.
- */
-export function defuse(text) {
-  return String(text).replace(/[@#]/g, (c) => `${c}${ZW}`).replace(/\b(GH)-(?=\d)/gi, `$1${ZW}-`).replace(/:\/\//g, `:${ZW}//`).replace(/\b(www)\./gi, `$1${ZW}.`);
-}
+// Mentions and references are broken by server/defuse.js, which reviews share; re-exported for the callers that had it here
+export { defuse } from './defuse.js';
 
 /** Untrusted text as a code span: no backtick or control character can end it */
 export function code(value, max = 100) {

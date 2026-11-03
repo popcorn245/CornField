@@ -20,7 +20,8 @@
  *   7. the proposal file's SHA-256 at the PR's head: when the caller names the version it read (`sha256`; the API
  *      requires it) and the head holds another, 409, so a review counts only for the version that was read. An
  *      approval records the head's hash (`proposal`) and its mockups' (`mockups`), as the server read them, never the caller's word
- *   8. the comment is posted as that person (`postReview`)
+ *   8. with the API, the token once more (`stillAllowed`): one revoked or expired while the forge was being asked is 403
+ *   9. the comment is posted as that person (`postReview`)
  *
  * Every attempt that gets past step 1 is a row in `actions` (`record`), whatever the answer: a posted review and a forge
  * that refused it are written by `postReview`, every refusal before that here. The audit never holds a token's secret,
@@ -50,6 +51,8 @@ const MAX_PULL = 999_999_999;
  * @property {{ auth: object, now?: () => number }} limits what `server/throttle.js` counts by (one `auth` per server)
  * @property {import('./reviews.js').ApiVia} [via] set when the review came through the API: the token it came with
  * @property {boolean} [requireSha256] the caller must name the version it read (the API does; the button reads the head itself)
+ * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the post, after every
+ *   forge call: null to go on, or the words for why not (the API's token was revoked or expired meanwhile), refused 403
  */
 
 /**
@@ -67,9 +70,10 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
   const now = ctx.limits.now ?? Date.now;
   const validPull = typeof pull === 'number' && Number.isInteger(pull) && pull >= 1 && pull <= MAX_PULL;
   const target = validPull ? `${repo}#${pull}` : repo;
-  // What the audit row says was asked: only what is small and plain, never the whole body
-  const clip = (v) => (typeof v === 'number' || typeof v === 'boolean' ? v : typeof v === 'string' ? v.slice(0, 200) : undefined);
-  const asked = /** @type {Record<string, unknown>} */ ({ slug: clip(slug), pull: clip(pull), ...(sha256 !== null && sha256 !== undefined ? { sha256: clip(sha256) } : {}), ...(via ? { via: 'api', token: via.token } : {}) });
+  // What the audit row says was asked: only what is small, plain and of the right shape, never the whole body
+  // A slug or a hash only when it has the shape of one: anything else the caller sent is not kept (it could be a secret pasted in the wrong field)
+  const slugShown = typeof slug === 'string' && slug.length <= 200 && PROPOSAL_FILE.test(`${slug}.json`) ? slug : undefined;
+  const asked = /** @type {Record<string, unknown>} */ ({ slug: slugShown, pull: validPull ? pull : undefined, ...(isSha256(sha256) ? { sha256 } : {}), ...(via ? { via: 'api', token: via.token } : {}) });
 
   const flood = countAttempt(ctx.limits, who.userId, now());
   if (flood) throw flood;
@@ -90,7 +94,8 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
     release = throttle(ctx.limits, who.userId, `review|${pull}|${slug}`, now());
 
     if (review !== null && typeof review === 'object') {
-      asked.verdict = clip(/** @type {any} */ (review).verdict);
+      const verdict = /** @type {any} */ (review).verdict;
+      if (verdict === 'approved' || verdict === 'notes') asked.verdict = verdict;
       if (Array.isArray(/** @type {any} */ (review).edits)) asked.edits = /** @type {any} */ (review).edits.length;
     }
     const checked = validateReview(review);
@@ -112,6 +117,11 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
       checkedReview = { ...checkedReview, proposal: head };
       const mockups = await hashPullMockups(forge, ctx.where, entry);
       if (mockups.length) checkedReview = { ...checkedReview, mockups };
+    }
+    // The checks above took a while: a token revoked (or expired) since it was looked up does not post
+    if (ctx.stillAllowed) {
+      const why = await ctx.stillAllowed();
+      if (why) throw new Refused(403, why, 'forbidden');
     }
     return await postReview(forge, pull, slug, checkedReview, { login: me.login, record, via });
   } catch (err) {
