@@ -27,8 +27,8 @@
  * that refused it are written by `postReview`, every refusal before that here. The audit never holds a token's secret,
  * only its id and label.
  *
- * `submitReview` is the one place a review has been posted: a hook on "a review was posted" goes after `postReview`
- * below, not in either caller.
+ * `submitReview` is the one place a review has been posted, so the event hooks' `spec.approved` and `spec.sentBack`
+ * (server/hooks.js) are emitted here, after `postReview`, not in either caller.
  */
 
 import { ForgeError, isMaintainer } from './forge.js';
@@ -37,6 +37,7 @@ import { findPullProposal, forgeWords, readPullProposal } from './proposal-pulls
 import { hashPullMockups } from './mockups.js';
 import { postReview, proposalHash, validateReview } from './reviews.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
+import { proposalPayload } from './hooks.js';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const MAX_PULL = 999_999_999;
@@ -50,6 +51,7 @@ const MAX_PULL = 999_999_999;
  * @property {(entry: import('./reviews.js').AuditEntry) => Promise<void> | void} record writes a row of the audit table
  * @property {{ auth: object, now?: () => number }} limits what `server/throttle.js` counts by (one `auth` per server)
  * @property {import('./reviews.js').ApiVia} [via] set when the review came through the API: the token it came with
+ * @property {import('./hooks.js').Hooks | null} [hooks] the event hooks (server/hooks.js): `spec.approved` or `spec.sentBack` after a post
  * @property {boolean} [requireSha256] the caller must name the version it read (the API does; the button reads the head itself)
  * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the post, after every
  *   forge call: null to go on, or the words for why not (the API's token was revoked or expired meanwhile), refused 403
@@ -123,7 +125,11 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
       const why = await ctx.stillAllowed();
       if (why) throw new Refused(403, why, 'forbidden');
     }
-    return await postReview(forge, pull, slug, checkedReview, { login: me.login, record, via });
+    const posted = await postReview(forge, pull, slug, checkedReview, { login: me.login, record, via });
+    // The one place a review is posted, so the button and the API fire the same event; the actor is who the forge says
+    // the poster is (with the API, the token's owner), never a name the caller sent
+    ctx.hooks?.emit(posted.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, ctx.where, entry, { actor: me.login, note: checkedReview.note, edits: checkedReview.edits }));
+    return posted;
   } catch (err) {
     if (!(err instanceof Refused) && !(err instanceof ForgeError)) console.error(`[cornfield] the review of ${target}: ${err instanceof Error ? err.stack || err.message : err}`);
     // postReview writes the row of a review it tried to post; anything refused before that is written here

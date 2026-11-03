@@ -111,7 +111,7 @@ function notesInput(config, since) {
  * The reads: the request's route, the forge call that answers it, and the key it is kept under.
  * @returns {{ key: string, load: (forge: import('./forge.js').Forge) => Promise<object> } | null}
  */
-function routeOf(reqPath, url, config, where) {
+function routeOf(reqPath, url, config, where, hooks = null) {
   if (reqPath === '/api/forge/release-notes') {
     const since = sinceOf(url.searchParams.get('since'));
     return { key: `release-notes?since=${since ?? ''}&label=${config.releaseNotes?.breakingLabel ?? ''}`, load: (forge) => releaseNotes(forge, notesInput(config, since)) };
@@ -136,7 +136,7 @@ function routeOf(reqPath, url, config, where) {
       key: 'work',
       load: async (forge) => {
         const [pulls, issues, branches, specs] = await Promise.all([
-          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, config),
+          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, config, { hooks }),
         ]);
         return {
           pulls: pulls.map((p) => ({ ...p, body: p.body.slice(0, WORK_BODY_MAX) })),
@@ -220,7 +220,7 @@ async function servePlan(req, res, act, url, ctx) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, where?: { proposals: string }, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
@@ -270,7 +270,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     return true;
   }
   try {
-    const route = routeOf(reqPath, url, config, ctx.where);
+    const route = routeOf(reqPath, url, config, ctx.where, ctx.hooks);
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;

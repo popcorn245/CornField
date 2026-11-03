@@ -57,7 +57,7 @@ function send(res, status, body, headers = {}) {
 
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** @typedef {{ config: any, where: any, auth: any, now?: () => number, publicHost?: string | null }} ApiContext */
+/** @typedef {{ config: any, where: any, auth: any, hooks?: import('./hooks.js').Hooks | null, now?: () => number, publicHost?: string | null }} ApiContext */
 
 /**
  * `POST /api/reviews`. The caller has found the path to be this one; this runs before the sign-in guard.
@@ -123,7 +123,7 @@ export async function serveReviewCall(req, res, ctx) {
   try {
     const found = await submitReview({
       forge: () => auth.forgeForUser(row.user_id), where, repo, who: { login: row.login, userId: row.user_id },
-      record: (entry) => auth.record(entry), limits: { auth, now: ctx.now }, via: { token }, requireSha256: true,
+      record: (entry) => auth.record(entry), limits: { auth, now: ctx.now }, via: { token }, requireSha256: true, hooks: ctx.hooks,
       stillAllowed: async () => {
         const again = findToken(await auth.store(), /** @type {string} */ (presented), now());
         if (again && again.state === 'active') return null;

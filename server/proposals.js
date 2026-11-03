@@ -197,7 +197,7 @@ async function listWithPulls(where, forgeFor, signedIn) {
   } catch (err) {
     return { list: local, problem: forgeWords(err) };
   }
-  const { entries, problem } = await listPullProposals(forge, where);
+  const { entries, problem } = await listPullProposals(forge, where, { hooks: signedIn?.hooks });
   if (signedIn && entries.length) await migrateStage1Reviews({ forge, dataDir: where.dataDir, entries, login: signedIn.login, record: signedIn.record });
   const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, where, topology)));
   const list = [...local, ...pulls].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
@@ -265,7 +265,7 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
   try {
     // The checks and the post are submitReview's, shared with the review API (server/submit-review.js)
     const found = await submitReview({
-      forge: forgeFor, where, repo: signedIn.repo, who: { login: signedIn.login, userId: signedIn.userId }, record: signedIn.record, limits: signedIn.limits,
+      forge: forgeFor, where, repo: signedIn.repo, who: { login: signedIn.login, userId: signedIn.userId }, record: signedIn.record, limits: signedIn.limits, hooks: signedIn.hooks,
     }, { pull: n, slug, review: parsed });
     return send(res, 200, found);
   } catch (err) {
@@ -274,7 +274,7 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
   }
 }
 
-/** @typedef {{ login: string, userId: string, repo: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void, limits: { auth: object, now?: () => number } }} SignedIn who is signed in, the repo, where their actions are recorded, and what the flood and repeat limits count by */
+/** @typedef {{ login: string, userId: string, repo: string, record: (entry: import('./reviews.js').AuditEntry) => Promise<void> | void, limits: { auth: object, now?: () => number }, hooks?: import('./hooks.js').Hooks | null }} SignedIn who is signed in, the repo, where their actions are recorded, and what the flood and repeat limits count by */
 
 /**
  * Answers a request under `/proposals`, or returns false when it is not one.

@@ -9,6 +9,8 @@
  *   actions       the audit of every action cornfield takes on the forge: who, what, when, the forge's answer
  *   forge_cache   forge answers kept for a while (an ETag and a body), so a page load is not a dozen API calls
  *   review_tokens the review API's tokens: a SHA-256 hash, owner, label, expiry, revoked, last used (never the token)
+ *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
+ *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
  * the last one it has. `openStore` runs the ones a file lacks, each in its own transaction, so a fresh file and one
@@ -82,7 +84,18 @@ export const MIGRATIONS = Object.freeze([
   ) STRICT;
   CREATE INDEX forge_cache_expires_at ON forge_cache (expires_at);
   `,
-  // 2: review tokens, for the review API (server/review-tokens.js)
+  // 2: event hooks (server/hooks.js): which spec PR heads have been announced
+  `
+  CREATE TABLE hook_seen (
+    repo        TEXT NOT NULL,                  -- 'owner/name'
+    pr          INTEGER NOT NULL,
+    head_sha    TEXT NOT NULL,                  -- the PR's head when cornfield first saw it
+    slug        TEXT NOT NULL,                  -- the proposal file's slug
+    at          TEXT NOT NULL,
+    PRIMARY KEY (repo, pr, head_sha, slug)
+  ) STRICT;
+  `,
+  // 3: review tokens, for the review API (server/review-tokens.js)
   `
   CREATE TABLE review_tokens (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
