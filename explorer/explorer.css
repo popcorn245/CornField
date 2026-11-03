@@ -879,6 +879,16 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-confirm-pre:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
 .hx-confirm-note { margin: 0; color: var(--hx-text-2); line-height: 1.5; }
 .hx-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.hx-tokens-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.hx-tokens-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well-soft); }
+.hx-tokens-item[data-state="revoked"], .hx-tokens-item[data-state="expired"] { opacity: 0.65; }
+.hx-tokens-label { font-weight: 600; color: var(--hx-ink); overflow-wrap: anywhere; }
+.hx-tokens-meta { grid-column: 1; }
+.hx-tokens-item .hx-btn { grid-column: 2; grid-row: 1 / span 2; }
+.hx-tokens-row { display: flex; gap: 8px; align-items: center; }
+.hx-tokens-row .hx-forge-input { flex: 1; }
+.hx-tokens-form { display: grid; grid-template-columns: 1fr 5rem; gap: 8px; align-items: end; }
+.hx-tokens-form .hx-btn { grid-column: 1 / -1; justify-self: start; }
 .hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding-left: 62px; }
 .hx-forge-node { padding: 1px 8px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well-soft); color: var(--hx-text-2); font-size: 11px; }
 .hx-forge-node:hover { background: var(--hx-control-hover); }

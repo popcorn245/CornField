@@ -103,6 +103,12 @@
         <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
       </button>
 
+      <!-- Review tokens (explorer/review-tokens.js): shown only when somebody is signed in to a forge -->
+      <button type="button" id="tokens-btn" class="hx-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="tokens-dialog" aria-label="Review tokens" title="Review tokens: let a script or a chat bot approve or send back a proposal as you" hidden>
+        <span aria-hidden="true">⚿</span>
+        <span class="hx-only-wide">Review tokens</span>
+      </button>
+
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
       <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
         <button type="button" id="live-chip" class="hx-btn hx-live-chip" aria-haspopup="true" aria-expanded="false" aria-label="Live layer">
@@ -311,6 +317,32 @@
       <div class="hx-confirm-actions">
         <button type="button" class="hx-btn" data-action="forge-confirm-cancel">Cancel</button>
         <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go">Land it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Review tokens (review-tokens.js): make one (shown once), list them, revoke; a modal dialog over a scrim, the focus stays in it -->
+  <div id="tokens-dialog" class="hx-confirm-scrim" hidden>
+    <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="tokens-title" aria-describedby="tokens-intro">
+      <h2 id="tokens-title" class="hx-confirm-title" tabindex="-1">Review tokens</h2>
+      <p id="tokens-intro" class="hx-confirm-note">A review token lets a script or a chat bot approve or send back a proposal as you (<code class="hx-code">POST /api/reviews</code>). It works while you are signed in here and still maintain the repo; it expires, and you can revoke it below.</p>
+      <p id="tokens-msg" class="hx-forge-msg" role="status" hidden></p>
+      <div id="tokens-secret" class="hx-tokens-secret" hidden>
+        <label class="hx-forge-field" for="tokens-secret-value">Your new token (copy it now, it is not shown again)</label>
+        <div class="hx-tokens-row">
+          <input id="tokens-secret-value" class="hx-forge-input hx-mono" type="text" readonly spellcheck="false" autocomplete="off" />
+          <button type="button" class="hx-btn" data-tokens-copy>Copy</button>
+        </div>
+      </div>
+      <ul id="tokens-list" class="hx-tokens-list" aria-label="Your review tokens"></ul>
+      <form id="tokens-form" class="hx-tokens-form" autocomplete="off">
+        <label class="hx-forge-field">Label<input id="tokens-label" class="hx-forge-input" type="text" maxlength="60" placeholder="chat bot" /></label>
+        <label class="hx-forge-field">Days<input id="tokens-days" class="hx-forge-input" type="text" inputmode="numeric" maxlength="2" aria-describedby="tokens-days-hint" /></label>
+        <span id="tokens-days-hint" class="hx-sr-only"></span>
+        <button type="submit" id="tokens-make" class="hx-btn hx-btn--approve">Make a token</button>
+      </form>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-tokens-close>Close</button>
       </div>
     </div>
   </div>

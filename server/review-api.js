@@ -2,7 +2,7 @@
  * @module server/review-api
  *
  * The review API (spec 0002, issue #67): Approve or Send back from somewhere that is not the button, a script or a chat
- * reaction, with a review token the maintainer made in the dashboard (server/review-tokens.js).
+ * reaction, with a review token the maintainer made in the dashboard. The tokens are kept by the review-tokens module.
  *
  *   POST /api/reviews                    { pull, slug, sha256, verdict, note?, edits? }, with `Authorization: Bearer cf_rt_…`
  *   GET  /api/review-tokens              the signed-in maintainer's tokens: id, label, made, expires, revoked, last used (never a secret)

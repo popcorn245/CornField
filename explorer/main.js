@@ -17,6 +17,7 @@
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
+ *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
  *   forge-panel.js  the issues and PRs panel, when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half
  *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
@@ -41,6 +42,7 @@ import { initHouse } from './house.js';
 import { initChecks } from './check.js';
 import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
+import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
 import { cycleTheme, initTheme } from './theme.js';
 
@@ -207,6 +209,7 @@ loadTopology().then(async (ok) => {
   const config = await configReady;
   const { liveSource, floorRenderer, checker } = await loadSources(config);
   initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
+  initReviewTokens(config); // review tokens for the review API: only for somebody signed in (review-tokens.js)
   initWhatIf(); // before a proposal can open, so its edits come with it
   initReview(); // after it: the review controls sit under the edit controls on the bar
   initMockups(); // a proposal's screens open from the node they name
