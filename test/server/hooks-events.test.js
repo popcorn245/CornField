@@ -98,9 +98,13 @@ async function receiver() {
   me.close = () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve(undefined)); });
   /** The events of one name received so far */
   me.of = (event) => got.filter((g) => g.body.event === event);
-  /** Waits until `n` events of that name have arrived (and then a moment, for one more that should not) */
+  /**
+   * Waits until `n` events of that name have arrived (and then a moment, for one more that should not). It returns as
+   * soon as they have; the deadline is only there to fail, rather than hang, when they never come.
+   */
   me.next = async (event, n = 1) => {
-    for (let i = 0; i < 300 && me.of(event).length < n; i++) await new Promise((r) => setTimeout(r, 10));
+    const end = Date.now() + 15_000;
+    while (me.of(event).length < n && Date.now() < end) await new Promise((r) => setTimeout(r, 5));
     await settle();
     return me.of(event);
   };
@@ -292,6 +296,23 @@ describe('event hooks', () => {
 
   /** What has arrived of an event after a moment: for a check that nothing more came */
   const settled = async (r, event) => { await new Promise((ok) => setTimeout(ok, 300)); return r.of(event); };
+  /**
+   * Waits until a data folder's cornfield.db says the repo has been looked at (the `pr = 0` row the first look writes in
+   * the background), so a test never pushes before the first look is on record, however slow the machine.
+   */
+  const lookedAt = async (dir = data) => {
+    const end = Date.now() + 15_000;
+    for (;;) {
+      let row;
+      try {
+        const db = new DatabaseSync(path.join(dir, 'cornfield.db'), { readOnly: true });
+        try { row = db.prepare("SELECT 1 AS y FROM hook_seen WHERE repo = 'owner/name' AND pr = 0").get(); } finally { db.close(); }
+      } catch { row = undefined; }
+      if (row) return;
+      if (Date.now() > end) throw new Error('timed out waiting for the first look to be recorded');
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  };
   /** A push to spec PR #40: a new head with the proposal at it */
   const push = (tag, proposalText = text()) => {
     const sha = `${H1.slice(0, 30)}${tag.repeat(10)}`;
@@ -305,6 +326,7 @@ describe('event hooks', () => {
     world.pulls[0].draft = false;
     const res = await get('/proposals');
     expect(res.status, res.text).toBe(200);
+    await lookedAt();
     // The first look after hooks were added: no flood of what was open already
     expect(await settled(rcv, 'spec.ready')).toEqual([]);
     await get('/api/forge/work');
@@ -329,6 +351,7 @@ describe('event hooks', () => {
     world.pulls[0].draft = false;
     world.pulls[0].head.sha = H1;
     await get('/proposals'); // looked at (the first look may have been an earlier test's)
+    await lookedAt();
     await settled(rcv, 'spec.ready');
     rcv.got.length = 0;
     // Back to a draft, and pushed to: a draft is not waiting for review
@@ -360,6 +383,7 @@ describe('event hooks', () => {
       let one = await start(cfg);
       let c = await signedIn(one.port, 'c-maint');
       await get('/proposals', { port: one.port, as: c }); // the first look: recorded, not announced
+      await lookedAt(dir);
       expect(await settled(mine, 'spec.ready')).toEqual([]);
       const first = push('8');
       await get('/proposals', { port: one.port, as: c });

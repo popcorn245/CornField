@@ -40,6 +40,17 @@ function fakeTimer() {
   };
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+/**
+ * Waits until `cond()` holds: for what happens over a real socket (a loopback receiver), whose timing is the machine's.
+ * It returns as soon as the condition holds; the deadline only turns a hang into a failure that says what it waited for.
+ */
+async function until(cond, what, deadlineMs = 15_000) {
+  const end = Date.now() + deadlineMs;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
 
 /** A fetch that answers from a script and remembers what it was sent */
 function fakeFetch(script = () => ({ status: 200 })) {
@@ -328,8 +339,9 @@ describe('retries', () => {
     const timer = fakeTimer();
     const h = createHooks({ hooks: [{ url: 'https://a.example.org/h', events: '*' }], secret: SECRET, record: async (e) => { rows.push(e); }, timer, fetch: () => new Promise((ok) => { answer = ok; }) });
     h.emit('pr.landed', { pull: 3 });
-    for (let i = 0; i < 50 && !answer; i++) await settle();
+    await until(() => answer !== undefined, 'the request to start');
     h.close();
+    // No socket here: the answer resolves in the same process, so settling the promises is enough
     answer(new Response('down', { status: 500 }));
     await settle();
     await settle();
@@ -383,9 +395,11 @@ describe('against a receiver on loopback', () => {
     const h = createHooks({ hooks: [{ url: receiver.url, events: '*' }], secret: SECRET, record: async (e) => { rows.push(e); }, now: () => NOW, timer });
     // Not ASCII: the signature is over the exact bytes sent, so a receiver that hashes what it got agrees
     h.emit('spec.sentBack', { slug: '0014-planner', pull: 11, headSha: 'f'.repeat(40), actor: 'maintainer-one', note: 'Café, 中文, «quotes» and \u2028 a line separator' });
-    for (let i = 0; i < 100 && !got.length; i++) await new Promise((r) => setTimeout(r, 10));
-    await timer.tick(1000); // the retry, after the redirect was refused
-    for (let i = 0; i < 100 && got.length < 2; i++) await new Promise((r) => setTimeout(r, 10));
+    await until(() => got.length === 1, 'the first request');
+    // The first attempt's answer (the 307) comes back over a real socket: tick only once its retry is in the timer
+    await until(() => rows.length === 1 && timer.waiting.includes(1000), 'the retry to be scheduled after the refused redirect');
+    await timer.tick(1000);
+    await until(() => got.length === 2, 'the retry');
     expect(got).toHaveLength(2);
     expect(elsewhere).toEqual([]);
     // The verify function docs/config.md gives a receiver, as it is written there
@@ -403,8 +417,9 @@ describe('against a receiver on loopback', () => {
       expect(JSON.parse(g.raw.toString('utf8'))).toMatchObject({ pull: 11, note: 'Café, 中文, «quotes» and \u2028 a line separator' });
     }
     expect(got[0].headers['x-cornfield-delivery']).toBe(got[1].headers['x-cornfield-delivery']);
-    await new Promise((r) => setTimeout(r, 50));
+    await until(() => rows.length === 2, 'the second attempt\'s audit row');
     expect(rows.map((r) => r.status)).toEqual([307, 200]);
+    expect(timer.waiting).toEqual([]);
     h.close();
     receiver.server.close();
     other.server.close();
@@ -417,7 +432,7 @@ describe('against a receiver on loopback', () => {
     const rows = [];
     const h = createHooks({ hooks: [{ url, events: '*' }], secret: SECRET, record: async (e) => { rows.push(e); }, timer: fakeTimer() });
     expect(() => h.emit('pr.landed', { pull: 1 })).not.toThrow();
-    for (let i = 0; i < 100 && !rows.length; i++) await new Promise((r) => setTimeout(r, 10));
+    await until(() => rows.length === 1, 'the refused connection\'s audit row');
     expect(rows[0]).toMatchObject({ action: 'hook', status: null, answer: { ok: false, reason: 'ECONNREFUSED' } });
     h.close();
   });
