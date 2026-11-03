@@ -125,6 +125,25 @@ The comment on the PR is the usual one, and its first line says where it came fr
 
 A token belongs to the maintainer who made it, lasts 30 days unless they ask for fewer or more (90 at most), can be revoked in the same dialog (a revoked token is refused at once), and is kept only as a SHA-256 hash: lose it and make another. A maintainer holds at most 20 live tokens. A token can do one thing: send reviews. It cannot make or revoke tokens (those routes take a signed-in maintainer from cornfield's own page only), and a session cookie is never taken in its place. The route takes no cookie, so it needs no same-origin check, but the `Host` check of [sign-in.md](sign-in.md#which-host-it-answers) applies as to every route: call it at your public URL.
 
+### Land on approval
+
+For a team where approving a spec means the docs are good, Approve followed by Land it is one decision made twice, and spec PRs pile up waiting for the second click. Set `proposals: { approveLands: true }` ([config.md](config.md#proposals)) and an approval, from the button or from the review API, also lands the spec PR. It is **off by default**, and with it off nothing changes. A send-back never lands anything.
+
+What happens, once the review comment is on the PR (the review's own answer does not wait for any of this):
+
+1. cornfield remembers the landing (a row in `cornfield.db`, so a restart does not lose it) and looks at the PR at once, then every 20 seconds for up to 60 minutes. The PR view says **Will land when checks pass**, with a **Cancel** button.
+2. At each look it stops at the first thing that decides it:
+   - the PR is closed or was merged elsewhere: done, nothing more to say;
+   - its head is not the commit that was approved (**a push after the approval**): cancelled, and the pushed commit never lands. The approval covered another version of the proposal; approve again;
+   - a check is red: **left open: `<check>` failed**;
+   - every check is green and the forge says it is mergeable: it lands, with the same `forge.merge(n, { onlyIfGreen: true, sha })` as **Land it**, pinned to the approved head, by the repo's `forge.mergeMethod`, firing the same `pr.landed` [hook](config.md#hooks). A merge the forge refuses for good (a conflict, a method it does not allow) leaves it open in the forge's words;
+   - 60 minutes pass: left open;
+   - otherwise (checks still running, the forge still working out whether it can merge, a draft, a forge that did not answer) it waits.
+3. **Who lands:** the approving maintainer, with their own forge token, the one their dashboard sign-in keeps (the way a review token posts as its owner). cornfield asks the forge who that is and whether they still maintain the repo just before it merges. If their session ends before the checks finish (Sign out, 7 days, a revoked token), the landing stops with **left open: sign in to land** and does nothing else.
+4. **It says so.** When a landing is cancelled or left open, cornfield posts **one** comment on the PR, as the approver, with mentions and references defused (a check's name is the forge's, not cornfield's): "Left open: lint failed. …" or "Landing on approval was cancelled: a push after approval …". Every state change is also a row in the audit table (`actions`, action `landing`; the merge itself is the same `merge` row Land it writes, with `via: 'approval'`). A landing that lands posts no comment: the merge is its own news. A maintainer who presses **Cancel** stops it with one comment too.
+
+It is **polled on both forges, on purpose.** Forgejo can merge a PR itself when its checks succeed, and GitHub has no such call; using it would give two code paths, and the pinned head and the green rule would be the forge's to enforce instead of cornfield's. One polled path means the same checks run, in the same order, as Land it, on either forge. The cost is a few forge calls every 20 seconds while a landing waits. A second approval of the same PR replaces the first. A PR that holds several proposals lands when the PR is ready, whichever proposal was approved last: land such PRs by hand if you want each approved first.
+
 Whoever is writing the proposal reads the review from the PR with:
 
 ```sh

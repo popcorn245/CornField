@@ -4,6 +4,8 @@ Status: accepted (maintainer, 2026-10-17)
 
 Amended 2026-10-20 (maintainer): one more safe action, post a release draft (drafts only: never published, never tagged), for the release notes ([#17](https://github.com/popcorn245/cornfield/issues/17)).
 
+Amended 2026-11-03 (maintainer): landing on approval is an action the maintainer opted into, never a default. With `proposals: { approveLands: true }` an approval also asks the forge to land the spec PR, through the same green-only merge as Land it, pinned to the approved head, as the approver, and only once every check is green ([#68](https://github.com/popcorn245/cornfield/issues/68)).
+
 ## Decision
 
 cornfield shows everything it can read. It acts only in these ways: approve or send back a proposal; land a PR whose required checks are green (the forge's own merge, never an override); re-run a failed check; and the pipeline's own steps. It never force-merges, never deploys by hand, never touches anything live.

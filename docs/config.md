@@ -12,7 +12,7 @@ export default {
   host: '127.0.0.1',
   publicUrl: null,
   worktrees: '.claude/worktrees',
-  proposals: 'docs/specs/proposals',
+  proposals: 'docs/specs/proposals',   // or { dir: 'docs/specs/proposals', approveLands: true }
   topology: 'topology.json',
   personas: { roles: ['admin', 'member'], parent: 'root' },
   cloud: { parent: 'root' },
@@ -35,7 +35,7 @@ export default {
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
 | `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
-| `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests |
+| `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
 | `agents` | what marks work as made by an agent: `authors`, `labels`, `branchPrefixes` (lists, empty by default) and `bots` (default true: `[bot]` accounts count). The Agents tab of the issues and PRs panel uses it: [agents](agents.md) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
@@ -50,6 +50,22 @@ export default {
 Env vars win over the file: `CORNFIELD_PORT` (or `PORT`), `CORNFIELD_HOST`, `CORNFIELD_PUBLIC_URL`, `CORNFIELD_DATA`, `CORNFIELD_CONFIG`. Sign-in is env only, never the file: `CORNFIELD_GITHUB_CLIENT_ID` and `CORNFIELD_GITHUB_CLIENT_SECRET` (or the `FORGEJO` pair) and `CORNFIELD_SESSION_SECRET` ([sign-in](sign-in.md)). `CORNFIELD_HOOK_SECRET` signs the [hooks](#hooks) and, like the sign-in secrets, is never in the file. `CORNFIELD_HA_URL` and `CORNFIELD_HA_TOKEN` are read only by the server, for the `home-assistant` house source; with both set and no `sources.house`, the house comes from Home Assistant ([house.md](house.md#home-assistant-directly)).
 
 **Never put a secret in the config.** Source options are sent to the browser; v1's OAuth secrets come from env only.
+
+## Proposals
+
+`proposals` is the proposals folder, and it has two spellings that mean the same thing for the folder:
+
+```js
+proposals: 'docs/specs/proposals',                                // the folder (the default); a string works as it always did
+proposals: { dir: 'docs/specs/proposals', approveLands: true },   // or an object: the folder is `dir` (optional), and the options sit beside it
+```
+
+| Key | What it is |
+|---|---|
+| `dir` | the folder, inside the repo, written relative to it. Default `docs/specs/proposals` |
+| `approveLands` | `true` or `false` (default **false**). When true, approving a spec (the **Approve** button, or an approval through the [review API](proposals.md)) also lands its pull request once the pull request is mergeable and every check is green: no second click. It is opt-in, for teams where approving a spec means the docs are good. [Land on approval](proposals.md#land-on-approval) says what it does and what stops it |
+
+Nothing else is accepted: an unknown key, a `dir` that leaves the repo, or an `approveLands` that is not `true` or `false` fails the config at start-up, naming the key. `approveLands` needs [sign-in](sign-in.md) (an approval is a signed-in maintainer's, and it lands as them); with it on and no sign-in cornfield does not start, and says so.
 
 ## Hooks
 
