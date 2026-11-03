@@ -29,6 +29,9 @@
  *     it goes, how, each check); a scrim covers the page, the dialog is `aria-modal`, Tab stays inside, Escape and Cancel close it and give the
  *     focus back, and it is announced. What is sent is the head that was shown: a push since is refused by the server,
  *     which checks everything again (server/forge-actions.js). While one is in flight the buttons are off.
+ *   - With `proposals.approveLands` on, a spec pull request that was approved and is waiting for its checks says **Will land when
+ *     checks pass** (read from `GET /api/forge/pulls/<n>/landing`, the server's own state) with a **Cancel** that POSTs to
+ *     `…/landing/cancel` (server/lander.js). With the key off the panel asks nothing and shows nothing more.
  *   - The pipeline's own steps (PIPE-05, server/pipeline.js), each one button with a confirm step that shows exactly what
  *     will be made, read from the server first (the plan, with a digest the server must find again):
  *       1. an open issue in the Issues list has **Start a spec …**: a branch, a stub proposal and a draft spec pull request;
@@ -56,7 +59,7 @@ import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
-  mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
+  landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
@@ -79,6 +82,7 @@ const ui = {
   error: '',
   selected: null, // the pull request's number
   detail: null, // { pull, files, checks, at, rate, stale } of the selected one
+  landing: null, // what waits to land on its approval for the selected pull request ({ slug, by, since }), or null
   detailError: '',
   lit: null, // litFor(detail, nodes)
   deploy: null, // the selected deploy's id; the deploy itself is `deployItem`
@@ -181,6 +185,7 @@ async function selectPull(n) {
   ui.litDeploy = null;
   ui.selected = n;
   ui.detail = null;
+  ui.landing = null;
   ui.detailError = '';
   ui.lit = null;
   ui.note = null;
@@ -198,8 +203,33 @@ async function selectPull(n) {
   }
   ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
   relight();
+  await loadLanding(n, token);
   $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the pull request's files are what was asked for, not the row that was tapped
   announce(selectionWords());
+}
+
+/** Asks the server whether the selected pull request waits to land on its approval (a read of the server's own state, not of the forge); nothing is shown when it does not */
+async function loadLanding(n, token) {
+  if (!(ui.config && ui.config.forge && ui.config.forge.approveLands)) return; // the key is off: nothing to ask
+  const res = await request(landingUrl(n), true);
+  if (token !== pullToken || ui.selected !== n) return;
+  ui.landing = res.ok && res.body && res.body.landing ? res.body.landing : null;
+  paint();
+}
+
+/** Stops the landing that waits on the selected pull request: a POST from this page, then the pull request is read again */
+async function cancelLanding(n) {
+  if (ui.busy) return;
+  ui.busy = 'landing';
+  ui.note = null;
+  paint();
+  const res = await post(cancelLandingUrl(n), {});
+  ui.busy = '';
+  ui.note = { text: res.ok ? `Pull request #${n} will not land on its own. It stays open.` : `Not cancelled: ${(res.body && res.body.error) || 'cornfield did not answer.'}`, ok: res.ok };
+  announce(ui.note.text);
+  ui.landing = null;
+  paint();
+  if (ui.selected === n) await refreshForge({ quiet: true });
 }
 
 /** Lets go of the selected pull request: nothing is lit any more */
@@ -210,6 +240,7 @@ export function clearPull() {
   ui.selected = null;
   ui.note = null;
   ui.detail = null;
+  ui.landing = null;
   ui.detailError = '';
   ui.lit = null;
   state.forgeLit = null;
@@ -570,6 +601,10 @@ function detailHtml() {
   const act = block
     ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
     : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''}>Land it …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
+  // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
+  const waiting = ui.landing && pull.state === 'open'
+    ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status">${escHtml(landingWords(ui.landing, now()))}</p><button type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
+    : '';
   const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}">${escHtml(ui.note.text)}</p>` : '';
   // Step 2 of the pipeline: a spec pull request with an approved proposal opens its build issue
   const offers = buildOffers(ui.detail);
@@ -589,6 +624,7 @@ function detailHtml() {
     ${build}
     <h4 class="hx-forge-subact">Land it</h4>
     ${note}
+    ${waiting}
     ${act}
     <h4 class="hx-forge-sub">${escHtml(plural(lit.files.length, 'file'))} changed, ${mapped} on the map</h4>
     ${key}
@@ -951,6 +987,7 @@ export async function refreshForge({ quiet = false } = {}) {
     if (token !== pullToken || !res.ok) return;
     ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
     relight();
+    await loadLanding(n, token);
   }
 }
 
@@ -1005,6 +1042,8 @@ function onClick(e) {
     announce(`${node.label}, ${node.type}`);
     return;
   }
+  const unland = t.closest('[data-forge-landing-cancel]');
+  if (unland) { cancelLanding(Number(unland.dataset.forgeLandingCancel)); return; }
   const merge = t.closest('[data-forge-merge]');
   if (merge) { openConfirm('[data-forge-merge]'); return; }
   const spec = t.closest('[data-forge-spec]');
@@ -1119,5 +1158,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   pullToken++;
   notesToken++;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
+  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
 }

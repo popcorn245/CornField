@@ -22,6 +22,8 @@
  *   specBlock, buildOffers    the pipeline's steps (PIPE-05): why a spec cannot be started on an issue; which proposals of a spec pull request can have a build issue
  *   planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords
  *                             where a step's plan is read, what the confirm step shows of it, what is sent to confirm it, and what is said of one that is made already
+ *   landingUrl, cancelLandingUrl, landingWords
+ *                             a spec pull request waiting to land on its approval (`proposals.approveLands`, server/lander.js): where it is read, where it is cancelled, and the words
  *   notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest
  *                             the Release notes view: what to ask, the tags to start from, and the words around a draft
  */
@@ -53,6 +55,21 @@ export const listUrl = (kind, state) => (kind === 'deploys' ? `/api/forge/deploy
 export const listKeyOf = (kind, state) => (kind === 'deploys' ? 'deploys' : `${kind}|${serverState(state)}`);
 /** The address of one pull request with its files and checks */
 export const pullUrl = (n) => `/api/forge/pulls/${n}`;
+
+/** Where a pull request's landing on approval is read (GET) and cancelled (POST) */
+export const landingUrl = (n) => `/api/forge/pulls/${n}/landing`;
+export const cancelLandingUrl = (n) => `/api/forge/pulls/${n}/landing/cancel`;
+
+/**
+ * The line for a pull request waiting to land on its approval: "Will land when checks pass".
+ * @param {{ slug: string, by: string, since: string } | null} landing what the server says is waiting
+ * @param {number} nowMs
+ * @returns {string} empty when nothing is waiting
+ */
+export function landingWords(landing, nowMs) {
+  if (!landing) return '';
+  return `Will land when checks pass. ${landing.slug} was approved by ${landing.by} ${relativeTime(landing.since, nowMs)}; it lands at that head only, and a push cancels it.`;
+}
 
 /** Whether a list's item passes the filters (the state of a pull request is decided here: open, merged, closed without landing) */
 export function matches(item, kind, filters) {
