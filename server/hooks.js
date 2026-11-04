@@ -7,8 +7,8 @@
  *
  *   spec.ready      a spec PR that is not a draft was first seen, or was seen at a new head: it is waiting for review.
  *                   A draft (a "Start a spec" stub among them) is never announced; one marked ready is, at its head.
- *                   cornfield has no webhook receiver: it notices when it next lists the PRs, so this fires when
- *                   cornfield next looks, not at the push. The first look at a repo after hooks are added announces
+ *                   cornfield has no webhook receiver: it notices when it lists the PRs (a maintainer's dashboard, or its own
+ *                   timer, server/spec-poll.js), so this fires within the poll interval of the push, not at it. The first look at a repo after hooks are added announces
  *                   nothing: it records what is open, so only what changes after it is news
  *   spec.approved   a maintainer approved a proposal          spec.sentBack   a maintainer sent one back
  *   build.opened    the build issue of an approved proposal was opened
