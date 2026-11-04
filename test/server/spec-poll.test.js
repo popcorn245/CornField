@@ -199,6 +199,11 @@ describe('the spec.ready poll', () => {
     expect(await poll.tick()).toBe('ok');
     expect(asked).toEqual(['1002', '1003', '1001']);
     expect(t.forge.calls).toContain('pulls');
+    // whose sign-in it looked with is on record, once while it stays the same
+    expect(await poll.tick()).toBe('ok');
+    expect(t.logs.filter((l) => /sign-in of @/.test(l))).toEqual(['[cornfield] spec.ready poll: looking at the open spec PRs with the sign-in of @u1001, a maintainer']);
+    poll.close();
+    expect(await poll.tick()).toBe('closed');
   });
 
   it('with only non-maintainers signed in it does not list, and tries at most MAX_CANDIDATES users', async () => {

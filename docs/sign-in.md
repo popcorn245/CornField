@@ -81,6 +81,7 @@ With a [hook](config.md#hooks) that subscribes to `spec.ready`, cornfield lists 
 
 - **No live maintainer session, no poll.** Signed out, expired, or demoted, a session holds no usable token. The poll then skips quietly (one log line when the gap starts, one when a session is back) and cornfield keeps running. It looks again at the next tick after a maintainer signs in.
 - **A restart** drops no session (they are in the SQLite file), so the poll picks up as soon as it runs, with the sessions that were live.
+- **It only reads.** With that token the poll asks who its owner is, their permission, and the open spec PRs (their files, and a proposal it announces); it never writes. The log names whose sign-in it looks with each time that changes, and after `close()` a look in flight lists nothing.
 
 ## Review tokens
 

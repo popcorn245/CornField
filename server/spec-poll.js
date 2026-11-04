@@ -13,8 +13,9 @@
  *
  * **Whose token.** Never one from the config. The newest live sign-in of a user the forge confirms is a maintainer now
  * (`auth.forgeForUser`, then `me()` and `permission()` with that token; the same check the review API and the lander make).
- * A user who is not, or whose token the forge refuses, is passed over for the next newest, at most `MAX_CANDIDATES`. With no
- * such session the tick does nothing and says so once for the stretch (and once more when a session is back).
+ * A user who is not, or whose token the forge refuses, is passed over for the next newest, at most `MAX_CANDIDATES`; their
+ * token is only ever asked those two questions, never used to list. With no such session the tick does nothing and says so
+ * once for the stretch (and once more when a session is back). Whose sign-in it looks with is logged each time that changes.
  *
  * **Never in the way.** One tick runs at a time (the next is scheduled when one ends, so a slow forge cannot pile them up).
  * A forge error is logged and never thrown; the next tick waits twice the interval until one succeeds. The timer is
@@ -53,8 +54,10 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
   let failing = false;
   /** Whether the last tick found no maintainer to look as; what makes the log once per stretch */
   let noSession = false;
+  /** Whose token the last look used: the log names them each time that changes, so whose sign-in is read with is on record */
+  let lookingAs = null;
 
-  /** The forge as the newest live sign-in of a user who is a maintainer now, or null when there is none */
+  /** The forge as the newest live sign-in of a user who is a maintainer now, and their login, or null when there is none */
   async function maintainerForge() {
     const rows = /** @type {{ user_id: string }[]} */ ((await auth.store()).prepare("SELECT user_id FROM sessions WHERE token <> '' AND expires_at > ? ORDER BY created_at DESC, rowid DESC").all(iso(now())));
     const users = [...new Set(rows.map((r) => r.user_id))].slice(0, MAX_CANDIDATES);
@@ -62,7 +65,7 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
       try {
         const forge = await auth.forgeForUser(userId);
         const me = await forge.me();
-        if (String(me.id) === userId && isMaintainer(await forge.permission(repo, me.login))) return forge;
+        if (String(me.id) === userId && isMaintainer(await forge.permission(repo, me.login))) return { forge, login: me.login };
       } catch { /* this user's token is gone or refused: the next one */ }
     }
     return null;
@@ -70,22 +73,27 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
 
   /** One look. Resolves to what happened; never rejects. */
   async function look() {
-    let forge;
+    let found;
     try {
-      forge = await maintainerForge();
+      found = await maintainerForge();
     } catch (err) {
       log(`the sign-ins could not be read: ${words(err)}`);
       return 'error';
     }
-    if (!forge) {
+    // Closed while the sign-ins were checked: the open PRs are not listed with a token after close()
+    if (closed) return 'closed';
+    if (!found) {
+      lookingAs = null;
       if (!noSession) log('no signed-in maintainer to look as, so the open spec PRs are not checked; it resumes when one signs in');
       noSession = true;
       return 'no-session';
     }
     if (noSession) log('a signed-in maintainer is back; checking the open spec PRs again');
     noSession = false;
+    if (found.login !== lookingAs) log(`looking at the open spec PRs with the sign-in of @${found.login}, a maintainer`);
+    lookingAs = found.login;
     try {
-      const { problem } = await listPullProposals(forge, where, { hooks });
+      const { problem } = await listPullProposals(found.forge, where, { hooks });
       if (problem) {
         log(`the forge could not be asked: ${problem}`);
         return 'error';
@@ -112,6 +120,7 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
     if (closed) return Promise.resolve('closed');
     if (running) return Promise.resolve('busy');
     running = look().then((out) => {
+      if (out === 'closed') { running = null; return out; }
       if (out !== 'no-session') failing = out === 'error';
       running = null;
       schedule(failing ? intervalMs * 2 : intervalMs);
