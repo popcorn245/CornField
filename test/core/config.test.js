@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);

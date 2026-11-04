@@ -87,6 +87,7 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 | `spec.sentBack` | a maintainer sent a proposal back |
 | `build.opened` | the build issue of an approved proposal was opened (not when a second ask only found it) |
 | `pr.landed` | a pull request was landed **through cornfield** (the issues and PRs panel's Land it). A merge made on the forge itself, or by anything else, sends nothing. `slug` is its proposal when it is a spec PR (the first, when it holds several), else `null` |
+| `session.expiring` | a maintainer's [sign-in](sign-in.md#how-long-a-session-lasts) ends within 24 hours, so a review token or a landing that acts with it is about to be refused. cornfield looks once an hour, so it arrives between 24 and 23 hours before the end (at once, for a 1 day session). **Once for each session**, recorded in `cornfield.db`, so a restart does not repeat it; a maintainer signed in twice (a laptop and a phone) gets one for each, each with its own `expiresAt`. A session that was signed out or has ended never sends it, nor does a signed-in reader who is not a maintainer. Its body is only `{ event, at, actor, expiresAt, mapUrl }`: `actor` is the maintainer's login, `expiresAt` when the session ends (ISO 8601). It is the only event with no `slug` or `pull` |
 
 Each event is a POST of one JSON body:
 
