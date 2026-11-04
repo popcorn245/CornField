@@ -45,8 +45,14 @@ import { sameOrigin } from './proposals.js';
 
 /** How often a session's permission is asked of the forge again */
 export const RECHECK_MS = 15 * 60 * 1000;
-/** How long a session lasts */
-export const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** How long a session lasts unless `CORNFIELD_SESSION_DAYS` says otherwise */
+export const SESSION_MS = 7 * DAY_MS;
+export const SESSION_DAYS_ENV = 'CORNFIELD_SESSION_DAYS';
+export const DEFAULT_SESSION_DAYS = 7;
+export const MAX_SESSION_DAYS = 30;
+/** A forge token this close to its expiry (or past it) is renewed before it is used */
+export const REFRESH_SKEW_MS = 30_000;
 /** How long the way out to the forge and back may take */
 export const STATE_MS = 10 * 60 * 1000;
 export const MIN_SESSION_SECRET = 32;
@@ -54,6 +60,8 @@ const TOKEN_TIMEOUT_MS = 15_000;
 const REVOKE_TIMEOUT_MS = 5_000;
 /** What a session row keeps in place of a token when it keeps none (a signed-in non-maintainer) */
 const NO_TOKEN = '';
+/** What a renewal answers for a session that has no refresh token */
+const NO_REFRESH = Symbol('no refresh token');
 
 /** The env each forge's OAuth app is read from */
 export const OAUTH_ENV = Object.freeze({
@@ -80,14 +88,28 @@ export function oauthEndpoints(forge) {
 }
 
 /**
+ * How many days a session lasts: `CORNFIELD_SESSION_DAYS`, a whole number from 1 to 30, 7 when unset. Anything else
+ * throws, in words (a value that is quietly ignored would leave a team on 7 days without knowing).
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function sessionDays(env = process.env) {
+  const raw = env[SESSION_DAYS_ENV];
+  if (raw === undefined || raw === '') return DEFAULT_SESSION_DAYS;
+  const days = /^[0-9]{1,3}$/.test(raw.trim()) ? Number(raw.trim()) : NaN;
+  if (!Number.isInteger(days) || days < 1 || days > MAX_SESSION_DAYS) throw new Error(`${SESSION_DAYS_ENV} is ${JSON.stringify(raw.slice(0, 40))}: use a whole number of days from 1 to ${MAX_SESSION_DAYS} (${DEFAULT_SESSION_DAYS} when unset).`);
+  return days;
+}
+
+/**
  * The sign-in settings env gives, or null when sign-in is not configured at all. Throws, in words, when it is
  * half configured: one of a pair, no session secret, a short one, no public URL, no forge.
  * @param {{ forge?: { type: string, url?: string, repo: string } | null, publicUrl?: string | null }} config
  * @param {Record<string, string | undefined>} [env]
- * @returns {null | { forge: { type: string, url?: string, repo: string }, forgeName: string, clientId: string, clientSecret: string, sessionSecret: string, publicUrl: URL, secure: boolean }}
+ * @returns {null | { forge: { type: string, url?: string, repo: string }, forgeName: string, clientId: string, clientSecret: string, sessionSecret: string, publicUrl: URL, secure: boolean, sessionDays: number }}
  */
 export function signInSettings(config, env = process.env) {
   const set = (name) => typeof env[name] === 'string' && env[name] !== '';
+  const days = sessionDays(env);
   const anyPair = Object.values(OAUTH_ENV).some((p) => set(p.id) || set(p.secret));
   if (!anyPair) {
     if (set(SESSION_SECRET_ENV)) throw new Error(`${SESSION_SECRET_ENV} is set but no OAuth app is: set the forge's client id and secret too (docs/sign-in.md), or unset it.`);
@@ -114,7 +136,7 @@ export function signInSettings(config, env = process.env) {
   if (publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash) throw new Error('The public URL is an origin, like https://cornfield.example.org: cornfield is served at its root.');
   return {
     forge, forgeName: FORGE_NAMES[forge.type], clientId: env[pair.id], clientSecret: env[pair.secret], sessionSecret: env[SESSION_SECRET_ENV],
-    publicUrl, secure: publicUrl.protocol === 'https:',
+    publicUrl, secure: publicUrl.protocol === 'https:', sessionDays: days,
   };
 }
 
@@ -255,7 +277,7 @@ function wantsPage(req, reqPath) {
 }
 
 /**
- * @typedef {{ id: string, forge: string, user_id: string, login: string, token: string, permission: string, created_at: string, checked_at: string, expires_at: string }} SessionRow
+ * @typedef {{ id: string, forge: string, user_id: string, login: string, token: string, permission: string, created_at: string, checked_at: string, expires_at: string, refresh_token: string, token_expires_at: string | null, expiring_sent_at: string | null }} SessionRow
  * @typedef {{ login: string, userId: string, permission: string, admin: boolean, row: SessionRow }} Session
  */
 
@@ -290,6 +312,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
 
   const title = config.title || 'cornfield';
   const { forge: forgeConfig, forgeName, clientId, clientSecret, publicUrl, secure } = settings;
+  const sessionMs = settings.sessionDays * DAY_MS;
   const keys = keysOf(settings.sessionSecret);
   const endpoints = oauthEndpoints(forgeConfig);
   const redirectUri = new URL('/auth/callback', publicUrl).href;
@@ -305,6 +328,8 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   const store = () => (opening ??= import('./db.js').then((m) => (db = m.openStore(config.dataDir))).catch((err) => { opening = null; throw err; }));
   const iso = (ms) => new Date(ms).toISOString();
   const forgeWith = (token) => createForge(forgeConfig, { token, ...forgeOptions });
+  /** Session ids whose forge token is being renewed right now: one renewal per session, however many calls wait on it */
+  const renewals = new Map();
 
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { ...(typeof body === 'string' ? HTML_HEADERS : JSON_HEADERS), ...headers });
@@ -385,7 +410,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       return { session: null };
     }
     try {
-      const forge = forgeWith(token);
+      const forge = managedForge(row);
       const user = await forge.me();
       if (String(user.id) !== row.user_id) {
         await endRow(row);
@@ -393,9 +418,14 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       }
       const permission = await forge.permission(forgeConfig.repo, user.login);
       const keep = isMaintainer(permission);
-      const next = { ...row, login: user.login, permission, checked_at: iso(now()), token: keep ? row.token : NO_TOKEN };
-      (await store()).prepare('UPDATE sessions SET login = ?, permission = ?, checked_at = ?, token = ? WHERE id = ?').run(next.login, next.permission, next.checked_at, next.token, row.id);
-      if (!keep) await revoke(token);
+      // The token is not written back when it is kept: a renewal during these calls has stored a newer one
+      const file = await store();
+      const kept = /** @type {SessionRow | undefined} */ (file.prepare('SELECT * FROM sessions WHERE id = ?').get(row.id));
+      if (!kept) return { session: null };
+      const next = { ...kept, login: user.login, permission, checked_at: iso(now()), ...(keep ? {} : { token: NO_TOKEN, refresh_token: '', token_expires_at: null }) };
+      file.prepare('UPDATE sessions SET login = ?, permission = ?, checked_at = ?, token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?')
+        .run(next.login, next.permission, next.checked_at, next.token, next.refresh_token, next.token_expires_at, row.id);
+      if (!keep) await revoke(openToken(keys.enc, kept.token) ?? token);
       return { session: sessionOf(next) };
     } catch (err) {
       if (err instanceof ForgeError && err.code === 'unauthorized') {
@@ -430,22 +460,124 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     return { verifier };
   }
 
-  /** The forge's token for a code, or throws a ForgeError */
-  async function exchange(code, verifier) {
-    const body = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: verifier });
+  /**
+   * The forge's token endpoint, for a code (sign-in) or a refresh token (renewal). Answers the pair it gave, or throws
+   * a ForgeError: `unauthorized` when the forge refused (a code or refresh token that is bad, revoked or expired),
+   * `unavailable` when it did not answer or said it could not now (nothing is ended for that).
+   * @returns {Promise<{ accessToken: string, refreshToken: string, expiresAt: string | null }>}
+   */
+  async function tokenRequest(grant, what) {
+    const body = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, ...grant });
     let res;
     let parsed = null;
     try {
       res = await doFetch(endpoints.token, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'cornfield' }, body, redirect: 'manual', signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS) });
       parsed = JSON.parse(await res.text());
     } catch (err) {
-      throw new ForgeError(`${forgeName} did not answer the sign-in; try again in a minute.`, { code: 'unavailable', forge: forgeName, cause: err });
+      // A forge that answered 4xx with a body that is not JSON said no; one that did not answer, or broke, did not
+      if (res && res.status >= 400 && res.status < 500) throw new ForgeError(`${forgeName} did not give a token for ${what}.`, { code: 'unauthorized', status: res.status, forge: forgeName });
+      throw new ForgeError(`${forgeName} did not answer ${what}; try again in a minute.`, { code: 'unavailable', forge: forgeName, cause: err });
+    }
+    if (res.status >= 500 || (parsed && (parsed.error === 'temporarily_unavailable' || parsed.error === 'server_error'))) {
+      throw new ForgeError(`${forgeName} could not answer ${what} just now; try again in a minute.`, { code: 'unavailable', status: res.status, forge: forgeName });
     }
     if (!res.ok || !parsed || typeof parsed.access_token !== 'string' || parsed.access_token === '') {
       const said = parsed && typeof parsed.error_description === 'string' ? ` ${forgeName} said: "${parsed.error_description.slice(0, 200)}"` : '';
-      throw new ForgeError(`${forgeName} did not give a token for this sign-in.${said}`, { code: 'unauthorized', status: res.status, forge: forgeName });
+      throw new ForgeError(`${forgeName} did not give a token for ${what}.${said}`, { code: 'unauthorized', status: res.status, forge: forgeName });
     }
-    return parsed.access_token;
+    // Forgejo always says how long an access token lasts (1 hour unless the instance changed it) and gives a refresh
+    // token; GitHub does only for an app with token expiration on. A token that says nothing is not expiring
+    const seconds = Number(parsed.expires_in);
+    return {
+      accessToken: parsed.access_token,
+      refreshToken: typeof parsed.refresh_token === 'string' ? parsed.refresh_token : '',
+      expiresAt: Number.isFinite(seconds) && seconds > 0 ? iso(now() + seconds * 1000) : null,
+    };
+  }
+
+  const exchange = (code, verifier) => tokenRequest({ code, redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: verifier }, 'this sign-in');
+
+  /**
+   * Renews a session's forge token with its refresh token, once at a time per session. `used` is the sealed token the
+   * caller found stale: if the row holds another by now, somebody renewed it already and that is what answers. Persists
+   * the new pair together (a rotated refresh token makes the old one useless). Answers the row; `NO_REFRESH` when the
+   * session keeps no refresh token (a GitHub app whose tokens do not expire, the usual case: nothing changes for it);
+   * or null when the session is over: the refresh token is refused (revoked, expired), and the row is ended so the
+   * "sign in again" behaviour applies. Throws a ForgeError `unavailable` when the forge cannot be asked now: the session
+   * stays and the next call tries again.
+   * @param {string} id the session row's id
+   * @param {string} used
+   * @returns {Promise<SessionRow | typeof NO_REFRESH | null>}
+   */
+  function renew(id, used) {
+    const going = renewals.get(id);
+    if (going) return going;
+    const job = (async () => {
+      const file = await store();
+      const row = /** @type {SessionRow | undefined} */ (file.prepare('SELECT * FROM sessions WHERE id = ?').get(id));
+      if (!row || row.token === NO_TOKEN) return null;
+      if (row.token !== used) return row;
+      const refresh = row.refresh_token === '' ? null : openToken(keys.enc, row.refresh_token);
+      // Nothing to renew with: the session is left as it is, and the call that found the token stale gets the forge's own answer
+      if (refresh === null) return NO_REFRESH;
+      let got;
+      try {
+        got = await tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh }, 'a renewed sign-in');
+      } catch (err) {
+        if (err instanceof ForgeError && err.code === 'unauthorized') {
+          await endRow(row);
+          return null;
+        }
+        throw err;
+      }
+      const next = { ...row, token: sealToken(keys.enc, got.accessToken), refresh_token: got.refreshToken === '' ? row.refresh_token : sealToken(keys.enc, got.refreshToken), token_expires_at: got.expiresAt };
+      file.prepare('UPDATE sessions SET token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?').run(next.token, next.refresh_token, next.token_expires_at, id);
+      return next;
+    })().finally(() => renewals.delete(id));
+    renewals.set(id, job);
+    return job;
+  }
+
+  /**
+   * The forge as the session's owner, with a token that renews itself: past (or about to pass) its expiry it is renewed
+   * before the call, and a call the forge answers 401 is renewed once and made again. A renewal that cannot be had
+   * ends the session and the call throws the same `unauthorized` ForgeError as a session that is gone.
+   * @param {SessionRow} row
+   */
+  function managedForge(row) {
+    let sealed = row.token;
+    let expiresAt = row.token_expires_at;
+    let forge = forgeWith(/** @type {string} */ (openToken(keys.enc, sealed)));
+    const over = () => new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
+    /** Whether the token is a new one: false when this session cannot renew (the call goes on as it would have) */
+    const renewNow = async () => {
+      const next = await renew(row.id, sealed);
+      if (next === NO_REFRESH) return false;
+      const token = next ? openToken(keys.enc, next.token) : null;
+      if (!next || token === null) throw over();
+      sealed = next.token;
+      expiresAt = next.token_expires_at;
+      forge = forgeWith(token);
+      return true;
+    };
+    const due = () => expiresAt !== null && Date.parse(expiresAt) - REFRESH_SKEW_MS <= now();
+    return new Proxy({}, {
+      get(_, prop) {
+        const member = forge[prop];
+        if (typeof member !== 'function' || prop === 'rateLimit') return member;
+        return async (...args) => {
+          if (due()) await renewNow();
+          try {
+            return await forge[prop](...args);
+          } catch (err) {
+            if (!(err instanceof ForgeError) || err.code !== 'unauthorized') throw err;
+            // The forge refused the token: renew it (when it can be) and ask once more; else its refusal stands
+            if (!(await renewNow())) throw err;
+          }
+          return forge[prop](...args);
+        };
+      },
+    });
   }
 
   async function callback(req, res, url) {
@@ -457,12 +589,12 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     if (url.searchParams.get('error')) return fail(url.searchParams.get('error') === 'access_denied' ? `The sign-in was cancelled on ${forgeName}.` : `${forgeName} did not sign you in.`);
     const code = url.searchParams.get('code');
     if (!code || code.length > 1000) return fail(`${forgeName} came back without a sign-in code.`);
-    let token;
+    let given;
     let user;
     let permission;
     try {
-      token = await exchange(code, checked.verifier);
-      const forge = forgeWith(token);
+      given = await exchange(code, checked.verifier);
+      const forge = forgeWith(given.accessToken);
       user = await forge.me();
       permission = await forge.permission(forgeConfig.repo, user.login);
     } catch (err) {
@@ -470,14 +602,16 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     }
     const value = random();
     const at = now();
+    const token = given.accessToken;
     const file = await store();
     for (const old of file.prepare('SELECT * FROM sessions WHERE expires_at <= ?').all(iso(at))) await endRow(/** @type {SessionRow} */ (old));
     // Only a maintainer's token is kept; anyone else's is revoked at once (they are asked again at their next sign-in)
     const keep = isMaintainer(permission);
-    file.prepare('INSERT INTO sessions (id, forge, user_id, login, token, permission, created_at, checked_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(macOf(keys.mac, value), forgeConfig.type, String(user.id), user.login, keep ? sealToken(keys.enc, token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + SESSION_MS));
+    file.prepare('INSERT INTO sessions (id, forge, user_id, login, token, permission, created_at, checked_at, expires_at, refresh_token, token_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(macOf(keys.mac, value), forgeConfig.type, String(user.id), user.login, keep ? sealToken(keys.enc, token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + sessionMs),
+        keep && given.refreshToken !== '' ? sealToken(keys.enc, given.refreshToken) : '', keep ? given.expiresAt : null);
     if (!keep) await revoke(token);
-    redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: SESSION_MS / 1000, secure }), clearState]);
+    redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: sessionMs / 1000, secure }), clearState]);
   }
 
   async function authRoute(req, res, reqPath, url) {
@@ -577,7 +711,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     forgeFor(session) {
       const token = session.row.token === NO_TOKEN ? null : openToken(keys.enc, session.row.token);
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
-      return forgeWith(token);
+      return managedForge(session.row);
     },
     /**
      * The forge as a user who may not be at the dashboard now, with the token their newest live sign-in keeps (a
@@ -591,7 +725,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const row = /** @type {SessionRow | undefined} */ ((await store()).prepare('SELECT * FROM sessions WHERE user_id = ? AND token <> ? AND expires_at > ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get(String(userId), NO_TOKEN, iso(now())));
       const token = row ? openToken(keys.enc, row.token) : null;
       if (token === null) throw new ForgeError(`The token's owner has no live sign-in to ${forgeName}; they sign in to cornfield again, then the token works again.`, { code: 'unauthorized', forge: forgeName });
-      return forgeWith(token);
+      return managedForge(/** @type {SessionRow} */ (row));
     },
     /** The SQLite file (opened on first use), for the routes that keep answers in it (server/forge-routes.js) */
     store,

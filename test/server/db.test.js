@@ -46,7 +46,7 @@ describe('openStore', () => {
     expect(fs.existsSync(path.join(dataDir, DB_FILE))).toBe(true);
     expect(schemaVersion(db)).toBe(MIGRATIONS.length);
     expect(tables(db)).toEqual(TABLES);
-    expect(columns(db, 'sessions')).toEqual(['id', 'forge', 'user_id', 'login', 'token', 'permission', 'created_at', 'checked_at', 'expires_at']);
+    expect(columns(db, 'sessions')).toEqual(['id', 'forge', 'user_id', 'login', 'token', 'permission', 'created_at', 'checked_at', 'expires_at', 'refresh_token', 'token_expires_at', 'expiring_sent_at']);
     expect(columns(db, 'reviews')).toEqual(['repo', 'pr', 'slug', 'verdict', 'note', 'edits', 'author', 'comment_id', 'at']);
     expect(columns(db, 'actions')).toEqual(['id', 'at', 'login', 'action', 'target', 'request', 'status', 'answer']);
     expect(columns(db, 'forge_cache')).toEqual(['key', 'etag', 'body', 'fetched_at', 'expires_at']);
@@ -69,6 +69,8 @@ describe('openStore', () => {
     expect(schemaVersion(db)).toBe(MIGRATIONS.length);
     expect(tables(db)).toEqual(TABLES);
     expect(db.prepare('SELECT login, permission FROM sessions').all()).toEqual([{ login: 'maintainer-one', permission: 'maintain' }]);
+    // migration 5: an old session has no refresh token, a token that does not expire, and no session.expiring sent
+    expect(db.prepare('SELECT refresh_token, token_expires_at, expiring_sent_at FROM sessions').get()).toEqual({ refresh_token: '', token_expires_at: null, expiring_sent_at: null });
     expect(db.prepare('SELECT pr, slug, verdict, edits FROM reviews').get()).toEqual({ pr: 7, slug: '0013-meals', verdict: 'notes', edits: '[{"op":"remove-edge","from":"a","to":"b"}]' });
     expect(db.prepare('SELECT count(*) AS n FROM actions').get().n).toBe(1);
     expect(db.prepare('SELECT etag FROM forge_cache').get().etag).toBe('"etag-1"');
