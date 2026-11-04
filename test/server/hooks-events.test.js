@@ -75,6 +75,26 @@ async function signedIn(port, code_) {
 
 /** A clock for the hooks that the test never winds: retries wait, and a hung request is never cut off */
 const frozenTimer = () => ({ setTimeout: () => 0, clearTimeout: () => {} });
+/** A clock fired by hand, one timer at a time: what is waiting (in ms, unref'd or not), and `fire()` runs the oldest */
+function handTimer() {
+  const queue = new Map();
+  let n = 0;
+  return {
+    setTimeout: (fn, ms) => { const id = { n: ++n, unrefd: false, unref() { this.unrefd = true; } }; queue.set(id, { fn, ms }); return id; },
+    clearTimeout: (id) => { queue.delete(id); },
+    get waiting() { return [...queue.values()].map((t) => t.ms); },
+    get unrefd() { return [...queue.keys()].every((id) => id.unrefd); },
+    fire() { const [id, t] = [...queue.entries()][0]; queue.delete(id); t.fn(); },
+  };
+}
+/** Waits for `cond` (real sockets take their time), failing rather than hanging when it never holds */
+async function until(cond, what, deadlineMs = 15_000) {
+  const end = Date.now() + deadlineMs;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
 const settle = async () => { for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r)); };
 
 /** A receiver on loopback: it keeps what it is sent, checks each signature, and answers `status` (switchable) */
@@ -226,7 +246,8 @@ describe('event hooks', () => {
   const routes = new Proxy({}, { get: (_, key) => (typeof key === 'string' ? (req) => dispatch(key, req) : undefined) });
 
   const start = async (cfg, opts) => {
-    const server = createCornfieldServer(cfg, { env: ENV, now: () => clock, hookTimer: timer, ...opts });
+    // The spec.ready poll (server/spec-poll.js) is held still unless a test hands it a clock: it never looks on its own here
+    const server = createCornfieldServer(cfg, { env: ENV, now: () => clock, hookTimer: timer, specPollTimer: frozenTimer(), ...opts });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
     return { port: /** @type {import('node:net').AddressInfo} */ (server.address()).port, close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve(undefined)); }) };
   };
@@ -404,6 +425,59 @@ describe('event hooks', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+  it('spec.ready with nobody at the dashboard: the poll alone makes the silent first look, announces a push once, and close() stops it', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-hooks-poll-'));
+    const mine = await receiver();
+    const poll = handTimer();
+    const cfg = { ...config, dataDir: dir, hooks: [{ url: mine.url, events: ['spec.ready'] }], hookPoll: { specs: '2m' } };
+    world.pulls[0].draft = false;
+    world.pulls[0].head.sha = H1;
+    const listed = () => fake.requests.filter((r) => r.method === 'GET' && r.url.startsWith(`${GH}/pulls?`)).length;
+    try {
+      const one = await start(cfg, { specPollTimer: poll });
+      expect(poll.waiting).toEqual([15_000]);
+      expect(poll.unrefd).toBe(true);
+      await signedIn(one.port, 'c-maint'); // a maintainer signed in once, and never opens the dashboard
+      expect(listed()).toBe(0);
+      // The first look is the poll's: it records what is open and announces nothing
+      poll.fire();
+      await until(() => poll.waiting.length === 1, 'the first look to finish');
+      expect(poll.waiting).toEqual([120_000]);
+      expect(listed()).toBe(1);
+      await lookedAt(dir);
+      expect(await settled(mine, 'spec.ready')).toEqual([]);
+      // A push, and the next tick: announced, by the poll alone
+      const pushed = push('5');
+      poll.fire();
+      const got = await mine.next('spec.ready');
+      expect(got.map((g) => [g.valid, g.body.slug, g.body.pull, g.body.headSha])).toEqual([[true, '0040-meals', 40, pushed]]);
+      await until(() => poll.waiting.length === 1, 'the second look to finish');
+      expect(listed()).toBe(2);
+      // Nothing new: the next tick sends nothing
+      poll.fire();
+      await until(() => poll.waiting.length === 1, 'the third look to finish');
+      expect(await settled(mine, 'spec.ready')).toHaveLength(1);
+      // close() while a look is in flight (the forge holds its permission answer until after it): nothing is listed with
+      // the token after it, nothing is announced, and nothing is left waiting
+      push('6');
+      const before = listed();
+      let release = () => {};
+      const held = new Promise((r) => { release = () => r(undefined); });
+      let asked = false;
+      state.override[`GET ${GH}`] = async () => { asked = true; await held; return base['GET /repos/owner/name']; };
+      poll.fire();
+      await until(() => asked, 'the in-flight look to ask the forge');
+      await one.close();
+      release();
+      expect(await settled(mine, 'spec.ready')).toHaveLength(1);
+      expect(listed()).toBe(before);
+      expect(poll.waiting).toEqual([]);
+    } finally {
+      await mine.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('spec.approved: once, after the review comment is posted, with the note, the edits and who acted', async () => {
     allowWrites();
     const edits = [{ op: 'remove-edge', from: 'a', to: 'b' }];
