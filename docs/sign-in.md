@@ -92,6 +92,14 @@ A session is only useful while the forge token it keeps works, and forge tokens 
 
 With `proposals: { approveLands: true }` ([proposals.md](proposals.md#land-on-approval)) an approval also lands the spec PR once its checks are green, **as the approver**, with the forge token their session keeps. It follows the session the way a review token does: when the approver's session ends before the checks finish (Sign out, expiry, a revoked token), the landing stops with "left open: sign in to land", merges nothing and posts no comment (there is no token to post one with). It needs sign-in at all: with the key on and no sign-in cornfield does not start.
 
+## The spec poll
+
+With a [hook](config.md#hooks) that subscribes to `spec.ready`, cornfield lists the open spec PRs on a timer ([`hookPoll`](config.md#hook-poll)) so the event fires with nobody at the dashboard. A timer has no request, so it has no cookie: it looks with the token the newest live session of a maintainer keeps, as a [review through the API](proposals.md) does, and asks the forge first who that is and whether they maintain the repo now. Never a token from the config; cornfield has none.
+
+- **No live maintainer session, no poll.** Signed out, expired, or demoted, a session holds no usable token. The poll then skips quietly (one log line when the gap starts, one when a session is back) and cornfield keeps running. It looks again at the next tick after a maintainer signs in.
+- **A restart** drops no session (they are in the SQLite file), so the poll picks up as soon as it runs, with the sessions that were live.
+- **It only reads.** With that token the poll asks who its owner is, their permission, and the open spec PRs (their files, and a proposal it announces); it never writes. The log names whose sign-in it looks with each time that changes, and after `close()` a look in flight lists nothing.
+
 ## Review tokens
 
 A maintainer can make **review tokens** in the dashboard, so a script or a chat bot can send their Approve or Send back through `POST /api/reviews` ([proposals.md](proposals.md#2-review-it)). They are kept in `review_tokens` in the same file: a SHA-256 hash (never the token, which is shown once), who made it, a label, when it was made, when it expires (30 days unless asked, 90 at most), when it was revoked and last used.

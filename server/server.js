@@ -42,7 +42,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, specPollMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -54,6 +54,7 @@ import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
+import { createSpecPoll } from './spec-poll.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -126,10 +127,10 @@ export const HA_CACHE_MS = 30_000;
 /**
  * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
- * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function }, landTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
+ * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function }, landTimer?: { setTimeout: Function, clearTimeout: Function }, specPollTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
  *   see server/auth.js); the Home Assistant URL and token are read from the same `env`, and `homeAssistant` is what
  *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket); `hookFetch` and `hookTimer` are the
- *   tests' fake network and clock for the event hooks (server/hooks.js); `landTimer` is the clock of landing on approval (server/lander.js)
+ *   tests' fake network and clock for the event hooks (server/hooks.js); `landTimer` is the clock of landing on approval (server/lander.js); `specPollTimer` is the clock of the `spec.ready` poll (server/spec-poll.js)
  * @returns {import('node:http').Server}
  */
 export function createCornfieldServer(config, opts = {}) {
@@ -155,6 +156,9 @@ export function createCornfieldServer(config, opts = {}) {
     // What a restart left waiting: looked at again, in the background
     lander.resume().catch((err) => console.error(`[cornfield] pending landings could not be picked up: ${err instanceof Error ? err.message : err}`));
   }
+  // Looks at the open spec PRs on a timer when a hook wants spec.ready (config `hookPoll`); started when the server listens
+  const pollMs = hooks ? specPollMs(config) : null;
+  const specPoll = pollMs ? createSpecPoll({ config, where, auth, hooks, intervalMs: pollMs, now: opts.now, timer: opts.specPollTimer }) : null;
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
   const houseFile = houseSource && houseSource.options && houseSource.options.file ? inside(root, houseSource.options.file) : null;
@@ -192,7 +196,8 @@ export function createCornfieldServer(config, opts = {}) {
       else res.end();
     }
   });
-  server.on('close', () => { lander?.close(); hooks?.close(); auth.close(); });
+  server.on('listening', () => specPoll?.start());
+  server.on('close', () => { specPoll?.close(); lander?.close(); hooks?.close(); auth.close(); });
   return server;
 
   async function answer(req, res) {

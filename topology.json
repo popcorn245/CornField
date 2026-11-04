@@ -1658,6 +1658,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0003: approving a spec can land it (opt-in) (docs/specs/0003-land-on-approval.md)."
+    },
+    {
+      "id": "core-server-spec-poll",
+      "label": "spec-poll.js",
+      "type": "core",
+      "file": "server/spec-poll.js",
+      "summary": "`spec.ready` without anyone at the dashboard (PIPE-10, docs/config.md#hook-poll).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "`spec.ready` without anyone at the dashboard (PIPE-10, docs/config.md#hookpoll). (server/spec-poll.js)"
+    },
+    {
+      "id": "page-doc-docs-specs-0004-spec-poll",
+      "type": "page",
+      "label": "/docs/specs/0004-spec-poll",
+      "file": "docs/specs/0004-spec-poll.md",
+      "summary": "Spec 0004: spec.ready without anyone opening the dashboard",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0004: spec.ready without anyone opening the dashboard (docs/specs/0004-spec-poll.md)."
     }
   ],
   "edges": [
@@ -4978,7 +4998,38 @@
       "to": "core-server-proposal-pulls",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-spec-poll"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-spec-poll",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-spec-poll",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-spec-poll",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0004-spec-poll"
+    },
+    {
+      "from": "page-doc-docs-specs-0004-spec-poll",
+      "to": "page-doc-docs-config",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-03T23:25:58.407Z"
+  "updatedAt": "2026-11-04T22:59:24.677Z"
 }

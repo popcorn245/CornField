@@ -23,6 +23,7 @@
  *     personas: { roles: null },              // the roles a persona may have (null: any)
  *     releaseNotes: { breakingLabel: 'breaking' },   // the pull request label that lists a change under "Breaking" in the release notes
  *     hooks: [],                              // [{ url, events }]: signed JSON events posted to outside code (docs/config.md#hooks); the secret is env only
+ *     hookPoll: { specs: '5m' },              // how often cornfield looks for ready specs on its own, for the spec.ready hook; false turns it off (docs/config.md#hook-poll)
  *     links: [],                              // [{ label, href }] shown in the explorer's header
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
@@ -68,6 +69,33 @@ export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
 /** The most hooks a config lists */
 export const MAX_HOOKS = 20;
+/** The bounds of `hookPoll.specs` in milliseconds: not under a minute (the forge is not hammered), not over an hour */
+export const HOOK_POLL_MIN_MS = 60_000;
+export const HOOK_POLL_MAX_MS = 3_600_000;
+/** The keys of `hookPoll` when it is an object */
+export const HOOK_POLL_KEYS = Object.freeze(['specs']);
+
+/**
+ * A duration like '90s', '5m' or '1h' in milliseconds, or null when it is not one (whole numbers only).
+ * @param {unknown} v
+ * @returns {number | null}
+ */
+export function parseDuration(v) {
+  const m = typeof v === 'string' ? /^([1-9]\d{0,5})(s|m|h)$/.exec(v) : null;
+  return m ? Number(m[1]) * { s: 1000, m: 60_000, h: 3_600_000 }[m[2]] : null;
+}
+
+/**
+ * How often cornfield looks at the open spec PRs by itself, in milliseconds, or null when it does not: when `hookPoll.specs`
+ * is false, or no hook subscribes to `spec.ready` (by name or with '*').
+ * @param {{ hooks?: { events: string[] | '*' }[], hookPoll?: { specs?: string | false } | false }} config a loaded config
+ * @returns {number | null}
+ */
+export function specPollMs(config) {
+  const wanted = Array.isArray(config.hooks) && config.hooks.some((h) => h.events === '*' || (Array.isArray(h.events) && h.events.includes('spec.ready')));
+  const every = config.hookPoll === false ? false : config.hookPoll ? config.hookPoll.specs : DEFAULTS.hookPoll.specs;
+  return wanted && every !== false ? parseDuration(every ?? DEFAULTS.hookPoll.specs) : null;
+}
 
 export const DEFAULTS = Object.freeze({
   title: null,
@@ -86,6 +114,7 @@ export const DEFAULTS = Object.freeze({
   releaseNotes: { breakingLabel: 'breaking' },
   agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
   hooks: [],
+  hookPoll: { specs: '5m' },
   links: [],
   proxy: {},
   importMap: {},
@@ -199,6 +228,19 @@ export function configProblems(c) {
       });
     }
   }
+  if (c.hookPoll !== undefined && c.hookPoll !== false) {
+    if (!isObject(c.hookPoll)) out.push('"hookPoll" is { specs: "5m" }, or false for none.');
+    else {
+      for (const k of Object.keys(c.hookPoll)) if (!HOOK_POLL_KEYS.includes(k)) out.push(`hookPoll.${k}: the key is ${HOOK_POLL_KEYS.join(', ')}.`);
+      const v = c.hookPoll.specs;
+      if (v !== undefined && v !== false) {
+        const ms = parseDuration(v);
+        if (ms === null) out.push('hookPoll.specs is a duration like "90s", "5m" or "1h" (from 60s to 1h), or false.');
+        else if (ms < HOOK_POLL_MIN_MS) out.push(`hookPoll.specs ${JSON.stringify(v)} is under the floor of 60s, so the forge is not hammered; use "60s" or more.`);
+        else if (ms > HOOK_POLL_MAX_MS) out.push(`hookPoll.specs ${JSON.stringify(v)} is over the ceiling of 1h; use "1h" or less, or false to turn the poll off.`);
+      }
+    }
+  }
   if (c.releaseNotes !== undefined) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
@@ -290,6 +332,8 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
     agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
+  // `hookPoll: false` is `{ specs: false }`; an object is read over the default
+  config.hookPoll = raw.hookPoll === false ? { specs: false } : { ...DEFAULTS.hookPoll, ...(raw.hookPoll || {}) };
   // `proposals` is the folder to everything downstream, whichever way the file wrote it; the options are read from `approveLands`
   config.approveLands = isObject(raw.proposals) && raw.proposals.approveLands === true;
   config.proposals = (isObject(raw.proposals) ? raw.proposals.dir : raw.proposals) ?? DEFAULTS.proposals;

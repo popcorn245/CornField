@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS } from '../../core/config.js';
+import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, parseDuration, specPollMs } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
 
 const made = [];
@@ -173,6 +173,52 @@ describe('the proposals key', () => {
 
   it('refuses a bad object, naming the file', async () => {
     await expect(loadConfig(repo('export default { proposals: { approveLands: 1 } };'), { env: {} })).rejects.toThrow(/cornfield\.config\.js:\n {2}proposals\.approveLands/);
+  });
+});
+
+describe('hookPoll', () => {
+  const specs = (v) => configProblems({ hookPoll: { specs: v } });
+
+  it('takes durations from the 60s floor to the 1h ceiling, or false', () => {
+    for (const v of ['60s', '90s', '5m', '59m', '1h', '3600s', '60m', false]) expect(specs(v), String(v)).toEqual([]);
+    expect(configProblems({ hookPoll: false })).toEqual([]);
+    expect(configProblems({ hookPoll: {} })).toEqual([]);
+  });
+
+  it('refuses under the floor and over the ceiling, naming the bound', () => {
+    for (const v of ['59s', '1s', '30s']) expect(specs(v)[0], v).toMatch(/hookPoll\.specs .* under the floor of 60s/);
+    for (const v of ['61m', '3601s', '2h']) expect(specs(v)[0], v).toMatch(/hookPoll\.specs .* over the ceiling of 1h/);
+  });
+
+  it('refuses anything that is not a duration, an unknown key and a wrong shape', () => {
+    for (const v of ['5', '5 m', '5min', '0m', '1.5m', '-5m', '', 300, true, null, 'm', '5M']) expect(specs(v)[0], String(v)).toMatch(/hookPoll\.specs is a duration/);
+    expect(configProblems({ hookPoll: { every: '5m' } })[0]).toMatch(/hookPoll\.every: the key is specs/);
+    for (const v of [true, '5m', 300, [], null]) expect(configProblems({ hookPoll: v })[0], String(v)).toMatch(/"hookPoll" is \{ specs/);
+  });
+
+  it('parses durations to milliseconds', () => {
+    expect(parseDuration('90s')).toBe(90_000);
+    expect(parseDuration('5m')).toBe(300_000);
+    expect(parseDuration('1h')).toBe(3_600_000);
+    expect(parseDuration('5')).toBeNull();
+  });
+
+  it('is on at 5m only when a hook subscribes to spec.ready, by name or with *; false turns it off', async () => {
+    const hook = (events) => ({ url: 'https://a.example.org/h', events });
+    const cfg = async (text) => loadConfig(repo(text), { env: {} });
+    expect(DEFAULTS.hookPoll).toEqual({ specs: '5m' });
+    expect(specPollMs(await cfg('export default {};'))).toBeNull();
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook(['pr.landed', 'spec.approved']))}] };`))).toBeNull();
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook(['spec.ready']))}] };`))).toBe(300_000);
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook('*'))}] };`))).toBe(300_000);
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook('*'))}], hookPoll: { specs: '90s' } };`))).toBe(90_000);
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook('*'))}], hookPoll: { specs: false } };`))).toBeNull();
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook('*'))}], hookPoll: false };`))).toBeNull();
+    expect(specPollMs(await cfg(`export default { hookPoll: { specs: '2m' } };`))).toBeNull();
+  });
+
+  it('fails the config at load with the key named', async () => {
+    await expect(loadConfig(repo("export default { hookPoll: { specs: '10s' } };"), { env: {} })).rejects.toThrow(/cornfield\.config\.js:\n {2}hookPoll\.specs "10s" is under the floor/);
   });
 });
 

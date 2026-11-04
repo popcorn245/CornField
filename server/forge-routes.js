@@ -138,7 +138,7 @@ function routeOf(reqPath, url, config, where, hooks = null) {
       key: 'work',
       load: async (forge) => {
         const [pulls, issues, branches, specs] = await Promise.all([
-          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, config, { hooks }),
+          forge.pulls({ state: 'all', limit: WORK_PULLS }), forge.issues({ state: 'all', labels: [], limit: WORK_ISSUES }), forge.branches(), listPullProposals(forge, where || config, { hooks }),
         ]);
         return {
           pulls: pulls.map((p) => ({ ...p, body: p.body.slice(0, WORK_BODY_MAX) })),

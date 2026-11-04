@@ -42,6 +42,7 @@ export default {
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
 | `hooks` | `[{ url, events }]`: where cornfield posts a signed JSON event when something happens, and which events (a non-empty list of the five names, or `'*'`). [Hooks](#hooks) |
+| `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs by itself, so `spec.ready` fires without anyone opening the dashboard. On at 5 minutes when a hook subscribes to `spec.ready`, off otherwise. [Hook poll](#hook-poll) |
 | `links` | extra links in the explorer's header |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
@@ -82,7 +83,7 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 
 | Event | When |
 |---|---|
-| `spec.ready` | a spec PR is waiting for review: a spec PR that is **not a draft** was opened, pushed to, or marked ready. A draft, a "Start a spec" stub among them, is never announced; once it is marked ready it is, at its head. cornfield has no webhook receiver, so it notices when it next lists the open spec PRs (a maintainer opening the proposals menu or the issues and PRs panel): it fires **when cornfield next looks, not at the push**. Once per (pull request, head commit, proposal), and a restart does not repeat it. **The first look after `hooks` is added announces nothing**: it records the spec PRs already open, and only what changes after it is sent |
+| `spec.ready` | a spec PR is waiting for review: a spec PR that is **not a draft** was opened, pushed to, or marked ready. A draft, a "Start a spec" stub among them, is never announced; once it is marked ready it is, at its head. cornfield has no webhook receiver, so it notices when it lists the open spec PRs: when a maintainer opens the proposals menu or the issues and PRs panel, **or on its own timer** ([`hookPoll`](#hook-poll), every 5 minutes unless set otherwise), so it fires **within the poll interval of the push, whether or not anyone has the dashboard open**, as long as a maintainer is signed in. Once per (pull request, head commit, proposal), and a restart does not repeat it. **The first look after `hooks` is added announces nothing**: it records the spec PRs already open, and only what changes after it is sent |
 | `spec.approved` | a maintainer approved a proposal (the review comment was posted) |
 | `spec.sentBack` | a maintainer sent a proposal back |
 | `build.opened` | the build issue of an approved proposal was opened (not when a second ask only found it) |
@@ -118,6 +119,21 @@ export function verify(raw, header, secret, maxAgeMs = 300_000) {
   return want.length === got.length && timingSafeEqual(want, got) && Math.abs(Date.now() - Date.parse(JSON.parse(raw).at)) < maxAgeMs;
 }
 ```
+
+### Hook poll
+
+`spec.ready` is noticed by listing the open spec PRs. A team that reviews from chat never opens the dashboard, so cornfield also does that listing by itself, on a timer:
+
+```js
+hookPoll: { specs: '5m' },   // the default; '90s', '5m', '1h'… or false for none
+```
+
+- **When it runs.** By default, when some hook subscribes to `spec.ready` (by name, or with `events: '*'`): every 5 minutes, the first look 15 seconds after start. With no such hook it is off, and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
+- **The interval** is a whole number with `s`, `m` or `h`, from **60s** (a floor, so the forge is not hammered) to **1h**. Anything else fails the config at start-up, naming the key. The key is separate from the `hooks` list, which stays a list.
+- **Whose token.** Never one from the config. The poll looks as the newest live [sign-in](sign-in.md#the-spec-poll) of a user the forge says is a maintainer of the repo *right now* (the check the [review API](proposals.md) makes before it posts). With no such session it does nothing and keeps running: it says so once in the log, not on every tick, and says so again when a maintainer is back. The log also names whose sign-in it looks with, each time that changes. That token only ever reads: who its owner is, their permission, and the open spec PRs; someone the forge says is no longer a maintainer is asked the first two and nothing else. A restart keeps the sessions (they are in the SQLite file, the tokens encrypted), so the poll looks with them as soon as it runs.
+- **The same look.** The poll calls the listing the dashboard uses, so the rules above are unchanged: a draft is never announced, the first look after `hooks` is added announces nothing, and each (pull request, head commit, proposal) is sent once. A poll and a dashboard look never announce the same head twice.
+- **What it costs the forge.** A poll with nothing new makes **3 calls**: who the token's owner is, their permission on the repo, and the open pull requests (one more call per further page of 30 or so). A pull request pushed to since the last look costs one call for its changed files, and an announced proposal one call to read it, once each; what was read at a head is cached and not asked again. One poll in flight at a time: if the forge is slow the next tick waits for it.
+- **When the forge fails.** The error is logged, never thrown, and the next look waits twice the interval, until one succeeds.
 
 A hook never blocks or undoes what fired it. Events are sent in the background; a delivery that is not answered with a 2xx within 10 seconds (a redirect is not followed) is tried again after 1, 5 and 30 seconds, then dropped. Every attempt is a row in the audit table (`actions`, action `hook`; it names the hook's origin and the HTTP status, never its path, the secret or the body). Deliveries wait in memory, so a restart forgets the ones still being retried, and a receiver should answer quickly and treat `X-Cornfield-Delivery` as its dedupe key.
 
