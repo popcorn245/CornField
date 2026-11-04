@@ -58,6 +58,33 @@ export const STATE_MS = 10 * 60 * 1000;
 export const MIN_SESSION_SECRET = 32;
 const TOKEN_TIMEOUT_MS = 15_000;
 const REVOKE_TIMEOUT_MS = 5_000;
+/** The most of a token endpoint's answer that is read: a token pair is a few hundred bytes */
+const MAX_TOKEN_ANSWER = 64 * 1024;
+/** Statuses that say "not now" (a timeout, a rate limit), never "no": a renewal answered with one ends no session */
+const NOT_NOW = [408, 425, 429];
+
+/** A response's text, at most `max` bytes: past that the body is dropped and the read throws */
+async function cappedText(res, max) {
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const text = await res.text();
+    if (Buffer.byteLength(text) > max) throw new Error('the answer is too large');
+    return text;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw new Error('the answer is too large');
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
 /** What a session row keeps in place of a token when it keeps none (a signed-in non-maintainer) */
 const NO_TOKEN = '';
 /** What a renewal answers for a session that has no refresh token */
@@ -174,19 +201,24 @@ function keysOf(secret) {
 const macOf = (key, text) => createHmac('sha256', key).update(text).digest('base64url');
 
 /** A forge token, encrypted for its row: `v1.<iv>.<tag>.<ciphertext>` */
-export function sealToken(key, token) {
+export function sealToken(key, token, aad) {
   const iv = randomBytes(12);
   const c = createCipheriv('aes-256-gcm', key, iv);
+  // With `aad` (v2) the ciphertext opens only for that row and column: one cannot be moved into another session's row
+  if (aad !== undefined) c.setAAD(Buffer.from(String(aad), 'utf8'));
   const body = Buffer.concat([c.update(token, 'utf8'), c.final()]);
-  return `v1.${b64url(iv)}.${b64url(c.getAuthTag())}.${b64url(body)}`;
+  return `${aad !== undefined ? 'v2' : 'v1'}.${b64url(iv)}.${b64url(c.getAuthTag())}.${b64url(body)}`;
 }
 
 /** The token a row holds, or null when it does not open under this key (another secret, or tampered) */
-export function openToken(key, sealed) {
+export function openToken(key, sealed, aad, { legacy = true } = {}) {
   const [v, iv, tag, body] = String(sealed).split('.');
-  if (v !== 'v1' || !iv || !tag || body === undefined) return null;
+  if (!iv || !tag || body === undefined) return null;
+  // v2 is bound to its row and column (`aad`); v1, sealed before that, opens only where a legacy value may still be
+  if (v === 'v2' ? aad === undefined : v !== 'v1' || !legacy) return null;
   try {
     const d = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url'));
+    if (v === 'v2') d.setAAD(Buffer.from(String(aad), 'utf8'));
     d.setAuthTag(Buffer.from(tag, 'base64url'));
     return Buffer.concat([d.update(Buffer.from(body, 'base64url')), d.final()]).toString('utf8');
   } catch {
@@ -330,6 +362,14 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   const forgeWith = (token) => createForge(forgeConfig, { token, ...forgeOptions });
   /** Session ids whose forge token is being renewed right now: one renewal per session, however many calls wait on it */
   const renewals = new Map();
+  /**
+   * A session's tokens are sealed for their row and column (AES-GCM's additional data): a sealed token copied into
+   * another session's row, or from one column to the other, does not open. An access token sealed before this (v1)
+   * still opens until its session ends; a refresh token never had a v1.
+   */
+  const aadOf = (id, column) => `cornfield session ${id} ${column}`;
+  const sealFor = (id, column, value) => sealToken(keys.enc, value, aadOf(id, column));
+  const openFor = (row, column) => openToken(keys.enc, row[column], aadOf(row.id, column), { legacy: column === 'token' });
 
   const send = (res, status, body, headers = {}) => {
     res.writeHead(status, { ...(typeof body === 'string' ? HTML_HEADERS : JSON_HEADERS), ...headers });
@@ -375,7 +415,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   /** Ends a session: its row goes, and the token it kept is revoked */
   async function endRow(row) {
     (await store()).prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
-    if (row.token !== NO_TOKEN) await revoke(openToken(keys.enc, row.token));
+    if (row.token !== NO_TOKEN) await revoke(openFor(row, 'token'));
   }
 
   /** The session row a request's cookie names, live, or null */
@@ -404,7 +444,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     const row = await rowOf(req);
     if (!row) return { session: null };
     if (row.token === NO_TOKEN || now() - Date.parse(row.checked_at) < RECHECK_MS) return { session: sessionOf(row) };
-    const token = openToken(keys.enc, row.token);
+    const token = openFor(row, 'token');
     if (token === null) {
       await endRow(row);
       return { session: null };
@@ -425,7 +465,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const next = { ...kept, login: user.login, permission, checked_at: iso(now()), ...(keep ? {} : { token: NO_TOKEN, refresh_token: '', token_expires_at: null }) };
       file.prepare('UPDATE sessions SET login = ?, permission = ?, checked_at = ?, token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?')
         .run(next.login, next.permission, next.checked_at, next.token, next.refresh_token, next.token_expires_at, row.id);
-      if (!keep) await revoke(openToken(keys.enc, kept.token) ?? token);
+      if (!keep) await revoke(openFor(kept, 'token') ?? token);
       return { session: sessionOf(next) };
     } catch (err) {
       if (err instanceof ForgeError && err.code === 'unauthorized') {
@@ -472,13 +512,13 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     let parsed = null;
     try {
       res = await doFetch(endpoints.token, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'cornfield' }, body, redirect: 'manual', signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS) });
-      parsed = JSON.parse(await res.text());
+      parsed = JSON.parse(await cappedText(res, MAX_TOKEN_ANSWER));
     } catch (err) {
       // A forge that answered 4xx with a body that is not JSON said no; one that did not answer, or broke, did not
-      if (res && res.status >= 400 && res.status < 500) throw new ForgeError(`${forgeName} did not give a token for ${what}.`, { code: 'unauthorized', status: res.status, forge: forgeName });
+      if (res && res.status >= 400 && res.status < 500 && !NOT_NOW.includes(res.status)) throw new ForgeError(`${forgeName} did not give a token for ${what}.`, { code: 'unauthorized', status: res.status, forge: forgeName });
       throw new ForgeError(`${forgeName} did not answer ${what}; try again in a minute.`, { code: 'unavailable', forge: forgeName, cause: err });
     }
-    if (res.status >= 500 || (parsed && (parsed.error === 'temporarily_unavailable' || parsed.error === 'server_error'))) {
+    if (res.status >= 500 || NOT_NOW.includes(res.status) || (res.status >= 300 && res.status < 400) || (parsed && (parsed.error === 'temporarily_unavailable' || parsed.error === 'server_error'))) {
       throw new ForgeError(`${forgeName} could not answer ${what} just now; try again in a minute.`, { code: 'unavailable', status: res.status, forge: forgeName });
     }
     if (!res.ok || !parsed || typeof parsed.access_token !== 'string' || parsed.access_token === '') {
@@ -517,22 +557,31 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const row = /** @type {SessionRow | undefined} */ (file.prepare('SELECT * FROM sessions WHERE id = ?').get(id));
       if (!row || row.token === NO_TOKEN) return null;
       if (row.token !== used) return row;
-      const refresh = row.refresh_token === '' ? null : openToken(keys.enc, row.refresh_token);
+      const refresh = row.refresh_token === '' ? null : openFor(row, 'refresh_token');
       // Nothing to renew with: the session is left as it is, and the call that found the token stale gets the forge's own answer
       if (refresh === null) return NO_REFRESH;
+      // Another process (cornfield restarted, or two behind one data folder) may renew the same row at the same time. The
+      // forge rotates the refresh token, so the slower of the two is refused: that is a lost race, not a refused sign-in,
+      // and the row the winner wrote is the answer. The write itself only lands on the row as it was read.
+      const rowNow = () => /** @type {SessionRow | undefined} */ (file.prepare('SELECT * FROM sessions WHERE id = ?').get(id));
       let got;
       try {
         got = await tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh }, 'a renewed sign-in');
       } catch (err) {
         if (err instanceof ForgeError && err.code === 'unauthorized') {
-          await endRow(row);
+          const after = rowNow();
+          if (after && after.token !== row.token && after.token !== NO_TOKEN) return after;
+          if (after) await endRow(after);
           return null;
         }
         throw err;
       }
-      const next = { ...row, token: sealToken(keys.enc, got.accessToken), refresh_token: got.refreshToken === '' ? row.refresh_token : sealToken(keys.enc, got.refreshToken), token_expires_at: got.expiresAt };
-      file.prepare('UPDATE sessions SET token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?').run(next.token, next.refresh_token, next.token_expires_at, id);
-      return next;
+      const next = { ...row, token: sealFor(id, 'token', got.accessToken), refresh_token: got.refreshToken === '' ? row.refresh_token : sealFor(id, 'refresh_token', got.refreshToken), token_expires_at: got.expiresAt };
+      const wrote = file.prepare('UPDATE sessions SET token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ? AND token = ? AND refresh_token = ?').run(next.token, next.refresh_token, next.token_expires_at, id, row.token, row.refresh_token).changes;
+      if (wrote === 1) return next;
+      // The row changed while the forge was asked: ended (sign-out), or renewed elsewhere. The row as it is now answers
+      const after = rowNow();
+      return after && after.token !== NO_TOKEN ? after : null;
     })().finally(() => renewals.delete(id));
     renewals.set(id, job);
     return job;
@@ -547,13 +596,13 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   function managedForge(row) {
     let sealed = row.token;
     let expiresAt = row.token_expires_at;
-    let forge = forgeWith(/** @type {string} */ (openToken(keys.enc, sealed)));
+    let forge = forgeWith(/** @type {string} */ (openFor({ id: row.id, token: sealed }, 'token')));
     const over = () => new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
     /** Whether the token is a new one: false when this session cannot renew (the call goes on as it would have) */
     const renewNow = async () => {
       const next = await renew(row.id, sealed);
       if (next === NO_REFRESH) return false;
-      const token = next ? openToken(keys.enc, next.token) : null;
+      const token = next ? openFor(next, 'token') : null;
       if (!next || token === null) throw over();
       sealed = next.token;
       expiresAt = next.token_expires_at;
@@ -566,7 +615,15 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
         const member = forge[prop];
         if (typeof member !== 'function' || prop === 'rateLimit') return member;
         return async (...args) => {
-          if (due()) await renewNow();
+          if (due()) {
+            try {
+              await renewNow();
+            } catch (err) {
+              // Renewing ahead of time could not be done now (the forge is down): a token that has not expired yet still works
+              const stillGood = expiresAt !== null && Date.parse(expiresAt) > now();
+              if (!(err instanceof ForgeError && err.code === 'unavailable' && stillGood)) throw err;
+            }
+          }
           try {
             return await forge[prop](...args);
           } catch (err) {
@@ -607,9 +664,10 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     for (const old of file.prepare('SELECT * FROM sessions WHERE expires_at <= ?').all(iso(at))) await endRow(/** @type {SessionRow} */ (old));
     // Only a maintainer's token is kept; anyone else's is revoked at once (they are asked again at their next sign-in)
     const keep = isMaintainer(permission);
+    const id = macOf(keys.mac, value);
     file.prepare('INSERT INTO sessions (id, forge, user_id, login, token, permission, created_at, checked_at, expires_at, refresh_token, token_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(macOf(keys.mac, value), forgeConfig.type, String(user.id), user.login, keep ? sealToken(keys.enc, token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + sessionMs),
-        keep && given.refreshToken !== '' ? sealToken(keys.enc, given.refreshToken) : '', keep ? given.expiresAt : null);
+      .run(id, forgeConfig.type, String(user.id), user.login, keep ? sealFor(id, 'token', token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + sessionMs),
+        keep && given.refreshToken !== '' ? sealFor(id, 'refresh_token', given.refreshToken) : '', keep ? given.expiresAt : null);
     if (!keep) await revoke(token);
     redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: sessionMs / 1000, secure }), clearState]);
   }
@@ -709,7 +767,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     },
     /** The forge as a signed-in user, with their own token (for the routes that act on the forge) */
     forgeFor(session) {
-      const token = session.row.token === NO_TOKEN ? null : openToken(keys.enc, session.row.token);
+      const token = session.row.token === NO_TOKEN ? null : openFor(session.row, 'token');
       if (token === null) throw new ForgeError(`${forgeName} sign-in has to be renewed; sign in again.`, { code: 'unauthorized', forge: forgeName });
       return managedForge(session.row);
     },
@@ -723,7 +781,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
      */
     async forgeForUser(userId) {
       const row = /** @type {SessionRow | undefined} */ ((await store()).prepare('SELECT * FROM sessions WHERE user_id = ? AND token <> ? AND expires_at > ? ORDER BY created_at DESC, rowid DESC LIMIT 1').get(String(userId), NO_TOKEN, iso(now())));
-      const token = row ? openToken(keys.enc, row.token) : null;
+      const token = row ? openFor(row, 'token') : null;
       if (token === null) throw new ForgeError(`The token's owner has no live sign-in to ${forgeName}; they sign in to cornfield again, then the token works again.`, { code: 'unauthorized', forge: forgeName });
       return managedForge(/** @type {SessionRow} */ (row));
     },

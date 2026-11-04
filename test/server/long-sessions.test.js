@@ -264,8 +264,8 @@ describe('GitHub: a review token over a long session', () => {
       await boot();
       const row = session();
       expect(row.token_expires_at).toBe(new Date(T0 + 8 * HOUR).toISOString());
-      expect(row.refresh_token).toMatch(/^v1\./);
-      expect(row.token).toMatch(/^v1\./);
+      expect(row.refresh_token).toMatch(/^v2\./);
+      expect(row.token).toMatch(/^v2\./);
       const file = fs.readFileSync(path.join(data, 'cornfield.db'));
       expect(file.includes('rt-1')).toBe(false);
       expect(file.includes('tok-1')).toBe(false);
@@ -344,15 +344,26 @@ describe('Forgejo: tokens that last an hour', () => {
   let srv;
   let clock;
   let st;
+  let fjConfig;
+  let stubForge;
 
   /** A token endpoint like Forgejo's: 1 hour access tokens, a rotating refresh token */
   const routes = {
-    'POST /login/oauth/access_token': (req) => {
+    'POST /login/oauth/access_token': async (req) => {
       const form = Object.fromEntries(new URLSearchParams(req.body));
       st.requests.push(form);
       if (form.grant_type === 'refresh_token') {
+        // A test can hold the renewals until two have arrived: two processes renewing the same row at once
+        if (st.together) {
+          st.together.arrived += 1;
+          if (st.together.arrived >= 2) st.together.release();
+          await st.together.both;
+        }
         if (st.refreshAnswer) return st.refreshAnswer;
-        if (form.refresh_token !== st.refreshToken) return { status: 400, body: { error: 'invalid_grant', error_description: 'unable to parse refresh token' } };
+        if (form.refresh_token !== st.refreshToken) {
+          if (st.together) await new Promise((r) => setTimeout(r, 50)); // the loser hears after the winner has written
+          return { status: 400, body: { error: 'invalid_grant', error_description: 'unable to parse refresh token' } };
+        }
       }
       st.n += 1;
       st.valid = new Set([`fj-${st.n}`]); // an issued token replaces the last: only the newest works
@@ -365,12 +376,13 @@ describe('Forgejo: tokens that last an hour', () => {
   afterAll(async () => { await fake.close(); });
   beforeEach(async () => {
     clock = T0;
-    st = { n: 0, requests: [], valid: new Set(), refreshToken: null, refreshAnswer: null, refresh: true, expiresIn: 3600, asked: [] };
+    st = { n: 0, requests: [], valid: new Set(), refreshToken: null, refreshAnswer: null, refresh: true, expiresIn: 3600, asked: [], together: null };
     data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-long-fj-'));
     const config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
     Object.assign(config, { forge: { type: 'forgejo', url: fake.url, repo: 'acme/home' }, publicUrl: PUBLIC });
+    fjConfig = config;
     // A stand-in for the Forgejo adapter: it knows which token is good, and refuses (401) any other
-    const createForge = (_forge, { token }) => {
+    const createForge = stubForge = (_forge, { token }) => {
       const guard = () => {
         st.asked.push(token);
         if (!st.valid.has(token)) throw new ForgeError('Forgejo did not accept the sign-in; sign in again.', { code: 'unauthorized', status: 401, forge: 'Forgejo' });
@@ -396,7 +408,7 @@ describe('Forgejo: tokens that last an hour', () => {
     await signedIn(srv.port, 'c');
     const row = session();
     expect(row.token_expires_at).toBe(new Date(T0 + HOUR).toISOString());
-    expect(row.refresh_token).toMatch(/^v1\./);
+    expect(row.refresh_token).toMatch(/^v2\./);
     expect(fs.readFileSync(path.join(data, 'cornfield.db')).includes('fjr-1')).toBe(false);
   });
 
@@ -465,6 +477,65 @@ describe('Forgejo: tokens that last an hour', () => {
     expect((await dashboard(cookie)).status).toBe(401);
     expect(refreshes()).toEqual([]);
     expect(rowsOf(data, 'SELECT * FROM sessions')).toEqual([]);
+  });
+
+  it('does not end a valid session when two processes renew it at once: the one the forge refuses takes the winner\'s pair', async () => {
+    const { cookie } = await signedIn(srv.port, 'c');
+    // A second cornfield on the same data folder (a restart that overlaps, two behind one volume)
+    const other = await start(fjConfig, { env: FJ_ENV, now: () => clock, createForge: stubForge });
+    try {
+      let release = () => {};
+      st.together = { arrived: 0, both: new Promise((r) => { release = r; }), release: () => release() };
+      clock = T0 + 2 * HOUR;
+      const [a, b] = await Promise.all([dashboard(cookie), raw(other.port, 'GET', '/topology.json', { headers: { cookie } })]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(refreshes().map((f) => f.refresh_token)).toEqual(['fjr-1', 'fjr-1']); // one won, one was refused
+      expect(rowsOf(data, 'SELECT * FROM sessions')).toHaveLength(1);
+      st.together = null;
+      // and the session goes on with the winner's pair
+      clock += 2 * HOUR;
+      expect((await dashboard(cookie)).status).toBe(200);
+      expect(refreshes().at(-1).refresh_token).toBe('fjr-2');
+    } finally {
+      await other.close();
+    }
+  });
+
+  it('a token sealed for one session does not open in another\'s row', async () => {
+    const one = await signedIn(srv.port, 'c');
+    const two = await signedIn(srv.port, 'c');
+    st.valid = new Set(['fj-1', 'fj-2']); // both sign-ins' tokens are good at the forge
+    const [a, b] = rowsOf(data, 'SELECT id, token, refresh_token FROM sessions ORDER BY created_at, rowid');
+    expect(a.id).not.toBe(b.id);
+    // Somebody who can write the file (not the key) copies session one's sealed pair into session two
+    const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+    db.prepare('UPDATE sessions SET token = ?, refresh_token = ? WHERE id = ?').run(a.token, a.refresh_token, b.id);
+    db.close();
+    clock = T0 + 20 * MIN; // the permission is due again: the token is opened
+    expect((await dashboard(two.cookie)).status).toBe(401);
+    expect((await dashboard(one.cookie)).status).toBe(200);
+  });
+
+  it('ends no session for a rate limit, a timeout or an answer too large to be a token pair', async () => {
+    const { cookie } = await signedIn(srv.port, 'c');
+    for (const answer of [{ status: 429, body: 'slow down' }, { status: 408, body: '' }, { status: 200, body: 'x'.repeat(100 * 1024) }]) {
+      st.refreshAnswer = answer;
+      clock += 2 * HOUR;
+      expect((await dashboard(cookie)).status, String(answer.status)).toBe(503);
+      expect(rowsOf(data, 'SELECT * FROM sessions'), String(answer.status)).toHaveLength(1);
+    }
+    st.refreshAnswer = null;
+    expect((await dashboard(cookie)).status).toBe(200);
+  });
+
+  it('a call just before expiry still works with the old token when renewing ahead cannot be done now', async () => {
+    const { cookie } = await signedIn(srv.port, 'c');
+    st.refreshAnswer = { status: 503, body: { message: 'down' } };
+    clock = T0 + HOUR - 10_000; // inside the 30 s skew, not yet expired; the permission is due again
+    expect((await dashboard(cookie)).status).toBe(200);
+    expect(refreshes().length).toBeGreaterThan(0); // each call tried, and went on when it could not
+    expect(st.asked.slice(-2)).toEqual(['fj-1', 'fj-1']); // me() and permission(), with the token that still works
+    expect(rowsOf(data, 'SELECT * FROM sessions')).toHaveLength(1);
   });
 
   it('keeps the session when Forgejo cannot be asked to renew: 503 now, fine when it is back', async () => {
