@@ -66,7 +66,7 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
 /** The most hooks a config lists */
 export const MAX_HOOKS = 20;
 /** The bounds of `hookPoll.specs` in milliseconds: not under a minute (the forge is not hammered), not over an hour */

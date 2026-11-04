@@ -13,6 +13,8 @@
  *   spec.approved   a maintainer approved a proposal          spec.sentBack   a maintainer sent one back
  *   build.opened    the build issue of an approved proposal was opened
  *   pr.landed       a pull request was landed through cornfield (its Land it); a merge made on the forge sends nothing
+ *   session.expiring  a maintainer's sign-in ends within a day (`watchSessions`, below). Its body is its own:
+ *                   `{ event, at, actor, expiresAt, mapUrl }`
  *
  * **A hook never gets in the way.** `emit` returns at once and never throws; the delivery runs in the background, from a
  * queue in memory. A failed delivery (a network error, a timeout, anything but a 2xx) is tried again after 1s, 5s and 30s
@@ -49,6 +51,9 @@ export const BACKOFF_MS = Object.freeze([1_000, 5_000, 30_000]);
 export const TIMEOUT_MS = 10_000;
 /** How much of an answer is read before it is dropped */
 export const MAX_RESPONSE_BYTES = 4096;
+/** How often live sessions are looked at for `session.expiring`, and how far ahead of the end the event is sent */
+export const SESSION_CHECK_MS = 60 * 60 * 1000;
+export const EXPIRING_WITHIN_MS = 24 * 60 * 60 * 1000;
 /** The most deliveries waiting (or being retried) at once; one past it is dropped, and the audit table says so */
 export const MAX_PENDING = 500;
 
@@ -179,6 +184,8 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
 
   /** The body of an event: only the fields of the payload, in a fixed order */
   function bodyOf(event, p) {
+    // A session's end has no spec, pull request or proposal: its body is only who, until when, and where cornfield is
+    if (event === 'session.expiring') return JSON.stringify({ event, at: new Date(now()).toISOString(), actor: p.actor ?? null, expiresAt: p.expiresAt ?? null, mapUrl: publicUrl || null });
     const out = {
       event, at: new Date(now()).toISOString(), slug: p.slug ?? null, pull: p.pull ?? null, headSha: p.headSha ?? null,
       proposalSha256: p.proposalSha256 ?? null, actor: p.actor ?? null,
@@ -254,13 +261,42 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     })().catch((err) => console.error(`[cornfield] the spec PRs could not be checked for spec.ready: ${err instanceof Error ? err.message : err}`));
   }
 
+  /**
+   * `session.expiring`: once an hour (and once now), the live sessions of maintainers (the ones that keep a forge token)
+   * that end within 24 hours are announced, each once: the row's `expiring_sent_at` is set before the event is
+   * emitted, so a restart sends none twice (and a delivery lost for good is not tried again later). A session that was
+   * signed out, or ended, is not a row any more and is never announced. A user with several live sessions (a laptop and
+   * a phone) gets an event for each, naming the same login and that session's own end. Needs the SQLite file, and only
+   * runs when a hook asked for the event. The timer is unref'd and stopped by `close`. Returns at once, never throws.
+   */
+  function watchSessions() {
+    if (closed || !store || !targets.some((t) => t.events.includes('session.expiring'))) return;
+    const check = async () => {
+      const db = await store();
+      const at = now();
+      const rows = db.prepare("SELECT id, login, expires_at FROM sessions WHERE token <> '' AND expiring_sent_at IS NULL AND expires_at > ? AND expires_at <= ? ORDER BY expires_at")
+        .all(new Date(at).toISOString(), new Date(at + EXPIRING_WITHIN_MS).toISOString());
+      const mark = db.prepare('UPDATE sessions SET expiring_sent_at = ? WHERE id = ? AND expiring_sent_at IS NULL');
+      for (const r of rows) {
+        if (mark.run(new Date(at).toISOString(), r.id).changes === 1) emit('session.expiring', { actor: r.login, expiresAt: r.expires_at });
+      }
+    };
+    const tick = () => {
+      if (closed) return;
+      check()
+        .catch((err) => console.error(`[cornfield] the sessions could not be checked for session.expiring: ${err instanceof Error ? err.message : err}`))
+        .finally(() => { if (!closed) later(tick, SESSION_CHECK_MS); });
+    };
+    later(tick, 0);
+  }
+
   function close() {
     closed = true;
     for (const t of timers) timer.clearTimeout(t);
     timers.clear();
   }
 
-  return { emit, specsSeen, close };
+  return { emit, specsSeen, watchSessions, close };
 }
 
 /** The SHA-256 of a proposal file as `read` gives it, or null when it cannot be read (an event still goes out) */

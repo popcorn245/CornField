@@ -141,6 +141,7 @@ export function createCornfieldServer(config, opts = {}) {
   const hooks = hookSettings
     ? createHooks({ hooks: config.hooks, secret: hookSettings.secret, fetch: opts.hookFetch, record: (entry) => auth.record(entry), store: auth.store, now: opts.now, publicUrl: config.publicUrl, timer: opts.hookTimer })
     : null;
+  hooks?.watchSessions();
   // Landing on approval needs somebody signed in to land as, like the hooks' events: a half-set key is a startup error
   if (config.approveLands && !auth.enabled) throw new Error('The config says proposals.approveLands, but sign-in is not set up. An approval is a signed-in maintainer\'s, and it lands as them, so without sign-in nothing would ever land: set up sign-in (docs/sign-in.md), or remove approveLands.');
   const root = config.root;

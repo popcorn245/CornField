@@ -12,6 +12,7 @@
  *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
  *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
  *   landings      the spec PRs an approval is waiting to land (`proposals.approveLands`), so a restart picks them up (server/lander.js)
+ *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
  * the last one it has. `openStore` runs the ones a file lacks, each in its own transaction, so a fresh file and one
@@ -124,6 +125,13 @@ export const MIGRATIONS = Object.freeze([
     state       TEXT NOT NULL CHECK (state IN ('pending', 'landed', 'cancelled', 'left-open', 'done')),
     PRIMARY KEY (repo, pull)
   ) STRICT;
+  `,
+  // 5: long sessions (server/auth.js, server/hooks.js): the forge's refresh token (encrypted, like the access token) and
+  // when the access token expires, so an expiring forge token is renewed; and when \`session.expiring\` was sent for a session
+  `
+  ALTER TABLE sessions ADD COLUMN refresh_token TEXT NOT NULL DEFAULT '';  -- the forge's refresh token, encrypted like \`token\`; '' when there is none
+  ALTER TABLE sessions ADD COLUMN token_expires_at TEXT;                   -- when the access token stops working; NULL when it does not expire
+  ALTER TABLE sessions ADD COLUMN expiring_sent_at TEXT;                   -- when the \`session.expiring\` hook event was sent; NULL before
   `,
 ]);
 

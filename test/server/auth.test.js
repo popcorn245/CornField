@@ -195,7 +195,7 @@ describe('sign-in with GitHub, and the guard', () => {
     expect(row).toMatchObject({ forge: 'github', user_id: '1003', permission: 'admin' });
     expect(row.id).not.toBe(cookie.split('=')[1]);
     expect(row.token).not.toContain('tok-admin');
-    expect(row.token).toMatch(/^v1\./);
+    expect(row.token).toMatch(/^v2\./);
     expect(fs.readFileSync(path.join(data, 'cornfield.db')).includes('tok-admin')).toBe(false);
   });
 
@@ -581,6 +581,20 @@ describe('the pieces', () => {
   it('parseCookies', () => {
     expect(parseCookies('a=1; b=two=2;c=; =x; junk; a=again')).toEqual({ a: '1', b: 'two=2', c: '' });
     expect(parseCookies(undefined)).toEqual({});
+  });
+
+  it('a token sealed for a row and column opens only there, and a v1 one only where a legacy value may be', () => {
+    const key = Buffer.alloc(32, 7);
+    const sealed = sealToken(key, 'tok-123', 'cornfield session A token');
+    expect(sealed).toMatch(/^v2\./);
+    expect(openToken(key, sealed, 'cornfield session A token')).toBe('tok-123');
+    expect(openToken(key, sealed, 'cornfield session B token')).toBeNull();
+    expect(openToken(key, sealed, 'cornfield session A refresh_token')).toBeNull();
+    expect(openToken(key, sealed)).toBeNull();
+    const old = sealToken(key, 'tok-old');
+    expect(old).toMatch(/^v1\./);
+    expect(openToken(key, old, 'cornfield session A token')).toBe('tok-old');
+    expect(openToken(key, old, 'cornfield session A refresh_token', { legacy: false })).toBeNull();
   });
 
   it('a sealed token opens under its key only, and not once tampered with', () => {

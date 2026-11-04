@@ -32,10 +32,11 @@ Sign-in is configured by env only, never by the config file:
 | `CORNFIELD_FORGEJO_CLIENT_ID`, `CORNFIELD_FORGEJO_CLIENT_SECRET` | the OAuth app, when it is `forgejo` |
 | `CORNFIELD_SESSION_SECRET` | at least 32 random characters: `openssl rand -base64 48` |
 | `CORNFIELD_PUBLIC_URL` | the origin people open cornfield at, like `https://cornfield.example.org` (or `publicUrl` in the config) |
+| `CORNFIELD_SESSION_DAYS` | optional: how many days a session lasts, a whole number from 1 to 30; 7 when unset ([below](#how-long-a-session-lasts)) |
 
 The config's `forge` names the forge and the repo whose maintainers may sign in (`forge: { type: 'github', repo: 'owner/name' }`; a Forgejo, or a GitHub Enterprise Server, also needs its `url`).
 
-Half of it set is an error at startup, not a quiet fallback to no sign-in: an id without its secret, the other forge's pair, no session secret, a short one, or no public URL.
+Half of it set is an error at startup, not a quiet fallback to no sign-in: an id without its secret, the other forge's pair, no session secret, a short one, or no public URL. So is a `CORNFIELD_SESSION_DAYS` that is not a whole number from 1 to 30.
 
 The session secret names sessions and encrypts the forge tokens kept in them; change it and everyone is signed out.
 
@@ -67,9 +68,25 @@ Set the config's `forge.url` to the instance, like `https://forgejo.example.org`
 
 ## What it keeps
 
-A session is a row of `cornfield.db` in the data folder ([config](config.md)): who you are, your permission, when it was last asked, and, for a maintainer only, your forge token, encrypted. The cookie holds a random value whose hash names the row, so the file alone opens no session. Sessions last 7 days; **Sign out** in the header ends one at once. The token never reaches the browser, and never reaches a `proxy` upstream either: cornfield's own cookies are taken out of what a proxied path forwards, and an upstream cannot set them.
+A session is a row of `cornfield.db` in the data folder ([config](config.md)): who you are, your permission, when it was last asked, and, for a maintainer only, your forge token, encrypted. The cookie holds a random value whose hash names the row, so the file alone opens no session. Sessions last 7 days unless `CORNFIELD_SESSION_DAYS` says otherwise ([below](#how-long-a-session-lasts)); **Sign out** in the header ends one at once. The token never reaches the browser, and never reaches a `proxy` upstream either: cornfield's own cookies are taken out of what a proxied path forwards, and an upstream cannot set them.
 
 A token cornfield no longer needs is revoked at the forge: a non-maintainer's right after sign-in, and a maintainer's when the session ends (sign-out, expiry, or no longer a maintainer). GitHub lets the app do that; Forgejo's API has no such call, so on Forgejo revoke cornfield in **Settings → Applications → Authorized OAuth2 applications** when you stop using it.
+
+## How long a session lasts
+
+A session lasts **7 days**, from the sign-in. A team that approves from a chat bot through a [review token](#review-tokens) needs the owner's session to be alive for every review, and would otherwise sign in again once a week. Set `CORNFIELD_SESSION_DAYS` to a whole number from **1 to 30** to change that; anything else (`0`, `31`, `7.5`, `a week`) is an error at startup, never a quiet fallback to 7.
+
+- The session ends on the day it was set to, whatever is done with it: **nothing renews it**, a review through the API included. After it, a review token is refused with the same 401 as ever, and signing in again makes it work again.
+- **The trade-off.** A maintainer's session keeps their forge token, encrypted, in `cornfield.db` for as long as it lasts, so a longer session keeps that token (and a stolen copy of the file with the session secret) useful for longer. What does not change: **Sign out** or revoking the token at the forge ends it at once; the maintainer's permission is asked again after 15 minutes on the dashboard and on every review call; a demoted owner loses the token at the next check; the cookie, the secret and the token never reach a browser. Choose the shortest number of days that a team can live with; 30 is the most.
+- `session.expiring` ([config](config.md#hooks)) tells a chat bot about a day before a maintainer's session ends, so someone signs in again before the reviews start failing.
+
+### The forge token inside a session
+
+A session is only useful while the forge token it keeps works, and forge tokens can expire sooner than the session:
+
+- **Forgejo** OAuth access tokens expire, by default after **1 hour** (the instance's `ACCESS_TOKEN_EXPIRATION_TIME`), and come with a refresh token. cornfield keeps the refresh token, encrypted like the access token, with the time the access token ends. It renews the pair on its own: before a call when the time has passed, and once more when a call is answered 401. The renewal is one at a time for a session (Forgejo's refresh tokens are used once), and the new pair is stored together. The session is not lengthened by it.
+- **GitHub** OAuth app tokens do not expire, and nothing changes for them. An app with *token expiration* turned on is handled the same way as Forgejo: if GitHub answers with `expires_in` and a refresh token, they are kept and used.
+- If the forge refuses the refresh token (revoked, expired, the app removed), the session **ends** like a sign-out: the dashboard asks to sign in, and a review token or a landing is refused with the 401 above until its owner signs in again. If the forge cannot be reached for the renewal, the session is kept and the call fails for now (the dashboard says it could not check your access); the next call tries again.
 
 ## Landing on approval
 
@@ -87,7 +104,7 @@ With a [hook](config.md#hooks) that subscribes to `spec.ready`, cornfield lists 
 
 A maintainer can make **review tokens** in the dashboard, so a script or a chat bot can send their Approve or Send back through `POST /api/reviews` ([proposals.md](proposals.md#2-review-it)). They are kept in `review_tokens` in the same file: a SHA-256 hash (never the token, which is shown once), who made it, a label, when it was made, when it expires (30 days unless asked, 90 at most), when it was revoked and last used.
 
-- **The comment is the maintainer's own.** A review only counts when a maintainer wrote its comment, and cornfield has no forge token of its own, so a review that came through the API is posted with the forge token above, the one the token's owner's session keeps. A review token therefore works while its owner has a live session (7 days, or until Sign out) and is refused with a 401 when they have none; signing in again makes the same token work again. It does not make a session last longer, and it does not keep a forge token that would otherwise be revoked.
+- **The comment is the maintainer's own.** A review only counts when a maintainer wrote its comment, and cornfield has no forge token of its own, so a review that came through the API is posted with the forge token above, the one the token's owner's session keeps. A review token therefore works while its owner has a live session ([7 days by default, up to 30](#how-long-a-session-lasts), or until Sign out) and is refused with a 401 when they have none; signing in again makes the same token work again. It does not make a session last longer, and it does not keep a forge token that would otherwise be revoked. To go longer than a week without signing in, set `CORNFIELD_SESSION_DAYS`.
 - **The permission is asked on every call.** Not the session's 15-minute-old answer: the forge is asked who the token is and whether they maintain the repo now. A demoted owner is refused (403) with the token untouched, and it works again if they are made a maintainer again.
 - **No cookie.** The call is the one route before the sign-in guard. It reads the `Authorization: Bearer cf_rt_…` header and nothing else; a session cookie is never a substitute, and a review token is no way into any other route (the routes that make, list and revoke tokens take a signed-in maintainer from cornfield's own page, with the same-origin check of sign-out). The `Host` check above is not loosened: call it at the public URL.
 - **Every call is a row** in `actions` (`review`), accepted or refused; a call with no token or one nobody holds is written down too, up to 20 a minute from everyone together (more is answered 429 and not written, so no one can fill the file).
