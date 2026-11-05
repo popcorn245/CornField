@@ -82,7 +82,7 @@ import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, ru
 import { quietAfterMs } from '../core/config.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
 import { readTopology } from '../core/validate.js';
-import { listPullProposals } from './proposal-pulls.js';
+import { findPullProposal, listPullProposals, readPullProposal } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 
 /** Requests one person may make in a minute (a ceiling of its own; every other action is counted by `ATTEMPTS_PER_MINUTE` and `PER_MINUTE`) */
@@ -200,6 +200,24 @@ export function timelineOf(row, events, now, quietMs) {
   return out;
 }
 
+/**
+ * The ids of the nodes a proposal touches: what it adds (and their parents), changes and removes, and both ends of the edges it adds,
+ * changes and removes. Anything that is not a proposal gives none. Pure.
+ * @param {any} proposal
+ * @returns {string[]}
+ */
+export function proposalNodeIds(proposal) {
+  const out = new Set();
+  const list = (v) => (Array.isArray(v) ? v : []);
+  const id = (v) => { if (typeof v === 'string' && v !== '') out.add(v); };
+  const blocks = proposal && typeof proposal === 'object' ? proposal : {};
+  for (const op of ['add', 'change', 'remove']) {
+    for (const n of list(blocks.nodes?.[op])) { id(n?.id); if (op === 'add') id(n?.parent); }
+    for (const e of list(blocks.edges?.[op])) { id(e?.from); id(e?.to); }
+  }
+  return [...out];
+}
+
 /** The ids a request names, the ones the map knows when it is known */
 function requestNodes(request, known) {
   const ids = Array.isArray(request?.nodes) ? request.nodes.filter((n) => typeof n === 'string') : [];
@@ -278,6 +296,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const map = theMap();
     if (row.head_sha) {
       const files = readOf(db, row.run_id, 'files');
+      // `null` at this sha: the forge could not list the files (see readNodes), so what the run is about stands in, below
       if (files && files.sha === row.head_sha && Array.isArray(files.data)) {
         const ids = new Set();
         for (const f of files.data) {
@@ -332,7 +351,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   }
 
   /** Takes a place for a run: the cap and the one-per-subject rule are checked and the row inserted in one transaction. Throws a `Refused`. */
-  function reserve(db, request, { target, who, via, force }) {
+  function reserve(db, request, { target, who, via, force, derived = null }) {
     const at = now();
     const mine = subjectKeys(request.refs);
     db.exec('BEGIN IMMEDIATE');
@@ -345,7 +364,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       }
       if (refuseCollisions) {
         const map = theMap();
-        const wanted = requestNodes(request, map.ids.size ? map.ids : null);
+        // What the request names; when it names nothing (the dashboard's button), what its subject is about, read before the transaction
+        const wanted = [...new Set([...requestNodes(request, map.ids.size ? map.ids : null), ...resolveMentions(derived || [], map.nodes).ids])];
         for (const r of open) {
           const theirs = nodesOfRow(db, r).nodes;
           const shared = wanted.filter((id) => theirs.includes(id));
@@ -443,10 +463,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
 
       // Where the request goes: the thread it came from, else the open spec PR of the proposal, else the issue
       let number;
+      let entry = null;
       if (made.refs.thread != null) number = made.refs.thread;
       else if (made.refs.proposal != null) {
         const listed = await listPullProposals(forge, folder, { hooks: null });
-        const entry = listed.entries.find((e) => e.slug === made.refs.proposal);
+        entry = listed.entries.find((e) => e.slug === made.refs.proposal) ?? null;
         if (!entry) throw new Refused(404, listed.problem ? `The open spec pull requests could not be read: ${listed.problem}` : `No open spec pull request holds the proposal ${made.refs.proposal}, so there is nowhere to post the request.`, 'not-found');
         number = entry.pull.number;
         made = build(me.login, number);
@@ -473,13 +494,26 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         const why = await ctx.stillAllowed();
         if (why) throw new Refused(403, why, 'forbidden');
       }
+      // With collisions refused, a request that names no node on the map is checked by what its subject is about (spec 0005 D9), as the
+      // map would mark it before its first push: the opening post's mentions and the proposal's nodes. Read now, outside the transaction
+      let derived = null;
+      if (refuseCollisions && !requestNodes(made, theMap().ids.size ? theMap().ids : null).length) {
+        try {
+          derived = await subjectRefs(forge, made.refs, entry);
+        } catch (err) {
+          throw new Refused(503, `What this request is about could not be read, so it cannot be checked for collisions (agents.refuseCollisions is on): ${words(err)}`, 'unavailable');
+        }
+      }
       const db = await auth.store();
-      reserve(db, made, { target: number, who, via, force: force === true });
+      reserve(db, made, { target: number, who, via, force: force === true, derived });
+      // What was read is what the map marks for this run until it pushes: kept, so the overlay has it now and the poll need not read it again
+      if (derived) db.prepare('INSERT OR REPLACE INTO run_reads (run_id, source, sha, data, at) VALUES (?, ?, ?, ?, ?)').run(made.runId, 'mentions', '', JSON.stringify(derived), iso(now()));
       let posted;
       try {
         posted = await forge.comment(number, comment);
       } catch (err) {
         db.prepare('DELETE FROM runs WHERE run_id = ?').run(made.runId);
+        db.prepare('DELETE FROM run_reads WHERE run_id = ?').run(made.runId);
         throw err;
       }
       db.prepare('UPDATE runs SET comment_id = ?, comment_url = ? WHERE run_id = ?').run(posted.id, posted.url ?? null, made.runId);
@@ -634,6 +668,40 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   }
 
   /**
+   * What a run is about, as references the map resolves (spec 0005 D9: "before the first push, the nodes come from what the request was
+   * about: the proposal, or the thread's mentions"): the `[[mentions]]` in the opening post of its thread, issue or spec PR, and for a
+   * proposal the ids of every node it touches (what it adds, changes and removes, the parents of what it adds, and the ends of the edges it
+   * adds, changes and removes). Asks the forge; throws what it throws. `entry`: the spec PR's listing when the caller has it already.
+   * @returns {Promise<string[]>}
+   */
+  async function subjectRefs(forge, refs, entry = null) {
+    const out = [];
+    const add = (r) => { if (typeof r === 'string' && r !== '' && !out.includes(r)) out.push(r); };
+    if (refs?.proposal != null && refs.pull != null) {
+      const pull = await forge.pull(refs.pull);
+      parseMentions(pull.body ?? '').refs.forEach(add);
+      const found = entry ?? await findPullProposal(forge, folder, refs.proposal, refs.pull);
+      if (found) {
+        let proposal = null;
+        try { proposal = JSON.parse(await readPullProposal(forge, folder, found)); } catch (err) { if (!(err instanceof SyntaxError)) throw err; }
+        for (const id of proposalNodeIds(proposal)) add(id);
+      }
+    } else if (refs?.thread != null || refs?.issue != null) {
+      const n = refs.thread ?? refs.issue;
+      let item;
+      try {
+        item = await forge.issue(n);
+      } catch (err) {
+        // A thread that is a pull request is not an issue to the forge: ask for it as one
+        if (!(err instanceof ForgeError && err.code === 'not-found')) throw err;
+        item = await forge.pull(n);
+      }
+      parseMentions(item.body ?? '').refs.forEach(add);
+    }
+    return out;
+  }
+
+  /**
    * What the map needs from the forge, kept in `run_reads` so it is asked once: for a run with a head (a trusted pull request, or a branch)
    * the files it changes, read again only when the head moved; for a run with no head yet, the `[[mentions]]` in the opening post of what it is about.
    * A failure is logged and tried again at the next look. At most `MAX_FILE_READS` and `MAX_MENTION_READS` a look.
@@ -647,21 +715,27 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (!statusOf(row, at, quietMs).open) continue;
       if (row.head_sha) {
         const had = readOf(db, row.run_id, 'files');
-        if (had && had.sha === row.head_sha) continue;
-        if (files >= MAX_FILE_READS) continue;
-        files += 1;
-        try {
-          let list;
-          if (row.pull != null && row.pull_trusted === 1) list = await forge.pullFiles(row.pull);
-          else {
-            base ??= config.forge.baseBranch || await forge.defaultBranch();
-            list = await forge.compare(base, row.head_sha);
+        // Files listed at this head: they say the nodes. Listed as unknowable (`null`): what the run is about stands in, read below
+        if (had && had.sha === row.head_sha && Array.isArray(had.data)) continue;
+        if (!(had && had.sha === row.head_sha) && files < MAX_FILE_READS) {
+          files += 1;
+          try {
+            let list;
+            if (row.pull != null && row.pull_trusted === 1) list = await forge.pullFiles(row.pull);
+            else {
+              base ??= config.forge.baseBranch || await forge.defaultBranch();
+              list = await forge.compare(base, row.head_sha);
+            }
+            save.run(row.run_id, 'files', row.head_sha, JSON.stringify(list.map((f) => ({ path: f.path, previousPath: f.previousPath ?? null, status: f.status }))), iso(at));
+          } catch (err) {
+            // A forge that cannot list a comparison's files (an older Forgejo) will not at this head either: say so once, keep `null` for this
+            // sha so it is not asked again until the next push, and the run keeps the nodes of what it is about. Anything else is tried again.
+            if (err instanceof ForgeError && err.code === 'invalid') save.run(row.run_id, 'files', row.head_sha, 'null', iso(at));
+            log(`the files of ${row.run_id} could not be read: ${words(err)}`);
           }
-          save.run(row.run_id, 'files', row.head_sha, JSON.stringify(list.map((f) => ({ path: f.path, previousPath: f.previousPath ?? null, status: f.status }))), iso(at));
-        } catch (err) {
-          log(`the files of ${row.run_id} could not be read: ${words(err)}`);
         }
-        continue;
+        const read = readOf(db, row.run_id, 'files');
+        if (!(read && read.sha === row.head_sha && read.data === null)) continue; // only an unknowable list falls through to the subject
       }
       const had = readOf(db, row.run_id, 'mentions');
       const stamp = /** @type {{ at: string } | undefined} */ (db.prepare("SELECT at FROM run_reads WHERE run_id = ? AND source = 'mentions'").get(row.run_id));
@@ -669,22 +743,12 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (mentions >= MAX_MENTION_READS) continue;
       let refs = null;
       try { refs = JSON.parse(row.request).refs; } catch { refs = null; }
-      const text = refs?.proposal != null && refs.pull != null ? ['pull', refs.pull] : refs?.thread != null || refs?.issue != null ? ['issue', refs.thread ?? refs.issue] : null;
-      if (!text) continue;
+      if (!(refs?.proposal != null && refs.pull != null) && refs?.thread == null && refs?.issue == null) continue;
       mentions += 1;
       try {
-        const item = text[0] === 'pull' ? await forge.pull(text[1]) : await forge.issue(text[1]);
-        save.run(row.run_id, 'mentions', '', JSON.stringify(parseMentions(item.body ?? '').refs), iso(at));
+        save.run(row.run_id, 'mentions', '', JSON.stringify(await subjectRefs(forge, refs)), iso(at));
       } catch (err) {
-        // A thread that is a pull request is not an issue to the forge: ask for it as one
-        try {
-          if (text[0] === 'issue' && err instanceof ForgeError && err.code === 'not-found') {
-            const item = await forge.pull(text[1]);
-            save.run(row.run_id, 'mentions', '', JSON.stringify(parseMentions(item.body ?? '').refs), iso(at));
-          } else throw err;
-        } catch (again) {
-          log(`what ${row.run_id} is about could not be read for mentions: ${words(again)}`);
-        }
+        log(`what ${row.run_id} is about could not be read for its nodes: ${words(err)}`);
       }
     }
   }

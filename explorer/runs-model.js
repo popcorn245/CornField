@@ -181,10 +181,10 @@ export function timelineWords(entry) {
     case 'requested': return { what: `Requested${by}${entry.ref ? ` under the profile ${entry.ref}` : ''}`, note: '' };
     case 'claimed': return { what: `Claimed${by}`, note: entry.note || '' };
     case 'report': return { what: `Reported ${entry.ref || 'in'}${by}`, note: entry.note || '' };
-    case 'push': return { what: `Pushed ${String(entry.ref || '').slice(0, 7)}${entry.note ? ` to ${entry.note}` : ''}`, note: '' };
+    // When cornfield saw it, not when it was pushed: the forge does not say
+    case 'push': return { what: `Push seen: ${String(entry.ref || '').slice(0, 7)}${entry.note ? ` on ${entry.note}` : ''}`, note: '' };
     case 'pull-opened': return { what: `Opened pull request ${entry.ref || ''}${by}`.trim(), note: '' };
     case 'checks': return { what: { success: 'Checks passed', failure: 'Checks failed', running: 'Checks running', none: 'No checks' }[entry.ref] || 'Checks changed', note: '' };
-    case 'review': return { what: `Review${entry.ref ? `: ${entry.ref}` : ''}${by}`, note: entry.note || '' };
     case 'stop-requested': return { what: `Asked to stop${by}`, note: entry.note || '' };
     case 'merged': return { what: `Landed: pull request ${entry.ref || ''} merged`, note: '' };
     case 'closed': return { what: `Pull request ${entry.ref || ''} closed without landing`, note: '' };

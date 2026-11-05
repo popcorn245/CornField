@@ -211,9 +211,9 @@ export const MIGRATIONS = Object.freeze([
     run_id  TEXT NOT NULL,
     key     TEXT NOT NULL,                        -- what happened, once: 'report:<comment>:<n>', 'push:<sha>', 'pull:<n>:opened', 'checks:<sha>:<summary>' ...
     at      TEXT NOT NULL,                        -- when it happened (the forge's time where it says, else when cornfield saw it)
-    kind    TEXT NOT NULL CHECK (kind IN ('claimed', 'report', 'stop-requested', 'push', 'pull-opened', 'checks', 'review', 'merged', 'closed')),
+    kind    TEXT NOT NULL CHECK (kind IN ('claimed', 'report', 'stop-requested', 'push', 'pull-opened', 'checks', 'merged', 'closed')),
     actor   TEXT,
-    ref     TEXT,                                 -- the report's state, the sha pushed, the pull request number, the checks summary, the review's verdict
+    ref     TEXT,                                 -- the report's state, the sha pushed, the pull request number, the checks summary
     note    TEXT,                                 -- the runner's words, as written: the page escapes them
     url     TEXT,
     PRIMARY KEY (run_id, key)

@@ -27,6 +27,11 @@ export const RUNS_LAYER = 'runs';
 /** @type {Map<string, HTMLElement>} the marks on the page by `<kind>:<node id>`, kept so a pulse is not restarted by every pan */
 const marks = new Map();
 let wired = false;
+/** What the marks were last placed for: a paint with the same scene, camera, runs, layer and motion moves nothing (packet frames) */
+let placed = '';
+let placedFor = null;
+let placedScene = null;
+let placedLayer = null;
 let reduce = null;
 
 /** Whether motion is reduced: the page's setting, or a test's */
@@ -61,6 +66,7 @@ function wire() {
 function clearMarks() {
   for (const el of marks.values()) el.remove();
   marks.clear();
+  placed = '';
 }
 
 /** The words on a collision mark */
@@ -76,7 +82,14 @@ export function syncRunOverlay(scene, camera) {
   const layer = typeof document !== 'undefined' ? document.getElementById('run-overlay') : null;
   if (!layer) return;
   const map = state.runsMap;
-  if (!map || !runsLayerOn() || (!map.flight.size && !map.collide.size)) { if (marks.size) clearMarks(); layer.hidden = true; return; }
+  if (!map || !runsLayerOn() || (!map.flight.size && !map.collide.size)) { if (marks.size) clearMarks(); layer.hidden = true; placed = ''; return; }
+  // The map paints every frame while packets move; the marks only move with the scene or the camera
+  const key = `${scene.version}|${camera.x}|${camera.y}|${camera.zoom}|${reducedMotion()}`;
+  if (key === placed && placedFor === map && placedScene === scene && placedLayer === layer) return;
+  placed = key;
+  placedLayer = layer;
+  placedFor = map;
+  placedScene = scene;
   layer.hidden = false;
   layer.classList.toggle('is-static', reducedMotion());
   const seen = new Set();

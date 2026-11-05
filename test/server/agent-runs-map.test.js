@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 // @ts-expect-error plain JS module, no declarations
-import { createRuns } from '../../server/agent-runs.js';
+import { createRuns, proposalNodeIds } from '../../server/agent-runs.js';
 // @ts-expect-error plain JS module, no declarations
 import { ForgeError } from '../../server/forge.js';
 // @ts-expect-error plain JS module, no declarations
@@ -129,13 +129,36 @@ describe('the nodes of a run', () => {
     expect(await t.runs.get(a.id)).toMatchObject({ nodes: ['cart'], nodesFrom: 'files' });
   });
 
-  it('are kept when the forge could not list the files: the request\'s nodes stand, and the next look tries again', async () => {
+  it('fall back to what the run is about when the forge cannot list a comparison\'s files (an older Forgejo), asked once for each push', async () => {
+    const t = setup();
+    t.world.issues.get(12).body = 'About [[cart]]';
+    const a = await t.ask({ refs: { issue: 12 }, nodes: ['orders'] });
+    t.world.branches = [{ name: `agent/${a.id}/x`, sha: 'd'.repeat(40), protected: false }];
+    let asked = 0;
+    t.forge.compare = async () => { asked += 1; throw new ForgeError('This Forgejo does not list the files of a comparison.', { code: 'invalid' }); };
+    t.wait(60_000);
+    await t.follow();
+    await t.follow();
+    await t.follow();
+    expect(asked).toBe(1); // not every look: the answer will not change at this head
+    // the request's node, and the subject's mentions, read although the run has a head
+    expect(await t.runs.get(a.id)).toMatchObject({ nodes: ['orders', 'cart'], nodesFrom: 'request' });
+    // a push asks again
+    t.world.branches = [{ name: `agent/${a.id}/x`, sha: 'e'.repeat(40), protected: false }];
+    await t.follow();
+    expect(asked).toBe(2);
+  });
+
+  it('try again at the next look when the forge failed for another reason (it may answer then)', async () => {
     const t = setup();
     const a = await t.ask({ refs: { issue: 12 }, nodes: ['orders'] });
     t.world.branches = [{ name: `agent/${a.id}/x`, sha: 'd'.repeat(40), protected: false }];
-    t.forge.compare = async () => { throw new ForgeError('no files', { code: 'invalid' }); };
+    let asked = 0;
+    t.forge.compare = async () => { asked += 1; throw new ForgeError('down', { code: 'unavailable' }); };
     t.wait(60_000);
     await t.follow();
+    await t.follow();
+    expect(asked).toBe(2);
     expect(await t.runs.get(a.id)).toMatchObject({ nodes: ['orders'], nodesFrom: 'request' });
   });
 });
@@ -187,6 +210,50 @@ describe('collisions', () => {
     // another node, or none named, is fine
     expect((await t.ask({ refs: { issue: 13 }, nodes: ['web'] })).ok).toBe(true);
     expect((await t.ask({ refs: { issue: 14 } })).ok).toBe(true);
+  });
+
+  it('refuse a request that names no node (the dashboard\'s button) by what its subject mentions, and keep those as its nodes', async () => {
+    const t = setup({ refuse: true });
+    t.world.issues.get(12).body = 'Meals: [[server/orders.js]]';
+    t.world.issues.get(13).body = 'Also about [[orders]], and [[web]]';
+    t.world.issues.get(14).body = 'Only [[cart]]';
+    const a = await t.ask({ refs: { issue: 12 } });
+    expect(a.run).toMatchObject({ nodes: ['orders'], nodesFrom: 'request' }); // read at the request, on the map at once
+    const refused = await t.ask({ refs: { issue: 13 } });
+    expect(refused).toMatchObject({ ok: false, status: 409, code: 'collision' });
+    expect(refused.error).toContain('orders');
+    expect(refused.error).toContain(a.id);
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM run_reads').get().n).toBe(1); // nothing kept for the refused one
+    expect((await t.ask({ refs: { issue: 14 } })).ok).toBe(true);
+  });
+
+  it('refuse by the proposal\'s nodes, for a request about a proposal that names none', async () => {
+    const t = setup({ refuse: true });
+    const sha = 'f'.repeat(40);
+    t.world.pulls = [{ number: 60, title: 'Spec: meals', body: 'Thread: #12', state: 'open', draft: false, author: { login: 'maintainer-one' }, head: { ref: 'spec/0013-meals', sha }, base: { ref: 'main' }, url: 'https://forge.test/pull/60', createdAt: t.stamp(), updatedAt: t.stamp(), mergedAt: null }];
+    t.world.files.set(60, [{ path: `${FOLDER}/0013-meals.json`, status: 'added', previousPath: null }]);
+    t.forge.file = async (ref, p) => (ref === sha && p === `${FOLDER}/0013-meals.json`
+      ? JSON.stringify({ version: 1, title: 'Meals', summary: 's', nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'web' }], change: [{ id: 'cart', set: { desc: 'x' }, why: 'y' }] } })
+      : null);
+    const a = await t.ask({ refs: { issue: 14 }, nodes: ['web'] });
+    expect(a.ok).toBe(true);
+    const refused = await t.ask({ refs: { proposal: '0013-meals' } });
+    expect(refused).toMatchObject({ ok: false, status: 409, code: 'collision' });
+    expect(refused.error).toContain('web'); // the parent of what the proposal adds
+    expect(refused.error).toContain(a.id);
+  });
+
+  it('refuse rather than let through unchecked when what the request is about cannot be read', async () => {
+    const t = setup({ refuse: true });
+    await t.ask({ refs: { issue: 12 }, nodes: ['orders'] });
+    const issue = t.forge.issue;
+    let calls = 0;
+    // the existence check passes, the read for the subject's mentions fails
+    t.forge.issue = async (n) => { calls += 1; if (n === 13 && calls > 1) throw new ForgeError('down', { code: 'unavailable' }); return issue(n); };
+    const refused = await t.ask({ refs: { issue: 13 } });
+    expect(refused).toMatchObject({ ok: false, status: 503, code: 'unavailable' });
+    expect(refused.error).toMatch(/cannot be checked for collisions/);
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM runs').get().n).toBe(1);
   });
 
   it('are refused in the transaction that takes the place: two at once get one, and the cap is still checked first', async () => {
@@ -261,5 +328,18 @@ describe('the timeline', () => {
     const list = await t.runs.list();
     expect(list.refuseCollisions).toBe(false);
     expect(list.runs.find((r) => r.runId === a.id).timeline.length).toBe(1);
+  });
+});
+
+describe('proposalNodeIds', () => {
+  it('names every node a proposal touches: added (and their parents), changed, removed, and the ends of its edges', () => {
+    expect(proposalNodeIds({
+      nodes: { add: [{ id: 'page-meals', parent: 'web' }], change: [{ id: 'cart' }], remove: [{ id: 'old' }] },
+      edges: { add: [{ from: 'page-meals', to: 'orders' }], change: [{ from: 'web', to: 'cart' }], remove: [{ from: 'x', to: 'y' }] },
+    }).sort()).toEqual(['cart', 'old', 'orders', 'page-meals', 'web', 'x', 'y']);
+  });
+
+  it('gives nothing for what is not a proposal, and skips what is not an id', () => {
+    for (const p of [null, undefined, 'text', 7, [], {}, { nodes: 'x' }, { nodes: { add: [null, { id: 3 }, { id: '' }] } }]) expect(proposalNodeIds(p)).toEqual([]);
   });
 });

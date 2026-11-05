@@ -796,11 +796,13 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 .hx-forge * { touch-action: pan-y; }
 .hx-forge.forge-open { pointer-events: auto; }
 @media (min-width: 768px) {
-  .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: min(400px, calc(100% - 24px)); border-left: 0; transform: translateX(-100%); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+  /* The panel's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number (the Runs view's compare widens it, below) */
+  .hx-stage { --hx-forge-w: min(400px, calc(100% - 24px)); }
+  .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: var(--hx-forge-w); border-left: 0; transform: translateX(-100%); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
   .hx-forge.forge-open { transform: translateX(0); }
-  /* The proposal bar and the player make room for it */
-  .hx-stage:has(.forge-open) .hx-proposal-bar { left: 412px; width: min(720px, calc(100% - 436px)); }
-  .hx-stage:has(.forge-open):has(.drawer-open) .hx-proposal-bar { width: min(720px, calc(100% - 940px)); }
+  /* The proposal bar and the player make room for it: 12px past its edge, and the node panel's 480px (+24) when that is open too */
+  .hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px); width: min(720px, calc(100% - var(--hx-forge-w) - 36px)); }
+  .hx-stage:has(.forge-open):has(.drawer-open) .hx-proposal-bar { width: min(720px, calc(100% - var(--hx-forge-w) - 540px)); }
 }
 @media (max-width: 767px) {
   .hx-forge:not(.forge-open) { display: none; }
@@ -958,6 +960,12 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-run-compare-title { margin: 0; font-size: 12px; font-weight: 700; color: var(--hx-text-1); }
 .hx-run-columns { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0; padding: 0; list-style: none; }
 @media (min-width: 1100px) {
-  .hx-forge:has(.hx-run-compare) { width: min(780px, calc(100% - 24px)); }
+  .hx-stage:has(.hx-forge .hx-run-compare) { --hx-forge-w: min(780px, calc(100% - 24px)); }
   .hx-run-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* With the node panel open as well, a 780px compare only fits beside it from 1600px: below that the panel keeps its width and the
+   profiles stack, so neither panel nor the proposal bar between them is covered */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  .hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }
+  .hx-stage:has(.drawer-open) .hx-run-columns { grid-template-columns: 1fr; }
 }

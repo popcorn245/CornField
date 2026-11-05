@@ -146,7 +146,7 @@ describe('the words (runs-model.js)', () => {
 
   it('say a timeline in the order it came, and the limits beside what was reported in words', () => {
     expect(A.timeline.map((e) => timelineWords(e).what)).toEqual([
-      'Requested by maintainer-one under the profile claude', 'Claimed by runner-bot', 'Pushed abcdef0 to agent/meals', 'Opened pull request #50 by runner-bot', 'Reported working by runner-bot', 'Checks running',
+      'Requested by maintainer-one under the profile claude', 'Claimed by runner-bot', 'Push seen: abcdef0 on agent/meals', 'Opened pull request #50 by runner-bot', 'Reported working by runner-bot', 'Checks running',
     ]);
     expect(limitRows(A)).toEqual([
       { name: 'Minutes', limit: '30', reported: 'not reported' }, { name: 'Cost', limit: '5', reported: '0.4' }, { name: 'Tokens', limit: 'no limit asked', reported: '1200' },
@@ -214,6 +214,20 @@ describe('the marks on the map', () => {
     render.renderNow();
     expect(marks().length).toBeGreaterThan(0);
     expect(qa('#layer-toggles-container [data-layer="runs"]')).toHaveLength(1);
+  });
+
+  it('are not touched by a frame that moves nothing (the packets\' frames), and move again with the camera', async () => {
+    fakeServer([A2, B]);
+    mount();
+    await settle();
+    render.renderNow();
+    const el = marks()[0];
+    el.style.left = '-9999px';
+    render.renderNow(); // same scene, same camera: nothing is written
+    expect(el.style.left).toBe('-9999px');
+    state.camera = { ...state.camera, x: state.camera.x + 5 };
+    render.renderNow();
+    expect(el.style.left).not.toBe('-9999px');
   });
 
   it('are not there for a finished run or without any run', async () => {
@@ -345,5 +359,62 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     expect(q('ol.hx-run-timeline')).not.toBe(null);
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
+  });
+});
+
+describe('the runs are read again every minute, only while one is open', () => {
+  const reads = () => /** @type {any} */ (globalThis.fetch).mock.calls.filter(([u]) => String(u).startsWith('/api/agent-runs')).length;
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('reads again while a run is open, stops when none is, never stacks, and stops while the page is put away', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const server = fakeServer([A]);
+    mount();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads()).toBe(1);
+    // A second init (as a test reset or a re-wire would) does not start a second timer
+    initForgePanel({ forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } }, { clock: () => NOW });
+    await vi.advanceTimersByTimeAsync(0);
+    const afterInit = reads();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(reads()).toBe(afterInit + 1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(reads()).toBe(afterInit + 2);
+    // Put away (closed, or into the back-forward cache): no read; shown again: reads resume
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(reads()).toBe(afterInit + 2);
+    window.dispatchEvent(new Event('pageshow'));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(reads()).toBe(afterInit + 3);
+    // The run finishes: the answer has none open, so the timer is not armed again
+    server.runs = [{ ...A, open: false, status: 'merged' }];
+    await vi.advanceTimersByTimeAsync(60_000);
+    const last = reads();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(reads()).toBe(last);
+  });
+
+  it('with no run open, there is no timer at all', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fakeServer([DONE]);
+    mount();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reads()).toBe(1);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(reads()).toBe(1);
+  });
+});
+
+describe('the proposal bar beside the issues and PRs panel (explorer.css)', () => {
+  beforeEach(() => { document.body.innerHTML = body; });
+  // happy-dom has no layout: the rule is held here, and measured in Chromium at 1100, 1440 and 1920 px wide for the review of #90
+  it('makes room by the panel\'s own width, which the compare widens, never a fixed offset', () => {
+    const cssText = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+    expect(cssText).not.toMatch(/proposal-bar \{ left: \d+px/);
+    expect(cssText).toContain('.hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px);');
+    expect(cssText).toContain('width: var(--hx-forge-w);');
+    expect(cssText).toContain('.hx-stage:has(.hx-forge .hx-run-compare) { --hx-forge-w: min(780px, calc(100% - 24px)); }');
+    expect(cssText).toContain('.hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }');
   });
 });

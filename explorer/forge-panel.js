@@ -202,23 +202,38 @@ async function loadRuns(refresh, { say = true } = {}) {
   if (!(ui.runs && ui.runs.data)) return;
   // The map shows the open runs' nodes; a run lit on the map follows its nodes; what changed is said, once the first answer is in
   setRunsOnMap(ui.runs.data.runs);
+  syncRunsPoll();
   if (ui.runSel) relightRun();
   const said = say ? changeWords(before, ui.runs.data.runs) : [];
   if (said.length) announce(said.join('. '));
 }
 
-/** Looks at the runs now and then while any is open, so the marks on the map and the words follow the runs (not while the tab is hidden) */
-function scheduleRunsPoll() {
-  clearTimeout(runsTimer);
+/**
+ * Looks at the runs again in `RUNS_POLL_MS`, but only while one is open: a run's answer that has none open disarms it, and the next answer
+ * with one open (a run requested here, or a look from elsewhere) arms it again. One timer at most; never while the page is hidden or put
+ * away (`pagehide`). So the marks on the map and the words follow the runs.
+ */
+function syncRunsPoll() {
+  const open = !!(ui.runs && ui.runs.data && ui.runs.data.open > 0);
+  if (!open || pageAway) {
+    clearTimeout(runsTimer);
+    runsTimer = 0;
+    return;
+  }
+  if (runsTimer) return;
   runsTimer = setTimeout(async () => {
-    const open = ui.runs && ui.runs.data && ui.runs.data.open > 0;
-    if (open && !(typeof document !== 'undefined' && document.hidden)) {
+    runsTimer = 0;
+    if (!(typeof document !== 'undefined' && document.hidden)) {
       await loadRuns(false);
       paint();
     }
-    scheduleRunsPoll();
+    syncRunsPoll();
   }, RUNS_POLL_MS);
 }
+/** The page is being put away (closed, or into the back-forward cache): no look until it is shown again */
+let pageAway = false;
+function onPageHide() { pageAway = true; syncRunsPoll(); }
+function onPageShow() { pageAway = false; syncRunsPoll(); }
 
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
 async function loadList(refresh = false, quiet = false) {
@@ -1676,7 +1691,6 @@ export function initForgePanel(config, opts = {}) {
   // The map shows the open runs whether or not the panel is open: read them once now, and again now and then while any is open
   if (config.agents && config.agents.runs) {
     loadRuns(false).then(() => { if (ui.kind === 'work') paint(); }, () => {});
-    scheduleRunsPoll();
   }
   if (!wired) {
     wired = true;
@@ -1685,6 +1699,10 @@ export function initForgePanel(config, opts = {}) {
     panel.addEventListener('change', onChange);
     panel.addEventListener('input', onInput);
     panel.addEventListener('keydown', onKey);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', onPageHide);
+      window.addEventListener('pageshow', onPageShow);
+    }
     const agent = agentEl();
     if (agent) {
       agent.addEventListener('click', onAgentClick);
@@ -1726,6 +1744,8 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   state.forgeLit = null;
   state.threadIndex = null;
   clearTimeout(runsTimer);
+  runsTimer = 0;
+  pageAway = false;
   clearRunsOnMap();
   Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
 }
