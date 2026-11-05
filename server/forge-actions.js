@@ -37,11 +37,16 @@
  * (server/db.js), begun before anything is asked of the forge and finished with the answer after (`auth.begin`,
  * `auth.finish`). Without an audit to write to nothing is done.
  *
+ * One more write is not about a pull request: **a new idea** (docs/threads.md), `POST /api/forge/threads { title, body }`, which opens an issue
+ * with the threads label as the signed-in maintainer (`serveIdea`, below). It goes through the same doors, in the same order:
+ * POST, signed in, the flood ceiling, an audit row begun, same origin, JSON (here up to 32 KB), not twice, the permission asked of
+ * the forge now. The row keeps the title and the text's length, never the text. It only adds an issue.
+ *
  * A pull request lands by the config's `forge.mergeMethod` (`merge`, `squash` or `rebase`; `merge` when unset), the way
  * the repo lands its pull requests; the forge refuses a method the repo does not allow, in its own words.
  */
 
-import { ForgeError, RERUN_STATES, canRerun, isMaintainer } from './forge.js';
+import { ForgeError, RERUN_STATES, canRerun, isMaintainer, hasAdapter } from './forge.js';
 import { sameOrigin } from './proposals.js';
 import { planSpec, planBuild, startSpec, openBuildIssue } from './pipeline.js';
 import { PROPOSAL_FILE } from './files.js';
@@ -50,19 +55,22 @@ import { Refused, throttle, countAttempt } from './throttle.js';
 // The limits live in server/throttle.js (reviews share them); these are re-exported for the callers that always had them here
 export { COOLDOWN_MS, PER_MINUTE, ATTEMPTS_PER_MINUTE, countAttempt } from './throttle.js';
 import { proposalPayload, landedPayload } from './hooks.js';
+import { ideaInput, createIdea, threadsOff } from './threads.js';
 
 /** A request body is a sha and a check's id */
 const MAX_BODY = 4096;
+/** A new idea's request: a title and a text of up to 20,000 characters, in JSON (any of it may be escaped) */
+const IDEA_BODY = 96 * 1024;
 
 const STATUS = { unauthorized: 401, forbidden: 403, 'not-found': 404, conflict: 409, invalid: 400, 'rate-limited': 429, unavailable: 502, 'not-green': 409, 'too-large': 413 };
 const SHA = /^[0-9a-f]{7,64}$/i;
 const DIGEST = /^[0-9a-f]{32}$/;
 /** What each action is called in the words of a refusal, and what it asks of the person */
-const DOING = { merge: 'Landing', rerun: 'Re-running', spec: 'Starting a spec', build: 'Opening the build issue' };
-const ONLY_MAINTAINERS = { merge: 'land pull requests or re-run checks', rerun: 'land pull requests or re-run checks', spec: 'start specs', build: 'open build issues' };
+const DOING = { merge: 'Landing', rerun: 'Re-running', spec: 'Starting a spec', build: 'Opening the build issue', idea: 'Opening an idea' };
+const ONLY_MAINTAINERS = { merge: 'land pull requests or re-run checks', rerun: 'land pull requests or re-run checks', spec: 'start specs', build: 'open build issues', idea: 'open ideas' };
 
 /** Reads a small JSON object body, or refuses */
-function readJson(req) {
+function readJson(req, max = MAX_BODY) {
   return new Promise((resolve, reject) => {
     if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] || ''))) {
       req.resume();
@@ -75,7 +83,7 @@ function readJson(req) {
     req.on('data', (c) => {
       if (over) return;
       size += c.length;
-      if (size <= MAX_BODY) { chunks.push(c); return; }
+      if (size <= max) { chunks.push(c); return; }
       // Too large: answered now, and the rest is not read (the connection closes once the answer is sent)
       over = true;
       req.pause();
@@ -284,6 +292,97 @@ export async function serveAction(req, res, what, ctx, send) {
       await auth.finish(rowId, { target: rowTarget, request, status: 'forgeStatus' in out ? out.forgeStatus ?? null : out.status, answer: out.body });
     } catch (err) {
       console.error(`[cornfield] the audit row of ${action} ${target} could not be finished: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  if (closeAfter) res.on('finish', () => req.destroy());
+  send(out.status, out.body, out.headers);
+}
+
+/**
+ * POST /api/forge/threads { title, body }: a new idea, an issue with the threads label, opened as the signed-in maintainer. The
+ * caller has found the path and the method to be this; every refusal is in words and written down, as in `serveAction`.
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {{ config: any, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, begin: Function, finish: Function }, now?: () => number, publicHost?: string | null }} ctx
+ * @param {(status: number, body: object, headers?: object) => void} send
+ */
+export async function serveIdea(req, res, ctx, send) {
+  const { config, session, auth, now = Date.now } = ctx;
+  if (!config.forge || !hasAdapter(config.forge.type)) {
+    req.resume();
+    return send(config.forge ? 501 : 404, { ok: false, error: config.forge ? `cornfield has no adapter for the forge type ${JSON.stringify(config.forge.type)} yet.` : 'No forge is configured: set `forge` in cornfield.config.js.', code: config.forge ? 'unavailable' : 'not-found' });
+  }
+  if (threadsOff(config)) {
+    req.resume();
+    return send(404, { ok: false, error: 'Threads are off in this config (threads: false).', code: 'not-found' });
+  }
+  if (!session || !auth.store) {
+    req.resume();
+    return send(403, { ok: false, error: `${DOING.idea} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
+  }
+  const flood = countAttempt(ctx, session.userId, now());
+  if (flood) {
+    req.resume();
+    return send(flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
+  }
+  const target = config.forge.repo;
+  /** @type {Record<string, unknown>} */
+  const request = { action: 'idea' };
+  let rowId = null;
+  let closeAfter = false;
+  let release = () => {};
+  /** @type {{ status: number, body: object, headers?: object, forgeStatus?: number | null }} */
+  let out;
+  try {
+    try {
+      rowId = await auth.begin({ login: session.login, action: 'idea', target, request });
+    } catch (err) {
+      console.error(`[cornfield] the audit row of idea ${target} could not be written: ${err instanceof Error ? err.message : err}`);
+      throw new Refused(503, 'cornfield cannot write its audit log, so it will not act on the forge.', 'unavailable');
+    }
+    if (!sameOrigin(req, ctx.publicHost ?? null)) {
+      req.resume();
+      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
+    }
+    let asked;
+    try {
+      asked = await readJson(req, IDEA_BODY);
+    } catch (err) {
+      closeAfter = Boolean(err && err.closeAfter);
+      throw err;
+    }
+    let idea;
+    try {
+      idea = ideaInput(asked);
+    } catch (err) {
+      throw new Refused(400, err instanceof Error ? err.message : 'That is not an idea.', 'invalid');
+    }
+    // The audit keeps what was asked for, not the words: the title, and how long the text was
+    request.title = idea.title;
+    request.bodyLength = idea.body.length;
+    release = throttle(ctx, session.userId, `idea|${idea.title.toLowerCase().slice(0, 80)}`, now());
+    const forge = auth.forgeFor(session);
+    await assertMaintainerNow(forge, session, config, 'idea');
+    const issue = await createIdea(forge, config, idea);
+    await forgetKept(auth, config);
+    out = { status: 201, body: { ok: true, action: 'idea', created: true, number: issue.number, issue: { number: issue.number, title: issue.title, url: issue.url } } };
+  } catch (err) {
+    if (err instanceof Refused) out = { status: err.status, body: { ok: false, error: err.message, code: err.code }, headers: err.headers };
+    else if (err instanceof ForgeError) {
+      const wait = err.rateLimit && err.rateLimit.retryAfter != null ? { 'Retry-After': String(Math.ceil(err.rateLimit.retryAfter)) } : {};
+      out = { status: STATUS[err.code] || 502, body: { ok: false, error: err.message, code: err.code }, headers: wait, forgeStatus: err.status ?? (err.code === 'unavailable' ? null : STATUS[err.code] || null) };
+    } else {
+      out = { status: 500, body: { ok: false, error: 'Something went wrong in cornfield; the log says what.', code: 'unavailable' } };
+      console.error(`[cornfield] idea ${target}: ${err instanceof Error ? err.stack || err.message : err}`);
+    }
+  } finally {
+    release();
+  }
+  if (rowId !== null) {
+    try {
+      await auth.finish(rowId, { target, request, status: 'forgeStatus' in out ? out.forgeStatus ?? null : out.status, answer: out.body });
+    } catch (err) {
+      console.error(`[cornfield] the audit row of idea ${target} could not be finished: ${err instanceof Error ? err.message : err}`);
     }
   }
   if (closeAfter) res.on('finish', () => req.destroy());
