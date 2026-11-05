@@ -439,7 +439,7 @@ describe('findRunId', () => {
 //  The JSON Schema: a small checker for exactly the keywords the schema uses, then the same corpus put to both
 // ---------------------------------------------------------------------------
 
-const SCHEMA = JSON.parse(fs.readFileSync(new URL('../../docs/agent-contract.schema.json', import.meta.url), 'utf8'));
+const SCHEMA = JSON.parse(fs.readFileSync(new URL('../../core/agent-contract.schema.json', import.meta.url), 'utf8'));
 
 /** Draft 2020-12, only what agent-contract.schema.json uses: any keyword it does not know throws, so the schema cannot outgrow the checker unseen */
 const KNOWN = new Set(['anyOf', 'dependentRequired', '$schema', '$id', '$ref', '$defs', 'title', 'description', 'type', 'const', 'enum', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'items', 'maxItems', 'properties', 'required', 'additionalProperties', 'minProperties', 'propertyNames', 'not', 'allOf', 'oneOf']);
