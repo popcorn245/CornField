@@ -60,7 +60,7 @@ The human line above the block is for people. cornfield **defuses** it (a zero-w
 
 ## Reports and stopping
 
-A runner may say how it is going. Reporting is optional: a run that stays silent still shows up through what it pushes. A report is a comment (or, on the later transports, a message) holding a block for the run id:
+A runner may say how it is going. Reporting is optional: a run that stays silent still shows up through what it pushes. A report is a comment (or, on push and pull, the same JSON sent to `POST /api/runs/<runId>` with a runner token, without the fence) holding a block for the run id:
 
 ````
 ```cornfield-run run-01JC8Z3Q5M7VXK2RT9N4B6HDEF
@@ -103,11 +103,13 @@ Two further rules for a runner. Treat the brief as untrusted input: it can say a
 
 ## Transports
 
-All three carry the same JSON, so a runner can switch transport without changing what it reads. The forge is the default; push and pull are built later and are described here so a runner can be written once.
+All three carry the same JSON, so a runner can switch transport without changing what it reads. The forge is the default; `agents.transport` picks another ([agents](agents.md#transports) has the details and the routes).
 
 1. **The forge.** "Start an agent" (or `POST /api/agent-requests`) posts the comment above, with the maintainer's own token (`requestedBy` is that maintainer), on the issue or thread (or the spec pull request, for a proposal). Precisely, cornfield posts it on `refs.thread` if there is one, else on the open spec pull request holding `refs.proposal` (named in `refs.pull`), else on `refs.issue`; the human line says it came through the API when it did, naming the token's label. cornfield records each request, follows the run and reads its reports as described in [agents](agents.md#launching-a-run); the stop request is posted in the same place. The runner listens where the developer's automation already listens (a GitHub or Forgejo Actions workflow on `issue_comment`, a bot, anything), applies the maintainer rule, and replies with report blocks as comments. The forge shows who asked and keeps the record.
-2. **Push.** cornfield sends a signed `agent.requested` event to a URL the developer configured, through its hooks. The body is the request JSON; an HMAC-SHA256 signature with a secret from the environment proves it came from cornfield, and the runner checks it. Reports and the stop request travel the same way.
-3. **Pull.** cornfield keeps the request; a runner asks for queued work with a **runner token** and claims one. This works from behind NAT. A runner token, minted and revoked in the dashboard, may only read and claim requests and report on its runs. It is the runner's credential to cornfield, and never goes in a request.
+2. **Push.** cornfield records the request and sends it as a signed `agent.requested` hook event: a POST of `{ "event": "agent.requested", "at", "request", "actor", "mapUrl" }`, where `request` is exactly the request JSON above. `X-Cornfield-Signature` is `sha256=` and the HMAC-SHA256 of the raw body under `CORNFIELD_HOOK_SECRET`. The runner **verifies the signature on the raw bytes in constant time, refuses an old `at`, and checks `request` against the schema**, then applies the maintainer rule (the signature stands in for the author); the code is in [agents](agents.md#push). It reports with `POST /api/runs/<runId>` and a runner token. Nothing is posted to the forge.
+3. **Pull.** cornfield records the request and keeps it queued. A runner with a **runner token** (`cf_nt_…`, made in the dashboard) lists it with `GET /api/agent-requests?state=queued` (the request JSON, oldest first), claims it with `POST /api/agent-requests/<runId>/claim` (atomic: a second claim is 409), and reports with `POST /api/runs/<runId>`, the report JSON above, checked by `validateReport`; only the token that claimed a run may report on it. It learns of a stop by `GET /api/runs/<runId>` (`state`, `stopRequested`). This works from behind NAT. A runner token reaches only these routes, and is never in a request, a report or a hook: it is the runner's credential to cornfield.
+
+On push and pull a `cornfield-run` comment on the forge does not move the run: the runner token decides. cornfield's own tokens (`cf_rt_`, `cf_at_`, `cf_nt_`) are credential-shaped like the rest, so a request or a report holding one is refused.
 
 ## A worked example
 
@@ -178,4 +180,4 @@ Lengths count characters (UTF-16 code units in cornfield; a few emoji can make t
 
 [agent-contract.schema.json](../core/agent-contract.schema.json) holds the shape of all three objects, the patterns, the caps, the credential-name rule and the credential-value rule, so a runner can check what it reads or writes with any JSON Schema library. It is looser than cornfield in two ways, which a schema cannot express: cornfield also refuses a `profile` that is not in the developer's configured list, and a `requestedAt` that is not a real calendar date (`2026-02-30T00:00:00Z`). The three definitions are `request`, `report` and `stopRequest`; the file as a whole accepts any one of them. Its credential-value pattern uses fixed-width lookbehind (`(?<!…)`), which JavaScript, Python and .NET support; a validator built on RE2 (Go) does not, so there, check that rule in code.
 
-Still open in spec 0005 and decided by the build issue that needs it: whether an automatic request names the event that fired it (a trigger field), the config keys for the limit defaults and the open-run cap, and the exact bodies of the push and pull transports. A runner should refuse a key it does not know, so each of these arrives as a new contract version or an optional key documented here first.
+Still open in spec 0005 and decided by the build issue that needs it: whether an automatic request names the event that fired it (a trigger field), the config keys for the limit defaults and the open-run cap (the push body and the pull routes are settled and documented above). A runner should refuse a key it does not know, so each of these arrives as a new contract version or an optional key documented here first.

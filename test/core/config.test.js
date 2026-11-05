@@ -299,10 +299,20 @@ describe('loadDerivers and browserSources', () => {
 describe('the agents keys that ask for and follow runs (spec 0005)', () => {
   it('are checked strictly: transport, maxOpen, profiles, runners, quietAfter and limits', () => {
     expect(configProblems({ agents: { transport: 'forge', maxOpen: 5, profiles: ['claude', 'local-qwen'], runners: ['claude-bot', 'ci[bot]'], quietAfter: '12h', limits: { minutes: 30, turns: 40, cost: 2.5 } } })).toEqual([]);
-    const text = configProblems({ agents: { transport: 'push', maxOpen: 0, profiles: ['two words', 'a', 'a'], runners: ['has space'], quietAfter: '1m', limits: { minutes: -1, turns: 1.5, tokens: 3 } } }).join('\n');
+    const text = configProblems({ agents: { transport: 'telegram', maxOpen: 0, profiles: ['two words', 'a', 'a'], runners: ['has space'], quietAfter: '1m', limits: { minutes: -1, turns: 1.5, tokens: 3 } } }).join('\n');
     for (const want of ['agents.transport is "forge"', 'agents.maxOpen is a whole number from 1 to 100', 'agents.profiles is a list', 'agents.runners is a list', 'under the floor of 5m', 'agents.limits.minutes is a number above zero', 'agents.limits.turns is a whole number', 'agents.limits.tokens: the keys are']) expect(text).toContain(want);
     expect(configProblems({ agents: { quietAfter: '90 days' } }).join()).toContain('agents.quietAfter is a duration');
     expect(configProblems({ agents: { quietAfter: '9999h' } }).join()).toContain('over the ceiling');
+  });
+
+  it('knows the three transports, and push needs a hook that wants agent.requested', () => {
+    expect(configProblems({ agents: { transport: 'pull' } })).toEqual([]);
+    const push = { agents: { transport: 'push' } };
+    expect(configProblems(push).join()).toContain('a hook must subscribe to agent.requested');
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: ['spec.ready'] }] }).join()).toContain('agent.requested');
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: ['agent.requested'] }] })).toEqual([]);
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: '*' }] })).toEqual([]);
+    expect(configProblems({ agents: { transport: 'smoke-signals' } }).join()).toContain('"forge", "push", "pull"');
   });
 
   it('read quietAfter with the duration parser of hookPoll', async () => {

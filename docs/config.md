@@ -60,7 +60,7 @@ agents: {
   // what marks work as made by an agent (docs/agents.md)
   authors: ['claude-bot'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true,
   // asking for runs (docs/agents.md#launching-a-run)
-  transport: 'forge',                  // the only one for now: the request is a comment on the forge
+  transport: 'forge',                  // 'forge' (default: the request is a comment), 'push' (a signed agent.requested hook event) or 'pull' (kept for a runner to claim): docs/agents.md#transports
   maxOpen: 3,                          // the most open runs per repo cornfield asks for (1 to 100)
   profiles: ['claude', 'local-qwen'],  // names a request may carry; the runner maps each to a model, a machine and a budget
   runners: ['claude-bot'],             // forge logins whose reports count, besides maintainers
@@ -69,7 +69,7 @@ agents: {
 },
 ```
 
-Each key is checked when the config loads and a wrong one fails start-up naming it. `profiles` are letters, digits and `. _ -`; a request naming a profile not on the list is refused (so is any profile when the list is empty). `runners` is the allow-list of the runners' own accounts: a `cornfield-run` report from anyone else who is not a maintainer is ignored and written to the audit table. `quietAfter` uses the same durations as [`hookPoll`](#hook-poll). None of these holds a secret, and no model, provider or key is ever configured in cornfield.
+Each key is checked when the config loads and a wrong one fails start-up naming it. `profiles` are letters, digits and `. _ -`; a request naming a profile not on the list is refused (so is any profile when the list is empty). `runners` is the allow-list of the runners' own accounts: a `cornfield-run` report from anyone else who is not a maintainer is ignored and written to the audit table. `quietAfter` uses the same durations as [`hookPoll`](#hook-poll). `transport: 'push'` needs a [hook](#hooks) that subscribes to `agent.requested` (or `'*'`), or the config fails to load; `push` and `pull` also need sign-in and a forge. None of these holds a secret (a runner's token is made in the dashboard, never here), and no model, provider or key is ever configured in cornfield.
 
 ## Proposals
 
@@ -112,13 +112,13 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 | `thread.linked` | a thread now points at the map or at a proposal: a message with a `[[node]]` mention that resolves or a `cornfield-thread` block, or a spec PR that names it with `Thread: #n`. Carries `nodes` and `proposal` |
 | `session.expiring` | a maintainer's [sign-in](sign-in.md#how-long-a-session-lasts) ends within 24 hours, so a review token or a landing that acts with it is about to be refused. cornfield looks once an hour, so it arrives between 24 and 23 hours before the end (at once, for a 1 day session). **Once for each session**, recorded in `cornfield.db`, so a restart does not repeat it; a maintainer signed in twice (a laptop and a phone) gets one for each, each with its own `expiresAt`. A session that was signed out or has ended never sends it, nor does a signed-in reader who is not a maintainer. Its body is only `{ event, at, actor, expiresAt, mapUrl }`: `actor` is the maintainer's login, `expiresAt` when the session ends (ISO 8601). It is the only event with no `slug` or `pull` |
 
-| `agent.requested` | a maintainer asked for an agent run (the dashboard's Start an agent, or the request API). Sent at once. Its body is its own: `{ event, at, request, actor, mapUrl }`, where `request` is the [contract's](agent-contract.md) request JSON, which holds no credential by construction (it is checked again on the way out), and `actor` is who asked |
+| `agent.requested` | a maintainer asked for an agent run (the dashboard's Start an agent, or the request API). Sent at once, on every `agents.transport`; on `push` it is how the runner gets the request ([how to verify it](agents.md#push)). Its body is its own: `{ event, at, request, actor, mapUrl }`, where `request` is the [contract's](agent-contract.md) request JSON, which holds no credential by construction (it is checked again on the way out), and `actor` is who asked |
 | `run.claimed` | the run's runner reported `claimed` |
 | `run.state` | a run changed state: a report with another state, its pull request found, merged or closed |
 | `run.stopRequested` | a maintainer asked a run to stop (through cornfield, or by hand on the forge) |
 | `run.finished` | a run ended: `done`, `failed`, `stopped`, or its pull request merged or closed |
 
-The `run.*` events are noticed when cornfield looks at the forge (the [spec poll](#hook-poll), or a Refresh), each once, even across a restart. Their body is `{ "event", "at", "runId", "state", "pull"?, "issue"?, "actor", "mapUrl" }`: `state` is the state the event is about, `pull` the run's pull request and `issue` its issue or thread when there are any, and `actor` who caused it (the reporting login, the maintainer, or the pull request's author).
+The `run.*` events for a run on the forge are noticed when cornfield looks at the forge (the [spec poll](#hook-poll), or a Refresh), each once, even across a restart. For a run on push or pull they are sent as the runner's report arrives (`actor` is `runner:<token label>`). Their body is `{ "event", "at", "runId", "state", "pull"?, "issue"?, "actor", "mapUrl" }`: `state` is the state the event is about, `pull` the run's pull request and `issue` its issue or thread when there are any, and `actor` who caused it (the reporting login, the maintainer, or the pull request's author).
 
 Each other event is a POST of one JSON body:
 

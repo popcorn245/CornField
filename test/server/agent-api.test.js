@@ -225,13 +225,15 @@ describe('the agent API', () => {
       expect((await page('GET', '/api/agent-tokens')).json.tokens[0].lastUsed).toBe(new Date(clock).toISOString());
     });
 
-    it('answers only POST on /api/agent-requests', async () => {
+    it('answers POST with an agent token; GET is the runners\' (a runner token), and anything else is 405', async () => {
       const { secret } = await mint();
-      for (const method of ['GET', 'PUT', 'DELETE']) {
+      for (const method of ['PUT', 'DELETE']) {
         const res = await raw(srv.port, method, '/api/agent-requests', { headers: { authorization: `Bearer ${secret}` } });
         expect(res.status, method).toBe(405);
-        expect(res.headers.allow).toBe('POST');
+        expect(res.headers.allow).toBe('GET, HEAD, POST');
       }
+      // an agent token is no runner's: the queue is 403 to it
+      expect((await raw(srv.port, 'GET', '/api/agent-requests?state=queued', { headers: { authorization: `Bearer ${secret}` } })).status).toBe(403);
     });
 
     it('posts to the thread, and to the spec PR of a proposal', async () => {
@@ -320,14 +322,18 @@ describe('the agent API', () => {
       const demoted = await call(secret, code());
       expect(demoted.status).toBe(403);
       expect(demoted.json.error).toMatch(/Only the repo's maintainers/);
+      // learning it revoked the token: it stays revoked when the owner is a maintainer again
       world.demoted.clear();
       later();
+      expect((await call(secret, code())).status).toBe(403);
+      const fresh = (await mint('agent', 'second bot')).secret;
+      later();
       expect((await page('POST', '/auth/sign-out', '')).status).toBe(303);
-      const gone = await call(secret, code());
-      expect(gone.status).toBe(401);
+      const gone = await call(fresh, code());
+      expect(gone.status, gone.text).toBe(401);
       expect(gone.json.error).toMatch(/no live sign-in/);
       expect(world.posted).toEqual([]);
-      expect(agentRows().map((r) => r.status)).toEqual([403, 401]);
+      expect(agentRows().map((r) => r.status)).toEqual([403, 403, 401]);
     });
 
     it('refuses past the cap of three, and a second on the same issue, with the reason; force asks on purpose and never lifts the cap', async () => {
