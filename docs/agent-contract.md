@@ -2,7 +2,7 @@
 
 cornfield **asks**; the developer's own **runner** does the work. A runner is whatever starts an agent for you: a Claude Code session, a CI job, Ollama on your own machine, a shell script. cornfield runs no agent process, calls no agent platform and holds no agent credentials. This page is everything a runner needs to implement, in any language. The decisions behind it are [spec 0005](specs/0005-threads-and-agents.md) (its "The contract" section is what this page builds) and [ADR 0012](adr/0012-cornfield-asks-runners-act.md). The code that cornfield itself uses to write and read the contract is [core/agent-contract.js](../core/agent-contract.js); a [JSON Schema](../core/agent-contract.schema.json) (draft 2020-12) describes the same JSON, and a test keeps the two in agreement. The schema ships in the npm package: `import schema from 'cornfield/agent-contract.schema.json' with { type: 'json' }`.
 
-A test for every part of it: could you delete cornfield tomorrow and lose nothing but the view? A request is a comment on your forge that a person can write by hand, so yes.
+A test for every part of it: could you delete cornfield tomorrow and lose nothing but the view? A request is a comment on your forge that a person can write by hand, so yes. Two complete runners, for Forgejo Actions and GitHub Actions, are in [Example runners](runners.md).
 
 ## Run ids
 
