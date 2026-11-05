@@ -42,7 +42,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES, specPollMs } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, specPollMs, ideaLabel } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -59,7 +59,7 @@ import { createSpecPoll } from './spec-poll.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
 /** The pure core modules the explorer imports (no Node built-ins, no files): the only ones of core/ served */
-export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js'];
+export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js'];
 /** cornfield's own browser sources, by request path */
 const BROWSER_PLUGINS = new Map(Object.values(BUILTIN_SOURCES).map((p) => [p, path.join(CORNFIELD_DIR, p)]));
 const PKG = JSON.parse(fs.readFileSync(path.join(CORNFIELD_DIR, 'package.json'), 'utf8'));
@@ -109,6 +109,8 @@ export function clientConfig(config, signIn = false) {
     title: config.title,
     links: config.links || [],
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.approveLands ? { approveLands: true } : {}) } : null,
+    // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
+    threads: config.threads === false ? false : { label: ideaLabel(config) },
     sources: browserSources(config),
     signIn,
   };

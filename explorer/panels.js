@@ -126,6 +126,26 @@ function dataSummary(node) {
 }
 
 // ---------------------------------------------------------------------------
+//  Threads that mention the node
+// ---------------------------------------------------------------------------
+
+/** "Mentioned in": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the issues and PRs panel */
+function threadsSection(node) {
+  const index = state.threadIndex;
+  const threads = index ? index.for(node.id) : null;
+  if (!threads || !threads.length) return '';
+  const rows = threads.map((t) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:#fbbf24">◆</span><span><button type="button" class="hx-btn hx-thread-open" data-thread-open="${t.number}" aria-label="Open thread #${t.number}, ${escHtml(t.title)}, in the issues and pull requests panel">#${t.number} ${escHtml(t.title)}</button> <span class="hx-faint">${t.kind === 'proposal' ? 'proposal' : 'idea'}</span></span></div>`);
+  return section(`Mentioned in ${threads.length} ${threads.length === 1 ? 'thread' : 'threads'}:`, rows);
+}
+
+/** Draws "Mentioned in" again in the open panel (the list was just read, or the map changed); nothing else in the panel moves */
+export function repaintThreads() {
+  const box = $('drawer-threads');
+  if (!box || !state.selectedNode) return;
+  box.innerHTML = threadsSection(state.selectedNode);
+}
+
+// ---------------------------------------------------------------------------
 //  The drawer
 // ---------------------------------------------------------------------------
 let selectToken = 0;
@@ -178,6 +198,10 @@ export async function selectNode(node) {
   // The screens the proposal lists for it, which open from here (mockups.js)
   const mockups = nodeMockupsHtml(node.id);
   if (mockups) (proposed ? metaList.firstElementChild : metaList).insertAdjacentHTML(proposed ? 'afterend' : 'afterbegin', mockups);
+
+  // The threads that mention it (docs/threads.md): filled in place once the list is read
+  metaList.insertAdjacentHTML('beforeend', `<div id="drawer-threads">${threadsSection(node)}</div>`);
+  if (state.threadIndex) state.threadIndex.ensure();
 
   // What the live layer knows of it (spec 0029): a count, a linked machine's item, contents and sets; repainted in place by live.js
   metaList.insertAdjacentHTML('beforeend', `<div id="drawer-live">${liveSection(node)}</div>`);

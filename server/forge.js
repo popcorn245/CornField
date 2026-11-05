@@ -14,7 +14,8 @@
  *   issue(n)                          one issue (not a pull request: that is `not-found`)
  *   searchIssues(words)               the issues whose text holds the words (one page; the forge's search, which can lag a moment)
  *   pullFiles(n)                      the files a pull request changes
- *   comments(n)                       the comments on an issue or pull request, oldest first
+ *   comments(n, { since })            the comments on an issue or pull request, oldest first; `since` (an ISO time) only those
+ *                                     created or edited after it, which is how a thread is followed without reading it all again
  *   comment(n, body)                  posts one, and answers it
  *   checks(ref)                       the checks on a commit (a branch, a tag or a sha)
  *   rerun(check)                      re-runs one that can be (`check.rerunnable`)
@@ -36,7 +37,9 @@
  *   createBranch(name, { from })      a branch at the head of the branch `from` (`conflict` when it exists)
  *   createFile({ branch, path, content, message })   one new file on a branch, as one commit (`invalid` when it exists)
  *   createPull({ title, body, head, base, draft })   a pull request; a draft one is `draft: true` (Forgejo: the "WIP: " title it uses)
- *   createIssue({ title, body })      an issue
+ *   createIssue({ title, body, labels })   an issue; `labels` (names) are put on it, a label the repo lacks is made first (an idea is
+ *                                     an issue with the threads label, docs/threads.md). Where cornfield makes the label itself
+ *                                     (Forgejo), the issue carries `labelsMade: [names]`; GitHub makes it on its own and says nothing
  *
  * An adapter module (server/forge-github.js, server/forge-forgejo.js) implements these at its forge's level, with
  * `mergeAt(n, { sha, method })` in place of `merge`; `wrap` checks the arguments and builds `merge` once for every
@@ -78,9 +81,9 @@
  *   createBranch(name: string, opts: { from: string }): Promise<{ name: string, sha: string }>,
  *   createFile(file: { branch: string, path: string, content: string, message: string }): Promise<{ sha: string }>,
  *   createPull(pull: { title: string, body: string, head: string, base: string, draft: boolean }): Promise<Pull>,
- *   createIssue(issue: { title: string, body: string }): Promise<Issue>,
+ *   createIssue(issue: { title: string, body: string, labels?: string[] }): Promise<Issue>,
  *   pullFiles(n: number): Promise<PullFile[]>,
- *   comments(n: number): Promise<Comment[]>,
+ *   comments(n: number, opts?: { since?: string }): Promise<Comment[]>,
  *   comment(n: number, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
  *   rerun(check: Check): Promise<void>,
@@ -120,6 +123,9 @@ export const DEFAULT_LIMIT = 1000;
 /** The runs a listing returns unless asked for fewer: one forge page */
 export const DEFAULT_RUN_LIMIT = 100;
 
+/** The most labels one new issue is given */
+const MAX_LABELS = 5;
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 const STATES = ['open', 'closed', 'all'];
 const REPO = /^[\w.-]+\/[\w.-]+$/;
@@ -270,7 +276,12 @@ export function wrap(a, forge) {
       return a.searchIssues(words.trim());
     },
     pullFiles: async (n) => a.pullFiles(number(n)),
-    comments: async (n) => a.comments(number(n)),
+    comments: async (n, opts) => {
+      if (opts !== undefined && (opts === null || typeof opts !== 'object' || Array.isArray(opts))) throw invalid('The options are an object.');
+      const since = opts && opts.since;
+      if (since !== undefined && (typeof since !== 'string' || !ISO_TIME.test(since) || Number.isNaN(Date.parse(since)))) throw invalid('since is a time like 2026-11-05T09:00:00Z.');
+      return a.comments(number(n), since === undefined ? {} : { since: new Date(since).toISOString() });
+    },
     comment: async (n, body) => a.comment(number(n), text(body, 'The comment')),
     checks: async (ref) => a.checks(text(ref, 'The commit')),
     rerun: async (check) => {
@@ -339,7 +350,9 @@ export function wrap(a, forge) {
     },
     createIssue: async (issue) => {
       if (!issue || typeof issue !== 'object') throw invalid('Open which issue?');
-      return a.createIssue({ title: bounded(issue.title, 'The title', MAX_TITLE), body: bounded(issue.body ?? ' ', 'The description', MAX_BODY) });
+      const labels = issue.labels ?? [];
+      if (!Array.isArray(labels) || labels.length > MAX_LABELS || labels.some((l) => typeof l !== 'string' || l.trim() === '' || l.trim() !== l || l.length > 50 || l.includes(',') || l.includes('\0'))) throw invalid(`The labels are at most ${MAX_LABELS} names, without commas.`);
+      return a.createIssue({ title: bounded(issue.title, 'The title', MAX_TITLE), body: bounded(issue.body ?? ' ', 'The description', MAX_BODY), labels: [...new Set(labels)] });
     },
     defaultBranch: async () => a.defaultBranch(),
     tags: async () => a.tags(),

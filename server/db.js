@@ -12,6 +12,9 @@
  *   hook_seen     the (pull request, head, proposal) triples whose `spec.ready` event was sent, so a restart sends none twice;
  *                 a row with `pr = 0` says the repo has been looked at once (server/hooks.js)
  *   landings      the spec PRs an approval is waiting to land (`proposals.approveLands`), so a restart picks them up (server/lander.js)
+ *   thread_seen   the (repo, issue, comment) triples whose thread.* hook event was sent, and each thread's last-seen time, so a
+ *                 restart sends none twice and a look asks the forge only for what is new (server/hooks.js, server/threads.js);
+ *                 a row with `issue = 0` says the repo's threads have been looked at once
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
@@ -132,6 +135,18 @@ export const MIGRATIONS = Object.freeze([
   ALTER TABLE sessions ADD COLUMN refresh_token TEXT NOT NULL DEFAULT '';  -- the forge's refresh token, encrypted like \`token\`; '' when there is none
   ALTER TABLE sessions ADD COLUMN token_expires_at TEXT;                   -- when the access token stops working; NULL when it does not expire
   ALTER TABLE sessions ADD COLUMN expiring_sent_at TEXT;                   -- when the \`session.expiring\` hook event was sent; NULL before
+  `,
+  // 6: threads (server/threads.js, server/hooks.js): which comments of a thread have been announced. The thread itself is the
+  // forge's (an issue's comments, or a spec PR's conversation); this only remembers what was told, never what was said
+  `
+  CREATE TABLE thread_seen (
+    repo        TEXT NOT NULL,                  -- 'owner/name'
+    issue       INTEGER NOT NULL,               -- the issue or pull request number of the thread; 0 with comment '' says the repo has been looked at once
+    comment     TEXT NOT NULL,                  -- '' the thread itself (opened); a comment's id (message); 'link:<id>' or 'link:body' (linked); 'pr:<n>' a spec PR that names the thread
+    stamp       TEXT NOT NULL DEFAULT '',       -- the forge's own time: the comment's last edit, or (on the '' row) the thread's last update when it was looked at
+    at          TEXT NOT NULL,                  -- when cornfield first saw it
+    PRIMARY KEY (repo, issue, comment)
+  ) STRICT;
   `,
 ]);
 

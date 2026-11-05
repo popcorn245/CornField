@@ -19,6 +19,10 @@
  *   GET  /api/forge/issues/<n>/spec                                    the plan of step 1: what starting a spec on the issue would make (server/pipeline.js), never kept
  *   GET  /api/forge/pulls/<n>/build?slug=<proposal>                    the plan of step 2: the build issue of an approved proposal, never kept
  *   POST /api/forge/issues/<n>/spec | /pulls/<n>/build                 do them, with the plan's digest (server/forge-actions.js)
+ *   GET /api/forge/threads?state=open|closed|all&limit=100             the threads (docs/threads.md): ideas (issues with the threads label) and spec PRs' conversations,
+ *                                                                      newest activity first, each with the `[[mentions]]` its text holds, as written (404 when `threads: false`)
+ *   GET /api/forge/threads/<n>                                         one thread's messages, as written, to read; replying is on the forge
+ *   POST /api/forge/threads                                            { title, body }: a new idea, an issue with the label, as the maintainer (server/forge-actions.js `serveIdea`)
  *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
  *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
  *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
@@ -47,7 +51,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
-import { actionOf, countAttempt, serveAction } from './forge-actions.js';
+import { actionOf, countAttempt, serveAction, serveIdea } from './forge-actions.js';
+import { listThreads, readThread, snapshotOf, threadsOff } from './threads.js';
+import { ideaLabel } from '../core/config.js';
 import { landingOf, serveLanding } from './lander.js';
 import { planSpec, planBuild, pullSpecs } from './pipeline.js';
 import { listPullProposals } from './proposal-pulls.js';
@@ -132,6 +138,28 @@ function routeOf(reqPath, url, config, where, hooks = null) {
     // in the key, so an answer kept before it changed is never served for the new one.
     const mapping = createHash('sha256').update(JSON.stringify(config.deploys || null)).digest('hex').slice(0, 12);
     return { key: `deploys?limit=${limit}&config=${mapping}`, load: async (forge) => ({ items: deploysOf(await forge.runs({ limit }), config.deploys) }) };
+  }
+  if (reqPath === '/api/forge/threads' || /^\/api\/forge\/threads\/[1-9]\d{0,8}$/.test(reqPath)) {
+    if (threadsOff(config)) throw new ForgeError('Threads are off in this config (threads: false).', { code: 'not-found' });
+    const label = ideaLabel(config);
+    if (reqPath === '/api/forge/threads') {
+      const q = listQuery(url, false);
+      return {
+        key: `threads?state=${q.state}&limit=${q.limit}&label=${label}`,
+        load: async (forge) => {
+          const found = await listThreads(forge, config, where || config, { state: q.state, limit: q.limit, hooks });
+          // Whatever a look reads is news to the hooks once (thread.opened, thread.message, thread.linked), as the spec PRs are
+          if (hooks) {
+            let nodes = [];
+            try { nodes = readTopology(config)?.nodes || []; } catch { nodes = []; }
+            hooks.threadsSeen(forge.repo, snapshotOf(found.gathered, nodes)).catch(() => {});
+          }
+          return { items: found.items, label, problem: found.problem };
+        },
+      };
+    }
+    const n = Number(reqPath.split('/').pop());
+    return { key: `threads/${n}&label=${label}`, load: async (forge) => ({ thread: await readThread(forge, config, where || config, n) }) };
   }
   if (reqPath === '/api/forge/work') {
     return {
@@ -234,6 +262,10 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     // What is waiting to land on its approval, and stopping it: nothing is asked of the forge to read, and it is never kept
     const out = await serveLanding(req, landing, ctx);
     send(req, res, out.status, out.body, out.headers);
+    return true;
+  }
+  if (reqPath === '/api/forge/threads' && req.method === 'POST') {
+    await serveIdea(req, res, ctx, (status, body, headers) => send(req, res, status, body, headers));
     return true;
   }
   const act = actionOf(reqPath);

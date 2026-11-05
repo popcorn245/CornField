@@ -41,8 +41,9 @@ export default {
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
-| `hooks` | `[{ url, events }]`: where cornfield posts a signed JSON event when something happens, and which events (a non-empty list of the six names, `spec.ready`, `spec.approved`, `spec.sentBack`, `build.opened`, `pr.landed` and `session.expiring`, or `'*'`). [Hooks](#hooks) |
-| `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs by itself, so `spec.ready` fires without anyone opening the dashboard. On at 5 minutes when a hook subscribes to `spec.ready`, off otherwise. [Hook poll](#hook-poll) |
+| `hooks` | `[{ url, events }]`: where cornfield posts a signed JSON event when something happens, and which events (a non-empty list of the names below, or `'*'`). [Hooks](#hooks) |
+| `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
+| `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's header |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
@@ -88,6 +89,9 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 | `spec.sentBack` | a maintainer sent a proposal back |
 | `build.opened` | the build issue of an approved proposal was opened (not when a second ask only found it) |
 | `pr.landed` | a pull request was landed **through cornfield** (the issues and PRs panel's Land it). A merge made on the forge itself, or by anything else, sends nothing. `slug` is its proposal when it is a spec PR (the first, when it holds several), else `null` |
+| `thread.opened` | an idea (an issue with the [threads](threads.md) label) was first seen. Fires when cornfield looks, like `spec.ready` |
+| `thread.message` | a comment was added to a thread: an idea's, or a spec PR's conversation. Once per comment, across restarts. The payload never holds the text |
+| `thread.linked` | a thread now points at the map or at a proposal: a message with a `[[node]]` mention that resolves or a `cornfield-thread` block, or a spec PR that names it with `Thread: #n`. Carries `nodes` and `proposal` |
 | `session.expiring` | a maintainer's [sign-in](sign-in.md#how-long-a-session-lasts) ends within 24 hours, so a review token or a landing that acts with it is about to be refused. cornfield looks once an hour, so it arrives between 24 and 23 hours before the end (at once, for a 1 day session). **Once for each session**, recorded in `cornfield.db`, so a restart does not repeat it; a maintainer signed in twice (a laptop and a phone) gets one for each, each with its own `expiresAt`. A session that was signed out or has ended never sends it, nor does a signed-in reader who is not a maintainer. Its body is only `{ event, at, actor, expiresAt, mapUrl }`: `actor` is the maintainer's login, `expiresAt` when the session ends (ISO 8601). It is the only event with no `slug` or `pull` |
 
 Each event is a POST of one JSON body:
@@ -107,7 +111,7 @@ Each event is a POST of one JSON body:
 }
 ```
 
-`slug`, `pull`, `headSha`, `proposalSha256` and `actor` are `null` where they do not apply (or cannot be read). `actor` is who acted: the maintainer, or for `spec.ready` the PR's author. `note` and `edits` (the review note and what-if edits) come only on `spec.approved` and `spec.sentBack`. `mapUrl` is `publicUrl`, or `null`. An event never carries file contents, a token or an email.
+The thread events have a body of their own, `{ event, at, thread, comment?, actor, nodes?, proposal?, mapUrl }`, and never a comment's text: see [threads](threads.md#hooks). For the others, `slug`, `pull`, `headSha`, `proposalSha256` and `actor` are `null` where they do not apply (or cannot be read). `actor` is who acted: the maintainer, or for `spec.ready` the PR's author. `note` and `edits` (the review note and what-if edits) come only on `spec.approved` and `spec.sentBack`. `mapUrl` is `publicUrl`, or `null`. An event never carries file contents, a token or an email.
 
 Headers: `Content-Type: application/json`, `X-Cornfield-Event`, `X-Cornfield-Delivery` (a UUID, the same on every retry of one delivery), `X-Cornfield-Timestamp` (the body's `at`) and `X-Cornfield-Signature: sha256=<hex>`, the HMAC-SHA256 of the **raw body** under the secret. Check it on the raw bytes, in constant time, and refuse an old `at` (a few minutes) so a captured request cannot be replayed:
 
@@ -122,17 +126,18 @@ export function verify(raw, header, secret, maxAgeMs = 300_000) {
 
 ### Hook poll
 
-`spec.ready` is noticed by listing the open spec PRs. A team that reviews from chat never opens the dashboard, so cornfield also does that listing by itself, on a timer:
+`spec.ready` is noticed by listing the open spec PRs, and the `thread.*` events by reading the threads ([threads](threads.md#hooks)). A team that reviews from chat never opens the dashboard, so cornfield also does that by itself, on a timer, in one look:
 
 ```js
 hookPoll: { specs: '5m' },   // the default; '90s', '5m', '1h'… or false for none
 ```
 
-- **When it runs.** By default, when some hook subscribes to `spec.ready` (by name, or with `events: '*'`): every 5 minutes, the first look 15 seconds after start. With no such hook it is off, and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
+- **When it runs.** By default, when some hook subscribes to `spec.ready` or to a `thread.*` event while threads are on (by name, or with `events: '*'`): every 5 minutes, the first look 15 seconds after start. With no such hook it is off, and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
 - **The interval** is a whole number with `s`, `m` or `h`, from **60s** (a floor, so the forge is not hammered) to **1h**. Anything else fails the config at start-up, naming the key. The key is separate from the `hooks` list, which stays a list.
 - **Whose token.** Never one from the config. The poll looks as the newest live [sign-in](sign-in.md#the-spec-poll) of a user the forge says is a maintainer of the repo *right now* (the check the [review API](proposals.md) makes before it posts). With no such session it does nothing and keeps running: it says so once in the log, not on every tick, and says so again when a maintainer is back. The log also names whose sign-in it looks with, each time that changes. That token only ever reads: who its owner is, their permission, and the open spec PRs; someone the forge says is no longer a maintainer is asked the first two and nothing else. A restart keeps the sessions (they are in the SQLite file, the tokens encrypted), so the poll looks with them as soon as it runs.
 - **The same look.** The poll calls the listing the dashboard uses, so the rules above are unchanged: a draft is never announced, the first look after `hooks` is added announces nothing, and each (pull request, head commit, proposal) is sent once. A poll and a dashboard look never announce the same head twice.
 - **What it costs the forge.** A poll with nothing new makes **3 calls**: who the token's owner is, their permission on the repo, and the open pull requests (one more call per further page of 30 or so). A pull request pushed to since the last look costs one call for its changed files, and an announced proposal one call to read it, once each; what was read at a head is cached and not asked again. One poll in flight at a time: if the forge is slow the next tick waits for it.
+- **Threads ride the same tick.** When a hook wants a `thread.*` event the look also reads the ideas and the spec PRs' conversations, with the same sign-in, the same timer and the same backoff; the open PRs are listed once for both. A failure in either half is the tick's failure. [Threads](threads.md#hooks) has the rules and the cost.
 - **When the forge fails.** The error is logged, never thrown, and the next look waits twice the interval, until one succeeds.
 
 A hook never blocks or undoes what fired it. Events are sent in the background; a delivery that is not answered with a 2xx within 10 seconds (a redirect is not followed) is tried again after 1, 5 and 30 seconds, then dropped. Every attempt is a row in the audit table (`actions`, action `hook`; it names the hook's origin and the HTTP status, never its path, the secret or the body). Deliveries wait in memory, so a restart forgets the ones still being retried, and a receiver should answer quickly and treat `X-Cornfield-Delivery` as its dedupe key.
