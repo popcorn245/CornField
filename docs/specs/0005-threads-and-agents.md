@@ -56,6 +56,14 @@ Every request carries a **run id** that cornfield mints (`run-<ulid>`).
   - **one open run per issue or proposal** unless the maintainer asks for another on purpose.
 - **Cost** is shown only when the runner reports `tokens` or `cost`. cornfield never estimates.
 
+### D5. No credentials in a request; the forge's permissions are the boundary (2026-11-05)
+
+- **A request carries no credentials.** The runner pushes and opens pull requests under its **own** identity (a bot account, a deploy key, a CI token), which is also what the Agents tab marks as agent-made.
+- **A request is made as the maintainer who clicked.** On the forge transport it is posted with that maintainer's own token, as reviews are, so the forge shows who asked and keeps the record.
+- **The runner acts only on a request whose author is a maintainer now.** This is the same rule reviews follow. The example recipes check it in their first lines, and the docs say it plainly: without it, anyone who can comment could start an agent.
+- **A request written by hand on the forge counts.** Any maintainer-authored request block is a real request, so the whole system can be driven with cornfield switched off. cornfield is only a convenient way to write one. Such a request bypasses cornfield's cap and rate limits; those guard against a runaway click, not against a maintainer acting on purpose.
+- **Push and pull:** requests are HMAC-signed with a secret from the environment, as hooks are. Pull uses **runner tokens**, minted and revoked in the dashboard like review tokens, that may only read and claim requests and report on their runs.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -64,7 +72,7 @@ The tree, roughly in the order each answer unlocks the next:
 1a. ~~How a request reaches the runner.~~ D2.
 2. ~~What an agent run is, as cornfield sees it.~~ D3.
 3. ~~How a run is stopped, limited and paid for.~~ D4.
-4. Whose credentials an agent uses.
+4. ~~Whose credentials an agent uses.~~ D5.
 5. What a thread is, and where its messages live.
 6. Who writes in a thread (people, agents, the chat bridge), and how.
 7. How a thread connects to issues, nodes, proposals and runs.
