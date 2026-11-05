@@ -46,6 +46,16 @@ Every request carries a **run id** that cornfield mints (`run-<ulid>`).
   On the forge transport it is a comment on the request; on push or pull it is the same JSON sent to cornfield with the runner token. States: `claimed`, `working`, `done`, `failed`, `stopped`.
 - **A silent runner is fine:** a run that never reports still appears through what it pushes.
 
+### D4. cornfield asks to stop and limits how often it asks; the runner enforces the rest (2026-11-05)
+
+- **Stop** sends a stop request for the run id over the same transport and in the same block (`"state": "stop-requested"`). The runner decides what stopping means; cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet.
+- **Limits are hints:** a request carries optional `limits: { minutes, turns, cost }` from config defaults, editable per request. The runner enforces them or not; cornfield shows them beside what the runner reports.
+- **What cornfield enforces, because it controls the asking:**
+  - **at most 3 open runs per repo by default** (configurable); a request past the cap is refused with the reason;
+  - a per-maintainer rate limit on requests, like the review flood limits;
+  - **one open run per issue or proposal** unless the maintainer asks for another on purpose.
+- **Cost** is shown only when the runner reports `tokens` or `cost`. cornfield never estimates.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -53,7 +63,7 @@ The tree, roughly in the order each answer unlocks the next:
 1. ~~Where an agent runs, and what "launch" means for cornfield.~~ D1.
 1a. ~~How a request reaches the runner.~~ D2.
 2. ~~What an agent run is, as cornfield sees it.~~ D3.
-3. How a run is stopped, limited and paid for.
+3. ~~How a run is stopped, limited and paid for.~~ D4.
 4. Whose credentials an agent uses.
 5. What a thread is, and where its messages live.
 6. Who writes in a thread (people, agents, the chat bridge), and how.
