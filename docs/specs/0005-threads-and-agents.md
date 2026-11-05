@@ -77,6 +77,15 @@ This changes the earlier plan (the vision and #14) to keep threads in cornfield'
 
   Where cornfield only learns of a forge event by looking, it fires the hook when it next looks, as `spec.ready` does with the spec poll (#72). That poll grows to cover threads and runs.
 
+### D7. Threads point at the map with mentions; links are conventions, not machinery (2026-11-05)
+
+- **People write `[[…]]` in prose,** holding a node id (`[[core-server-auth]]`) or a repo path (`[[server/auth.js]]`). cornfield resolves either to its node. A mention that resolves to nothing stays plain text. It still reads sensibly on the forge without cornfield.
+- **Tools and agents may write a fenced block,** `cornfield-thread { "nodes": [...], "proposal": "<slug>" }`, for precise links.
+- **Links are conventions:**
+  - a spec pull request names its thread with `Thread: #n` or `Closes #n`;
+  - a run started from a thread posts its request *in* that thread, so the comment is the link;
+  - viewing a thread lights every node it mentions, and a node's panel lists the threads that mention it.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -88,7 +97,7 @@ The tree, roughly in the order each answer unlocks the next:
 4. ~~Whose credentials an agent uses.~~ D5.
 5. ~~What a thread is, and where its messages live.~~ D6.
 6. ~~Who writes in a thread, and how.~~ D6: anyone, on the forge, as themselves.
-7. How a thread connects to issues, nodes, proposals and runs.
+7. ~~How a thread connects to issues, nodes, proposals and runs.~~ D7.
 8. Models: where `models: { provider, baseUrl, model }` belongs, if anywhere.
 9. What cornfield shows of a run while it is going.
 10. The safe-actions line (ADR 0006) for v2.
