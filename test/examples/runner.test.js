@@ -92,6 +92,18 @@ describe('parse', () => {
       expect(c.validateRequest(request(over)).ok, why).toBe(false);
     }
   });
+  it("refuses cornfield's own token shapes, whichever kind, even where the vendored contract does not know it yet", () => {
+    const cf = (kind) => 'cf_' + kind + '_' + 'Ab3dE5gH7jK9mN1pQ3sT5vX7z';
+    for (const kind of ['rt', 'at', 'nt', 'zz']) {
+      const r = parse(fence(request({ brief: `use ${cf(kind)}` })));
+      expect(r.status, kind).toBe(1);
+      expect(r.stdout, kind).toBe('');
+      expect(r.stderr, kind).toMatch(/credential/);
+      expect(run(['report', ID, 'failed', `key ${cf(kind)}`]).status, kind).toBe(1);
+    }
+    // prose that names the prefixes is not a token
+    expect(parse(comment({ brief: 'Document the cf_rt_ and cf_at_ prefixes.' })).status).toBe(0);
+  });
   it('allows prose about tokens', () => {
     expect(parse(comment({ brief: 'Rotate the token handling in docs; mention the password policy.' })).status).toBe(0);
   });
@@ -171,35 +183,96 @@ describe('trailer', () => {
   });
 });
 
+describe('closes, claimed-url, body and pr', () => {
+  it('closes names the request\'s issue, and nothing without one', () => {
+    const f = path.join(dir, 'closes.txt');
+    fs.writeFileSync(f, comment());
+    expect(run(['closes', f]).stdout).toBe('Closes #12\n');
+    fs.writeFileSync(f, comment({ refs: { thread: 3 } }));
+    expect(run(['closes', f]).stdout).toBe('\n');
+    fs.writeFileSync(f, 'no request here');
+    expect(run(['closes', f]).status).toBe(1);
+  });
+  it('claimed-url finds the url of the runner\'s own latest report, never someone else\'s', () => {
+    const report = (url) => c.formatRunComment(ID, { state: 'claimed', url });
+    const f = path.join(dir, 'comments.json');
+    fs.writeFileSync(f, JSON.stringify([[
+      { user: { login: 'bot' }, body: report('https://ci.example.com/runs/1') },
+      { user: { login: 'someone' }, body: report('https://evil.example.com/runs/9') },
+      { user: { login: 'bot' }, body: report('https://ci.example.com/runs/2') },
+    ]]));
+    expect(run(['claimed-url', f, 'bot', ID]).stdout).toBe('https://ci.example.com/runs/2\n');
+    expect(run(['claimed-url', f, 'nobody', ID]).stdout).toBe('\n');
+    expect(run(['claimed-url', f, 'bot', 'run-nope']).status).toBe(1);
+  });
+  it('body and pr make JSON whatever the text holds', () => {
+    const f = path.join(dir, 'body.md');
+    fs.writeFileSync(f, 'a "quoted" $(line)\n`and` more');
+    expect(JSON.parse(run(['body', f]).stdout)).toEqual({ body: 'a "quoted" $(line)\n`and` more' });
+    expect(JSON.parse(run(['pr', 't', 'agent/x', 'main', f]).stdout)).toEqual({ title: 't', head: 'agent/x', base: 'main', body: 'a "quoted" $(line)\n`and` more' });
+  });
+});
+
 describe('the example workflows', () => {
   const files = { forgejo: 'examples/runner/forgejo-workflow.yml', github: 'examples/runner/github-workflow.yml' };
-  const load = async (f) => (await import('js-yaml')).default.load(fs.readFileSync(path.join(root, f), 'utf8'));
+  const text = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const load = async (f) => (await import('js-yaml')).default.load(text(f));
+  const stepsOf = (job) => job.steps;
+  const env = (o) => Object.values(o || {}).join('\n');
   for (const [name, f] of Object.entries(files)) {
-    it(`${name} parses, runs on created issue comments, and checks the maintainer first`, async () => {
+    it(`${name} runs on created issue comments only, and checks the maintainer first`, async () => {
       const wf = await load(f);
+      expect(Object.keys(wf.on)).toEqual(['issue_comment']);
       expect(wf.on.issue_comment.types).toEqual(['created']);
-      const steps = wf.jobs.agent.steps;
+      const steps = stepsOf(wf.jobs.request);
       expect(steps[0].run).toMatch(/collaborators\/\$COMMENTER\/permission/);
-      expect(steps.every((s) => s.uses || s.run)).toBe(true);
-      // every step after the check waits for it
+      expect(steps[0].run).toMatch(/set -euo pipefail/);
+      // every step after the check waits for it, and every other job waits for the request job's verdict
       for (const s of steps.slice(1)) expect(s.if, s.name).toBeTruthy();
+      for (const [id, job] of Object.entries(wf.jobs)) if (id !== 'request') expect(job.if, id).toMatch(/needs\.request\.outputs\.mode == 'run'/);
     });
     it(`${name} never puts event text or a secret into a shell script`, async () => {
       const wf = await load(f);
-      for (const s of wf.jobs.agent.steps) if (s.run) expect(s.run, s.name).not.toMatch(/\$\{\{/);
-      const text = fs.readFileSync(path.join(root, f), 'utf8');
-      expect(text).not.toMatch(/github\.event\.comment\.body[^\n]*run:/);
-      for (const m of text.matchAll(/\$\{\{\s*secrets\.(\w+)/g)) expect(['ANTHROPIC_API_KEY', 'RUNNER_TOKEN']).toContain(m[1]);
+      for (const job of Object.values(wf.jobs)) for (const s of job.steps) if (s.run) expect(s.run, s.name).not.toMatch(/\$\{\{/);
+      for (const m of text(f).matchAll(/\$\{\{\s*secrets\.(\w+)/g)) expect(['ANTHROPIC_API_KEY', 'RUNNER_TOKEN']).toContain(m[1]);
+    });
+    it(`${name} keeps the forge token away from the agent: no token in the agent job, a secret only at step level`, async () => {
+      const wf = await load(f);
+      const agent = JSON.stringify(wf.jobs.agent);
+      expect(agent).not.toMatch(/RUNNER_TOKEN|GH_TOKEN|GITHUB_TOKEN|github\.token/);
+      expect(agent).toMatch(/secrets\.ANTHROPIC_API_KEY/);
+      // no secret at workflow or job level, where every step would get it
+      expect(env(wf.env)).not.toMatch(/secrets\./);
+      for (const job of Object.values(wf.jobs)) expect(env(job.env)).not.toMatch(/secrets\./);
+      // the API key only in the agent job
+      for (const [id, job] of Object.entries(wf.jobs)) if (id !== 'agent') expect(JSON.stringify(job), id).not.toMatch(/ANTHROPIC_API_KEY/);
+      for (const job of Object.values(wf.jobs)) for (const s of job.steps) if (s.uses?.includes('checkout')) expect(s.with?.['persist-credentials'], s.uses).toBe(false);
+    });
+    it(`${name} publishes only a patch, never runs what the agent left, refuses workflow changes, and never moves an existing branch`, async () => {
+      const wf = await load(f);
+      const publish = stepsOf(wf.jobs.publish).map((s) => s.run || '').join('\n');
+      expect(publish).toMatch(/git apply --index/);
+      expect(publish).toMatch(/\^\\\.\(forgejo\|gitea\|github\)\//);
+      expect(publish).toMatch(/--force-with-lease="refs\/heads\/\$BRANCH:"/);
+      for (const m of publish.matchAll(/git (-c [^\n]*?)?(commit|push)/g)) expect(m[0]).toMatch(/core\.hooksPath=\/dev\/null/);
+      expect(text(f)).toMatch(/\[ "\$BRANCH" != "\$DEFAULT_BRANCH" \]/);
+      // the agent's work leaves its job only as an artifact
+      expect(stepsOf(wf.jobs.agent).some((s) => /upload-artifact/.test(s.uses || ''))).toBe(true);
+      expect(stepsOf(wf.jobs.publish).some((s) => /download-artifact/.test(s.uses || ''))).toBe(true);
+    });
+    it(`${name} pins Claude Code and the actions`, () => {
+      expect(text(f)).toMatch(/npm install -g @anthropic-ai\/claude-code@\d+\.\d+\.\d+\n/);
+      for (const m of text(f).matchAll(/uses: (\S+)/g)) expect(m[1], m[1]).toMatch(name === 'github' ? /@[0-9a-f]{40}$/ : /@v\d+\.\d+\.\d+$/);
     });
     it(`${name} calls only helper subcommands that exist`, () => {
-      const text = fs.readFileSync(path.join(root, f), 'utf8');
-      for (const m of text.matchAll(/node "\$RUNNER_TEMP\/cornfield-run\.mjs" (\w+)/g)) expect(['parse', 'stop', 'get', 'report', 'trailer']).toContain(m[1]);
+      const used = [...text(f).matchAll(/node "\$HELPER" ([\w-]+)/g)].map((m) => m[1]);
+      expect(used.length).toBeGreaterThan(5);
+      for (const u of used) expect(['parse', 'stop', 'get', 'report', 'trailer', 'closes', 'claimed-url', 'body', 'pr']).toContain(u);
     });
   }
   it('the docs show the Forgejo workflow as it is in the file, and link both', () => {
     const doc = fs.readFileSync(path.join(root, 'docs/runners.md'), 'utf8');
-    const yml = fs.readFileSync(path.join(root, files.forgejo), 'utf8');
-    expect(doc).toContain('```yaml\n' + yml + '```');
+    expect(doc).toContain('```yaml\n' + text(files.forgejo) + '```');
     for (const l of ['agent-contract.md', 'specs/0005-threads-and-agents.md', 'adr/0012-cornfield-asks-runners-act.md', 'github-workflow.yml']) expect(doc).toContain(`](${l.includes('workflow') ? '../examples/runner/' : ''}${l})`);
     expect(doc).toContain('**The maintainer check comes first.**');
   });
@@ -209,9 +282,10 @@ describe('the example workflows', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     expect(pkg.files.some((p) => p.startsWith('examples'))).toBe(false);
   });
-  it('the helper imports nothing but node:fs', () => {
+  it('the helper uses the contract itself: vendored byte for byte from core, and nothing else', () => {
     const src = fs.readFileSync(SCRIPT, 'utf8');
-    expect([...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1])).toEqual(['node:fs']);
-    expect(src.split('\n').length).toBeLessThan(130);
+    expect([...src.matchAll(/^import .* from '([^']+)'/gm)].map((m) => m[1])).toEqual(['node:fs', './agent-contract.js']);
+    for (const f of ['agent-contract.js', 'defuse.js']) expect(fs.readFileSync(path.join(root, 'examples/runner', f), 'utf8'), f).toBe(fs.readFileSync(path.join(root, 'core', f), 'utf8'));
+    expect(JSON.parse(fs.readFileSync(path.join(root, 'examples/runner/package.json'), 'utf8')).type).toBe('module');
   });
 });
