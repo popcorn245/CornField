@@ -2,6 +2,8 @@
 
 Status: accepted (maintainer, 2026-10-17); v1 work
 
+Amended 2026-11-05 (maintainer): threads are not kept in the SQLite file. A thread is a forge conversation (an issue's comments, or a spec PR's), and the file only caches it ([spec 0005](../specs/0005-threads-and-agents.md) D6, [ADR 0012](0012-cornfield-asks-runners-act.md)).
+
 ## Decision
 
 cornfield runs its own HTTP server (Node's `http`, no framework). In v1 it gains:
