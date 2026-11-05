@@ -6,14 +6,16 @@
  * repo's map and registry, and the folders of the browser modules its config names. Everything else in
  * the checkout (.env files, databases, sources) is not reachable.
  *
- * Proposals are found here too: `<proposals>/*.json` in the checkout and the same under each folder of
- * the configured worktrees folder (git worktrees with unpushed drafts). A request can only name one the
- * listing found itself; what it says is never joined into a path.
+ * Proposals are found here too (server/proposal-walk.js does the walking, asynchronously): `<proposals>/*.json` in the
+ * checkout and the same under each folder of the configured worktrees folder (git worktrees with unpushed drafts, those
+ * that differ from the checkout's). A request can only name one the listing found itself; what it says is never joined
+ * into a path.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { PROPOSAL_FILE, createProposalLister } from './proposal-walk.js';
 
 /** Content-Type by lower-case file extension (with the dot) */
 export const MIME_TYPES = {
@@ -112,64 +114,40 @@ export function sendFile(req, res, filePath, reqPath) {
 //  Proposals: listed from the checkout and its worktrees, served read-only
 // ---------------------------------------------------------------------------
 
-/** A proposal's file name: letters, digits, `.`, `_`, `-`; never a leading dot or dash. The slug is the name without `.json` */
-export const PROPOSAL_FILE = /^([A-Za-z0-9][A-Za-z0-9._-]*)\.json$/;
+export { PROPOSAL_FILE };
 
-/**
- * The folders to look in: the checkout first, then each worktree (a real directory, never a link).
- * @param {{ root: string, proposals: string, worktrees?: string|null }} where
- */
-function proposalFolders({ root, proposals, worktrees }) {
-  const base = path.resolve(root);
-  const folders = [{ source: 'checkout', dir: path.join(base, proposals) }];
-  if (!worktrees) return folders;
-  let entries = [];
-  try {
-    entries = fs.readdirSync(path.join(base, worktrees), { withFileTypes: true });
-  } catch { /* no worktrees here */ }
-  for (const w of entries) {
-    // A worktree called "checkout" would be taken for the checkout itself: not listed
-    if (w.isDirectory() && w.name !== 'checkout') folders.push({ source: w.name, dir: path.join(base, worktrees, w.name, proposals) });
-  }
-  return folders;
+/** The listers by the `fs` they use: the real one, or a fake a test hands in as `where.fs`. Each keeps its own cache. */
+const listers = new WeakMap();
+const realLister = createProposalLister();
+
+function listerOf(where) {
+  if (!where.fs) return realLister;
+  if (!listers.has(where.fs)) listers.set(where.fs, createProposalLister({ fs: where.fs }));
+  return listers.get(where.fs);
 }
 
 /**
- * Every proposal the server may serve. A review (`*.review.json`), a link, a directory and a name that is
- * not a plain file name are left out. When a slug is in several places each is listed, the worktree copies
- * first, as that is where it is being written.
- * @param {{ root: string, proposals: string, worktrees?: string|null }} where
- * @returns {{ slug: string, source: string, file: string }[]} `source` is `checkout` or the worktree's name
+ * Every proposal the server may serve (server/proposal-walk.js has how: async, cached, without the worktree files
+ * that are copies of the checkout's). A review (`*.review.json`), a link, a directory and a name that is not a plain
+ * file name are left out. When a slug is in several places each is listed, the worktree copies first, as that is
+ * where it is being written. Each entry carries `parsed`, `{ proposal }` or `{ error }`: what the file holds.
+ * @param {{ root: string, proposals: string, worktrees?: string|null, worktreeMaxAgeDays?: number|null }} where
+ * @param {{ only?: string|null }} [opts] `only`: walk just this source (`checkout` or a worktree's name)
+ * @returns {Promise<{ slug: string, source: string, file: string, parsed: { proposal?: unknown, error?: string } }[]>} `source` is `checkout` or the worktree's name
  */
-export function listProposalFiles(where) {
-  const out = [];
-  for (const { source, dir } of proposalFolders(where)) {
-    let names = [];
-    try {
-      names = fs.readdirSync(dir);
-    } catch { continue; }
-    for (const name of names) {
-      const m = PROPOSAL_FILE.exec(name);
-      if (!m || name.endsWith('.review.json')) continue;
-      const file = path.join(dir, name);
-      try {
-        if (!fs.lstatSync(file).isFile()) continue; // a directory, or a symlink to somewhere else
-      } catch { continue; }
-      out.push({ slug: m[1], source, file });
-    }
-  }
-  const rank = (e) => (e.source === 'checkout' ? 1 : 0);
-  return out.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : rank(a) - rank(b) || (a.source < b.source ? -1 : a.source > b.source ? 1 : 0)));
+export function listProposalFiles(where, opts) {
+  return listerOf(where).list(where, opts);
 }
 
 /**
  * The listed proposal a request names, matched against the listing. No `source` means the first one
- * listed for the slug (the worktree copy).
- * @param {{ root: string, proposals: string, worktrees?: string|null }} where
+ * listed for the slug (the worktree copy). With a `source`, only that one place is walked.
+ * @param {{ root: string, proposals: string, worktrees?: string|null, worktreeMaxAgeDays?: number|null }} where
  * @param {unknown} slug
  * @param {unknown} [source]
  */
-export function findProposalFile(where, slug, source) {
+export async function findProposalFile(where, slug, source) {
   if (typeof slug !== 'string' || (source !== undefined && source !== null && typeof source !== 'string')) return null;
-  return listProposalFiles(where).find((e) => e.slug === slug && (source === undefined || source === null || e.source === source)) || null;
+  const only = typeof source === 'string' && source !== '' ? source : null;
+  return (await listProposalFiles(where, { only })).find((e) => e.slug === slug && (only === null || e.source === only)) || null;
 }

@@ -143,6 +143,32 @@ describe('the agents rules', () => {
   });
 });
 
+describe('the worktrees key', () => {
+  it('is the folder as a string, as it always was, with no age limit; null turns the worktrees off', async () => {
+    expect(configProblems({ worktrees: '.claude/worktrees' })).toEqual([]);
+    expect(configProblems({ worktrees: null })).toEqual([]);
+    expect(await loadConfig(repo(), { env: {} })).toMatchObject({ worktrees: '.claude/worktrees', worktreeMaxAgeDays: null });
+    expect(await loadConfig(repo("export default { worktrees: '.worktrees' };"), { env: {} })).toMatchObject({ worktrees: '.worktrees', worktreeMaxAgeDays: null });
+    expect(await loadConfig(repo('export default { worktrees: null };'), { env: {} })).toMatchObject({ worktrees: null, worktreeMaxAgeDays: null });
+  });
+
+  it('may be { dir?, maxAgeDays? }: the folder stays what the rest of cornfield reads as `worktrees`', async () => {
+    for (const ok of [{}, { dir: '.worktrees' }, { maxAgeDays: 30 }, { maxAgeDays: 0.5 }, { dir: 'wt', maxAgeDays: 14 }]) expect(configProblems({ worktrees: ok }), JSON.stringify(ok)).toEqual([]);
+    expect(await loadConfig(repo('export default { worktrees: { maxAgeDays: 30 } };'), { env: {} })).toMatchObject({ worktrees: '.claude/worktrees', worktreeMaxAgeDays: 30 });
+    expect(await loadConfig(repo("export default { worktrees: { dir: 'wt', maxAgeDays: 14 } };"), { env: {} })).toMatchObject({ worktrees: 'wt', worktreeMaxAgeDays: 14 });
+    expect(await loadConfig(repo("export default { worktrees: { dir: 'wt' } };"), { env: {} })).toMatchObject({ worktrees: 'wt', worktreeMaxAgeDays: null });
+  });
+
+  it('refuses what it does not understand', () => {
+    for (const bad of [0, -1, '30', null, NaN, Infinity, 40000, true, []]) expect(configProblems({ worktrees: { maxAgeDays: bad } }).join(), JSON.stringify(bad)).toContain('worktrees.maxAgeDays is a number of days');
+    expect(configProblems({ worktrees: { maxage: 3 } })).toEqual(['worktrees.maxage: the keys are dir, maxAgeDays.']);
+    for (const dir of ['../out', '/abs', '', 3]) expect(configProblems({ worktrees: { dir } }).join(), String(dir)).toContain('worktrees.dir is the folder of git worktrees');
+    expect(configProblems({ worktrees: '../out' }).join()).toContain('"worktrees" is a folder inside the repo');
+    expect(configProblems({ worktrees: ['x'] }).join()).toContain('"worktrees" is a folder inside the repo');
+    expect(configProblems({ worktrees: 7 }).join()).toContain('"worktrees"');
+  });
+});
+
 describe('the proposals key', () => {
   it('is the folder as a string, as it always was, and landing on approval is off', async () => {
     expect(configProblems({ proposals: 'docs/specs/proposals' })).toEqual([]);

@@ -26,7 +26,8 @@
  * the review in the data folder; `migrateStage1Reviews` carries those over once, when the menu is opened.
  *
  * Which files exist, and that a request can only name one the server itself listed, is server/files.js
- * (`listProposalFiles`, `findProposalFile`); this module reads the files, checks each
+ * (`listProposalFiles`, `findProposalFile`, server/proposal-walk.js: async and cached by path and mtime, so a slow
+ * worktrees folder never holds up the server); this module checks each
  * against the checkout's topology.json and answers. Every function takes `where`:
  * `{ root, proposals, worktrees, topology, dataDir, publicHost? }` (core/config.js names them). A file that does not
  * parse is listed with an `error` instead of breaking the list. The listing's `review` is always null: a review lives on
@@ -39,7 +40,7 @@
  * (percent-encoded) says why the PRs are not. Without `forgeFor` nothing is asked of a forge and the routes answer as they always have.
  */
 
-import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
@@ -60,14 +61,24 @@ function send(res, status, body, extra = {}) {
 }
 
 /** The map the proposals are checked against: the checkout's topology.json, or null when it cannot be read */
-function readTopology(where) {
+async function readTopology(where) {
+  const file = path.join(where.root, where.topology || 'topology.json');
   try {
-    const topology = JSON.parse(fs.readFileSync(path.join(where.root, where.topology || 'topology.json'), 'utf8'));
-    return Array.isArray(topology.nodes) && Array.isArray(topology.edges) ? topology : null;
+    const st = await fsp.stat(file);
+    const stamp = `${st.mtimeMs}:${st.size}`;
+    const known = topologies.get(file);
+    if (known && known.stamp === stamp) return known.topology;
+    const topology = JSON.parse(await fsp.readFile(file, 'utf8'));
+    const checked = Array.isArray(topology.nodes) && Array.isArray(topology.edges) ? topology : null;
+    topologies.set(file, { stamp, topology: checked });
+    if (topologies.size > 32) topologies.delete(topologies.keys().next().value);
+    return checked;
   } catch {
     return null;
   }
 }
+/** The maps read, by file and the size and mtime they were read at: an unchanged map is not read or parsed again */
+const topologies = new Map();
 
 /** A host name that is the machine's own: localhost, an address, a tailnet name, a bare name, or the configured public host. Not an outside domain pointed here. */
 function ownHostName(host, publicHost) {
@@ -136,15 +147,16 @@ export function readBody(req, limit) {
  * a file that does not parse has `error` instead and no counts. `review` is null (see the module's head).
  */
 function describeEntry(entry, topology) {
-  const { slug, source } = entry;
-  let proposal;
-  try {
-    proposal = JSON.parse(fs.readFileSync(entry.file, 'utf8'));
-  } catch (err) {
-    return { slug, title: slug, summary: '', spec: null, source, counts: null, errors: null, review: null, error: `Not valid JSON: ${err.message}` };
-  }
-  return { ...describeProposal(slug, source, proposal, topology), review: null };
+  const { slug, source, parsed } = entry;
+  if (parsed.error !== undefined) return { slug, title: slug, summary: '', spec: null, source, counts: null, errors: null, review: null, error: parsed.error };
+  // What a file says of itself against the map is kept with its parsed result, until either changes
+  const memo = described.get(parsed);
+  if (memo && memo.topology === topology && memo.slug === slug && memo.source === source) return { ...memo.value };
+  const value = { ...describeProposal(slug, source, parsed.proposal, topology), review: null };
+  described.set(parsed, { topology, slug, source, value });
+  return { ...value };
 }
+const described = new WeakMap();
 
 /** What a listing entry says of a parsed proposal (the file may hold anything JSON can) */
 function describeProposal(slug, source, proposal, topology) {
@@ -175,9 +187,9 @@ async function describePull(entry, forge, where, topology) {
 }
 
 /** The listing `GET /proposals` answers with */
-export function listProposals(where) {
-  const topology = readTopology(where);
-  return listProposalFiles(where).map((entry) => describeEntry(entry, topology));
+export async function listProposals(where) {
+  const [topology, files] = await Promise.all([readTopology(where), listProposalFiles(where)]);
+  return files.map((entry) => describeEntry(entry, topology));
 }
 
 /**
@@ -189,8 +201,8 @@ export function listProposals(where) {
  * @returns {Promise<{ list: object[], problem: string | null }>}
  */
 async function listWithPulls(where, forgeFor, signedIn) {
-  const topology = readTopology(where);
-  const local = listProposalFiles(where).map((entry) => describeEntry(entry, topology));
+  const [topology, files] = await Promise.all([readTopology(where), listProposalFiles(where)]);
+  const local = files.map((entry) => describeEntry(entry, topology));
   let forge;
   try {
     forge = forgeFor();
@@ -285,7 +297,7 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
  * @param {{ root: string, proposals: string, worktrees?: string|null, topology?: string, dataDir: string, publicHost?: string|null }} where
  * @param {(() => import('./forge.js').Forge) | null} [forgeFor] the forge as the signed-in user; null without sign-in
  * @param {SignedIn | null} [signedIn] who is signed in, and where their actions are recorded; null without sign-in
- * @returns {boolean} true when the request was answered
+ * @returns {boolean} true when the route is one of the proposals' (the answer may follow: the files are read without blocking the server)
  */
 export function serveProposals(req, res, reqPath, url, where, forgeFor = null, signedIn = null) {
   if (reqPath !== '/proposals' && !reqPath.startsWith('/proposals/')) return false;
@@ -310,7 +322,11 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null, s
           if (!res.headersSent) send(res, 500, { error: 'The review could not be read' });
         });
       } else {
-        send(res, 404, { error: findProposalFile(where, slug, url.searchParams.get('source') || null) ? 'No review yet' : 'No such proposal' });
+        findProposalFile(where, slug, url.searchParams.get('source') || null).then((found) => {
+          send(res, 404, { error: found ? 'No review yet' : 'No such proposal' });
+        }).catch(() => {
+          if (!res.headersSent) send(res, 500, { error: 'The proposal could not be looked up' });
+        });
       }
     } else {
       req.resume();
@@ -334,7 +350,9 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null, s
 
   if (reqPath === '/proposals') {
     if (!forgeFor) {
-      send(res, 200, listProposals(where));
+      listProposals(where).then((list) => send(res, 200, list)).catch(() => {
+        if (!res.headersSent) send(res, 500, { error: 'The proposals could not be listed' });
+      });
       return true;
     }
     listWithPulls(where, forgeFor, signedIn).then(({ list, problem }) => {
@@ -349,25 +367,25 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null, s
   // listing; it never becomes part of a path.
   const m = /^\/proposals\/([^/]+)\.json$/.exec(reqPath);
   const source = url.searchParams.get('source') || null;
-  const entry = m ? findProposalFile(where, m[1], source) : null;
+  serveFile(res, where, forgeFor, m ? m[1] : null, source).catch(() => {
+    if (!res.headersSent) send(res, 500, { error: 'The proposal could not be read' });
+  });
+  return true;
+}
+
+/** GET /proposals/<slug>.json: the file the listing found, or (with a forge) the proposal of an open spec PR */
+async function serveFile(res, where, forgeFor, slug, source) {
+  const entry = slug ? await findProposalFile(where, slug, source) : null;
   if (!entry) {
-    if (m && forgeFor) {
-      servePull(res, where, forgeFor, m[1], source).catch(() => {
-        if (!res.headersSent) send(res, 500, { error: 'The proposal could not be read' });
-      });
-      return true;
-    }
-    send(res, 404, { error: 'No such proposal' });
-    return true;
+    if (slug && forgeFor) return servePull(res, where, forgeFor, slug, source);
+    return send(res, 404, { error: 'No such proposal' });
   }
   let text;
   try {
-    text = fs.readFileSync(entry.file, 'utf8');
+    text = await fsp.readFile(entry.file, 'utf8');
     JSON.parse(text);
   } catch (err) {
-    send(res, 422, { error: `Not valid JSON: ${err.message}` });
-    return true;
+    return send(res, 422, { error: `Not valid JSON: ${err.message}` });
   }
-  send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source) });
-  return true;
+  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source) });
 }
