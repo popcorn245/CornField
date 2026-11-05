@@ -168,3 +168,35 @@ describe('the migrations', () => {
     b.close();
   });
 });
+
+describe('migration 8 (push and pull transports, runner tokens)', () => {
+  const hash = (n) => `${String(n).padStart(2, '0')}`.repeat(32);
+  const at = '2026-11-01T00:00:00.000Z';
+
+  it('moves a file at version 7 to 8: tokens, their ids and their sequence kept, runner scope allowed, runs get a transport', () => {
+    expect(MIGRATIONS).toHaveLength(8);
+    const db = new DatabaseSync(':memory:');
+    migrate(db, MIGRATIONS.slice(0, 7));
+    expect(schemaVersion(db)).toBe(7);
+    const add = db.prepare("INSERT INTO review_tokens (token_hash, user_id, login, label, scope, created_at, expires_at) VALUES (?, '1', 'maint', ?, ?, ?, ?)");
+    add.run(hash(1), 'review one', 'review', at, at);
+    add.run(hash(2), 'agent one', 'agent', at, at);
+    add.run(hash(3), 'dropped', 'agent', at, at);
+    db.prepare('DELETE FROM review_tokens WHERE id = 3').run(); // the highest id is gone: the sequence must still remember it
+    db.prepare(`INSERT INTO runs (run_id, repo, kind, issue, target, comment_id, request, requested_by, requested_by_id, requested_at, last_activity)
+      VALUES ('run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', 'o/n', 'code', 12, 12, '77', '{}', 'maint', '1', ?, ?)`).run(at, at);
+
+    expect(migrate(db)).toEqual({ from: 7, to: 8 });
+    expect(db.prepare('SELECT id, label, scope FROM review_tokens ORDER BY id').all()).toEqual([{ id: 1, label: 'review one', scope: 'review' }, { id: 2, label: 'agent one', scope: 'agent' }]);
+    expect(db.prepare('SELECT run_id, transport, claimed_by, claimed_at, comment_id FROM runs').all()).toEqual([{ run_id: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', transport: 'forge', claimed_by: null, claimed_at: null, comment_id: '77' }]);
+    expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used', 'scope']);
+    // the runner scope is allowed now, and a made-up one is not; ids carry on past the dropped one
+    const id = Number(add.run(hash(4), 'runner one', 'runner', at, at).lastInsertRowid);
+    expect(id).toBe(4);
+    expect(() => add.run(hash(5), 'x', 'bogus', at, at)).toThrow();
+    expect(() => add.run(hash(1), 'dup', 'review', at, at)).toThrow(); // the hash is still unique
+    expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name = 'review_tokens_user_id'").all()).toHaveLength(1);
+    expect(() => db.prepare("UPDATE runs SET transport = 'carrier-pigeon'").run()).toThrow();
+    db.close();
+  });
+});

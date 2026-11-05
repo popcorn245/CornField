@@ -1,8 +1,8 @@
 /**
  * @module server/runner-api
  *
- * The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5; the engine is server/agent-runs.js, the contract
- * core/agent-contract.js, the guide docs/agents.md and docs/agent-contract.md). A runner behind NAT asks cornfield for work, claims it, and
+ * The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5). The engine is server/agent-runs.js, the contract is
+ * core/agent-contract.js, and docs/agents.md says how a runner uses these routes. A runner behind NAT asks cornfield for work, claims it, and
  * reports on it; a runner that was pushed a request (the `agent.requested` hook event) reports the same way.
  *
  *   GET  /api/agent-requests?state=queued      the queued requests (the contract's request JSON), oldest first, at most `QUEUE_LIMIT`

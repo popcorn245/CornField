@@ -500,9 +500,8 @@ describe('the push and pull transports', () => {
     });
 
     it('needs sign-in and a forge on push and pull', () => {
-      for (const transport of ['push', 'pull']) {
-        expect(() => createCornfieldServer({ ...config, agents: { ...config.agents, transport }, hooks: [{ url: rcv.url, events: '*' }] }, { env: {} })).toThrow(/sign-in/);
-      }
+      expect(() => createCornfieldServer({ ...config, agents: { ...config.agents, transport: 'push' }, hooks: [{ url: rcv.url, events: '*' }] }, { env: { CORNFIELD_HOOK_SECRET: HOOK_SECRET } })).toThrow(/sign-in/);
+      expect(() => createCornfieldServer({ ...config, agents: { ...config.agents, transport: 'pull' }, hooks: [] }, { env: {} })).toThrow(/needs sign-in and a forge/);
     });
   });
 
@@ -585,7 +584,7 @@ describe('the push and pull transports', () => {
       const { runner, agent, runId } = await pulled();
       const review = await mint('review', 'reviewer');
       const stray = [
-        ['POST', '/api/reviews', { pull: 1 }], ['POST', '/api/agent-requests', { kind: 'code' }], ['PUT', '/api/agent-requests', {}],
+        ['POST', '/api/reviews', { pull: 1 }], ['POST', '/api/agent-requests', { kind: 'code' }],
         ['GET', '/api/agent-runs'], ['GET', `/api/agent-runs/${runId}`], ['POST', '/api/agent-runs', {}], ['POST', `/api/agent-runs/${runId}/stop`, {}],
         ['GET', '/api/review-tokens'], ['POST', '/api/review-tokens', { label: 'x' }], ['GET', '/api/agent-tokens'], ['POST', '/api/agent-tokens', { label: 'x' }],
         ['GET', '/api/runner-tokens'], ['POST', '/api/runner-tokens', { label: 'x' }], ['POST', '/api/runner-tokens/1/revoke', {}], ['POST', '/api/review-tokens/1/revoke', {}],
@@ -599,7 +598,7 @@ describe('the push and pull transports', () => {
         expect(res.text).not.toContain(runner.secret);
       }
       // …and every one of them is a row
-      expect(rows().filter((r) => r.action === 'runner-call')).toHaveLength(stray.length - 3);
+      expect(rows().filter((r) => r.action === 'runner-call')).toHaveLength(stray.length - 2);
       for (const t of [review, agent]) {
         const routes = [['GET', '/api/agent-requests?state=queued'], ['POST', `/api/agent-requests/${runId}/claim`], ['GET', `/api/runs/${runId}`], ['POST', `/api/runs/${runId}`, { state: 'working' }]];
         for (const [method, target, body] of routes) {

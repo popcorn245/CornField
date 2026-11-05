@@ -109,7 +109,8 @@ export async function publish({ request, answer, env, fetch, exec = sh }) {
   await git('commit', '-m', `${answer.summary}\n\nCornfield-Run: ${request.runId}`);
   await git('push', '--force-with-lease', 'origin', branch);
   const github = (env.FORGE_TYPE || 'github') === 'github';
-  const api = github ? `${env.FORGE_URL ? env.FORGE_URL.replace(/\/+$/, '') + '/api/v3' : 'https://api.github.com'}` : `${env.FORGE_URL.replace(/\/+$/, '')}/api/v1`;
+  const root = env.FORGE_URL ? env.FORGE_URL.replace(/\/+$/, '') : '';
+  const api = github ? (root ? `${root}/api/v3` : 'https://api.github.com') : `${root}/api/v1`;
   const res = await fetch(`${api}/repos/${env.FORGE_REPO}/pulls`, {
     method: 'POST', headers: { authorization: `token ${env.FORGE_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({ title: answer.summary, head: branch, base, body: `${request.brief.slice(0, 2000)}\n\nCornfield-Run: ${request.runId}` }),

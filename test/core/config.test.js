@@ -305,6 +305,16 @@ describe('the agents keys that ask for and follow runs (spec 0005)', () => {
     expect(configProblems({ agents: { quietAfter: '9999h' } }).join()).toContain('over the ceiling');
   });
 
+  it('knows the three transports, and push needs a hook that wants agent.requested', () => {
+    expect(configProblems({ agents: { transport: 'pull' } })).toEqual([]);
+    const push = { agents: { transport: 'push' } };
+    expect(configProblems(push).join()).toContain('a hook must subscribe to agent.requested');
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: ['spec.ready'] }] }).join()).toContain('agent.requested');
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: ['agent.requested'] }] })).toEqual([]);
+    expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: '*' }] })).toEqual([]);
+    expect(configProblems({ agents: { transport: 'smoke-signals' } }).join()).toContain('"forge", "push", "pull"');
+  });
+
   it('read quietAfter with the duration parser of hookPoll', async () => {
     const { quietAfterMs } = await import('../../core/config.js');
     expect(quietAfterMs({ agents: {} })).toBe(24 * 3_600_000);

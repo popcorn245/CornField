@@ -1788,6 +1788,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else. (server/agent-runs.js)"
+    },
+    {
+      "id": "core-server-runner-api",
+      "label": "runner-api.js",
+      "type": "core",
+      "file": "server/runner-api.js",
+      "summary": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5). (server/runner-api.js)"
     }
   ],
   "edges": [
@@ -5560,7 +5570,59 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-agent-contract",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-runner-api"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-agent-runs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-review-api",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-review-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-submit-review",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-runner-api",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T09:37:28.724Z"
+  "updatedAt": "2026-11-05T09:59:37.796Z"
 }
