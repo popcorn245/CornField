@@ -31,6 +31,7 @@
     "./plugins/*": "./plugins/*",
     "./deriver-kit": "./core/deriver-kit.js",
     "./server": "./server/server.js",
+    "./agent-contract.schema.json": "./docs/agent-contract.schema.json",
     "./package.json": "./package.json"
   },
   "files": [
@@ -39,6 +40,7 @@
     "explorer/",
     "plugins/",
     "server/",
+    "docs/agent-contract.schema.json",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

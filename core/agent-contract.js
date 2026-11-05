@@ -27,13 +27,18 @@
  * What this module does not do, because it cannot: decide whether the author of a block is a maintainer. That is the
  * caller's, and the runner's (D5). A comment is untrusted text: it is parsed, never rendered as HTML, never joined into a path.
  *
- * It lives in `core/` and imports `server/defuse.js`, which imports nothing, so Node and the browser can both load it as long as
- * the server hands that one file out.
+ * It lives in `core/` and imports only `core/defuse.js`, which imports nothing; its randomness is `crypto.getRandomValues`, so
+ * Node and the browser can both load it.
+ *
+ * **For the server (#80 on).** `createRequest` makes a request, `formatRunComment` the comment that carries it, and
+ * `runBlocksOf(comments, { trust })` reads a forge conversation back: every block with the comment and author it came from,
+ * the blocks whose author is not trusted (to write the audit row the spec asks for), and the refused ones. `runAuthors` names the
+ * logins worth asking the forge about first. `findRunId` ties a pull request to its run.
  *
  * @typedef {'code' | 'summary' | 'brief' | 'proposal'} RunKind
- * @typedef {{ issue?: number, proposal?: string, thread?: number }} RunRefs
+ * @typedef {{ issue?: number, proposal?: string, pull?: number, thread?: number }} RunRefs
  * @typedef {{ minutes?: number, turns?: number, cost?: number }} RunLimits
- * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief?: string,
+ * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief: string,
  *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string }} RunRequest
  * @typedef {'claimed' | 'working' | 'done' | 'failed' | 'stopped'} ReportState
  * @typedef {{ state: ReportState, note?: string, url?: string, tokens?: number, cost?: number }} RunReport
@@ -42,8 +47,10 @@
  * @typedef {{ runId: string, type: 'request', value: RunRequest } | { runId: string, type: 'report', value: RunReport } | { runId: string, type: 'stop-request', value: StopRequest }} RunBlock
  */
 
-import { randomBytes } from 'node:crypto';
-import { defuse } from '../server/defuse.js';
+import { defuse } from './defuse.js';
+
+/** Ten (or `n`) random bytes, from the Web Crypto API that Node and the browser both have */
+const randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 
 // ---------------------------------------------------------------------------
 //  The limits, in one place (the JSON Schema repeats them; a test keeps the two together)
@@ -77,7 +84,7 @@ export const RUN_TAG = 'cornfield-run';
 export const TRAILER_KEY = 'Cornfield-Run';
 
 const REQUEST_KEYS = ['version', 'runId', 'kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'requestedAt'];
-const REF_KEYS = ['issue', 'proposal', 'thread'];
+const REF_KEYS = ['issue', 'proposal', 'pull', 'thread'];
 const LIMIT_KEYS = ['minutes', 'turns', 'cost'];
 const REPORT_KEYS = ['state', 'note', 'url', 'tokens', 'cost'];
 const STOP_KEYS = ['state', 'note'];
@@ -104,20 +111,32 @@ const anyCase = (word) => word.replace(/[a-z]/gi, (c) => `[${c.toLowerCase()}${c
 /** A field name that says it holds a credential (matched anywhere in the name, any case) */
 export const CREDENTIAL_KEY_SOURCE = `(?:${['token', 'secret', 'passw', 'credential', 'api[_-]?key', 'access[_-]?key', 'private[_-]?key', 'ssh[_-]?key', 'authorization', 'bearer', 'cookie'].map(anyCase).join('|')})`;
 
-/** A value shaped like a credential: a forge or cloud token, a JWT, a private key, a bearer header, a user and password in a link */
+/**
+ * Where a token may start: not inside a longer word, so prose like "desk-booking-service-for-teams" never reads as an `sk-` key.
+ * Every alternative below starts with it (or with a fixed text), which also keeps each one linear in the length of the text.
+ */
+const EDGE = '(?<![A-Za-z0-9])';
+
+/**
+ * A value shaped like a credential: a forge or cloud token, a JWT, a private key, a bearer header, a user and password in a link.
+ * Prose that only talks about tokens and passwords passes; `sk-` keys and bearer values need a digit in their first 41
+ * characters, as real ones have, so a long hyphenated word after "Bearer" or "sk-" is not taken for one. Each alternative tries a
+ * bounded stretch from each place it may start, so a 20000 character brief is read in linear time whatever it holds.
+ */
 export const CREDENTIAL_VALUE_SOURCE = [
-  'gh[pousr]_[A-Za-z0-9]{30,}',
-  'github_pat_[A-Za-z0-9_]{20,}',
-  'glpat-[A-Za-z0-9_-]{15,}',
-  'gto-[A-Za-z0-9]{20,}',
-  'sk-[A-Za-z0-9_-]{20,}',
-  'AKIA[0-9A-Z]{16}',
-  'AIza[0-9A-Za-z_-]{35}',
-  'xox[abprs]-[A-Za-z0-9-]{10,}',
-  'eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}',
-  '-----BEGIN [A-Z ]*PRIVATE KEY-----',
-  `${anyCase('bearer')}\\s+[A-Za-z0-9._~+/=-]{20,}`,
-  '[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@',
+  `${EDGE}gh[pousr]_[A-Za-z0-9]{30,}`,
+  `${EDGE}github_pat_[A-Za-z0-9_]{20,}`,
+  `${EDGE}glpat-[A-Za-z0-9_-]{15,}`,
+  `${EDGE}gto-[A-Za-z0-9]{20,}`,
+  `${EDGE}sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]`,
+  `${EDGE}AKIA[0-9A-Z]{16}`,
+  `${EDGE}AIza[0-9A-Za-z_-]{35}`,
+  `${EDGE}xox[abprs]-[A-Za-z0-9-]{10,}`,
+  `${EDGE}eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}`,
+  '-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----',
+  `${EDGE}${anyCase('bearer')}[ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]`,
+  // a user and a password in a link: the scheme is a whole word, the user holds no colon, so no part of the text is tried twice
+  '(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@',
 ].join('|');
 
 /** A link whose query or fragment carries a credential (`?token=…`) */
@@ -279,20 +298,22 @@ export function validateRequest(body, { profiles } = {}) {
   if (!isObject(body.refs)) return no('"refs" says what the run is about: { issue, proposal, thread }, at least one.');
   const refKeys = keyProblem(body.refs, REF_KEYS, '"refs"');
   if (refKeys) return no(refKeys);
-  if (Object.keys(body.refs).length === 0) return no('"refs" needs at least one of issue, proposal or thread.');
-  for (const field of ['issue', 'thread']) {
+  if (!['issue', 'proposal', 'thread'].some((k) => k in body.refs)) return no('"refs" needs at least one of issue, proposal or thread.');
+  for (const field of ['issue', 'pull', 'thread']) {
     const n = body.refs[field];
     if (n !== undefined && (!isInt(n) || n < 1 || n > MAX_NUMBER)) return no(`"refs.${field}" is a number from 1, like 12.`);
   }
   if (body.refs.proposal !== undefined && (typeof body.refs.proposal !== 'string' || !SLUG.test(body.refs.proposal))) return no('"refs.proposal" is the proposal\'s name, like 0014-planner.');
+  if (body.refs.pull !== undefined && body.refs.proposal === undefined) return no('"refs.pull" is the spec pull request that holds "refs.proposal", so it comes with one.');
 
   if (body.branch !== undefined) {
     const problem = branchProblem(body.branch);
     if (problem) return no(`"branch" ${problem}`);
   }
 
-  if (body.brief !== undefined) {
-    const problem = text(body.brief, 'brief', MAX_BRIEF_CHARS);
+  {
+    // Required, as the spec's table has it (it may be empty: a summary of a thread needs no more than the thread)
+    const problem = body.brief === undefined ? '"brief" is the text the runner hands to its agent (it may be empty).' : text(body.brief, 'brief', MAX_BRIEF_CHARS);
     if (problem) return no(problem);
   }
 
@@ -324,7 +345,7 @@ export function validateRequest(body, { profiles } = {}) {
   value.refs = {};
   for (const k of REF_KEYS) if (body.refs[k] !== undefined) value.refs[k] = body.refs[k];
   if (body.branch !== undefined) value.branch = body.branch;
-  if (body.brief !== undefined) value.brief = body.brief;
+  value.brief = body.brief;
   if (body.limits !== undefined) {
     value.limits = {};
     for (const k of LIMIT_KEYS) if (body.limits[k] !== undefined) value.limits[k] = body.limits[k];
@@ -448,7 +469,7 @@ const oneLine = (s) => defuse(String(s).replace(/\s+/g, ' ').replace(/`{3,}/g, "
 
 function defaultLine(runId, type, value) {
   if (type === 'request') {
-    const about = [value.refs.issue && `issue #${value.refs.issue}`, value.refs.proposal && `proposal ${value.refs.proposal}`, value.refs.thread && `thread #${value.refs.thread}`].filter(Boolean).join(', ');
+    const about = [value.refs.issue && `issue #${value.refs.issue}`, value.refs.proposal && `proposal ${value.refs.proposal}${value.refs.pull ? ` (pull request #${value.refs.pull})` : ''}`, value.refs.thread && `thread #${value.refs.thread}`].filter(Boolean).join(', ');
     return `Asked for a ${value.kind} run \`${runId}\` on ${about}${value.profile ? ` with the profile ${value.profile}` : ''} (${value.requestedBy}, in cornfield).`;
   }
   if (type === 'stop-request') return `Asked run \`${runId}\` to stop.`;
@@ -474,13 +495,41 @@ export function formatRunComment(runId, body, { line, profiles } = {}) {
   return out;
 }
 
-const BLOCK = new RegExp(`^${FENCE}${RUN_TAG}([^\\n]*)\\n([\\s\\S]*?)\\n${FENCE}[ \\t]*$`, 'gm');
+/** A line that opens or closes a fence: three or more backticks or tildes at the start of the line, and the rest */
+const FENCE_LINE = /^(`{3,}|~{3,})(.*)$/;
+
+/**
+ * The fenced code blocks of a text, outermost only, in one pass over its lines: `{ fence, info, body, end }` for each, where
+ * `end` is false for a block nobody closed (it runs to the end of the text). A fence closes on a line of the same character, at
+ * least as long, with nothing after it but spaces, as Markdown reads it; so a block inside a longer fence (a ```` example, a
+ * ~~~ one) or inside a ```js block is part of that block, never a block of its own. Fences start a line: a quoted or indented
+ * one is text. Linear in the length of the text, whatever it holds.
+ * @param {string} text with `\n` line ends
+ */
+export function* fencedBlocks(text) {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const open = FENCE_LINE.exec(lines[i]);
+    if (!open) continue;
+    const [, fence, info] = open;
+    // An info string after backticks may not hold a backtick (Markdown); such a line is text
+    if (fence[0] === '`' && info.includes('`')) continue;
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const close = FENCE_LINE.exec(lines[j]);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length && close[2].trim() === '') break;
+    }
+    yield { fence, info, body: lines.slice(i + 1, j).join('\n'), end: j < lines.length };
+    i = j;
+  }
+}
 
 /**
  * Every block a comment's text holds, in order, and every block that was refused with the reason. A block that is not strictly a
  * request, a report or a stop request is refused: not JSON, a list, two objects, a key it does not have, a credential, a fence
- * that names no run id, a request for another run than its fence names. Text around a block, a quoted block (`> ```…`) and an
- * indented one are ignored. Nothing is thrown.
+ * that names no run id, a request for another run than its fence names. Text around a block, a quoted block (`> ```…`), an
+ * indented one, one nobody closed, and one inside another fence (a ```` example) are ignored (`fencedBlocks`). Nothing is thrown,
+ * and the time it takes is linear in the text.
  * @param {unknown} body a comment's text
  * @param {{ profiles?: string[] }} [opts]
  * @returns {{ blocks: RunBlock[], refused: { runId: string | null, error: string }[] }}
@@ -489,7 +538,10 @@ export function readRunBlocks(body, opts) {
   const out = { blocks: [], refused: [] };
   if (typeof body !== 'string' || !body.includes(RUN_TAG)) return out;
   let seen = 0;
-  for (const m of body.slice(0, MAX_TEXT_CHARS).replace(/\r\n?/g, '\n').matchAll(BLOCK)) {
+  for (const b of fencedBlocks(body.slice(0, MAX_TEXT_CHARS).replace(/\r\n?/g, '\n'))) {
+    // A run block is a fence of exactly three backticks, as cornfield writes it, that was closed
+    if (b.fence !== FENCE || !b.end || !b.info.startsWith(RUN_TAG)) continue;
+    const m = [null, b.info.slice(RUN_TAG.length), b.body];
     if (++seen > MAX_BLOCKS) {
       out.refused.push({ runId: null, error: `A comment is read for at most ${MAX_BLOCKS} cornfield-run blocks.` });
       break;
@@ -526,6 +578,63 @@ export function readRunBlocks(body, opts) {
   return out;
 }
 
+/** How long after it was posted a comment may change and still count as not edited (the forge's own touch-ups), as for reviews */
+export const EDIT_GRACE_MS = 5000;
+
+/**
+ * @typedef {{ id: string, author: { login: string } | null, body: string, url?: string, createdAt: string, updatedAt?: string }} RunComment
+ *   a forge comment, as server/forge.js gives it
+ * @typedef {RunBlock & { by: string, at: string, comment: { id: string, url: string | null } }} FoundBlock
+ */
+
+/**
+ * The logins whose comments hold something that may be a run block, once each, newest comment first: the ones worth asking the
+ * forge about (their permission, or whether they are in `agents.runners`) before `runBlocksOf`.
+ * @param {RunComment[]} comments
+ * @returns {string[]}
+ */
+export function runAuthors(comments) {
+  const out = new Set();
+  for (let i = (Array.isArray(comments) ? comments.length : 0) - 1; i >= 0; i--) {
+    const c = comments[i];
+    if (c?.author?.login && typeof c.body === 'string' && c.body.includes(RUN_TAG)) out.add(c.author.login);
+  }
+  return [...out];
+}
+
+/**
+ * Every run block of a forge conversation (comments oldest first), with the comment it came from, sorted three ways:
+ * - `blocks`: from an author `trust(login)` accepts, in a comment not edited after it was posted;
+ * - `ignored`: well formed, but from someone else (or a deleted account), or in an edited comment: the spec wants one audit row
+ *   for each, so they are kept with the reason;
+ * - `refused`: not strictly a request, report or stop request (`readRunBlocks`), with the author.
+ * Whom to trust is the caller's to decide, because it takes the forge: a maintainer now for a request or a stop, a login in
+ * `agents.runners` or a maintainer for a report (spec 0005). `trust` is asked once per block, with the block, so it can tell them
+ * apart.
+ * @param {RunComment[]} comments
+ * @param {{ trust: (login: string, block: RunBlock) => boolean, profiles?: string[] }} opts
+ * @returns {{ blocks: FoundBlock[], ignored: (FoundBlock & { why: 'author' | 'edited' })[], refused: { runId: string | null, error: string, by: string | null, comment: { id: string, url: string | null } }[] }}
+ */
+export function runBlocksOf(comments, { trust, profiles } = /** @type {any} */ ({})) {
+  if (typeof trust !== 'function') throw new TypeError('runBlocksOf needs a trust(login, block) function: whose blocks count is the caller\'s to say.');
+  const out = { blocks: [], ignored: [], refused: [] };
+  for (const c of Array.isArray(comments) ? comments : []) {
+    if (!c || typeof c.body !== 'string') continue;
+    const read = readRunBlocks(c.body, { profiles });
+    const by = c.author?.login ?? null;
+    const comment = { id: String(c.id), url: c.url ?? null };
+    for (const r of read.refused) out.refused.push({ ...r, by, comment });
+    const edited = c.updatedAt !== undefined && Date.parse(c.updatedAt) - Date.parse(c.createdAt) > EDIT_GRACE_MS;
+    for (const b of read.blocks) {
+      const found = { ...b, by, at: c.createdAt, comment };
+      if (by === null || !trust(by, b)) out.ignored.push({ ...found, why: 'author' });
+      else if (edited) out.ignored.push({ ...found, why: 'edited' });
+      else out.blocks.push(found);
+    }
+  }
+  return out;
+}
+
 /** The blocks a comment's text holds, in order (see `readRunBlocks`; the refused ones are dropped) */
 export function parseRunBlocks(body, opts) {
   return readRunBlocks(body, opts).blocks;
@@ -548,7 +657,7 @@ export function latestBlock(blocks, runId, type) {
 //  The trailer, and the branch
 // ---------------------------------------------------------------------------
 
-const TRAILER = new RegExp(`^[ \\t]*${anyCase(TRAILER_KEY)}[ \\t]*:[ \\t]*(run-${ULID_SOURCE})[ \\t]*$`, 'gm');
+const TRAILER = new RegExp(`^ {0,3}${anyCase(TRAILER_KEY)}[ \\t]*:[ \\t]*(run-${ULID_SOURCE})[ \\t]*$`);
 
 /** The trailer line for a run: `Cornfield-Run: run-…` */
 export function formatTrailer(runId) {
@@ -558,14 +667,28 @@ export function formatTrailer(runId) {
 
 /**
  * The run id a pull request body or a commit message names in a `Cornfield-Run:` trailer: the key in any case, the id on a line of
- * its own, the last such line when there are several. A line that is quoted (`> `) or holds more than the trailer does not count.
+ * its own, the last such line when there are several. A line that is quoted (`> `), indented as code (four spaces or a tab),
+ * inside a fenced code block (an example in a pull request body), or holds more than the trailer does not count.
  * @param {unknown} message
  * @returns {string | null}
  */
 export function parseTrailer(message) {
   if (typeof message !== 'string' || message.length > MAX_TEXT_CHARS) return null;
   let found = null;
-  for (const m of message.replace(/\r\n?/g, '\n').matchAll(TRAILER)) found = m[1];
+  let fence = null;
+  for (const line of message.replace(/\r\n?/g, '\n').split('\n')) {
+    const f = FENCE_LINE.exec(line);
+    if (fence) {
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && f[2].trim() === '') fence = null;
+      continue;
+    }
+    if (f && !(f[1][0] === '`' && f[2].includes('`'))) {
+      fence = f[1];
+      continue;
+    }
+    const m = TRAILER.exec(line);
+    if (m) found = m[1];
+  }
   return found;
 }
 
