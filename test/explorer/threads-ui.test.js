@@ -531,6 +531,67 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(words).toContain('It is listed under Mentioned in for db.js.');
   });
 
+  it('after posting, the new thread\'s messages pending, then an answer with no thread, then a failure: nothing lit, nothing thrown, all said', async () => {
+    const unhandled = [];
+    const catcher = (err) => { unhandled.push(err); };
+    process.on('unhandledRejection', catcher);
+    try {
+      const server = fakeServer({ posts: POSTED });
+      mount();
+      selectNode(pick('core-db'));
+      await settle();
+      // The new thread's messages: held until the test lets them go, then answered as asked
+      let release = null;
+      let answer = null;
+      const real = globalThis.fetch;
+      vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+        if (!init.method && new URL(url, 'http://localhost').pathname === '/api/forge/threads/77') {
+          await new Promise((r) => { release = r; });
+          return answer();
+        }
+        return real(url, init);
+      }));
+      const json = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
+
+      // 1. pending: the idea is opened and the thread is selected, but nothing is lit before its messages are in
+      click(button());
+      await settle();
+      click($('idea-send'));
+      await settle();
+      expect(server.posts()).toHaveLength(1);
+      expect(release).not.toBe(null);
+      expect(state.forgeLit).toBe(null);
+      // 2. it comes back as a 200 with no thread in it: a failure in words, nothing lit
+      answer = () => json(200, { ok: true, at: '2026-10-19T11:59:30.000Z', rate: '' });
+      release();
+      await settle();
+      expect(state.forgeLit).toBe(null);
+      expect(q('#forge-detail').textContent).toContain('Thread 77 could not be read: the answer had no thread in it.');
+      const words = await said();
+      expect(words).toContain('Opened idea #77');
+      expect(words).toContain('Thread 77 could not be read');
+      expect(document.activeElement).toBe(button());
+
+      // 3. again, and the forge fails: said, nothing lit, the form usable
+      release = null;
+      click(button());
+      await settle();
+      $('idea-title').value = 'Another';
+      click($('idea-send'));
+      await settle();
+      answer = () => json(502, { ok: false, error: 'GitHub did not answer.', code: 'unavailable' });
+      release();
+      await settle();
+      expect(state.forgeLit).toBe(null);
+      expect(q('#forge-detail').textContent).toContain('GitHub did not answer.');
+      expect(await said()).toContain('GitHub did not answer.');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', catcher);
+    }
+  });
+
   it('never loses a draft: a typed title stays, typed text stays under the mention, and the mention is added once', async () => {
     fakeServer();
     mount();

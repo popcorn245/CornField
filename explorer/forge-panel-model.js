@@ -304,10 +304,12 @@ export function mentionsOf(refs, nodes) {
  * @returns {{ nodes: object[], unresolved: string[], changed: Set<string>, failing: Set<string>, perMessage: Map<string, { nodes: object[], unresolved: string[] }> }}
  */
 export function litForThread(thread, nodes) {
-  const all = linksOf(thread.messages.map((m) => m.body));
+  // A thread that is not there (not loaded, or an answer without one) lights nothing, and never throws
+  const messages = thread && Array.isArray(thread.messages) ? thread.messages.filter((m) => m && typeof m.body === 'string') : [];
+  const all = linksOf(messages.map((m) => m.body));
   const got = mentionsOf(all.refs, nodes);
   const perMessage = new Map();
-  for (const m of thread.messages) perMessage.set(m.id, messageNodes(m.body, nodes));
+  for (const m of messages) perMessage.set(m.id, messageNodes(m.body, nodes));
   return { nodes: got.nodes, unresolved: got.unresolved, changed: new Set(got.ids), failing: new Set(), perMessage };
 }
 

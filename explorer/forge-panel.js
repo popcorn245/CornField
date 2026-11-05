@@ -339,7 +339,7 @@ function relight() {
   if (ui.runSel) {
     const run = runById(ui.runSel);
     state.forgeLit = run ? litOfRun(run) : null;
-  } else if (ui.threadDetail) {
+  } else if (ui.threadDetail && ui.threadDetail.thread) {
     ui.litThread = litForThread(ui.threadDetail.thread, state.nodes);
     state.forgeLit = { changed: ui.litThread.changed, failing: ui.litThread.failing };
   } else if (ui.deployItem) {
@@ -414,6 +414,9 @@ function dropThread() {
 }
 
 /** Selects a thread: asks for its messages (read-only), then lights the nodes they mention */
+/** The thread a successful answer holds, or null (a failure, or an answer without one) */
+const threadOf = (res) => (res && res.ok && res.body && res.body.thread && typeof res.body.thread === 'object' && Array.isArray(res.body.thread.messages) ? res.body.thread : null);
+
 async function selectThread(n) {
   const token = ++threadToken;
   pullToken++;
@@ -436,13 +439,15 @@ async function selectThread(n) {
   paint();
   const res = await request(threadUrl(n), false);
   if (token !== threadToken) return;
-  if (!res.ok) {
-    ui.threadError = errorWords(res.status, res.body);
+  // An answer without a thread in it is a failure too: nothing to show or light
+  const thread = threadOf(res);
+  if (!thread) {
+    ui.threadError = res.ok ? `Thread ${n} could not be read: the answer had no thread in it. Refresh to ask again.` : errorWords(res.status, res.body);
     announce(ui.threadError);
     paint();
     return;
   }
-  ui.threadDetail = { thread: res.body.thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+  ui.threadDetail = { thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
   relight();
   $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the thread's messages are what was asked for, not the row that was tapped
   announce(threadSelectionWords());
@@ -578,24 +583,36 @@ async function sendIdea() {
   }
   paintIdea();
   announce(ui.idea.message);
-  if (res.ok) {
+  if (res.ok) await afterIdea(res);
+  else $('idea-title').focus();
+}
+
+/**
+ * After an idea is opened: the list read again, the new thread selected (so what it mentions lights), the focus back on what opened
+ * the form, and all of it said once. The idea is on the forge whatever happens here, so a failure is said, never thrown.
+ */
+async function afterIdea(res) {
+  const about = ui.idea.node;
+  const n = res.body && res.body.number;
+  let trouble = '';
+  try {
     ui.lists = {};
     indexCache = null;
-    const about = ui.idea.node;
     await loadList(true, true);
     ensureThreadsList();
-    // The new thread is selected in the list, so what it mentions lights on the map
-    const n = res.body.number;
+    // The new thread is selected in the list, so what it mentions lights on the map once its messages are in
     if (Number.isInteger(n)) await selectThread(n);
-    // Then the focus goes back to what opened the form: after the selection, which draws the node's panel (and its button) again
-    focusIdeaOpener();
-    ui.idea.opener = '';
-    ui.idea.node = null;
-    const shown = ui.thread === n && ui.threadDetail ? ` ${threadSelectionWords()}` : '';
-    // Opened from a node: say that its "Mentioned in" lists the new thread
-    const listed = about && (threadsFor(about.id) || []).some((t) => t.number === n);
-    announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Mentioned in for ${about.label}.` : ''}`);
-  } else $('idea-title').focus();
+  } catch (err) {
+    trouble = ` The list could not be read again (${err instanceof Error ? err.message : err}); Refresh asks for it.`;
+  }
+  // Then the focus goes back to what opened the form: after the selection, which draws the node's panel (and its button) again
+  try { focusIdeaOpener(); } catch { /* the page moved on */ }
+  ui.idea.opener = '';
+  ui.idea.node = null;
+  const shown = ui.thread === n && ui.threadDetail && ui.threadDetail.thread ? ` ${threadSelectionWords()}` : ui.thread === n && ui.threadError ? ` ${ui.threadError}` : '';
+  // Opened from a node: say that its "Mentioned in" lists the new thread
+  const listed = about && (threadsFor(about.id) || []).some((t) => t.number === n);
+  announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Mentioned in for ${about.label}.` : ''}${trouble}`);
 }
 
 /** The New idea bar and form, from `ui.idea`; typed text and the focus are left alone */
@@ -1566,8 +1583,9 @@ export async function refreshForge({ quiet = false } = {}) {
     const at = ui.thread;
     const token = ++threadToken;
     const res = await request(threadUrl(at), true);
-    if (token !== threadToken || !res.ok) return;
-    ui.threadDetail = { thread: res.body.thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+    const thread = threadOf(res);
+    if (token !== threadToken || !thread) return;
+    ui.threadDetail = { thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
     relight();
     return;
   }
@@ -1668,7 +1686,16 @@ function onClick(e) {
   else if (action.dataset.action === 'clear-forge-deploy') { clearDeploy(); $('forge-title').focus(); }
   else if (action.dataset.action === 'clear-forge-thread') { clearThread(); $('forge-title').focus(); }
   else if (action.dataset.action === 'idea-open') toggleIdea(!ui.idea.open);
-  else if (action.dataset.action === 'idea-send') sendIdea();
+  else if (action.dataset.action === 'idea-send') {
+    // Nothing of it may escape as an unhandled rejection: what went wrong is said, and the form is usable again
+    sendIdea().catch((err) => {
+      ui.idea.busy = false;
+      ui.idea.message = `Something went wrong in the page: ${err instanceof Error ? err.message : err}`;
+      ui.idea.bad = true;
+      paintIdea();
+      announce(ui.idea.message);
+    });
+  }
   else if (action.dataset.action === 'idea-cancel') { toggleIdea(false); announce('Cancelled. Nothing was opened.'); }
 }
 

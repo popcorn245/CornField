@@ -105,3 +105,12 @@ describe('which threads mention which node', () => {
     expect([...mentionsIndex(items, NODES.filter((n) => n.id !== 'core-auth')).keys()].sort()).toEqual(['core-hooks', 'pkg-server']);
   });
 });
+
+describe('litForThread on a thread that is not there', () => {
+  it('lights nothing and never throws: not loaded, an answer without one, odd messages', () => {
+    for (const t of [undefined, null, {}, { messages: null }, { messages: [null, { id: 'x' }, { id: 'y', body: 7 }] }]) {
+      const lit = litForThread(t, NODES);
+      expect([lit.nodes, lit.unresolved, lit.changed.size, lit.perMessage.size]).toEqual([[], [], 0, 0]);
+    }
+  });
+});
