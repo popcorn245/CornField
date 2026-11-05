@@ -123,6 +123,8 @@ export function clientConfig(config, signIn = false) {
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },
     sources: browserSources(config),
+    // Agent runs are followed (and marked on the map) where there is a forge and a sign-in (docs/agents.md)
+    ...(config.forge && signIn ? { agents: { runs: true } } : {}),
     signIn,
   };
 }

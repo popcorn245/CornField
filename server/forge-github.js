@@ -233,6 +233,11 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return (await client.list(`repos/${repo}/pulls/${n}/files?per_page=${PER_PAGE}`, { what: `the files of ${pullWhat(n)}` })).map(toFile);
     },
 
+    async compare(base, head) {
+      const { body } = await client.request('GET', `repos/${repo}/compare/${segments(base)}...${segments(head)}`, { what: `the files of ${head} against ${base} in ${forge.repo}` });
+      return (Array.isArray(body?.files) ? body.files : []).map(toFile);
+    },
+
     async pullCommits(n) {
       return (await client.list(`repos/${repo}/pulls/${n}/commits?per_page=${PER_PAGE}`, { what: `the commits of ${pullWhat(n)}` })).map(toCommit);
     },

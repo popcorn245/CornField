@@ -1818,6 +1818,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click. (server/triggers.js)"
+    },
+    {
+      "id": "core-explorer-runs-map",
+      "label": "runs-map.js",
+      "type": "core",
+      "file": "explorer/runs-map.js",
+      "summary": "Agent runs on the map (issue #82, spec 0005 D9): the nodes an open run is changing **pulse**, and a node two or more open runs are changing carries a **collision** mark.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Agent runs on the map (issue #82, spec 0005 D9): the nodes an open run is changing **pulse**, and a node two or more open runs are changing carries a **collision** mark. (explorer/runs-map.js)"
+    },
+    {
+      "id": "core-explorer-runs-view",
+      "label": "runs-view.js",
+      "type": "core",
+      "file": "explorer/runs-view.js",
+      "summary": "The markup of the Runs view in the Agents tab (issue #82), as strings: each run's state as a word, its profile, its limits beside what the runner reported, its thread, branch, pull request and chec…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The markup of the Runs view in the Agents tab (issue #82), as strings: each run's state as a word, its profile, its limits beside what the runner reported, its thread, branch, pull request and chec… (explorer/runs-view.js)"
     }
   ],
   "edges": [
@@ -5717,7 +5737,75 @@
       "to": "core-server-throttle",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-runs-map"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-runs-view"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-runs-map",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-runs-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-map",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-map",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-map",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-map",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-core-mentions",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-core-validate",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T10:31:56.310Z"
+  "updatedAt": "2026-11-05T10:41:14.192Z"
 }

@@ -17,7 +17,7 @@ import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
 const V1_TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
-const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'run_seen', 'runs', 'sessions', 'thread_seen'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'run_events', 'run_reads', 'run_seen', 'runs', 'sessions', 'thread_seen'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -174,7 +174,7 @@ describe('migration 8 (push and pull transports, runner tokens)', () => {
   const at = '2026-11-01T00:00:00.000Z';
 
   it('moves a file at version 7 to 8: tokens, their ids and their sequence kept, runner scope allowed, runs get a transport', () => {
-    expect(MIGRATIONS).toHaveLength(8);
+    expect(MIGRATIONS).toHaveLength(9); // 9 is runs on the map, below
     const db = new DatabaseSync(':memory:');
     migrate(db, MIGRATIONS.slice(0, 7));
     expect(schemaVersion(db)).toBe(7);
@@ -190,7 +190,7 @@ describe('migration 8 (push and pull transports, runner tokens)', () => {
     db.prepare("UPDATE review_tokens SET last_used = '2026-11-03T00:00:00.000Z' WHERE id = 2").run();
     const before = db.prepare('SELECT id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope FROM review_tokens ORDER BY id').all();
 
-    expect(migrate(db)).toEqual({ from: 7, to: 8 });
+    expect(migrate(db, MIGRATIONS.slice(0, 8))).toEqual({ from: 7, to: 8 });
     expect(db.prepare('SELECT id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope FROM review_tokens ORDER BY id').all()).toEqual(before);
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     expect(db.prepare('SELECT id, label, scope FROM review_tokens ORDER BY id').all()).toEqual([{ id: 1, label: 'review one', scope: 'review' }, { id: 2, label: 'agent one', scope: 'agent' }]);
@@ -203,6 +203,20 @@ describe('migration 8 (push and pull transports, runner tokens)', () => {
     expect(() => add.run(hash(1), 'dup', 'review', at, at)).toThrow(); // the hash is still unique
     expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name = 'review_tokens_user_id'").all()).toHaveLength(1);
     expect(() => db.prepare("UPDATE runs SET transport = 'carrier-pigeon'").run()).toThrow();
+    db.close();
+  });
+});
+
+describe('migration 9 (runs on the map)', () => {
+  it('moves a file at version 8 to 9: the timeline and what was read for the nodes, held to their kinds', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db, MIGRATIONS.slice(0, 8));
+    expect(schemaVersion(db)).toBe(8);
+    expect(migrate(db)).toEqual({ from: 8, to: 9 });
+    db.prepare("INSERT INTO run_events (run_id, key, at, kind) VALUES ('r', 'push:a', '2026-11-05T10:00:00Z', 'push')").run();
+    expect(() => db.prepare("INSERT INTO run_events (run_id, key, at, kind) VALUES ('r', 'x', '2026-11-05T10:00:00Z', 'review')").run()).toThrow(); // nothing records a review
+    db.prepare("INSERT INTO run_reads (run_id, source, sha, data, at) VALUES ('r', 'files', 'a', 'null', '2026-11-05T10:00:00Z')").run(); // a forge that cannot list them
+    expect(() => db.prepare("INSERT INTO run_reads (run_id, source, sha, data, at) VALUES ('r', 'mentions', '', 'not json', '2026-11-05T10:00:00Z')").run()).toThrow();
     db.close();
   });
 });

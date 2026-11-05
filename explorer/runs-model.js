@@ -123,3 +123,149 @@ export function confirmStartWords(refs, forgeName) {
   const where = refs.proposal != null ? `the spec pull request of proposal ${refs.proposal}` : refs.thread != null ? `thread #${refs.thread}` : `issue #${refs.issue}`;
   return `This posts a request as a comment on ${where} on ${forgeName}, as you. Your runner picks it up. cornfield starts nothing and sends no credentials.`;
 }
+
+// ---------------------------------------------------------------------------
+//  Runs on the map (issue #82): the Runs view, the compare, the timeline, and what the map shows
+// ---------------------------------------------------------------------------
+
+/** Runs asked for within this long of each other, on the same subject, kind and brief, are one request under different profiles */
+export const COMPARE_WINDOW_MS = 3 * 60_000;
+
+const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
+const listWords = (items) => (items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** The subject of a run as a key: the same issue, thread and proposal */
+const subjectKey = (refs) => JSON.stringify([refs?.issue ?? null, refs?.thread ?? null, refs?.proposal ?? null]);
+
+/**
+ * The runs for the view, newest first: a run on its own, or a **compare**: the same request (same subject, kind and brief) asked for under
+ * different profiles within `COMPARE_WINDOW_MS`, shown side by side. A group sits where its newest run is; inside it the runs are in profile order.
+ * @param {object[]} runs as the API lists them (newest first)
+ * @returns {({ kind: 'run', run: object } | { kind: 'compare', key: string, runs: object[] })[]}
+ */
+export function groupRuns(runs) {
+  const clusters = [];
+  const byKey = new Map();
+  for (const run of runs) {
+    const key = `${subjectKey(run.refs)}|${run.kind}|${typeof run.brief === 'string' ? run.brief : ''}`;
+    const at = Date.parse(run.requestedAt);
+    const open = byKey.get(key) ?? [];
+    // Newest first: a run joins the cluster its time is within the window of, if that cluster has not got its profile yet
+    const home = open.find((c) => Math.abs(c.newest - at) <= COMPARE_WINDOW_MS && !c.runs.some((r) => (r.profile ?? '') === (run.profile ?? '')));
+    if (home) { home.runs.push(run); continue; }
+    const fresh = { key, newest: at, runs: [run], first: clusters.length };
+    open.push(fresh);
+    byKey.set(key, open);
+    clusters.push(fresh);
+  }
+  return clusters.map((c) => (c.runs.length > 1
+    ? { kind: 'compare', key: c.runs.map((r) => r.runId).join('+'), runs: [...c.runs].sort((a, b) => String(a.profile ?? '').localeCompare(String(b.profile ?? ''))) }
+    : { kind: 'run', run: c.runs[0] }));
+}
+
+/** What the group is titled: "Code on issue #7 under 2 profiles: claude and qwen" */
+export function compareTitle(runs) {
+  const first = runs[0];
+  const kind = (KINDS.find(([k]) => k === first.kind) || [first.kind, first.kind])[1].split(':')[0];
+  return `${kind} on ${aboutWords(first.refs)} under ${plural(runs.length, 'profile')}: ${listWords(runs.map((r) => r.profile || 'no profile'))}`;
+}
+
+/** Limits beside what the runner reported: a row for each of minutes, turns, cost and tokens that has either, in words (never a bare dash) */
+export function limitRows(run) {
+  const l = run.limits || {};
+  const r = run.report || {};
+  const rows = [];
+  const add = (name, limit, reported) => {
+    if (limit == null && reported == null) return;
+    rows.push({ name, limit: limit == null ? 'no limit asked' : String(limit), reported: reported == null ? 'not reported' : String(reported) });
+  };
+  add('Minutes', l.minutes, null);
+  add('Turns', l.turns, null);
+  add('Cost', l.cost, r.cost);
+  add('Tokens', null, r.tokens);
+  return rows;
+}
+
+/** The checks of a run's pull request, said short */
+export function checksWords(run) {
+  if (!run.pull) return 'No pull request yet, so no checks.';
+  return { success: 'Checks passing', failure: 'Checks failing', running: 'Checks running', none: 'The pull request has no checks' }[run.checks] || 'Checks not read yet';
+}
+
+/** One line of a run's timeline, and the runner's words under it (data for the page to escape) */
+export function timelineWords(entry) {
+  const by = entry.actor ? ` by ${entry.actor}` : '';
+  switch (entry.kind) {
+    case 'requested': return { what: `Requested${by}${entry.ref ? ` under the profile ${entry.ref}` : ''}`, note: '' };
+    case 'claimed': return { what: `Claimed${by}`, note: entry.note || '' };
+    case 'report': return { what: `Reported ${entry.ref || 'in'}${by}`, note: entry.note || '' };
+    // When cornfield saw it, not when it was pushed: the forge does not say
+    case 'push': return { what: `Push seen: ${String(entry.ref || '').slice(0, 7)}${entry.note ? ` on ${entry.note}` : ''}`, note: '' };
+    case 'pull-opened': return { what: `Opened pull request ${entry.ref || ''}${by}`.trim(), note: '' };
+    case 'checks': return { what: { success: 'Checks passed', failure: 'Checks failed', running: 'Checks running', none: 'No checks' }[entry.ref] || 'Checks changed', note: '' };
+    case 'stop-requested': return { what: `Asked to stop${by}`, note: entry.note || '' };
+    case 'merged': return { what: `Landed: pull request ${entry.ref || ''} merged`, note: '' };
+    case 'closed': return { what: `Pull request ${entry.ref || ''} closed without landing`, note: '' };
+    case 'quiet': return { what: 'Went quiet: nothing reported or pushed for a while', note: '' };
+    default: return { what: entry.kind, note: entry.note || '' };
+  }
+}
+
+/** The ids of the nodes a run names, as the names the map shows (an id the map lacks is shown as it is) */
+export function nodeLabels(ids, nodes) {
+  const byId = new Map((nodes || []).map((n) => [n.id, n.label || n.id]));
+  return (ids || []).map((id) => byId.get(id) || id);
+}
+
+/**
+ * What the map shows of the runs: the nodes of the open runs (in flight), and those two or more open runs share (collisions). A run that
+ * is finished or quiet marks nothing.
+ * @param {object[]} runs
+ * @returns {{ flight: Map<string, string[]>, collide: Map<string, string[]> }} node id to the ids of the open runs that name it
+ */
+export function overlayOf(runs) {
+  const flight = new Map();
+  for (const run of runs || []) {
+    if (!run.open) continue;
+    for (const id of run.nodes || []) flight.set(id, [...(flight.get(id) || []), run.runId]);
+  }
+  const collide = new Map([...flight].filter(([, ids]) => ids.length > 1));
+  return { flight, collide };
+}
+
+/** What a run lights when it is selected, like a pull request: its nodes, whatever its state */
+export const litOfRun = (run) => ({ changed: new Set(run ? run.nodes || [] : []), failing: new Set() });
+
+/** The collision of a run in words: "Collides with run-… on orders and cart" (null when it does not) */
+export function collisionWords(run, runs, nodes) {
+  const others = (run.collidesWith || []);
+  if (!run.open || !others.length) return null;
+  const mine = new Set(run.nodes || []);
+  const shared = [...new Set(others.flatMap((id) => ((runs.find((r) => r.runId === id) || {}).nodes || []).filter((n) => mine.has(n))))];
+  return `Collides with ${listWords(others)}${shared.length ? ` on ${listWords(nodeLabels(shared, nodes))}` : ''}`;
+}
+
+/**
+ * What changed between two answers, as sentences for the live region: a run that appeared, a new state, a collision begun or cleared.
+ * Nothing before the first answer (`before` is null): the page does not read its whole list out on load.
+ * @param {object[] | null} before
+ * @param {object[]} after
+ * @returns {string[]}
+ */
+export function changeWords(before, after) {
+  if (!before) return [];
+  const was = new Map(before.map((r) => [r.runId, r]));
+  const out = [];
+  for (const run of after) {
+    const old = was.get(run.runId);
+    if (!old) { out.push(`New run ${run.runId}: ${run.kind} on ${aboutWords(run.refs)}, ${statusWords(run).toLowerCase()}`); continue; }
+    if (old.status !== run.status) out.push(`Run ${run.runId} is now ${statusWords(run).toLowerCase()}`);
+    const was2 = new Set(old.open ? old.collidesWith || [] : []);
+    const now2 = new Set(run.open ? run.collidesWith || [] : []);
+    const added = [...now2].filter((id) => !was2.has(id));
+    const gone = [...was2].filter((id) => !now2.has(id));
+    if (added.length) out.push(`Run ${run.runId} now collides with ${listWords(added)}`);
+    if (gone.length && !now2.size) out.push(`Run ${run.runId} no longer collides`);
+  }
+  return out;
+}

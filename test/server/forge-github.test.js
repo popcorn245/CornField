@@ -53,6 +53,16 @@ describe('the GitHub adapter', () => {
     ]);
   });
 
+  it('lists the files a branch changes against the base (compare), renames included', async () => {
+    const forge = await forgeOn({
+      'GET /repos/owner/name/compare/main...agent/x': { body: { files: [{ filename: 'a.js', status: 'modified', additions: 2, deletions: 1 }, { filename: 'b.js', previous_filename: 'old.js', status: 'renamed' }] } },
+    });
+    expect(await forge.compare('main', 'agent/x')).toEqual([
+      { path: 'a.js', status: 'modified', previousPath: null, additions: 2, deletions: 1 },
+      { path: 'b.js', status: 'renamed', previousPath: 'old.js', additions: 0, deletions: 0 },
+    ]);
+  });
+
   it('finds the API of github.com and of a GitHub Enterprise Server', () => {
     expect(githubApiUrl()).toBe('https://api.github.com');
     expect(githubApiUrl('https://github.com/')).toBe('https://api.github.com');
