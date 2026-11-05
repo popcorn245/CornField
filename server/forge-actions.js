@@ -255,7 +255,7 @@ export async function serveAction(req, res, what, ctx, send) {
       if (!plan.existing && plan.digest !== digest) throw new ForgeError(`What the build issue for ${slug} would say has changed since it was shown (a new review, or a push); look again.`, { code: 'conflict' });
       const done = await openBuildIssue(forge, plan);
       // Only an issue this ask made is news: a second ask that found the first one's says nothing again
-      if (done.created) ctx.hooks?.emit('build.opened', () => proposalPayload(forge, ctx.where || { proposals: config.proposals }, plan, { actor: session.login }));
+      if (done.created) ctx.hooks?.emit('build.opened', async () => ({ ...(await proposalPayload(forge, ctx.where || { proposals: config.proposals }, plan, { actor: session.login })), issue: done.issue.number }));
       await forgetKept(auth, config);
       out = { status: done.created ? 201 : 200, body: { ok: true, action, created: done.created, number: n, slug, issue: done.issue, path: plan.path } };
     } else if (action === 'merge') {

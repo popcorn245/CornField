@@ -81,7 +81,7 @@ Starting an agent only **asks**. The request is the [contract's](agent-contract.
 
 **What counts as open.** A run is open until the runner reports `done`, `failed` or `stopped`, or its pull request is merged or closed, or nothing has happened for `agents.quietAfter` (24h): no report, no push, no pull request activity. A **quiet** run is shown as quiet and counts toward neither rule; a later report or push makes it open again.
 
-**Config** (all under `agents`, see [config](config.md#agents)): `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'` by default, or `'push'` or `'pull'`: [transports](#transports)).
+**Config** (all under `agents`, see [config](config.md#agents)): `on` (the [triggers](#triggers)), `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'` by default, or `'push'` or `'pull'`: [transports](#transports)).
 
 ### Following a run
 
@@ -96,6 +96,43 @@ cornfield records each request in a `runs` table and follows the run by what the
 - **Requests written by hand** on the forge (a maintainer's own `cornfield-run` request block, which a runner may act on with cornfield switched off) are not discovered yet: cornfield follows only the runs it asked for. Finding those is [#82](https://github.com/popcorn245/CornField/issues/82).
 
 The Agents tab lists the runs: state, kind, what it is about, who asked and when, profile, limits beside the runner's reported tokens and cost, the runner's note, links to the request, the pull request and the runner's own logs, and **Stop**. Stop posts a `stop-requested` block in the same place, as you; the runner decides what that means. (The fuller Runs view is a later issue.) On push and pull there is no comment to post: Stop is recorded, and the runner learns of it as [below](#stopping-on-push-and-pull).
+
+### Triggers
+
+By default a run starts only when a maintainer asks (the button or the API). A repo may **opt in** to a few automatic requests, off unless set, in the same spirit as [`proposals.approveLands`](config.md#proposals):
+
+```js
+agents: {
+  profiles: ['claude'],
+  on: {
+    'spec.approved': { kind: 'code', profile: 'claude' },        // approving a spec asks for a run on that proposal
+    'build.opened': { kind: 'code', profile: 'claude' },         // opening the build issue asks for a run on that issue
+    'thread.message': { kind: 'summary', profile: 'claude' },    // a maintainer's `/agent` comment asks for a run in that thread
+  },
+},
+```
+
+A trigger fires **only on something a maintainer did**, and the request names them: it is posted as that maintainer, with their own sign-in, by the same code as the button, so the forge shows who asked and **the cap, the rate limit and the one-run-per-subject rule apply unchanged**. Every automatic request also records what caused it in the [`trigger`](agent-contract.md#what-caused-an-automatic-request) field of the request: `{ event, by, ref }`, and its run is marked `trigger` in the runs list.
+
+| Event | The request | Posted on |
+|---|---|---|
+| `spec.approved` | `kind` from the config, about the approved proposal | the proposal's open spec pull request |
+| `build.opened` | about the build issue the maintainer just opened | that issue |
+| `thread.message` | about the thread, with the `/agent` line's text as the brief | the thread |
+
+**`/agent`.** In a thread comment (an idea's, or a spec pull request's), a line that **starts** with `/agent` is a command, and the rest of that line is the brief (`/agent summarise this for the release notes`; with none, the trigger's own `brief` if it has one). It is honoured only if all of these hold: the commenter is a maintainer **as the forge says now**; the comment was **not edited** (a few seconds of the forge's own touch-up aside); it has not been honoured before (once per comment, remembered in `cornfield.db`, so a restart does not repeat it); and it is not code. A line inside a code span, a fenced block, a quote or an indented block is never read, nor is `/agentic`. Anyone else's `/agent` does nothing at all. It is noticed when cornfield next reads the threads (the [spec poll](config.md#hook-poll), within its interval), and a trigger on `thread.message` makes that poll run even with no hook configured. Comments that were already there when the trigger was first switched on are not acted on.
+
+**No chaining.** Nothing a run produces can start another run. This is checked three ways. Each posts nothing and sends no hook, but writes a `trigger-ignored` row to the audit table with the reason (`machine`, `run-block`, `edited` or `run-output`), so you can see why an act of yours started nothing. A comment with no `/agent` command in it writes nothing at all.
+
+1. *Structure.* Only the three events above are wired to triggers. A run's pushes, pull request, checks, reports and state changes (`run.*`, `agent.requested`) are not, and the module that follows runs does not know triggers exist.
+2. *Who.* A trigger never fires when the actor is a login in `agents.runners` or a bot account (`[bot]`, or the forge's Bot type), or when the comment holds a `cornfield-run` block.
+3. *What.* A trigger never fires on a run's **output**: a run's linked pull request (in any state, whether the run is open or long over), or a pull request or issue that carries a `Cornfield-Run` id, or was written by a runner or a bot. So a run's pull request is reviewed by a person first, and the approval of **that** pull request starts nothing by itself.
+
+A run's **target** (the thread, issue or spec pull request it was requested on) is not its output. Once every run on it is over (finished: `done`, `failed`, `stopped`, or its pull request merged or closed; or quiet), a maintainer's fresh `/agent` there, or the approval of a new head of that spec pull request, fires again. While a run on it is still open, under any profile, the trigger is skipped with `run-open`: a `trigger-skipped` row and the `trigger.skipped` hook, never in silence. A repeat of the same approval (the same head) is deduped silently. An `/agent` from someone whose permission cannot be confirmed (no maintainer signed in to ask the forge with, or the forge does not answer) is dropped with a line in the log.
+
+**No live sign-in.** If the maintainer whose act caused the trigger is not signed in to cornfield, nothing is requested (cornfield holds no forge token of its own, and another maintainer's would put words in their name). Instead it writes a `trigger-skipped` row to the audit table, sends the [`trigger.skipped`](config.md#hooks) hook event (`reason: "no-session"`), and the Agents tab shows **"A trigger was skipped: sign in to let triggers request runs."** for the next 24 hours. A request that the cap or a limit refuses ends the same way, with that refusal as the reason (`cap-reached`, `run-open`, `rate-limited`, `forbidden`, `invalid`), and nothing is posted.
+
+**With `proposals.approveLands`.** An approval can land the spec pull request before the trigger's request reads it. The request then finds no open proposal, and the trigger is skipped with `not-found` (the audit row and the hook). The proposal is on the default branch by then: ask for the run with the button, or set the `build.opened` trigger, which fires when the build issue is opened.
 
 ### The request API
 

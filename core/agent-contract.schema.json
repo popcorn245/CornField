@@ -181,6 +181,37 @@
         "requestedAt": {
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+        },
+        "trigger": {
+          "description": "Only on an automatic request (agents.on): what caused it. A maintainer's act, never a run's output.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "event",
+            "by",
+            "ref"
+          ],
+          "properties": {
+            "event": {
+              "enum": [
+                "spec.approved",
+                "build.opened",
+                "thread.message"
+              ]
+            },
+            "by": {
+              "type": "string",
+              "maxLength": 40,
+              "not": {
+                "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])cf_(?:rt|at)_[A-Za-z0-9_-]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
+              },
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^(pull|issue|comment):[0-9]{1,20}$"
+            }
+          }
         }
       }
     },
