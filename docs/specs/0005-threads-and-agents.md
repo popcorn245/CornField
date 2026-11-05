@@ -64,6 +64,19 @@ Every request carries a **run id** that cornfield mints (`run-<ulid>`).
 - **A request written by hand on the forge counts.** Any maintainer-authored request block is a real request, so the whole system can be driven with cornfield switched off. cornfield is only a convenient way to write one. Such a request bypasses cornfield's cap and rate limits; those guard against a runaway click, not against a maintainer acting on purpose.
 - **Push and pull:** requests are HMAC-signed with a secret from the environment, as hooks are. Pull uses **runner tokens**, minted and revoked in the dashboard like review tokens, that may only read and claim requests and report on their runs.
 
+### D6. A thread is a forge conversation, and every step has a hook (2026-11-05)
+
+This changes the earlier plan (the vision and #14) to keep threads in cornfield's SQLite file. That would fail the test above.
+
+- **An idea is an issue, and its thread is that issue's comments.** A proposal's thread is its spec pull request's conversation. cornfield adds structure with fenced blocks, as reviews and runs do. SQLite only caches.
+- **Writing into a thread needs nothing from cornfield.** People, agents and bridges comment on the forge as themselves. A busy agent posts summaries and links to its own logs (`url`), not every step.
+- **Every step is a hook**, so programs can wire threads, runs and reviews into anything (a chat, a pipeline, a notifier). These events are added to the hooks of #66, with the same signing, retries and audit:
+  - **Threads:** `thread.opened`, `thread.message`, `thread.linked` (a thread now points at nodes, a proposal or a run).
+  - **Runs:** `agent.requested`, `run.claimed`, `run.state` (any reported change), `run.stopRequested`, `run.finished`.
+  - **Already shipped:** `spec.ready`, `spec.approved`, `spec.sentBack`, `build.opened`, `pr.landed`, `session.expiring`.
+
+  Where cornfield only learns of a forge event by looking, it fires the hook when it next looks, as `spec.ready` does with the spec poll (#72). That poll grows to cover threads and runs.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -73,8 +86,8 @@ The tree, roughly in the order each answer unlocks the next:
 2. ~~What an agent run is, as cornfield sees it.~~ D3.
 3. ~~How a run is stopped, limited and paid for.~~ D4.
 4. ~~Whose credentials an agent uses.~~ D5.
-5. What a thread is, and where its messages live.
-6. Who writes in a thread (people, agents, the chat bridge), and how.
+5. ~~What a thread is, and where its messages live.~~ D6.
+6. ~~Who writes in a thread, and how.~~ D6: anyone, on the forge, as themselves.
 7. How a thread connects to issues, nodes, proposals and runs.
 8. Models: where `models: { provider, baseUrl, model }` belongs, if anywhere.
 9. What cornfield shows of a run while it is going.
