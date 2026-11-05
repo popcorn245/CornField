@@ -170,7 +170,7 @@ async function loadWork(refresh, token) {
 /** Loads the runs for the Agents tab (a refresh also has cornfield look at the forge for their reports first); a failure is a line, never a blank panel */
 async function loadRuns(refresh) {
   const res = await request(runsUrl(refresh), refresh);
-  ui.runs = res.ok ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
+  ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
 }
 
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */

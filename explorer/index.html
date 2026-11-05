@@ -363,6 +363,7 @@
       </div>
       <ul id="tokens-list" class="hx-tokens-list" aria-label="Your review tokens"></ul>
       <form id="tokens-form" class="hx-tokens-form" autocomplete="off">
+        <label class="hx-forge-field">Kind of token<select id="tokens-scope" class="hx-forge-select"><option value="review">Review: approve or send back proposals</option><option value="agent">Agent: ask for agent runs (POST /api/agent-requests)</option></select></label>
         <label class="hx-forge-field">Label<input id="tokens-label" class="hx-forge-input" type="text" maxlength="60" placeholder="chat bot" /></label>
         <label class="hx-forge-field">Days<input id="tokens-days" class="hx-forge-input" type="text" inputmode="numeric" maxlength="2" aria-describedby="tokens-days-hint" /></label>
         <span id="tokens-days-hint" class="hx-sr-only"></span>

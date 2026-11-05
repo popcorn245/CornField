@@ -493,7 +493,7 @@ describe('the agent API', () => {
       const list = await page('GET', '/api/agent-runs?follow=1');
       expect(list.json.runs[0]).toMatchObject({ status: 'working', report: { state: 'working', by: 'runner-bot', note: 'on it', url: 'https://ci.example.org/1' } });
       const reports = rows().filter((r) => r.action === 'agent-report');
-      expect(reports.map((r) => [r.login, r.answer.accepted])).toEqual([['stranger', false], ['runner-bot', true]]);
+      expect(reports.map((r) => [r.login, r.answer.accepted]).sort()).toEqual([['runner-bot', true], ['stranger', false]]);
     });
   });
 

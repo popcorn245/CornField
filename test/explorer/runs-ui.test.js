@@ -26,6 +26,9 @@ import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { aboutWords, statusWords, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
+// @ts-expect-error plain JS modules, no declarations
+import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
+
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -114,6 +117,7 @@ describe('the words (runs-model.js)', () => {
     expect(startBody({ kind: 'code', profile: '', brief: '  hi  ', refs: { issue: 1 }, force: false })).toEqual({ kind: 'code', refs: { issue: 1 }, brief: 'hi' });
     expect(startBody({ kind: 'code', profile: 'claude', brief: '', refs: { issue: 1 }, force: true })).toEqual({ kind: 'code', refs: { issue: 1 }, brief: '', profile: 'claude', force: true });
     expect(startWords(null)).toMatch(/did not answer/);
+    expect([tokensUrl('review'), tokensUrl('agent'), revokeUrl(3, 'agent'), revokeUrl(3)]).toEqual(['/api/review-tokens', '/api/agent-tokens', '/api/agent-tokens/3/revoke', '/api/review-tokens/3/revoke']);
     expect(startWords(401)).toMatch(/Sign in again/);
     expect(stopWords(200, { ok: true }, 'run-1')).toMatch(/decides/);
     expect(confirmStartWords({ proposal: 'x' }, 'GitHub')).toMatch(/spec pull request of proposal x on GitHub, as you/);

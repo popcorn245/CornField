@@ -543,7 +543,9 @@ describe('following a run', () => {
     t.say(12, 'runner-bot', `\`\`\`cornfield-run ${id}\n{ "state": "done", "token": "x" }\n\`\`\``);
     t.say(12, 'runner-bot', formatRunComment(id, { version: 1, runId: id, kind: 'code', brief: '', refs: { issue: 12 }, requestedBy: 'maintainer-one', requestedAt: '2026-11-05T10:00:00Z' }));
     t.world.comments.set(13, [{ id: '1', author: { login: 'runner-bot' }, body: formatRunComment(id, { state: 'done' }), url: 'u', createdAt: new Date(T0).toISOString(), updatedAt: new Date(T0).toISOString() }]);
-    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 0, ignored: 0 });
+    // the malformed block (a key the contract does not have) is turned away and written down; the rest is not ours
+    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 0, ignored: 1 });
+    expect(t.rows().filter((r) => r.action === 'agent-report').map((r) => r.answer.reason)).toEqual([expect.stringMatching(/^not a valid block/)]);
     expect((await t.runs.get(id)).status).toBe('requested');
   });
 

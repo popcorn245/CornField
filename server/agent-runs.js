@@ -63,10 +63,9 @@
  */
 
 import { ForgeError, isMaintainer } from './forge.js';
-import { createRequest, findRunId, formatRunComment, readRunBlocks, runIdFromBranch, MAX_NOTE_CHARS } from '../core/agent-contract.js';
+import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, MAX_NOTE_CHARS } from '../core/agent-contract.js';
 import { quietAfterMs } from '../core/config.js';
 import { listPullProposals } from './proposal-pulls.js';
-import { EDIT_GRACE_MS } from './reviews.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 
 /** Requests one person may make in a minute (a ceiling of its own; every other action is counted by `ATTEMPTS_PER_MINUTE` and `PER_MINUTE`) */
@@ -95,7 +94,6 @@ const OWN_TOKEN = /cf_(?:rt|at)_[A-Za-z0-9_-]{20,}/;
 const iso = (ms) => new Date(ms).toISOString();
 const lower = (s) => String(s).toLowerCase();
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const wasEdited = (c) => Date.parse(c.updatedAt) - Date.parse(c.createdAt) > EDIT_GRACE_MS;
 const words = (err) => (err instanceof Error ? err.message : String(err));
 const maxIso = (a, b) => (Date.parse(b) > Date.parse(a) ? b : a);
 
@@ -420,8 +418,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       db.exec('BEGIN IMMEDIATE');
       try {
         db.prepare('UPDATE runs SET stop_requested_at = ?, stop_requested_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ?').run(stamp, me.login, stamp, row.run_id);
-        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:0`, stamp);
-        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:stop:${posted.id}:0`, stamp);
+        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
+        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:stop:${posted.id}:c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
         db.exec('COMMIT');
       } catch (err) {
         try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
@@ -609,7 +607,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     /** @type {Map<number, Set<string>>} */
     const places = new Map();
     for (const r of cur.values()) for (const n of [r.target, r.pull]) if (n != null) places.set(n, (places.get(n) ?? new Set()).add(r.run_id));
-    /** @type {{ row: RunRow, comment: import('./forge.js').Comment, index: number, block: any }[]} */
+    /** @type {{ row: RunRow, id: string, key: string, at: string, by: string | null, block: any }[]} */
     const heard = [];
     for (const [number, ids] of places) {
       let comments;
@@ -619,51 +617,78 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         log(`the comments on #${number} could not be read: ${words(err)}`);
         continue;
       }
-      for (const comment of comments) {
-        if (!comment.body.includes('cornfield-run')) continue;
-        const { blocks } = readRunBlocks(comment.body);
-        for (const [index, block] of blocks.entries()) {
-          const row = cur.get(block.runId);
-          if (!row || !ids.has(block.runId) || block.type === 'request') continue;
-          const key = `c:${comment.id}:${index}`;
-          if (seen(row.run_id, key)) continue;
-          const login = comment.author?.login ?? null;
-          let reason = null;
-          try {
-            if (wasEdited(comment)) reason = 'edited after it was posted, so it is not believed';
-            else if (OWN_TOKEN.test(JSON.stringify(block.value))) reason = 'holds something shaped like a cornfield token, which nothing here keeps';
-            else if (block.type === 'report') {
-              if (!login || !(runnerSet.has(lower(login)) || await isMaintainerLogin(login))) reason = 'not from a runner (agents.runners) or a maintainer';
-            } else if (!login || !(await isMaintainerLogin(login))) reason = 'a stop request is believed only from a maintainer';
-          } catch (err) {
-            log(`who wrote comment ${comment.id} could not be asked: ${words(err)}`);
-            continue; // judged next look
-          }
-          audits.push({ login, target: number, request: { runId: row.run_id, type: block.type, ...(block.value.state ? { state: block.value.state } : {}), comment: comment.id }, answer: reason ? { accepted: false, reason } : { accepted: true }, runId: row.run_id, key });
-          if (reason) { out.ignored += 1; continue; }
-          heard.push({ row, comment, index, block });
+      // Whom the forge says to believe: asked once per login, for the comments that hold a block at all (the contract's reader does the rest)
+      const standing = new Map();
+      try {
+        for (const login of runAuthors(comments)) standing.set(lower(login), { runner: runnerSet.has(lower(login)), maintainer: await isMaintainerLogin(login) });
+      } catch (err) {
+        log(`who wrote the comments on #${number} could not be asked: ${words(err)}`);
+        continue; // judged next look
+      }
+      const trust = (login, block) => {
+        const who = standing.get(lower(login));
+        if (!who) return false;
+        // A report: a runner (agents.runners) or a maintainer. A stop request: a maintainer. A request is not ours to follow
+        return block.type === 'report' ? who.runner || who.maintainer : block.type === 'stop-request' ? who.maintainer : false;
+      };
+      const found = runBlocksOf(comments, { trust });
+      const counts = new Map();
+      const keyOf = (id, runId, type) => {
+        const base = `c:${id}:${runId}:${type}`;
+        const n = counts.get(base) ?? 0;
+        counts.set(base, n + 1);
+        return `${base}:${n}`;
+      };
+      /** Judges one block once: audited whatever the outcome; true when it is new and is ours */
+      const judge = (row, id, key, by, type, request, answer) => {
+        if (seen(row.run_id, key)) return false;
+        audits.push({ login: by, target: number, request: { runId: row.run_id, type, comment: id, ...request }, answer, runId: row.run_id, key });
+        return true;
+      };
+      for (const b of found.blocks) {
+        const row = cur.get(b.runId);
+        if (!row || !ids.has(b.runId)) continue;
+        const key = keyOf(b.comment.id, b.runId, b.type);
+        if (OWN_TOKEN.test(JSON.stringify(b.value))) {
+          if (judge(row, b.comment.id, key, b.by, b.type, {}, { accepted: false, reason: 'holds something shaped like a cornfield token, which nothing here keeps' })) out.ignored += 1;
+          continue;
         }
+        if (!judge(row, b.comment.id, key, b.by, b.type, { ...(b.value.state ? { state: b.value.state } : {}) }, { accepted: true })) continue;
+        heard.push({ row, id: b.comment.id, key, at: b.at, by: b.by, block: b });
+      }
+      for (const b of found.ignored) {
+        const row = cur.get(b.runId);
+        if (!row || !ids.has(b.runId) || b.type === 'request') continue;
+        const key = keyOf(b.comment.id, b.runId, b.type);
+        const reason = b.why === 'edited' ? 'edited after it was posted, so it is not believed'
+          : b.type === 'report' ? 'not from a runner (agents.runners) or a maintainer' : 'a stop request is believed only from a maintainer';
+        if (judge(row, b.comment.id, key, b.by, b.type, { ...(b.value.state ? { state: b.value.state } : {}) }, { accepted: false, reason })) out.ignored += 1;
+      }
+      // A block that is not strictly the contract's (a credential in a report, a stray key) is turned away, and written down once
+      for (const [n, r] of found.refused.entries()) {
+        const row = r.runId ? cur.get(r.runId) : null;
+        if (!row || !ids.has(row.run_id)) continue;
+        if (judge(row, r.comment.id, `c:${r.comment.id}:${row.run_id}:refused:${n}`, r.by, 'refused', {}, { accepted: false, reason: `not a valid block: ${r.error}` })) out.ignored += 1;
       }
     }
-    heard.sort((a, b) => Date.parse(a.comment.createdAt) - Date.parse(b.comment.createdAt));
-    for (const { row, comment, index, block } of heard) {
-      const login = comment.author?.login ?? null;
+    heard.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    for (const { row, id, key, at: when, by: login, block } of heard) {
       if (block.type === 'report') {
         const r = block.value;
         const previous = row.state;
         Object.assign(row, {
-          state: r.state, reported_at: comment.createdAt, reported_by: login, note: r.note ?? null, url: r.url ?? null,
+          state: r.state, reported_at: when, reported_by: login, note: r.note ?? null, url: r.url ?? null,
           tokens: r.tokens ?? row.tokens, cost: r.cost ?? row.cost,
         });
-        touch(row, comment.createdAt);
+        touch(row, when);
         out.reports += 1;
-        cause.set(row.run_id, `c:${comment.id}:${index}`);
+        cause.set(row.run_id, key);
         if (r.state === 'claimed') queue(row, 'run.claimed', 'ev:claimed', login, 'claimed');
-        if (r.state !== previous) queue(row, 'run.state', `ev:state:${comment.id}:${index}`, login, r.state);
+        if (r.state !== previous) queue(row, 'run.state', `ev:state:${id}:${key}`, login, r.state);
       } else {
-        if (!row.stop_requested_at) Object.assign(row, { stop_requested_at: comment.createdAt, stop_requested_by: login });
-        touch(row, comment.createdAt);
-        queue(row, 'run.stopRequested', `ev:stop:${comment.id}:${index}`, login, 'stop-requested');
+        if (!row.stop_requested_at) Object.assign(row, { stop_requested_at: when, stop_requested_by: login });
+        touch(row, when);
+        queue(row, 'run.stopRequested', `ev:stop:${id}:${key}`, login, 'stop-requested');
       }
     }
 

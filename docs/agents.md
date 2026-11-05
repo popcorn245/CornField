@@ -1,6 +1,6 @@
-# Agents, tracked
+# Agents: asked for, and tracked
 
-cornfield follows coding agents by what they leave on the forge: branches, spec pull requests, pull requests. It groups them by the issue and the proposal they belong to, and marks the ones an agent made. It does not start an agent; that is a later issue ([roadmap](roadmap.md), [ADR 0007](adr/0007-track-agents-do-not-launch.md)). An agent started anywhere else shows up as soon as it pushes.
+cornfield follows coding agents by what they leave on the forge: branches, spec pull requests, pull requests. It groups them by the issue and the proposal they belong to, and marks the ones an agent made. It can also **ask** for a run ([launching](#launching-a-run)), but it never starts one: the developer's own runner does the work, with its own identity ([ADR 0012](adr/0012-cornfield-asks-runners-act.md), which supersedes [ADR 0007](adr/0007-track-agents-do-not-launch.md)). An agent started anywhere else shows up as soon as it pushes.
 
 It is the **Agents** tab of the [issues and PRs panel](issues-and-prs.md), so it needs the same things: a `forge` in the [config](config.md) and a signed-in maintainer ([sign-in](sign-in.md)). Without them the tab is not there.
 
@@ -59,10 +59,52 @@ One read-only route, behind the sign-in guard like the others in [issues and PRs
 |---|---|
 | `GET /api/forge/work` | the newest 100 pull requests (any state, their text cut to 4000 characters), the newest 200 issues (any state), up to 300 branches, the open spec pull requests (`{ pull, slug }`), and the config's `agents` |
 
-It is asked as the signed-in maintainer with their own token and kept for a minute in `forge_cache` like the lists, with an ETag; **Refresh** asks the forge again, and a rate-limited forge shows the last answer marked old. Nothing writes to the forge and nothing starts an agent: there is no new route that changes anything.
+It is asked as the signed-in maintainer with their own token and kept for a minute in `forge_cache` like the lists, with an ETag; **Refresh** asks the forge again, and a rate-limited forge shows the last answer marked old. Nothing in this route writes to the forge. The runs come from `GET /api/agent-runs`, which reads cornfield's own file (and, on Refresh, the forge).
 
 What is not seen: work older than the newest 100 pull requests, and an issue older than the newest 200 (a pull request that says "Closes #n" for one is still grouped, under "Issue #n", without its title; a branch name's number counts only for an issue that was listed). If the spec pull requests could not all be read, the panel says so and lists the rest.
 
+## Launching a run
+
+Starting an agent only **asks**. The request is the [contract's](agent-contract.md) JSON, posted as a comment on the forge by the maintainer who clicked, with their own token, so the forge shows who asked. Your runner (a Forgejo or GitHub Actions workflow on `issue_comment`, a bot, a script) picks it up; see [the maintainer rule](agent-contract.md#who-may-ask-the-maintainer-rule) it must apply first. cornfield holds no agent credentials, and a request never carries a credential.
+
+**Where to start one.** **Start an agent …** is on an open issue in the Issues tab, and on an issue or proposal group of the Agents tab. A dialog asks for the kind of run (`code`, `summary`, `brief`, `proposal`), a profile if the config lists any, and a brief, says in words where the comment will go, and posts once. Or call the [request API](#the-request-api).
+
+**Where the comment goes.** On the issue (or the thread: the issue or pull request whose conversation it is). For a proposal, on its open spec pull request. Without a live sign-in for the maintainer the answer is 401, as for reviews.
+
+**What cornfield enforces**, because it controls the asking (a request written by hand on the forge bypasses all of this; the rules guard against a runaway click, not a maintainer acting on purpose). A refusal says why:
+
+| Rule | Default | Refusal |
+|---|---|---|
+| open runs per repo | `agents.maxOpen`: 3 | 409 `cap-reached`, naming the runs in the way. `force` never lifts it |
+| one open run per issue or proposal **and profile** | on | 409 `run-open`. `"force": true` asks for another on purpose. The same request under two profiles is two runs |
+| requests per person | 6 a minute, and the panel's usual 20 actions a minute and 5 seconds between repeats | 429 with `Retry-After` |
+
+**What counts as open.** A run is open until the runner reports `done`, `failed` or `stopped`, or its pull request is merged or closed, or nothing has happened for `agents.quietAfter` (24h): no report, no push, no pull request activity. A **quiet** run is shown as quiet and counts toward neither rule; a later report or push makes it open again.
+
+**Config** (all under `agents`, see [config](config.md#agents)): `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'`; push and pull come later).
+
+### Following a run
+
+cornfield records each request in a `runs` table and follows the run by what the forge shows plus what the runner reports:
+
+- **The run id.** A pull request carrying `Cornfield-Run: run-…` in its body, else in a commit message, else the id in its branch name, is linked to the run. Anyone can write a trailer, so a pull request whose author is not a runner, a listed `agents.authors` account or a maintainer is linked but marked unverified, and moves nothing.
+- **Reports.** A `cornfield-run` block in a comment on the run's issue or pull request (or its linked pull request) moves the state, but only from a login in `agents.runners` or a maintainer, and not from a comment edited after it was posted. A stop request is believed only from a maintainer. Every block ignored is a row in the audit table, as is every one accepted.
+- **State** is derived: the runner's latest report, else the pull request (merged, closed), else quiet, with **stop requested** shown until the runner says `stopped` or the run goes quiet. A run that never reports is seen through its pull request or a branch holding its id. Checks on the pull request are shown, not counted.
+- **When.** On the spec poll's timer (`hookPoll.specs`, 5 minutes by default; [hook poll](config.md#hook-poll)), and when you press **Refresh** in the Agents tab. The poll starts when a run is asked for, or after a restart that finds one to follow, and asks the forge nothing while there is none. With `hookPoll: false` runs are followed only on Refresh.
+- **Restarts.** Everything seen is kept in the data file: a restart re-reads the forge, judges no comment twice and sends no [hook](config.md#hooks) twice.
+
+The Agents tab lists the runs: state, kind, what it is about, who asked and when, profile, limits beside the runner's reported tokens and cost, the runner's note, links to the request, the pull request and the runner's own logs, and **Stop**. Stop posts a `stop-requested` block in the same place, as you; the runner decides what that means. (The fuller Runs view is a later issue.)
+
+### The request API
+
+`POST /api/agent-requests` with `Authorization: Bearer cf_at_…`, so a chat bridge can start runs. An **agent token** is made by a signed-in maintainer (the tokens dialog in the header, kind *Agent*; or `POST /api/agent-tokens { label, days? }`, same origin, shown once). It works like a [review token](proposals.md): it is the maintainer's, ends in 30 days unless asked (90 at most), can be revoked, and works only while they are signed in, as a maintainer. It is stored with the review tokens (same hashing and limits) under a *scope*: **a review token is refused here, and an agent token is refused by `POST /api/reviews`** (403, and a row in the audit table). The body is the request without what cornfield writes (`version`, `runId`, `requestedAt`) and with `force`:
+
+```json
+{ "kind": "code", "refs": { "issue": 12 }, "profile": "claude", "brief": "Add the meals page.", "limits": { "minutes": 30 }, "force": false }
+```
+
+The answer is 201 `{ ok, run, request, comment }`. `requestedBy` is the token's owner and is never taken from the body. A body with a credential in it, by key or by value, is 400 and nothing is posted. The dashboard's own routes are `GET /api/agent-runs[?follow=1]`, `GET /api/agent-runs/<runId>`, `POST /api/agent-runs` and `POST /api/agent-runs/<runId>/stop`, for a signed-in maintainer from cornfield's own page.
+
 ## By keyboard and screen reader
 
-The tab is a button in the panel's Show group, like the other two. Each group is a heading with the list under it, so a screen reader can move by headings; the two switches are checkboxes. Loading, a switch changing and a failure are said through the map's live region ([accessibility](accessibility.md)); the mark is the word "Agent" and its reason, not a colour. On a phone it is the same bottom sheet.
+The tab is a button in the panel's Show group, like the other two. Each group is a heading with the list under it, so a screen reader can move by headings; the two switches are checkboxes. Loading, a switch changing and a failure are said through the map's live region ([accessibility](accessibility.md)); the mark is the word "Agent" and its reason, not a colour. The Start an agent dialog is modal: the focus stays in it, Escape and Cancel close it and give the focus back to the button, and a refusal is read out as an alert. A run's state is a word, not a colour. On a phone it is the same bottom sheet.

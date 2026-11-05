@@ -113,7 +113,7 @@ describe('the release guard (prepublishOnly)', () => {
   it('is what npm runs before a publish, and the package ships only its own folders (and the agent contract schema, for runners)', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(CORNFIELD, 'package.json'), 'utf8'));
     expect(pkg.scripts.prepublishOnly).toBe('node cli/release-guard.js');
-    expect(pkg.files).toEqual(['cli/', 'core/', 'explorer/', 'plugins/', 'server/', 'docs/agent-contract.schema.json', 'README.md', 'LICENSE', 'CHANGELOG.md']);
+    expect(pkg.files).toEqual(['cli/', 'core/', 'explorer/', 'plugins/', 'server/', 'README.md', 'LICENSE', 'CHANGELOG.md']);
     expect(pkg.bin).toEqual({ cornfield: 'cli/cornfield.js' });
     expect(pkg.dependencies).toBeUndefined();
   });

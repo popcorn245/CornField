@@ -25,8 +25,12 @@ const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 const LABEL = /^[\p{L}\p{N}][\p{L}\p{N} ._:/()-]*$/u;
 
+/** Tokens come in two scopes (server/review-tokens.js): `review` approves proposals, `agent` asks for agent runs. Each has its own address. */
+export const SCOPES = Object.freeze([['review', 'Review: approve or send back proposals'], ['agent', 'Agent: ask for agent runs']]);
+export const tokensUrl = (scope) => (scope === 'agent' ? '/api/agent-tokens' : TOKENS_URL);
+
 /** The address that revokes token `id` */
-export const revokeUrl = (id) => `${TOKENS_URL}/${encodeURIComponent(String(id))}/revoke`;
+export const revokeUrl = (id, scope = 'review') => `${tokensUrl(scope)}/${encodeURIComponent(String(id))}/revoke`;
 
 /**
  * What the form sends: the label, and the days when they were given. The server checks everything again.
