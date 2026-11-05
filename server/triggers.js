@@ -23,14 +23,24 @@
  * the line is the brief. A line inside a code span or a fenced block is never a command, nor one in a quote or an indented block.
  * Every automatic request records its cause in the request itself (`trigger: { event, by, ref }`, core/agent-contract.js).
  *
- * **No chaining, in three layers.**
+ * **No chaining: a run's OUTPUT never causes a run.** In three layers:
  *   1. Structural: the only events handled are the three above. Nothing a run produces (a push, a pull request, a check, a report, a run's
  *      state change: `run.*`, `agent.requested`) is wired to a trigger; `server/agent-runs.js` does not know this module exists.
  *   2. Who: no trigger fires when the actor is a login in `agents.runners` or a bot account ("[bot]", or the forge's Bot type), or the
  *      comment holds a `cornfield-run` block.
- *   3. What: no trigger fires when the subject is a run's own: a number cornfield holds as a run's target or linked pull request, or a pull
- *      request or issue whose text or branch carries a run id (`Cornfield-Run:`) or whose author is a runner or a bot.
- *   Each ends in silence: nothing is posted, nothing is audited, and no hook is sent.
+ *   3. What: no trigger fires on a run's output: a pull request cornfield holds as a run's linked one (in any state, the run finished or
+ *      not), or a pull request or issue whose text or branch carries a run id (`Cornfield-Run:`) or whose author is a runner or a bot.
+ *   Each posts nothing and sends no hook, but writes a `trigger-ignored` audit row with the reason (`machine`, `run-block`, `edited`,
+ *   `run-output`), so a maintainer can see why nothing happened. A comment that holds no `/agent` command is not a cause at all and writes
+ *   nothing.
+ *
+ * **A run's TARGET is not its output.** The thread, issue or spec pull request a run was requested on may fire again once every run on it is
+ * over (finished, or quiet: what the cap counts). While one is open, the trigger is skipped with `run-open` (`trigger-skipped` and the
+ * hook), whatever its profile; the one-run-per-subject rule of the request path only clashes within a profile.
+ *
+ * **approveLands.** With `proposals.approveLands`, an approval may land the spec pull request before the trigger's request reads it; the
+ * request then finds no open proposal and the trigger is skipped with `not-found` (audited, and the hook). The proposal is on the default
+ * branch by then: ask for the run with the button, or use the `build.opened` trigger, which fires after the build issue is opened.
  *
  * **No live sign-in.** If the maintainer has no live session, the trigger does nothing else (cornfield holds no forge token of its own, and
  * another maintainer's would put words in their name): an audit row (`trigger-skipped`), the hook event `trigger.skipped`
@@ -109,11 +119,11 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
   /** Whether an account is a runner or a bot: what it does is a run's output, never a cause */
   const machine = (login, bot = false) => bot === true || isBotLogin(login) || runnerSet.has(lower(login));
 
-  /** Whether cornfield holds this number as a run's target (where its request was posted) or its linked pull request */
-  async function ownedByRun(numbers) {
+  /** Whether cornfield holds this number as a run's linked pull request: a run's output, in any state, the run finished or not */
+  async function runOutput(numbers) {
     const db = await auth.store();
-    const ask = db.prepare('SELECT 1 FROM runs WHERE repo = ? AND (target = ? OR pull = ?) LIMIT 1');
-    return numbers.some((n) => Number.isInteger(n) && ask.get(repo, n, n) !== undefined);
+    const ask = db.prepare('SELECT 1 FROM runs WHERE repo = ? AND pull = ? LIMIT 1');
+    return numbers.some((n) => Number.isInteger(n) && ask.get(repo, n) !== undefined);
   }
 
   /**
@@ -150,6 +160,18 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
     return db.prepare('INSERT OR IGNORE INTO thread_seen (repo, issue, comment, stamp, at) VALUES (?, ?, ?, ?, ?)').run(repo, number, key, '', iso(now())).changes === 1;
   }
 
+  /**
+   * A no-chaining exit: an audit row (`trigger-ignored`, with the reason) and nothing else, no hook and nothing posted, so a maintainer can
+   * see why an act of theirs started nothing. Never the comment's text: only the event, who and the reference.
+   */
+  async function ignore(cause, reason) {
+    try {
+      await auth.record({ login: cause.by, action: 'trigger-ignored', target: `${repo}#${cause.subject}`, request: { event: cause.event, by: cause.by, ref: cause.ref }, status: null, answer: { reason } });
+    } catch (err) {
+      log(`an ignored trigger could not be written to the audit table: ${words(err)}`);
+    }
+  }
+
   /** The trigger did nothing, and says why: an audit row and the `trigger.skipped` hook event. It posts nothing. */
   async function skip(cause, reason) {
     try {
@@ -184,19 +206,20 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
     const cause = causeOf(event, p);
     if (!cause) return;
 
-    // --- who: a runner or a bot never causes anything; a run's own block is no command; an edited or non-command comment is nothing
-    if (machine(cause.by)) return;
+    // --- a comment with no /agent command is no cause at all: nothing, not even a row (most thread messages are this)
+    const command = cause.message ? agentCommand(cause.message.body) : null;
+    if (cause.message && !command) return;
+    // --- who: a runner or a bot never causes anything; a run's own block is no command; an edited comment is not trusted
+    if (machine(cause.by) || cause.message?.bot === true) return ignore(cause, 'machine');
     if (cause.message) {
       const m = cause.message;
-      if (m.bot === true || RUN_FENCE.test(m.body)) return;
-      const edited = !(Date.parse(m.updatedAt) - Date.parse(m.createdAt) <= EDIT_GRACE_MS);
-      if (edited) return;
-      const command = agentCommand(m.body);
-      if (!command) return;
+      if (RUN_FENCE.test(m.body)) return ignore(cause, 'run-block');
+      // Both forges give the comment's own created and updated times; one missing or unreadable counts as edited (fails closed)
+      if (!(Date.parse(m.updatedAt) - Date.parse(m.createdAt) <= EDIT_GRACE_MS)) return ignore(cause, 'edited');
       cause.brief = command.brief;
     }
-    // --- what: the subject is not a run's own
-    if (await ownedByRun(cause.owned)) return;
+    // --- what: a run's output (its linked pull request) never fires, in any state
+    if (await runOutput(cause.owned)) return ignore(cause, 'run-output');
     // --- once: a cause is acted on one time, across restarts
     if (!(await first(cause.subject, cause.key))) return;
 
@@ -214,6 +237,9 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
       if (!isMaintainer(permission)) return;
     }
 
+    // --- a run's target may fire again once its runs are over; while one is open, the trigger is skipped and says so
+    if (typeof runs.openOn === 'function' && await runs.openOn({ number: cause.subject, refs: cause.refs })) return skip(cause, 'run-open');
+
     // --- the maintainer's own sign-in, or nothing else
     const userId = await sessionOf(cause.by);
     if (userId === null) return skip(cause, 'no-session');
@@ -224,7 +250,7 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
       return skip(cause, reasonOf(err));
     }
     // The pull request or issue itself may be a run's (a run id in its text or branch, a runner as its author) before cornfield has linked it
-    for (const n of cause.checked) if (Number.isInteger(n) && await outputOfRun(forge, n)) return;
+    for (const n of cause.checked) if (Number.isInteger(n) && await outputOfRun(forge, n)) return ignore(cause, 'run-output');
 
     const body = { kind: rule.kind, ...(rule.profile ? { profile: rule.profile } : {}), refs: cause.refs, brief: cause.brief || rule.brief || '' };
     try {
@@ -245,7 +271,7 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
     return queue;
   }
 
-  hooks.subscribe(onEvent);
+  hooks.subscribe(onEvent, [...rules.keys()]);
 
   return {
     /** Which events have a trigger */

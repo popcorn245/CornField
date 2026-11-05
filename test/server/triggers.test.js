@@ -233,16 +233,16 @@ describe('spec.approved and build.opened', () => {
     const t = setup({ config: { maxOpen: 1 } });
     await t.fire('spec.approved', approved());
     t.wait(10_000);
-    // the pull request now holds a run of its own: a second approval of it is no trigger's (no chaining), and nothing more is asked
+    // the pull request is now the target of an open run: a second approval of a new head is skipped, and says so
     await t.fire('spec.approved', approved({ headSha: 'c'.repeat(40) }));
     expect(t.runRows()).toHaveLength(1);
-    expect(t.events('trigger.skipped')).toEqual([]);
+    expect(t.events('trigger.skipped').map((e) => e.reason)).toEqual(['run-open']);
     // another subject meets the cap
     t.wait(10_000);
     t.world.pulls.push({ number: 41, state: 'open', body: '', author: { login: 'maintainer-two' }, head: { ref: 'spec/0041-x', sha: 'e'.repeat(40) } });
     await t.fire('build.opened', built({ pull: 41 }));
     expect(t.runRows()).toHaveLength(1);
-    expect(t.events('trigger.skipped').map((e) => e.reason)).toEqual(['cap-reached']);
+    expect(t.events('trigger.skipped').map((e) => e.reason)).toEqual(['run-open', 'cap-reached']);
   });
 
   it('cannot be forged: a body from the button or the API that carries a trigger is refused', async () => {
@@ -348,11 +348,11 @@ describe('the /agent command', () => {
     // not even a refusal: it was never tried again
     expect(t.rows('agent-request')).toHaveLength(1);
     expect(t.rows('trigger-skipped')).toEqual([]);
-    // another comment is another command; the first run was posted on that thread, so it is a run's own (no chaining) and says nothing
+    // another comment is another command; the first run on that thread is still open, so it is skipped with the reason
     t.wait(10_000);
     await t.fire('thread.message', message(t, 15, 'maintainer-one', '/agent again'));
     expect(t.runRows()).toHaveLength(1);
-    expect(t.events('trigger.skipped')).toEqual([]);
+    expect(t.events('trigger.skipped').map((e) => [e.reason, e.trigger.event])).toEqual([['run-open', 'thread.message']]);
   });
 
   it('is not a request at all for an approval repeated after a restart', async () => {
@@ -475,29 +475,138 @@ describe('no chaining', () => {
     const ask = formatRunComment(RUN, { version: 1, runId: RUN, kind: 'code', refs: { issue: 12 }, brief: '/agent', requestedBy: 'maintainer-one', requestedAt: '2026-11-05T10:00:00Z' });
     await t.fire('thread.message', message(t, 13, 'maintainer-one', `/agent\n${ask}`));
     expect(t.runRows()).toEqual([]);
-    expect(t.rows()).toEqual([]);
+    // each says why in the audit table, and only there: which event, who, which comment, never what it said
+    const rows = t.rows();
+    expect(rows.map((r) => [r.action, r.target, r.answer.reason])).toEqual([15, 16, 14, 13].map((n) => ['trigger-ignored', `owner/name#${n}`, 'run-block']));
+    for (const r of rows) {
+      expect(Object.keys(r.request).sort()).toEqual(['by', 'event', 'ref']);
+      expect(JSON.stringify(r)).not.toMatch(/please|cornfield-run|state/);
+    }
+    expect(t.events('trigger.skipped')).toEqual([]);
   });
 
-  it('a subject a run owns never fires: its target, or its linked pull request', async () => {
-    const t = setup({ config: { maxOpen: 10 } });
+  /** A run asked for by the button on thread 15, whose linked pull request is #41 */
+  async function withRun(t) {
     const ctx = { forge: () => t.as('maintainer-one'), who: { login: 'maintainer-one', userId: '1001' }, limits: { auth: t.auth, now: () => t.clock.now } };
     const run = await t.runs.request(ctx, { body: { kind: 'brief', refs: { thread: 15 }, brief: '' } });
     t.db.prepare('UPDATE runs SET pull = 41, pull_state = ?, pull_trusted = 1 WHERE run_id = ?').run('open', run.run.runId);
     t.world.pulls.push({ number: 41, state: 'open', body: '', author: { login: 'maintainer-two' }, head: { ref: 'x', sha: 'e'.repeat(40) } });
+    return run.run.runId;
+  }
+
+  it('a run\'s linked pull request never fires, in any state, the run open or long over: an audit row says why, no hook', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    const runId = await withRun(t);
     const before = t.allComments().length;
     t.wait(61_000);
-    await t.fire('thread.message', message(t, 15, 'maintainer-one', '/agent again')); // the run's target
-    await t.fire('spec.approved', approved({ pull: 41 })); // its pull request
-    await t.fire('build.opened', built({ pull: 41, issue: 15 }));
+    await t.fire('spec.approved', approved({ pull: 41 }));
+    await t.fire('build.opened', built({ pull: 41, issue: 16 }));
+    for (const [state, pullState] of [['done', 'open'], ['failed', 'merged'], ['stopped', 'closed']]) {
+      t.db.prepare('UPDATE runs SET state = ?, pull_state = ? WHERE run_id = ?').run(state, pullState, runId);
+      t.wait(61_000);
+      await t.fire('spec.approved', approved({ pull: 41, headSha: state.padEnd(40, 'd') }));
+    }
     expect(t.runRows()).toHaveLength(1);
-    expect(t.allComments().length - before).toBe(1); // only the /agent comment itself
+    expect(t.allComments().length).toBe(before);
+    expect(t.rows('trigger-ignored').map((r) => [r.request.event, r.answer.reason])).toEqual([
+      ['spec.approved', 'run-output'], ['build.opened', 'run-output'], ['spec.approved', 'run-output'], ['spec.approved', 'run-output'], ['spec.approved', 'run-output'],
+    ]);
     expect(t.rows('trigger-skipped')).toEqual([]);
     expect(t.events('trigger.skipped')).toEqual([]);
-    // a run's own PR is quiet even when the run is long over
-    t.db.prepare("UPDATE runs SET state = 'done' WHERE run_id = ?").run(run.run.runId);
+  });
+
+  it('a run\'s target with a run still open is skipped with run-open, whatever the profile: audited, with the hook, nothing posted', async () => {
+    const t = setup({ config: { maxOpen: 10, profiles: ['claude', 'local'] }, on: { 'thread.message': { kind: 'summary', profile: 'local' } } });
+    await withRun(t); // asked with no profile; the trigger's is another one, which the request path alone would let through
+    const before = t.allComments().length;
     t.wait(61_000);
-    await t.fire('spec.approved', approved({ pull: 41, headSha: 'd'.repeat(40) }));
+    await t.fire('thread.message', message(t, 15, 'maintainer-one', '/agent again'));
     expect(t.runRows()).toHaveLength(1);
+    expect(t.allComments().length - before).toBe(1); // only the /agent comment itself
+    expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['run-open']);
+    expect(t.events('trigger.skipped')).toEqual([expect.objectContaining({ reason: 'run-open', by: 'maintainer-one', trigger: { event: 'thread.message', by: 'maintainer-one', ref: expect.stringMatching(/^comment:/) } })]);
+  });
+
+  it('a run\'s target fires again on a fresh maintainer act once every run on it is over', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    const runId = await withRun(t);
+    // finished by its report
+    t.db.prepare("UPDATE runs SET state = 'done' WHERE run_id = ?").run(runId);
+    t.wait(61_000);
+    await t.fire('thread.message', message(t, 15, 'maintainer-one', '/agent once more'));
+    expect(t.runRows()).toHaveLength(2);
+    const second = t.posted().filter((x) => x.number === 15).at(-1);
+    expect(second.request).toMatchObject({ refs: { thread: 15 }, brief: 'once more', trigger: { event: 'thread.message', by: 'maintainer-one' } });
+    // that one open: skipped; then its pull request merged, which finishes it: a fresh act fires again
+    t.wait(61_000);
+    await t.fire('thread.message', message(t, 15, 'maintainer-two', '/agent and again'));
+    expect(t.runRows()).toHaveLength(2);
+    expect(t.events('trigger.skipped').map((e) => e.reason)).toEqual(['run-open']);
+    t.db.prepare("UPDATE runs SET pull = 77, pull_state = 'merged', pull_trusted = 1 WHERE run_id = ?").run(second.request.runId);
+    t.wait(61_000);
+    await t.fire('thread.message', message(t, 15, 'maintainer-two', '/agent third'));
+    expect(t.runRows()).toHaveLength(3);
+    expect(t.posted().filter((x) => x.number === 15).at(-1).request).toMatchObject({ brief: 'third', requestedBy: 'maintainer-two' });
+  });
+
+  it('a spec pull request that was a run\'s target fires again on the approval of a new head once its run is over', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    await t.fire('spec.approved', approved());
+    expect(t.runRows()).toHaveLength(1);
+    t.wait(61_000);
+    await t.fire('spec.approved', approved({ headSha: 'c'.repeat(40) }));
+    expect(t.runRows()).toHaveLength(1);
+    expect(t.events('trigger.skipped').map((e) => e.reason)).toEqual(['run-open']);
+    t.db.prepare("UPDATE runs SET state = 'failed'").run();
+    t.wait(61_000);
+    await t.fire('spec.approved', approved({ headSha: 'c'.repeat(40) })); // the same head again: deduped, silently
+    expect(t.runRows()).toHaveLength(1);
+    await t.fire('spec.approved', approved({ headSha: 'f'.repeat(40) }));
+    expect(t.runRows()).toHaveLength(2);
+    expect(t.posted().map((x) => x.number)).toEqual([40, 40]);
+  });
+
+  it('an edited /agent comment, a runner\'s and a bot\'s are audited as ignored; a comment with no command writes nothing', async () => {
+    const t = setup({ signedIn: ['maintainer-one', 'runner-bot'] });
+    await t.fire('thread.message', message(t, 15, 'maintainer-one', '/agent go', { updatedAt: new Date(T0 + 60_000).toISOString() }));
+    await t.fire('thread.message', message(t, 16, 'maintainer-one', '/agent go', { updatedAt: undefined }));
+    await t.fire('thread.message', message(t, 14, 'runner-bot', '/agent go'));
+    await t.fire('thread.message', message(t, 13, 'robot[bot]', '/agent go'));
+    await t.fire('thread.message', message(t, 12, 'runner-bot', 'Done, see the PR.'));
+    await t.fire('thread.message', message(t, 12, 'maintainer-one', 'Thanks, nice work.', { updatedAt: new Date(T0 + 60_000).toISOString() }));
+    expect(t.runRows()).toEqual([]);
+    expect(t.rows().map((r) => [r.action, r.login, r.answer.reason])).toEqual([
+      ['trigger-ignored', 'maintainer-one', 'edited'], ['trigger-ignored', 'maintainer-one', 'edited'], ['trigger-ignored', 'runner-bot', 'machine'], ['trigger-ignored', 'robot[bot]', 'machine'],
+    ]);
+    expect(t.events('trigger.skipped')).toEqual([]);
+  });
+
+  it('the comment\'s text reaches no hook body, audit row or log line', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    const words = 'zebra-quokka-marmot';
+    await t.fire('thread.message', message(t, 15, 'stranger', `/agent ${words}`));
+    await t.fire('thread.message', message(t, 16, 'maintainer-one', `hello ${words}`));
+    await t.fire('thread.message', message(t, 14, 'maintainer-one', `/agent x ${words}`, { updatedAt: new Date(T0 + 60_000).toISOString() }));
+    t.world.perms['maintainer-one'] = 'admin';
+    t.signIn('maintainer-one', { token: '' });
+    expect(JSON.stringify(t.sent)).not.toContain(words);
+    expect(JSON.stringify(t.rows())).not.toContain(words);
+    expect(t.logs.join('\n')).not.toContain(words);
+    expect(t.events('thread.message').length).toBeGreaterThan(0);
+    for (const e of t.events('thread.message')) expect(Object.keys(e)).not.toContain('message');
+  });
+
+  it('an event no hook asks for and no trigger listens to is not even worked out', async () => {
+    const t = setup({ on: { 'thread.message': { kind: 'summary' } } });
+    const quiet = createHooks({ hooks: [], secret: SECRET, store: t.auth.store, now: () => t.clock.now, fetch: async () => { throw new Error('no delivery'); }, timer: { setTimeout: () => 0, clearTimeout: () => {} } });
+    const seen = [];
+    quiet.subscribe((e) => seen.push(e), ['thread.message']);
+    let worked = 0;
+    quiet.emit('spec.approved', () => { worked += 1; return approved(); });
+    quiet.emit('thread.message', () => { worked += 10; return { thread: 1, comment: '1', actor: 'x' }; });
+    await settle();
+    expect(worked).toBe(10);
+    expect(seen).toEqual(['thread.message']);
   });
 
   it('a pull request that carries a run id, a runner as its author or a bot, is a run\'s even before cornfield has linked it', async () => {

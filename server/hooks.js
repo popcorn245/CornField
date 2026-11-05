@@ -143,8 +143,9 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   if (typeof secret !== 'string' || secret.length < MIN_HOOK_SECRET) throw new Error(`${HOOK_SECRET_ENV} must be at least ${MIN_HOOK_SECRET} characters.`);
   const targets = hooks.map((h, i) => ({ index: i, url: h.url, origin: originOf(h.url), events: h.events === '*' ? HOOK_EVENTS : h.events }));
   const timers = new Set();
-  /** @type {((event: string, payload: any) => unknown)[]} */
+  /** @type {{ fn: (event: string, payload: any) => unknown, events: string[] | null }[]} */
   const subscribers = [];
+  const listeners = (event) => subscribers.filter((s) => s.events === null || s.events.includes(event));
   let pending = 0;
   let closed = false;
 
@@ -259,12 +260,14 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     try {
       if (closed || !HOOK_EVENTS.includes(event)) return;
       const to = targets.filter((t) => t.events.includes(event));
-      if (!to.length && !subscribers.length) return;
+      // Nobody wants it: the payload is not even worked out (it may read the forge)
+      const local = listeners(event);
+      if (!to.length && !local.length) return;
       Promise.resolve()
         .then(() => (typeof payload === 'function' ? payload() : payload))
         .then((p) => {
           // In-process listeners first, each on its own: they cannot hold up or break a delivery
-          for (const fn of subscribers) {
+          for (const { fn } of local) {
             Promise.resolve().then(() => fn(event, p || {})).catch((err) => console.error(`[cornfield] a listener of ${event} failed: ${err instanceof Error ? err.message : err}`));
           }
           if (!to.length) return;
@@ -289,11 +292,13 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
 
   /**
    * Listens in-process to every event `emit` is given (a trigger does: server/triggers.js). `fn(event, payload)` gets the payload
-   * resolved; it may be async, is never awaited and its failure is only logged.
+   * resolved; it may be async, is never awaited and its failure is only logged. With `events`, only those: an event nobody listens to and no
+   * hook asks for has its payload left unworked out.
    * @param {(event: string, payload: any) => unknown} fn
+   * @param {string[]} [events]
    */
-  function subscribe(fn) {
-    if (typeof fn === 'function') subscribers.push(fn);
+  function subscribe(fn, events) {
+    if (typeof fn === 'function') subscribers.push({ fn, events: Array.isArray(events) ? [...events] : null });
   }
 
   /**

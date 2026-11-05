@@ -782,7 +782,22 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     if (gone) log(`${gone} request${gone === 1 ? '' : 's'} that never reached the forge ${gone === 1 ? 'was' : 'were'} dropped`);
   }
 
-  return { request, stop, list, get, follow, hasWork, resume, maxOpen: cap, profiles };
+  /**
+   * The open run on a subject, under any profile, or null: one whose request was posted on `number` (its target), or that is about the
+   * same issue, thread or proposal as `refs`. Open as the cap counts it (not finished, not quiet). An opt-in trigger asks before it requests
+   * (server/triggers.js), so a maintainer's act on a target whose run is still going is skipped with `run-open`, whatever the profile.
+   * @param {{ number?: number, refs?: { issue?: number, thread?: number, proposal?: string } }} about
+   * @returns {Promise<string | null>} the run id
+   */
+  async function openOn({ number, refs = {} }) {
+    const db = await auth.store();
+    const mine = subjectKeys(refs);
+    const hit = openRows(db, now()).find((r) => (Number.isInteger(number) && (r.target === number || r.issue === number || r.thread === number))
+      || subjectKeys({ issue: r.issue ?? undefined, thread: r.thread ?? undefined, proposal: r.proposal ?? undefined }).some((k) => mine.includes(k)));
+    return hit ? hit.run_id : null;
+  }
+
+  return { request, stop, list, get, follow, hasWork, resume, openOn, maxOpen: cap, profiles };
 }
 
 /** @typedef {ReturnType<typeof createRuns>} Runs */

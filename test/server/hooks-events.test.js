@@ -622,7 +622,9 @@ describe('event hooks', () => {
     it('approving a spec with a trigger set requests ONE run, posted as the approver on the spec PR; no hook is configured and none is needed', async () => {
       allowWrites();
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-trig-'));
-      const one = await start(triggered({ 'spec.approved': { kind: 'code', profile: 'claude' } }, { dataDir: dir }), { env: NO_HOOKS });
+      // With no hook configured the hooks object only carries the moments; its secret is a random one that signs nothing
+      const delivered = [];
+      const one = await start(triggered({ 'spec.approved': { kind: 'code', profile: 'claude' } }, { dataDir: dir }), { env: NO_HOOKS, hookFetch: async (url) => { delivered.push(url); return new Response(null, { status: 200 }); } });
       try {
         const c = await signedIn(one.port, 'c-maint');
         const res = await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: one.port, as: c });
@@ -650,6 +652,12 @@ describe('event hooks', () => {
         await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: one.port, as: c });
         await settle();
         expect(requestsPosted().filter((r) => r.body.includes('"kind": "code"'))).toHaveLength(1);
+        // spec.approved, agent.requested and the rest were all emitted, and not one delivery was made or signed
+        expect(delivered).toEqual([]);
+        const audit = new DatabaseSync(path.join(dir, 'cornfield.db'));
+        const hookRows = audit.prepare("SELECT COUNT(*) AS n FROM actions WHERE action = 'hook'").get();
+        audit.close();
+        expect(hookRows.n).toBe(0);
       } finally {
         await one.close();
         fs.rmSync(dir, { recursive: true, force: true });

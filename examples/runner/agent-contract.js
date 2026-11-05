@@ -368,6 +368,8 @@ export function validateRequest(body, { profiles } = {}) {
     if (!TRIGGER_EVENTS.includes(body.trigger.event)) return no(`"trigger.event" is one of ${TRIGGER_EVENTS.join(', ')}.`);
     if (typeof body.trigger.by !== 'string' || !LOGIN.test(body.trigger.by)) return no('"trigger.by" is the forge login of the maintainer whose act caused the request.');
     if (typeof body.trigger.ref !== 'string' || !TRIGGER_REF.test(body.trigger.ref)) return no('"trigger.ref" is what the act was on: pull:<number>, issue:<number> or comment:<id>.');
+    // The request is posted as the maintainer whose act caused it, so the two name one person
+    if (body.trigger.by !== body.requestedBy) return no('"trigger.by" is the maintainer the request is made as, the same login as "requestedBy".');
     value.trigger = { event: body.trigger.event, by: body.trigger.by, ref: body.trigger.ref };
   }
   return { ok: true, value };

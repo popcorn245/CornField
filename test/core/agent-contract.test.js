@@ -604,6 +604,10 @@ describe('the JSON Schema', () => {
     expect(valid(request({ profile: 'gpt' }))).toBe(true);
     expect(c.validateRequest(request({ requestedAt: '2026-02-30T00:00:00Z' })).ok).toBe(false);
     expect(valid(request({ requestedAt: '2026-02-30T00:00:00Z' }))).toBe(true);
+    // and a trigger that names someone else than the maintainer the request is made as
+    const other = request({ trigger: { event: 'spec.approved', by: 'maintainer-two', ref: 'pull:40' } });
+    expect(c.validateRequest(other).error).toMatch(/same login as "requestedBy"/);
+    expect(valid(other)).toBe(true);
   });
   it('accepts what the module writes', () => {
     const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: 'Fix it.', requestedBy: 'maintainer-one', branch: 'agent/x', limits: { turns: 5 } }).value;
