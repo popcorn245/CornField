@@ -1678,6 +1678,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0004: spec.ready without anyone opening the dashboard (docs/specs/0004-spec-poll.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0005-threads-and-agents",
+      "type": "page",
+      "label": "/docs/specs/0005-threads-and-agents",
+      "file": "docs/specs/0005-threads-and-agents.md",
+      "summary": "Spec 0005: threads, agents and how they plug in (v2)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0005: threads, agents and how they plug in (v2) (docs/specs/0005-threads-and-agents.md)."
     }
   ],
   "edges": [
@@ -5029,7 +5039,11 @@
       "from": "page-doc-docs-specs-0004-spec-poll",
       "to": "page-doc-docs-config",
       "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0005-threads-and-agents"
     }
   ],
-  "updatedAt": "2026-11-04T22:59:24.677Z"
+  "updatedAt": "2026-11-05T05:16:32.680Z"
 }
