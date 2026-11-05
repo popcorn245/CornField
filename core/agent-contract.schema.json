@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/popcorn245/CornField/blob/main/docs/agent-contract.schema.json",
+  "$id": "https://github.com/popcorn245/CornField/blob/main/core/agent-contract.schema.json",
   "title": "cornfield agent contract, version 1",
   "description": "The JSON a cornfield-run fenced block holds: a request, a report or a stop request. docs/agent-contract.md says what each means. Checks the shape; a few rules are the validator's alone (the configured profile list, that a date is a real one), and are listed in the docs.",
   "oneOf": [
