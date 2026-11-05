@@ -1680,6 +1680,26 @@
       "desc": "Spec 0004: spec.ready without anyone opening the dashboard (docs/specs/0004-spec-poll.md)."
     },
     {
+      "id": "page-doc-docs-specs-0005-threads-and-agents",
+      "type": "page",
+      "label": "/docs/specs/0005-threads-and-agents",
+      "file": "docs/specs/0005-threads-and-agents.md",
+      "summary": "Spec 0005: threads, agents and how they plug in (v2)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0005: threads, agents and how they plug in (v2) (docs/specs/0005-threads-and-agents.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "type": "page",
+      "label": "/docs/adr/0012-cornfield-asks-runners-act",
+      "file": "docs/adr/0012-cornfield-asks-runners-act.md",
+      "summary": "ADR 0012: cornfield asks; the developer's runners act",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0012: cornfield asks; the developer's runners act (docs/adr/0012-cornfield-asks-runners-act.md)."
+    },
+    {
       "id": "core-core-agent-contract",
       "label": "agent-contract.js",
       "type": "core",
@@ -5051,6 +5071,109 @@
       "dashed": true
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0005-threads-and-agents"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act"
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0006-safe-actions-only",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0006-safe-actions-only",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-agent-contract"
     },
@@ -5081,5 +5204,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T08:52:51.454Z"
+  "updatedAt": "2026-11-05T08:58:24.195Z"
 }

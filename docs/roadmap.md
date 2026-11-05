@@ -6,7 +6,7 @@ cornfield grows in the open. Each item below is an issue draft, ready to file on
 
 ### Alignment threads
 Labels: `enhancement`, `pipeline`
-A thread per idea or issue, kept in the SQLite file: people and agents write, a thread can point at nodes (they light up) and at a proposal. Done when: a thread can be started from an issue or from a node, its messages show on the map's panel, and a thread links to the spec PR it led to.
+A thread per idea or issue, as a forge conversation (the issue's comments, or a spec PR's; [spec 0005](specs/0005-threads-and-agents.md) D6, D7): people and agents write on the forge, a thread can point at nodes (they light up) and at a proposal. Done when: a thread can be started from an issue or from a node, its messages show on the map's panel, and a thread links to the spec PR it led to.
 
 ### Mockups beside a proposal
 Labels: `enhancement`, `pipeline`
@@ -26,7 +26,7 @@ The safe steps between stages (issue to spec PR, approved spec to build issue, g
 
 ### Launching agents
 Labels: `enhancement`, `agents`
-Start a coding agent (a Claude Code session, for example) on an issue or an approved proposal, see it run, stop it. Needs its own design: credentials, budgets, limits. Done when: an approved proposal can start one agent run that shows up as a branch and a PR.
+Ask the developer's own runner to start a coding agent (a Claude Code session, for example) on an issue or an approved proposal, see it run, ask it to stop. Designed in [spec 0005](specs/0005-threads-and-agents.md): cornfield publishes a request and holds no agent credentials ([ADR 0012](adr/0012-cornfield-asks-runners-act.md)). Done when: an approved proposal can start one agent run that shows up as a branch and a PR.
 
 ## Sources and derivers
 
