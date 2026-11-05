@@ -1,11 +1,16 @@
 /**
  * @module server/review-tokens
  *
- * Review tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through
- * `POST /api/reviews` (server/review-api.js). The store over the `review_tokens` table of `cornfield.db`
- * (server/db.js); nothing here knows about HTTP.
+ * API tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through
+ * `POST /api/reviews` (server/review-api.js), or ask for an agent run through `POST /api/agent-requests`
+ * (server/agent-api.js). The store over the `review_tokens` table of `cornfield.db` (server/db.js); nothing here knows
+ * about HTTP.
  *
- *   - A token is `cf_rt_` and 32 random bytes in base64url. It is shown once, when it is made; only its SHA-256 is
+ *   - **A token has a scope,** `review` or `agent`, and is good for the one API its scope names; each API refuses the other's
+ *     token (403) and says so. One store serves both, so hashing, expiry, revoking, `last_used` and the limits are written
+ *     once and cannot drift. A review token is `cf_rt_…` and an agent token `cf_at_…`, so a leaked one is told apart on
+ *     sight (and by a secret scanner). Rows from before scopes existed are review tokens.
+ *   - A token is its prefix and 32 random bytes in base64url. It is shown once, when it is made; only its SHA-256 is
  *     kept. A presented token is found by the hash of what was presented (an indexed equality on a hash of a 256-bit
  *     secret, so there is no secret-dependent comparison to time); the token itself is never stored, logged or
  *     returned again.
@@ -17,14 +22,18 @@
  *
  * Times are ISO strings, as everywhere in the file; `now` is milliseconds and is passed in, so tests need no clock.
  *
- * @typedef {{ id: number, user_id: string, login: string, label: string, created_at: string, expires_at: string, revoked_at: string | null, last_used: string | null }} TokenRow
+ * @typedef {'review' | 'agent'} TokenScope
+ * @typedef {{ id: number, user_id: string, login: string, label: string, scope: TokenScope, created_at: string, expires_at: string, revoked_at: string | null, last_used: string | null }} TokenRow
  * @typedef {'active' | 'expired' | 'revoked'} TokenState
  */
 
 import { createHash, randomBytes } from 'node:crypto';
 
-/** What every token starts with, so a leaked one is recognised (by a secret scanner too) */
-export const TOKEN_PREFIX = 'cf_rt_';
+/** The scopes a token may have, and what each one's tokens start with, so a leaked one is recognised (by a secret scanner too) */
+export const SCOPES = Object.freeze(['review', 'agent']);
+export const PREFIXES = Object.freeze({ review: 'cf_rt_', agent: 'cf_at_' });
+/** What a review token starts with (the original, kept for the callers that always had it) */
+export const TOKEN_PREFIX = PREFIXES.review;
 /** Random bytes in a token */
 export const TOKEN_BYTES = 32;
 export const DEFAULT_DAYS = 30;
@@ -34,10 +43,10 @@ export const MAX_ACTIVE = 20;
 export const MAX_LABEL = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A token as presented: the prefix and base64url (43 characters for 32 bytes); anything else is not one */
-const TOKEN_SHAPE = /^cf_rt_[A-Za-z0-9_-]{43,128}$/;
+const TOKEN_SHAPE = /^cf_(?:rt|at)_[A-Za-z0-9_-]{43,128}$/;
 /** A label is words: letters, digits, spaces and a little punctuation. No backtick, no @, no newline: the comment quotes it */
 const LABEL = /^[\p{L}\p{N}][\p{L}\p{N} ._:/()-]*$/u;
-const COLUMNS = 'id, user_id, login, label, created_at, expires_at, revoked_at, last_used';
+const COLUMNS = 'id, user_id, login, label, scope, created_at, expires_at, revoked_at, last_used';
 
 const iso = (ms) => new Date(ms).toISOString();
 
@@ -48,7 +57,7 @@ export function hashToken(token) {
 
 /**
  * The token a request presents: the value of `Authorization: Bearer <token>`, or null when there is none, or it is
- * not shaped like one of ours (the scheme is matched in any case, as RFC 9110 says).
+ * not shaped like one of ours (either scope's; which API it is good for is the row's `scope`) (the scheme is matched in any case, as RFC 9110 says).
  * @param {string | string[] | undefined} header
  * @returns {string | null}
  */
@@ -96,21 +105,22 @@ export function stateOf(row, now) {
  * for a label or a number of days that is not allowed, or when the owner holds `MAX_ACTIVE` live tokens already.
  * Tokens that ended (expired or revoked) more than `MAX_DAYS` days ago are dropped on the way.
  * @param {import('node:sqlite').DatabaseSync} db
- * @param {{ userId: string, login: string, label: string, days?: number }} owner
+ * @param {{ userId: string, login: string, label: string, days?: number, scope?: TokenScope }} owner `scope`: `review` unless said
  * @param {number} now
  * @returns {{ token: string, row: TokenRow }}
  */
-export function mintToken(db, { userId, login, label, days }, now) {
+export function mintToken(db, { userId, login, label, days, scope = 'review' }, now) {
+  if (!SCOPES.includes(scope)) throw new RangeError(`A token's scope is one of ${SCOPES.join(', ')}.`);
   const problem = labelProblem(label);
   if (problem) throw new RangeError(problem);
   const lasts = daysOf(days);
   const nowIso = iso(now);
   db.prepare('DELETE FROM review_tokens WHERE COALESCE(revoked_at, expires_at) <= ?').run(iso(now - MAX_DAYS * DAY_MS));
-  const live = /** @type {{ n: number }} */ (db.prepare('SELECT COUNT(*) AS n FROM review_tokens WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?').get(String(userId), nowIso)).n;
-  if (live >= MAX_ACTIVE) throw new RangeError(`You hold ${MAX_ACTIVE} live tokens; revoke one you do not use before making another.`);
-  const token = `${TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString('base64url')}`;
-  const id = Number(db.prepare('INSERT INTO review_tokens (token_hash, user_id, login, label, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(hashToken(token), String(userId), login, label, nowIso, iso(now + lasts * DAY_MS)).lastInsertRowid);
+  const live = /** @type {{ n: number }} */ (db.prepare('SELECT COUNT(*) AS n FROM review_tokens WHERE user_id = ? AND scope = ? AND revoked_at IS NULL AND expires_at > ?').get(String(userId), scope, nowIso)).n;
+  if (live >= MAX_ACTIVE) throw new RangeError(`You hold ${MAX_ACTIVE} live ${scope === 'review' ? '' : `${scope} `}tokens; revoke one you do not use before making another.`);
+  const token = `${PREFIXES[scope]}${randomBytes(TOKEN_BYTES).toString('base64url')}`;
+  const id = Number(db.prepare('INSERT INTO review_tokens (token_hash, user_id, login, label, scope, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(hashToken(token), String(userId), login, label, scope, nowIso, iso(now + lasts * DAY_MS)).lastInsertRowid);
   return { token, row: /** @type {TokenRow} */ (db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE id = ?`).get(id)) };
 }
 
@@ -132,14 +142,17 @@ export function touchToken(db, id, now) {
 }
 
 /**
- * An owner's tokens, newest first, each with its state. Never the hash, never the token.
+ * An owner's tokens of one scope (all of them when none is named), newest first, each with its state. Never the hash, never the token.
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {string} userId
  * @param {number} now
+ * @param {TokenScope} [scope]
  * @returns {(TokenRow & { state: TokenState })[]}
  */
-export function listTokens(db, userId, now) {
-  return /** @type {TokenRow[]} */ (db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE user_id = ? ORDER BY id DESC`).all(String(userId)))
+export function listTokens(db, userId, now, scope) {
+  return /** @type {TokenRow[]} */ (scope
+    ? db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE user_id = ? AND scope = ? ORDER BY id DESC`).all(String(userId), scope)
+    : db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE user_id = ? ORDER BY id DESC`).all(String(userId)))
     .map((row) => ({ ...row, state: stateOf(row, now) }));
 }
 
@@ -150,11 +163,12 @@ export function listTokens(db, userId, now) {
  * @param {string} userId
  * @param {number} id
  * @param {number} now
+ * @param {TokenScope} [scope] when named, a token of the other scope is no token to them here
  * @returns {(TokenRow & { state: TokenState }) | null} the token as it is now, or null when the owner has none by that id
  */
-export function revokeToken(db, userId, id, now) {
+export function revokeToken(db, userId, id, now, scope) {
   const row = /** @type {TokenRow | undefined} */ (db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE id = ? AND user_id = ?`).get(id, String(userId)));
-  if (!row) return null;
+  if (!row || (scope && row.scope !== scope)) return null;
   if (!row.revoked_at) db.prepare('UPDATE review_tokens SET revoked_at = ? WHERE id = ?').run(iso(now), id);
   const after = /** @type {TokenRow} */ (db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE id = ?`).get(id));
   return { ...after, state: stateOf(after, now) };

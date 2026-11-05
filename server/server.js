@@ -22,7 +22,10 @@
  *   POST /api/forge/release-drafts      the release notes kept as a DRAFT release on the forge (never published, no tag made)
  *   POST /api/reviews                   Approve or Send back with a review token (`Authorization: Bearer cf_rt_…`), no cookie: the one
  *                                       route that answers before the sign-in guard, and takes the token alone (server/review-api.js)
- *   *    /api/review-tokens…            make, list and revoke review tokens: the signed-in maintainer only (server/review-api.js)
+ *   *    /api/review-tokens…, /api/agent-tokens…
+ *                                       make, list and revoke review tokens, and agent tokens: the signed-in maintainer only (server/review-api.js)
+ *   POST /api/agent-requests            ask for an agent run with an agent token (`Authorization: Bearer cf_at_…`), no cookie: before the guard too (server/agent-api.js)
+ *   *    /api/agent-runs…               the dashboard's runs: list, one, start, stop; the signed-in maintainer only (server/agent-api.js, server/agent-runs.js)
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
  *                                       and a review is a comment on one: server/reviews.js)
  *   *    <proxy path>/…                 server/proxy.js, for each path the config's `proxy` names
@@ -42,11 +45,14 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES, specPollMs } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, DEFAULTS } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
+import { hasAdapter } from './forge.js';
+import { createRuns } from './agent-runs.js';
+import { REQUESTS_PATH, serveAgentCall, serveRunRoutes } from './agent-api.js';
 import { REVIEWS_PATH, serveReviewCall, serveTokenRoutes } from './review-api.js';
 import { proxyTo } from './proxy.js';
 import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
@@ -156,9 +162,16 @@ export function createCornfieldServer(config, opts = {}) {
     // What a restart left waiting: looked at again, in the background
     lander.resume().catch((err) => console.error(`[cornfield] pending landings could not be picked up: ${err instanceof Error ? err.message : err}`));
   }
-  // Looks at the open spec PRs on a timer when a hook wants spec.ready (config `hookPoll`); started when the server listens
-  const pollMs = hooks ? specPollMs(config) : null;
-  const specPoll = pollMs ? createSpecPoll({ config, where, auth, hooks, intervalMs: pollMs, now: opts.now, timer: opts.specPollTimer }) : null;
+  // Agent runs (server/agent-runs.js) need a signed-in maintainer to ask as and a forge to ask on; the runs are followed on the spec poll's tick
+  const runs = config.forge && auth.enabled && hasAdapter(config.forge.type) ? createRuns({ config, where, auth, hooks, now: opts.now, onAsk: () => specPoll?.start() }) : null;
+  runs?.resume().catch((err) => console.error(`[cornfield] agent runs could not be picked up: ${err instanceof Error ? err.message : err}`));
+  // Looks at the open spec PRs on a timer when a hook wants spec.ready (config `hookPoll`); started when the server listens. The same timer follows
+  // agent runs: it is started for them when there is a run to follow, or as one is asked for, and does nothing while there is none
+  const specMs = hooks ? specPollMs(config) : null;
+  const runsEvery = config.hookPoll === undefined ? DEFAULTS.hookPoll.specs : config.hookPoll.specs;
+  const pollMs = specMs ?? (runs && runsEvery !== false ? parseDuration(runsEvery) : null);
+  const specPoll = pollMs ? createSpecPoll({ config, where, auth, hooks, runs, specs: specMs !== null, intervalMs: pollMs, now: opts.now, timer: opts.specPollTimer }) : null;
+  let serverClosed = false;
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
   const houseFile = houseSource && houseSource.options && houseSource.options.file ? inside(root, houseSource.options.file) : null;
@@ -196,8 +209,14 @@ export function createCornfieldServer(config, opts = {}) {
       else res.end();
     }
   });
-  server.on('listening', () => specPoll?.start());
-  server.on('close', () => { specPoll?.close(); lander?.close(); hooks?.close(); auth.close(); });
+  server.on('listening', () => {
+    if (specMs !== null) specPoll?.start();
+    else if (specPoll && runs) {
+      // Runs asked for before a restart are followed again from the start
+      runs.hasWork().then((work) => { if (work && !serverClosed) specPoll.start(); }).catch(() => {});
+    }
+  });
+  server.on('close', () => { serverClosed = true; specPoll?.close(); lander?.close(); hooks?.close(); auth.close(); });
   return server;
 
   async function answer(req, res) {
@@ -234,12 +253,15 @@ export function createCornfieldServer(config, opts = {}) {
     }
     // The review API takes a token, not a session: it is the one route before the guard (and it reads no cookie)
     if (reqPath === REVIEWS_PATH) return serveReviewCall(req, res, { config, where, auth, hooks, lander, now: opts.now });
+    // …and so does asking for a run: an agent token, not a session
+    if (reqPath === REQUESTS_PATH) return serveAgentCall(req, res, { config, auth, runs, now: opts.now });
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
     if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost })) return;
+    if (await serveRunRoutes(req, res, reqPath, { config, auth, runs, session: gate.session, now: opts.now, publicHost })) return;
     if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;

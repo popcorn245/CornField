@@ -13,7 +13,7 @@
  *     },
  *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'; baseBranch: 'main'
  *     deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } },   // which workflow runs are deploys, and what they restart (docs/deploys.md)
- *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md)
+ *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md); and how runs are asked for and followed: transport, maxOpen, profiles, runners, quietAfter, limits (docs/config.md#agents)
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
@@ -39,6 +39,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { PROFILE_SOURCE, MAX_NUMBER } from './agent-contract.js';
 
 export const CONFIG_FILE = 'cornfield.config.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,7 +67,7 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
 /** The most hooks a config lists */
 export const MAX_HOOKS = 20;
 /** The bounds of `hookPoll.specs` in milliseconds: not under a minute (the forge is not hammered), not over an hour */
@@ -97,6 +98,25 @@ export function specPollMs(config) {
   return wanted && every !== false ? parseDuration(every ?? DEFAULTS.hookPoll.specs) : null;
 }
 
+/** How a request reaches a runner: the forge only for now (spec 0005 D2; push and pull come with #81) */
+export const AGENT_TRANSPORTS = Object.freeze(['forge']);
+/** `agents.maxOpen`: the most open runs per repo cornfield will ask for, by default and at most */
+export const DEFAULT_MAX_OPEN = 3;
+export const MAX_OPEN_CEILING = 100;
+/** `agents.quietAfter`: how long a run may show no report, push or pull request activity before it is quiet; its bounds in milliseconds */
+export const DEFAULT_QUIET_AFTER = '24h';
+export const QUIET_MIN_MS = 5 * 60_000;
+export const QUIET_MAX_MS = 30 * 24 * 3_600_000;
+/** The most profiles and runners a config lists */
+export const MAX_PROFILES = 20;
+export const MAX_RUNNERS = 50;
+
+/**
+ * How long a run may be silent before it is quiet, in milliseconds: `agents.quietAfter`, '24h' unless set.
+ * @param {{ agents?: { quietAfter?: string } }} config a loaded config
+ */
+export const quietAfterMs = (config) => parseDuration(config.agents?.quietAfter ?? DEFAULT_QUIET_AFTER) ?? parseDuration(DEFAULT_QUIET_AFTER);
+
 export const DEFAULTS = Object.freeze({
   title: null,
   derivers: ['starter', 'personas', 'cloud'],
@@ -112,7 +132,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
-  agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {} },
   hooks: [],
   hookPoll: { specs: '5m' },
   links: [],
@@ -124,7 +144,8 @@ export const DEFAULTS = Object.freeze({
 const KEYS = Object.keys(DEFAULTS);
 /** The keys of `proposals` when it is an object: the folder, and whether an approval also lands the spec PR (opt-in, off unless true) */
 export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits'];
+const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 /** A path inside the repo: relative, forward slashes, no `..` segment */
@@ -184,7 +205,7 @@ export function configProblems(c) {
     }
   }
   if (c.agents !== undefined) {
-    if (!isObject(c.agents)) out.push('"agents" is { authors, labels, branchPrefixes, bots }.');
+    if (!isObject(c.agents)) out.push(`"agents" is { ${AGENT_KEYS.join(', ')} }.`);
     else {
       for (const k of Object.keys(c.agents)) if (!AGENT_KEYS.includes(k)) out.push(`agents.${k}: the keys are ${AGENT_KEYS.join(', ')}.`);
       for (const k of ['authors', 'labels', 'branchPrefixes']) {
@@ -196,6 +217,7 @@ export function configProblems(c) {
         }
       }
       if (c.agents.bots !== undefined && typeof c.agents.bots !== 'boolean') out.push('agents.bots is true or false: whether a bot account ("[bot]" or the forge\'s Bot type) counts as an agent.');
+      out.push(...agentRunProblems(c.agents));
     }
   }
   if (c.deploys !== undefined && c.deploys !== null) {
@@ -275,6 +297,38 @@ export function configProblems(c) {
   }
   if (c.personas !== undefined && (!isObject(c.personas) || (c.personas.roles != null && (!Array.isArray(c.personas.roles) || !c.personas.roles.every(isText))))) {
     out.push('"personas" is { roles: ["admin", …] | null, parent? }.');
+  }
+  return out;
+}
+
+/** What is wrong with the keys of `agents` that ask for and follow runs (spec 0005), in words */
+function agentRunProblems(a) {
+  const out = [];
+  if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(' or ')}: a request is posted on the forge (push and pull come later).`);
+  if (a.maxOpen !== undefined && !(Number.isInteger(a.maxOpen) && a.maxOpen >= 1 && a.maxOpen <= MAX_OPEN_CEILING)) out.push(`agents.maxOpen is a whole number from 1 to ${MAX_OPEN_CEILING}: the most open runs cornfield asks for at once (${DEFAULT_MAX_OPEN} unless set).`);
+  if (a.profiles !== undefined) {
+    if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {
+      out.push(`agents.profiles is a list of at most ${MAX_PROFILES} different names ("claude", "local-qwen"): letters, digits and . _ -, at most 64 characters each. The runner maps each to a model; cornfield only knows the name.`);
+    }
+  }
+  if (a.runners !== undefined) {
+    if (!Array.isArray(a.runners) || a.runners.length > MAX_RUNNERS || !a.runners.every((r) => isText(r) && r === r.trim() && !/[\s,]/.test(r))) {
+      out.push(`agents.runners is a list of at most ${MAX_RUNNERS} forge logins ("claude-bot"), the runners' own accounts whose reports count besides a maintainer's.`);
+    }
+  }
+  if (a.quietAfter !== undefined) {
+    const ms = parseDuration(a.quietAfter);
+    if (ms === null) out.push('agents.quietAfter is a duration like "90m", "24h" or "72h".');
+    else if (ms < QUIET_MIN_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is under the floor of 5m; use "5m" or more.`);
+    else if (ms > QUIET_MAX_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is over the ceiling of 30 days; use "720h" or less.`);
+  }
+  if (a.limits !== undefined) {
+    if (!isObject(a.limits)) out.push('agents.limits is { minutes?, turns?, cost? }: hints the runner may enforce.');
+    else {
+      for (const k of Object.keys(a.limits)) if (!['minutes', 'turns', 'cost'].includes(k)) out.push(`agents.limits.${k}: the keys are minutes, turns, cost.`);
+      for (const k of ['minutes', 'cost']) if (a.limits[k] !== undefined && !(typeof a.limits[k] === 'number' && Number.isFinite(a.limits[k]) && a.limits[k] > 0)) out.push(`agents.limits.${k} is a number above zero.`);
+      if (a.limits.turns !== undefined && !(Number.isInteger(a.limits.turns) && a.limits.turns > 0 && a.limits.turns <= MAX_NUMBER)) out.push('agents.limits.turns is a whole number above zero.');
+    }
   }
   return out;
 }

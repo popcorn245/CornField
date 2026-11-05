@@ -81,6 +81,9 @@ const FILE_STATUS = { added: 'added', copied: 'added', deleted: 'removed', remov
 const toFile = (f) => ({ path: f.filename, status: FILE_STATUS[f.status] || 'modified', previousPath: f.previous_filename || null, additions: f.additions ?? 0, deletions: f.deletions ?? 0 });
 
 /** @returns {import('./forge.js').Comment} */
+/** @returns {import('./forge.js').PullCommit} */
+const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '' });
+
 const toComment = (c) => ({ id: String(c.id), author: author(c.user), body: c.body ?? '', url: c.html_url, createdAt: c.created_at, updatedAt: c.updated_at });
 
 // A warning does not count as passing, so it stands in the way like a failure
@@ -214,6 +217,10 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
 
     async pullFiles(n) {
       return (await client.list(`repos/${repo}/pulls/${n}/files?limit=${PER_PAGE}`, { what: `the files of ${pullWhat(n)}` })).map(toFile);
+    },
+
+    async pullCommits(n) {
+      return (await client.list(`repos/${repo}/pulls/${n}/commits?limit=${PER_PAGE}`, { what: `the commits of ${pullWhat(n)}` })).map(toCommit);
     },
 
     async comments(n) {

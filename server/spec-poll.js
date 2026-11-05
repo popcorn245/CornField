@@ -17,6 +17,10 @@
  * token is only ever asked those two questions, never used to list. With no such session the tick does nothing and says so
  * once for the stretch (and once more when a session is back). Whose sign-in it looks with is logged each time that changes.
  *
+ * **It also follows agent runs** (issue #80, server/agent-runs.js): when there is a run to look at (`runs.hasWork()`, a question of the
+ * database alone, so an idle repo costs the forge nothing), the same tick hands the same maintainer's forge to `runs.follow`, which reads the
+ * runs' comments and pull requests. A server with no `spec.ready` hook still polls for runs (`specs: false`) and then does nothing else.
+ *
  * **Never in the way.** One tick runs at a time (the next is scheduled when one ends, so a slow forge cannot pile them up).
  * A forge error is logged and never thrown; the next tick waits twice the interval until one succeeds. The timer is
  * unref'd and `close()` clears it.
@@ -38,14 +42,17 @@ const words = (err) => (err instanceof Error ? err.message : String(err));
  *   config: any,
  *   where: { proposals: string },
  *   auth: { store: () => Promise<import('node:sqlite').DatabaseSync>, forgeForUser: (userId: string) => Promise<import('./forge.js').Forge> },
- *   hooks: import('./hooks.js').Hooks,
+ *   hooks: import('./hooks.js').Hooks | null,
+ *   runs?: { hasWork: () => Promise<boolean>, follow: (forge: import('./forge.js').Forge) => Promise<unknown> } | null,
+ *   specs?: boolean,
  *   intervalMs: number,
  *   now?: () => number,
  *   timer?: { setTimeout: Function, clearTimeout: Function },
  *   firstMs?: number,
- * }} opts `now`, `timer` and `firstMs` are the tests' clock
+ * }} opts `now`, `timer` and `firstMs` are the tests' clock; `runs` is the agent runs engine, whose runs are followed on the same tick, and
+ *   `specs: false` leaves the spec PRs alone (no hook wants `spec.ready`), so only the runs are looked at
  */
-export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = Date.now, timer = { setTimeout, clearTimeout }, firstMs = FIRST_MS }) {
+export function createSpecPoll({ config, where, auth, hooks, runs = null, specs = true, intervalMs, now = Date.now, timer = { setTimeout, clearTimeout }, firstMs = FIRST_MS }) {
   const repo = config.forge.repo;
   const log = (what) => console.error(`[cornfield] spec.ready poll: ${what}`);
   let handle = null;
@@ -73,6 +80,14 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
 
   /** One look. Resolves to what happened; never rejects. */
   async function look() {
+    // Nothing to look at: no forge call is made (an idle repo with only runs to follow costs nothing)
+    let followRuns = false;
+    try {
+      followRuns = Boolean(runs) && await /** @type {NonNullable<typeof runs>} */ (runs).hasWork();
+    } catch (err) {
+      log(`the runs could not be counted: ${words(err)}`);
+    }
+    if (!specs && !followRuns) return 'ok';
     let found;
     try {
       found = await maintainerForge();
@@ -92,17 +107,28 @@ export function createSpecPoll({ config, where, auth, hooks, intervalMs, now = D
     noSession = false;
     if (found.login !== lookingAs) log(`looking at the open spec PRs with the sign-in of @${found.login}, a maintainer`);
     lookingAs = found.login;
-    try {
-      const { problem } = await listPullProposals(found.forge, where, { hooks });
-      if (problem) {
-        log(`the forge could not be asked: ${problem}`);
-        return 'error';
+    let out = 'ok';
+    if (specs) {
+      try {
+        const { problem } = await listPullProposals(found.forge, where, { hooks });
+        if (problem) {
+          log(`the forge could not be asked: ${problem}`);
+          out = 'error';
+        }
+      } catch (err) {
+        log(`failed: ${words(err)}`);
+        out = 'error';
       }
-      return 'ok';
-    } catch (err) {
-      log(`failed: ${words(err)}`);
-      return 'error';
     }
+    if (followRuns && !closed) {
+      try {
+        await /** @type {NonNullable<typeof runs>} */ (runs).follow(found.forge);
+      } catch (err) {
+        log(`the runs could not be followed: ${words(err)}`);
+        out = 'error';
+      }
+    }
+    return out;
   }
 
   function schedule(ms) {

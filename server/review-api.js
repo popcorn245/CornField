@@ -8,6 +8,8 @@
  *   GET  /api/review-tokens              the signed-in maintainer's tokens: id, label, made, expires, revoked, last used (never a secret)
  *   POST /api/review-tokens              { label, days? } -> the new token, in this answer only
  *   POST /api/review-tokens/<id>/revoke  ends one of theirs for good
+ *   *    /api/agent-tokens…                  the same three for tokens of the other scope: an agent token asks for runs
+ *                                        (`POST /api/agent-requests`, server/agent-api.js) and is no good here, as a review token is no good there
  *
  * **The call takes the token and nothing else.** It runs before the sign-in guard (a script has no cookie) and reads no
  * cookie: a session cookie is never a substitute for the token, and a request that sends only one is 401. Being no
@@ -41,6 +43,7 @@ import { Refused, countAttempt } from './throttle.js';
 
 export const REVIEWS_PATH = '/api/reviews';
 export const TOKENS_PATH = '/api/review-tokens';
+export const AGENT_TOKENS_PATH = '/api/agent-tokens';
 /** Calls with no token, or one nobody holds, that are written down in a minute, all callers together */
 export const ANONYMOUS_PER_MINUTE = 20;
 /** What the audit row of a call nobody could name says in place of a login */
@@ -101,6 +104,15 @@ export async function serveReviewCall(req, res, ctx) {
 
   const { row, state } = found;
   const token = { id: row.id, label: row.label };
+  // An agent token asks for runs and is no review token: refused whatever its state, and not counted as used
+  if (row.scope !== 'review') {
+    req.resume();
+    const flood = countAttempt(ctx, row.user_id, now());
+    if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
+    const body = { error: `This is an ${row.scope} token. Reviews take a review token; make one in the dashboard.`, code: 'forbidden' };
+    await audit(row.login, { reason: 'wrong-scope', token, scope: row.scope }, 403, body);
+    return send(res, 403, { ok: false, ...body });
+  }
   if (state !== 'active') {
     req.resume();
     const flood = countAttempt(ctx, row.user_id, now());
@@ -159,7 +171,7 @@ function inputOf(text) {
 // ---------------------------------------------------------------------------
 
 /** What a token looks like to the dashboard: no hash, no secret */
-const publicToken = ({ id, login, label, created_at, expires_at, revoked_at, last_used, state }) => ({ id, login, label, created: created_at, expires: expires_at, revoked: revoked_at, lastUsed: last_used, state });
+const publicToken = ({ id, login, label, scope, created_at, expires_at, revoked_at, last_used, state }) => ({ id, login, label, scope, created: created_at, expires: expires_at, revoked: revoked_at, lastUsed: last_used, state });
 
 /**
  * The `/api/review-tokens` routes. The caller has passed the sign-in guard, so `session` is a maintainer's.
@@ -170,8 +182,10 @@ const publicToken = ({ id, login, label, created_at, expires_at, revoked_at, las
  * @returns {Promise<boolean>} whether the path was one of these
  */
 export async function serveTokenRoutes(req, res, reqPath, ctx) {
-  const revoke = /^\/api\/review-tokens\/([1-9]\d{0,9})\/revoke$/.exec(reqPath);
-  if (reqPath !== TOKENS_PATH && !revoke) return false;
+  const revoke = /^\/api\/(review|agent)-tokens\/([1-9]\d{0,9})\/revoke$/.exec(reqPath);
+  if (reqPath !== TOKENS_PATH && reqPath !== AGENT_TOKENS_PATH && !revoke) return false;
+  /** @type {'review' | 'agent'} the scope of the tokens this path is about */
+  const scope = revoke ? /** @type {'review' | 'agent'} */ (revoke[1]) : reqPath === AGENT_TOKENS_PATH ? 'agent' : 'review';
   const { config, auth, session } = ctx;
   const now = ctx.now ?? Date.now;
   const allow = revoke ? 'POST' : 'GET, POST';
@@ -183,12 +197,12 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
   }
   if (!session || !auth.store) {
     req.resume();
-    send(res, 403, { ok: false, error: 'Review tokens belong to a signed-in maintainer: set up sign-in first (docs/sign-in.md).', code: 'forbidden' });
+    send(res, 403, { ok: false, error: `${scope === 'agent' ? 'Agent' : 'Review'} tokens belong to a signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
     return true;
   }
   const db = await auth.store();
   if (method === 'GET') {
-    send(res, 200, { ok: true, tokens: listTokens(db, session.userId, now()).map(publicToken), defaultDays: DEFAULT_DAYS, maxDays: MAX_DAYS, maxActive: MAX_ACTIVE });
+    send(res, 200, { ok: true, tokens: listTokens(db, session.userId, now(), scope).map(publicToken), defaultDays: DEFAULT_DAYS, maxDays: MAX_DAYS, maxActive: MAX_ACTIVE });
     return true;
   }
 
@@ -200,7 +214,7 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
     return true;
   }
   const what = revoke ? 'revoke' : 'mint';
-  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(revoke ? { id: Number(revoke[1]) } : {}) });
+  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(scope === 'agent' ? { scope } : {}), ...(revoke ? { id: Number(revoke[2]) } : {}) });
   let rowId = null;
   /** @type {{ status: number, body: object }} */
   let out;
@@ -219,10 +233,10 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
     const forge = auth.forgeFor(session);
     const me = await forge.me();
     if (String(me.id) !== String(session.userId)) throw new Refused(403, 'The forge says this sign-in is someone else now; sign in again.', 'forbidden');
-    if (!isMaintainer(await forge.permission(config.forge.repo, me.login))) throw new Refused(403, `Only the repo's maintainers make review tokens; ${me.login} is not one now.`, 'forbidden');
+    if (!isMaintainer(await forge.permission(config.forge.repo, me.login))) throw new Refused(403, `Only the repo's maintainers make ${scope} tokens; ${me.login} is not one now.`, 'forbidden');
     if (revoke) {
-      const done = revokeToken(db, session.userId, Number(revoke[1]), now());
-      if (!done) throw new Refused(404, 'You have no review token by that number.', 'not-found');
+      const done = revokeToken(db, session.userId, Number(revoke[2]), now(), scope);
+      if (!done) throw new Refused(404, `You have no ${scope} token by that number.`, 'not-found');
       request.label = done.label;
       out = { status: 200, body: { ok: true, token: publicToken(done) } };
     } else {
@@ -239,7 +253,7 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
       Object.assign(request, { label: body.label, days });
       let made;
       try {
-        made = mintToken(db, { userId: session.userId, login: me.login, label: body.label, days }, now());
+        made = mintToken(db, { userId: session.userId, login: me.login, label: body.label, days, scope }, now());
       } catch (err) {
         if (err instanceof RangeError) throw new Refused(409, err.message, 'conflict');
         throw err;

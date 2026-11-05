@@ -66,6 +66,9 @@ const toPull = (p) => ({
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
 });
 
+/** @returns {import('./forge.js').PullCommit} */
+const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '' });
+
 const FILE_STATUS = { added: 'added', copied: 'added', removed: 'removed', renamed: 'renamed', modified: 'modified', changed: 'modified', unchanged: 'modified' };
 /** @returns {import('./forge.js').PullFile} */
 const toFile = (f) => ({ path: f.filename, status: FILE_STATUS[f.status] || 'modified', previousPath: f.previous_filename ?? null, additions: f.additions ?? 0, deletions: f.deletions ?? 0 });
@@ -227,6 +230,10 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
 
     async pullFiles(n) {
       return (await client.list(`repos/${repo}/pulls/${n}/files?per_page=${PER_PAGE}`, { what: `the files of ${pullWhat(n)}` })).map(toFile);
+    },
+
+    async pullCommits(n) {
+      return (await client.list(`repos/${repo}/pulls/${n}/commits?per_page=${PER_PAGE}`, { what: `the commits of ${pullWhat(n)}` })).map(toCommit);
     },
 
     async comments(n) {

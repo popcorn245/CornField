@@ -132,6 +132,13 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       ]);
     });
 
+    it('pullCommits(): the shas and the whole messages, oldest first (a trailer is in the body of one)', async () => {
+      const commits = await forge.pullCommits(12);
+      expect(commits.map((c) => c.sha)).toEqual([`c1${'0'.repeat(38)}`, `c2${'0'.repeat(38)}`]);
+      expect(commits[0].message).toBe('Add the meals page');
+      expect(commits[1].message).toBe('Wire it up\n\nCornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF');
+    });
+
     it('comments(): oldest first, with their text as written', async () => {
       const comments = await forge.comments(12);
       expect(comments.map((c) => [c.id, c.author?.login])).toEqual([['9001', 'agent-four'], ['9002', 'maintainer-one']]);

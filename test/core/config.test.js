@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
@@ -123,15 +123,16 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {} };
+    expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
-    expect(c.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    expect(c.agents).toEqual(defaults);
     expect(c.agents).not.toBe(DEFAULTS.agents);
   });
 
   it('take the keys of the file over the defaults, and the rest stay', async () => {
     const c = await loadConfig(repo("export default { agents: { branchPrefixes: ['claude/'], labels: ['agent', 'needs human'], bots: false } };"), { env: {} });
-    expect(c.agents).toEqual({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false });
+    expect(c.agents).toMatchObject({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false, maxOpen: 3, quietAfter: '24h' });
   });
 
   it('are checked: the shape, the keys, and what a name may be', () => {

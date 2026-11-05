@@ -41,7 +41,7 @@ describe('review tokens', () => {
       expect(stored.token_hash).toBe(createHash('sha256').update(token).digest('hex'));
       expect(stored.token_hash).toBe(hashToken(token));
       expect(Object.values(stored).some((v) => typeof v === 'string' && v.includes(token.slice(TOKEN_PREFIX.length)))).toBe(false);
-      expect(row).toEqual({ id: row.id, user_id: '1001', login: 'maintainer-one', label: 'chat bot', created_at: new Date(T0).toISOString(), expires_at: new Date(T0 + 30 * DAY).toISOString(), revoked_at: null, last_used: null });
+      expect(row).toEqual({ id: row.id, user_id: '1001', login: 'maintainer-one', label: 'chat bot', scope: 'review', created_at: new Date(T0).toISOString(), expires_at: new Date(T0 + 30 * DAY).toISOString(), revoked_at: null, last_used: null });
       expect(Object.keys(row)).not.toContain('token_hash');
     });
 
