@@ -93,6 +93,14 @@ This changes the earlier plan (the vision and #14) to keep threads in cornfield'
 - **Requests carry an optional `profile`** from a list the developer names (`agents.profiles: ['claude', 'local-qwen']`). The runner maps each name to a model, a machine and a budget; cornfield only knows the name.
 - **Side by side:** the same request started under two profiles is two runs, shown next to each other (branches, checks, any reported cost, and their diffs on the map). That answers the #14 comment about starting on Claude, moving to Ollama, and running both in parallel to compare.
 
+### D9. What cornfield shows of a run: the map in flight, never the logs (2026-11-05)
+
+- **Runs in flight on the map.** Nodes an open run is changing pulse, worked out from the branch diff each time it pushes. Before the first push, the nodes come from what the request was about (the proposal, or the thread's mentions).
+- **Collisions.** Two open runs touching the same node both carry a warning mark. Refusing a request whose nodes overlap an open run is an option, **off by default**.
+- **A Runs view** in the Agents tab. It shows each run's state, profile, limits beside what was reported, the thread it came from, its branch and pull request, and its checks. Runs of the same request under two profiles sit side by side.
+- **A timeline per run:** requested, claimed, the runner's reports, pushes, the pull request, checks, review, landed. It is built from forge events plus whatever the runner reports.
+- **Not shown:** live logs, because the runner's `url` links out to its own; and chat with an agent inside cornfield, because talking to a run is commenting in its thread on the forge (D6).
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -106,5 +114,5 @@ The tree, roughly in the order each answer unlocks the next:
 6. ~~Who writes in a thread, and how.~~ D6: anyone, on the forge, as themselves.
 7. ~~How a thread connects to issues, nodes, proposals and runs.~~ D7.
 8. ~~Models.~~ D8.
-9. What cornfield shows of a run while it is going.
+9. ~~What cornfield shows of a run while it is going.~~ D9.
 10. The safe-actions line (ADR 0006) for v2.
