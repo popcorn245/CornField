@@ -322,6 +322,19 @@ describe('the timeline', () => {
     expect(Date.parse(quiet.timeline.at(-1).at)).toBeGreaterThan(Date.parse(quiet.timeline[1].at));
   });
 
+  it('a forge answer missing a field (a pull request with no time) does not stop the look: the run is followed, the event dated when seen', async () => {
+    const t = setup();
+    const a = await t.ask({ refs: { issue: 12 } });
+    t.world.pulls = [pr(a.id, { createdAt: undefined, updatedAt: undefined, author: { login: 'runner-bot', html_url: { odd: true } } })];
+    t.world.files.set(50, [{ path: 'server/orders.js', status: 'modified', previousPath: null }]);
+    t.wait(300_000);
+    await t.follow();
+    const run = await t.runs.get(a.id);
+    expect(run.pull).toMatchObject({ number: 50 });
+    const opened = run.timeline.find((e) => e.kind === 'pull-opened');
+    expect(opened.at).toBe(new Date(t.clock.now).toISOString());
+  });
+
   it('is in the list as well as the run, and holds nothing of a credential', async () => {
     const t = setup();
     const a = await t.ask({ refs: { issue: 12 } });

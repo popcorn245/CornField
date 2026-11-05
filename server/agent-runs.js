@@ -347,8 +347,12 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
 
   /** Writes what happened to a run, once: the key says what, so a second look at the same thing adds nothing */
   function keepEvent(db, runId, ev) {
+    // A forge's answer may lack a field (a pull request with no `createdAt`): the timeline then says when cornfield saw it, and a value
+    // that is not text is left out. One odd answer must never throw out of the look, or every run's state in it would be lost
+    const text = (v) => (typeof v === 'string' && v !== '' ? v : v == null ? null : typeof v === 'number' ? String(v) : null);
+    const at = typeof ev.at === 'string' && !Number.isNaN(Date.parse(ev.at)) ? ev.at : iso(now());
     db.prepare('INSERT OR IGNORE INTO run_events (run_id, key, at, kind, actor, ref, note, url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(runId, ev.key, ev.at, ev.kind, ev.actor ?? null, ev.ref ?? null, ev.note ?? null, ev.url ?? null);
+      .run(runId, String(ev.key), at, ev.kind, text(ev.actor), text(ev.ref), text(ev.note), text(ev.url));
   }
 
   /**
