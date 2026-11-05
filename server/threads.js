@@ -14,7 +14,8 @@
  * **Nothing here is stored.** The forge is read with the signed-in maintainer's own token, through the interface
  * (server/forge.js); SQLite only caches answers (`forge_cache`, server/forge-routes.js) and remembers which events a hook sent
  * (`thread_seen`, server/hooks.js). The one write is `createIdea`: an issue with the idea label, as the maintainer, which adds
- * and changes nothing that exists.
+ * and changes nothing that exists (the label itself is made first when the repo lacks it: by the forge on GitHub, by the
+ * adapter on Forgejo, which says so in `labelsMade`). No read ever writes.
  *
  * **One look, two doors.** `gatherThreads` reads the ideas and the spec PRs' conversations. The dashboard's list calls it for
  * everything (so a node's "Mentioned in" is complete); the poll (server/spec-poll.js) calls it with the cursors the database

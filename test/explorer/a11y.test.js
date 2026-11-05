@@ -465,7 +465,8 @@ describe('the issues and PRs panel', () => {
     });
   });
 
-  it('has none with the pipeline\'s steps: Start a spec on an issue and Open the build issue on an approved spec, each with its confirm step open, in both themes', async () => {
+  // The pipeline's steps (PIPE-05): the same page for both, each step a test of its own so each fits the suite's time limit
+  const pipelinePage = async () => {
     const spec = { number: 40, title: 'Meals spec', state: 'open', draft: true, author, labels: [], head: { ref: 'spec/0040-meals', sha: 'abc' }, base: { ref: 'main' }, url: 'https://git.example.test/pull/40', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null };
     const SPEC_PLAN = { kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/issues/7' }, base: 'main', branch: 'spec/0007-meals-page', path: 'docs/specs/proposals/0007-meals-page.json', message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft pull request.', content: '{\n  "version": 1,\n  "title": "Meals page"\n}\n', existing: null };
     const BUILD_PLAN = { kind: 'build', digest: 'b'.repeat(32), pull: { number: 40, title: 'Meals spec', url: spec.url }, slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', sha: 'abc', review: { by: 'maintainer-one', url: 'https://git.example.test/c/1', at: '2026-10-19T10:00:00Z' }, title: 'Build: Meals', body: 'Build the approved proposal `0040-meals`.\n\n## Nodes\n\n- [ ] Add `page-meals`\n', items: 1, existing: null };
@@ -484,6 +485,11 @@ describe('the issues and PRs panel', () => {
     openForge();
     await settle();
     const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return click;
+  };
+
+  it('has none with the pipeline\'s Start a spec on an issue, its confirm step open, in both themes', async () => {
+    const click = await pipelinePage();
     click('[data-forge-kind="issues"]');
     await settle();
     expect(document.querySelectorAll('[data-forge-spec]').length).toBe(1);
@@ -500,6 +506,11 @@ describe('the issues and PRs panel', () => {
       expect($('forge-confirm').hidden).toBe(true);
       expect(document.activeElement).toBe(document.querySelector('[data-forge-spec="7"]'));
     }
+  });
+
+  it('has none with the pipeline\'s Open the build issue on an approved spec, its confirm step open, in both themes', async () => {
+    const click = await pipelinePage();
+    document.documentElement.dataset.theme = 'light'; // as the spec step left it: light first, then dark
     click('[data-forge-kind="pulls"]');
     await settle();
     click('[data-forge-pr="40"]');
@@ -516,7 +527,7 @@ describe('the issues and PRs panel', () => {
       expect($('forge-confirm').hidden).toBe(true);
     }
     expect(await audit()).toEqual([]);
-  }, 60_000); // axe walks the panel in both themes: slow on a loaded machine
+  });
 
   it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {
     stub();

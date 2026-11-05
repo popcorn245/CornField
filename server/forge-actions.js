@@ -40,7 +40,8 @@
  * One more write is not about a pull request: **a new idea** (docs/threads.md), `POST /api/forge/threads { title, body }`, which opens an issue
  * with the threads label as the signed-in maintainer (`serveIdea`, below). It goes through the same doors, in the same order:
  * POST, signed in, the flood ceiling, an audit row begun, same origin, JSON (here up to 32 KB), not twice, the permission asked of
- * the forge now. The row keeps the title and the text's length, never the text. It only adds an issue.
+ * the forge now. The row keeps the title and the text's length, never the text. It only adds: an issue, and on Forgejo the
+ * threads label first when the repo lacks it (the answer, and so the row, says `labelsMade`).
  *
  * A pull request lands by the config's `forge.mergeMethod` (`merge`, `squash` or `rebase`; `merge` when unset), the way
  * the repo lands its pull requests; the forge refuses a method the repo does not allow, in its own words.
@@ -365,7 +366,8 @@ export async function serveIdea(req, res, ctx, send) {
     await assertMaintainerNow(forge, session, config, 'idea');
     const issue = await createIdea(forge, config, idea);
     await forgetKept(auth, config);
-    out = { status: 201, body: { ok: true, action: 'idea', created: true, number: issue.number, issue: { number: issue.number, title: issue.title, url: issue.url } } };
+    // A label the forge did not have yet and that cornfield made for it (Forgejo) is part of the answer, and so of the audit row
+    out = { status: 201, body: { ok: true, action: 'idea', created: true, number: issue.number, issue: { number: issue.number, title: issue.title, url: issue.url }, ...(issue.labelsMade ? { labelsMade: issue.labelsMade } : {}) } };
   } catch (err) {
     if (err instanceof Refused) out = { status: err.status, body: { ok: false, error: err.message, code: err.code }, headers: err.headers };
     else if (err instanceof ForgeError) {

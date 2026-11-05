@@ -232,6 +232,8 @@ export function linksOf(texts) {
  */
 export function threadOfPull(body) {
   const { prose } = scan(body);
-  const m = /(?:^|[\s(])(?:thread\s*:|(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?)\s+#([1-9]\d{0,8})\b/i.exec(prose);
+  // `(?:\s*:)?\s+` and not `\s*:?\s+`: two whitespace runs side by side backtrack against each other, which made a long
+  // run of spaces after "Closes" (or a code block, blanked to spaces) quadratic; this way each run is read once
+  const m = /(?:^|[\s(])(?:thread\s*:|(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:)?)\s+#([1-9]\d{0,8})\b/i.exec(prose);
   return m ? Number(m[1]) : null;
 }

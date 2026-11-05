@@ -295,6 +295,27 @@ describe('the hooks', () => {
     expect(s.of('thread.linked')).toHaveLength(1);
   });
 
+  it('a comment deleted on the forge is simply gone: no event, no failure, and the next comment is still announced', async () => {
+    const s = site();
+    const { hooks } = s.boot();
+    const w = world();
+    const forge = fakeForge(w);
+    await look(forge, hooks);
+    // The comment that was seen is deleted; the thread changes
+    w.issues[0] = { ...w.issues[0], comments: 0, updatedAt: '2026-11-08T09:00:00Z' };
+    w.comments[41] = [];
+    const got = await look(forge, hooks);
+    expect(got.problem).toBe(null);
+    expect(s.sent).toEqual([]);
+    // A new one after it is still news, once
+    w.issues[0] = { ...w.issues[0], comments: 1, updatedAt: '2026-11-08T10:00:00Z' };
+    w.comments[41] = [comment(9102, 'after the delete [[page-web-cart]]', '2026-11-08T10:00:00Z')];
+    await look(forge, hooks);
+    await look(forge, hooks);
+    expect(s.of('thread.message').map((e) => e.comment)).toEqual(['9102']);
+    expect(s.of('thread.linked')).toHaveLength(1);
+  });
+
   it('only a hook that asked for an event gets it; the rows are still kept', async () => {
     const s = site(['thread.message']);
     const { hooks, db } = s.boot();

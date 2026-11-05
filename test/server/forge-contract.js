@@ -257,8 +257,9 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
     });
 
     it('createIssue(): with labels, by name on GitHub and by id on Forgejo (a label the repo lacks is made first)', async () => {
-      await forge.createIssue({ title: 'An idea', body: 'what if', labels: ['idea'] });
+      const first = await forge.createIssue({ title: 'An idea', body: 'what if', labels: ['idea'] });
       const issue = sent('POST').find((r) => r.url.endsWith('/issues'));
+      expect(first.labelsMade).toBeUndefined(); // nothing was made by cornfield
       if (type === 'github') {
         expect(JSON.parse(issue.body)).toEqual({ title: 'An idea', body: 'what if', labels: ['idea'] });
         return;
@@ -267,8 +268,9 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(JSON.parse(issue.body)).toEqual({ title: 'An idea', body: 'what if', labels: [7] });
       expect(sent('POST').filter((r) => r.url.endsWith('/labels'))).toEqual([]);
       fake.requests.length = 0;
-      await forge.createIssue({ title: 'Another', body: 'b', labels: ['rfc', 'v1'] });
+      const second = await forge.createIssue({ title: 'Another', body: 'b', labels: ['rfc', 'v1'] });
       expect(JSON.parse(sent('POST').find((r) => r.url.endsWith('/labels')).body)).toMatchObject({ name: 'rfc' });
+      expect(second.labelsMade).toEqual(['rfc']); // the label cornfield made is said, for the audit row
       expect(JSON.parse(sent('POST').find((r) => r.url.endsWith('/issues')).body).labels).toEqual([9, 8]);
     });
 

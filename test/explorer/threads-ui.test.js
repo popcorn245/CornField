@@ -218,6 +218,28 @@ describe('a thread is read here and answered on the forge', () => {
     expect(await said()).toBe('Thread 41, Rework sign-in: 3 messages, 2 nodes lit, 1 named that is not on the map. Read-only: reply on GitHub.');
   });
 
+  it('names the configured forge, Forgejo too, in every link and word; a hostile mention stays text', async () => {
+    const hostile = (d) => ({ ...d, messages: [...d.messages, { id: '9666', author: user('<img src=x onerror=alert(1)>'), url: URL_OF(41), createdAt: '2026-10-19T11:00:00Z', updatedAt: '2026-10-19T11:00:00Z', body: 'see [[<img src=x onerror=alert(1)>]] and [["><script>alert(1)</script>]]' }] });
+    fakeServer({ detail: hostile });
+    mount({ forge: { type: 'forgejo', url: 'https://git.example.test', repo: 'owner/name' } });
+    await openThreads();
+    click(q('[data-forge-thread="41"]'));
+    await settle();
+    const detail = $('forge-detail');
+    const words = `${detail.textContent} ${[...detail.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).join(' ')} ${await said()}`;
+    expect(words).not.toContain('GitHub');
+    expect([...detail.querySelectorAll('a')].find((a) => a.textContent.startsWith('Reply on Forgejo'))).toBeTruthy();
+    expect(detail.querySelector('a[aria-label="Open this message on Forgejo (new tab)"]')).toBeTruthy();
+    expect(detail.textContent).toContain('a conversation on Forgejo');
+    // the mention and the login are text: nothing became an element
+    expect(detail.querySelector('img, script')).toBe(null);
+    expect(detail.textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(detail.textContent).toContain('"><script>alert(1)</script>');
+    // and New idea says where it will open the issue
+    click($('idea-open'));
+    expect($('idea-words').textContent).toBe('This opens an issue labelled "idea" on Forgejo, as you. The conversation lives there; cornfield keeps no copy of it.');
+  });
+
   it('lights the nodes its text mentions, outside code, the way a pull request lights its files', async () => {
     fakeServer();
     mount();

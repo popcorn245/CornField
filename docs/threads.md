@@ -1,6 +1,6 @@
 # Threads
 
-A thread is a conversation about an idea or a spec, and it lives on your forge. cornfield shows it next to the map, points it at the nodes it is about, and says when something new is said. It keeps none of it: delete cornfield and every thread is still there, on the forge, with the people and the tools that wrote it (spec 0005, decisions D6 and D7).
+A thread is a conversation about an idea or a spec, and it lives on your forge. cornfield shows it next to the map, points it at the nodes it is about, and says when something new is said. It keeps none of it: delete cornfield and every thread is still there, on the forge, with the people and the tools that wrote it ([spec 0005](specs/0005-threads-and-agents.md), decisions D6 and D7).
 
 It needs what the [issues and PRs panel](issues-and-prs.md) needs: a `forge` in the [config](config.md) and a signed-in maintainer ([sign-in](sign-in.md)). `threads: false` in the config turns it all off.
 
@@ -41,7 +41,7 @@ Mentions are resolved against the map **on screen**, so a proposal opened on the
 - **Opening a thread** shows its messages as they were written, read-only, oldest first: plain text (no Markdown is rendered and nothing in a message is made into markup or a link), cut at 20,000 characters a message, the latest 200 messages. There is nothing to type into: **Reply on GitHub** (or Forgejo) opens the thread on the forge, because that is where it is written.
 - **A thread lights the map.** Every node its messages mention gets the amber glow of a pull request's files, and the rest fades back. The panel lists those nodes, each a button that selects the node on the map; a mention on no node is listed as "not on the map". **Clear**, or the row again, lets go. One thing is lit at a time: a thread, a pull request or a deploy.
 - **A node's panel** has **Mentioned in** with the threads that mention the node (open ones). Each is a button that opens the thread in the panel. The list is read once, when you first select a node, and shared with the tab.
-- **New idea** opens an issue with the label as you, with a title and a text (the text may be left empty). It says exactly what it will do before it does it. Only the page's own POST can open one (below); the issue shows in the list within a minute, and the answer links to it. The idea is as you typed it: cornfield adds nothing to it.
+- **New idea** opens an issue with the label as you, with a title and a text (the text may be left empty). It says exactly what it will do before it does it. Only the page's own POST can open one (below); the issue shows in the list within a minute, and the answer links to it. The idea is as you typed it: cornfield adds nothing to it. If the repo has no label of that name yet, the label is made with the issue, as you: on GitHub the forge makes it; on Forgejo cornfield makes it first (plain grey), and the answer and its [audit row](issues-and-prs.md#the-audit) say `labelsMade`. Nothing else ever writes: reading threads, the list and the poll only read.
 
 ### What New idea asks of the server
 

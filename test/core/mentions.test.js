@@ -158,3 +158,28 @@ describe('threadOfPull', () => {
     expect(threadOfPull(undefined)).toBeNull();
   });
 });
+
+describe('hostile text costs about what its length does', () => {
+  // A pull request's text is up to 65,536 characters on the forges, and the poll reads every open spec PR's
+  const within = (ms, fn) => { const t = performance.now(); fn(); return performance.now() - t < ms; };
+
+  it('threadOfPull: a long run of spaces (or a code block, blanked to spaces) after "Closes" is read once, not quadratically', () => {
+    expect(within(300, () => threadOfPull(`Closes${' '.repeat(65000)}x`))).toBe(true);
+    expect(within(300, () => threadOfPull(`Fixes:${' '.repeat(65000)}x`))).toBe(true);
+    expect(within(300, () => threadOfPull(`Resolves \`${'a'.repeat(64000)}\` x`))).toBe(true);
+    expect(within(300, () => threadOfPull(`closes ${' '.repeat(30000)}`.repeat(2)))).toBe(true);
+    // and still reads what it should
+    expect(threadOfPull('Fixes   #9')).toBe(9);
+    expect(threadOfPull('closes:\n#8')).toBe(8);
+    expect(threadOfPull('thread #12')).toBeNull();
+  });
+
+  it('parseMentions: brackets by the thousand, an unclosed mention, backtick runs, open fences', () => {
+    expect(within(500, () => parseMentions(`[[${'a'.repeat(399)}`.repeat(160)))).toBe(true);
+    expect(within(500, () => parseMentions('[['.repeat(32000)))).toBe(true);
+    expect(within(500, () => parseMentions('[[x]]'.repeat(13000)))).toBe(true);
+    expect(within(1000, () => { let s = ''; for (let i = 1; s.length < 65000; i++) s += `${'`'.repeat(i)}a`; parseMentions(s); })).toBe(true);
+    expect(within(500, () => parseMentions('```\n'.repeat(16000)))).toBe(true);
+    expect(parseMentions('[[x]]'.repeat(13000)).refs).toEqual(['x']);
+  });
+});

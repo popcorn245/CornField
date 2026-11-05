@@ -143,12 +143,15 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
     return meOnce;
   };
 
-  /** The id of the repo's label called `name`, making the label (plain grey) when it is not there */
+  /**
+   * The id of the repo's label called `name`, making the label (plain grey) when it is not there: `{ id, made }`. Only
+   * `createIssue` calls this, so a label is only ever made on a write the maintainer asked for, never on a read.
+   */
   async function labelId(name) {
     const have = (await client.list(`repos/${repo}/labels?limit=${PER_PAGE}`, { what: `the labels of ${forge.repo}` })).find((l) => typeof l.name === 'string' && l.name.toLowerCase() === name.toLowerCase());
-    if (have) return have.id;
+    if (have) return { id: have.id, made: false };
     const { body } = await client.request('POST', `repos/${repo}/labels`, { body: { name, color: '#ededed' }, what: `the label ${name} in ${forge.repo}` });
-    return body.id;
+    return { id: body.id, made: true };
   }
 
   return {
@@ -218,10 +221,16 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
     },
 
     async createIssue({ title, body, labels = [] }) {
-      // Forgejo takes label ids, not names: each is looked up, and made when the repo lacks it
+      // Forgejo takes label ids, not names: each is looked up, and made when the repo lacks it; the issue says which were made
       const ids = [];
-      for (const name of labels) ids.push(await labelId(name));
-      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body, ...(ids.length ? { labels: ids } : {}) }, what: `an issue in ${forge.repo}` })).body);
+      const made = [];
+      for (const name of labels) {
+        const label = await labelId(name);
+        ids.push(label.id);
+        if (label.made) made.push(name);
+      }
+      const issue = toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body, ...(ids.length ? { labels: ids } : {}) }, what: `an issue in ${forge.repo}` })).body);
+      return made.length ? { ...issue, labelsMade: made } : issue;
     },
 
     async pullFiles(n) {

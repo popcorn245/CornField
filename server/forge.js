@@ -38,7 +38,8 @@
  *   createFile({ branch, path, content, message })   one new file on a branch, as one commit (`invalid` when it exists)
  *   createPull({ title, body, head, base, draft })   a pull request; a draft one is `draft: true` (Forgejo: the "WIP: " title it uses)
  *   createIssue({ title, body, labels })   an issue; `labels` (names) are put on it, a label the repo lacks is made first (an idea is
- *                                     an issue with the threads label, docs/threads.md)
+ *                                     an issue with the threads label, docs/threads.md). Where cornfield makes the label itself
+ *                                     (Forgejo), the issue carries `labelsMade: [names]`; GitHub makes it on its own and says nothing
  *
  * An adapter module (server/forge-github.js, server/forge-forgejo.js) implements these at its forge's level, with
  * `mergeAt(n, { sha, method })` in place of `merge`; `wrap` checks the arguments and builds `merge` once for every
