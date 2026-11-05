@@ -132,10 +132,13 @@ function dataSummary(node) {
 /** "Mentioned in": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the issues and PRs panel */
 function threadsSection(node) {
   const index = state.threadIndex;
-  const threads = index ? index.for(node.id) : null;
-  if (!threads || !threads.length) return '';
+  if (!index) return '';
+  const threads = index.for(node.id);
+  // "Start a thread about this" shows whenever threads are on and a maintainer is signed in (the panel only sets `start` then)
+  const start = index.start ? `<div class="hx-line"><button type="button" class="hx-btn" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned">Start a thread about this</button></div>` : '';
+  if (!threads || !threads.length) return start;
   const rows = threads.map((t) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:#fbbf24">◆</span><span><button type="button" class="hx-btn hx-thread-open" data-thread-open="${t.number}" aria-label="Open thread #${t.number}, ${escHtml(t.title)}, in the issues and pull requests panel">#${t.number} ${escHtml(t.title)}</button> <span class="hx-faint">${t.kind === 'proposal' ? 'proposal' : 'idea'}</span></span></div>`);
-  return section(`Mentioned in ${threads.length} ${threads.length === 1 ? 'thread' : 'threads'}:`, rows);
+  return section(`Mentioned in ${threads.length} ${threads.length === 1 ? 'thread' : 'threads'}:`, rows) + start;
 }
 
 /** Draws "Mentioned in" again in the open panel (the list was just read, or the map changed); nothing else in the panel moves */
