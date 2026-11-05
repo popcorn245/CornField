@@ -7,6 +7,7 @@ When the config names a forge (`forge: { type: 'github', repo: 'owner/name' }`, 
 - **Pull requests** and **Issues** are two lists, newest first, read through cornfield's server (the browser never talks to the forge, and never sees a token).
 - **Filters** on what is loaded: state (a pull request is open, merged, or closed without landing; an issue open or closed), label, author, and a search over the title, number, author and labels. The line under the title says how many pass.
 - A third tab, **Agents**, groups the work by issue and proposal and marks what agents made: [agents](agents.md).
+- A **Threads** tab lists the ideas (issues labelled `idea`) and the spec PRs' conversations, newest activity first; opening one shows its messages, read-only, with a link out to reply on the forge, and lights the nodes it mentions. **New idea** opens an issue as you. A node's panel lists the threads that mention it: [threads](threads.md).
 - A row links out to the forge. An issue's whole row is the link (an open one also has **Start a spec**, below); a pull request's row selects it, with a link beside it.
 - Rate limits and errors are a line in the panel in words ("GitHub's limit for this sign-in is used up; it resets at 21:14 UTC"), never a blank list. While the forge cannot be asked, the last answer cornfield saw is shown and says it is old. **Refresh** asks the forge again.
 
@@ -105,6 +106,9 @@ The routes, for the curious (all behind the sign-in guard):
 | `GET /api/forge/pulls/<n>/build?slug=<proposal>` | the plan of step 2: the issue it would open, or the one it opened already (never kept) |
 | `POST /api/forge/pulls/<n>/build` `{ "slug", "sha", "digest" }` | opens the build issue, if the plan is still that one |
 | `/api/forge/work` | what the Agents tab groups: pull requests and issues of any state, branches, open spec PRs and the `agents` rules ([agents](agents.md)) |
+| `/api/forge/threads?state=open\|closed\|all&limit=100` | the threads: ideas and spec conversations, newest activity first, each with the `[[mentions]]` its text holds as written, never the text; 404 when `threads: false` ([threads](threads.md)) |
+| `/api/forge/threads/<n>` | one thread's messages, as written (the opening text first), to read; 404 for a number that is no thread |
+| `POST /api/forge/threads` `{ title, body }` | opens an idea: an issue with the label, as you; guarded and audited as above, JSON up to 96 KB, never cached |
 | `/api/forge/deploys?limit=100` | the workflow runs that are deploys, with what the config says each restarted ([deploys](deploys.md)) |
 | `/api/forge/release-notes?since=<tag>` | the notes since a tag: the groups, the Markdown, the tags to choose from (kept like the others) |
 | `POST /api/forge/release-drafts` `{ tag, since?, name? }` | keeps the notes as a draft release for `tag` (never cached; guarded as above) |

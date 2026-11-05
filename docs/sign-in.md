@@ -94,7 +94,7 @@ With `proposals: { approveLands: true }` ([proposals.md](proposals.md#land-on-ap
 
 ## The spec poll
 
-With a [hook](config.md#hooks) that subscribes to `spec.ready`, cornfield lists the open spec PRs on a timer ([`hookPoll`](config.md#hook-poll)) so the event fires with nobody at the dashboard. A timer has no request, so it has no cookie: it looks with the token the newest live session of a maintainer keeps, as a [review through the API](proposals.md) does, and asks the forge first who that is and whether they maintain the repo now. Never a token from the config; cornfield has none.
+With a [hook](config.md#hooks) that subscribes to `spec.ready` (or to a [`thread.*`](threads.md#hooks) event, which makes the same look read the threads too), cornfield lists the open spec PRs on a timer ([`hookPoll`](config.md#hook-poll)) so the event fires with nobody at the dashboard. A timer has no request, so it has no cookie: it looks with the token the newest live session of a maintainer keeps, as a [review through the API](proposals.md) does, and asks the forge first who that is and whether they maintain the repo now. Never a token from the config; cornfield has none.
 
 - **No live maintainer session, no poll.** Signed out, expired, or demoted, a session holds no usable token. The poll then skips quietly (one log line when the gap starts, one when a session is back) and cornfield keeps running. It looks again at the next tick after a maintainer signs in.
 - **A restart** drops no session (they are in the SQLite file), so the poll picks up as soon as it runs, with the sessions that were live.
