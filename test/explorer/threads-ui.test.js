@@ -357,7 +357,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     const server = fakeServer();
     mount();
     selectNode(pick('core-hooks'));
-    expect(q('#drawer-threads').innerHTML).toBe('');
+    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
     await settle();
     expect(server.urls()).toEqual(['/api/forge/threads?state=open&limit=100']);
     const box = q('#drawer-threads');
@@ -380,8 +380,8 @@ describe('a node\'s panel lists the threads that mention it', () => {
     expect(q('#drawer-threads [data-thread-open]').dataset.threadOpen).toBe('41');
     selectNode(pick('core-db'));
     await settle();
-    expect(q('#drawer-threads').innerHTML).toBe('');
     expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    expect(q('#drawer-threads [data-thread-open]')).toBe(null);
   });
 
   it('a button opens the thread in the issues and PRs panel, which lights its nodes', async () => {
@@ -412,7 +412,130 @@ describe('a node\'s panel lists the threads that mention it', () => {
     mount();
     selectNode(pick('core-hooks'));
     await settle();
-    expect(q('#drawer-threads').innerHTML).toBe('');
+    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+  });
+});
+
+describe('Start a thread about this (a node\'s panel)', () => {
+  const pick = (id) => MAP.nodes.find((n) => n.id === id);
+  const type = (id, value) => { const el = $(id); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+  const POSTED = { '/api/forge/threads': { status: 201, body: { ok: true, action: 'idea', created: true, number: 77, issue: { number: 77, title: 'db.js', url: URL_OF(77) } } } };
+  const button = () => q('#drawer-threads [data-thread-start]');
+
+  it('shows only when threads are on and a maintainer is signed in', async () => {
+    fakeServer();
+    mount();
+    selectNode(pick('core-db'));
+    expect(button().textContent).toBe('Start a thread about this');
+    expect(button().dataset.threadStart).toBe('core-db');
+    expect(button().getAttribute('aria-label')).toContain('GitHub');
+    closeDrawer();
+    expect(mount({ threads: false })).toBe(true);
+    selectNode(pick('core-db'));
+    await settle();
+    expect(q('[data-thread-start]')).toBe(null);
+    closeDrawer();
+    expect(mount({ signIn: false })).toBe(false);
+    selectNode(pick('core-db'));
+    await settle();
+    expect(q('[data-thread-start]')).toBe(null);
+  });
+
+  it('names the configured forge, never GitHub, on Forgejo', async () => {
+    fakeServer();
+    mount({ forge: { type: 'forgejo', url: 'https://git.example.test', repo: 'owner/name' } });
+    selectNode(pick('core-db'));
+    expect(button().getAttribute('aria-label')).toContain('Forgejo');
+    expect(button().getAttribute('aria-label')).not.toContain('GitHub');
+    click(button());
+    await settle();
+    expect($('idea-words').textContent).toContain('Forgejo');
+  });
+
+  it('opens the New idea form with [[id]] on its own line under an empty line, the label as the title, and the focus in the form', async () => {
+    fakeServer();
+    mount();
+    selectNode(pick('core-auth'));
+    await settle();
+    button().focus();
+    click(button());
+    await settle();
+    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
+    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('idea-form').hidden).toBe(false);
+    expect($('idea-open').getAttribute('aria-expanded')).toBe('true');
+    expect($('idea-title').value).toBe('auth.js');
+    expect($('idea-body').value).toBe('[[core-auth]]\n\n');
+    expect(document.activeElement).toBe($('idea-title'));
+  });
+
+  it('closing the form returns the focus to the node\'s button', async () => {
+    fakeServer();
+    mount();
+    selectNode(pick('core-auth'));
+    await settle();
+    click(button());
+    await settle();
+    click(q('[data-action="idea-cancel"]'));
+    expect($('idea-form').hidden).toBe(true);
+    expect(document.activeElement).toBe(button());
+    // opened from the bar's own button, it goes back to that one
+    click($('idea-open'));
+    click(q('[data-action="idea-cancel"]'));
+    expect(document.activeElement).toBe($('idea-open'));
+  });
+
+  it('posts the edited title and the text through POST /api/forge/threads, then "Mentioned in" lists the new thread', async () => {
+    const posted = [];
+    const server = fakeServer({ posts: POSTED });
+    mount();
+    selectNode(pick('core-db'));
+    await settle();
+    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    click(button());
+    await settle();
+    type('idea-title', 'Move db.js to its own package');
+    type('idea-body', '[[core-db]]\n\nIt has outgrown the server.');
+    // the list the forge answers with from now on has the new idea, which names the node
+    const NEW = { kind: 'idea', number: 77, title: 'Move db.js to its own package', state: 'open', author: user('maintainer-one'), labels: ['idea'], url: URL_OF(77), createdAt: '2026-10-19T11:59:00Z', updatedAt: '2026-10-19T11:59:00Z', comments: 0, refs: ['core-db'] };
+    const real = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      if (!init.method && new URL(url, 'http://localhost').pathname === '/api/forge/threads') {
+        posted.push(init);
+        const at = '2026-10-19T11:59:30.000Z';
+        return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at, rate: '', label: 'idea', problem: null, items: [NEW, ...THREADS] }) };
+      }
+      return real(url, init);
+    }));
+    click($('idea-send'));
+    await settle();
+    expect(server.posts()).toHaveLength(1);
+    expect(server.posts()[0].url).toBe('/api/forge/threads');
+    expect(JSON.parse(server.posts()[0].init.body)).toEqual({ title: 'Move db.js to its own package', body: '[[core-db]]\n\nIt has outgrown the server.' });
+    expect(posted.some((i) => i.cache === 'reload')).toBe(true); // the forge was asked again, not the minute's cache
+    const box = q('#drawer-threads');
+    expect(box.textContent).toContain('Mentioned in 1 thread:');
+    expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('#77 Move db.js to its own package');
+    expect(document.activeElement).toBe(button());
+    expect(await said()).toContain('Thread #77 is now listed under Mentioned in for db.js');
+    // and the thread lights the node
+    click(box.querySelector('[data-thread-open="77"]'));
+    await settle();
+    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
+  });
+
+  it('posts the mention alone when nothing is written under it, and keeps the form on a refusal', async () => {
+    const server = fakeServer({ posts: { '/api/forge/threads': { status: 403, body: { ok: false, error: 'Not a maintainer.', code: 'forbidden' } } } });
+    mount();
+    selectNode(pick('core-hooks'));
+    await settle();
+    click(button());
+    await settle();
+    click($('idea-send'));
+    await settle();
+    expect(JSON.parse(server.posts()[0].init.body)).toEqual({ title: 'hooks.js', body: '[[core-hooks]]' });
+    expect($('idea-form').hidden).toBe(false);
+    expect(document.activeElement).toBe($('idea-title'));
   });
 });
 

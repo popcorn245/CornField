@@ -130,7 +130,8 @@ function freshNotes() {
 
 /** The New idea form: whether it is open, one send in flight, and what the last send came to */
 function freshIdea() {
-  return { open: false, busy: false, message: '', bad: false, link: null };
+  // `opener` is the id of the node whose panel button that opened the form ('' when the bar's own button did), `node` the node it was about
+  return { open: false, busy: false, message: '', bad: false, link: null, opener: '', node: null };
 }
 
 let wired = false;
@@ -507,9 +508,38 @@ function threadsFor(nodeId) {
 /** Opens or closes the form; the focus goes to the title, or back to the button */
 function toggleIdea(open) {
   ui.idea.open = open;
-  if (open) ui.idea.message = '';
+  if (open) { ui.idea.message = ''; ui.idea.opener = ''; ui.idea.node = null; }
   paintIdea();
-  if (open) $('idea-title').focus(); else $('idea-open').focus();
+  if (open) $('idea-title').focus(); else focusIdeaOpener();
+}
+
+/** Puts the focus back on what opened the form: the node panel's button while it is still there, else the New idea button */
+function focusIdeaOpener() {
+  const from = ui.idea.opener ? [...document.querySelectorAll('[data-thread-start]')].find((b) => b.dataset.threadStart === ui.idea.opener) : null;
+  (from && !from.closest('[inert]') ? from : $('idea-open')).focus();
+}
+
+/** "Start a thread about this" (a node's panel): the New idea form, with the node's label as the title and its mention in the text */
+function startThread(node) {
+  if (!node || ui.idea.busy || !ui.config || ui.config.threads === false) return;
+  if (ui.kind !== 'threads') {
+    ui.kind = 'threads';
+    ui.actNote = null;
+    ui.filters = defaultFilters('threads');
+  }
+  openForge();
+  paintFilters();
+  ui.idea.open = true;
+  ui.idea.message = '';
+  ui.idea.bad = false;
+  ui.idea.link = null;
+  ui.idea.node = { id: node.id, label: node.label };
+  ui.idea.opener = node.id;
+  $('idea-title').value = String(node.label || node.id).slice(0, 256);
+  const text = $('idea-body');
+  text.value = `[[${node.id}]]\n\n`; // the mention on its own line, an empty line under it to write in
+  paintIdea();
+  $('idea-title').focus();
 }
 
 /** The one write: a POST to cornfield's own server, which opens an issue with the label as the maintainer */
@@ -544,9 +574,15 @@ async function sendIdea() {
   if (res.ok) {
     ui.lists = {};
     indexCache = null;
+    const about = ui.idea.node;
     await loadList(true, true);
     ensureThreadsList();
-    $('idea-open').focus();
+    focusIdeaOpener();
+    // Opened from a node: say when its "Mentioned in" lists the new thread
+    const listed = about && (threadsFor(about.id) || []).some((t) => t.number === res.body.number);
+    if (listed) announce(`${ui.idea.message} Thread #${res.body.number} is now listed under Mentioned in for ${about.label}.`);
+    ui.idea.opener = '';
+    ui.idea.node = null;
   } else $('idea-title').focus();
 }
 
@@ -1690,7 +1726,7 @@ export function initForgePanel(config, opts = {}) {
   const threadsOn = config.threads !== false;
   const tab = panel.querySelector('[data-forge-kind="threads"]');
   if (tab) tab.hidden = !threadsOn;
-  state.threadIndex = threadsOn ? { for: threadsFor, ensure: ensureThreadsList, open: openThread } : null;
+  state.threadIndex = threadsOn ? { for: threadsFor, ensure: ensureThreadsList, open: openThread, start: startThread, forge: forgeName } : null;
   registerSheet('forge', panel);
   paintFilters();
   paint();
@@ -1725,7 +1761,9 @@ export function initForgePanel(config, opts = {}) {
     const drawer = $('spec-drawer');
     if (drawer) drawer.addEventListener('click', (e) => {
       const open = e.target.closest && e.target.closest('[data-thread-open]');
-      if (open && state.threadIndex) openThread(Number(open.dataset.threadOpen));
+      if (open && state.threadIndex) { openThread(Number(open.dataset.threadOpen)); return; }
+      const start = e.target.closest && e.target.closest('[data-thread-start]');
+      if (start && state.threadIndex && state.selectedNode) startThread(state.selectedNode);
     });
   }
   return true;
