@@ -1,0 +1,199 @@
+# A cornfield runner for Forgejo Actions + Claude Code. Copy this file to .forgejo/workflows/cornfield-agent.yml and
+# examples/runner/cornfield-run.mjs to .forgejo/cornfield-run.mjs in the repository that cornfield watches (docs/runners.md).
+#
+# Secrets (repository settings, Actions): ANTHROPIC_API_KEY, and RUNNER_TOKEN: an access token of the runner's OWN account
+# (a bot user: write access to the repo, issues and pull requests). List that account in agents.runners. Never a maintainer's token.
+name: cornfield-agent
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  agent:
+    # Cheap pre-filter only. It decides nothing: the first step does the real check.
+    if: contains(github.event.comment.body, 'cornfield-run')
+    runs-on: docker
+    timeout-minutes: 60
+    env:
+      API: ${{ github.server_url }}/api/v1
+      REPO: ${{ github.repository }}
+      ISSUE: ${{ github.event.issue.number }}
+      COMMENTER: ${{ github.event.comment.user.login }}
+      RUNNER_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+    steps:
+      # 1. FIRST: is the commenter a maintainer now? Ask the forge; the login comes from the event, never from the block.
+      #    GET /repos/{owner}/{repo}/collaborators/{user}/permission must say admin or owner. Fails closed: any error stops the job.
+      - name: Commenter is a maintainer now
+        id: who
+        run: |
+          set -euo pipefail
+          case "$COMMENTER" in ''|*[!A-Za-z0-9._-]*) echo "unexpected login"; exit 1 ;; esac
+          perm=$(curl -fsS -H "Authorization: token $RUNNER_TOKEN" "$API/repos/$REPO/collaborators/$COMMENTER/permission" \
+            | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).permission')
+          case "$perm" in
+            admin|owner) echo "ok=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "$COMMENTER has permission '$perm', not a maintainer: ignoring the comment"; echo "ok=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        if: steps.who.outputs.ok == 'true'
+        with:
+          persist-credentials: false # the agent below must not find the runner token in .git/config
+
+      # 2. The comment goes to a file through the environment, never into the shell text.
+      - name: Read the request
+        id: req
+        if: steps.who.outputs.ok == 'true'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          R="$RUNNER_TEMP"
+          cp .forgejo/cornfield-run.mjs "$R/cornfield-run.mjs" # a copy the agent cannot edit
+          printf '%s' "$COMMENT_BODY" > "$R/comment.txt"
+          if id=$(node "$RUNNER_TEMP/cornfield-run.mjs" stop "$R/comment.txt" 2>/dev/null); then
+            echo "mode=stop" >> "$GITHUB_OUTPUT"; echo "run=$id" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! node "$RUNNER_TEMP/cornfield-run.mjs" parse "$R/comment.txt" > "$R/request.json" 2> "$R/why.txt"; then
+            echo "not a valid request: $(cat "$R/why.txt")"; echo "mode=none" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          node "$RUNNER_TEMP/cornfield-run.mjs" get "$R/request.json" brief > "$R/brief.txt"
+          echo "mode=run" >> "$GITHUB_OUTPUT"
+          echo "run=$(node "$RUNNER_TEMP/cornfield-run.mjs" get "$R/request.json" runId)" >> "$GITHUB_OUTPUT"
+          echo "kind=$(node "$RUNNER_TEMP/cornfield-run.mjs" get "$R/request.json" kind)" >> "$GITHUB_OUTPUT"
+          echo "profile=$(node "$RUNNER_TEMP/cornfield-run.mjs" get "$R/request.json" profile)" >> "$GITHUB_OUTPUT"
+          echo "branch=$(node "$RUNNER_TEMP/cornfield-run.mjs" get "$R/request.json" branch)" >> "$GITHUB_OUTPUT"
+
+      # Helpers for the later steps: post a comment from a file (JSON built by node, so no quoting problems).
+      - name: Helpers
+        if: steps.req.outputs.mode == 'run' || steps.req.outputs.mode == 'stop'
+        run: |
+          cat > "$RUNNER_TEMP/forge.sh" <<'SH'
+          post() { # post <body-file>
+            node -e 'process.stdout.write(JSON.stringify({ body: require("fs").readFileSync(process.argv[1], "utf8") }))' "$1" \
+              | curl -fsS -X POST -H "Authorization: token $RUNNER_TOKEN" -H 'Content-Type: application/json' --data-binary @- "$API/repos/$REPO/issues/$ISSUE/comments" > /dev/null
+          }
+          say() { node "$RUNNER_TEMP/cornfield-run.mjs" report "$@" > "$RUNNER_TEMP/out.md" && post "$RUNNER_TEMP/out.md"; }
+          SH
+
+      # 3. Stop: best effort. Find the run that claimed this id and ask the forge to cancel it. The forge may refuse (older
+      #    Forgejo has no cancel call); then say so.
+      - name: Stop a run
+        if: steps.req.outputs.mode == 'stop'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+        run: |
+          set -uo pipefail
+          . "$RUNNER_TEMP/forge.sh"
+          me=$(curl -fsS -H "Authorization: token $RUNNER_TOKEN" "$API/user" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).login')
+          curl -fsS -H "Authorization: token $RUNNER_TOKEN" "$API/repos/$REPO/issues/$ISSUE/comments?limit=100" > "$RUNNER_TEMP/comments.json"
+          link=$(node -e '
+            const [file, me, id] = process.argv.slice(1);
+            const fence = "`".repeat(3) + "cornfield-run " + id;
+            let url = "";
+            for (const c of JSON.parse(require("fs").readFileSync(file, "utf8"))) {
+              if (c.user?.login !== me) continue;
+              const i = (c.body || "").indexOf(fence);
+              if (i < 0) continue;
+              try { url = JSON.parse(c.body.slice(i + fence.length).split("`".repeat(3))[0]).url || url; } catch {}
+            }
+            console.log(url)' "$RUNNER_TEMP/comments.json" "$me" "$RUN_ID")
+          n=${link##*/}
+          case "$n" in ''|*[!0-9]*) say "$RUN_ID" working "stop requested, but this run's job could not be found"; exit 0 ;; esac
+          if curl -fsS -X POST -H "Authorization: token $RUNNER_TOKEN" "$API/repos/$REPO/actions/runs/$n/cancel" > /dev/null; then
+            say "$RUN_ID" stopped "cancelled on request"
+          else
+            say "$RUN_ID" working "stop requested; the forge would not cancel the job (best effort)"
+          fi
+
+      # 4. A code run.
+      - name: Claim
+        if: steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          KIND: ${{ steps.req.outputs.kind }}
+          CORNFIELD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        run: |
+          . "$RUNNER_TEMP/forge.sh"
+          say "$RUN_ID" claimed
+          if [ "$KIND" != code ]; then echo "this runner only does code runs" > "$RUNNER_TEMP/why.txt"; exit 1; fi
+
+      - name: Check out a branch
+        if: steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          HINT: ${{ steps.req.outputs.branch }}
+        run: |
+          set -euo pipefail
+          BRANCH="${HINT:-agent/$RUN_ID}" # the request's branch was checked by the helper as a safe ref name
+          git checkout -b "$BRANCH"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      # 5. Profiles: the request names one; this maps it to a model and a budget. Unknown names are refused.
+      - name: Choose the model
+        if: steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          PROFILE: ${{ steps.req.outputs.profile }}
+          CORNFIELD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        run: |
+          set -uo pipefail
+          . "$RUNNER_TEMP/forge.sh"
+          case "${PROFILE:-default}" in
+            default|claude) MODEL=sonnet; TURNS=40 ;;
+            fast)           MODEL=haiku;  TURNS=20 ;;
+            deep)           MODEL=opus;   TURNS=80 ;;
+            *) echo "unknown profile" > "$RUNNER_TEMP/why.txt"; exit 1 ;;
+          esac
+          printf 'MODEL=%s\nTURNS=%s\n' "$MODEL" "$TURNS" >> "$GITHUB_ENV"
+          say "$RUN_ID" working "model $MODEL"
+
+      # 6. Claude Code, headless. This step has the API key and NOT the forge token.
+      - name: Work with Claude Code
+        if: steps.req.outputs.mode == 'run'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RUNNER_TOKEN: ''
+        run: |
+          set -uo pipefail
+          npm install -g @anthropic-ai/claude-code # pin a version you have tried
+          # The brief is untrusted text. It goes in as a file on stdin, never into a command line.
+          { echo "You are working on one task in this repository. Make the change, run the tests, and do not commit. The task:"; echo; cat "$RUNNER_TEMP/brief.txt"; } > "$RUNNER_TEMP/prompt.txt"
+          claude -p --model "$MODEL" --max-turns "$TURNS" --permission-mode acceptEdits \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm test:*),Bash(npm run:*),Bash(git diff:*),Bash(git status:*)" \
+            < "$RUNNER_TEMP/prompt.txt" > "$RUNNER_TEMP/claude.log" 2>&1 || { echo "claude exited with status $?" > "$RUNNER_TEMP/why.txt"; exit 1; }
+
+      # 7. Push and open the pull request, with the runner's token and the trailer.
+      - name: Push and open the pull request
+        if: steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          CORNFIELD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        run: |
+          set -uo pipefail
+          . "$RUNNER_TEMP/forge.sh"
+          fail() { echo "$1" > "$RUNNER_TEMP/why.txt"; exit 1; }
+          trailer=$(node "$RUNNER_TEMP/cornfield-run.mjs" trailer "$RUN_ID")
+          git add -A -- .
+          git diff --cached --quiet && fail "the agent changed nothing"
+          git -c user.name="cornfield-agent" -c user.email="agent@users.noreply.invalid" commit -q -m "chore(agent): run $RUN_ID" -m "$trailer" || fail "could not commit"
+          git -c http.extraHeader="Authorization: token $RUNNER_TOKEN" push -q origin "HEAD:refs/heads/$BRANCH" || fail "could not push the branch"
+          closes=$(node "$RUNNER_TEMP/cornfield-run.mjs" get "$RUNNER_TEMP/request.json" refs | node -p 'const i = JSON.parse(require("fs").readFileSync(0, "utf8")).issue; i ? "Closes #" + i : ""')
+          printf '%s\n\n%s\n' "$closes" "$trailer" > "$RUNNER_TEMP/pr-body.md"
+          node -e 'process.stdout.write(JSON.stringify({ title: "chore(agent): " + process.argv[1], head: process.argv[2], base: process.argv[3], body: require("fs").readFileSync(process.argv[4], "utf8") }))' \
+            "$RUN_ID" "$BRANCH" "$DEFAULT_BRANCH" "$RUNNER_TEMP/pr-body.md" \
+            | curl -fsS -X POST -H "Authorization: token $RUNNER_TOKEN" -H 'Content-Type: application/json' --data-binary @- "$API/repos/$REPO/pulls" > "$RUNNER_TEMP/pr.json" || fail "could not open the pull request"
+          say "$RUN_ID" done "opened $(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).html_url' "$RUNNER_TEMP/pr.json")"
+
+      # 8. Anything above that failed says so, once.
+      - name: Report a failure
+        if: failure() && steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          CORNFIELD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
+        run: |
+          . "$RUNNER_TEMP/forge.sh"
+          why=$(cat "$RUNNER_TEMP/why.txt" 2>/dev/null || echo "the run failed; see the job log")
+          say "$RUN_ID" failed "$why"
