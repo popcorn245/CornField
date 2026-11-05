@@ -107,7 +107,7 @@ worktrees: null,                                          // no worktrees are lo
 | `dir` | the folder, inside the repo, written relative to it. Default `.claude/worktrees` |
 | `maxAgeDays` | a number of days above 0 (default: none, every worktree is listed). A worktree whose newest proposal file was changed longer ago than this is left out. The age is the newest modification time among the worktree's proposal files, so a worktree you are still writing in always stays |
 
-Nothing else is accepted: an unknown key, a `dir` that leaves the repo, or a `maxAgeDays` that is not a number above 0 fails the config at start-up, naming the key. How the worktrees are read, and why a slow folder cannot hold the server up, is in [proposals](proposals.md#many-worktrees-and-slow-folders).
+Nothing else is accepted: an unknown key, a `dir` that leaves the repo, or a `maxAgeDays` that is not a number above 0 (and at most 36500) fails the config at start-up, naming the key. How the worktrees are read, and why a slow folder cannot hold the server up, is in [proposals](proposals.md#many-worktrees-and-slow-folders).
 
 ## Hooks
 
