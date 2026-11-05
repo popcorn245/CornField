@@ -23,7 +23,8 @@
  *     personas: { roles: null },              // the roles a persona may have (null: any)
  *     releaseNotes: { breakingLabel: 'breaking' },   // the pull request label that lists a change under "Breaking" in the release notes
  *     hooks: [],                              // [{ url, events }]: signed JSON events posted to outside code (docs/config.md#hooks); the secret is env only
- *     hookPoll: { specs: '5m' },              // how often cornfield looks for ready specs on its own, for the spec.ready hook; false turns it off (docs/config.md#hook-poll)
+ *     hookPoll: { specs: '5m' },              // how often cornfield looks for ready specs and thread activity on its own, for the spec.ready and thread.* hooks; false turns it off (docs/config.md#hook-poll)
+ *     threads: { label: 'idea' },             // an idea is an issue with this label, its thread the issue's comments; false turns threads off (docs/threads.md)
  *     links: [],                              // [{ label, href }] shown in the explorer's header
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
@@ -66,7 +67,12 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked']);
+/** The events that come from looking at threads (server/threads.js): a poll that wants any of them looks at threads too */
+export const THREAD_EVENTS = Object.freeze(['thread.opened', 'thread.message', 'thread.linked']);
+/** The keys of `threads` when it is an object, and the label's longest length */
+export const THREADS_KEYS = Object.freeze(['label']);
+export const MAX_LABEL = 50;
 /** The most hooks a config lists */
 export const MAX_HOOKS = 20;
 /** The bounds of `hookPoll.specs` in milliseconds: not under a minute (the forge is not hammered), not over an hour */
@@ -85,14 +91,26 @@ export function parseDuration(v) {
   return m ? Number(m[1]) * { s: 1000, m: 60_000, h: 3_600_000 }[m[2]] : null;
 }
 
+/** Whether some hook subscribes to any of `events` (by name, or with '*') */
+export function hookWants(config, events) {
+  return Array.isArray(config.hooks) && config.hooks.some((h) => h.events === '*' || (Array.isArray(h.events) && h.events.some((e) => events.includes(e))));
+}
+
+/** Whether threads are on: `threads: false` turns them off, anything else (the default included) leaves them on */
+export const threadsOn = (config) => config.threads !== false;
+
+/** The label that makes an issue an idea, or null when threads are off */
+export const ideaLabel = (config) => (threadsOn(config) ? (config.threads && config.threads.label) || DEFAULTS.threads.label : null);
+
 /**
- * How often cornfield looks at the open spec PRs by itself, in milliseconds, or null when it does not: when `hookPoll.specs`
- * is false, or no hook subscribes to `spec.ready` (by name or with '*').
- * @param {{ hooks?: { events: string[] | '*' }[], hookPoll?: { specs?: string | false } | false }} config a loaded config
+ * How often cornfield looks by itself, in milliseconds, or null when it does not: when `hookPoll.specs` is false, or no
+ * hook subscribes to something the look finds (`spec.ready`, or a `thread.*` event while threads are on), by name or with '*'.
+ * One look covers both: the open spec PRs and the threads (server/spec-poll.js).
+ * @param {{ hooks?: { events: string[] | '*' }[], hookPoll?: { specs?: string | false } | false, threads?: false | { label?: string } }} config a loaded config
  * @returns {number | null}
  */
 export function specPollMs(config) {
-  const wanted = Array.isArray(config.hooks) && config.hooks.some((h) => h.events === '*' || (Array.isArray(h.events) && h.events.includes('spec.ready')));
+  const wanted = hookWants(config, ['spec.ready']) || (threadsOn(config) && hookWants(config, THREAD_EVENTS));
   const every = config.hookPoll === false ? false : config.hookPoll ? config.hookPoll.specs : DEFAULTS.hookPoll.specs;
   return wanted && every !== false ? parseDuration(every ?? DEFAULTS.hookPoll.specs) : null;
 }
@@ -115,6 +133,7 @@ export const DEFAULTS = Object.freeze({
   agents: { authors: [], labels: [], branchPrefixes: [], bots: true },
   hooks: [],
   hookPoll: { specs: '5m' },
+  threads: { label: 'idea' },
   links: [],
   proxy: {},
   importMap: {},
@@ -241,6 +260,14 @@ export function configProblems(c) {
       }
     }
   }
+  if (c.threads !== undefined && c.threads !== false) {
+    if (!isObject(c.threads)) out.push('"threads" is { label: "idea" }, or false to turn threads off.');
+    else {
+      for (const k of Object.keys(c.threads)) if (!THREADS_KEYS.includes(k)) out.push(`threads.${k}: the key is ${THREADS_KEYS.join(', ')}.`);
+      const l = c.threads.label;
+      if (l !== undefined && (!isText(l) || l.includes(',') || l.trim() !== l || l.length > MAX_LABEL)) out.push(`threads.label is the name of the label that makes an issue an idea, like "idea": text of at most ${MAX_LABEL} characters, no comma, no space at either end.`);
+    }
+  }
   if (c.releaseNotes !== undefined) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
@@ -323,7 +350,7 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     if (problems.length) throw new Error(`${path.relative(absRoot, configFile) || CONFIG_FILE}:\n  ${problems.join('\n  ')}`);
   }
   const config = {
-    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, agents: { ...DEFAULTS.agents }, releaseNotes: { ...DEFAULTS.releaseNotes } }),
+    ...structuredClone({ ...DEFAULTS, sources: { ...DEFAULTS.sources }, personas: { ...DEFAULTS.personas }, cloud: { ...DEFAULTS.cloud }, agents: { ...DEFAULTS.agents }, releaseNotes: { ...DEFAULTS.releaseNotes }, threads: { ...DEFAULTS.threads } }),
     ...raw,
     sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
     personas: { ...DEFAULTS.personas, ...(raw.personas || {}) },
@@ -332,6 +359,8 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
     agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
+  // `threads: false` stays false; an object is read over the default
+  config.threads = raw.threads === false ? false : { ...DEFAULTS.threads, ...(raw.threads || {}) };
   // `hookPoll: false` is `{ specs: false }`; an object is read over the default
   config.hookPoll = raw.hookPoll === false ? { specs: false } : { ...DEFAULTS.hookPoll, ...(raw.hookPoll || {}) };
   // `proposals` is the folder to everything downstream, whichever way the file wrote it; the options are read from `approveLands`
