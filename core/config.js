@@ -118,8 +118,8 @@ export function specPollMs(config) {
   return wanted && every !== false ? parseDuration(every ?? DEFAULTS.hookPoll.specs) : null;
 }
 
-/** How a request reaches a runner: the forge only for now (spec 0005 D2; push and pull come with #81) */
-export const AGENT_TRANSPORTS = Object.freeze(['forge']);
+/** How a request reaches a runner (spec 0005 D2): posted on the forge (the default), pushed as a signed `agent.requested` hook event, or kept for a runner to pull and claim */
+export const AGENT_TRANSPORTS = Object.freeze(['forge', 'push', 'pull']);
 /** `agents.maxOpen`: the most open runs per repo cornfield will ask for, by default and at most */
 export const DEFAULT_MAX_OPEN = 3;
 export const MAX_OPEN_CEILING = 100;
@@ -272,6 +272,10 @@ export function configProblems(c) {
       });
     }
   }
+  // Push is the hook's delivery: with no hook that wants agent.requested the request would go nowhere
+  if (isObject(c.agents) && c.agents.transport === 'push' && !hookWants(c, ['agent.requested'])) {
+    out.push('agents.transport is "push", so a hook must subscribe to agent.requested: add { url, events: ["agent.requested"] } (or "*") to "hooks". Without one a request would go nowhere.');
+  }
   if (c.hookPoll !== undefined && c.hookPoll !== false) {
     if (!isObject(c.hookPoll)) out.push('"hookPoll" is { specs: "5m" }, or false for none.');
     else {
@@ -358,7 +362,7 @@ export const triggersOf = (config) => Object.entries(isObject(config.agents?.on)
 /** What is wrong with the keys of `agents` that ask for and follow runs (spec 0005), in words */
 function agentRunProblems(a) {
   const out = [];
-  if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(' or ')}: a request is posted on the forge (push and pull come later).`);
+  if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(', ')}: where a request goes: "forge" posts it as a comment (the default), "push" sends it as an agent.requested hook event, "pull" keeps it for a runner to claim (docs/agents.md#transports).`);
   if (a.maxOpen !== undefined && !(Number.isInteger(a.maxOpen) && a.maxOpen >= 1 && a.maxOpen <= MAX_OPEN_CEILING)) out.push(`agents.maxOpen is a whole number from 1 to ${MAX_OPEN_CEILING}: the most open runs cornfield asks for at once (${DEFAULT_MAX_OPEN} unless set).`);
   if (a.profiles !== undefined) {
     if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {

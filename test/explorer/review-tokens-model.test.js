@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS module, no declarations
-import { TOKENS_URL, makeRequest, revokeUrl, tokenLine, errorWords } from '../../explorer/review-tokens-model.js';
+import { TOKENS_URL, SCOPES, introWords, tokensUrl, makeRequest, revokeUrl, tokenLine, errorWords } from '../../explorer/review-tokens-model.js';
 
 const NOW = Date.parse('2026-10-19T12:00:00.000Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -60,5 +60,18 @@ describe('the addresses and the words of a refusal', () => {
     expect(errorWords(403, null)).toMatch(/maintainers/);
     expect(errorWords(429, {})).toMatch(/Wait/);
     expect(errorWords(500, null)).toMatch(/did not work/);
+  });
+});
+
+describe('the three kinds of token', () => {
+  it('each have an address, a line in the picker and an intro', () => {
+    expect(SCOPES.map(([scope]) => scope)).toEqual(['review', 'agent', 'runner']);
+    expect(tokensUrl('runner')).toBe('/api/runner-tokens');
+    expect(tokensUrl('agent')).toBe('/api/agent-tokens');
+    expect(tokensUrl('review')).toBe(TOKENS_URL);
+    expect(revokeUrl(3, 'runner')).toBe('/api/runner-tokens/3/revoke');
+    expect(introWords('runner')).toMatch(/claim/);
+    expect(introWords('agent')).toMatch(/agent-requests/);
+    expect(introWords('review')).toMatch(/api\/reviews/);
   });
 });

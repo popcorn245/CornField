@@ -25,6 +25,9 @@
  *   *    /api/review-tokens…, /api/agent-tokens…
  *                                       make, list and revoke review tokens, and agent tokens: the signed-in maintainer only (server/review-api.js)
  *   POST /api/agent-requests            ask for an agent run with an agent token (`Authorization: Bearer cf_at_…`), no cookie: before the guard too (server/agent-api.js)
+ *   GET  /api/agent-requests, POST /api/agent-requests/<run>/claim, GET and POST /api/runs/<run>
+ *                                       a runner's: list the queue, claim, read and report, with a runner token (`cf_nt_…`) and no cookie, before the guard
+ *                                       too; a runner token on any other route is 403 (server/runner-api.js)
  *   *    /api/agent-runs…               the dashboard's runs: list, one, start, stop; the signed-in maintainer only (server/agent-api.js, server/agent-runs.js)
  *   *    /proposals…                    server/proposals.js (with sign-in, the open spec PRs too: server/proposal-pulls.js,
  *                                       and a review is a comment on one: server/reviews.js)
@@ -45,7 +48,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, ideaLabel } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -53,6 +56,7 @@ import { serveForge } from './forge-routes.js';
 import { hasAdapter } from './forge.js';
 import { createRuns } from './agent-runs.js';
 import { REQUESTS_PATH, serveAgentCall, serveRunRoutes } from './agent-api.js';
+import { presentedScope, runnerRoute, serveRunnerCall, serveStrayRunner, takesTokens } from './runner-api.js';
 import { REVIEWS_PATH, serveReviewCall, serveTokenRoutes } from './review-api.js';
 import { proxyTo } from './proxy.js';
 import { HA_ENV, homeAssistantHouse } from '../plugins/house/home-assistant.js';
@@ -172,6 +176,10 @@ export function createCornfieldServer(config, opts = {}) {
   }
   // Agent runs (server/agent-runs.js) need a signed-in maintainer to ask as and a forge to ask on; the runs are followed on the spec poll's tick
   const runs = config.forge && auth.enabled && hasAdapter(config.forge.type) ? createRuns({ config, where, auth, hooks, now: opts.now, onAsk: () => specPoll?.start() }) : null;
+  // Push and pull need the same two things a request on the forge does (a maintainer's sign-in to ask as, a forge to check against), and push needs the hook that delivers it
+  const transport = config.agents?.transport ?? 'forge';
+  if (transport !== 'forge' && !runs) throw new Error(`agents.transport is "${transport}", which needs sign-in and a forge to ask as a maintainer and to check them: set them up (docs/sign-in.md, docs/config.md#forge).`);
+  if (transport === 'push' && !hookWants(config, ['agent.requested'])) throw new Error('agents.transport is "push", so a hook must subscribe to agent.requested: add { url, events: ["agent.requested"] } to "hooks" (docs/config.md#hooks). Without one a request would go nowhere.');
   // Triggers subscribe to the hooks' moments and call the runs' own request path; nothing a run produces is wired to them (server/triggers.js)
   if (runs && hooks && triggerList.length) createTriggers({ config, auth, runs, hooks, now: opts.now });
   runs?.resume().catch((err) => console.error(`[cornfield] agent runs could not be picked up: ${err instanceof Error ? err.message : err}`));
@@ -257,6 +265,9 @@ export function createCornfieldServer(config, opts = {}) {
       return res.end('400 Bad Request');
     }
 
+    // A runner token is good for the runner routes only: on any other route it is refused here, before anything else is looked at
+    if (presentedScope(req) === 'runner' && !takesTokens(reqPath, { reviews: REVIEWS_PATH })) return serveStrayRunner(req, res, reqPath, { config, auth, now: opts.now });
+
     if (reqPath === '/healthz') {
       req.resume();
       return sendJson(res, 200, { ok: true });
@@ -264,6 +275,9 @@ export function createCornfieldServer(config, opts = {}) {
     // The review API takes a token, not a session: it is the one route before the guard (and it reads no cookie)
     if (reqPath === REVIEWS_PATH) return serveReviewCall(req, res, { config, where, auth, hooks, lander, now: opts.now });
     // …and so does asking for a run: an agent token, not a session
+    // …and a runner asks for work and reports on it with a runner token (the GET of the same path lists the queue)
+    const runner = runnerRoute(reqPath);
+    if (runner && !(reqPath === REQUESTS_PATH && req.method !== 'GET' && req.method !== 'HEAD')) return serveRunnerCall(req, res, runner, url, { config, auth, runs, now: opts.now });
     if (reqPath === REQUESTS_PATH) return serveAgentCall(req, res, { config, auth, runs, now: opts.now });
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;

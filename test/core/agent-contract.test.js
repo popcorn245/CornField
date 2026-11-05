@@ -168,6 +168,7 @@ describe('validateRequest', () => {
       const secrets = [
         'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'github_' + 'pat_11ABCDEFG0abcdefghijkl_mnopqrstuv', 'glp' + 'at-abcdefghij0123456789', 'sk-' + 'ant-api03-abcdefghijklmnopqrstu',
         'AKIA' + 'IOSFODNN7EXAMPLE', 'xox' + 'b-1234567890-abcdefghij', 'eyJhbGciOiJIUzI1NiJ9' + '.eyJzdWIiOiIxMjM0NTY3ODkwIn0' + '.dBjftJeZ4CVPmB92K27uhbUJU1p1r',
+        'cf_' + 'nt_' + 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG', 'cf_' + 'at_' + 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG', 'cf_' + 'rt_' + 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG',
         '-----BEGIN RSA ' + 'PRIVATE KEY-----', 'Authorization: Bearer ' + 'abcd1234efgh5678ijkl9012', 'https://user:' + 'hunter2@example.com/repo.git',
       ];
       for (const s of secrets) {

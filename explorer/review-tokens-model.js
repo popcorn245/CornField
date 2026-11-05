@@ -25,9 +25,16 @@ const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 const LABEL = /^[\p{L}\p{N}][\p{L}\p{N} ._:/()-]*$/u;
 
-/** Tokens come in two scopes (server/review-tokens.js): `review` approves proposals, `agent` asks for agent runs. Each has its own address. */
-export const SCOPES = Object.freeze([['review', 'Review: approve or send back proposals'], ['agent', 'Agent: ask for agent runs']]);
-export const tokensUrl = (scope) => (scope === 'agent' ? '/api/agent-tokens' : TOKENS_URL);
+/** Tokens come in three scopes (server/review-tokens.js): `review` approves proposals, `agent` asks for agent runs, `runner` pulls and reports on them. Each has its own address. */
+export const SCOPES = Object.freeze([['review', 'Review: approve or send back proposals'], ['agent', 'Agent: ask for agent runs'], ['runner', 'Runner: pull, claim and report on runs']]);
+export const tokensUrl = (scope) => (scope === 'agent' ? '/api/agent-tokens' : scope === 'runner' ? '/api/runner-tokens' : TOKENS_URL);
+
+/** What the dialog says a token of this scope is for */
+export function introWords(scope) {
+  if (scope === 'agent') return 'An agent token lets a script or a chat bot ask for an agent run as you (POST /api/agent-requests). It works while you are signed in here and still maintain the repo; it expires, and you can revoke it below.';
+  if (scope === 'runner') return 'A runner token lets your own runner, wherever it runs, list the queued requests, claim one and report on it (GET /api/agent-requests, POST /api/agent-requests/<run>/claim, POST /api/runs/<run>). It reaches nothing else, and works until it expires or you revoke it below, even after you sign out.';
+  return 'A review token lets a script or a chat bot approve or send back a proposal as you (POST /api/reviews). It works while you are signed in here and still maintain the repo; it expires, and you can revoke it below.';
+}
 
 /** The address that revokes token `id` */
 export const revokeUrl = (id, scope = 'review') => `${tokensUrl(scope)}/${encodeURIComponent(String(id))}/revoke`;

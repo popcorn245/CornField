@@ -4,6 +4,7 @@
  * The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js).
  *
  *   POST /api/agent-requests             { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }, with `Authorization: Bearer cf_at_…`
+ *   GET  /api/agent-requests             the queue, for a runner token: server/runner-api.js (and the pull transport's claim and report routes)
  *   GET  /api/agent-tokens               the signed-in maintainer's agent tokens (and POST, and /<id>/revoke: server/review-api.js)
  *   GET  /api/agent-runs[?follow=1]      the runs, newest first, with the cap and how many are open; `follow=1` looks at the forge first
  *   GET  /api/agent-runs/<runId>         one run
@@ -13,7 +14,7 @@
  * **The call takes an agent token and nothing else,** exactly as the review API takes a review token (server/review-api.js): it runs
  * before the sign-in guard (a script has no cookie), reads no cookie, needs no same-origin check (a browser never adds an `Authorization`
  * header itself), and keeps the `Host` check in front of every route. **The two scopes are kept apart:** a review token on this route is 403
- * (and an agent token on `POST /api/reviews` is 403), whatever else is true of it. Token states, the anonymous flood ceiling and the rows
+ * (and an agent token on `POST /api/reviews` is 403, and a runner token on either), whatever else is true of it. Token states, the anonymous flood ceiling and the rows
  * in `actions` are the review API's, under the action `agent-request`:
  *
  *   no token, or one that no row has    401 (`WWW-Authenticate: Bearer`), logged under `(no token)`; past `ANONYMOUS_PER_MINUTE` a minute 429 and no row
@@ -84,7 +85,7 @@ export async function serveAgentCall(req, res, ctx) {
   }
   if (req.method !== 'POST') {
     req.resume();
-    return send(res, 405, { ok: false, error: 'A run is asked for with POST.', code: 'invalid' }, { Allow: 'POST' });
+    return send(res, 405, { ok: false, error: 'A run is asked for with POST (an agent token); a runner lists the queue with GET (a runner token).', code: 'invalid' }, { Allow: 'GET, HEAD, POST' });
   }
   const repo = config.forge.repo;
   const audit = async (login, request, status, body) => {
@@ -115,7 +116,7 @@ export async function serveAgentCall(req, res, ctx) {
     if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
     const wrong = state === 'wrong-scope';
     const body = {
-      error: wrong ? `This is a ${row.scope} token. Asking for a run takes an agent token; make one in the dashboard.`
+      error: wrong ? `This is ${row.scope === 'agent' ? 'an' : 'a'} ${row.scope} token. Asking for a run takes an agent token; make one in the dashboard.`
         : state === 'revoked' ? 'This agent token was revoked; make a new one in the dashboard.' : 'This agent token has expired; make a new one in the dashboard.',
       code: 'forbidden',
     };

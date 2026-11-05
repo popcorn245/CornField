@@ -17,6 +17,7 @@
  *                 a row with `issue = 0` says the repo's threads have been looked at once
  *   runs          the agent runs cornfield asked for: the request, where it was posted, the latest report, the pull request found for
  *                 it and when anything last happened (server/agent-runs.js, migration 7); review_tokens also keep a scope
+ *                 (review, agent, or runner: migration 8, which also gives a run its transport and the runner token that claimed it)
  *   run_seen      what has been seen of each run (a comment judged, a hook event sent), so a restart sends and judges nothing twice
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
@@ -200,6 +201,36 @@ export const MIGRATIONS = Object.freeze([
     at          TEXT NOT NULL,
     PRIMARY KEY (run_id, key)
   ) STRICT;
+  `,
+  // 8: push and pull transports, and runner tokens (server/agent-runs.js, server/runner-api.js, spec 0005 D2, D5): a run records how its request
+  // travels and which runner token claimed it; the token scope check gains 'runner'. SQLite cannot change a CHECK, so review_tokens is rebuilt
+  // (the documented way: a new table, the rows copied with their ids, the old one dropped, the new one renamed) and keeps its id sequence
+  `
+  ALTER TABLE runs ADD COLUMN transport  TEXT NOT NULL DEFAULT 'forge' CHECK (transport IN ('forge', 'push', 'pull'));  -- how the request reaches the runner; a push or pull run has no request comment (comment_id stays '')
+  ALTER TABLE runs ADD COLUMN claimed_by INTEGER;   -- the runner token (review_tokens.id) that claimed a pull run, or that first reported on a push run
+  ALTER TABLE runs ADD COLUMN claimed_at TEXT;
+  CREATE INDEX runs_queue ON runs (repo, transport, state, requested_at);
+
+  CREATE TABLE review_tokens_new (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash  TEXT NOT NULL UNIQUE,
+    user_id     TEXT NOT NULL,
+    login       TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    revoked_at  TEXT,
+    last_used   TEXT,
+    scope       TEXT NOT NULL DEFAULT 'review' CHECK (scope IN ('review', 'agent', 'runner'))  -- what the token may call: POST /api/reviews, POST /api/agent-requests, or the runner routes
+  ) STRICT;
+  INSERT INTO review_tokens_new (id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope)
+    SELECT id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope FROM review_tokens;
+  UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'review_tokens'), 0)) WHERE name = 'review_tokens_new';
+  INSERT INTO sqlite_sequence (name, seq) SELECT 'review_tokens_new', seq FROM sqlite_sequence WHERE name = 'review_tokens'
+    AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'review_tokens_new');
+  DROP TABLE review_tokens;
+  ALTER TABLE review_tokens_new RENAME TO review_tokens;
+  CREATE INDEX review_tokens_user_id ON review_tokens (user_id);
   `,
 ]);
 

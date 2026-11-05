@@ -20,7 +20,7 @@
 
 import { escHtml } from './state.js';
 import { announce } from './keyboard.js';
-import { tokensUrl, DEFAULT_DAYS, MAX_DAYS, makeRequest, revokeUrl, tokenLine, errorWords } from './review-tokens-model.js';
+import { tokensUrl, introWords, DEFAULT_DAYS, MAX_DAYS, makeRequest, revokeUrl, tokenLine, errorWords } from './review-tokens-model.js';
 
 const $ = (id) => document.getElementById(id);
 let wired = false;
@@ -58,6 +58,8 @@ function paint() {
       return `<li class="hx-tokens-item" data-state="${line.state}"><span class="hx-tokens-label">${escHtml(line.label)}</span> <span class="hx-tokens-meta hx-faint">${escHtml(line.status)} · ${escHtml(line.used)}</span> ${line.canRevoke ? `<button type="button" class="hx-btn hx-btn--quiet" data-revoke="${escHtml(String(line.id))}" aria-label="Revoke ${escHtml(line.label)}"${ui.busy ? ' disabled' : ''}>Revoke</button>` : ''}</li>`;
     }).join('');
   }
+  const intro = $('tokens-intro');
+  if (intro) intro.textContent = introWords(ui.scope);
   const msg = $('tokens-msg');
   msg.hidden = !ui.message;
   msg.textContent = ui.message ? ui.message.text : '';
@@ -204,7 +206,7 @@ export function initReviewTokens(config, opts = {}) {
     dialog().addEventListener('keydown', onKey);
     $('tokens-form').addEventListener('submit', make);
     const scope = $('tokens-scope');
-    if (scope) scope.addEventListener('change', () => { ui.scope = scope.value === 'agent' ? 'agent' : 'review'; ui.loaded = false; ui.tokens = []; clearSecret(); paint(); load(); });
+    if (scope) scope.addEventListener('change', () => { ui.scope = scope.value === 'agent' || scope.value === 'runner' ? scope.value : 'review'; ui.loaded = false; ui.tokens = []; clearSecret(); paint(); load(); });
   }
   return true;
 }
