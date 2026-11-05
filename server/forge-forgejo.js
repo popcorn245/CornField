@@ -9,7 +9,8 @@
  *   - **Permission.** Forgejo has three levels, so a repo's people are `admin`, `write` or `read` and never
  *     `maintain` or `triage`; its admins are cornfield's. The signed-in user's own comes from the repo itself
  *     (`permissions`); anyone else's from the collaborator endpoint, which only a repo admin may ask (else 403).
- *   - **Issues.** `type=issues` leaves the pull requests out.
+ *   - **Issues.** `type=issues` leaves the pull requests out. A new issue's labels are given as ids (Forgejo's API takes no names),
+ *     so each is looked up and made when the repo lacks it.
  *   - **Checks.** Forgejo Actions reports each job as a commit status, so the commit's statuses are all the checks
  *     there are. Its API cannot re-run one: none is `rerunnable`.
  *   - **Runs.** `actions/runs` (Forgejo 11 and later, Gitea 1.24 and later), where Actions is on for the repo; an older
@@ -142,6 +143,14 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
     return meOnce;
   };
 
+  /** The id of the repo's label called `name`, making the label (plain grey) when it is not there */
+  async function labelId(name) {
+    const have = (await client.list(`repos/${repo}/labels?limit=${PER_PAGE}`, { what: `the labels of ${forge.repo}` })).find((l) => typeof l.name === 'string' && l.name.toLowerCase() === name.toLowerCase());
+    if (have) return have.id;
+    const { body } = await client.request('POST', `repos/${repo}/labels`, { body: { name, color: '#ededed' }, what: `the label ${name} in ${forge.repo}` });
+    return body.id;
+  }
+
   return {
     me,
 
@@ -208,16 +217,19 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return toPull((await client.request('POST', `repos/${repo}/pulls`, { body: { title: draft ? `WIP: ${title}` : title, body, head, base }, what: `a pull request in ${forge.repo}` })).body);
     },
 
-    async createIssue({ title, body }) {
-      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body }, what: `an issue in ${forge.repo}` })).body);
+    async createIssue({ title, body, labels = [] }) {
+      // Forgejo takes label ids, not names: each is looked up, and made when the repo lacks it
+      const ids = [];
+      for (const name of labels) ids.push(await labelId(name));
+      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body, ...(ids.length ? { labels: ids } : {}) }, what: `an issue in ${forge.repo}` })).body);
     },
 
     async pullFiles(n) {
       return (await client.list(`repos/${repo}/pulls/${n}/files?limit=${PER_PAGE}`, { what: `the files of ${pullWhat(n)}` })).map(toFile);
     },
 
-    async comments(n) {
-      return (await client.list(`repos/${repo}/issues/${n}/comments?limit=${PER_PAGE}`, { what: `the comments on #${n} in ${forge.repo}` })).map(toComment);
+    async comments(n, { since } = {}) {
+      return (await client.list(`repos/${repo}/issues/${n}/comments?limit=${PER_PAGE}${since ? `&since=${enc(since)}` : ''}`, { what: `the comments on #${n} in ${forge.repo}` })).map(toComment);
     },
 
     async comment(n, body) {
