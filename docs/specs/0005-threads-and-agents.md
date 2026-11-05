@@ -30,13 +30,29 @@ A request reaches the runner in one of three ways, all carrying the **same versi
 
 - **Why the forge first:** it is the one thing every stack already has, and it keeps cornfield a view on top rather than a hub everything must pass through.
 
+### D3. A run id travels as a trailer; reporting is optional and looks the same everywhere (2026-11-05)
+
+Every request carries a **run id** that cornfield mints (`run-<ulid>`).
+
+- **Identity:** the runner carries the id forward as a `Cornfield-Run: run-…` trailer in the PR body or its commits, the same trick as `Closes #n`. A branch name holding the id is a fallback: cornfield matches the trailer first, then the branch name. No branch naming scheme is imposed.
+- **Reporting, optional:** a runner may say how it is going with a fenced block, the same pattern as reviews (ADR 0005):
+
+  ````
+  ```cornfield-run run-01JC…
+  { "state": "working", "note": "tests failing on auth, retrying", "url": "https://…/logs" }
+  ```
+  ````
+
+  On the forge transport it is a comment on the request; on push or pull it is the same JSON sent to cornfield with the runner token. States: `claimed`, `working`, `done`, `failed`, `stopped`.
+- **A silent runner is fine:** a run that never reports still appears through what it pushes.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
 
 1. ~~Where an agent runs, and what "launch" means for cornfield.~~ D1.
 1a. ~~How a request reaches the runner.~~ D2.
-2. What an agent run is, as cornfield sees it (identity, lifecycle, what it leaves).
+2. ~~What an agent run is, as cornfield sees it.~~ D3.
 3. How a run is stopped, limited and paid for.
 4. Whose credentials an agent uses.
 5. What a thread is, and where its messages live.
