@@ -249,7 +249,7 @@ describe('the runs on the Agents tab', () => {
     expect(rows[0].textContent).toContain('code on issue #7');
     expect(rows[0].textContent).toContain('Runner: tests <img src=x onerror=alert(1)> failing');
     expect(rows[0].querySelector('img')).toBe(null);
-    expect([...rows[0].querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
+    expect([...rows[0].querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://github.com/owner/name/issues/7', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
     expect(rows[0].querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe(`Stop run ${RUN.runId}`);
     expect(rows[1].textContent).toContain('Quiet');
     expect(rows[1].textContent).toMatch(/no longer counts toward the limit/);

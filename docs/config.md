@@ -37,7 +37,7 @@ export default {
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
-| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `limits`): [agents](agents.md), [below](#agents) |
+| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `limits`, `refuseCollisions`): [agents](agents.md), [below](#agents) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
@@ -66,6 +66,7 @@ agents: {
   runners: ['claude-bot'],             // forge logins whose reports count, besides maintainers
   quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h')
   limits: { minutes: 30, turns: 40, cost: 5 },   // hints put in every request; a request may change them; the runner enforces them or not
+  refuseCollisions: false,             // true: refuse a new request whose `nodes` an open run is already changing (docs/agents.md#runs-on-the-map)
 },
 ```
 
