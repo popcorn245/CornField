@@ -913,3 +913,12 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 :root[data-theme="light"] .hx-forge-tab[aria-pressed="true"] { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); }
 :root[data-theme="light"] .hx-forge { box-shadow: 10px 0 30px -12px rgba(15, 23, 42, 0.18); }
 :root[data-theme="light"] .hx-forge:not(.forge-open) { box-shadow: none; }
+
+/* Threads (forge-panel.js, docs/threads.md): messages as written, read-only; a node's "Mentioned in" opens one */
+.hx-thread-msgs { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.hx-thread-msg { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--hx-line); border-radius: 10px; background: var(--hx-control); }
+.hx-thread-body { margin: 0; color: var(--hx-ink); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.hx-thread-nodes { padding-left: 0; }
+.hx-thread-compose { font-family: inherit; min-height: 8em; }
+.hx-thread-open { display: block; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+#forge-idea[hidden], #idea-form[hidden], #idea-message[hidden] { display: none; }
