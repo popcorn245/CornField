@@ -17,7 +17,7 @@ import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
 const V1_TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
-const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'sessions'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'sessions', 'thread_seen'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -52,6 +52,7 @@ describe('openStore', () => {
     expect(columns(db, 'forge_cache')).toEqual(['key', 'etag', 'body', 'fetched_at', 'expires_at']);
     expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used']);
     expect(columns(db, 'hook_seen')).toEqual(['repo', 'pr', 'head_sha', 'slug', 'at']);
+    expect(columns(db, 'thread_seen')).toEqual(['repo', 'issue', 'comment', 'stamp', 'at']);
     expect(columns(db, 'landings')).toEqual(['repo', 'pull', 'slug', 'sha', 'user_id', 'login', 'started', 'state']);
     expect(db.prepare('PRAGMA journal_mode').get().journal_mode).toBe('wal');
   });

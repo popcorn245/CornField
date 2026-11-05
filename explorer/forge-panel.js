@@ -20,6 +20,11 @@
  *     the config says it restarted. Selecting one lights those nodes (a stack brings its containers; a failed deploy lights
  *     them red) through the same paint path, turning on the layers they are on; a deploy no `deploys.restarts` names is listed and says it lights nothing.
  *     Only one thing is selected at a time, a pull request or a deploy.
+ *   - A Threads tab (docs/threads.md): the ideas (issues labelled `idea`) and the spec PRs' conversations, newest activity first.
+ *     Opening one shows its messages, read-only, with a link out to the forge to reply (writing happens there, spec 0005 D6), and
+ *     lights the nodes its text mentions (`[[node-id]]`, `[[repo/path]]`, a `cornfield-thread` block; core/mentions.js) the way a
+ *     pull request lights its files. "New idea" opens an issue with the label as the signed-in maintainer: a POST to cornfield's
+ *     own server, which guards, counts and audits it. A node's panel lists the threads that mention it (`state.threadIndex`).
  *   - Keys: Tab reaches the header button, Enter opens the panel with the focus on its title; Escape closes it and
  *     gives the focus back to the button. What happens (a list loaded, a pull request selected, what it lights, a
  *     failure) is said through the map's live region (`announce`, keyboard.js). Closed, the panel is `inert`.
@@ -51,7 +56,7 @@
 
 import { state, nodeById, escHtml, touchScene, onSceneTouch } from './state.js';
 import { render, isNodeVisible } from './render.js';
-import { selectNode } from './panels.js';
+import { selectNode, repaintThreads } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
@@ -63,6 +68,7 @@ import {
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
+  threadsUrl, threadUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -85,6 +91,11 @@ const ui = {
   landing: null, // what waits to land on its approval for the selected pull request ({ slug, by, since }), or null
   detailError: '',
   lit: null, // litFor(detail, nodes)
+  thread: null, // the selected thread's number (Threads tab)
+  threadDetail: null, // { thread, at, rate, stale } of the selected one: its messages, as written
+  threadError: '',
+  litThread: null, // litForThread(thread, nodes)
+  idea: freshIdea(), // the New idea form
   deploy: null, // the selected deploy's id; the deploy itself is `deployItem`
   deployItem: null,
   litDeploy: null, // litForDeploy(deployItem, nodes)
@@ -101,7 +112,16 @@ function freshNotes() {
   return { since: '', data: null, loading: false, error: '', confirm: false, posting: false, message: '', bad: false, link: null };
 }
 
+/** The New idea form: whether it is open, one send in flight, and what the last send came to */
+function freshIdea() {
+  return { open: false, busy: false, message: '', bad: false, link: null };
+}
+
 let wired = false;
+let threadToken = 0;
+let indexToken = 0;
+let indexLoading = false;
+let indexCache = null; // { items, nodes, map } the mentions index for the list and map it was made from
 let listToken = 0;
 let pullToken = 0;
 let notesToken = 0;
@@ -114,7 +134,7 @@ const listKey = () => listKeyOf(ui.kind, ui.filters.state);
 const current = () => (ui.kind === 'work' ? ui.work : ui.lists[listKey()]) || null;
 const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
-const kindWords = () => ({ pulls: 'pull request', issues: 'issue', deploys: 'deploy' })[ui.kind] || 'piece of work';
+const kindWords = () => ({ pulls: 'pull request', issues: 'issue', threads: 'thread', deploys: 'deploy' })[ui.kind] || 'piece of work';
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
@@ -167,7 +187,8 @@ async function loadList(refresh = false, quiet = false) {
   if (token !== listToken) return;
   ui.loading = false;
   if (res.ok) {
-    ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+    ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '', problem: res.body.problem || '' };
+    if (ui.kind === 'threads') repaintThreads();
     if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
   } else {
     ui.error = errorWords(res.status, res.body);
@@ -180,6 +201,7 @@ async function loadList(refresh = false, quiet = false) {
 /** Selects a pull request: asks for its files and checks, then lights what they are on the map */
 async function selectPull(n) {
   const token = ++pullToken;
+  dropThread();
   ui.deploy = null;
   ui.deployItem = null;
   ui.litDeploy = null;
@@ -253,7 +275,10 @@ export function clearPull() {
 /** What the selected pull request lights, worked out again: for the nodes now on the map */
 function relight() {
   ui.nodesSeen = state.nodes;
-  if (ui.deployItem) {
+  if (ui.threadDetail) {
+    ui.litThread = litForThread(ui.threadDetail.thread, state.nodes);
+    state.forgeLit = { changed: ui.litThread.changed, failing: ui.litThread.failing };
+  } else if (ui.deployItem) {
     ui.litDeploy = litForDeploy(ui.deployItem, state.nodes);
     state.forgeLit = { changed: ui.litDeploy.changed, failing: ui.litDeploy.failing };
   } else if (ui.detail) {
@@ -270,7 +295,8 @@ function relight() {
 
 /** A proposal opening, or the live layer, changes the nodes: the lights follow them */
 function onNodesChange() {
-  if ((ui.detail || ui.deployItem) && state.nodes !== ui.nodesSeen) relight();
+  if ((ui.detail || ui.deployItem || ui.threadDetail) && state.nodes !== ui.nodesSeen) relight();
+  repaintThreads();
 }
 
 /** Selects a deploy: nothing to ask (the list holds what it restarted), so its nodes light at once */
@@ -278,6 +304,7 @@ export function selectDeploy(id) {
   const found = ui.lists.deploys && ui.lists.deploys.items.find((d) => d.id === id);
   if (!found) return;
   pullToken++;
+  dropThread();
   ui.selected = null;
   ui.detail = null;
   ui.detailError = '';
@@ -306,6 +333,184 @@ export function clearDeploy() {
   render();
   paint();
   if (had) announce(`Deploy ${had.name} cleared`);
+}
+
+// ---------------------------------------------------------------------------
+//  Threads
+// ---------------------------------------------------------------------------
+
+/** Forgets the selected thread without painting: another thing is being selected */
+function dropThread() {
+  threadToken++;
+  ui.thread = null;
+  ui.threadDetail = null;
+  ui.threadError = '';
+  ui.litThread = null;
+}
+
+/** Selects a thread: asks for its messages (read-only), then lights the nodes they mention */
+async function selectThread(n) {
+  const token = ++threadToken;
+  pullToken++;
+  ui.selected = null;
+  ui.detail = null;
+  ui.detailError = '';
+  ui.lit = null;
+  ui.landing = null;
+  ui.deploy = null;
+  ui.deployItem = null;
+  ui.litDeploy = null;
+  ui.thread = n;
+  ui.threadDetail = null;
+  ui.threadError = '';
+  ui.litThread = null;
+  state.forgeLit = null;
+  touchScene();
+  render();
+  paint();
+  const res = await request(threadUrl(n), false);
+  if (token !== threadToken) return;
+  if (!res.ok) {
+    ui.threadError = errorWords(res.status, res.body);
+    announce(ui.threadError);
+    paint();
+    return;
+  }
+  ui.threadDetail = { thread: res.body.thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+  relight();
+  $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the thread's messages are what was asked for, not the row that was tapped
+  announce(threadSelectionWords());
+}
+
+/** Lets go of the selected thread: nothing is lit any more */
+export function clearThread() {
+  const had = ui.thread;
+  dropThread();
+  state.forgeLit = null;
+  touchScene();
+  render();
+  paint();
+  if (had !== null) announce(`Thread ${had} cleared`);
+}
+
+/** What a screen reader hears when a thread is selected */
+function threadSelectionWords() {
+  const { thread } = ui.threadDetail;
+  const lit = ui.litThread ? ui.litThread.nodes.length : 0;
+  const off = ui.litThread ? ui.litThread.unresolved.length : 0;
+  return `Thread ${thread.number}, ${thread.title}: ${plural(thread.messages.length, 'message')}, ${lit ? `${plural(lit, 'node')} lit` : 'no node mentioned'}${off ? `, ${off} named that ${off === 1 ? 'is' : 'are'} not on the map` : ''}. Read-only: reply on ${forgeName()}.`;
+}
+
+/** Shows a thread from the map (a node's "Mentioned in"): the panel opens on the Threads tab with that thread selected */
+function openThread(n) {
+  if (ui.kind !== 'threads') {
+    ui.kind = 'threads';
+    ui.actNote = null;
+    ui.filters = defaultFilters('threads');
+  }
+  openForge();
+  paintFilters();
+  selectThread(n);
+}
+
+/** The threads list for the node panel's "Mentioned in", read once (quietly) when a node is first selected, and when the Threads tab loads it */
+function ensureThreadsList() {
+  if (!ui.config || ui.config.threads === false || ui.lists['threads|open'] || indexLoading) return;
+  indexLoading = true;
+  const token = ++indexToken;
+  request(threadsUrl('open'), false).then((res) => {
+    indexLoading = false;
+    if (token !== indexToken || !res.ok || ui.lists['threads|open']) return;
+    ui.lists['threads|open'] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '', problem: res.body.problem || '' };
+    repaintThreads();
+    if (ui.open && ui.kind === 'threads') paint();
+  });
+}
+
+/** The threads that mention a node on the map now, or null while the list has not been read */
+function threadsFor(nodeId) {
+  const list = ui.lists['threads|open'];
+  if (!list) return null;
+  if (!indexCache || indexCache.items !== list.items || indexCache.nodes !== state.nodes) indexCache = { items: list.items, nodes: state.nodes, map: mentionsIndex(list.items, state.nodes) };
+  return indexCache.map.get(nodeId) || [];
+}
+
+// ---------------------------------------------------------------------------
+//  New idea
+// ---------------------------------------------------------------------------
+
+/** Opens or closes the form; the focus goes to the title, or back to the button */
+function toggleIdea(open) {
+  ui.idea.open = open;
+  if (open) ui.idea.message = '';
+  paintIdea();
+  if (open) $('idea-title').focus(); else $('idea-open').focus();
+}
+
+/** The one write: a POST to cornfield's own server, which opens an issue with the label as the maintainer */
+async function sendIdea() {
+  if (ui.idea.busy) return;
+  const asked = ideaRequest($('idea-title').value, $('idea-body').value);
+  if (!asked) {
+    ui.idea.message = 'Give the idea a title.';
+    ui.idea.bad = true;
+    ui.idea.link = null;
+    paintIdea();
+    announce(ui.idea.message);
+    $('idea-title').focus();
+    return;
+  }
+  ui.idea.busy = true;
+  ui.idea.message = '';
+  paintIdea();
+  announce(`Opening the idea on ${forgeName()}`);
+  const res = await post(IDEAS_URL, asked);
+  ui.idea.busy = false;
+  ui.idea.message = ideaWords(forgeName(), res);
+  ui.idea.bad = !res.ok;
+  ui.idea.link = res.ok && res.body.issue ? res.body.issue.url : null;
+  if (res.ok) {
+    ui.idea.open = false;
+    $('idea-title').value = '';
+    $('idea-body').value = '';
+  }
+  paintIdea();
+  announce(ui.idea.message);
+  if (res.ok) {
+    ui.lists = {};
+    indexCache = null;
+    await loadList(true, true);
+    ensureThreadsList();
+    $('idea-open').focus();
+  } else $('idea-title').focus();
+}
+
+/** The New idea bar and form, from `ui.idea`; typed text and the focus are left alone */
+function paintIdea() {
+  const bar = $('forge-idea');
+  if (!bar) return;
+  bar.hidden = ui.kind !== 'threads';
+  $('idea-open').setAttribute('aria-expanded', String(ui.idea.open));
+  $('idea-form').hidden = !ui.idea.open;
+  $('idea-send').textContent = ui.idea.busy ? 'Opening …' : 'Open the idea';
+  $('idea-send').disabled = ui.idea.busy;
+  if (ui.idea.open) {
+    const label = (ui.config && ui.config.threads && ui.config.threads.label) || 'idea';
+    $('idea-words').textContent = `This opens an issue labelled "${label}" on ${forgeName()}, as you. The conversation lives there; cornfield keeps no copy of it.`;
+  }
+  const message = $('idea-message');
+  message.hidden = !ui.idea.message;
+  message.classList.toggle('hx-forge-msg--bad', ui.idea.bad);
+  message.textContent = ui.idea.message;
+  if (ui.idea.message && ui.idea.link && safeUrl(ui.idea.link)) {
+    const link = document.createElement('a');
+    link.className = 'hx-link';
+    link.href = ui.idea.link;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.textContent = `Open it on ${forgeName()} (new tab)`;
+    message.append(' ', link);
+  }
 }
 
 /** What a screen reader hears when a deploy is selected */
@@ -480,10 +685,10 @@ function paintFilters() {
   $('forge-label').innerHTML = option('', 'Any label', !ui.filters.label) + labels.map((l) => option(l, l, l === ui.filters.label)).join('');
   $('forge-author').innerHTML = option('', 'Anyone', !ui.filters.author) + authors.map((a) => option(a, a, a === ui.filters.author)).join('');
   // A deploy has no labels and no author to pick: its list is filtered by state and the search
-  $('forge-label').parentElement.hidden = ui.kind === 'deploys';
+  $('forge-label').parentElement.hidden = ui.kind === 'deploys' || ui.kind === 'threads';
   $('forge-author').parentElement.hidden = ui.kind === 'deploys';
   // …and its search reads the workflow, what it ran for, the branch and who started it, not a number or a label
-  $('forge-text').placeholder = ui.kind === 'deploys' ? 'Workflow, branch, commit, who' : 'Title, number, label';
+  $('forge-text').placeholder = ui.kind === 'deploys' ? 'Workflow, branch, commit, who' : ui.kind === 'threads' ? 'Title, number, author' : 'Title, number, label';
 }
 
 /** What a deploy lights, said short, for its row: how many nodes, or that it is not mapped */
@@ -502,8 +707,19 @@ function deployHtml(d) {
     <span class="hx-forge-labels"><span class="hx-forge-label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
 }
 
+/** One thread in the list: a row that opens it, and a link out to the forge */
+function threadHtml(t) {
+  const link = safeUrl(t.url);
+  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open thread ${t.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  const note = [t.proposals && t.proposals.length ? `Proposal ${t.proposals.map((p) => p.slug).join(', ')}` : '', t.idea ? `Idea #${t.idea}` : ''].filter(Boolean).join(' · ');
+  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}">
+    <span class="hx-forge-title">${escHtml(t.title)}</span>
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}">${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> <span class="hx-forge-label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
+}
+
 function itemHtml(item, before = '', after = '') {
   if (ui.kind === 'deploys') return deployHtml(item);
+  if (ui.kind === 'threads') return threadHtml(item);
   const link = safeUrl(item.url);
   const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
@@ -561,7 +777,48 @@ function deployDetailHtml() {
   return `${head}${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${body}`;
 }
 
+/** A node button, as in a pull request's files: it selects the node on the map */
+const nodeButton = (n) => `<button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button>`;
+
+/** The selected thread: read-only, its messages as written, a way to reply on the forge, and the nodes its text lights */
+function threadDetailHtml() {
+  const head = (title) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-thread">Clear</button></div>`;
+  if (ui.threadError) return `${head(`Thread ${ui.thread}`)}<p class="hx-forge-notice">${escHtml(ui.threadError)}</p>`;
+  if (!ui.threadDetail) return `${head(`Thread ${ui.thread}`)}<p class="hx-faint">Loading its messages …</p>`;
+  const { thread: t, stale } = ui.threadDetail;
+  const lit = ui.litThread;
+  const url = safeUrl(t.url);
+  const reply = url ? `<a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(forgeName())} (new tab)</a>` : '';
+  const named = [
+    ...(t.proposals || []).map((p) => `Proposal <code class="hx-code">${escHtml(p.slug)}</code> in pull request #${p.pull}`),
+    ...(t.kind === 'proposal' ? [`Spec pull request for <code class="hx-code">${escHtml((t.slugs || []).join(', '))}</code>`] : []),
+    ...(t.idea ? [`Names idea #${t.idea}`] : []),
+  ];
+  const msgs = t.messages.map((m) => {
+    const own = lit.perMessage.get(m.id) || { nodes: [], unresolved: [] };
+    const link = safeUrl(m.url) ? ` <a class="hx-link" href="${escHtml(m.url)}" target="_blank" rel="noreferrer" aria-label="Open this message on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+    const chips = own.nodes.length || own.unresolved.length
+      ? `<span class="hx-forge-nodes hx-thread-nodes">${own.nodes.map(nodeButton).join('')}${own.unresolved.length ? `<span class="hx-faint">not on the map: ${own.unresolved.map((r) => `<code class="hx-code">${escHtml(r)}</code>`).join(' ')}</span>` : ''}</span>`
+      : '';
+    return `<li class="hx-thread-msg"><p class="hx-forge-meta"><strong class="hx-strong">${escHtml(m.author ? m.author.login : 'someone')}</strong>${m.opening ? ' opened this' : ''} · ${escHtml(relativeTime(m.createdAt, now()))}${link}</p><p class="hx-thread-body">${escHtml(m.body.trim() === '' ? '(no text)' : m.body)}${m.cut ? '\n… (cut here; the rest is on the forge)' : ''}</p>${chips}</li>`;
+  }).join('');
+  const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a node this thread mentions</p>` : '';
+  return `${head(`#${t.number} ${escHtml(t.title)}`)}
+    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}">${t.state === 'open' ? 'Open' : 'Closed'}</span> ${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, now()))}</p>
+    <p class="hx-forge-why hx-faint">Read-only here: a thread is a conversation on ${escHtml(forgeName())}, so you reply there. ${reply}</p>
+    ${named.length ? `<p class="hx-forge-meta">${named.join(' · ')}</p>` : ''}
+    ${stale ? `<p class="hx-forge-notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
+    <h4 class="hx-forge-sub">${escHtml(`Mentions: ${plural(lit.nodes.length, 'node')} on the map`)}</h4>
+    ${key}
+    ${lit.nodes.length ? `<span class="hx-forge-nodes hx-thread-nodes">${lit.nodes.map(nodeButton).join('')}</span>` : '<p class="hx-faint">No message mentions a node. Write [[node-id]] or [[repo/path]] in a message to point at the map.</p>'}
+    ${lit.unresolved.length ? `<p class="hx-forge-notice">${escHtml(lit.unresolved.join(', '))} ${lit.unresolved.length === 1 ? 'is' : 'are'} mentioned but not on the map, so ${lit.unresolved.length === 1 ? 'it stays' : 'they stay'} text.</p>` : ''}
+    <h4 class="hx-forge-sub">${escHtml(plural(t.messages.length, 'message'))}</h4>
+    ${t.hidden ? `<p class="hx-forge-why hx-faint">${escHtml(plural(t.hidden, 'earlier message'))} not shown; they are on ${escHtml(forgeName())}.</p>` : ''}
+    <ol class="hx-thread-msgs" aria-label="Messages">${msgs}</ol>`;
+}
+
 function detailHtml() {
+  if (ui.thread !== null) return threadDetailHtml();
   if (ui.deployItem) return deployDetailHtml();
   if (ui.selected === null) return '';
   const head = (title, link) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-pr">Clear</button></div>${link || ''}`;
@@ -636,6 +893,7 @@ function findAgain(el) {
   if (!el || !el.dataset) return null;
   if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
   if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
+  if (el.dataset.forgeThread) return `[data-forge-thread="${el.dataset.forgeThread}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
   if (el.dataset.forgeMerge) return '[data-forge-merge]';
   if (el.dataset.forgeSpec) return `[data-forge-spec="${el.dataset.forgeSpec}"]`;
@@ -677,7 +935,7 @@ function draw(panel) {
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
-  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '');
+  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '') || (ui.kind === 'threads' && list && list.problem ? `Some threads could not all be read: ${list.problem}` : '');
   notice.hidden = !words;
   notice.textContent = words;
 
@@ -695,11 +953,12 @@ function draw(panel) {
   else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
 
   const detail = $('forge-detail');
-  detail.hidden = ui.selected === null && !ui.deployItem;
-  detail.setAttribute('aria-label', ui.deployItem ? 'Selected deploy' : 'Selected pull request');
+  detail.hidden = ui.selected === null && !ui.deployItem && ui.thread === null;
+  detail.setAttribute('aria-label', ui.thread !== null ? 'Selected thread' : ui.deployItem ? 'Selected deploy' : 'Selected pull request');
   detail.innerHTML = detailHtml();
 
-  const rate = (ui.detail && ui.detail.rate) || (list && list.rate) || '';
+  paintIdea();
+  const rate = (ui.threadDetail && ui.threadDetail.rate) || (ui.detail && ui.detail.rate) || (list && list.rate) || '';
   $('forge-rate').textContent = rate;
   paintButton();
 }
@@ -713,6 +972,7 @@ function drawNotes() {
   notice.hidden = !words;
   notice.textContent = words;
   $('forge-detail').hidden = true;
+  paintIdea();
   $('forge-rate').textContent = (n.data && n.data.rate) || '';
   paintNotes();
   paintButton();
@@ -722,11 +982,11 @@ function drawNotes() {
 function paintButton() {
   const btn = $('forge-btn');
   if (!btn) return;
-  const lit = ui.selected !== null || !!ui.deployItem;
+  const lit = ui.selected !== null || !!ui.deployItem || ui.thread !== null;
   const tag = $('forge-btn-lit');
   tag.hidden = !lit;
-  tag.textContent = ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
-  btn.setAttribute('aria-label', ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
+  tag.textContent = ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  btn.setAttribute('aria-label', ui.thread !== null ? `Issues and pull requests, thread ${ui.thread} selected` : ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
   btn.setAttribute('aria-expanded', String(ui.open));
 }
 
@@ -981,6 +1241,15 @@ export async function refreshForge({ quiet = false } = {}) {
     if (again) { ui.deployItem = again; relight(); }
     return;
   }
+  if (ui.thread !== null) {
+    const at = ui.thread;
+    const token = ++threadToken;
+    const res = await request(threadUrl(at), true);
+    if (token !== threadToken || !res.ok) return;
+    ui.threadDetail = { thread: res.body.thread, at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
+    relight();
+    return;
+  }
   if (n !== null && ui.selected === n) {
     const token = ++pullToken;
     const res = await request(pullUrl(n), true);
@@ -1027,6 +1296,12 @@ function onClick(e) {
     if (ui.selected === n) clearPull(); else selectPull(n);
     return;
   }
+  const thr = t.closest('[data-forge-thread]');
+  if (thr) {
+    const n = Number(thr.dataset.forgeThread);
+    if (ui.thread === n) clearThread(); else selectThread(n);
+    return;
+  }
   const dep = t.closest('[data-forge-deploy]');
   if (dep) {
     if (ui.deploy === dep.dataset.forgeDeploy) clearDeploy(); else selectDeploy(dep.dataset.forgeDeploy);
@@ -1062,6 +1337,10 @@ function onClick(e) {
   else if (action.dataset.action === 'cancel-notes') { closeNotesConfirm(); announce('Cancelled. Nothing was posted.'); }
   else if (action.dataset.action === 'clear-forge-pr') { clearPull(); $('forge-title').focus(); }
   else if (action.dataset.action === 'clear-forge-deploy') { clearDeploy(); $('forge-title').focus(); }
+  else if (action.dataset.action === 'clear-forge-thread') { clearThread(); $('forge-title').focus(); }
+  else if (action.dataset.action === 'idea-open') toggleIdea(!ui.idea.open);
+  else if (action.dataset.action === 'idea-send') sendIdea();
+  else if (action.dataset.action === 'idea-cancel') { toggleIdea(false); announce('Cancelled. Nothing was opened.'); }
 }
 
 function onChange(e) {
@@ -1126,6 +1405,11 @@ export function initForgePanel(config, opts = {}) {
   if (opts.clock) now = opts.clock;
   btn.hidden = false;
   panel.hidden = false;
+  // `threads: false` in the config turns the tab off; a server that does not say has threads
+  const threadsOn = config.threads !== false;
+  const tab = panel.querySelector('[data-forge-kind="threads"]');
+  if (tab) tab.hidden = !threadsOn;
+  state.threadIndex = threadsOn ? { for: threadsFor, ensure: ensureThreadsList, open: openThread } : null;
   registerSheet('forge', panel);
   paintFilters();
   paint();
@@ -1142,6 +1426,12 @@ export function initForgePanel(config, opts = {}) {
       confirm.addEventListener('keydown', onConfirmKey);
     }
     offScene = onSceneTouch(onNodesChange);
+    // A node's panel lists the threads that mention it; a click there shows one in this panel
+    const drawer = $('spec-drawer');
+    if (drawer) drawer.addEventListener('click', (e) => {
+      const open = e.target.closest && e.target.closest('[data-thread-open]');
+      if (open && state.threadIndex) openThread(Number(open.dataset.threadOpen));
+    });
   }
   return true;
 }
@@ -1157,6 +1447,11 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   listToken++;
   pullToken++;
   notesToken++;
+  threadToken++;
+  indexToken++;
+  indexLoading = false;
+  indexCache = null;
   state.forgeLit = null;
-  Object.assign(ui, { config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
+  state.threadIndex = null;
+  Object.assign(ui, { thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
 }

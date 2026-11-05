@@ -84,7 +84,7 @@ function entryOf(pull, file) {
  * @param {import('./forge.js').Forge} forge
  * @param {{ proposals: string }} where
  * @param {{ hooks?: { specsSeen: Function } | null }} [opts]
- * @returns {Promise<{ entries: PullEntry[], problem: string | null }>}
+ * @returns {Promise<{ entries: PullEntry[], problem: string | null, pulls: import('./forge.js').Pull[] }>} `pulls`: the open pull requests listed (a thread look reads their text, server/threads.js)
  */
 export async function listPullProposals(forge, where, { hooks = null } = {}) {
   const folder = folderOf(where);
@@ -92,7 +92,7 @@ export async function listPullProposals(forge, where, { hooks = null } = {}) {
   try {
     pulls = await forge.pulls({ state: 'open' });
   } catch (err) {
-    return { entries: [], problem: forgeWords(err) };
+    return { entries: [], problem: forgeWords(err), pulls: [] };
   }
   let problem = null;
   const found = pulls.map(() => []);
@@ -112,7 +112,7 @@ export async function listPullProposals(forge, where, { hooks = null } = {}) {
   if (hooks) {
     try { hooks.specsSeen(forge.repo, entries, (entry) => readPullProposal(forge, where, entry)); } catch { /* a hook never gets in the way */ }
   }
-  return { entries, problem };
+  return { entries, problem, pulls };
 }
 
 /**

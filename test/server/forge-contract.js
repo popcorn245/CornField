@@ -43,6 +43,14 @@ function writeRoutes(type) {
       : { 'POST /repos/owner/name/branches': (req) => (json(req).new_branch_name === 'feature/meals' ? { status: 409, body: { message: 'branch already exists' } } : { status: 201, body: { name: json(req).new_branch_name, commit: { id: '0000000000000000000000000000000000000001' } } }) }),
     [`${verb} /repos/owner/name/contents/docs/specs/proposals/7-new.json`]: make('docs/specs/proposals/7-new.json'),
     [`${verb} /repos/owner/name/contents/docs/specs/proposals/0013-meals.json`]: make('docs/specs/proposals/0013-meals.json'),
+    // Following a thread (docs/threads.md): the comments created or edited since a time, and the label an idea carries
+    [`GET /repos/owner/name/issues/12/comments?${github ? 'per_page=100' : 'limit=50'}&since=2026-10-17T10%3A21%3A00.000Z`]: {
+      body: [{ id: 9002, user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, body: 'second', html_url: `${base}/owner/name/pulls/12#issuecomment-9002`, created_at: '2026-10-17T10:20:00Z', updated_at: '2026-10-17T10:25:00Z' }],
+    },
+    ...(github ? {} : {
+      'GET /repos/owner/name/labels?limit=50': { body: [{ id: 7, name: 'Idea' }, { id: 8, name: 'v1' }] },
+      'POST /repos/owner/name/labels': (req) => ({ status: 201, body: { id: 9, name: json(req).name } }),
+    }),
     'POST /repos/owner/name/pulls': (req) => ({ status: 201, body: pull(30, json(req).title, json(req).head, json(req).base, json(req).draft === true) }),
     'POST /repos/owner/name/issues': (req) => ({ status: 201, body: { number: 31, title: json(req).title, state: 'open', user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, labels: [], body: json(req).body, comments: 0, html_url: `${base}/owner/name/issues/31`, created_at: '2026-10-19T10:00:00Z', updated_at: '2026-10-19T10:00:00Z', closed_at: null } }),
   };
@@ -236,6 +244,39 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
     it('createIssue(): an issue with its title and text', async () => {
       expect(await forge.createIssue({ title: 'Build: Meals', body: '- [ ] a node' })).toMatchObject({ number: 31, title: 'Build: Meals', body: '- [ ] a node', state: 'open' });
       expect(JSON.parse(sent('POST')[0].body)).toEqual({ title: 'Build: Meals', body: '- [ ] a node' });
+    });
+
+    it('comments(): since a time, only those created or edited after it; a time that is not one is refused before the forge is asked', async () => {
+      const later = await forge.comments(12, { since: '2026-10-17T10:21:00Z' });
+      expect(later.map((c) => c.id)).toEqual(['9002']);
+      expect(fake.requests[0].url).toContain(`since=2026-10-17T10%3A21%3A00.000Z`);
+      fake.requests.length = 0;
+      for (const bad of ['yesterday', 7, '', '2026-13-45T00:00:00Z', null]) await forgeError(() => forge.comments(12, { since: bad }), 'invalid');
+      await forgeError(() => forge.comments(12, 'since'), 'invalid');
+      expect(fake.requests).toEqual([]);
+    });
+
+    it('createIssue(): with labels, by name on GitHub and by id on Forgejo (a label the repo lacks is made first)', async () => {
+      const first = await forge.createIssue({ title: 'An idea', body: 'what if', labels: ['idea'] });
+      const issue = sent('POST').find((r) => r.url.endsWith('/issues'));
+      expect(first.labelsMade).toBeUndefined(); // nothing was made by cornfield
+      if (type === 'github') {
+        expect(JSON.parse(issue.body)).toEqual({ title: 'An idea', body: 'what if', labels: ['idea'] });
+        return;
+      }
+      // Forgejo: `Idea` is the repo's label (7), found whatever the case
+      expect(JSON.parse(issue.body)).toEqual({ title: 'An idea', body: 'what if', labels: [7] });
+      expect(sent('POST').filter((r) => r.url.endsWith('/labels'))).toEqual([]);
+      fake.requests.length = 0;
+      const second = await forge.createIssue({ title: 'Another', body: 'b', labels: ['rfc', 'v1'] });
+      expect(JSON.parse(sent('POST').find((r) => r.url.endsWith('/labels')).body)).toMatchObject({ name: 'rfc' });
+      expect(second.labelsMade).toEqual(['rfc']); // the label cornfield made is said, for the audit row
+      expect(JSON.parse(sent('POST').find((r) => r.url.endsWith('/issues')).body).labels).toEqual([9, 8]);
+    });
+
+    it('createIssue(): labels that are not names are refused before the forge is asked', async () => {
+      for (const labels of ['idea', [''], ['a,b'], [' x'], [7], ['a', 'b', 'c', 'd', 'e', 'f']]) await forgeError(() => forge.createIssue({ title: 't', body: 'b', labels }), 'invalid');
+      expect(fake.requests).toEqual([]);
     });
 
     it('refuses the arguments of a write that are not what the interface takes, before the forge is asked', async () => {
