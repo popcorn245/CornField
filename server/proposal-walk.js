@@ -6,7 +6,7 @@
  * A worktrees folder can be huge and slow (147 worktrees of 50 proposals each on a Windows drive seen through WSL's 9p:
  * minutes of reads). So the walk is:
  *
- *  - **async**: only `fs.promises` calls, at most `CONCURRENCY` in flight at once (a slow mount is not hammered with
+ *  - **async**: only `fs.promises` calls, at most `CONCURRENCY` in flight at once across all walks (a slow mount is not hammered with
  *    thousands of opens), and a turn of the event loop given back every `YIELD_EVERY` calls, so `/healthz` and the
  *    other routes are answered meanwhile. No worker thread: nothing in it is CPU-bound, only waiting on the disk;
  *  - **cached by path, mtime and size**: a file whose stamp is unchanged is not read again, so a listing with nothing
@@ -75,6 +75,8 @@ function parseProposal(text) {
 export function createProposalLister({ fs = fsp, concurrency = CONCURRENCY, maxEntries = MAX_ENTRIES, now = Date.now } = {}) {
   /** One state per place walked: its cache (path -> record) and the walk under way */
   const states = new Map();
+  /** One gate for every walk of this lister: two walks at once (a listing, and a lookup of one source) share the limit */
+  const io = gateOf(concurrency);
 
   function stateOf(key) {
     let state = states.get(key);
@@ -90,7 +92,6 @@ export function createProposalLister({ fs = fsp, concurrency = CONCURRENCY, maxE
 
   async function walk(where, state, only) {
     const { cache } = state;
-    const io = gateOf(concurrency);
     const seen = new Set();
     const base = path.resolve(where.root);
     const maxAgeMs = where.worktreeMaxAgeDays > 0 ? where.worktreeMaxAgeDays * DAY_MS : null;

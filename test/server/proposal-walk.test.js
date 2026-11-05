@@ -166,6 +166,32 @@ describe('listing the proposals of the worktrees', () => {
     expect(peak).toBeGreaterThan(1);
   });
 
+  it('keeps no more than 8 calls in flight across walks running at once', async () => {
+    seed(10);
+    let active = 0;
+    let peak = 0;
+    const track = (fn) => async (...a) => { active++; peak = Math.max(peak, active); try { await new Promise((r) => setTimeout(r, 2)); return await fn(...a); } finally { active--; } };
+    const l = lister({ readdir: track(fsp.readdir), lstat: track(fsp.lstat), readFile: track(fsp.readFile) });
+    await Promise.all([l.list(whereOf(root)), l.list(whereOf(root), { only: 'w3' }), l.list(whereOf(root), { only: 'checkout' })]);
+    expect(peak).toBeLessThanOrEqual(8);
+  });
+
+  it('hands a failed walk to every listing that joined it, and the next listing walks afresh', async () => {
+    seed(2, 2);
+    const fake = slowFs(2);
+    let broken = true;
+    const readdir = fake.readdir;
+    fake.readdir = async (...a) => (broken && a[1]?.withFileTypes ? null : readdir(...a)); // the worktrees folder answers nonsense once
+    const l = lister(fake);
+    const results = await Promise.allSettled([l.list(whereOf(root)), l.list(whereOf(root)), l.list(whereOf(root))]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected', 'rejected']);
+    expect(results[1].reason).toBe(results[0].reason);
+    broken = false;
+    const list = await l.list(whereOf(root));
+    expect(names(list)).toEqual(['001-p@checkout', '002-p@checkout']); // the worktree copies are compared, not taken from a half-done walk
+    expect(fake.calls.readFile).toBe(2 + 4); // the checkout's 2 were cached by the failed walk; each worktree file is read once now
+  });
+
   it('leaves out a worktree whose newest proposal is older than maxAgeDays', async () => {
     seed(3, 2);
     put('.claude/worktrees/w0', '009-old.json', doc(9));
