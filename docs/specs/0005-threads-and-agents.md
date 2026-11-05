@@ -86,6 +86,13 @@ This changes the earlier plan (the vision and #14) to keep threads in cornfield'
   - a run started from a thread posts its request *in* that thread, so the comment is the link;
   - viewing a thread lights every node it mentions, and a node's panel lists the threads that mention it.
 
+### D8. cornfield holds no model; thinking is a run, and models are profiles the runner resolves (2026-11-05)
+
+- **No model config in cornfield, ever:** no provider, no `baseUrl`, no keys.
+- **What cornfield would "think" about is a request too.** Summarising a thread, drafting a brief or turning a thread into a proposal is a request with a `kind` (`code`, `summary`, `brief`, `proposal`) that the runner does with whatever model it likes.
+- **Requests carry an optional `profile`** from a list the developer names (`agents.profiles: ['claude', 'local-qwen']`). The runner maps each name to a model, a machine and a budget; cornfield only knows the name.
+- **Side by side:** the same request started under two profiles is two runs, shown next to each other (branches, checks, any reported cost, and their diffs on the map). That answers the #14 comment about starting on Claude, moving to Ollama, and running both in parallel to compare.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
@@ -98,6 +105,6 @@ The tree, roughly in the order each answer unlocks the next:
 5. ~~What a thread is, and where its messages live.~~ D6.
 6. ~~Who writes in a thread, and how.~~ D6: anyone, on the forge, as themselves.
 7. ~~How a thread connects to issues, nodes, proposals and runs.~~ D7.
-8. Models: where `models: { provider, baseUrl, model }` belongs, if anywhere.
+8. ~~Models.~~ D8.
 9. What cornfield shows of a run while it is going.
 10. The safe-actions line (ADR 0006) for v2.
