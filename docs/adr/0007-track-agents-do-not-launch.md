@@ -1,6 +1,6 @@
 # ADR 0007: v1 tracks agents by what they leave; it does not launch them
 
-Status: accepted (maintainer, 2026-10-17)
+Status: accepted (maintainer, 2026-10-17); **superseded by [ADR 0012](0012-cornfield-asks-runners-act.md)** (maintainer's go-ahead to build [spec 0005](../specs/0005-threads-and-agents.md), 2026-11-05). Tracking stays; launching is now asking a runner.
 
 ## Decision
 
