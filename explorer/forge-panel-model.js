@@ -24,17 +24,21 @@
  *                             where a step's plan is read, what the confirm step shows of it, what is sent to confirm it, and what is said of one that is made already
  *   landingUrl, cancelLandingUrl, landingWords
  *                             a spec pull request waiting to land on its approval (`proposals.approveLands`, server/lander.js): where it is read, where it is cancelled, and the words
+ *   threadsUrl, threadUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, mentionsOf, messageNodes, ideaRequest, ideaWords
+ *                             the Threads tab (docs/threads.md): what to ask, a thread's words, which nodes its text lights and which threads mention a node
  *   notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest
  *                             the Release notes view: what to ask, the tags to start from, and the words around a draft
  */
 
 import { relativeTime } from './review-model.js';
+import { nodesForFile, linksOf, parseMentions, resolveMentions } from '../core/mentions.js';
 
-export const KINDS = Object.freeze(['pulls', 'issues', 'deploys', 'notes']);
+export const KINDS = Object.freeze(['pulls', 'issues', 'threads', 'deploys', 'notes']);
 /** The states a list offers: [value, label]; a pull request that landed is "merged", one closed without landing "closed" */
 export const STATES = Object.freeze({
   pulls: [['open', 'Open'], ['merged', 'Merged'], ['closed', 'Closed'], ['all', 'All']],
   issues: [['open', 'Open'], ['closed', 'Closed'], ['all', 'All']],
+  threads: [['open', 'Open'], ['closed', 'Closed'], ['all', 'All']],
   deploys: [['all', 'All'], ['success', 'Succeeded'], ['failure', 'Failed'], ['running', 'Running or waiting'], ['other', 'Cancelled or skipped']],
 });
 /** How many a list asks for (the server's own default; its most is 300) */
@@ -50,9 +54,13 @@ export const defaultFilters = (kind = 'pulls') => ({ state: kind === 'deploys' ?
 export const serverState = (state) => (state === 'merged' ? 'closed' : state);
 
 /** The address of a list */
-export const listUrl = (kind, state) => (kind === 'deploys' ? `/api/forge/deploys?limit=${LIST_LIMIT}` : `/api/forge/${kind}?state=${serverState(state)}&limit=${LIST_LIMIT}`);
+export const listUrl = (kind, state) => (kind === 'deploys' ? `/api/forge/deploys?limit=${LIST_LIMIT}` : kind === 'threads' ? threadsUrl(state) : `/api/forge/${kind}?state=${serverState(state)}&limit=${LIST_LIMIT}`);
 /** What a list is kept under: a deploys list is filtered by state here, so every state is one list */
 export const listKeyOf = (kind, state) => (kind === 'deploys' ? 'deploys' : `${kind}|${serverState(state)}`);
+/** The address of the threads list for a state, of one thread, and where a new idea is posted */
+export const threadsUrl = (state) => `/api/forge/threads?state=${state}&limit=${LIST_LIMIT}`;
+export const threadUrl = (n) => `/api/forge/threads/${n}`;
+export const IDEAS_URL = '/api/forge/threads';
 /** The address of one pull request with its files and checks */
 export const pullUrl = (n) => `/api/forge/pulls/${n}`;
 
@@ -152,25 +160,8 @@ export function checksWords(checks) {
 
 const clean = (p) => String(p).replace(/^\.\//, '').replace(/\/+$/, '');
 
-/**
- * The node(s) whose `file` holds a path: the node's `file` is the path itself or a folder above it, and the deepest
- * (longest) `file` wins. A file that holds several nodes (a page and what renders it) lights all of them.
- * @param {string} path a repo-relative path
- * @param {{ id: string, file?: string }[]} nodes
- * @returns {object[]} the nodes, [] when none holds it
- */
-export function nodesForFile(path, nodes) {
-  const p = clean(path);
-  let best = -1;
-  let out = [];
-  for (const node of nodes) {
-    if (typeof node.file !== 'string' || node.file === '') continue;
-    const file = clean(node.file);
-    if (p !== file && !p.startsWith(`${file}/`)) continue;
-    if (file.length > best) { best = file.length; out = [node]; } else if (file.length === best) out.push(node);
-  }
-  return out;
-}
+// The map's rule for a file's node(s) is core/mentions.js's too (a thread's [[server/auth.js]] resolves the same way)
+export { nodesForFile };
 
 const TEST_PATH = /(?:^|\/)(?:tests?|__tests__|spec|specs)\/|\.(?:test|spec)\.[a-z]+$|_test\.[a-z]+$|(?:^|\/)test_[^/]+\.py$/i;
 /** Whether a path looks like a test file */
@@ -277,6 +268,82 @@ export function litForDeploy(deploy, nodes) {
   return deploy.state === 'failure'
     ? { nodes: hit, missing, changed: new Set(), failing: ids }
     : { nodes: hit, missing, changed: ids, failing: new Set() };
+}
+
+// ---------------------------------------------------------------------------
+//  Threads: a conversation on the forge that points at the map (core/mentions.js)
+// ---------------------------------------------------------------------------
+
+/** "Idea", or "Proposal 0040-meals" for a spec PR's conversation */
+export const threadKindWords = (t) => (t.kind === 'proposal' ? `Proposal${t.slugs && t.slugs.length ? ` ${t.slugs.join(', ')}` : ''}` : 'Idea');
+
+/** "#41 · maintainer-one · 3 comments · 2 days ago" (the time of the last message) */
+export function threadMeta(t, nowMs) {
+  const count = t.kind === 'proposal' && !t.comments ? 'no comments' : `${t.comments} ${t.comments === 1 ? 'comment' : 'comments'}`;
+  return [`#${t.number}`, t.author ? t.author.login : 'someone', count, relativeTime(t.updatedAt, nowMs)].filter(Boolean).join(' · ');
+}
+
+/**
+ * The nodes the references in some texts stand for, against the map now on screen. `refs` are as the server gives them (or
+ * as `linksOf` finds them); what is on no node stays text.
+ * @param {string[]} refs
+ * @param {{ id: string, file?: string }[]} nodes
+ * @returns {{ ids: string[], nodes: object[], unresolved: string[], resolved: { ref: string, ids: string[] }[] }}
+ */
+export function mentionsOf(refs, nodes) {
+  const got = resolveMentions(refs, nodes);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return { ...got, nodes: got.ids.map((id) => byId.get(id)).filter(Boolean) };
+}
+
+/**
+ * What an open thread lights: the nodes its messages mention, as a pull request's files light theirs (amber, the rest
+ * faded). `messages` carry `body`; each message also says which nodes are its own (for the chips under it).
+ * @param {{ messages: { id: string, body: string }[] }} thread
+ * @param {{ id: string, file?: string }[]} nodes
+ * @returns {{ nodes: object[], unresolved: string[], changed: Set<string>, failing: Set<string>, perMessage: Map<string, { nodes: object[], unresolved: string[] }> }}
+ */
+export function litForThread(thread, nodes) {
+  const all = linksOf(thread.messages.map((m) => m.body));
+  const got = mentionsOf(all.refs, nodes);
+  const perMessage = new Map();
+  for (const m of thread.messages) perMessage.set(m.id, messageNodes(m.body, nodes));
+  return { nodes: got.nodes, unresolved: got.unresolved, changed: new Set(got.ids), failing: new Set(), perMessage };
+}
+
+/** The nodes one message mentions (its `[[…]]` and its `cornfield-thread` block), and the references that are on none */
+export function messageNodes(body, nodes) {
+  const got = parseMentions(body);
+  const found = mentionsOf([...got.refs, ...(got.block ? got.block.nodes : [])], nodes);
+  return { nodes: found.nodes, unresolved: found.unresolved };
+}
+
+/**
+ * Which threads mention which nodes, from the list the server gave (each thread's references as written), against the map
+ * on screen.
+ * @param {{ number: number, refs: string[] }[]} items
+ * @param {{ id: string, file?: string }[]} nodes
+ * @returns {Map<string, object[]>} node id -> the threads, in the order of `items`
+ */
+export function mentionsIndex(items, nodes) {
+  const index = new Map();
+  for (const t of items) {
+    for (const id of resolveMentions(t.refs || [], nodes).ids) index.set(id, [...(index.get(id) || []), t]);
+  }
+  return index;
+}
+
+/** A new idea's request body: the title and the text, trimmed, or null when there is no title */
+export function ideaRequest(title, body) {
+  const t = String(title ?? '').trim();
+  return t ? { title: t, body: String(body ?? '').trim() } : null;
+}
+
+/** What a new idea came to, in words */
+export function ideaWords(forgeName, res) {
+  if (res.ok) return `Opened idea #${res.body.number} on ${forgeName}. It shows in the list within a minute.`;
+  if (res.status === 401) return 'Your sign-in has ended. Sign in again to open an idea.';
+  return errorWords(res.status, res.body);
 }
 
 // ---------------------------------------------------------------------------

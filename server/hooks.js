@@ -13,6 +13,14 @@
  *   spec.approved   a maintainer approved a proposal          spec.sentBack   a maintainer sent one back
  *   build.opened    the build issue of an approved proposal was opened
  *   pr.landed       a pull request was landed through cornfield (its Land it); a merge made on the forge sends nothing
+ *   thread.opened  a new idea (an issue with the threads label, docs/threads.md) was first seen
+ *   thread.message a comment was added to a thread: an idea's, or a spec PR's conversation. Once per comment
+ *   thread.linked  a thread now points at the map: a message holds a `[[node]]` mention or a `cornfield-thread` block that
+ *                  resolves, or a spec PR names the thread with `Thread: #n`. Its body adds `nodes` and `proposal`
+ *                  Like `spec.ready`, these fire when cornfield next looks (the dashboard's threads list, or the poll,
+ *                  server/spec-poll.js); a comment's text is never in the payload: `{ event, at, thread, comment?, actor, nodes?,
+ *                  proposal?, mapUrl }`, so the receiver reads the words from the forge itself. The first look at a repo records
+ *                  what is there and sends nothing; each (repo, thread, comment) is sent once, across restarts (`thread_seen`)
  *   session.expiring  a maintainer's sign-in ends within a day (`watchSessions`, below). Its body is its own:
  *                   `{ event, at, actor, expiresAt, mapUrl }`
  *   agent.requested  a maintainer asked for an agent run (server/agent-runs.js). Its body is its own: `{ event, at, request, actor, mapUrl }`,
@@ -205,6 +213,16 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
         ...(p.pull != null ? { pull: p.pull } : {}), ...(p.issue != null ? { issue: p.issue } : {}), actor: p.actor ?? null, mapUrl: publicUrl || null,
       });
     }
+    // A thread's event is only which thread, which comment, who and what it links to: never the words said
+    if (event.startsWith('thread.')) {
+      const out = { event, at: new Date(now()).toISOString(), thread: p.thread ?? null };
+      if (p.comment !== undefined) out.comment = p.comment;
+      out.actor = p.actor ?? null;
+      if (p.nodes !== undefined) out.nodes = p.nodes;
+      if (p.proposal !== undefined) out.proposal = p.proposal;
+      out.mapUrl = publicUrl || null;
+      return JSON.stringify(out);
+    }
     const out = {
       event, at: new Date(now()).toISOString(), slug: p.slug ?? null, pull: p.pull ?? null, headSha: p.headSha ?? null,
       proposalSha256: p.proposalSha256 ?? null, actor: p.actor ?? null,
@@ -281,6 +299,68 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   }
 
   /**
+   * Where each thread was last looked at: for the poll to ask the forge only for what is new. `looked` is whether the repo's
+   * threads have been looked at before (the first look sends nothing); `threads` maps a thread's number to the forge's
+   * last-update time when it was looked at (`stamp`) and the time of the newest comment seen (`since`, '' for none).
+   * @param {string} repo
+   * @returns {Promise<{ looked: boolean, threads: Map<number, { stamp: string, since: string }> }>}
+   */
+  async function threadCursors(repo) {
+    const none = { looked: false, threads: new Map() };
+    if (!store) return none;
+    const db = await store();
+    const rows = db.prepare('SELECT issue, comment, stamp FROM thread_seen WHERE repo = ?').all(repo);
+    const threads = new Map();
+    for (const r of rows) {
+      if (r.issue === 0) continue;
+      const t = threads.get(r.issue) || { stamp: '', since: '' };
+      if (r.comment === '') t.stamp = r.stamp;
+      else if (!r.comment.includes(':') && r.stamp > t.since) t.since = r.stamp;
+      threads.set(r.issue, t);
+    }
+    return { looked: rows.some((r) => r.issue === 0 && r.comment === ''), threads };
+  }
+
+  /**
+   * `thread.opened`, `thread.message` and `thread.linked`: the threads a look just read (server/threads.js `snapshotOf`).
+   * Everything is recorded in `thread_seen` (repo, thread, comment) before it is announced, so a restart sends none twice,
+   * and the first look at a repo records what is there and announces nothing. Returns a promise that resolves once the
+   * events are queued; it never rejects.
+   * @param {string} repo 'owner/name'
+   * @param {{ threads: any[], pulls: { pull: number, thread: number, slug: string }[] }} snapshot
+   */
+  async function threadsSeen(repo, snapshot) {
+    if (closed || !store || !snapshot || !Array.isArray(snapshot.threads)) return;
+    try {
+      const db = await store();
+      const at = new Date(now()).toISOString();
+      const looked = db.prepare("SELECT 1 FROM thread_seen WHERE repo = ? AND issue = 0 AND comment = ''").get(repo) !== undefined;
+      const insert = db.prepare('INSERT OR IGNORE INTO thread_seen (repo, issue, comment, stamp, at) VALUES (?, ?, ?, ?, ?)');
+      const move = db.prepare("INSERT INTO thread_seen (repo, issue, comment, stamp, at) VALUES (?, ?, '', ?, ?) ON CONFLICT(repo, issue, comment) DO UPDATE SET stamp = excluded.stamp");
+      /** Whether this (thread, key) is news: new to the table, and not the silent first look */
+      const fresh = (thread, key, stamp = '') => insert.run(repo, thread, key, stamp, at).changes === 1 && looked;
+      for (const t of snapshot.threads) {
+        if (t.opened && fresh(t.number, '', t.stamp)) emit('thread.opened', { thread: t.number, actor: t.opened.actor });
+        if (t.opened && t.opened.linked && fresh(t.number, 'link:body')) {
+          emit('thread.linked', { thread: t.number, actor: t.opened.actor, nodes: t.opened.linked.nodes, proposal: t.opened.linked.proposal });
+        }
+        for (const m of t.messages) {
+          if (fresh(t.number, String(m.id), m.stamp)) emit('thread.message', { thread: t.number, comment: m.id, actor: m.actor });
+          if (m.linked && fresh(t.number, `link:${m.id}`)) emit('thread.linked', { thread: t.number, comment: m.id, actor: m.actor, nodes: m.linked.nodes, proposal: m.linked.proposal });
+        }
+        // The last-update time moves with every look that read the thread, so the next look can skip it when nothing changed
+        move.run(repo, t.number, t.stamp, at);
+      }
+      for (const p of snapshot.pulls || []) {
+        if (fresh(p.thread, `pr:${p.pull}`)) emit('thread.linked', { thread: p.thread, actor: null, nodes: [], proposal: p.slug });
+      }
+      if (!looked) insert.run(repo, 0, '', '', at);
+    } catch (err) {
+      console.error(`[cornfield] the threads could not be checked for thread events: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  /**
    * `session.expiring`: once an hour (and once now), the live sessions of maintainers (the ones that keep a forge token)
    * that end within 24 hours are announced, each once: the row's `expiring_sent_at` is set before the event is
    * emitted, so a restart sends none twice (and a delivery lost for good is not tried again later). A session that was
@@ -315,7 +395,7 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     timers.clear();
   }
 
-  return { emit, specsSeen, watchSessions, close };
+  return { emit, specsSeen, threadCursors, threadsSeen, watchSessions, close };
 }
 
 /** The SHA-256 of a proposal file as `read` gives it, or null when it cannot be read (an event still goes out) */

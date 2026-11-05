@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
@@ -220,6 +220,34 @@ describe('hookPoll', () => {
 
   it('fails the config at load with the key named', async () => {
     await expect(loadConfig(repo("export default { hookPoll: { specs: '10s' } };"), { env: {} })).rejects.toThrow(/cornfield\.config\.js:\n {2}hookPoll\.specs "10s" is under the floor/);
+  });
+});
+
+describe('threads', () => {
+  const hook = (events) => ({ url: 'https://a.example.org/h', events });
+  const cfg = async (text) => loadConfig(repo(text), { env: {} });
+
+  it('defaults to the idea label; false turns threads off; the shape is strict', async () => {
+    expect(DEFAULTS.threads).toEqual({ label: 'idea' });
+    expect((await cfg('export default {};')).threads).toEqual({ label: 'idea' });
+    expect((await cfg("export default { threads: { label: 'rfc' } };")).threads).toEqual({ label: 'rfc' });
+    expect((await cfg('export default { threads: false };')).threads).toBe(false);
+    expect(configProblems({ threads: false })).toEqual([]);
+    expect(configProblems({ threads: {} })).toEqual([]);
+    expect(configProblems({ threads: { label: 'idea' } })).toEqual([]);
+    for (const v of [true, 'idea', 5, [], null]) expect(configProblems({ threads: v })[0], String(v)).toMatch(/"threads" is \{ label/);
+    expect(configProblems({ threads: { labels: ['a'] } })[0]).toMatch(/threads\.labels: the key is label/);
+    for (const v of ['', ' ', ' idea', 'a,b', 'x'.repeat(51), 7, null, ['idea']]) expect(configProblems({ threads: { label: v } })[0], String(v)).toMatch(/threads\.label is the name of the label/);
+  });
+
+  it('the thread events are hook events, and a hook that wants one turns the poll on unless threads or the poll are off', async () => {
+    for (const e of ['thread.opened', 'thread.message', 'thread.linked']) expect(HOOK_EVENTS).toContain(e);
+    expect(configProblems({ hooks: [hook(['thread.message', 'thread.linked'])] })).toEqual([]);
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook(['thread.opened']))}] };`))).toBe(300_000);
+    expect(specPollMs(await cfg(`export default { threads: false, hooks: [${JSON.stringify(hook(['thread.opened']))}] };`))).toBeNull();
+    expect(specPollMs(await cfg(`export default { threads: false, hooks: [${JSON.stringify(hook('*'))}] };`))).toBe(300_000);
+    expect(specPollMs(await cfg(`export default { hookPoll: false, hooks: [${JSON.stringify(hook(['thread.opened']))}] };`))).toBeNull();
+    expect(specPollMs(await cfg(`export default { hooks: [${JSON.stringify(hook(['thread.opened']))}], hookPoll: { specs: '2m' } };`))).toBe(120_000);
   });
 });
 

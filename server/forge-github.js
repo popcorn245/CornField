@@ -224,8 +224,9 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return toPull((await client.request('POST', `repos/${repo}/pulls`, { body: { title, body, head, base, draft }, what: `a pull request in ${forge.repo}` })).body);
     },
 
-    async createIssue({ title, body }) {
-      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body }, what: `an issue in ${forge.repo}` })).body);
+    async createIssue({ title, body, labels = [] }) {
+      // GitHub makes a label that is not there yet when the label's name comes with a new issue (the user pushes to the repo)
+      return toIssue((await client.request('POST', `repos/${repo}/issues`, { body: { title, body, ...(labels.length ? { labels } : {}) }, what: `an issue in ${forge.repo}` })).body);
     },
 
     async pullFiles(n) {
@@ -236,8 +237,8 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return (await client.list(`repos/${repo}/pulls/${n}/commits?per_page=${PER_PAGE}`, { what: `the commits of ${pullWhat(n)}` })).map(toCommit);
     },
 
-    async comments(n) {
-      return (await client.list(`repos/${repo}/issues/${n}/comments?per_page=${PER_PAGE}`, { what: `the comments on #${n} in ${forge.repo}` })).map(toComment);
+    async comments(n, { since } = {}) {
+      return (await client.list(`repos/${repo}/issues/${n}/comments?per_page=${PER_PAGE}${since ? `&since=${enc(since)}` : ''}`, { what: `the comments on #${n} in ${forge.repo}` })).map(toComment);
     },
 
     async comment(n, body) {

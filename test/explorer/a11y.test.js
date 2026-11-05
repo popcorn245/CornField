@@ -465,7 +465,8 @@ describe('the issues and PRs panel', () => {
     });
   });
 
-  it('has none with the pipeline\'s steps: Start a spec on an issue and Open the build issue on an approved spec, each with its confirm step open, in both themes', async () => {
+  // The pipeline's steps (PIPE-05): the same page for both, each step a test of its own so each fits the suite's time limit
+  const pipelinePage = async () => {
     const spec = { number: 40, title: 'Meals spec', state: 'open', draft: true, author, labels: [], head: { ref: 'spec/0040-meals', sha: 'abc' }, base: { ref: 'main' }, url: 'https://git.example.test/pull/40', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-17T11:00:00Z', mergedAt: null };
     const SPEC_PLAN = { kind: 'spec', digest: 'a'.repeat(32), issue: { number: 7, title: 'Meals page', url: 'https://git.example.test/issues/7' }, base: 'main', branch: 'spec/0007-meals-page', path: 'docs/specs/proposals/0007-meals-page.json', message: 'Start a spec for #7', title: 'Spec: Meals page', body: 'Refs #7\n\nA draft pull request.', content: '{\n  "version": 1,\n  "title": "Meals page"\n}\n', existing: null };
     const BUILD_PLAN = { kind: 'build', digest: 'b'.repeat(32), pull: { number: 40, title: 'Meals spec', url: spec.url }, slug: '0040-meals', path: 'docs/specs/proposals/0040-meals.json', sha: 'abc', review: { by: 'maintainer-one', url: 'https://git.example.test/c/1', at: '2026-10-19T10:00:00Z' }, title: 'Build: Meals', body: 'Build the approved proposal `0040-meals`.\n\n## Nodes\n\n- [ ] Add `page-meals`\n', items: 1, existing: null };
@@ -484,6 +485,11 @@ describe('the issues and PRs panel', () => {
     openForge();
     await settle();
     const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return click;
+  };
+
+  it('has none with the pipeline\'s Start a spec on an issue, its confirm step open, in both themes', async () => {
+    const click = await pipelinePage();
     click('[data-forge-kind="issues"]');
     await settle();
     expect(document.querySelectorAll('[data-forge-spec]').length).toBe(1);
@@ -500,6 +506,11 @@ describe('the issues and PRs panel', () => {
       expect($('forge-confirm').hidden).toBe(true);
       expect(document.activeElement).toBe(document.querySelector('[data-forge-spec="7"]'));
     }
+  });
+
+  it('has none with the pipeline\'s Open the build issue on an approved spec, its confirm step open, in both themes', async () => {
+    const click = await pipelinePage();
+    document.documentElement.dataset.theme = 'light'; // as the spec step left it: light first, then dark
     click('[data-forge-kind="pulls"]');
     await settle();
     click('[data-forge-pr="40"]');
@@ -537,6 +548,123 @@ describe('the issues and PRs panel', () => {
     expect($('forge-panel').inert).toBe(true);
     await settle(40);
     expect($('map-announcer').textContent).toBe('Issues and pull requests closed');
+  });
+});
+
+describe('the Threads tab and a node\'s "Mentioned in"', () => {
+  const author = { login: 'agent-four', url: 'https://git.example.test/agent-four' };
+  const THREADS = [
+    { kind: 'idea', number: 41, title: 'Rework sign-in', state: 'open', author, labels: ['idea'], url: 'https://git.example.test/issues/41', createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-19T11:00:00Z', comments: 2, refs: ['app-a', 'page-a', 'nowhere.md'], proposals: [{ pull: 40, slug: '0040-meals' }] },
+    { kind: 'proposal', number: 40, title: 'Spec: Meals', state: 'open', author, labels: [], url: 'https://git.example.test/pull/40', createdAt: '2026-10-18T10:00:00Z', updatedAt: '2026-10-19T11:30:00Z', comments: 1, refs: ['table-t'], slugs: ['0040-meals'], idea: 41 },
+  ];
+  const message = (id, text, extra = {}) => ({ id, author, url: `https://git.example.test/issues/41#c${id}`, createdAt: '2026-10-18T09:00:00Z', updatedAt: '2026-10-18T09:00:00Z', body: text, ...extra });
+  const THREAD = {
+    kind: 'idea', number: 41, title: 'Rework sign-in', state: 'open', author, url: 'https://git.example.test/issues/41', labels: ['idea'], createdAt: '2026-10-17T10:00:00Z', updatedAt: '2026-10-19T11:00:00Z', hidden: 0,
+    proposals: [{ pull: 40, slug: '0040-meals' }],
+    messages: [message('opening', 'Think about [[app-a]] and [[nowhere.md]].', { opening: true }), message('1', 'Also [[page-a]] <b>as text</b>')],
+  };
+  const stub = (post = { status: 201, body: { ok: true, number: 77, issue: { number: 77, title: 'x', url: 'https://git.example.test/issues/77' } } }) => vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+    const u = new URL(url, 'http://localhost');
+    const reply = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
+    if (init.method === 'POST') return reply(post.status, post.body);
+    const at = '2026-10-19T11:58:00.000Z';
+    if (u.pathname === '/api/forge/threads') return reply(200, { ok: true, at, rate: '', label: 'idea', problem: null, items: THREADS });
+    if (u.pathname === '/api/forge/threads/41') return reply(200, { ok: true, at, rate: '', thread: THREAD });
+    return reply(200, { ok: true, at, rate: '', items: [] });
+  }));
+  const start = () => {
+    const canvas = mount();
+    resetForgePanelForTests();
+    initForgePanel({ forge: { type: 'github', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, threads: { label: 'idea' } });
+    return canvas;
+  };
+  const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const type = (id, value) => { $(id).value = value; $(id).dispatchEvent(new Event('input', { bubbles: true })); };
+  afterEach(() => { closeForge({ restoreFocus: false }); resetForgePanelForTests(); delete document.documentElement.dataset.theme; });
+
+  /** Every state the tab has, audited in whichever theme is set */
+  async function walk() {
+    openForge();
+    await settle();
+    click(document.querySelector('[data-forge-kind="threads"]'));
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
+    expect(await audit()).toEqual([]);
+
+    click(document.querySelector('[data-forge-thread="41"]'));
+    await settle();
+    expect(document.querySelectorAll('.hx-thread-msg').length).toBe(2);
+    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
+    expect(await audit()).toEqual([]);
+
+    click($('idea-open'));
+    expect($('idea-form').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+    click(document.querySelector('[data-action="idea-send"]')); // no title: the message says so
+    expect($('idea-message').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+    type('idea-title', 'Meal plans');
+    click(document.querySelector('[data-action="idea-send"]'));
+    await settle();
+    expect($('idea-message').textContent).toContain('Opened idea #77');
+    expect(await audit()).toEqual([]);
+
+    closeForge({ restoreFocus: false });
+    await selectNode(state.nodes.find((n) => n.id === 'page-a'));
+    await settle();
+    expect($('drawer-threads').textContent).toContain('Mentioned in 1 thread');
+    expect(await audit()).toEqual([]);
+  }
+
+  it('has no violation: the list, a thread open, New idea (empty, refused, sent) and a node\'s "Mentioned in" (dark)', async () => {
+    stub();
+    start();
+    await walk();
+  });
+
+  it('has none in the light theme either (contrast is checked in Chromium, in both themes)', async () => {
+    stub();
+    start();
+    document.documentElement.dataset.theme = 'light';
+    await walk();
+  });
+
+  it('is by keyboard: the tab, the rows, Clear, New idea and the node buttons are buttons in the tab order; the fields are labelled; the thread says it is read-only', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    const tab = document.querySelector('[data-forge-kind="threads"]');
+    expect(tab.tagName).toBe('BUTTON');
+    expect(tab.hidden).toBe(false);
+    click(tab);
+    await settle();
+    expect(tab.getAttribute('aria-pressed')).toBe('true');
+    const row = document.querySelector('[data-forge-thread="41"]');
+    expect(row.tagName).toBe('BUTTON');
+    expect(row.getAttribute('aria-pressed')).toBe('false');
+    click(row);
+    await settle();
+    expect(document.querySelector('[data-forge-thread="41"]').getAttribute('aria-pressed')).toBe('true'); // the rows are drawn again
+    const detail = $('forge-detail');
+    expect(detail.querySelector('ol[aria-label="Messages"]')).not.toBe(null);
+    expect(detail.textContent).toContain('Read-only here');
+    expect(detail.querySelector('input, textarea')).toBe(null);
+    expect([...detail.querySelectorAll('button')].every((b) => b.tabIndex >= 0 && (b.textContent.trim() !== '' || b.getAttribute('aria-label')))).toBe(true);
+    await settle(40);
+    expect($('map-announcer').textContent).toContain('Thread 41');
+    expect($('idea-open').getAttribute('aria-controls')).toBe('idea-form');
+    click($('idea-open'));
+    for (const id of ['idea-title', 'idea-body']) {
+      expect($(id).labels.length, id).toBe(1);
+      expect($(id).tabIndex).toBe(0);
+    }
+    expect(document.activeElement).toBe($('idea-title'));
+    // Escape in a field is the field's own; Cancel closes the form and gives the button the focus
+    click(document.querySelector('[data-action="idea-cancel"]'));
+    expect(document.activeElement).toBe($('idea-open'));
+    key($('forge-title'), 'Escape');
+    expect($('forge-panel').inert).toBe(true);
   });
 });
 

@@ -1,7 +1,8 @@
 /**
  * @module server/spec-poll
  *
- * `spec.ready` without anyone at the dashboard (PIPE-10, docs/config.md#hook-poll). cornfield notices a spec PR when it
+ * `spec.ready` and the `thread.*` events without anyone at the dashboard (PIPE-10, docs/config.md#hook-poll, docs/threads.md).
+ * cornfield notices a spec PR when it
  * lists the open ones, and that listing used to run only when a maintainer opened the proposals menu or the issues and PRs
  * panel. A team that reviews from chat never does, so this lists them on a timer.
  *
@@ -10,6 +11,12 @@
  * `hook_seen` table are the ones that already exist: a poll and a dashboard look never announce the same head twice, and
  * nothing here decides what is news. The forge answers come through the same per-head cache, so a tick with nothing new
  * costs the open-PR listing (a call a page) plus the two calls that check the token's owner; see the docs for the count.
+ *
+ * **Threads ride the same tick.** When a hook wants `thread.opened`, `thread.message` or `thread.linked` (and threads are on),
+ * the look also reads the ideas and the spec PRs' conversations (server/threads.js) with the same sign-in, the same timer and
+ * the same backoff: one look, one set of calls to the forge for the open PRs, then what the database says is new
+ * (`hooks.threadCursors`: an idea whose update time is the one last seen is not read again, and the rest are read from their
+ * newest seen comment on). A failure in either half is the tick's failure.
  *
  * **Whose token.** Never one from the config. The newest live sign-in of a user the forge confirms is a maintainer now
  * (`auth.forgeForUser`, then `me()` and `permission()` with that token; the same check the review API and the lander make).
@@ -28,6 +35,9 @@
 
 import { isMaintainer } from './forge.js';
 import { listPullProposals } from './proposal-pulls.js';
+import { gatherThreads, snapshotOf, POLL_LIMIT } from './threads.js';
+import { hookWants, threadsOn, THREAD_EVENTS } from '../core/config.js';
+import { readTopology } from '../core/validate.js';
 
 /** How long after start the first look is made: soon, so the repo's silent first look is not left to the first interval */
 export const FIRST_MS = 15_000;
@@ -78,6 +88,24 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
     return null;
   }
 
+  /** The checkout's nodes, for a hook's `nodes` to be the ones a mention resolves to; none when there is no map */
+  function mapNodes() {
+    try {
+      const topology = readTopology(config);
+      return topology && Array.isArray(topology.nodes) ? topology.nodes : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The ideas and the spec PRs' conversations, read from where the database left off and handed to the hooks */
+  async function lookAtThreads(forge, withSpecs) {
+    const cursors = await hooks.threadCursors(repo);
+    const got = await gatherThreads(forge, config, where, { state: 'all', limit: POLL_LIMIT, hooks: withSpecs ? hooks : null, cursors: cursors.looked ? cursors.threads : null });
+    await hooks.threadsSeen(repo, snapshotOf(got, mapNodes()));
+    return got.problem;
+  }
+
   /** One look. Resolves to what happened; never rejects. */
   async function look() {
     // Nothing to look at: no forge call is made (an idle repo with only runs to follow costs nothing)
@@ -105,12 +133,15 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
     }
     if (noSession) log('a signed-in maintainer is back; checking the open spec PRs again');
     noSession = false;
-    if (found.login !== lookingAs) log(`looking at the open spec PRs with the sign-in of @${found.login}, a maintainer`);
+    if (found.login !== lookingAs) log(`looking at the open spec PRs${threadsOn(config) && hookWants(config, THREAD_EVENTS) ? ' and threads' : ''} with the sign-in of @${found.login}, a maintainer`);
     lookingAs = found.login;
     let out = 'ok';
     if (specs) {
       try {
-        const { problem } = await listPullProposals(found.forge, where, { hooks });
+        const specReady = hookWants(config, ['spec.ready']);
+        const threads = threadsOn(config) && hookWants(config, THREAD_EVENTS);
+        // One listing of the open PRs serves both: the threads' look makes it itself when it runs
+        const problem = threads ? await lookAtThreads(found.forge, specReady) : (await listPullProposals(found.forge, where, { hooks })).problem;
         if (problem) {
           log(`the forge could not be asked: ${problem}`);
           out = 'error';
