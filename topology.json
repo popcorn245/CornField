@@ -1788,6 +1788,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else. (server/agent-runs.js)"
+    },
+    {
+      "id": "page-doc-docs-runners",
+      "type": "page",
+      "label": "/docs/runners",
+      "file": "docs/runners.md",
+      "summary": "Example runners",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Example runners (docs/runners.md)."
     }
   ],
   "edges": [
@@ -5560,7 +5570,36 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-agent-contract",
       "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-runners"
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-runners",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-runners",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-runners",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-runners",
+      "to": "page-doc-docs-agent-contract",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-runners",
+      "to": "core-core-agent-contract",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T09:37:28.724Z"
+  "updatedAt": "2026-11-05T09:54:50.545Z"
 }

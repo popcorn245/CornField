@@ -1,0 +1,249 @@
+# A cornfield runner for GitHub Actions + Claude Code. Copy this file to .github/workflows/cornfield-agent.yml, and the four
+# files of examples/runner/ (cornfield-run.mjs, agent-contract.js, defuse.js, package.json) to .github/cornfield/, in the
+# repository that cornfield watches (docs/runners.md).
+#
+# Secrets (repository settings, Actions): ANTHROPIC_API_KEY, and RUNNER_TOKEN: a token of the runner's OWN account (a bot user,
+# or a fine-grained token for one: contents, pull requests and issues, read and write). List that account in agents.runners.
+# Never a maintainer's token. (A pull request opened with the built-in GITHUB_TOKEN would also not start your other workflows.)
+#
+# Three jobs, because the agent runs code it wrote (its tests): the agent job has the model key and NO forge token, and hands
+# its work on as a patch; the request and publish jobs have the forge token and never run anything the agent touched.
+# issue_comment runs for comments on pull requests from forks too, with this repository's secrets: the maintainer check is
+# the guard, and it comes first.
+name: cornfield-agent
+
+on:
+  issue_comment:
+    types: [created] # never "edited": an edit could change a maintainer's comment after the check
+
+permissions:
+  contents: read # the runner's own token does the writing; the built-in token only reads
+
+env:
+  REPO: ${{ github.repository }}
+  ISSUE: ${{ github.event.issue.number }}
+  HELPER: .github/cornfield/cornfield-run.mjs
+  # The link to this run, for the reports' "url"
+  CORNFIELD_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  request:
+    # Cheap pre-filter only. It decides nothing: the first step does the real check.
+    if: contains(github.event.comment.body, 'cornfield-run')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.req.outputs.mode }}
+      run: ${{ steps.req.outputs.run }}
+      branch: ${{ steps.claim.outputs.branch }}
+      model: ${{ steps.claim.outputs.model }}
+      turns: ${{ steps.claim.outputs.turns }}
+    steps:
+      # 1. FIRST: is the commenter a maintainer now? Ask GitHub; the login comes from the event, never from the block.
+      #    GET /repos/{owner}/{repo}/collaborators/{user}/permission: role_name must be admin or maintain. (The older
+      #    "permission" field folds maintain into write, so read role_name.) Fails closed: any error stops the job.
+      - name: Commenter is a maintainer now
+        id: who
+        env:
+          COMMENTER: ${{ github.event.comment.user.login }}
+          GH_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+        run: |
+          set -euo pipefail
+          case "$COMMENTER" in ''|*[!A-Za-z0-9._-]*) echo "unexpected login"; exit 1 ;; esac
+          role=$(gh api "repos/$REPO/collaborators/$COMMENTER/permission" --jq .role_name)
+          case "$role" in
+            admin|maintain) echo "ok=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "$COMMENTER has the role '$role', not a maintainer: ignoring the comment"; echo "ok=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # The default branch, as the workflow itself is: nothing an agent wrote has run here.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: steps.who.outputs.ok == 'true'
+        with:
+          persist-credentials: false
+
+      # 2. The comment goes to a file through the environment, never into the shell text. The helper checks it with the
+      #    agent contract; only checked values (a run id, a safe branch and profile name, a kind) become outputs.
+      - name: Read the request
+        id: req
+        if: steps.who.outputs.ok == 'true'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          R="$RUNNER_TEMP"
+          printf '%s' "$COMMENT_BODY" > "$R/comment.txt"
+          if id=$(node "$HELPER" stop "$R/comment.txt" 2>/dev/null); then
+            echo "mode=stop" >> "$GITHUB_OUTPUT"; echo "run=$id" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! node "$HELPER" parse "$R/comment.txt" > "$R/request.json" 2> "$R/why.txt"; then
+            echo "not a valid request: $(cat "$R/why.txt")"; echo "mode=none" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "mode=run" >> "$GITHUB_OUTPUT"
+          for f in runId:run kind:kind profile:profile branch:branch; do
+            echo "${f#*:}=$(node "$HELPER" get "$R/request.json" "${f%%:*}")" >> "$GITHUB_OUTPUT"
+          done
+
+      # 3. Stop: best effort. The runner's own "claimed" report holds the link to the run; cancel that run. A run already
+      #    finished cannot be cancelled, and a stop that arrives before the claim is not seen: then say so.
+      - name: Stop a run
+        if: steps.req.outputs.mode == 'stop'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          GH_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+        run: |
+          set -uo pipefail
+          say() { node "$HELPER" report "$@" > "$RUNNER_TEMP/out.md" && gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/out.md" > /dev/null; }
+          me=$(gh api user --jq .login)
+          gh api --paginate --slurp "repos/$REPO/issues/$ISSUE/comments" > "$RUNNER_TEMP/comments.json"
+          link=$(node "$HELPER" claimed-url "$RUNNER_TEMP/comments.json" "$me" "$RUN_ID")
+          n=${link##*/}
+          case "$n" in ''|*[!0-9]*) say "$RUN_ID" working "stop requested, but this run's job could not be found: cancel it in the Actions page"; exit 0 ;; esac
+          if gh run cancel "$n" --repo "$REPO"; then
+            say "$RUN_ID" stopped "cancelled on request"
+          else
+            say "$RUN_ID" working "stop requested, but GitHub did not cancel the run (it may have finished)"
+          fi
+
+      # 4. Claim: only code runs, only a known profile, and never a branch that exists (the push below makes sure of that).
+      - name: Claim
+        id: claim
+        if: steps.req.outputs.mode == 'run'
+        env:
+          RUN_ID: ${{ steps.req.outputs.run }}
+          KIND: ${{ steps.req.outputs.kind }}
+          PROFILE: ${{ steps.req.outputs.profile }}
+          HINT: ${{ steps.req.outputs.branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+        run: |
+          set -uo pipefail
+          say() { node "$HELPER" report "$@" > "$RUNNER_TEMP/out.md" && gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/out.md" > /dev/null; }
+          refuse() { say "$RUN_ID" failed "$1"; exit 1; }
+          [ "$KIND" = code ] || refuse "this runner only does code runs"
+          # Profiles: the request names one; this maps it to a model and a budget. An unknown name is refused, never guessed.
+          case "${PROFILE:-default}" in
+            default|claude) MODEL=sonnet; TURNS=40 ;;
+            fast)           MODEL=haiku;  TURNS=20 ;;
+            deep)           MODEL=opus;   TURNS=80 ;;
+            *) refuse "unknown profile" ;;
+          esac
+          BRANCH="${HINT:-agent/$RUN_ID}" # a safe ref name: the helper checked it against the contract
+          [ "$BRANCH" != "$DEFAULT_BRANCH" ] || refuse "the branch hint names the default branch"
+          printf 'branch=%s\nmodel=%s\nturns=%s\n' "$BRANCH" "$MODEL" "$TURNS" >> "$GITHUB_OUTPUT"
+          say "$RUN_ID" claimed "model $MODEL, branch $BRANCH"
+
+  # The agent: the model key, NO forge token. It runs code the agent wrote, so nothing it leaves behind (files, git config,
+  # hooks, the tools on this machine) is trusted after it: its work leaves only as a patch file.
+  agent:
+    needs: request
+    if: needs.request.outputs.mode == 'run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Read the brief
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$COMMENT_BODY" > "$RUNNER_TEMP/comment.txt"
+          node "$HELPER" parse "$RUNNER_TEMP/comment.txt" > "$RUNNER_TEMP/request.json"
+          node "$HELPER" get "$RUNNER_TEMP/request.json" brief > "$RUNNER_TEMP/brief.txt"
+
+      - name: Work with Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ needs.request.outputs.model }}
+          TURNS: ${{ needs.request.outputs.turns }}
+        run: |
+          set -uo pipefail
+          npm install -g @anthropic-ai/claude-code@2.1.307
+          # The brief is untrusted text. It goes in as a file on stdin, never into a command line.
+          { echo "You are working on one task in this repository. Make the change, run the tests, and do not commit. The task:"; echo; cat "$RUNNER_TEMP/brief.txt"; } > "$RUNNER_TEMP/prompt.txt"
+          claude -p --model "$MODEL" --max-turns "$TURNS" --permission-mode acceptEdits \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm test:*),Bash(npm run:*),Bash(git diff:*),Bash(git status:*)" \
+            < "$RUNNER_TEMP/prompt.txt" > "$RUNNER_TEMP/claude.log" 2>&1 || { echo "claude exited with status $?"; exit 1; }
+
+      # The repository's hooks and config may have been changed by the agent; that is harmless here, with no forge token.
+      - name: The work, as a patch
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/out"
+          git add -A -- .
+          git diff --cached --binary > "$RUNNER_TEMP/out/agent.patch"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agent-patch
+          path: ${{ runner.temp }}/out/agent.patch
+          retention-days: 1
+
+  # A fresh machine: the forge token, a clean checkout, and the patch applied as text. Nothing the agent wrote is run here.
+  publish:
+    needs: [request, agent]
+    if: needs.request.outputs.mode == 'run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUN_ID: ${{ needs.request.outputs.run }}
+      BRANCH: ${{ needs.request.outputs.branch }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: agent-patch
+          path: ${{ runner.temp }}/in
+
+      - name: Push and open the pull request
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          SERVER: ${{ github.server_url }}
+          GH_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+        run: |
+          set -uo pipefail
+          say() { node "$HELPER" report "$@" > "$RUNNER_TEMP/out.md" && gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/out.md" > /dev/null; }
+          fail() { say "$RUN_ID" failed "$1"; exit 1; }
+          P="$RUNNER_TEMP/in/agent.patch"
+          [ -s "$P" ] || fail "the agent changed nothing"
+          git apply --index "$P" || fail "the patch did not apply"
+          # A change to the workflows would run on the pushed branch with this repository's secrets: refused
+          if git diff --cached --no-renames --name-only | grep -Eq '^\.(forgejo|gitea|github)/'; then fail "the work changes .forgejo, .gitea or .github; this runner does not push that"; fi
+          trailer=$(node "$HELPER" trailer "$RUN_ID")
+          git -c core.hooksPath=/dev/null -c user.name="cornfield-agent" -c user.email="agent@users.noreply.invalid" \
+            commit -q -m "chore(agent): run $RUN_ID" -m "$trailer" || fail "could not commit"
+          # --force-with-lease with an empty expected value: the branch must not exist yet, so an existing branch (the default
+          # one included) is never moved
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c core.hooksPath=/dev/null -c http.extraHeader="Authorization: basic $auth" \
+            push -q --force-with-lease="refs/heads/$BRANCH:" "$SERVER/$REPO.git" "HEAD:refs/heads/$BRANCH" || fail "could not push the branch (does it exist already?)"
+          printf '%s' "$COMMENT_BODY" > "$RUNNER_TEMP/comment.txt"
+          printf '%s\n\n%s\n' "$(node "$HELPER" closes "$RUNNER_TEMP/comment.txt")" "$trailer" > "$RUNNER_TEMP/pr-body.md"
+          url=$(gh pr create --repo "$REPO" --base "$DEFAULT_BRANCH" --head "$BRANCH" --title "chore(agent): $RUN_ID" --body-file "$RUNNER_TEMP/pr-body.md") || fail "could not open the pull request"
+          say "$RUN_ID" done "opened $url"
+
+  # The agent job cannot report (it has no forge token), so its failure is said here, once. The request and publish jobs
+  # report their own failures, and a stopped (cancelled) run was reported by the stop.
+  failed:
+    needs: [request, agent]
+    if: always() && needs.request.result == 'success' && needs.request.outputs.mode == 'run' && needs.agent.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Report a failure
+        env:
+          RUN_ID: ${{ needs.request.outputs.run }}
+          GH_TOKEN: ${{ secrets.RUNNER_TOKEN }}
+        run: |
+          node "$HELPER" report "$RUN_ID" failed "the agent's job failed; see the run's log" > "$RUNNER_TEMP/out.md"
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file "$RUNNER_TEMP/out.md" > /dev/null
