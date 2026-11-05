@@ -110,7 +110,7 @@ describe('the release guard (prepublishOnly)', () => {
     expect(releaseProblems({ cwd: CORNFIELD, env: { CORNFIELD_RELEASE: '1', GITHUB_REF_NAME: `v${pkg.version}`, CORNFIELD_RELEASE_TAG: 'v9.9.9' } })).toEqual([`the release tag is "v9.9.9", not v${pkg.version}.`]);
   });
 
-  it('is what npm runs before a publish, and the package ships only its own folders', () => {
+  it('is what npm runs before a publish, and the package ships only its own folders (and the agent contract schema, for runners)', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(CORNFIELD, 'package.json'), 'utf8'));
     expect(pkg.scripts.prepublishOnly).toBe('node cli/release-guard.js');
     expect(pkg.files).toEqual(['cli/', 'core/', 'explorer/', 'plugins/', 'server/', 'README.md', 'LICENSE', 'CHANGELOG.md']);
