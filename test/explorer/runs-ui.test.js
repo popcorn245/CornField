@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, runsStatus, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -63,7 +63,7 @@ function fakeServer(opts = {}) {
     const at = '2026-11-05T11:58:00.000Z';
     if (init.method === 'POST' && u.pathname === '/api/agent-runs') return opts.start ? json(opts.start.status, opts.start.body) : json(201, { ok: true, request: { runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEH' }, run: RUN });
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
-    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {} });
+    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at, rate: '', items: [] });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, at, rate: '', pulls: [pr(50, 'Meals page', 'Closes #7', 'agent/meals'), pr(40, 'Meals spec', '', 'spec/0040-meals')], issues: [issue(7, 'Meals page')], branches: [], specs: [{ pull: 40, slug: '0040-meals' }], agents: {} });
@@ -258,6 +258,24 @@ describe('the runs on the Agents tab', () => {
     click(q('[data-forge-kind="issues"]'));
     await settle();
     expect(q('#forge-runs').hidden).toBe(true);
+  });
+
+  it('shows the notice for a skipped trigger, from the server\'s count of the last day, and none when nothing was skipped', async () => {
+    expect(triggerNotice({})).toBe('');
+    expect(triggerNotice({ triggerSkipped: null })).toBe('');
+    expect(triggerNotice({ triggerSkipped: { count: 2, reasons: { 'no-session': 2 } } })).toBe('A trigger was skipped: sign in to let triggers request runs.');
+    expect(triggerNotice({ triggerSkipped: { count: 3, reasons: { 'no-session': 1, 'cap-reached': 2 } } })).toBe('A trigger was skipped: sign in to let triggers request runs. 2 triggers were refused in the last day (cap-reached 2), so nothing was asked.');
+    fakeServer({ triggerSkipped: { count: 1, last: '2026-11-05T11:00:00Z', reasons: { 'no-session': 1 } } });
+    mount();
+    await openAgents();
+    expect($('forge-runs-trigger').hidden).toBe(false);
+    expect($('forge-runs-trigger').textContent).toBe('A trigger was skipped: sign in to let triggers request runs.');
+    expect(await audit()).toEqual([]);
+    closeForge({ restoreFocus: false });
+    fakeServer();
+    mount();
+    await openAgents();
+    expect($('forge-runs-trigger').hidden).toBe(true);
   });
 
   it('asks a run to stop once, says so, and shows stop requested', async () => {

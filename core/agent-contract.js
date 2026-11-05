@@ -39,7 +39,7 @@
  * @typedef {{ issue?: number, proposal?: string, pull?: number, thread?: number }} RunRefs
  * @typedef {{ minutes?: number, turns?: number, cost?: number }} RunLimits
  * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief: string,
- *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string }} RunRequest
+ *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string, trigger?: { event: 'spec.approved' | 'build.opened' | 'thread.message', by: string, ref: string } }} RunRequest
  * @typedef {'claimed' | 'working' | 'done' | 'failed' | 'stopped'} ReportState
  * @typedef {{ state: ReportState, note?: string, url?: string, tokens?: number, cost?: number }} RunReport
  * @typedef {{ state: 'stop-requested', note?: string }} StopRequest
@@ -83,7 +83,10 @@ export const RUN_TAG = 'cornfield-run';
 /** The key of the trailer */
 export const TRAILER_KEY = 'Cornfield-Run';
 
-const REQUEST_KEYS = ['version', 'runId', 'kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'requestedAt'];
+const REQUEST_KEYS = ['version', 'runId', 'kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'requestedAt', 'trigger'];
+const TRIGGER_KEYS = ['event', 'by', 'ref'];
+/** The events an opt-in trigger may fire on (`agents.on`, spec 0005 D10): each is something a maintainer did */
+export const TRIGGER_EVENTS = Object.freeze(['spec.approved', 'build.opened', 'thread.message']);
 const REF_KEYS = ['issue', 'proposal', 'pull', 'thread'];
 const LIMIT_KEYS = ['minutes', 'turns', 'cost'];
 const REPORT_KEYS = ['state', 'note', 'url', 'tokens', 'cost'];
@@ -101,6 +104,8 @@ export const LOGIN_SOURCE = '^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$';
 export const SLUG_SOURCE = `^[A-Za-z0-9][A-Za-z0-9._-]{0,${MAX_SLUG_CHARS - 1}}$`;
 export const PROFILE_SOURCE = `^[A-Za-z0-9][A-Za-z0-9._-]{0,${MAX_PROFILE_CHARS - 1}}$`;
 export const NODE_ID_SOURCE = `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,${MAX_NODE_CHARS - 1}}$`;
+/** What an automatic request says caused it: a pull request, an issue or a comment, by its number or id */
+export const TRIGGER_REF_SOURCE = '^(pull|issue|comment):[0-9]{1,20}$';
 export const ISO_SOURCE = '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$';
 /** An http(s) link with no user and password in it */
 export const URL_SOURCE = '^https?://[^\\s/@?#]+([/?#]\\S*)?$';
@@ -118,7 +123,7 @@ export const CREDENTIAL_KEY_SOURCE = `(?:${['token', 'secret', 'passw', 'credent
 const EDGE = '(?<![A-Za-z0-9])';
 
 /**
- * A value shaped like a credential: a forge or cloud token, cornfield's own API tokens (`cf_rt_…` review, `cf_at_…` agent), a JWT, a
+ * A value shaped like a credential: a forge or cloud token, cornfield's own API tokens (`cf_rt_…` review, `cf_at_…` agent, `cf_nt_…` runner), a JWT, a
  * private key, a bearer header, a user and password in a link.
  * Prose that only talks about tokens and passwords passes; `sk-` keys and bearer values need a digit in their first 41
  * characters, as real ones have, so a long hyphenated word after "Bearer" or "sk-" is not taken for one. Each alternative tries a
@@ -129,7 +134,7 @@ export const CREDENTIAL_VALUE_SOURCE = [
   `${EDGE}github_pat_[A-Za-z0-9_]{20,}`,
   `${EDGE}glpat-[A-Za-z0-9_-]{15,}`,
   `${EDGE}gto-[A-Za-z0-9]{20,}`,
-  `${EDGE}cf_(?:rt|at)_[A-Za-z0-9_-]{20,}`,
+  `${EDGE}cf_(?:rt|at|nt)_[A-Za-z0-9_-]{20,}`,
   `${EDGE}sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]`,
   `${EDGE}AKIA[0-9A-Z]{16}`,
   `${EDGE}AIza[0-9A-Za-z_-]{35}`,
@@ -150,6 +155,7 @@ const SLUG = new RegExp(SLUG_SOURCE);
 const PROFILE = new RegExp(PROFILE_SOURCE);
 const NODE_ID = new RegExp(NODE_ID_SOURCE);
 const ISO = new RegExp(ISO_SOURCE);
+const TRIGGER_REF = new RegExp(TRIGGER_REF_SOURCE);
 const URL_RE = new RegExp(URL_SOURCE);
 const CREDENTIAL_KEY = new RegExp(CREDENTIAL_KEY_SOURCE);
 const CREDENTIAL_VALUE = new RegExp(CREDENTIAL_VALUE_SOURCE);
@@ -355,6 +361,17 @@ export function validateRequest(body, { profiles } = {}) {
   if (body.nodes !== undefined) value.nodes = [...body.nodes];
   value.requestedBy = body.requestedBy;
   value.requestedAt = body.requestedAt;
+  if (body.trigger !== undefined) {
+    if (!isObject(body.trigger)) return no('"trigger" is { event, by, ref }: what caused an automatic request.');
+    const triggerKeys = keyProblem(body.trigger, TRIGGER_KEYS, '"trigger"');
+    if (triggerKeys) return no(triggerKeys);
+    if (!TRIGGER_EVENTS.includes(body.trigger.event)) return no(`"trigger.event" is one of ${TRIGGER_EVENTS.join(', ')}.`);
+    if (typeof body.trigger.by !== 'string' || !LOGIN.test(body.trigger.by)) return no('"trigger.by" is the forge login of the maintainer whose act caused the request.');
+    if (typeof body.trigger.ref !== 'string' || !TRIGGER_REF.test(body.trigger.ref)) return no('"trigger.ref" is what the act was on: pull:<number>, issue:<number> or comment:<id>.');
+    // The request is posted as the maintainer whose act caused it, so the two name one person
+    if (body.trigger.by !== body.requestedBy) return no('"trigger.by" is the maintainer the request is made as, the same login as "requestedBy".');
+    value.trigger = { event: body.trigger.event, by: body.trigger.by, ref: body.trigger.ref };
+  }
   return { ok: true, value };
 }
 

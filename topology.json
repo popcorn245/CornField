@@ -1800,6 +1800,26 @@
       "desc": "Example runners (docs/runners.md)."
     },
     {
+      "id": "core-server-runner-api",
+      "label": "runner-api.js",
+      "type": "core",
+      "file": "server/runner-api.js",
+      "summary": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5). (server/runner-api.js)"
+    },
+    {
+      "id": "core-server-triggers",
+      "label": "triggers.js",
+      "type": "core",
+      "file": "server/triggers.js",
+      "summary": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click. (server/triggers.js)"
+    },
+    {
       "id": "core-explorer-runs-map",
       "label": "runs-map.js",
       "type": "core",
@@ -5621,6 +5641,104 @@
       "dashed": true
     },
     {
+      "from": "pkg-server",
+      "to": "core-server-runner-api"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-agent-runs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-review-api",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-review-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-submit-review",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-runner-api",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-runner-api",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-review-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-triggers"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-triggers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-spec-poll",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-runs-map"
     },
@@ -5689,5 +5807,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T10:15:01.554Z"
+  "updatedAt": "2026-11-05T10:41:14.192Z"
 }

@@ -64,6 +64,24 @@ export function runMeta(run, nowMs) {
   return parts.join(' · ');
 }
 
+/**
+ * The notice over the runs when an opt-in trigger (`agents.on`) did nothing in the last day, from the audit rows the server counted
+ * (`triggerSkipped`: { count, reasons }), or '' when none did. No live sign-in is the case the person can mend, so it says how.
+ */
+export function triggerNotice(data) {
+  const n = data && data.triggerSkipped;
+  if (!n || !(n.count > 0)) return '';
+  const reasons = n.reasons || {};
+  const out = [];
+  if (reasons['no-session']) out.push('A trigger was skipped: sign in to let triggers request runs.');
+  const refused = Object.entries(reasons).filter(([why]) => why !== 'no-session');
+  if (refused.length) {
+    const count = refused.reduce((sum, [, c]) => sum + c, 0);
+    out.push(`${count} ${count === 1 ? 'trigger was' : 'triggers were'} refused in the last day (${refused.map(([why, c]) => `${why} ${c}`).join(', ')}), so nothing was asked.`);
+  }
+  return out.join(' ');
+}
+
 /** Whether a Stop is offered: the run is open and nobody has asked it to stop yet */
 export const canStop = (run) => run.open === true && !run.stopRequested;
 

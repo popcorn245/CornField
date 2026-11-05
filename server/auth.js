@@ -42,6 +42,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, ran
 import { createForge as defaultCreateForge, isMaintainer, ForgeError } from './forge.js';
 import { githubApiUrl } from './forge-github.js';
 import { sameOrigin } from './proposals.js';
+import { revokeOwnerTokens } from './review-tokens.js';
 
 /** How often a session's permission is asked of the forge again */
 export const RECHECK_MS = 15 * 60 * 1000;
@@ -335,6 +336,8 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       forgeFor: () => { throw new Error('Sign-in is not configured.'); },
       forgeForUser: async () => { throw new Error('Sign-in is not configured.'); },
       record: async () => { throw new Error('Sign-in is not configured.'); },
+      knownPermission: async () => null,
+      demoted: async () => {},
       begin: async () => { throw new Error('Sign-in is not configured.'); },
       finish: async () => { throw new Error('Sign-in is not configured.'); },
       store: null,
@@ -610,6 +613,19 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       return true;
     };
     const due = () => expiresAt !== null && Date.parse(expiresAt) - REFRESH_SKEW_MS <= now();
+    /** Who the forge says this token is: the login a `permission` question about the owner names */
+    let ownLogin = row.login;
+    /**
+     * What the call answered, looked at once on its way out: when the forge says the owner themself does not maintain the repo, their API
+     * tokens (review, agent, runner) are revoked there and then, wherever in cornfield the question was asked
+     */
+    const noted = async (prop, args, result) => {
+      if (prop === 'me' && result && typeof result.login === 'string') ownLogin = result.login;
+      if (prop === 'permission' && args[0] === forgeConfig.repo && typeof args[1] === 'string' && args[1].toLowerCase() === ownLogin.toLowerCase() && !isMaintainer(result)) {
+        await demoted(row.user_id, ownLogin, result);
+      }
+      return result;
+    };
     return new Proxy({}, {
       get(_, prop) {
         const member = forge[prop];
@@ -625,16 +641,38 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
             }
           }
           try {
-            return await forge[prop](...args);
+            return await noted(prop, args, await forge[prop](...args));
           } catch (err) {
             if (!(err instanceof ForgeError) || err.code !== 'unauthorized') throw err;
             // The forge refused the token: renew it (when it can be) and ask once more; else its refusal stands
             if (!(await renewNow())) throw err;
           }
-          return forge[prop](...args);
+          return noted(prop, args, await forge[prop](...args));
         };
       },
     });
+  }
+
+  /**
+   * A token owner the forge says no longer maintains the repo: every API token of theirs (review, agent and runner) is revoked at once, and
+   * the revoking is a row in the audit table. Never throws: what learned it goes on with its own answer.
+   * @param {string} userId
+   * @param {string} login
+   * @param {string} permission what the forge said
+   */
+  async function demoted(userId, login, permission) {
+    try {
+      const n = revokeOwnerTokens(await store(), userId, now());
+      if (!n) return;
+      try {
+        (await store()).prepare('INSERT INTO actions (at, login, action, target, request, status, answer) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(iso(now()), login, 'token-revoke', forgeConfig.repo, JSON.stringify({ reason: 'owner-not-maintainer', permission }), null, JSON.stringify({ revoked: n }));
+      } catch (err) {
+        console.error(`[cornfield] the revoking of ${login}'s tokens could not be written to the audit table: ${err instanceof Error ? err.message : err}`);
+      }
+    } catch (err) {
+      console.error(`[cornfield] the tokens of ${login}, no longer a maintainer, could not be revoked: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async function callback(req, res, url) {
@@ -668,7 +706,11 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     file.prepare('INSERT INTO sessions (id, forge, user_id, login, token, permission, created_at, checked_at, expires_at, refresh_token, token_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(id, forgeConfig.type, String(user.id), user.login, keep ? sealFor(id, 'token', token) : NO_TOKEN, permission, iso(at), iso(at), iso(at + sessionMs),
         keep && given.refreshToken !== '' ? sealFor(id, 'refresh_token', given.refreshToken) : '', keep ? given.expiresAt : null);
-    if (!keep) await revoke(token);
+    if (!keep) {
+      await revoke(token);
+      // Signed in, and not a maintainer: whatever API tokens they made while they were one stop working now
+      await demoted(String(user.id), user.login, permission);
+    }
     redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: sessionMs / 1000, secure }), clearState]);
   }
 
@@ -740,6 +782,19 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
      * decides what happens when this throws (the action it records has usually happened already).
      * @param {{ login: string, action: string, target: string, request?: object, status?: number | null, answer?: object | null }} entry
      */
+    /**
+     * What cornfield last heard of a user's permission on the repo: their newest sign-in's (asked of the forge at sign-in and every 15 minutes
+     * while they use cornfield), or null when it has no sign-in of theirs at all. A runner token is not asked of the forge per call; this is its
+     * cheap guard (server/runner-api.js).
+     * @param {string} userId
+     * @returns {Promise<string | null>}
+     */
+    async knownPermission(userId) {
+      const row = /** @type {{ permission: string } | undefined} */ ((await store()).prepare('SELECT permission FROM sessions WHERE user_id = ? ORDER BY checked_at DESC, rowid DESC LIMIT 1').get(String(userId)));
+      return row ? row.permission : null;
+    },
+    /** Revokes a user's API tokens when cornfield has learned they no longer maintain the repo (see `demoted`) */
+    demoted,
     async record({ login, action, target, request = {}, status = null, answer = null }) {
       (await store()).prepare('INSERT INTO actions (at, login, action, target, request, status, answer) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(iso(now()), login, action, target, JSON.stringify(request), status, answer === null ? null : JSON.stringify(answer));

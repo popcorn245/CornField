@@ -81,7 +81,7 @@ Starting an agent only **asks**. The request is the [contract's](agent-contract.
 
 **What counts as open.** A run is open until the runner reports `done`, `failed` or `stopped`, or its pull request is merged or closed, or nothing has happened for `agents.quietAfter` (24h): no report, no push, no pull request activity. A **quiet** run is shown as quiet and counts toward neither rule; a later report or push makes it open again.
 
-**Config** (all under `agents`, see [config](config.md#agents)): `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'`; push and pull come later).
+**Config** (all under `agents`, see [config](config.md#agents)): `on` (the [triggers](#triggers)), `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'` by default, or `'push'` or `'pull'`: [transports](#transports)).
 
 ### Following a run
 
@@ -95,7 +95,44 @@ cornfield records each request in a `runs` table and follows the run by what the
 - **Restarts.** Everything seen is kept in the data file: a restart re-reads the forge, judges no comment twice and sends no [hook](config.md#hooks) twice.
 - **Requests written by hand** on the forge (a maintainer's own `cornfield-run` request block, which a runner may act on with cornfield switched off) are not discovered yet: cornfield follows only the runs it asked for. Finding those is [#82](https://github.com/popcorn245/CornField/issues/82).
 
-The Agents tab lists the runs: state, kind, what it is about, who asked and when, profile, limits beside the runner's reported tokens and cost, the runner's note, links to the request, the pull request and the runner's own logs, and **Stop**. Stop posts a `stop-requested` block in the same place, as you; the runner decides what that means. (The fuller Runs view is a later issue.)
+The Agents tab lists the runs: state, kind, what it is about, who asked and when, profile, limits beside the runner's reported tokens and cost, the runner's note, links to the request, the pull request and the runner's own logs, and **Stop**. Stop posts a `stop-requested` block in the same place, as you; the runner decides what that means. (The fuller Runs view is a later issue.) On push and pull there is no comment to post: Stop is recorded, and the runner learns of it as [below](#stopping-on-push-and-pull).
+
+### Triggers
+
+By default a run starts only when a maintainer asks (the button or the API). A repo may **opt in** to a few automatic requests, off unless set, in the same spirit as [`proposals.approveLands`](config.md#proposals):
+
+```js
+agents: {
+  profiles: ['claude'],
+  on: {
+    'spec.approved': { kind: 'code', profile: 'claude' },        // approving a spec asks for a run on that proposal
+    'build.opened': { kind: 'code', profile: 'claude' },         // opening the build issue asks for a run on that issue
+    'thread.message': { kind: 'summary', profile: 'claude' },    // a maintainer's `/agent` comment asks for a run in that thread
+  },
+},
+```
+
+A trigger fires **only on something a maintainer did**, and the request names them: it is posted as that maintainer, with their own sign-in, by the same code as the button, so the forge shows who asked and **the cap, the rate limit and the one-run-per-subject rule apply unchanged**. Every automatic request also records what caused it in the [`trigger`](agent-contract.md#what-caused-an-automatic-request) field of the request: `{ event, by, ref }`, and its run is marked `trigger` in the runs list.
+
+| Event | The request | Posted on |
+|---|---|---|
+| `spec.approved` | `kind` from the config, about the approved proposal | the proposal's open spec pull request |
+| `build.opened` | about the build issue the maintainer just opened | that issue |
+| `thread.message` | about the thread, with the `/agent` line's text as the brief | the thread |
+
+**`/agent`.** In a thread comment (an idea's, or a spec pull request's), a line that **starts** with `/agent` is a command, and the rest of that line is the brief (`/agent summarise this for the release notes`; with none, the trigger's own `brief` if it has one). It is honoured only if all of these hold: the commenter is a maintainer **as the forge says now**; the comment was **not edited** (a few seconds of the forge's own touch-up aside); it has not been honoured before (once per comment, remembered in `cornfield.db`, so a restart does not repeat it); and it is not code. A line inside a code span, a fenced block, a quote or an indented block is never read, nor is `/agentic`. Anyone else's `/agent` does nothing at all. It is noticed when cornfield next reads the threads (the [spec poll](config.md#hook-poll), within its interval), and a trigger on `thread.message` makes that poll run even with no hook configured. Comments that were already there when the trigger was first switched on are not acted on.
+
+**No chaining.** Nothing a run produces can start another run. This is checked three ways. Each posts nothing and sends no hook, but writes a `trigger-ignored` row to the audit table with the reason (`machine`, `run-block`, `edited` or `run-output`), so you can see why an act of yours started nothing. A comment with no `/agent` command in it writes nothing at all.
+
+1. *Structure.* Only the three events above are wired to triggers. A run's pushes, pull request, checks, reports and state changes (`run.*`, `agent.requested`) are not, and the module that follows runs does not know triggers exist.
+2. *Who.* A trigger never fires when the actor is a login in `agents.runners` or a bot account (`[bot]`, or the forge's Bot type), or when the comment holds a `cornfield-run` block.
+3. *What.* A trigger never fires on a run's **output**: a run's linked pull request (in any state, whether the run is open or long over), or a pull request or issue that carries a `Cornfield-Run` id, or was written by a runner or a bot. So a run's pull request is reviewed by a person first, and the approval of **that** pull request starts nothing by itself.
+
+A run's **target** (the thread, issue or spec pull request it was requested on) is not its output. Once every run on it is over (finished: `done`, `failed`, `stopped`, or its pull request merged or closed; or quiet), a maintainer's fresh `/agent` there, or the approval of a new head of that spec pull request, fires again. While a run on it is still open, under any profile, the trigger is skipped with `run-open`: a `trigger-skipped` row and the `trigger.skipped` hook, never in silence. A repeat of the same approval (the same head) is deduped silently. An `/agent` from someone whose permission cannot be confirmed (no maintainer signed in to ask the forge with, or the forge does not answer) is dropped with a line in the log.
+
+**No live sign-in.** If the maintainer whose act caused the trigger is not signed in to cornfield, nothing is requested (cornfield holds no forge token of its own, and another maintainer's would put words in their name). Instead it writes a `trigger-skipped` row to the audit table, sends the [`trigger.skipped`](config.md#hooks) hook event (`reason: "no-session"`), and the Agents tab shows **"A trigger was skipped: sign in to let triggers request runs."** for the next 24 hours. A request that the cap or a limit refuses ends the same way, with that refusal as the reason (`cap-reached`, `run-open`, `rate-limited`, `forbidden`, `invalid`), and nothing is posted.
+
+**With `proposals.approveLands`.** An approval can land the spec pull request before the trigger's request reads it. The request then finds no open proposal, and the trigger is skipped with `not-found` (the audit row and the hook). The proposal is on the default branch by then: ask for the run with the button, or set the `build.opened` trigger, which fires when the build issue is opened.
 
 ### The request API
 
@@ -119,6 +156,72 @@ An open run's nodes **pulse** on the map, and where two open runs change the sam
 - **Timeline.** Each run's **Timeline** is an ordered list with times: requested, claimed, each report with its note (escaped), pushes as they were seen, the pull request opened, checks, a stop request, landed or closed, and quiet. It is built from `run_events` (one row for each thing, so looking again adds none) and from the request itself. A push's time is when cornfield **saw** it (the forge does not say when a branch was pushed), so it reads "Push seen". Reviews are not on the timeline: cornfield does not read them from the forge for a run.
 
 The API's `GET /api/agent-runs` and `GET /api/agent-runs/<id>` carry `nodes`, `nodesFrom` (`files` or `request`), `collidesWith`, `brief` (the first 2000 characters) and `timeline` on each run.
+
+## Transports
+
+`agents.transport` says how a request reaches the runner. All three carry the same [request JSON](agent-contract.md), so a runner can change transport without changing what it reads. The cap (`maxOpen`), the rate limit and the one-open-run-per-issue-or-proposal rule apply the same on every transport, and a run goes quiet after `quietAfter` on every transport.
+
+| `transport` | what cornfield does with a request | how the runner learns of it | how it reports |
+| --- | --- | --- | --- |
+| `'forge'` (default) | posts it as a comment, as the maintainer who asked | a workflow, bot or script listening on the forge | a `cornfield-run` comment |
+| `'push'` | records it, and sends it as a signed `agent.requested` hook event | the hook's delivery | `POST /api/runs/<runId>` with a runner token |
+| `'pull'` | records it, and keeps it queued | it lists the queue with a runner token and claims one | `POST /api/runs/<runId>` with a runner token |
+
+With `push` or `pull` **nothing is posted to the forge**: the request is a row in cornfield's data file and, on push, a hook delivery. (The run still shows on the map, and a pull request that carries its `Cornfield-Run:` trailer is linked and followed as always.) `push` and `pull` need the same things asking does, sign-in and a forge, or the server will not start; `push` also needs a hook that subscribes to `agent.requested` (or `'*'`), or the server will not start and `validate` fails. A run keeps the transport it was asked for with, so changing `agents.transport` does not strand runs in flight. **On push and pull, `cornfield-run` comments on the forge are ignored** for that run: its reports come only from the runner token that holds it.
+
+### Runner tokens
+
+A **runner token** (`cf_nt_…`) is the runner's credential to cornfield. A signed-in maintainer makes one in the tokens dialog (kind *Runner*) or with `POST /api/runner-tokens { label, days? }` from cornfield's own page; it is shown once, lasts 30 days unless asked (90 at most), and is revoked in the same dialog (`POST /api/runner-tokens/<id>/revoke`) at once and for good. It is stored with the other tokens under its own scope, and the scopes are kept apart both ways:
+
+- a runner token can **list the queue, claim a request, and read and report on the runs it holds**, and nothing else. On any other route (the review API, the agent API, the dashboard's routes, the page itself) it gets 403, and a row in the audit table;
+- a review or an agent token on a runner route gets 403.
+
+The routes take the bearer token and nothing else: they read no cookie, ignore the sign-in, keep the `Host` check, and need no same-origin header. **Unlike review and agent tokens, a runner token does not act as its owner on the forge**, so cornfield does not ask the forge about the owner on each call and the owner's forge sign-in may end: the runner has its own identity. What bounds a runner token is its scope, its expiry, revoking it, and its owner staying a maintainer: **when cornfield learns an owner no longer maintains the repo** (they sign in as a reader, the 15-minute re-check of their sign-in, or any question cornfield puts to the forge with their token), **all their API tokens, runner, agent and review, are revoked at once**, with a row in the audit table; and each runner call also refuses, and revokes, when the owner's newest sign-in on record says they are not a maintainer. No sign-in on record is no answer, so a runner keeps working while its owner is away. A revoked token stays revoked if they are made a maintainer again: they make a new one.
+
+**The queue is the repo's, not a token's:** every live runner token of the repo, whichever maintainer made it, sees every queued request and may claim it. A request holds no credential (the contract refuses one by key and by value, and the queue checks each request again before it is offered), so the queue shows what a maintainer asked for and nothing else. Treat a runner token like the forge token the runner holds: anyone with it can claim the repo's queued requests. A runner token is never in a request, a report, a hook or an answer.
+
+### Pull
+
+A runner asks, claims, works and reports. Every answer is JSON `{ ok, … }`, or `{ ok: false, error, code }`.
+
+1. `GET /api/agent-requests?state=queued` lists the requests waiting: `{ ok, requests: [<request JSON>, …], limit }`, oldest first, at most 50. A request is queued until it is claimed, asked to stop, or goes quiet. (Poll every 15 to 60 seconds; a token may call 120 times a minute. An empty read is written to the audit table at most once in ten minutes.)
+2. `POST /api/agent-requests/<runId>/claim` claims one, atomically. The answer is 200 `{ ok, request, run }`, and the run is now `claimed`, held by that token. **A second claim of the same request is 409** (`already-claimed`), whoever makes it, even the winner; two runners racing for one request cannot both get it. 409 also says when the request is not a pull request, was stopped, or has gone quiet.
+3. `POST /api/runs/<runId>` reports, with the [report JSON](agent-contract.md#reports-and-stopping): `{ "state": "working", "note": "…", "url": "https://…/logs" }`. It is checked by the contract (an unknown state or key, a bad `url`, a count below zero, or anything shaped like a credential, by key or by value, is 400, and nothing changes). **Only the token that claimed a run may report on it or read it** (403 for another). A run that is `done`, `failed` or `stopped` takes no more reports (409). The answer is `{ ok, run }`.
+4. Do the work under the runner's own identity and carry the run id forward as a `Cornfield-Run: run-…` trailer in the pull request or its commits.
+
+A claimed run with no report within `agents.quietAfter` goes quiet as usual; a later report makes it open again. The `run.claimed`, `run.state` and `run.finished` [hooks](config.md#hooks) fire for these reports as they do for reports on the forge (the actor is `runner:<token label>`).
+
+### Push
+
+The existing `agent.requested` hook is the push: a POST of `{ event, at, request, actor, mapUrl }` to the configured URL, signed with `CORNFIELD_HOOK_SECRET`, retried as every hook is (see [hooks](config.md#hooks)). The runner verifies it with two checks, in this order, before it does anything:
+
+1. **The signature.** `X-Cornfield-Signature` is `sha256=` and the hex HMAC-SHA256 of the **raw body** under the secret. Compare in constant time, on the raw bytes (not on re-serialised JSON), and refuse an `at` more than a few minutes old.
+2. **The request.** `request` is the contract's request. Check it with the JSON Schema (`cornfield/agent-contract.schema.json`) (or `validateRequest` from `cornfield/core/agent-contract.js`), refuse a `version` you do not know, and apply the [maintainer rule](agent-contract.md#who-may-ask-the-maintainer-rule): the signature stands in for the author.
+
+```js
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { validateRequest } from 'cornfield/core/agent-contract.js';
+
+export function verifyPush(secret, raw, signature, maxAgeMs = 5 * 60_000) {
+  const want = Buffer.from(`sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`);
+  const got = Buffer.from(String(signature ?? ''));
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
+  const event = JSON.parse(raw.toString('utf8'));
+  if (event.event !== 'agent.requested' || Math.abs(Date.now() - Date.parse(event.at)) > maxAgeMs) return null;
+  const checked = validateRequest(event.request);
+  return checked.ok ? checked.value : null;
+}
+```
+
+A push has no forge comment to reply in, so the runner reports with `POST /api/runs/<runId>` and a **runner token**, the same JSON as on pull. Nothing tells a push run apart from a token (the hook went to a URL), so **the first token to report on a push run holds it**, and another token gets 403 on it; claim does not apply (409). If the delivery fails after its retries, the run stays recorded and goes quiet after `quietAfter`.
+
+### Stopping on push and pull
+
+A maintainer's Stop is recorded and cornfield sends the `run.stopRequested` hook (on push, the runner's own hook subscription can listen for it). A runner does not have to be pushed it: **`GET /api/runs/<runId>`** with its token answers `{ ok, run: { runId, state, reported, stopRequested, stopRequestedAt?, open, finished } }`. `state` is what cornfield shows (`claimed`, `working`, `stop-requested`, `quiet`, `done`, …) and `stopRequested` is true once a maintainer asked, so a runner checks it between steps; every report's answer carries the same `run`. The runner decides what stopping means and reports `stopped` when it has. A pull request nobody has claimed yet has no runner to ask: cornfield stops it itself (the one `stopped` it writes) and it leaves the queue. The stop's `note` is only carried on the forge transport.
+
+### A recipe
+
+[`examples/runner/pull-runner.mjs`](../examples/runner/pull-runner.mjs) in the repository is a dependency-free Node pull loop: it claims a request, asks an Ollama model (`POST /api/generate`, base URL from `OLLAMA_URL`) for the change, writes it as a branch, a commit and a pull request under the runner's own git identity and forge token, and reports. Read the top of the file for its environment variables. It checks every request with the contract beside it (`examples/runner/agent-contract.js`, a byte-for-byte copy of cornfield's) before it claims one, so a credential, an unknown key or an unsafe branch name is never claimed; it never pushes to the base branch and never forces a push (a branch that is already there makes it fail); it does not write through a link in its clone; and neither the runner token nor the forge token goes in the model's prompt or a note. It is a recipe, not a dependency, and is not part of the package.
 
 ## By keyboard and screen reader
 
