@@ -1,6 +1,6 @@
 # Spec 0005: threads, agents and how they plug in (v2)
 
-Status: **being grilled** (maintainer and PM, from 2026-11-05). Each answer lands here as it is given; nothing is built until this is approved on the map.
+Status: **grilled, awaiting approval** (maintainer and PM, 2026-11-05). All ten questions are answered below. Nothing is built until this is approved on the map.
 
 Issues: [#14 PIPE-01 Alignment threads](https://github.com/popcorn245/CornField/issues/14), [#19 PIPE-06 Launching agents](https://github.com/popcorn245/CornField/issues/19).
 
@@ -101,9 +101,22 @@ This changes the earlier plan (the vision and #14) to keep threads in cornfield'
 - **A timeline per run:** requested, claimed, the runner's reports, pushes, the pull request, checks, review, landed. It is built from forge events plus whatever the runner reports.
 - **Not shown:** live logs, because the runner's `url` links out to its own; and chat with an agent inside cornfield, because talking to a run is commenting in its thread on the forge (D6).
 
-## Open questions
+### D10. Requests by click, by API, or by opt-in trigger; a run never triggers another (2026-11-05)
 
-The tree, roughly in the order each answer unlocks the next:
+- **By click or by API.** A maintainer requests a run with a button, or with a request API that a maintainer-minted token can call, as the review API does (#67), so a chat bridge can start runs.
+- **Opt-in triggers,** off by default, in the same pattern as `approveLands`:
+
+  ```js
+  agents: { on: { 'spec.approved': { kind: 'code', profile: 'claude' } } }
+  ```
+
+  A trigger may fire only on an event a maintainer caused: `spec.approved`, `build.opened`, or a `thread.message` holding an explicit `/agent` command from a maintainer. Every automatic request names the maintainer whose act caused it, and the cap and the one-run-per-issue rule still apply.
+- **No chaining.** A run's own output (its pushes, pull request, checks or reports) never fires another automatic request. A run's pull request is reviewed by a person, or through the review API, before anything else fires. That is how a fleet is kept from talking to itself.
+- **ADRs.** ADR 0007 ("tracks agents, does not launch them") is superseded by [ADR 0012](../adr/0012-cornfield-asks-runners-act.md), proposed with this spec. ADR 0006 gains two safe actions: ask a runner to start or stop a run, and open an idea issue or post a request in a thread. Each is posted as the maintainer and only ever asks.
+
+## The questions, as they were asked
+
+Each was answered in turn; the answers are the decisions above.
 
 1. ~~Where an agent runs, and what "launch" means for cornfield.~~ D1.
 1a. ~~How a request reaches the runner.~~ D2.
@@ -115,4 +128,4 @@ The tree, roughly in the order each answer unlocks the next:
 7. ~~How a thread connects to issues, nodes, proposals and runs.~~ D7.
 8. ~~Models.~~ D8.
 9. ~~What cornfield shows of a run while it is going.~~ D9.
-10. The safe-actions line (ADR 0006) for v2.
+10. ~~The safe-actions line for v2, and automation.~~ D10.

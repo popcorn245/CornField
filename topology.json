@@ -1688,6 +1688,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0005: threads, agents and how they plug in (v2) (docs/specs/0005-threads-and-agents.md)."
+    },
+    {
+      "id": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "type": "page",
+      "label": "/docs/adr/0012-cornfield-asks-runners-act",
+      "file": "docs/adr/0012-cornfield-asks-runners-act.md",
+      "summary": "ADR 0012: cornfield asks; the developer's runners act",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "ADR 0012: cornfield asks; the developer's runners act (docs/adr/0012-cornfield-asks-runners-act.md)."
     }
   ],
   "edges": [
@@ -5043,7 +5053,31 @@
     {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0005-threads-and-agents"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act"
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-readme",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T05:16:32.680Z"
+  "updatedAt": "2026-11-05T08:32:53.630Z"
 }
