@@ -1678,6 +1678,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0004: spec.ready without anyone opening the dashboard (docs/specs/0004-spec-poll.md)."
+    },
+    {
+      "id": "core-core-agent-contract",
+      "label": "agent-contract.js",
+      "type": "core",
+      "file": "core/agent-contract.js",
+      "summary": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md). (core/agent-contract.js)"
+    },
+    {
+      "id": "page-doc-docs-agent-contract",
+      "type": "page",
+      "label": "/docs/agent-contract",
+      "file": "docs/agent-contract.md",
+      "summary": "The agent contract (version 1)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The agent contract (version 1) (docs/agent-contract.md)."
     }
   ],
   "edges": [
@@ -5029,7 +5049,37 @@
       "from": "page-doc-docs-specs-0004-spec-poll",
       "to": "page-doc-docs-config",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-agent-contract"
+    },
+    {
+      "from": "pkg-core",
+      "to": "pkg-server",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-agent-contract",
+      "to": "core-server-defuse",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-agent-contract"
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "core-core-agent-contract",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-04T22:59:24.677Z"
+  "updatedAt": "2026-11-05T08:52:51.454Z"
 }
