@@ -519,6 +519,9 @@ function focusIdeaOpener() {
   (from && !from.closest('[inert]') ? from : $('idea-open')).focus();
 }
 
+/** A node id that reads back as one mention: no brackets or line breaks, as core/mentions.js parses them */
+const MENTIONABLE = /^[^[\]\r\n]{1,200}$/;
+
 /** "Start a thread about this" (a node's panel): the New idea form, with the node's label as the title and its mention in the text */
 function startThread(node) {
   if (!node || ui.idea.busy || !ui.config || ui.config.threads === false) return;
@@ -535,9 +538,13 @@ function startThread(node) {
   ui.idea.link = null;
   ui.idea.node = { id: node.id, label: node.label };
   ui.idea.opener = node.id;
-  $('idea-title').value = String(node.label || node.id).slice(0, 256);
+  // Never lose a draft: a title already typed stays, and text already typed stays under the mention, which is added once (`.value` is
+  // text, never markup, so the label and the id need no escaping here)
+  const title = $('idea-title');
+  if (title.value.trim() === '') title.value = String(node.label || node.id).slice(0, 256);
   const text = $('idea-body');
-  text.value = `[[${node.id}]]\n\n`; // the mention on its own line, an empty line under it to write in
+  const mention = MENTIONABLE.test(node.id) ? `[[${node.id}]]` : '';
+  if (mention && !text.value.includes(mention)) text.value = text.value.trim() === '' ? `${mention}\n\n` : `${mention}\n\n${text.value}`;
   paintIdea();
   $('idea-title').focus();
 }
@@ -577,12 +584,17 @@ async function sendIdea() {
     const about = ui.idea.node;
     await loadList(true, true);
     ensureThreadsList();
+    // The new thread is selected in the list, so what it mentions lights on the map
+    const n = res.body.number;
+    if (Number.isInteger(n)) await selectThread(n);
+    // Then the focus goes back to what opened the form: after the selection, which draws the node's panel (and its button) again
     focusIdeaOpener();
-    // Opened from a node: say when its "Mentioned in" lists the new thread
-    const listed = about && (threadsFor(about.id) || []).some((t) => t.number === res.body.number);
-    if (listed) announce(`${ui.idea.message} Thread #${res.body.number} is now listed under Mentioned in for ${about.label}.`);
     ui.idea.opener = '';
     ui.idea.node = null;
+    const shown = ui.thread === n && ui.threadDetail ? ` ${threadSelectionWords()}` : '';
+    // Opened from a node: say that its "Mentioned in" lists the new thread
+    const listed = about && (threadsFor(about.id) || []).some((t) => t.number === n);
+    announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Mentioned in for ${about.label}.` : ''}`);
   } else $('idea-title').focus();
 }
 

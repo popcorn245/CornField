@@ -614,32 +614,44 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
     await settle();
     expect($('drawer-threads').textContent).toContain('Mentioned in 1 thread');
     expect(await audit()).toEqual([]);
-
-    // The form opened from a node (Start a thread about this), prefilled
-    const starter = document.querySelector('[data-thread-start="page-a"]');
-    expect(starter.textContent).toBe('Start a thread about this');
-    click(starter);
-    await settle();
-    expect($('idea-form').hidden).toBe(false);
-    expect($('idea-body').value).toBe('[[page-a]]\n\n');
-    expect(document.activeElement).toBe($('idea-title'));
-    expect(await audit()).toEqual([]);
-    click(document.querySelector('[data-action="idea-cancel"]'));
-    expect(document.activeElement).toBe(document.querySelector('[data-thread-start="page-a"]'));
   }
 
   it('has no violation: the list, a thread open, New idea (empty, refused, sent) and a node\'s "Mentioned in" (dark)', async () => {
     stub();
     start();
     await walk();
- }, 60_000);
+  });
 
   it('has none in the light theme either (contrast is checked in Chromium, in both themes)', async () => {
     stub();
     start();
     document.documentElement.dataset.theme = 'light';
     await walk();
- }, 60_000);
+  });
+
+  // Its own test, not more steps in walk(): each stays well inside the suite's time limit (on CI the walk takes about 7 s of 60)
+  it('has none with the form opened from a node (Start a thread about this), prefilled, in both themes', async () => {
+    stub();
+    start();
+    for (const theme of ['dark', 'light']) {
+      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+      await selectNode(state.nodes.find((n) => n.id === 'page-a'));
+      await settle();
+      // The form opened from a node (Start a thread about this), prefilled
+      const starter = document.querySelector('[data-thread-start="page-a"]');
+      expect(starter.textContent).toBe('Start a thread about this');
+      click(starter);
+      await settle();
+      expect($('idea-form').hidden).toBe(false);
+      expect($('idea-body').value).toBe('[[page-a]]\n\n');
+      expect(document.activeElement).toBe($('idea-title'));
+      expect(await audit()).toEqual([]);
+      click(document.querySelector('[data-action="idea-cancel"]'));
+      expect(document.activeElement).toBe(document.querySelector('[data-thread-start="page-a"]'));
+      $('idea-body').value = ''; // the next theme starts from an empty form again
+      $('idea-title').value = '';
+    }
+  });
 
   it('is by keyboard: the tab, the rows, Clear, New idea and the node buttons are buttons in the tab order; the fields are labelled; the thread says it is read-only', async () => {
     stub();

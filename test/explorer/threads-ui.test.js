@@ -485,7 +485,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(document.activeElement).toBe($('idea-open'));
   });
 
-  it('posts the edited title and the text through POST /api/forge/threads, then "Mentioned in" lists the new thread', async () => {
+  it('posts the edited title and the text through POST /api/forge/threads, then "Mentioned in" lists the new thread, selected so its node lights', async () => {
     const posted = [];
     const server = fakeServer({ posts: POSTED });
     mount();
@@ -505,6 +505,10 @@ describe('Start a thread about this (a node\'s panel)', () => {
         const at = '2026-10-19T11:59:30.000Z';
         return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at, rate: '', label: 'idea', problem: null, items: [NEW, ...THREADS] }) };
       }
+      if (!init.method && new URL(url, 'http://localhost').pathname === '/api/forge/threads/77') {
+        const opening = { id: 'opening', author: user('maintainer-one'), url: URL_OF(77), createdAt: NEW.createdAt, updatedAt: NEW.updatedAt, body: '[[core-db]]\n\nIt has outgrown the server.', opening: true };
+        return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:59:30.000Z', rate: '', thread: { ...NEW, messages: [opening], hidden: 0 } }) };
+      }
       return real(url, init);
     }));
     click($('idea-send'));
@@ -517,11 +521,62 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(box.textContent).toContain('Mentioned in 1 thread:');
     expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('#77 Move db.js to its own package');
     expect(document.activeElement).toBe(button());
-    expect(await said()).toContain('Thread #77 is now listed under Mentioned in for db.js');
-    // and the thread lights the node
-    click(box.querySelector('[data-thread-open="77"]'));
+    // the new thread is selected on the Threads tab, so the node it mentions lights; the words say all of it at once
+    expect(q('[data-forge-thread="77"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-btn-lit').textContent).toBe('thread #77');
+    expect([...state.forgeLit.changed]).toEqual(['core-db']);
+    const words = await said();
+    expect(words).toContain('Opened idea #77');
+    expect(words).toContain('Thread 77, Move db.js to its own package: 1 message, 1 node lit.');
+    expect(words).toContain('It is listed under Mentioned in for db.js.');
+  });
+
+  it('never loses a draft: a typed title stays, typed text stays under the mention, and the mention is added once', async () => {
+    fakeServer();
+    mount();
+    openForge();
     await settle();
-    expect($('forge-panel').classList.contains('forge-open')).toBe(true);
+    click(q('[data-forge-kind="threads"]'));
+    await settle();
+    click($('idea-open'));
+    type('idea-title', 'My own title');
+    type('idea-body', 'Half a thought');
+    click(q('[data-action="idea-cancel"]')); // put away, not thrown away
+    selectNode(pick('core-db'));
+    await settle();
+    click(button());
+    await settle();
+    expect($('idea-title').value).toBe('My own title');
+    expect($('idea-body').value).toBe('[[core-db]]\n\nHalf a thought');
+    // again, from the same node: nothing doubled
+    click(button());
+    await settle();
+    expect($('idea-body').value).toBe('[[core-db]]\n\nHalf a thought');
+    // from another node: its mention goes on top, the rest kept
+    selectNode(pick('core-auth'));
+    await settle();
+    click(button());
+    await settle();
+    expect($('idea-body').value).toBe('[[core-auth]]\n\n[[core-db]]\n\nHalf a thought');
+    expect($('idea-title').value).toBe('My own title');
+  });
+
+  it('an empty title takes the node\'s label; a draft with only spaces is no draft', async () => {
+    fakeServer();
+    mount();
+    openForge();
+    await settle();
+    click(q('[data-forge-kind="threads"]'));
+    await settle();
+    click($('idea-open'));
+    type('idea-title', '   ');
+    type('idea-body', '  \n ');
+    selectNode(pick('core-hooks'));
+    await settle();
+    click(button());
+    await settle();
+    expect($('idea-title').value).toBe('hooks.js');
+    expect($('idea-body').value).toBe('[[core-hooks]]\n\n');
   });
 
   it('posts the mention alone when nothing is written under it, and keeps the form on a refusal', async () => {
