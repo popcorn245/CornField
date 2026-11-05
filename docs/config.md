@@ -41,7 +41,7 @@ export default {
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
-| `hooks` | `[{ url, events }]`: where cornfield posts a signed JSON event when something happens, and which events (a non-empty list of the five names, or `'*'`). [Hooks](#hooks) |
+| `hooks` | `[{ url, events }]`: where cornfield posts a signed JSON event when something happens, and which events (a non-empty list of the six names, `spec.ready`, `spec.approved`, `spec.sentBack`, `build.opened`, `pr.landed` and `session.expiring`, or `'*'`). [Hooks](#hooks) |
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs by itself, so `spec.ready` fires without anyone opening the dashboard. On at 5 minutes when a hook subscribes to `spec.ready`, off otherwise. [Hook poll](#hook-poll) |
 | `links` | extra links in the explorer's header |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |

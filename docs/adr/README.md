@@ -15,4 +15,4 @@ One record per decision a contributor could reasonably question. Each says what 
 | [0009](0009-generic-here-facts-in-config.md) | Generic logic in cornfield, a repo's facts in its config and plugins |
 | [0010](0010-cornfield-uses-its-own-gate.md) | cornfield proposes its own changes on its own map |
 | [0011](0011-vitest-for-tests.md) | Tests run on vitest, a dev dependency only |
-| [0012](0012-cornfield-asks-runners-act.md) | cornfield asks; the developer's runners act (proposed, with spec 0005) |
+| [0012](0012-cornfield-asks-runners-act.md) | cornfield asks; the developer's runners act (with spec 0005) |

@@ -112,7 +112,7 @@ This changes the earlier plan (the vision, the roadmap, #14 and [ADR 0003](../ad
 
   A trigger may fire only on an event a maintainer caused: `spec.approved`, `build.opened`, or a `thread.message` holding an explicit `/agent` command from a maintainer. Every automatic request names the maintainer whose act caused it, and the cap and the one-run-per-issue rule still apply.
 - **No chaining.** A run's own output (its pushes, pull request, checks or reports) never fires another automatic request. A run's pull request is reviewed by a person, or through the review API, before anything else fires. That is how a fleet is kept from talking to itself.
-- **ADRs.** ADR 0007 ("tracks agents, does not launch them") is superseded by [ADR 0012](../adr/0012-cornfield-asks-runners-act.md), proposed with this spec. [ADR 0006](../adr/0006-safe-actions-only.md) gains two safe actions, recorded there as an amendment: ask a runner to start or stop a run, and open an idea issue or post a request in a thread. Each is posted as the maintainer and only ever asks.
+- **ADRs.** ADR 0007 ("tracks agents, does not launch them") is superseded by [ADR 0012](../adr/0012-cornfield-asks-runners-act.md), accepted with this spec. [ADR 0006](../adr/0006-safe-actions-only.md) gains two safe actions, recorded there as an amendment: ask a runner to start or stop a run, and open an idea issue or post a request in a thread. Each is posted as the maintainer and only ever asks.
 
 ## The questions, as they were asked
 
@@ -132,7 +132,7 @@ Each was answered in turn; the answers are the decisions above.
 
 ## The contract
 
-What D2 to D5, D8 and D10 imply, gathered for whoever builds a runner or cornfield's side of it. It restates the decisions; nothing here is new. Anything they leave open is marked **settle in build**: the first build issue that needs it decides it, and writes it into the runner docs.
+What D2 to D5, D8 and D10 imply, gathered for whoever builds a runner or cornfield's side of it. It restates the decisions, plus three points the PM settled when the spec was approved (marked **PM, 2026-11-05**). Anything still open is marked **settle in build**: the first build issue that needs it decides it, and writes it into the runner docs.
 
 ### The request (JSON, version 1)
 
@@ -183,14 +183,15 @@ A fenced block whose info string names the run, holding one JSON object (D3):
 - `note` and `url` are optional, and so are `tokens` and `cost`, the only figures cornfield shows about cost; it never estimates (D4).
 - On the forge it is a comment on the request; on push or pull it is the same JSON sent to cornfield with the runner token.
 - Reporting is optional: a silent run is seen through its pushes (D3).
-- Still **settle in build:** whose `cornfield-run` comments cornfield believes on the forge transport (the runner posts as its own identity, which is not a maintainer, so the maintainer rule cannot be the test); when a run counts as no longer open (a final state, its pull request closed or landed, or a quiet period: D4 says "goes quiet" without a length).
+- **Whose reports count (PM, 2026-11-05).** On the forge transport, cornfield believes a `cornfield-run` block only from an account listed in a new config key, `agents.runners: ['login', …]` (the runners' own forge identities), or from a maintainer. A block from anyone else is ignored, and the ignoring is a row in the audit table. On push and pull, the runner token decides instead.
+- **When a run stops counting as open (PM, 2026-11-05):** after `done`, `failed` or `stopped`; when its pull request is merged or closed; or after a quiet period with no report, push or pull request activity, `agents.quietAfter`, by default **24h**. A quiet run is shown as **quiet** and no longer counts toward the cap or the one-run-per-issue rule. A later report or push makes it open again.
 
 ### Stopping a run
 
-A stop is the same block with `"state": "stop-requested"`, sent for the run id over the transport the request used, as the maintainer who clicked (D4). The runner decides what stopping means. cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet. A runner should honour a stop only from a maintainer, as it does a request (D5).
+A stop is the same block with `"state": "stop-requested"`, sent for the run id over the transport the request used, as the maintainer who clicked (D4). The runner decides what stopping means. cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet (`agents.quietAfter`, below). A runner should honour a stop only from a maintainer, as it does a request (D5).
 
 ### What cornfield enforces, and what it only shows
 
 - **Enforced, on requests cornfield makes** (button, API, trigger): at most 3 open runs per repo by default (configurable), a per-maintainer rate limit, and one open run per issue or proposal unless asked on purpose (D4, D10). A refusal says why. A request written by hand on the forge bypasses all three (D5).
-- **Triggers** fire only on `spec.approved`, `build.opened`, or a maintainer's `thread.message` holding `/agent`; never on a run's own output (D10). A `thread.message` is seen when cornfield next looks (D6), so a trigger fires within the poll interval, and the request is posted as the maintainer whose act caused it. What happens when that maintainer has no live sign-in is **settle in build**; landing on approval is the precedent (it stops, says why, and writes an audit row).
+- **Triggers** fire only on `spec.approved`, `build.opened`, or a maintainer's `thread.message` holding `/agent`; never on a run's own output (D10). A `thread.message` is seen when cornfield next looks (D6), so a trigger fires within the poll interval, and the request is posted as the maintainer whose act caused it. **When that maintainer has no live sign-in (PM, 2026-11-05)**, the trigger does nothing: no request is made, and an audit row says so. The PM asked for a comment in the thread or issue as well ("sign in to cornfield to let this trigger request a run"), as landing on approval does; but landing on approval posts nothing in that case, because cornfield holds no forge token of its own and posting with another maintainer's would put words in their name. So the comment is **settle in build**: post it once that maintainer next signs in, or show the notice in the dashboard instead.
 - **Shown, never enforced:** the limits beside what the runner reports, cost only as reported, and stop requested (D4).
