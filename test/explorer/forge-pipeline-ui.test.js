@@ -353,7 +353,8 @@ describe('step 3 and the rest of the panel are as they were', () => {
     await openIssues();
     const buttons = qa('[data-forge-spec]');
     expect(buttons.every((b) => b.tagName === 'BUTTON' && b.type === 'button' && b.tabIndex >= 0)).toBe(true);
-    expect(q('#forge-panel').textContent).not.toMatch(/launch|agent run|start an agent/i);
+    // cornfield asks and never launches (ADR 0012): the agent button is a request, and says so in its dialog
+    expect(q('#forge-panel').textContent).not.toMatch(/launch/i);
   });
 
   it('the confirm dialog is the one Land it uses, set up again for each step', async () => {

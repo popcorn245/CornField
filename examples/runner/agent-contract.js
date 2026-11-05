@@ -118,7 +118,8 @@ export const CREDENTIAL_KEY_SOURCE = `(?:${['token', 'secret', 'passw', 'credent
 const EDGE = '(?<![A-Za-z0-9])';
 
 /**
- * A value shaped like a credential: a forge or cloud token, a JWT, a private key, a bearer header, a user and password in a link.
+ * A value shaped like a credential: a forge or cloud token, cornfield's own API tokens (`cf_rt_…` review, `cf_at_…` agent), a JWT, a
+ * private key, a bearer header, a user and password in a link.
  * Prose that only talks about tokens and passwords passes; `sk-` keys and bearer values need a digit in their first 41
  * characters, as real ones have, so a long hyphenated word after "Bearer" or "sk-" is not taken for one. Each alternative tries a
  * bounded stretch from each place it may start, so a 20000 character brief is read in linear time whatever it holds.
@@ -128,6 +129,7 @@ export const CREDENTIAL_VALUE_SOURCE = [
   `${EDGE}github_pat_[A-Za-z0-9_]{20,}`,
   `${EDGE}glpat-[A-Za-z0-9_-]{15,}`,
   `${EDGE}gto-[A-Za-z0-9]{20,}`,
+  `${EDGE}cf_(?:rt|at)_[A-Za-z0-9_-]{20,}`,
   `${EDGE}sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]`,
   `${EDGE}AKIA[0-9A-Z]{16}`,
   `${EDGE}AIza[0-9A-Za-z_-]{35}`,
@@ -624,7 +626,8 @@ export function runBlocksOf(comments, { trust, profiles } = /** @type {any} */ (
     const by = c.author?.login ?? null;
     const comment = { id: String(c.id), url: c.url ?? null };
     for (const r of read.refused) out.refused.push({ ...r, by, comment });
-    const edited = c.updatedAt !== undefined && Date.parse(c.updatedAt) - Date.parse(c.createdAt) > EDIT_GRACE_MS;
+    // A time that does not parse is not taken for "never edited": only a comment the forge says it left alone counts
+    const edited = c.updatedAt !== undefined && !(Date.parse(c.updatedAt) - Date.parse(c.createdAt) <= EDIT_GRACE_MS);
     for (const b of read.blocks) {
       const found = { ...b, by, at: c.createdAt, comment };
       if (by === null || !trust(by, b)) out.ignored.push({ ...found, why: 'author' });

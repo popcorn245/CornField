@@ -99,6 +99,10 @@ describe('parse', () => {
       expect(r.status, kind).toBe(1);
       expect(r.stdout, kind).toBe('');
       expect(r.stderr, kind).toMatch(/credential/);
+      // the contract refuses the kinds it knows (cf_rt_ and cf_at_ at least); the helper keeps out the rest as well
+      const known = new RegExp(c.CREDENTIAL_VALUE_SOURCE).test(cf(kind));
+      if (kind === 'rt' || kind === 'at') expect(known, kind).toBe(true);
+      if (known) expect(c.validateRequest(request({ brief: `use ${cf(kind)}` })).ok, kind).toBe(false);
       expect(run(['report', ID, 'failed', `key ${cf(kind)}`]).status, kind).toBe(1);
     }
     // prose that names the prefixes is not a token

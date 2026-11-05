@@ -20,12 +20,12 @@
 
 import { escHtml } from './state.js';
 import { announce } from './keyboard.js';
-import { TOKENS_URL, DEFAULT_DAYS, MAX_DAYS, makeRequest, revokeUrl, tokenLine, errorWords } from './review-tokens-model.js';
+import { tokensUrl, DEFAULT_DAYS, MAX_DAYS, makeRequest, revokeUrl, tokenLine, errorWords } from './review-tokens-model.js';
 
 const $ = (id) => document.getElementById(id);
 let wired = false;
 let now = () => Date.now();
-const ui = { open: false, busy: false, tokens: [], loaded: false, message: null };
+const ui = { open: false, busy: false, tokens: [], loaded: false, message: null, scope: 'review' };
 
 const dialog = () => $('tokens-dialog');
 
@@ -51,7 +51,7 @@ function paint() {
   if (!dialog()) return;
   const list = $('tokens-list');
   if (!ui.loaded) list.innerHTML = '<li class="hx-faint">Loading …</li>';
-  else if (!ui.tokens.length) list.innerHTML = '<li class="hx-faint">You have no review tokens yet.</li>';
+  else if (!ui.tokens.length) list.innerHTML = `<li class="hx-faint">You have no ${ui.scope} tokens yet.</li>`;
   else {
     list.innerHTML = ui.tokens.map((t) => {
       const line = tokenLine(t, now());
@@ -66,7 +66,7 @@ function paint() {
 }
 
 async function load() {
-  const res = await request('GET', TOKENS_URL);
+  const res = await request('GET', tokensUrl(ui.scope));
   if (res.ok && Array.isArray(res.body.tokens)) {
     ui.tokens = res.body.tokens;
     ui.loaded = true;
@@ -92,7 +92,7 @@ async function make(e) {
   clearSecret();
   ui.busy = true;
   say('');
-  const res = await request('POST', TOKENS_URL, checked.body);
+  const res = await request('POST', tokensUrl(ui.scope), checked.body);
   ui.busy = false;
   if (!res.ok || typeof res.body.secret !== 'string') { say(errorWords(res.status, res.body), false); return; }
   // The one time the secret is seen: in the field, and not in a live region
@@ -110,7 +110,7 @@ async function revoke(id) {
   if (ui.busy) return;
   ui.busy = true;
   paint();
-  const res = await request('POST', revokeUrl(id), {});
+  const res = await request('POST', revokeUrl(id, ui.scope), {});
   ui.busy = false;
   if (!res.ok) say(errorWords(res.status, res.body), false);
   else say(`Revoked "${res.body.token.label}". It no longer works.`);
@@ -203,6 +203,8 @@ export function initReviewTokens(config, opts = {}) {
     dialog().addEventListener('click', onClick);
     dialog().addEventListener('keydown', onKey);
     $('tokens-form').addEventListener('submit', make);
+    const scope = $('tokens-scope');
+    if (scope) scope.addEventListener('change', () => { ui.scope = scope.value === 'agent' ? 'agent' : 'review'; ui.loaded = false; ui.tokens = []; clearSecret(); paint(); load(); });
   }
   return true;
 }
@@ -212,5 +214,7 @@ export function resetReviewTokensForTests(clock = () => Date.now()) {
   if (ui.open) closeTokens({ restoreFocus: false });
   wired = false;
   now = clock;
-  Object.assign(ui, { open: false, busy: false, tokens: [], loaded: false, message: null });
+  Object.assign(ui, { open: false, busy: false, tokens: [], loaded: false, message: null, scope: 'review' });
+  const scope = $('tokens-scope');
+  if (scope) scope.value = 'review';
 }

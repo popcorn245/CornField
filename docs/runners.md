@@ -26,7 +26,7 @@ What these examples do not solve, and you should know:
 
 ## The helper: `cornfield-run.mjs`
 
-[examples/runner/cornfield-run.mjs](../examples/runner/cornfield-run.mjs) is a small command line over the agent contract itself. It sits beside three files you copy with it: `agent-contract.js` and `defuse.js`, unchanged copies of cornfield's [core/agent-contract.js](../core/agent-contract.js) and `core/defuse.js` (a test keeps them identical), and a `package.json` that marks the folder as ES modules. So the runner refuses exactly what cornfield refuses (unknown keys, anything shaped like a credential, an unsafe branch or profile name, a block in another fence) and needs no install. When you update cornfield, copy the two contract files again.
+[examples/runner/cornfield-run.mjs](../examples/runner/cornfield-run.mjs) is a small command line over the agent contract itself. It sits beside three files you copy with it: `agent-contract.js` and `defuse.js`, unchanged copies of cornfield's [core/agent-contract.js](../core/agent-contract.js) and `core/defuse.js` (a test keeps them identical), and a `package.json` that marks the folder as ES modules. So the runner refuses exactly what cornfield refuses (unknown keys, anything shaped like a credential, an unsafe branch or profile name, a block in another fence) and needs no install. It also refuses anything shaped like one of cornfield's own tokens (`cf_` and two letters, such as `cf_rt_` or `cf_at_`), even a kind newer than its copy of the contract. When you update cornfield, copy the two contract files again.
 
 | Command | Does |
 | --- | --- |

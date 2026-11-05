@@ -14,6 +14,7 @@
  *   issue(n)                          one issue (not a pull request: that is `not-found`)
  *   searchIssues(words)               the issues whose text holds the words (one page; the forge's search, which can lag a moment)
  *   pullFiles(n)                      the files a pull request changes
+ *   pullCommits(n)                    the commits of a pull request, oldest first: their shas and full messages (a run's trailer may be in one)
  *   comments(n, { since })            the comments on an issue or pull request, oldest first; `since` (an ISO time) only those
  *                                     created or edited after it, which is how a thread is followed without reading it all again
  *   comment(n, body)                  posts one, and answers it
@@ -55,6 +56,7 @@
  * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
+ * @typedef {{ sha: string, message: string }} PullCommit
  * @typedef {'queued' | 'running' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'} CheckState
  * @typedef {{ id: string, name: string, state: CheckState, url: string | null, rerunnable: boolean }} Check
  * @typedef {{ name: string, sha: string, protected: boolean }} Branch
@@ -83,6 +85,7 @@
  *   createPull(pull: { title: string, body: string, head: string, base: string, draft: boolean }): Promise<Pull>,
  *   createIssue(issue: { title: string, body: string, labels?: string[] }): Promise<Issue>,
  *   pullFiles(n: number): Promise<PullFile[]>,
+ *   pullCommits(n: number): Promise<PullCommit[]>,
  *   comments(n: number, opts?: { since?: string }): Promise<Comment[]>,
  *   comment(n: number, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
@@ -114,7 +117,7 @@ import { ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'pull', 'issue', 'pullFiles', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'pull', 'issue', 'pullFiles', 'pullCommits', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -276,6 +279,7 @@ export function wrap(a, forge) {
       return a.searchIssues(words.trim());
     },
     pullFiles: async (n) => a.pullFiles(number(n)),
+    pullCommits: async (n) => a.pullCommits(number(n)),
     comments: async (n, opts) => {
       if (opts !== undefined && (opts === null || typeof opts !== 'object' || Array.isArray(opts))) throw invalid('The options are an object.');
       const since = opts && opts.since;

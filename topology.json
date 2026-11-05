@@ -1494,7 +1494,7 @@
       "type": "page",
       "label": "/docs/agents",
       "file": "docs/agents.md",
-      "summary": "Agents, tracked",
+      "summary": "Agents: asked for, and tracked",
       "r": 18,
       "color": "#38bdf8",
       "desc": "Agents, tracked (docs/agents.md)."
@@ -1604,7 +1604,7 @@
       "label": "review-tokens.js",
       "type": "core",
       "file": "server/review-tokens.js",
-      "summary": "Review tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through `POST /api/reviews` (server/review-api.js).",
+      "summary": "API tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through `POST /api/reviews` (server/review-api.js), or ask for an agent run through `POST /api/a…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Review tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through `POST /api/reviews` (server/review-api.js). (server/review-tokens.js)"
@@ -1758,6 +1758,36 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Threads (docs/threads.md)."
+    },
+    {
+      "id": "core-explorer-runs-model",
+      "label": "runs-model.js",
+      "type": "core",
+      "file": "explorer/runs-model.js",
+      "summary": "Agent runs in the issues and PRs panel, the pure half (issue #80, spec 0005): no DOM, no `window`, no clock.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Agent runs in the issues and PRs panel, the pure half (issue #80, spec 0005): no DOM, no `window`, no clock. (explorer/runs-model.js)"
+    },
+    {
+      "id": "core-server-agent-api",
+      "label": "agent-api.js",
+      "type": "core",
+      "file": "server/agent-api.js",
+      "summary": "The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js). (server/agent-api.js)"
+    },
+    {
+      "id": "core-server-agent-runs",
+      "label": "agent-runs.js",
+      "type": "core",
+      "file": "server/agent-runs.js",
+      "summary": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else. (server/agent-runs.js)"
     },
     {
       "id": "page-doc-docs-runners",
@@ -4525,11 +4555,6 @@
     },
     {
       "from": "page-doc-docs-agents",
-      "to": "page-doc-docs-roadmap",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-agents",
       "to": "page-doc-docs-adr-0007-track-agents-do-not-launch",
       "dashed": true
     },
@@ -5401,6 +5426,152 @@
       "dashed": true
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-runs-model"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-agent-api"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-agent-runs"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-proposals",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-review-api",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-review-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-submit-review",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-api",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-hooks",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-agent-api",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-agent-runs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agents",
+      "to": "page-doc-docs-agent-contract",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-agent-contract",
+      "dashed": true
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-runners"
     },
@@ -5430,5 +5601,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T09:36:37.724Z"
+  "updatedAt": "2026-11-05T09:54:50.545Z"
 }

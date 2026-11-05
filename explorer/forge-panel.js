@@ -51,6 +51,12 @@
  *     notes again itself and has the forge keep them as a DRAFT release; nothing is published and no tag is made. The
  *     page never sends the text of the notes, only the tag. The result, or the forge's refusal, is a line in words.
  *
+ *   - Agent runs (issue #80, spec 0005, explorer/runs-model.js): **Start an agent** on an open issue and on an issue or proposal group of the Agents
+ *     tab opens a dialog (kind, a profile when the config lists any, a brief, and in words what it will do) and POSTs once to
+ *     `/api/agent-runs`; the Agents tab lists the runs with their state, links and a **Stop**, which asks the runner to stop. cornfield only
+ *     asks: the request is a comment on the forge, as the maintainer. A refusal (the limit, a run already open) is said in the dialog, with
+ *     a way to ask on purpose where the rule allows it.
+ *
  * What is asked, which words and which nodes are forge-panel-model.js, tested without a page.
  */
 
@@ -62,6 +68,9 @@ import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js'
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
+import {
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords,
+} from './runs-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
   landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
@@ -105,6 +114,9 @@ const ui = {
   confirm: null, // { opener: selector, kind: 'merge' | 'spec' | 'build', plan?, n?, slug? } while the confirm dialog is open
   actNote: null, // { text, ok, url }: what the last pipeline step came to
   notes: freshNotes(), // the Release notes view
+  runs: null, // { data, error } of the Agents tab's runs: what /api/agent-runs answered
+  runNote: null, // { text, ok }: what the last Stop came to
+  agent: null, // { opener, refs, posting } while the Start an agent dialog is open
 };
 
 /** The Release notes view: the draft loaded for a tag, and where the confirm step is */
@@ -161,7 +173,7 @@ async function loadWork(refresh, token) {
   ui.loading = true;
   ui.error = '';
   paint();
-  const res = await request(WORK_URL, refresh);
+  const [res] = await Promise.all([request(WORK_URL, refresh), loadRuns(refresh)]);
   if (token !== listToken) return;
   ui.loading = false;
   if (res.ok) {
@@ -173,6 +185,12 @@ async function loadWork(refresh, token) {
     announce(ui.error);
   }
   paint();
+}
+
+/** Loads the runs for the Agents tab (a refresh also has cornfield look at the forge for their reports first); a failure is a line, never a blank panel */
+async function loadRuns(refresh) {
+  const res = await request(runsUrl(refresh), refresh);
+  ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
 }
 
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
@@ -732,9 +750,12 @@ function itemHtml(item, before = '', after = '') {
   const spec = specBlock(item) === null
     ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${item.number}" aria-label="Start a spec for issue ${item.number}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
     : '';
+  const agent = item.state === 'open'
+    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${item.number}" aria-label="Start an agent on issue ${item.number}">Start an agent …</button>`
+    : '';
   return link
-    ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a>${spec}</li>`
-    : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div>${spec}</li>`;
+    ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a>${spec}${agent}</li>`
+    : `<li class="hx-forge-item"><div class="hx-forge-row">${inner}</div>${spec}${agent}</li>`;
 }
 
 /** One piece of work in a group: a pull request (a row that selects it, as in the Pull requests tab) or a branch with none */
@@ -752,7 +773,9 @@ function workHtml(e) {
 function groupsHtml(groups) {
   return groups.map((g, i) => {
     const link = g.issue && safeUrl(g.issue.url) ? ` <a class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
-    return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3><p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
+    const startRef = g.kind === 'issue' && g.issue && g.issue.state === 'open' ? `issue:${g.number}` : g.kind === 'proposal' ? `proposal:${g.slug}` : null;
+    const start = startRef ? ` <button type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="Start an agent on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">Start an agent …</button>` : '';
+    return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3>${start}<p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
   }).join('');
 }
 
@@ -899,6 +922,8 @@ function findAgain(el) {
   if (el.dataset.forgeSpec) return `[data-forge-spec="${el.dataset.forgeSpec}"]`;
   if (el.dataset.forgeBuild) return `[data-forge-build="${el.dataset.forgeBuild}"]`;
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
+  if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
+  if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
   return null;
 }
 
@@ -960,7 +985,39 @@ function draw(panel) {
   paintIdea();
   const rate = (ui.threadDetail && ui.threadDetail.rate) || (ui.detail && ui.detail.rate) || (list && list.rate) || '';
   $('forge-rate').textContent = rate;
+  paintRuns();
   paintButton();
+}
+
+/** The runs of the Agents tab: state, what each is about, links, and Stop. A runner's words are escaped like any text from the forge. */
+function paintRuns() {
+  const box = $('forge-runs');
+  if (!box) return;
+  box.hidden = ui.kind !== 'work';
+  if (box.hidden) return;
+  const data = ui.runs && ui.runs.data;
+  $('forge-runs-status').textContent = data ? runsStatus(data) : ui.loading ? 'Loading the runs …' : '';
+  const note = $('forge-runs-note');
+  const words = (ui.runs && ui.runs.error) || (ui.runNote ? ui.runNote.text : '');
+  note.hidden = !words;
+  note.className = `hx-forge-notice${!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
+  note.textContent = words;
+  const list = $('forge-runs-list');
+  if (!data) { list.innerHTML = ''; return; }
+  list.innerHTML = data.runs.length ? data.runs.map(runHtml).join('') : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
+}
+
+function runHtml(run) {
+  const links = [
+    safeUrl(run.comment && run.comment.url) ? `<a class="hx-link" href="${escHtml(run.comment.url)}" target="_blank" rel="noreferrer">Request on ${escHtml(forgeName())} <span class="hx-sr-only">(new tab)</span></a>` : '',
+    run.pull && safeUrl(run.pull.url) ? `<a class="hx-link" href="${escHtml(run.pull.url)}" target="_blank" rel="noreferrer">Pull request #${run.pull.number} <span class="hx-sr-only">(new tab)</span></a>${run.pull.trusted ? '' : ' <span class="hx-faint">(not from a runner, so it moves nothing)</span>'}` : '',
+    run.report && safeUrl(run.report.url) ? `<a class="hx-link" href="${escHtml(run.report.url)}" target="_blank" rel="noreferrer">Runner\'s logs <span class="hx-sr-only">(new tab)</span></a>` : '',
+  ].filter(Boolean).join(' · ');
+  const why = statusWhy(run);
+  const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${escHtml(run.report.note)}</p>` : '';
+  const stop = canStop(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${escHtml(run.runId)}" aria-label="Stop run ${escHtml(run.runId)}"${ui.busy ? ' disabled' : ''}>Stop</button>` : '';
+  return `<li class="hx-forge-file"><span class="hx-forge-state hx-forge-state--${escHtml(run.status === 'done' || run.status === 'merged' ? 'success' : run.status === 'failed' ? 'failure' : run.status === 'quiet' || run.status === 'stop-requested' ? 'queued' : 'running')}">${escHtml(statusWords(run))}</span> <span class="hx-name">${escHtml(run.kind)} on ${escHtml(aboutWords(run.refs))}</span> ${stop}
+    <p class="hx-forge-meta">${escHtml(runMeta(run, now()))}</p>${why ? `<p class="hx-forge-why hx-faint">${escHtml(why)}</p>` : ''}${note}${links ? `<p class="hx-forge-meta">${links}</p>` : ''}</li>`;
 }
 
 /** The panel's lines for the Release notes view: the status, a failure, the rate limit; the rest is paintNotes */
@@ -1192,6 +1249,136 @@ function onConfirmClick(e) {
 }
 
 // ---------------------------------------------------------------------------
+//  Agent runs: Start an agent, and Stop
+// ---------------------------------------------------------------------------
+
+const agentEl = () => $('agent-start');
+
+/** While the dialog is open the focus cannot leave it */
+function keepFocusInAgent(e) {
+  const el = agentEl();
+  if (ui.agent && el && !el.contains(e.target)) $('agent-kind').focus();
+}
+
+/** Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field */
+async function openAgent(ref, opener) {
+  if (!agentEl() || ui.agent) return;
+  const at = ref.indexOf(':');
+  const type = ref.slice(0, at);
+  const value = ref.slice(at + 1);
+  const refs = type === 'proposal' ? { proposal: value } : { issue: Number(value) };
+  ui.agent = { opener, refs, posting: false };
+  // The profiles the config lists come with the runs: asked for if the Agents tab has not been opened yet
+  if (!ui.runs) { await loadRuns(false); if (ui.kind === 'work') paint(); }
+  if (!ui.agent) return;
+  const profiles = (ui.runs && ui.runs.data && ui.runs.data.profiles) || [];
+  $('agent-start-about').textContent = `About ${aboutWords(refs)}`;
+  $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
+  $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
+  $('agent-profile-field').hidden = !profiles.length;
+  $('agent-brief').value = '';
+  $('agent-force').checked = false;
+  $('agent-force-field').hidden = true;
+  $('agent-start-msg').hidden = true;
+  $('agent-start-msg').textContent = '';
+  $('agent-start-words').textContent = confirmStartWords(refs, forgeName());
+  const go = $('agent-start-go');
+  go.disabled = false;
+  go.removeAttribute('aria-busy');
+  go.textContent = 'Ask the runner';
+  document.addEventListener('focusin', keepFocusInAgent);
+  agentEl().hidden = false;
+  $('agent-kind').focus();
+  announce(`Start an agent on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+}
+
+/** Closes the dialog; the focus goes back to the button that opened it unless told not to */
+function closeAgent({ restoreFocus = true } = {}) {
+  const el = agentEl();
+  if (!el || !ui.agent) return;
+  const { opener } = ui.agent;
+  ui.agent = null;
+  el.hidden = true;
+  document.removeEventListener('focusin', keepFocusInAgent);
+  if (!restoreFocus) return;
+  const back = $('forge-panel').querySelector(opener) || $('forge-title');
+  if (back && !back.disabled) back.focus();
+}
+
+/** The one write: posts the choices once; a refusal stays in the dialog, in the server's words */
+async function submitAgent(e) {
+  e.preventDefault();
+  if (!ui.agent || ui.agent.posting) return;
+  ui.agent.posting = true;
+  const go = $('agent-start-go');
+  go.disabled = true;
+  go.setAttribute('aria-busy', 'true');
+  go.textContent = 'Asking …';
+  $('agent-start-msg').hidden = true;
+  const res = await post(RUNS_URL, startBody({
+    kind: $('agent-kind').value, profile: $('agent-profile-field').hidden ? '' : $('agent-profile').value, brief: $('agent-brief').value, refs: ui.agent.refs, force: $('agent-force').checked,
+  }));
+  if (!ui.agent) return;
+  ui.agent.posting = false;
+  const text = startWords(res.status, res.body);
+  if (res.ok) {
+    closeAgent();
+    ui.runNote = { text, ok: true };
+    announce(text);
+    await loadRuns(false);
+    paint();
+    return;
+  }
+  go.disabled = false;
+  go.removeAttribute('aria-busy');
+  go.textContent = 'Ask the runner';
+  const msg = $('agent-start-msg');
+  msg.textContent = text;
+  msg.hidden = false;
+  // The one-per-issue rule can be set aside on purpose; the cap cannot
+  if (res.body && res.body.code === 'run-open') $('agent-force-field').hidden = false;
+  announce(text);
+}
+
+/** Keys inside the dialog: Escape cancels, Tab stays inside, nothing reaches the map behind it */
+function onAgentKey(e) {
+  e.stopPropagation();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    if (!ui.agent || !ui.agent.posting) closeAgent();
+    return;
+  }
+  if (e.key !== 'Tab') return;
+  const fields = [...agentEl().querySelectorAll('select, textarea, input, button')].filter((el) => !el.disabled && !el.closest('[hidden]'));
+  if (!fields.length) { e.preventDefault(); return; }
+  const at = fields.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? fields.length - 1 : at - 1) : (at === -1 || at === fields.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  fields[next].focus();
+}
+
+function onAgentClick(e) {
+  const t = e.target;
+  if (t === agentEl()) { if (ui.agent && !ui.agent.posting) closeAgent(); return; } // the scrim
+  if (t.closest && t.closest('[data-action="agent-start-cancel"]') && ui.agent && !ui.agent.posting) closeAgent();
+}
+
+/** Asks a run to stop: one POST, then the runs are read again */
+async function stopRun(runId) {
+  if (ui.busy) return;
+  ui.busy = 'stop';
+  ui.runNote = null;
+  announce(`Asking ${runId} to stop`);
+  paint();
+  const res = await post(stopUrl(runId), {});
+  ui.busy = '';
+  ui.runNote = { text: stopWords(res.status, res.body, runId), ok: res.ok };
+  announce(ui.runNote.text);
+  await loadRuns(false);
+  paint();
+}
+
+// ---------------------------------------------------------------------------
 //  Opening and closing
 // ---------------------------------------------------------------------------
 
@@ -1317,6 +1504,10 @@ function onClick(e) {
     announce(`${node.label}, ${node.type}`);
     return;
   }
+  const agent = t.closest('[data-forge-agent]');
+  if (agent) { openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
+  const stop = t.closest('[data-forge-stop]');
+  if (stop) { stopRun(stop.dataset.forgeStop); return; }
   const unland = t.closest('[data-forge-landing-cancel]');
   if (unland) { cancelLanding(Number(unland.dataset.forgeLandingCancel)); return; }
   const merge = t.closest('[data-forge-merge]');
@@ -1420,6 +1611,12 @@ export function initForgePanel(config, opts = {}) {
     panel.addEventListener('change', onChange);
     panel.addEventListener('input', onInput);
     panel.addEventListener('keydown', onKey);
+    const agent = agentEl();
+    if (agent) {
+      agent.addEventListener('click', onAgentClick);
+      agent.addEventListener('keydown', onAgentKey);
+      agent.querySelector('form').addEventListener('submit', submitAgent);
+    }
     const confirm = confirmEl();
     if (confirm) {
       confirm.addEventListener('click', onConfirmClick);
@@ -1439,6 +1636,7 @@ export function initForgePanel(config, opts = {}) {
 /** For tests: forget the page this was wired to, and everything shown */
 export function resetForgePanelForTests(clock = () => Date.now()) {
   if (ui.confirm) closeConfirm({ restoreFocus: false });
+  if (ui.agent) closeAgent({ restoreFocus: false });
   if (offScene) offScene();
   offScene = null;
   clearTimeout(searchTimer);
@@ -1453,5 +1651,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   indexCache = null;
   state.forgeLit = null;
   state.threadIndex = null;
-  Object.assign(ui, { thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes() });
+  Object.assign(ui, { thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
 }
