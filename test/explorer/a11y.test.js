@@ -63,10 +63,28 @@ const $ = (id) => document.getElementById(id);
 const key = (el, k, opts = {}) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }); el.dispatchEvent(e); return e; };
 const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
-/** axe on the page as it stands, rules that need a layout off; returns the violations as "rule: target" */
-async function audit() {
+/**
+ * The regions a test audits. axe's cost is the computed style of every element it visits, and happy-dom recomputes
+ * all of them after each change to the page (about 2.5 s for this page, 60 ms for one panel), so a test about a panel
+ * audits that panel (plus the controls that name its state) and the two whole-page audits below (one per theme) keep
+ * the page-level rules (landmarks, duplicate ids, the order of headings) running.
+ */
+const FORGE = ['#forge-btn', '#forge-panel', '#forge-confirm'];
+const DRAWER = ['#spec-drawer'];
+const LAYERS = ['#legend-toggle-btn', '#legend-dropdown'];
+const PROPOSAL_REGION = ['#proposal-wrap', '#proposal-bar', '#sheet-dock', '#spec-drawer'];
+const MOCKUP_WINDOW = ['.hx-mockup-dialog'];
+
+/**
+ * axe on the regions given (CSS selectors; each must match, so a renamed id fails loudly), or on the whole page with
+ * none. Only the rules that need a layout are off (colour contrast: happy-dom has none); returns the violations as
+ * "rule: target"
+ */
+async function audit(...regions) {
+  for (const sel of regions) if (!document.querySelector(sel)) throw new Error(`audit: nothing matches ${sel}`);
   // An iframe is left to its own check below: happy-dom cannot run axe across a frame
-  const r = await axe.run({ include: [document.documentElement], exclude: [['iframe']] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
+  const include = regions.length ? regions : [document.documentElement];
+  const r = await axe.run({ include, exclude: [['iframe']] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
   return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`));
 }
 
@@ -91,7 +109,7 @@ function mount() {
 }
 
 beforeEach(() => { localStorage.clear(); history.replaceState(null, '', '/'); });
-afterEach(() => { clearScenario(); closeDrawer(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
+afterEach(() => { clearScenario(); closeDrawer(); resetMockupsForTests(); delete document.documentElement.dataset.theme; vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('axe finds no violation', () => {
   it('on the map as it loads', async () => {
@@ -112,7 +130,7 @@ describe('axe finds no violation', () => {
     renderLayerToggles();
     toggleLegendMenu();
     expect($('legend-toggle-btn').getAttribute('aria-expanded')).toBe('true');
-    expect(await audit()).toEqual([]);
+    expect(await audit(...LAYERS)).toEqual([]);
   });
 
   it('with a node\'s panel open; closed, the panel is inert so Tab never reaches it off screen', async () => {
@@ -120,40 +138,52 @@ describe('axe finds no violation', () => {
     expect($('spec-drawer').inert).toBe(true);
     await selectNode(state.nodes.find((n) => n.id === 'table-t'));
     expect($('spec-drawer').inert).toBe(false);
-    expect(await audit()).toEqual([]);
+    expect(await audit(...DRAWER)).toEqual([]);
     closeDrawer();
     expect($('spec-drawer').inert).toBe(true);
   });
 
-  it('with a proposal open, what-if editing on, and the scenario player playing', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url) => {
-      const u = new URL(url, 'http://localhost');
-      if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => [{ slug: '0013-meals', title: 'Meals', summary: 'Adds /meals.', source: 'checkout', counts: { added: 1, changed: 0, removed: 0, scenarios: 1 }, errors: 0 }] };
-      if (u.pathname.endsWith('/review')) return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
-      return { ok: true, status: 200, headers: new Headers({ 'X-Proposal-Source': 'checkout' }), json: async () => structuredClone(PROPOSAL) };
-    }));
-    mount();
-    resetWhatIfForTests();
-    initWhatIf();
-    await initProposals();
-    initScenarioUi();
-    expect(await openProposal('0013-meals', 'checkout')).toBe(true);
-    await settle();
-    expect(await audit()).toEqual([]);
-    await selectNode(state.nodes.find((n) => n.id === 'app-a'));
-    expect(await audit()).toEqual([]);
-    playScenario(PROPOSAL.scenarios[0], { autoplay: false });
-    await settle();
-    expect(document.querySelector('.hx-player')).not.toBe(null);
-    expect(await audit()).toEqual([]);
-    clearScenario();
-    closeProposal();
+  describe('with a proposal open and what-if editing on', () => {
+    beforeEach(async () => {
+      vi.stubGlobal('fetch', vi.fn(async (url) => {
+        const u = new URL(url, 'http://localhost');
+        if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => [{ slug: '0013-meals', title: 'Meals', summary: 'Adds /meals.', source: 'checkout', counts: { added: 1, changed: 0, removed: 0, scenarios: 1 }, errors: 0 }] };
+        if (u.pathname.endsWith('/review')) return { ok: false, status: 404, headers: new Headers(), json: async () => ({}) };
+        return { ok: true, status: 200, headers: new Headers({ 'X-Proposal-Source': 'checkout' }), json: async () => structuredClone(PROPOSAL) };
+      }));
+      mount();
+      resetWhatIfForTests();
+      initWhatIf();
+      await initProposals();
+      initScenarioUi();
+      expect(await openProposal('0013-meals', 'checkout')).toBe(true);
+      await settle();
+    });
+    afterEach(() => { clearScenario(); closeProposal(); });
+
+    it('the proposal bar, its changes and the what-if toolbar', async () => {
+      expect(document.querySelector('#whatif [role="toolbar"]')).not.toBe(null);
+      expect(await audit(...PROPOSAL_REGION)).toEqual([]);
+    });
+
+    it('and a node\'s panel open beside them', async () => {
+      await selectNode(state.nodes.find((n) => n.id === 'app-a'));
+      expect(await audit(...PROPOSAL_REGION)).toEqual([]);
+    });
+
+    it('and the scenario player playing', async () => {
+      await selectNode(state.nodes.find((n) => n.id === 'app-a'));
+      playScenario(PROPOSAL.scenarios[0], { autoplay: false });
+      await settle();
+      expect(document.querySelector('.hx-player')).not.toBe(null);
+      expect(await audit(...PROPOSAL_REGION)).toEqual([]);
+    });
   });
 });
 
 describe('axe finds no violation with a proposal\'s mockups', () => {
-  /** A node\'s panel with its mockups, then each opened in its window, in the dark and the light theme (contrast is checked in Chromium) */
-  it('in a node\'s panel and in the window a picture and a page open in, in both themes', async () => {
+  /** A node's panel with its mockups in a theme; returns the buttons that open them */
+  const mockupsPanel = async (theme) => {
     vi.stubGlobal('fetch', vi.fn(async (url) => {
       const u = new URL(url, 'http://localhost');
       if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => [{ slug: '0013-meals', title: 'Meals', summary: 'Adds /meals.', source: 'checkout', counts: { added: 1, changed: 0, removed: 0, scenarios: 1 }, errors: 0 }] };
@@ -174,10 +204,19 @@ describe('axe finds no violation with a proposal\'s mockups', () => {
     const buttons = [...document.querySelectorAll('#drawer-meta-list [data-mockup]')];
     expect(buttons.map((b) => b.textContent.trim())).toEqual(['The meal list (image, opens in a window)', 'The edit form (page, opens in a window)']);
     expect(document.querySelector('#drawer-meta-list').textContent).toContain('Changed since you approved');
-    for (const theme of ['dark', 'light']) {
-      if (theme === 'light') document.documentElement.dataset.theme = 'light';
-      expect(await audit(), `${theme}: the panel`).toEqual([]);
-      for (const b of buttons) {
+    if (theme === 'light') document.documentElement.dataset.theme = 'light';
+    return buttons;
+  };
+
+  for (const theme of ['dark', 'light']) {
+    it(`in a node's panel (${theme})`, async () => {
+      await mockupsPanel(theme);
+      expect(await audit(...DRAWER), `${theme}: the panel`).toEqual([]);
+    });
+
+    for (const [at, what] of [[0, 'a picture'], [1, 'a page']]) {
+      it(`in the window ${what} opens in (${theme})`, async () => {
+        const b = (await mockupsPanel(theme))[at];
         b.click();
         const dialog = document.querySelector('.hx-mockup-dialog[role="dialog"]');
         expect(dialog.getAttribute('aria-modal')).toBe('true');
@@ -185,16 +224,12 @@ describe('axe finds no violation with a proposal\'s mockups', () => {
         const frame = dialog.querySelector('iframe');
         if (frame) expect([frame.getAttribute('sandbox'), frame.getAttribute('title')]).toEqual(['', 'The edit form']);
         else expect(dialog.querySelector('img').getAttribute('alt')).toBe('The meal list');
-        expect(await audit(), `${theme}: ${b.textContent.trim()} open`).toEqual([]);
+        expect(await audit(...MOCKUP_WINDOW, ...DRAWER), `${theme}: ${b.textContent.trim()} open`).toEqual([]);
         closeMockup();
         expect(document.activeElement).toBe(b);
-      }
+      });
     }
-    delete document.documentElement.dataset.theme;
-    resetMockupsForTests();
-    clearScenario();
-    closeProposal();
-  });
+  }
 });
 
 describe('the issues and PRs panel', () => {
@@ -238,139 +273,191 @@ describe('the issues and PRs panel', () => {
     expect(initForgePanel({ forge: null })).toBe(false);
     expect($('forge-btn').hidden).toBe(true);
     expect($('forge-panel').hidden).toBe(true);
-    expect(await audit()).toEqual([]);
+    expect(await audit('#forge-btn', '#forge-panel')).toEqual([]);
   });
 
-  it('has no violation closed (inert off screen), open with its lists, and with a pull request selected', async () => {
+  const press = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const light = () => { document.documentElement.dataset.theme = 'light'; };
+
+  // Every state is a test of its own: axe recomputes the style of every element once after each change (the cost of an
+  // audit, about 2 s here), so a test with one audit stays far inside the time limit even on a loaded machine. A state
+  // that follows another is reached by the same steps, which are quick (no audit)
+  const listsOpen = async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+  };
+  const prSelected = async (n = 13) => {
+    press(`[data-forge-pr="${n}"]`);
+    await settle();
+  };
+
+  it('has no violation closed (inert off screen)', async () => {
     stub();
     start();
     expect($('forge-panel').inert).toBe(true);
-    expect(await audit()).toEqual([]);
-    openForge();
-    await settle();
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none open with its lists', async () => {
+    await listsOpen();
     expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
-    expect(await audit()).toEqual([]);
-    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none with a pull request selected', async () => {
+    await listsOpen();
+    await prSelected();
     expect(document.querySelectorAll('.hx-forge-file').length).toBe(2);
-    expect(await audit()).toEqual([]);
-    document.querySelector('[data-forge-kind="issues"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on the issues list', async () => {
+    await listsOpen();
+    await prSelected();
+    press('[data-forge-kind="issues"]');
     await settle();
-    expect(await audit()).toEqual([]);
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
   it('has none in the light theme either (contrast is checked in Chromium, in both themes)', async () => {
     stub();
     start();
-    document.documentElement.dataset.theme = 'light';
+    light();
     openForge();
     await settle();
-    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect(await audit()).toEqual([]);
+    await prSelected();
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
-  it('has none on the Agents tab: its groups, the marks, a selected pull request, the finished work shown (dark)', async () => {
-    stub();
-    start();
-    openForge();
+  const agentsTab = async (theme) => {
+    await listsOpen();
+    if (theme === 'light') light();
+    press('[data-forge-kind="work"]');
     await settle();
-    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect(document.querySelectorAll('#forge-list .hx-forge-group').length).toBe(3);
     expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
-    expect(await audit()).toEqual([]);
-    document.querySelector('[data-forge-pr="13"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
+  };
+
+  it('has none on the Agents tab: its groups and the marks (dark)', async () => {
+    await agentsTab('dark');
+    expect(document.querySelectorAll('#forge-list .hx-forge-group').length).toBe(3);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on the Agents tab with a pull request selected (dark)', async () => {
+    await agentsTab('dark');
+    await prSelected();
     expect(document.querySelectorAll('.hx-forge-file').length).toBe(2);
-    expect(await audit()).toEqual([]);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on the Agents tab with the finished work shown (dark)', async () => {
+    await agentsTab('dark');
+    await prSelected();
     const finished = $('forge-work-finished');
     finished.checked = true;
     finished.dispatchEvent(new Event('change', { bubbles: true }));
     expect(document.querySelector('[data-forge-pr="9"]')).not.toBe(null);
-    expect(await audit()).toEqual([]);
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
   it('has none on the Agents tab in the light theme either', async () => {
-    stub();
-    start();
-    document.documentElement.dataset.theme = 'light';
-    openForge();
-    await settle();
-    document.querySelector('[data-forge-kind="work"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect(document.querySelectorAll('.hx-forge-agent').length).toBeGreaterThan(0);
-    expect(await audit()).toEqual([]);
+    await agentsTab('light');
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on the Agents tab in the light theme with the agents filter changed', async () => {
+    await agentsTab('light');
     const agents = $('forge-work-agents');
     agents.checked = true;
     agents.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(await audit()).toEqual([]);
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
-  it('has none with the actions shown (Re-run, the reasons why not, Land it) and with the confirm dialog open, in both themes', async () => {
-    stub();
-    start();
-    openForge();
-    await settle();
-    const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    click('[data-forge-pr="13"]');
-    await settle();
+  it('has none with the actions shown (Re-run, the reasons why not)', async () => {
+    await listsOpen();
+    await prSelected(13);
     expect(document.querySelectorAll('[data-forge-rerun]').length).toBe(1);
     expect(document.querySelectorAll('.hx-forge-lights').length).toBeGreaterThan(1);
-    expect(await audit()).toEqual([]);
-    click('[data-forge-pr="13"]');
-    click('[data-forge-pr="12"]');
-    await settle();
-    expect(document.querySelector('[data-forge-merge]')).not.toBe(null);
-    expect(await audit()).toEqual([]);
-    for (const theme of ['dark', 'light']) {
-      if (theme === 'light') document.documentElement.dataset.theme = 'light';
-      click('[data-forge-merge]');
-      expect($('forge-confirm').hidden).toBe(false);
-      expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
-      expect(await audit()).toEqual([]);
-      key(document.activeElement, 'Escape');
-      expect($('forge-confirm').hidden).toBe(true);
-      expect(document.activeElement).toBe(document.querySelector('[data-forge-merge]'));
-    }
-    expect(await audit()).toEqual([]);
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
+  it('has none with the actions shown (Land it)', async () => {
+    await listsOpen();
+    await prSelected(13);
+    press('[data-forge-pr="13"]');
+    await prSelected(12);
+    expect(document.querySelector('[data-forge-merge]')).not.toBe(null);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
 
-  /** The Release notes tab through its states: the draft, the confirm step, a message after Copy and after Post */
-  async function auditNotes() {
-    openForge();
-    await settle();
-    document.querySelector('[data-forge-kind="notes"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect($('notes-preview').value).toContain('### a');
-    expect(await audit()).toEqual([]);
-    $('notes-post').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect($('notes-confirm').hidden).toBe(false);
-    expect(await audit()).toEqual([]);
-    $('notes-confirm-yes').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle();
-    expect($('notes-message').textContent).toMatch(/^Draft release v0\.3\.0 created/);
-    expect(await audit()).toEqual([]);
-    $('notes-copy').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    await settle(40);
-    expect($('notes-message').hidden).toBe(false);
-    expect(await audit()).toEqual([]);
+  /** The confirm dialog opened on Land it, then closed with Escape, in a theme */
+  const confirmPage = async (theme) => {
+    await listsOpen();
+    await prSelected(12);
+    if (theme === 'light') light();
+    press('[data-forge-merge]');
+    expect($('forge-confirm').hidden).toBe(false);
+    expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
+  };
+  const confirmClosed = () => {
+    key(document.activeElement, 'Escape');
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(document.activeElement).toBe(document.querySelector('[data-forge-merge]'));
+  };
+
+  for (const theme of ['dark', 'light']) {
+    it(`has none with the confirm dialog open (${theme})`, async () => {
+      await confirmPage(theme);
+      expect(await audit(...FORGE)).toEqual([]);
+      confirmClosed();
+    });
   }
 
-  it('has none on the Release notes tab: the draft, the confirm step, and the words after Copy and Post', async () => {
-    stub();
-    start();
-    await auditNotes();
+  it('has none with the confirm dialog closed again (light)', async () => {
+    await confirmPage('light');
+    confirmClosed();
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
-  it('has none on the Release notes tab in the light theme either', async () => {
-    stub();
-    start();
-    document.documentElement.dataset.theme = 'light';
-    await auditNotes();
-  });
+  /** The Release notes tab through its states: the draft, the confirm step, a message after Post and after Copy; each state a test, in either theme */
+  const NOTES_STEPS = [
+    ['the draft', async () => {
+      openForge();
+      await settle();
+      press('[data-forge-kind="notes"]');
+      await settle();
+      expect($('notes-preview').value).toContain('### a');
+    }],
+    ['the confirm step', async () => {
+      press('#notes-post');
+      await settle();
+      expect($('notes-confirm').hidden).toBe(false);
+    }],
+    ['the words after Post', async () => {
+      press('#notes-confirm-yes');
+      await settle();
+      expect($('notes-message').textContent).toMatch(/^Draft release v0\.3\.0 created/);
+    }],
+    ['the words after Copy', async () => {
+      press('#notes-copy');
+      await settle(40);
+      expect($('notes-message').hidden).toBe(false);
+    }],
+  ];
+
+  for (const theme of ['dark', 'light']) {
+    NOTES_STEPS.forEach(([name], at) => {
+      it(`has none on the Release notes tab: ${name} (${theme})`, async () => {
+        stub();
+        start();
+        if (theme === 'light') light();
+        for (const [, step] of NOTES_STEPS.slice(0, at + 1)) await step();
+        expect(await audit(...FORGE)).toEqual([]);
+      });
+    });
+  }
 
   it('reaches every control of the Release notes tab with Tab, names them, and says what the draft is', async () => {
     stub();
@@ -402,38 +489,47 @@ describe('the issues and PRs panel', () => {
     const stubDeploys = () => vi.stubGlobal('fetch', vi.fn(async (url) => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', items: new URL(url, 'http://localhost').pathname === '/api/forge/deploys' ? DEPLOYS : [] }) })));
     const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    it('has no violation listing deploys, with a mapped one selected, an unmapped one, and a failed one (dark theme)', async () => {
+    const deploysList = async (theme) => {
       stubDeploys();
       start();
+      if (theme === 'light') light();
       openForge();
       await settle();
       click(document.querySelector('[data-forge-kind="deploys"]'));
       await settle();
+    };
+    const deploySelected = async (id) => {
+      click(document.querySelector(`[data-forge-deploy="${id}"]`));
+      await settle();
+      expect(document.querySelector('#forge-detail').hidden).toBe(false);
+    };
+
+    it('has no violation listing deploys (dark theme)', async () => {
+      await deploysList('dark');
       expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(3);
-      expect(await audit()).toEqual([]);
-      for (const id of ['3', '2', '1']) {
-        click(document.querySelector(`[data-forge-deploy="${id}"]`));
-        await settle();
-        expect(document.querySelector('#forge-detail').hidden).toBe(false);
-        expect(await audit()).toEqual([]);
-      }
-      expect(state.forgeLit.failing.has('table-t')).toBe(true);
+      expect(await audit(...FORGE)).toEqual([]);
     });
 
+    for (const [id, what] of [['3', 'a mapped one'], ['2', 'an unmapped one'], ['1', 'a failed one']]) {
+      it(`has none with ${what} selected (dark theme)`, async () => {
+        await deploysList('dark');
+        await deploySelected(id);
+        expect(await audit(...FORGE)).toEqual([]);
+        if (id === '1') expect(state.forgeLit.failing.has('table-t')).toBe(true);
+      });
+    }
+
     it('has none in the light theme either', async () => {
-      stubDeploys();
-      start();
-      document.documentElement.dataset.theme = 'light';
-      openForge();
-      await settle();
-      click(document.querySelector('[data-forge-kind="deploys"]'));
-      await settle();
-      click(document.querySelector('[data-forge-deploy="3"]'));
-      await settle();
-      expect(await audit()).toEqual([]);
-      click(document.querySelector('[data-forge-deploy="2"]'));
-      await settle();
-      expect(await audit()).toEqual([]);
+      await deploysList('light');
+      await deploySelected('3');
+      expect(await audit(...FORGE)).toEqual([]);
+    });
+
+    it('has none in the light theme with an unmapped one selected', async () => {
+      await deploysList('light');
+      await deploySelected('3');
+      await deploySelected('2');
+      expect(await audit(...FORGE)).toEqual([]);
     });
 
     it('is by keyboard: the tab, the rows and Clear are buttons in the tab order, the selection is announced, Escape closes', async () => {
@@ -488,45 +584,77 @@ describe('the issues and PRs panel', () => {
     return click;
   };
 
-  it('has none with the pipeline\'s Start a spec on an issue, its confirm step open, in both themes', async () => {
+  /** Start a spec on an issue: the list, then its confirm step open in a theme */
+  const specPage = async () => {
     const click = await pipelinePage();
     click('[data-forge-kind="issues"]');
     await settle();
     expect(document.querySelectorAll('[data-forge-spec]').length).toBe(1);
-    expect(await audit()).toEqual([]);
-    for (const theme of ['dark', 'light']) {
-      if (theme === 'light') document.documentElement.dataset.theme = 'light';
+    return click;
+  };
+
+  it('has none with the pipeline\'s Start a spec on an issue', async () => {
+    await specPage();
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  for (const theme of ['dark', 'light']) {
+    it(`has none with the pipeline's Start a spec on an issue, its confirm step open (${theme})`, async () => {
+      const click = await specPage();
+      if (theme === 'light') light();
       click('[data-forge-spec="7"]');
       await settle();
       expect($('forge-confirm').hidden).toBe(false);
       expect(document.querySelectorAll('#forge-confirm-body pre').length).toBe(2);
       expect(document.activeElement.dataset.action).toBe('forge-confirm-cancel');
-      expect(await audit()).toEqual([]);
+      expect(await audit(...FORGE)).toEqual([]);
       key(document.activeElement, 'Escape');
       expect($('forge-confirm').hidden).toBe(true);
       expect(document.activeElement).toBe(document.querySelector('[data-forge-spec="7"]'));
-    }
-  });
+    });
+  }
 
-  it('has none with the pipeline\'s Open the build issue on an approved spec, its confirm step open, in both themes', async () => {
+  /** Open the build issue on an approved spec: the pull request selected (light first, then dark), its confirm step open */
+  const buildPage = async () => {
     const click = await pipelinePage();
-    document.documentElement.dataset.theme = 'light'; // as the spec step left it: light first, then dark
+    light();
     click('[data-forge-kind="pulls"]');
     await settle();
     click('[data-forge-pr="40"]');
     await settle();
     expect(document.querySelectorAll('[data-forge-build]').length).toBe(1);
-    expect(await audit()).toEqual([]);
-    for (const theme of ['light', 'dark']) {
-      if (theme === 'dark') delete document.documentElement.dataset.theme;
-      click('[data-forge-build="0040-meals"]');
-      await settle();
-      expect($('forge-confirm').hidden).toBe(false);
-      expect(await audit()).toEqual([]);
+    return click;
+  };
+  const buildConfirm = async (click, theme) => {
+    if (theme === 'dark') delete document.documentElement.dataset.theme;
+    click('[data-forge-build="0040-meals"]');
+    await settle();
+    expect($('forge-confirm').hidden).toBe(false);
+  };
+
+  it('has none with the pipeline\'s Open the build issue on an approved spec', async () => {
+    await buildPage();
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  for (const theme of ['light', 'dark']) {
+    it(`has none with its confirm step open (${theme})`, async () => {
+      const click = await buildPage();
+      await buildConfirm(click, theme);
+      expect(await audit(...FORGE)).toEqual([]);
       key(document.activeElement, 'Escape');
       expect($('forge-confirm').hidden).toBe(true);
-    }
-    expect(await audit()).toEqual([]);
+    });
+  }
+
+  it('has none with the confirm step closed again (dark)', async () => {
+    const click = await buildPage();
+    await buildConfirm(click, 'light');
+    key(document.activeElement, 'Escape');
+    await buildConfirm(click, 'dark');
+    key(document.activeElement, 'Escape');
+    expect($('forge-confirm').hidden).toBe(true);
+    expect(await audit(...FORGE)).toEqual([]);
   });
 
   it('is reached by Tab (a button in the header), opens with the focus on its title, and Escape gives the focus back', async () => {
@@ -582,62 +710,63 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
   const type = (id, value) => { $(id).value = value; $(id).dispatchEvent(new Event('input', { bubbles: true })); };
   afterEach(() => { closeForge({ restoreFocus: false }); resetForgePanelForTests(); delete document.documentElement.dataset.theme; });
 
-  /** Every state the tab has, audited in whichever theme is set */
-  async function walk() {
-    openForge();
-    await settle();
-    click(document.querySelector('[data-forge-kind="threads"]'));
-    await settle();
-    expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
-    expect(await audit()).toEqual([]);
+  /** Every state the tab has, in the order a visitor reaches them: each is audited by a test of its own (in each theme) after the steps before it */
+  const WALK = [
+    ['the list', FORGE, async () => {
+      openForge();
+      await settle();
+      click(document.querySelector('[data-forge-kind="threads"]'));
+      await settle();
+      expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(2);
+    }],
+    ['a thread open', FORGE, async () => {
+      click(document.querySelector('[data-forge-thread="41"]'));
+      await settle();
+      expect(document.querySelectorAll('.hx-thread-msg').length).toBe(2);
+      expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
+    }],
+    ['New idea, empty', FORGE, async () => {
+      click($('idea-open'));
+      expect($('idea-form').hidden).toBe(false);
+    }],
+    ['New idea, refused (no title)', FORGE, async () => {
+      click(document.querySelector('[data-action="idea-send"]')); // no title: the message says so
+      expect($('idea-message').hidden).toBe(false);
+    }],
+    ['New idea, sent', FORGE, async () => {
+      type('idea-title', 'Meal plans');
+      click(document.querySelector('[data-action="idea-send"]'));
+      await settle();
+      expect($('idea-message').textContent).toContain('Opened idea #77');
+    }],
+    ['a node\'s "Mentioned in"', DRAWER, async () => {
+      closeForge({ restoreFocus: false });
+      await selectNode(state.nodes.find((n) => n.id === 'page-a'));
+      await settle();
+      expect($('drawer-threads').textContent).toContain('Mentioned in 1 thread');
+    }],
+  ];
 
-    click(document.querySelector('[data-forge-thread="41"]'));
-    await settle();
-    expect(document.querySelectorAll('.hx-thread-msg').length).toBe(2);
-    expect($('forge-detail').getAttribute('aria-label')).toBe('Selected thread');
-    expect(await audit()).toEqual([]);
-
-    click($('idea-open'));
-    expect($('idea-form').hidden).toBe(false);
-    expect(await audit()).toEqual([]);
-    click(document.querySelector('[data-action="idea-send"]')); // no title: the message says so
-    expect($('idea-message').hidden).toBe(false);
-    expect(await audit()).toEqual([]);
-    type('idea-title', 'Meal plans');
-    click(document.querySelector('[data-action="idea-send"]'));
-    await settle();
-    expect($('idea-message').textContent).toContain('Opened idea #77');
-    expect(await audit()).toEqual([]);
-
-    closeForge({ restoreFocus: false });
-    await selectNode(state.nodes.find((n) => n.id === 'page-a'));
-    await settle();
-    expect($('drawer-threads').textContent).toContain('Mentioned in 1 thread');
-    expect(await audit()).toEqual([]);
+  for (const theme of ['dark', 'light']) {
+    WALK.forEach(([name, region], at) => {
+      it(`has no violation: ${name} (${theme}; contrast is checked in Chromium, in both themes)`, async () => {
+        stub();
+        start();
+        if (theme === 'light') document.documentElement.dataset.theme = 'light';
+        for (const [, , step] of WALK.slice(0, at + 1)) await step();
+        expect(await audit(...region)).toEqual([]);
+      });
+    });
   }
 
-  it('has no violation: the list, a thread open, New idea (empty, refused, sent) and a node\'s "Mentioned in" (dark)', async () => {
-    stub();
-    start();
-    await walk();
-  });
-
-  it('has none in the light theme either (contrast is checked in Chromium, in both themes)', async () => {
-    stub();
-    start();
-    document.documentElement.dataset.theme = 'light';
-    await walk();
-  });
-
-  // Its own test, not more steps in walk(): each stays well inside the suite's time limit (on CI the walk takes about 7 s of 60)
-  it('has none with the form opened from a node (Start a thread about this), prefilled, in both themes', async () => {
-    stub();
-    start();
-    for (const theme of ['dark', 'light']) {
+  // Its own test for each theme, not more steps in the walk
+  for (const theme of ['dark', 'light']) {
+    it(`has none with the form opened from a node (Start a thread about this), prefilled (${theme})`, async () => {
+      stub();
+      start();
       if (theme === 'light') document.documentElement.dataset.theme = 'light';
       await selectNode(state.nodes.find((n) => n.id === 'page-a'));
       await settle();
-      // The form opened from a node (Start a thread about this), prefilled
       const starter = document.querySelector('[data-thread-start="page-a"]');
       expect(starter.textContent).toBe('Start a thread about this');
       click(starter);
@@ -645,13 +774,11 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
       expect($('idea-form').hidden).toBe(false);
       expect($('idea-body').value).toBe('[[page-a]]\n\n');
       expect(document.activeElement).toBe($('idea-title'));
-      expect(await audit()).toEqual([]);
+      expect(await audit(...FORGE, ...DRAWER)).toEqual([]);
       click(document.querySelector('[data-action="idea-cancel"]'));
       expect(document.activeElement).toBe(document.querySelector('[data-thread-start="page-a"]'));
-      $('idea-body').value = ''; // the next theme starts from an empty form again
-      $('idea-title').value = '';
-    }
-  });
+    });
+  }
 
   it('is by keyboard: the tab, the rows, Clear, New idea and the node buttons are buttons in the tab order; the fields are labelled; the thread says it is read-only', async () => {
     stub();
