@@ -20,12 +20,22 @@ Starting an agent from cornfield only **asks**: cornfield publishes a request (t
 - **Rejected:** cornfield running a configured command (it becomes a process supervisor holding the agent's environment); cornfield calling agent platforms directly (credentials, budgets and lock-in to each vendor).
 - **Passes the test:** delete cornfield and the runner, the agent and the forge are untouched.
 
+### D2. One request schema, three transports; the forge is the default (2026-11-05)
+
+A request reaches the runner in one of three ways, all carrying the **same versioned JSON request**, so a runner can switch transport without changing what it reads:
+
+1. **The forge (default).** "Start an agent" leaves the request on the forge itself, where the developer's existing automation already listens (Forgejo or GitHub Actions on `issue_comment`, a bot, anything). The request is visible and audited on the forge even with cornfield gone. The exact carrier (a comment with a fenced block, a label, or both) is settled in the contract.
+2. **Push.** A signed `agent.requested` event to a configured URL, through the hooks that exist (#66).
+3. **Pull.** cornfield keeps the request; a runner asks for queued work with a runner token and claims one. Works from behind NAT.
+
+- **Why the forge first:** it is the one thing every stack already has, and it keeps cornfield a view on top rather than a hub everything must pass through.
+
 ## Open questions
 
 The tree, roughly in the order each answer unlocks the next:
 
 1. ~~Where an agent runs, and what "launch" means for cornfield.~~ D1.
-1a. **How a request reaches the runner** (push, pull, or the forge itself).
+1a. ~~How a request reaches the runner.~~ D2.
 2. What an agent run is, as cornfield sees it (identity, lifecycle, what it leaves).
 3. How a run is stopped, limited and paid for.
 4. Whose credentials an agent uses.
