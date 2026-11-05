@@ -43,9 +43,9 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, DEFAULTS, ideaLabel } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, ideaLabel } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -61,6 +61,7 @@ import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
 import { createSpecPoll } from './spec-poll.js';
+import { createTriggers } from './triggers.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -146,8 +147,13 @@ export function createCornfieldServer(config, opts = {}) {
   const auth = createAuth(config, opts);
   // Hooks listed without a secret (or without sign-in) are a startup error, like a half-configured sign-in
   const hookSettings = hooksSettings(config, env, auth.enabled);
-  const hooks = hookSettings
-    ? createHooks({ hooks: config.hooks, secret: hookSettings.secret, fetch: opts.hookFetch, record: (entry) => auth.record(entry), store: auth.store, now: opts.now, publicUrl: config.publicUrl, timer: opts.hookTimer })
+  // Opt-in triggers (agents.on, server/triggers.js) act as the maintainer whose act caused them and read the forge: both need sign-in and a forge
+  const triggerList = triggersOf(config);
+  if (triggerList.length && !auth.enabled) throw new Error('The config says agents.on, but sign-in is not set up. A trigger requests a run as the maintainer whose act caused it, with their own sign-in, so without sign-in nothing would ever fire: set up sign-in (docs/sign-in.md), or remove agents.on.');
+  if (triggerList.length && !(config.forge && hasAdapter(config.forge.type))) throw new Error('The config says agents.on, but there is no forge to ask on. Set up `forge` (docs/config.md#forge), or remove agents.on.');
+  // With triggers and no hook listed, the hooks object has no destination: it is only the moments the triggers subscribe to (and the thread look's memory)
+  const hooks = hookSettings || triggerList.length
+    ? createHooks({ hooks: hookSettings ? config.hooks : [], secret: hookSettings ? hookSettings.secret : randomBytes(32).toString('hex'), fetch: opts.hookFetch, record: (entry) => auth.record(entry), store: auth.store, now: opts.now, publicUrl: config.publicUrl, timer: opts.hookTimer })
     : null;
   hooks?.watchSessions();
   // Landing on approval needs somebody signed in to land as, like the hooks' events: a half-set key is a startup error
@@ -166,6 +172,8 @@ export function createCornfieldServer(config, opts = {}) {
   }
   // Agent runs (server/agent-runs.js) need a signed-in maintainer to ask as and a forge to ask on; the runs are followed on the spec poll's tick
   const runs = config.forge && auth.enabled && hasAdapter(config.forge.type) ? createRuns({ config, where, auth, hooks, now: opts.now, onAsk: () => specPoll?.start() }) : null;
+  // Triggers subscribe to the hooks' moments and call the runs' own request path; nothing a run produces is wired to them (server/triggers.js)
+  if (runs && hooks && triggerList.length) createTriggers({ config, auth, runs, hooks, now: opts.now });
   runs?.resume().catch((err) => console.error(`[cornfield] agent runs could not be picked up: ${err instanceof Error ? err.message : err}`));
   // Looks at the open spec PRs on a timer when a hook wants spec.ready (config `hookPoll`); started when the server listens. The same timer follows
   // agent runs: it is started for them when there is a run to follow, or as one is asked for, and does nothing while there is none

@@ -25,9 +25,17 @@
  *                   `{ event, at, actor, expiresAt, mapUrl }`
  *   agent.requested  a maintainer asked for an agent run (server/agent-runs.js). Its body is its own: `{ event, at, request, actor, mapUrl }`,
  *                   `request` being the whole request JSON of the contract (docs/agent-contract.md), which holds no credential by construction
+ *   trigger.skipped  an opt-in trigger (`agents.on`, server/triggers.js) was going to request a run and did not: the maintainer whose act caused it has no
+ *                   live sign-in (`reason: 'no-session'`), or the request was refused (the cap, the one-run-per-subject rule, the rate limit: the refusal's code).
+ *                   Its body is its own: `{ event, at, trigger: { event, by, ref }, by, reason, mapUrl }`
  *   run.claimed  run.state  run.stopRequested  run.finished   a run was claimed by its runner, changed state, was asked to stop, ended. They are
  *                   seen when cornfield looks (the spec poll, server/spec-poll.js), each once. Their body is their own:
  *                   `{ event, at, runId, state, pull?, issue?, actor, mapUrl }`
+ *
+ * **Triggers listen in-process.** `subscribe(fn)` hands a function the same moments the hooks fire at, with the payload resolved, whether or not
+ * any hook asks for them (server/triggers.js: `spec.approved`, `build.opened`, `thread.message`). A thread's payload then also holds the
+ * comment's text and times for that function alone; `bodyOf` picks fixed fields, so none of it can leave through a hook. A subscriber never
+ * slows or breaks a delivery, and a failing one is only logged.
  *
  * **A hook never gets in the way.** `emit` returns at once and never throws; the delivery runs in the background, from a
  * queue in memory. A failed delivery (a network error, a timeout, anything but a 2xx) is tried again after 1s, 5s and 30s
@@ -135,6 +143,8 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   if (typeof secret !== 'string' || secret.length < MIN_HOOK_SECRET) throw new Error(`${HOOK_SECRET_ENV} must be at least ${MIN_HOOK_SECRET} characters.`);
   const targets = hooks.map((h, i) => ({ index: i, url: h.url, origin: originOf(h.url), events: h.events === '*' ? HOOK_EVENTS : h.events }));
   const timers = new Set();
+  /** @type {((event: string, payload: any) => unknown)[]} */
+  const subscribers = [];
   let pending = 0;
   let closed = false;
 
@@ -200,6 +210,11 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   function bodyOf(event, p) {
     // A session's end has no spec, pull request or proposal: its body is only who, until when, and where cornfield is
     if (event === 'session.expiring') return JSON.stringify({ event, at: new Date(now()).toISOString(), actor: p.actor ?? null, expiresAt: p.expiresAt ?? null, mapUrl: publicUrl || null });
+    // A skipped trigger says which trigger, who caused it and why it did nothing: never a brief or any text
+    if (event === 'trigger.skipped') {
+      const t = p.trigger && typeof p.trigger === 'object' ? { event: p.trigger.event ?? null, by: p.trigger.by ?? null, ref: p.trigger.ref ?? null } : null;
+      return JSON.stringify({ event, at: new Date(now()).toISOString(), trigger: t, by: p.by ?? null, reason: p.reason ?? null, mapUrl: publicUrl || null });
+    }
     // A request goes out as it was posted, and is checked once more on the way: nothing like a credential can leave through a hook
     if (event === 'agent.requested') {
       const checked = validateRequest(p.request);
@@ -244,10 +259,15 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     try {
       if (closed || !HOOK_EVENTS.includes(event)) return;
       const to = targets.filter((t) => t.events.includes(event));
-      if (!to.length) return;
+      if (!to.length && !subscribers.length) return;
       Promise.resolve()
         .then(() => (typeof payload === 'function' ? payload() : payload))
         .then((p) => {
+          // In-process listeners first, each on its own: they cannot hold up or break a delivery
+          for (const fn of subscribers) {
+            Promise.resolve().then(() => fn(event, p || {})).catch((err) => console.error(`[cornfield] a listener of ${event} failed: ${err instanceof Error ? err.message : err}`));
+          }
+          if (!to.length) return;
           const body = bodyOf(event, p || {});
           for (const t of to) {
             if (pending >= MAX_PENDING) {
@@ -265,6 +285,15 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     } catch (err) {
       console.error(`[cornfield] the ${event} hook event was not sent: ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  /**
+   * Listens in-process to every event `emit` is given (a trigger does: server/triggers.js). `fn(event, payload)` gets the payload
+   * resolved; it may be async, is never awaited and its failure is only logged.
+   * @param {(event: string, payload: any) => unknown} fn
+   */
+  function subscribe(fn) {
+    if (typeof fn === 'function') subscribers.push(fn);
   }
 
   /**
@@ -345,7 +374,7 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
           emit('thread.linked', { thread: t.number, actor: t.opened.actor, nodes: t.opened.linked.nodes, proposal: t.opened.linked.proposal });
         }
         for (const m of t.messages) {
-          if (fresh(t.number, String(m.id), m.stamp)) emit('thread.message', { thread: t.number, comment: m.id, actor: m.actor });
+          if (fresh(t.number, String(m.id), m.stamp)) emit('thread.message', { thread: t.number, comment: m.id, actor: m.actor, message: m.text });
           if (m.linked && fresh(t.number, `link:${m.id}`)) emit('thread.linked', { thread: t.number, comment: m.id, actor: m.actor, nodes: m.linked.nodes, proposal: m.linked.proposal });
         }
         // The last-update time moves with every look that read the thread, so the next look can skip it when nothing changed
@@ -395,7 +424,7 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
     timers.clear();
   }
 
-  return { emit, specsSeen, threadCursors, threadsSeen, watchSessions, close };
+  return { emit, subscribe, specsSeen, threadCursors, threadsSeen, watchSessions, close };
 }
 
 /** The SHA-256 of a proposal file as `read` gives it, or null when it cannot be read (an event still goes out) */

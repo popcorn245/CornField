@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
@@ -123,7 +123,7 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {} };
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {}, on: {} };
     expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
     expect(c.agents).toEqual(defaults);
@@ -293,6 +293,45 @@ describe('loadDerivers and browserSources', () => {
     const own = browserSources({ sources: { live: { use: './tools/live.js', options: { url: '/api/world' } } } });
     expect(own.live).toEqual({ module: '/repo/tools/live.js', options: { url: '/api/world' } });
     expect(fs.existsSync(path.join(CORNFIELD, 'plugins/house/browser.js'))).toBe(true);
+  });
+});
+
+describe('agents.on: the opt-in triggers (spec 0005 D10)', () => {
+  const on = (o, extra = {}) => ({ agents: { profiles: ['claude'], ...extra, on: o } });
+  it('are off by default, and take the three events a maintainer causes', async () => {
+    expect(DEFAULTS.agents.on).toEqual({});
+    const { triggersOf, TRIGGER_EVENTS } = await import('../../core/config.js');
+    expect(triggersOf({ agents: {} })).toEqual([]);
+    expect(TRIGGER_EVENTS).toEqual(['spec.approved', 'build.opened', 'thread.message']);
+    const all = { 'spec.approved': { kind: 'code', profile: 'claude' }, 'build.opened': { kind: 'code' }, 'thread.message': { kind: 'summary', brief: 'Summarise.' } };
+    expect(configProblems(on(all))).toEqual([]);
+    expect(triggersOf(on(all)).map(([e]) => e)).toEqual(Object.keys(all));
+  });
+  it('refuse any other event, the keys of a value, a bad kind, a profile that is not listed, and a credential in a brief', () => {
+    const say = (o, extra) => configProblems(on(o, extra)).join('\n');
+    for (const e of ['run.finished', 'run.state', 'agent.requested', 'pr.landed', 'spec.ready', 'thread.opened', '*', '']) expect(say({ [e]: { kind: 'code' } }), e).toContain('a trigger fires only on spec.approved, build.opened, thread.message');
+    expect(say({ 'spec.approved': 'code' })).toContain('is { kind, profile?, brief? }');
+    expect(say({ 'spec.approved': { kind: 'code', force: true } })).toContain('the keys are kind, profile, brief');
+    expect(say({ 'spec.approved': {} })).toContain('.kind is one of code, summary, brief, proposal');
+    expect(say({ 'spec.approved': { kind: 'build' } })).toContain('.kind is one of');
+    expect(say({ 'spec.approved': { kind: 'code', profile: 'gpt' } })).toContain('is not one of agents.profiles (claude)');
+    expect(say({ 'spec.approved': { kind: 'code', profile: 'claude' } }, { profiles: [] })).toContain('(none listed)');
+    expect(say({ 'spec.approved': { kind: 'code', brief: 3 } })).toContain('.brief is text');
+    expect(say({ 'spec.approved': { kind: 'code', brief: 'use ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8' } })).toContain('nothing shaped like a credential');
+    expect(configProblems({ agents: { on: [] } }).join()).toContain('agents.on is {');
+    expect(configProblems({ agents: { on: 'all' } }).join()).toContain('agents.on is {');
+  });
+  it('need threads for a /agent command, and are a startup error through loadConfig', async () => {
+    expect(configProblems({ threads: false, ...on({ 'thread.message': { kind: 'code' } }) }).join()).toContain('needs threads');
+    await expect(loadConfig(repo("export default { agents: { on: { 'run.finished': { kind: 'code' } } } };"), { env: {} })).rejects.toThrow(/a trigger fires only on/);
+    const c = await loadConfig(repo("export default { agents: { profiles: ['claude'], on: { 'spec.approved': { kind: 'code', profile: 'claude' } } } };"), { env: {} });
+    expect(c.agents.on).toEqual({ 'spec.approved': { kind: 'code', profile: 'claude' } });
+  });
+  it('make the poll look when a thread.message trigger is set, even with no hook', () => {
+    expect(specPollMs({ agents: {} })).toBeNull();
+    expect(specPollMs({ agents: { profiles: [], on: { 'spec.approved': { kind: 'code' } } } })).toBeNull();
+    expect(specPollMs({ agents: { on: { 'thread.message': { kind: 'code' } } } })).toBe(300_000);
+    expect(specPollMs({ threads: false, agents: { on: { 'thread.message': { kind: 'code' } } } })).toBeNull();
   });
 });
 

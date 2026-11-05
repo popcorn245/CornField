@@ -497,6 +497,7 @@ const GOOD = [
   request({ requestedAt: '2026-11-05T09:30:00.5Z' }), request({ branch: 'a/b.c-d_e' }), request({ limits: {} }), request({ nodes: [] }),
   request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
   request({ brief: 'Rotate the token handling in server/auth.js' }), request({ requestedBy: 'x'.repeat(40) }),
+  request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'build.opened', by: 'maintainer-one', ref: 'issue:12' } }), request({ trigger: { event: 'thread.message', by: 'maintainer-one', ref: 'comment:9001' } }),
   ...c.REPORT_STATES.map((state) => ({ state })),
   { state: 'working', note: 'n', url: 'https://ci.example.com/run/1?page=2', tokens: 0, cost: 0 }, { state: 'done', cost: 1.25, tokens: 99 },
   { state: 'stop-requested' }, { state: 'stop-requested', note: 'wrong branch' },
@@ -510,6 +511,10 @@ const BAD = [
   request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS + 1) }), request({ brief: 3 }),
   request({ limits: { minutes: 0 } }), request({ limits: { turns: 2.5 } }), request({ limits: { cost: -1 } }), request({ limits: { hours: 1 } }), request({ limits: { minutes: '5' } }),
   request({ nodes: 'a' }), request({ nodes: [' x'] }), request({ nodes: [3] }), request({ nodes: Array.from({ length: 101 }, (_, i) => `n${i}`) }),
+  request({ trigger: 'spec.approved' }), request({ trigger: {} }), request({ trigger: [] }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one' } }),
+  request({ trigger: { event: 'run.finished', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'spec.ready', by: 'maintainer-one', ref: 'pull:40' } }),
+  request({ trigger: { event: 'spec.approved', by: 'a b', ref: 'pull:40' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:x' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'run:40' } }),
+  request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', extra: 1 } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', token: 'x' } }),
   request({ requestedBy: '' }), request({ requestedBy: 'a b' }), request({ requestedBy: 'x'.repeat(41) }), request({ requestedAt: '2026-11-05' }), request({ requestedAt: '2026-11-05T09:30:00+01:00' }),
   ...['token', 'githubToken', 'api_key', 'apiKey', 'secret', 'password', 'credentials', 'authorization', 'cookie', 'private_key'].map((k) => request({ [k]: 'x' })),
   ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIA' + 'IOSFODNN7EXAMPLE', '-----BEGIN ' + 'PRIVATE KEY-----', 'https://user:' + 'hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
@@ -538,6 +543,12 @@ describe('the JSON Schema', () => {
     expect(req.properties.branch.maxLength).toBe(c.MAX_BRANCH_CHARS);
     expect(req.properties.requestedBy.pattern).toBe(c.LOGIN_SOURCE);
     expect(req.properties.requestedAt.pattern).toBe(c.ISO_SOURCE);
+    expect(req.properties.trigger.properties.event.enum).toEqual(c.TRIGGER_EVENTS);
+    expect(req.properties.trigger.properties.by.pattern).toBe(c.LOGIN_SOURCE);
+    expect(req.properties.trigger.properties.ref.pattern).toBe(c.TRIGGER_REF_SOURCE);
+    expect(req.properties.trigger.additionalProperties).toBe(false);
+    expect(req.properties.trigger.required).toEqual(['event', 'by', 'ref']);
+    expect(req.required).not.toContain('trigger');
     expect(req.propertyNames.not.pattern).toBe(c.CREDENTIAL_KEY_SOURCE);
     expect(req.properties.brief.not.pattern).toBe(c.CREDENTIAL_VALUE_SOURCE);
     expect(SCHEMA.$defs.report.properties.note.maxLength).toBe(c.MAX_NOTE_CHARS);
@@ -549,7 +560,7 @@ describe('the JSON Schema', () => {
     expect(SCHEMA.$defs.request.properties.refs.additionalProperties).toBe(false);
     expect(SCHEMA.$defs.request.properties.limits.additionalProperties).toBe(false);
     // The request lists exactly the keys the validator allows
-    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'runId', 'version']);
+    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'runId', 'trigger', 'version']);
     expect(Object.keys(req.properties.refs.properties)).toEqual(['issue', 'proposal', 'pull', 'thread']);
     // What the spec's table does not mark optional is required
     expect(req.required).toEqual(['version', 'runId', 'kind', 'refs', 'brief', 'requestedBy', 'requestedAt']);
@@ -601,6 +612,31 @@ describe('the JSON Schema', () => {
   });
   it('the checker is not asleep: it rejects a schema keyword it does not know', () => {
     expect(() => check({ format: 'uri' }, 'x')).toThrow(/does not know/);
+  });
+});
+
+describe('the trigger field (an automatic request names its cause)', () => {
+  const trig = { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' };
+  it('is optional, kept in order and copied', () => {
+    const r = c.validateRequest(request({ trigger: { ref: 'pull:40', by: 'maintainer-one', event: 'spec.approved' } }));
+    expect(r.ok).toBe(true);
+    expect(Object.keys(r.value.trigger)).toEqual(['event', 'by', 'ref']);
+    expect(Object.keys(r.value).at(-1)).toBe('trigger');
+    expect(c.validateRequest(request()).value.trigger).toBeUndefined();
+  });
+  it('is strict: three events, a login, a ref, nothing else, and never a credential', () => {
+    expect(c.TRIGGER_EVENTS).toEqual(['spec.approved', 'build.opened', 'thread.message']);
+    for (const bad of [null, 'x', [], {}, { ...trig, event: 'pr.landed' }, { ...trig, by: '' }, { ...trig, ref: 'pull' }, { ...trig, ref: 'pull:1.5' }, { ...trig, extra: 1 }, { ...trig, token: 'x' }]) {
+      expect(refuse(request({ trigger: bad })), JSON.stringify(bad)).toMatch(/trigger/);
+    }
+    expect(refuse(request({ trigger: { ...trig, apiKey: 'x' } }))).toMatch(/credential/);
+    expect(refuse(request({ trigger: { ...trig, by: 'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8' } }))).toMatch(/trigger\.by|credential/);
+  });
+  it('createRequest takes it, and the comment carries it back', () => {
+    const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: '', requestedBy: 'maintainer-one', trigger: trig });
+    expect(made.value.trigger).toEqual(trig);
+    const [b] = c.parseRunBlocks(c.formatRunComment(made.value.runId, made.value));
+    expect(b.value.trigger).toEqual(trig);
   });
 });
 

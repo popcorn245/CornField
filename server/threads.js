@@ -256,7 +256,8 @@ const linkOf = (text, nodes) => {
 
 /**
  * What `hooks.threadsSeen` is handed: for each thread, who opened it, its comments (their id, author, own time and what they
- * link to, resolved against `nodes`), and the spec PRs that name it. Never a text: a hook says that something was said, not what.
+ * link to, resolved against `nodes`), and the spec PRs that name it. A hook says that something was said, not what: the text rides along
+ * as `text` for a trigger's in-process listener only, and no hook body holds it.
  * @param {{ threads: any[], pulls: any[] }} got `gatherThreads`' answer
  * @param {{ id: string, file?: string }[]} nodes the checkout's map
  */
@@ -268,7 +269,8 @@ export function snapshotOf(got, nodes) {
       stamp: t.item.updatedAt,
       unchanged: Boolean(t.unchanged),
       opened: t.kind === 'idea' ? { actor: t.item.author ? t.item.author.login : null, linked: linkOf(t.item.body, nodes) } : null,
-      messages: t.comments.map((c) => ({ id: c.id, actor: c.author ? c.author.login : null, stamp: c.updatedAt, linked: linkOf(c.body, nodes) })),
+      // `text` is for the in-process listeners of thread.message only (an opt-in trigger reads /agent in it): bodyOf never lets it into a hook's body
+      messages: t.comments.map((c) => ({ id: c.id, actor: c.author ? c.author.login : null, stamp: c.updatedAt, linked: linkOf(c.body, nodes), text: { body: c.body, createdAt: c.createdAt, updatedAt: c.updatedAt, bot: Boolean(c.author && c.author.bot) } })),
     })),
     pulls: got.pulls,
   };

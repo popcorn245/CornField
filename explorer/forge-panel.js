@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords,
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, triggerNotice, startBody, startWords, stopWords, confirmStartWords,
 } from './runs-model.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
@@ -1002,6 +1002,12 @@ function paintRuns() {
   note.hidden = !words;
   note.className = `hx-forge-notice${!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
   note.textContent = words;
+  const trig = $('forge-runs-trigger');
+  if (trig) {
+    const skipped = data ? triggerNotice(data) : '';
+    trig.hidden = !skipped;
+    trig.textContent = skipped;
+  }
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }
   list.innerHTML = data.runs.length ? data.runs.map(runHtml).join('') : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';

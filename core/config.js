@@ -40,7 +40,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { PROFILE_SOURCE, MAX_NUMBER } from './agent-contract.js';
+import { PROFILE_SOURCE, MAX_NUMBER, MAX_BRIEF_CHARS, RUN_KINDS, TRIGGER_EVENTS, CREDENTIAL_VALUE_SOURCE } from './agent-contract.js';
+
+export { TRIGGER_EVENTS };
 
 export const CONFIG_FILE = 'cornfield.config.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -68,7 +70,7 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped']);
 /** The events that come from looking at threads (server/threads.js): a poll that wants any of them looks at threads too */
 export const THREAD_EVENTS = Object.freeze(['thread.opened', 'thread.message', 'thread.linked']);
 /** The keys of `threads` when it is an object, and the label's longest length */
@@ -111,7 +113,7 @@ export const ideaLabel = (config) => (threadsOn(config) ? (config.threads && con
  * @returns {number | null}
  */
 export function specPollMs(config) {
-  const wanted = hookWants(config, ['spec.ready']) || (threadsOn(config) && hookWants(config, THREAD_EVENTS));
+  const wanted = hookWants(config, ['spec.ready']) || (threadsOn(config) && (hookWants(config, THREAD_EVENTS) || triggersOf(config).some(([e]) => e === 'thread.message')));
   const every = config.hookPoll === false ? false : config.hookPoll ? config.hookPoll.specs : DEFAULTS.hookPoll.specs;
   return wanted && every !== false ? parseDuration(every ?? DEFAULTS.hookPoll.specs) : null;
 }
@@ -150,7 +152,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
-  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {} },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {}, on: {} },
   hooks: [],
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
@@ -163,7 +165,7 @@ export const DEFAULTS = Object.freeze({
 const KEYS = Object.keys(DEFAULTS);
 /** The keys of `proposals` when it is an object: the folder, and whether an approval also lands the spec PR (opt-in, off unless true) */
 export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits', 'on'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -237,6 +239,7 @@ export function configProblems(c) {
       }
       if (c.agents.bots !== undefined && typeof c.agents.bots !== 'boolean') out.push('agents.bots is true or false: whether a bot account ("[bot]" or the forge\'s Bot type) counts as an agent.');
       out.push(...agentRunProblems(c.agents));
+      if (isObject(c.agents.on) && c.agents.on['thread.message'] !== undefined && c.threads === false) out.push('agents.on["thread.message"] needs threads, which are off (threads: false): the /agent command is read in a thread.');
     }
   }
   if (c.deploys !== undefined && c.deploys !== null) {
@@ -328,6 +331,30 @@ export function configProblems(c) {
   return out;
 }
 
+/**
+ * What is wrong with `agents.on`, the opt-in triggers (spec 0005 D10): `{ '<event>': { kind, profile?, brief? } }` for the events a
+ * maintainer causes. Off by default (no key, no trigger). `kind` is checked against the contract and `profile` against `agents.profiles`.
+ */
+function triggerProblems(a) {
+  const out = [];
+  const on = a.on;
+  if (!isObject(on)) return [`agents.on is { ${TRIGGER_EVENTS.map((e) => `"${e}": { kind, profile? }`).join(', ')} }: which events request a run by themselves (none unless set).`];
+  const profiles = Array.isArray(a.profiles) ? a.profiles : [];
+  for (const [event, t] of Object.entries(on)) {
+    const at = `agents.on[${JSON.stringify(event)}]`;
+    if (!TRIGGER_EVENTS.includes(event)) { out.push(`${at}: a trigger fires only on ${TRIGGER_EVENTS.join(', ')}: something a maintainer did, never a run's output.`); continue; }
+    if (!isObject(t)) { out.push(`${at} is { kind, profile?, brief? }.`); continue; }
+    for (const k of Object.keys(t)) if (!['kind', 'profile', 'brief'].includes(k)) out.push(`${at}.${k}: the keys are kind, profile, brief.`);
+    if (!RUN_KINDS.includes(t.kind)) out.push(`${at}.kind is one of ${RUN_KINDS.join(', ')}.`);
+    if (t.profile !== undefined && !(typeof t.profile === 'string' && profiles.includes(t.profile))) out.push(`${at}.profile ${JSON.stringify(t.profile)} is not one of agents.profiles (${profiles.join(', ') || 'none listed'}).`);
+    if (t.brief !== undefined && !(typeof t.brief === 'string' && t.brief.length <= MAX_BRIEF_CHARS && !new RegExp(CREDENTIAL_VALUE_SOURCE).test(t.brief))) out.push(`${at}.brief is text of at most ${MAX_BRIEF_CHARS} characters, and holds nothing shaped like a credential.`);
+  }
+  return out;
+}
+
+/** The triggers a config turns on, as `[event, { kind, profile?, brief? }]` (none when off, which is the default) */
+export const triggersOf = (config) => Object.entries(isObject(config.agents?.on) ? config.agents.on : {}).filter(([e]) => TRIGGER_EVENTS.includes(e));
+
 /** What is wrong with the keys of `agents` that ask for and follow runs (spec 0005), in words */
 function agentRunProblems(a) {
   const out = [];
@@ -349,6 +376,7 @@ function agentRunProblems(a) {
     else if (ms < QUIET_MIN_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is under the floor of 5m; use "5m" or more.`);
     else if (ms > QUIET_MAX_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is over the ceiling of 30 days; use "720h" or less.`);
   }
+  if (a.on !== undefined) out.push(...triggerProblems(a));
   if (a.limits !== undefined) {
     if (!isObject(a.limits)) out.push('agents.limits is { minutes?, turns?, cost? }: hints the runner may enforce.');
     else {

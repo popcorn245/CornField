@@ -166,6 +166,8 @@ export function publicRun(row, nowMs, quietMs) {
  * @property {{ auth: object, now?: () => number }} limits what server/throttle.js counts by
  * @property {{ token: { id: number, label: string } } | null} [via] set when the request came through the API: the token it came with
  * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the cap is taken: null to go on, or why not
+ * @property {{ event: string, ref: string }} [trigger] set only by an opt-in trigger (server/triggers.js): what caused this request. It is written into the
+ *   request (`trigger: { event, by, ref }`, `by` being the maintainer asking) and the audit row, and the run's `via` is 'trigger'. A caller's body can never set it
  */
 
 /**
@@ -208,7 +210,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   }
 
   /** Takes a place for a run: the cap and the one-per-subject rule are checked and the row inserted in one transaction. Throws a `Refused`. */
-  function reserve(db, request, { target, who, via, force }) {
+  function reserve(db, request, { target, who, via, force, trigger = false }) {
     const at = now();
     const mine = subjectKeys(request.refs);
     db.exec('BEGIN IMMEDIATE');
@@ -229,7 +231,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, request, requested_by, requested_by_id, requested_at, via, last_activity)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(request.runId, repo, request.kind, request.profile ?? null, request.refs.issue ?? null, request.refs.proposal ?? null, request.refs.thread ?? null,
-          target, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, via ? 'api' : 'dashboard', iso(at));
+          target, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, via ? 'api' : trigger ? 'trigger' : 'dashboard', iso(at));
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
@@ -279,7 +281,9 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     try {
       if (problem) throw new Refused(problem.status, problem.message, 'invalid');
       if (!isObject(body)) throw new Refused(400, `A request is a JSON object: { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }.`, 'invalid');
-      const { force, requestedBy, ...fields } = body;
+      const { force, requestedBy, trigger: forged, ...fields } = body;
+      // What caused a request is cornfield's to write, from a trigger's own call; a caller cannot say it was a trigger
+      if (forged !== undefined) throw new Refused(400, '"trigger" is written by cornfield for an automatic request; leave it out.', 'invalid');
       if (force !== undefined && typeof force !== 'boolean') throw new Refused(400, '"force" is true or false: whether to ask for another run on an issue or proposal that has an open one.', 'invalid');
       const build = (login, pull) => {
         // The config's limits are hints the request starts from; what the person sent wins key by key
@@ -289,10 +293,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         else if (isObject(limits)) limits = { ...base, ...limits };
         // The brief is required by the contract and may be empty; the spec PR that holds a proposal is named beside it
         const refs = pull != null && isObject(fields.refs) ? { ...fields.refs, pull } : fields.refs;
-        const made = createRequest({ brief: '', ...fields, refs, ...(limits !== undefined ? { limits } : {}), requestedBy: login }, { profiles, now: at });
+        const made = createRequest({ brief: '', ...fields, refs, ...(limits !== undefined ? { limits } : {}), requestedBy: login, ...(ctx.trigger ? { trigger: { event: ctx.trigger.event, by: login, ref: ctx.trigger.ref } } : {}) }, { profiles, now: at });
         if (!made.ok) throw new Refused(400, made.error, 'invalid');
         return /** @type {RunRequest} */ (made.value);
       };
+      if (ctx.trigger) Object.assign(asked, { trigger: { event: ctx.trigger.event, ref: ctx.trigger.ref } });
       let made = build(who.login);
       runId = made.runId;
       Object.assign(asked, { runId });
@@ -331,6 +336,9 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (via) {
         const [head, ...rest] = comment.split('\n\n');
         comment = [`${head} Sent through the agent API with the token \`${via.token.label}\`.`, ...rest].join('\n\n');
+      } else if (made.trigger) {
+        const [head, ...rest] = comment.split('\n\n');
+        comment = [`${head} Asked by the trigger on ${made.trigger.event} (${made.trigger.ref}), after an act of ${made.trigger.by}'s.`, ...rest].join('\n\n');
       }
 
       // The token once more, after every forge call: one revoked or expired meanwhile does not ask
@@ -339,7 +347,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         if (why) throw new Refused(403, why, 'forbidden');
       }
       const db = await auth.store();
-      reserve(db, made, { target: number, who, via, force: force === true });
+      reserve(db, made, { target: number, who, via, force: force === true, trigger: Boolean(made.trigger) });
       let posted;
       try {
         posted = await forge.comment(number, comment);
@@ -457,7 +465,18 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const db = await auth.store();
     const at = now();
     const rows = /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND comment_id <> '' ORDER BY requested_at DESC, run_id DESC LIMIT ?").all(repo, limit));
-    return { runs: rows.map((r) => publicRun(r, at, quietMs)), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length };
+    // The dashboard's notice for triggers that did nothing (server/triggers.js writes a `trigger-skipped` row each time): the last day's, by reason
+    const skipped = /** @type {{ at: string, answer: string | null }[]} */ (db.prepare("SELECT at, answer FROM actions WHERE action = 'trigger-skipped' AND (target = ? OR target LIKE ?) AND at > ? ORDER BY id DESC LIMIT 200").all(repo, `${repo}#%`, iso(at - 24 * 3_600_000)));
+    const reasons = {};
+    for (const r of skipped) {
+      let why = 'error';
+      try { why = JSON.parse(r.answer ?? '{}').reason || why; } catch { /* a row that is not JSON is counted as an error */ }
+      reasons[why] = (reasons[why] || 0) + 1;
+    }
+    return {
+      runs: rows.map((r) => publicRun(r, at, quietMs)), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
+      triggerSkipped: skipped.length ? { count: skipped.length, last: skipped[0].at, reasons } : null,
+    };
   }
 
   /** One run, or null */

@@ -36,7 +36,7 @@
 import { isMaintainer } from './forge.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { gatherThreads, snapshotOf, POLL_LIMIT } from './threads.js';
-import { hookWants, threadsOn, THREAD_EVENTS } from '../core/config.js';
+import { hookWants, threadsOn, triggersOf, THREAD_EVENTS } from '../core/config.js';
 import { readTopology } from '../core/validate.js';
 
 /** How long after start the first look is made: soon, so the repo's silent first look is not left to the first interval */
@@ -46,6 +46,26 @@ export const MAX_CANDIDATES = 5;
 
 const iso = (ms) => new Date(ms).toISOString();
 const words = (err) => (err instanceof Error ? err.message : String(err));
+
+/**
+ * The forge as the newest live sign-in of a user who is a maintainer now, and their login, or null when there is none: the sign-ins are
+ * tried newest first, at most `MAX_CANDIDATES` users, and a token the forge refuses passes to the next. The token is only asked who it is and
+ * what it may do on the repo. Shared with the triggers (server/triggers.js), which confirm a commenter with it.
+ * @param {{ auth: { store: () => Promise<import('node:sqlite').DatabaseSync>, forgeForUser: (userId: string) => Promise<import('./forge.js').Forge> }, repo: string, now?: () => number }} opts
+ * @returns {Promise<{ forge: import('./forge.js').Forge, login: string } | null>}
+ */
+export async function findMaintainerForge({ auth, repo, now = Date.now }) {
+  const rows = /** @type {{ user_id: string }[]} */ ((await auth.store()).prepare("SELECT user_id FROM sessions WHERE token <> '' AND expires_at > ? ORDER BY created_at DESC, rowid DESC").all(iso(now())));
+  const users = [...new Set(rows.map((r) => r.user_id))].slice(0, MAX_CANDIDATES);
+  for (const userId of users) {
+    try {
+      const forge = await auth.forgeForUser(userId);
+      const me = await forge.me();
+      if (String(me.id) === userId && isMaintainer(await forge.permission(repo, me.login))) return { forge, login: me.login };
+    } catch { /* this user's token is gone or refused: the next one */ }
+  }
+  return null;
+}
 
 /**
  * @param {{
@@ -74,19 +94,9 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
   /** Whose token the last look used: the log names them each time that changes, so whose sign-in is read with is on record */
   let lookingAs = null;
 
-  /** The forge as the newest live sign-in of a user who is a maintainer now, and their login, or null when there is none */
-  async function maintainerForge() {
-    const rows = /** @type {{ user_id: string }[]} */ ((await auth.store()).prepare("SELECT user_id FROM sessions WHERE token <> '' AND expires_at > ? ORDER BY created_at DESC, rowid DESC").all(iso(now())));
-    const users = [...new Set(rows.map((r) => r.user_id))].slice(0, MAX_CANDIDATES);
-    for (const userId of users) {
-      try {
-        const forge = await auth.forgeForUser(userId);
-        const me = await forge.me();
-        if (String(me.id) === userId && isMaintainer(await forge.permission(repo, me.login))) return { forge, login: me.login };
-      } catch { /* this user's token is gone or refused: the next one */ }
-    }
-    return null;
-  }
+  /** Whether a look reads the threads: a hook wants a thread.* event, or a trigger listens for `/agent` in a message (server/triggers.js) */
+  const wantsThreads = () => threadsOn(config) && (hookWants(config, THREAD_EVENTS) || triggersOf(config).some(([e]) => e === 'thread.message'));
+  const maintainerForge = () => findMaintainerForge({ auth, repo, now });
 
   /** The checkout's nodes, for a hook's `nodes` to be the ones a mention resolves to; none when there is no map */
   function mapNodes() {
@@ -133,13 +143,13 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
     }
     if (noSession) log('a signed-in maintainer is back; checking the open spec PRs again');
     noSession = false;
-    if (found.login !== lookingAs) log(`looking at the open spec PRs${threadsOn(config) && hookWants(config, THREAD_EVENTS) ? ' and threads' : ''} with the sign-in of @${found.login}, a maintainer`);
+    if (found.login !== lookingAs) log(`looking at the open spec PRs${wantsThreads() ? ' and threads' : ''} with the sign-in of @${found.login}, a maintainer`);
     lookingAs = found.login;
     let out = 'ok';
     if (specs) {
       try {
         const specReady = hookWants(config, ['spec.ready']);
-        const threads = threadsOn(config) && hookWants(config, THREAD_EVENTS);
+        const threads = wantsThreads();
         // One listing of the open PRs serves both: the threads' look makes it itself when it runs
         const problem = threads ? await lookAtThreads(found.forge, specReady) : (await listPullProposals(found.forge, where, { hooks })).problem;
         if (problem) {

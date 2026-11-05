@@ -25,6 +25,25 @@ One JSON object. Every key not listed here is refused, and so is any key named l
 | `nodes` | list of node ids, optional | Map nodes the run is expected to touch (`core-server-auth`), up to 100. |
 | `requestedBy` | forge login | The maintainer who asked. |
 | `requestedAt` | UTC time | Like `2026-11-05T09:30:00Z` (milliseconds allowed). |
+| `trigger` | `{ event, by, ref }`, optional | Only on an automatic request: what caused it. See [below](#what-caused-an-automatic-request). |
+
+### What caused an automatic request
+
+A request made by an opt-in [trigger](agents.md#triggers) (`agents.on`) carries `trigger: { event, by, ref }`, so the runner and the people reading the forge can see it was not a click:
+
+```json
+"requestedBy": "maintainer-one",
+"requestedAt": "2026-11-05T09:30:00Z",
+"trigger": { "event": "spec.approved", "by": "maintainer-one", "ref": "pull:40" }
+```
+
+| Key | |
+| --- | --- |
+| `event` | `spec.approved`, `build.opened` or `thread.message`: the only three events a trigger fires on, each a maintainer's act. |
+| `by` | The maintainer whose act caused it. It is always the same as `requestedBy`: the request is posted as them. |
+| `ref` | `pull:<number>` (the spec pull request approved), `issue:<number>` (the build issue opened) or `comment:<id>` (the comment that held `/agent`). |
+
+The field is optional (a request from a click or the API has none), strict (no other key, and the three values must have these shapes) and, like everything in a request, never a credential. It records a cause; it grants nothing: a runner applies the same [maintainer rule](#who-may-ask-the-maintainer-rule) to an automatic request as to any other, and cornfield only ever writes `trigger` itself (a body sent to the dashboard or the request API with a `trigger` key is refused). A runner must never treat a run's own output as a cause: cornfield does not.
 
 **A request never carries a credential.** No token, key, secret or password: the runner pushes and opens pull requests under its **own** identity (a bot account, a deploy key, a CI token). Prose about tokens and passwords is fine; only a value shaped like one is refused. A field whose name contains `token`, `secret`, `passw`, `credential`, `api_key`, `access_key`, `private_key`, `ssh_key`, `authorization`, `bearer` or `cookie` (any case) is refused, and so is a text value shaped like a credential (a GitHub, GitLab, OpenAI or Anthropic key, an AWS key id, a Slack token, a JWT, a private key header, a bearer header, or a link with a user and password in it). The refusal names the field.
 

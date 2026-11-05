@@ -612,6 +612,145 @@ describe('event hooks', () => {
     }
   });
 
+  describe('opt-in triggers (agents.on, server/triggers.js), through the real routes', () => {
+    const NO_HOOKS = { ...ENV, CORNFIELD_HOOK_SECRET: undefined };
+    const triggered = (on, extra = {}) => ({ ...config, hooks: [], agents: { ...config.agents, profiles: ['claude'], on }, ...extra });
+    /** The request comments the forge was sent, parsed */
+    const requestsPosted = () => wrote().filter((r) => r.method === 'POST' && /\/issues\/\d+\/comments$/.test(r.url)).map((r) => ({ url: r.url, body: JSON.parse(r.body).body }));
+    const blockOf = (text) => JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+
+    it('approving a spec with a trigger set requests ONE run, posted as the approver on the spec PR; no hook is configured and none is needed', async () => {
+      allowWrites();
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-trig-'));
+      const one = await start(triggered({ 'spec.approved': { kind: 'code', profile: 'claude' } }, { dataDir: dir }), { env: NO_HOOKS });
+      try {
+        const c = await signedIn(one.port, 'c-maint');
+        const res = await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: one.port, as: c });
+        expect(res.status, res.text).toBe(200);
+        await until(() => requestsPosted().length >= 2, 'the trigger to post its request');
+        await settle();
+        const [review, ask] = requestsPosted();
+        expect(review.url).toBe(`${GH}/issues/40/comments`);
+        expect(ask.url).toBe(`${GH}/issues/40/comments`);
+        const req = blockOf(ask.body);
+        expect(req).toMatchObject({ kind: 'code', profile: 'claude', refs: { proposal: '0040-meals', pull: 40 }, requestedBy: 'maintainer-one', trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' } });
+        // the forge saw it posted with the approver's own token
+        const posted = wrote().filter((r) => r.method === 'POST' && r.url.endsWith('/issues/40/comments'));
+        expect(posted).toHaveLength(2);
+        for (const r of posted) expect(r.headers.authorization).toBe(`Bearer ${MAINT}`);
+        const db = new DatabaseSync(path.join(dir, 'cornfield.db'));
+        const runs = db.prepare('SELECT run_id, via, requested_by FROM runs').all();
+        db.close();
+        expect(runs).toEqual([{ run_id: req.runId, via: 'trigger', requested_by: 'maintainer-one' }]);
+        // the Agents tab's list says so
+        const list = await get('/api/agent-runs', { port: one.port, as: c });
+        expect(list.json.runs.map((r) => [r.runId, r.via, r.requestedBy])).toEqual([[req.runId, 'trigger', 'maintainer-one']]);
+        // a second approval does not ask again
+        clock += 120_000;
+        await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: one.port, as: c });
+        await settle();
+        expect(requestsPosted().filter((r) => r.body.includes('"kind": "code"'))).toHaveLength(1);
+      } finally {
+        await one.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('with no trigger set, approving a spec requests nothing', async () => {
+      allowWrites();
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-trig-'));
+      const one = await start(triggered({}, { dataDir: dir }), { env: NO_HOOKS });
+      try {
+        const c = await signedIn(one.port, 'c-maint');
+        expect((await post(REVIEW, { verdict: 'approved', note: '', edits: [] }, { method: 'PUT', port: one.port, as: c })).status).toBe(200);
+        await settle();
+        expect(requestsPosted()).toHaveLength(1); // the review itself
+      } finally {
+        await one.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('opening the build issue with a trigger set requests ONE run about that issue, as the maintainer who opened it', async () => {
+      allowWrites();
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-trig-'));
+      state.override[`GET ${GH}/issues/60`] = () => ({ body: issue(60, 'Build 0040', { body: 'x' }) });
+      state.override[`POST ${GH}/issues/60/comments`] = (req) => ({ status: 201, body: comment(9600, 'maintainer-one', JSON.parse(req.body).body) });
+      const one = await start(triggered({ 'build.opened': { kind: 'code', profile: 'claude' } }, { dataDir: dir }), { env: NO_HOOKS });
+      try {
+        const c = await signedIn(one.port, 'c-maint');
+        const plan = (await get(`${BUILD}?slug=0040-meals`, { port: one.port, as: c })).json.plan;
+        const res = await post(BUILD, { slug: '0040-meals', sha: H1, digest: plan.digest }, { port: one.port, as: c });
+        expect(res.status, res.text).toBe(201);
+        await until(() => requestsPosted().length >= 1, 'the trigger to post its request');
+        await settle();
+        const [ask] = requestsPosted();
+        expect(ask.url).toBe(`${GH}/issues/60/comments`);
+        expect(blockOf(ask.body)).toMatchObject({ kind: 'code', refs: { issue: 60 }, requestedBy: 'maintainer-one', trigger: { event: 'build.opened', by: 'maintainer-one', ref: 'issue:60' } });
+        expect(requestsPosted()).toHaveLength(1);
+      } finally {
+        await one.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('/agent in a thread, found by the poll: a maintainer\'s requests (once, across a restart); a non-maintainer\'s and an edited one do nothing', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-trig-'));
+      const poll = handTimer();
+      const cfg = triggered({ 'thread.message': { kind: 'summary', profile: 'claude' } }, { dataDir: dir, hookPoll: { specs: '2m' } });
+      const labelled = { name: 'idea' };
+      world.issues[7] = issue(7, 'Meals page', { labels: [labelled] });
+      state.override[`POST ${GH}/issues/7/comments`] = (req) => ({ status: 201, body: comment(9700, 'maintainer-one', JSON.parse(req.body).body) });
+      state.override[`GET ${GH}/collaborators/reader-two/permission`] = () => ({ body: { permission: 'read', role_name: 'read' } });
+      const lookAgain = async (srv_, timer) => { timer.fire(); await until(() => timer.waiting.length === 1, 'the look to finish'); await settle(); };
+      let one = await start(cfg, { specPollTimer: poll, env: NO_HOOKS });
+      try {
+        await signedIn(one.port, 'c-maint');
+        expect(poll.waiting).toEqual([15_000]);
+        await lookAgain(one, poll); // the first look records what is there and fires nothing
+        world.comments[7] = [
+          comment(801, 'reader-two', '/agent do the thing', '2026-11-03T09:31:00Z'),
+          comment(802, 'maintainer-one', '/agent sneaky', '2026-11-03T09:31:00Z', '2026-11-03T09:40:00Z'),
+          comment(803, 'maintainer-one', 'Use `/agent` to ask.\n```\n/agent no\n```', '2026-11-03T09:31:00Z'),
+        ];
+        world.issues[7] = issue(7, 'Meals page', { labels: [labelled], comments: 3, updated_at: '2026-11-03T09:41:00Z' });
+        clock += 120_000;
+        await lookAgain(one, poll);
+        expect(requestsPosted()).toEqual([]);
+        // a maintainer's own command
+        world.comments[7].push(comment(804, 'maintainer-one', '/agent summarise the thread', '2026-11-03T09:42:00Z'));
+        world.issues[7] = issue(7, 'Meals page', { labels: [labelled], comments: 4, updated_at: '2026-11-03T09:43:00Z' });
+        clock += 120_000;
+        await lookAgain(one, poll);
+        await until(() => requestsPosted().length >= 1, 'the trigger to post its request');
+        expect(requestsPosted()).toHaveLength(1);
+        const [ask] = requestsPosted();
+        expect(ask.url).toBe(`${GH}/issues/7/comments`);
+        expect(blockOf(ask.body)).toMatchObject({ kind: 'summary', refs: { thread: 7 }, brief: 'summarise the thread', requestedBy: 'maintainer-one', trigger: { event: 'thread.message', by: 'maintainer-one', ref: 'comment:804' } });
+        // a restart on the same data folder looks at the same comments again and asks for nothing
+        await one.close();
+        one = null;
+        const again = handTimer();
+        const restarted = await start(cfg, { specPollTimer: again, env: NO_HOOKS });
+        try {
+          clock += 120_000;
+          await lookAgain(restarted, again);
+          await lookAgain(restarted, again);
+          expect(requestsPosted()).toHaveLength(1);
+        } finally {
+          await restarted.close();
+        }
+      } finally {
+        await one?.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('refuses to start with agents.on and no sign-in', () => {
+      expect(() => createCornfieldServer(triggered({ 'spec.approved': { kind: 'code', profile: 'claude' } }), { env: {} })).toThrow(/agents\.on, but sign-in is not set up/);
+    });
+  });
+
   it('is off without hooks: no secret is asked for and nothing is sent', async () => {
     allowWrites();
     const none = await start({ ...config, hooks: [] }, { env: { ...ENV, CORNFIELD_HOOK_SECRET: undefined } });

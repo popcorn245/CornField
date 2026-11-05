@@ -1788,6 +1788,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else. (server/agent-runs.js)"
+    },
+    {
+      "id": "core-server-triggers",
+      "label": "triggers.js",
+      "type": "core",
+      "file": "server/triggers.js",
+      "summary": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click. (server/triggers.js)"
     }
   ],
   "edges": [
@@ -5560,7 +5570,47 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-agent-contract",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-triggers"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-triggers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-core-agent-contract",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-spec-poll",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-triggers",
+      "to": "core-server-throttle",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T09:37:28.724Z"
+  "updatedAt": "2026-11-05T10:12:38.842Z"
 }
