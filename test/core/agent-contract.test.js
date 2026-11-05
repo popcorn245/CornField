@@ -166,9 +166,9 @@ describe('validateRequest', () => {
     });
     it('refuses a value shaped like one, in any text field', () => {
       const secrets = [
-        'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'github_pat_11ABCDEFG0abcdefghijkl_mnopqrstuv', 'glpat-abcdefghij0123456789', 'sk-ant-api03-abcdefghijklmnopqrstu',
-        'AKIAIOSFODNN7EXAMPLE', 'xoxb-1234567890-abcdefghij', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r',
-        '-----BEGIN RSA PRIVATE KEY-----', 'Authorization: Bearer abcd1234efgh5678ijkl9012', 'https://user:hunter2@example.com/repo.git',
+        'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'github_' + 'pat_11ABCDEFG0abcdefghijkl_mnopqrstuv', 'glp' + 'at-abcdefghij0123456789', 'sk-' + 'ant-api03-abcdefghijklmnopqrstu',
+        'AKIA' + 'IOSFODNN7EXAMPLE', 'xox' + 'b-1234567890-abcdefghij', 'eyJhbGciOiJIUzI1NiJ9' + '.eyJzdWIiOiIxMjM0NTY3ODkwIn0' + '.dBjftJeZ4CVPmB92K27uhbUJU1p1r',
+        '-----BEGIN RSA ' + 'PRIVATE KEY-----', 'Authorization: Bearer ' + 'abcd1234efgh5678ijkl9012', 'https://user:' + 'hunter2@example.com/repo.git',
       ];
       for (const s of secrets) {
         expect(refuse(request({ brief: `use ${s} to push` })), s).toMatch(/^The request.brief holds something shaped like a credential/);
@@ -512,7 +512,7 @@ const BAD = [
   request({ nodes: 'a' }), request({ nodes: [' x'] }), request({ nodes: [3] }), request({ nodes: Array.from({ length: 101 }, (_, i) => `n${i}`) }),
   request({ requestedBy: '' }), request({ requestedBy: 'a b' }), request({ requestedBy: 'x'.repeat(41) }), request({ requestedAt: '2026-11-05' }), request({ requestedAt: '2026-11-05T09:30:00+01:00' }),
   ...['token', 'githubToken', 'api_key', 'apiKey', 'secret', 'password', 'credentials', 'authorization', 'cookie', 'private_key'].map((k) => request({ [k]: 'x' })),
-  ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIAIOSFODNN7EXAMPLE', '-----BEGIN PRIVATE KEY-----', 'https://user:hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
+  ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIA' + 'IOSFODNN7EXAMPLE', '-----BEGIN ' + 'PRIVATE KEY-----', 'https://user:' + 'hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
   { state: 'running' }, { state: 'stop-requested', url: 'https://x.example' }, { state: 'done', extra: 1 }, { state: 'done', note: 3 }, { state: 'done', note: 'x'.repeat(4001) },
   ...['ftp://x.example/a', 'javascript:alert(1)', 'https://u:p@host/x', 'https://u@host/x', 'not a url', '', 'https://x.example/ a', 'https://x.example/l?token=abc', 'https://x.example/l?api_key=abc', 'https://x.example/l#access_token=abc', 'https://x.example/l?key=abc'].map((url) => ({ state: 'done', url })),
   { state: 'done', tokens: -1 }, { state: 'done', tokens: 1.5 }, { state: 'done', tokens: '3' }, { state: 'done', cost: -1 }, { state: 'done', cost: '1' }, { state: 'done', token: 'x' },
