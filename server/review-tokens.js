@@ -24,7 +24,7 @@
  *
  * @typedef {'review' | 'agent'} TokenScope
  * @typedef {{ id: number, user_id: string, login: string, label: string, scope: TokenScope, created_at: string, expires_at: string, revoked_at: string | null, last_used: string | null }} TokenRow
- * @typedef {'active' | 'expired' | 'revoked'} TokenState
+ * @typedef {'active' | 'expired' | 'revoked' | 'wrong-scope'} TokenState  `wrong-scope` only from `findToken` asked for a scope
  */
 
 import { createHash, randomBytes } from 'node:crypto';
@@ -131,9 +131,12 @@ export function mintToken(db, { userId, login, label, days, scope = 'review' }, 
  * @param {number} now
  * @returns {{ row: TokenRow, state: TokenState } | null}
  */
-export function findToken(db, token, now) {
+export function findToken(db, token, now, scope) {
   const row = /** @type {TokenRow | undefined} */ (db.prepare(`SELECT ${COLUMNS} FROM review_tokens WHERE token_hash = ?`).get(hashToken(token)));
-  return row ? { row, state: stateOf(row, now) } : null;
+  if (!row) return null;
+  // The scope is part of the lookup, not of each route: a token found for another API, or whose prefix is not its scope's, is no token here
+  if (scope !== undefined && (row.scope !== scope || !String(token).startsWith(PREFIXES[row.scope]))) return { row, state: /** @type {const} */ ('wrong-scope') };
+  return { row, state: stateOf(row, now) };
 }
 
 /** Notes that a token was presented (and valid) just now */

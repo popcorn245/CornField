@@ -385,6 +385,20 @@ describe('the limits cornfield enforces', () => {
     expect(t.rows().filter((r) => r.status === 429)).toEqual([]);
   });
 
+  it('does not let a request a crash left unposted hold a place past its reservation, though cornfield restarted soon after', async () => {
+    const t = setup();
+    // Three reservations whose comments never got posted (a crash), made just before cornfield started again: resume() keeps them
+    for (const n of [12, 13, 14]) {
+      t.db.prepare("INSERT INTO runs (run_id, repo, kind, issue, target, request, requested_by, requested_by_id, requested_at, last_activity) VALUES (?, 'owner/name', 'code', ?, ?, '{}', 'maintainer-one', '1001', ?, ?)")
+        .run(newRunId(T0 + n), n, n, new Date(T0 - 60_000).toISOString(), new Date(T0 - 60_000).toISOString());
+    }
+    await t.runs.resume();
+    expect((await ask(t, code({ refs: { issue: 15 } })))).toMatchObject({ ok: false, code: 'cap-reached' });
+    t.wait(10 * 60_000); // past the reservation: the places are free again, without another restart
+    expect((await ask(t, code({ refs: { issue: 15 } }))).ok).toBe(true);
+    expect(t.db.prepare("SELECT COUNT(*) AS n FROM runs WHERE comment_id = ''").get().n).toBe(0);
+  });
+
   it('drops a request that never reached the forge when it resumes', async () => {
     const t = setup();
     t.db.prepare("INSERT INTO runs (run_id, repo, kind, target, request, requested_by, requested_by_id, requested_at, last_activity) VALUES (?, 'owner/name', 'code', 12, '{}', 'maintainer-one', '1001', ?, ?)").run(RUN, new Date(T0 - 20 * 60_000).toISOString(), new Date(T0 - 20 * 60_000).toISOString());
@@ -534,6 +548,35 @@ describe('following a run', () => {
     expect(reasons[0]).toMatch(/edited/);
     expect(reasons[1]).toMatch(/only from a maintainer/);
     expect((await t.runs.get(id)).status).toBe('requested');
+  });
+
+  it('keeps a judged block as judged: an edit that comes in later changes nothing, and a time that does not parse is not believed', async () => {
+    const t = setup();
+    const id = await asked(t);
+    const c = t.say(12, 'runner-bot', formatRunComment(id, { state: 'working', note: 'on it' }));
+    t.wait(60_000);
+    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 1 });
+    // Somebody with write access rewrites the runner's comment into a "done" afterwards
+    Object.assign(c, { body: formatRunComment(id, { state: 'done' }), updatedAt: new Date(t.clock.now + 60_000).toISOString() });
+    t.wait(5 * 60_000);
+    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 0 });
+    expect((await t.runs.get(id)).status).toBe('working');
+    // A comment whose times the forge garbled is not taken for one nobody edited
+    t.say(12, 'runner-bot', formatRunComment(id, { state: 'failed' }), { updatedAt: 'not a time' });
+    t.wait(60_000);
+    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 0 });
+    expect((await t.runs.get(id)).status).toBe('working');
+  });
+
+  it('turns away a report holding one of cornfield\'s own tokens, through the contract\'s credential check', async () => {
+    const t = setup();
+    const id = await asked(t);
+    const leaked = `cf_rt_${'A'.repeat(43)}`;
+    t.say(12, 'runner-bot', '```cornfield-run ' + id + '\n' + JSON.stringify({ state: 'done', note: `used ${leaked}` }) + '\n```');
+    expect(await t.runs.follow(t.as('maintainer-one'))).toMatchObject({ reports: 0, ignored: 1 });
+    expect((await t.runs.get(id)).status).toBe('requested');
+    expect(JSON.stringify(t.rows())).not.toContain(leaked);
+    expect(readRunBlocks('```cornfield-run ' + id + '\n' + JSON.stringify({ state: 'done', note: `cf_at_${'B'.repeat(43)}` }) + '\n```').refused[0].error).toMatch(/shaped like a credential/);
   });
 
   it('ignores a block for another run, a request block, a malformed block, and blocks on a thread the run is not on', async () => {
