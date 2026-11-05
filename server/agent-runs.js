@@ -114,9 +114,6 @@ export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'bran
 export const FINISHED = Object.freeze(['done', 'failed', 'stopped', 'merged', 'closed']);
 const REPORT_FINISHED = ['done', 'failed', 'stopped'];
 
-/** cornfield's own API tokens (server/review-tokens.js): the contract's credential check does not know their shape, so a request and a report are checked for it here */
-const OWN_TOKEN = /cf_(?:rt|at)_[A-Za-z0-9_-]{20,}/;
-
 const iso = (ms) => new Date(ms).toISOString();
 const lower = (s) => String(s).toLowerCase();
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -325,10 +322,13 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       .run(runId, ev.key, ev.at, ev.kind, ev.actor ?? null, ev.ref ?? null, ev.note ?? null, ev.url ?? null);
   }
 
-  /** The runs of this repo that are open as of now (the cap and the one-per-subject rule count these) */
+  /**
+   * The runs of this repo that are open as of now (the cap and the one-per-subject rule count these). A reservation whose comment never got
+   * posted (a crash between the reservation and the post) holds its place for `RESERVATION_MS` only, whenever cornfield last restarted.
+   */
   function openRows(db, at) {
     return /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND state NOT IN ('done', 'failed', 'stopped') ORDER BY requested_at").all(repo))
-      .filter((r) => statusOf(r, at, quietMs).open);
+      .filter((r) => (r.comment_id !== '' || at - Date.parse(r.requested_at) < RESERVATION_MS) && statusOf(r, at, quietMs).open);
   }
 
   /** Takes a place for a run: the cap and the one-per-subject rule are checked and the row inserted in one transaction. Throws a `Refused`. */
@@ -337,6 +337,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const mine = subjectKeys(request.refs);
     db.exec('BEGIN IMMEDIATE');
     try {
+      // What a crash left (a reservation never posted) is dropped here too, not only at the next start
+      db.prepare("DELETE FROM runs WHERE repo = ? AND comment_id = '' AND requested_at < ?").run(repo, iso(at - RESERVATION_MS));
       const open = openRows(db, at);
       if (open.length >= cap) {
         throw new Refused(409, `${repo} already has ${open.length} open run${open.length === 1 ? '' : 's'}, the most cornfield asks for (agents.maxOpen is ${cap}): ${open.map((r) => r.run_id).join(', ')}. Wait for one to finish or go quiet, or stop one.`, 'cap-reached');
@@ -412,7 +414,6 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     try {
       if (problem) throw new Refused(problem.status, problem.message, 'invalid');
       if (!isObject(body)) throw new Refused(400, `A request is a JSON object: { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }.`, 'invalid');
-      if (OWN_TOKEN.test(JSON.stringify(body))) throw new Refused(400, 'The request holds something shaped like a cornfield token. A request never carries a credential: the runner uses its own identity.', 'invalid');
       const { force, requestedBy, ...fields } = body;
       if (force !== undefined && typeof force !== 'boolean') throw new Refused(400, '"force" is true or false: whether to ask for another run on an issue or proposal that has an open one.', 'invalid');
       const build = (login, pull) => {
@@ -849,10 +850,6 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         const row = cur.get(b.runId);
         if (!row || !ids.has(b.runId)) continue;
         const key = keyOf(b.comment.id, b.runId, b.type);
-        if (OWN_TOKEN.test(JSON.stringify(b.value))) {
-          if (judge(row, b.comment.id, key, b.by, b.type, {}, { accepted: false, reason: 'holds something shaped like a cornfield token, which nothing here keeps' })) out.ignored += 1;
-          continue;
-        }
         if (!judge(row, b.comment.id, key, b.by, b.type, { ...(b.value.state ? { state: b.value.state } : {}) }, { accepted: true })) continue;
         heard.push({ row, id: b.comment.id, key, at: b.at, by: b.by, block: b });
       }

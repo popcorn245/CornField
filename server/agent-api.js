@@ -97,7 +97,7 @@ export async function serveAgentCall(req, res, ctx) {
 
   const presented = bearerOf(req.headers.authorization);
   const db = presented ? await auth.store() : null;
-  const found = presented && db ? findToken(db, presented, now()) : null;
+  const found = presented && db ? findToken(db, presented, now(), 'agent') : null;
   if (!found) {
     req.resume();
     const flood = countAttempt(ctx, NO_TOKEN_LOGIN, now(), ANONYMOUS_PER_MINUTE);
@@ -109,11 +109,11 @@ export async function serveAgentCall(req, res, ctx) {
 
   const { row, state } = found;
   const token = { id: row.id, label: row.label };
-  if (row.scope !== 'agent' || state !== 'active') {
+  if (state !== 'active') {
     req.resume();
     const flood = countAttempt(ctx, row.user_id, now());
     if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
-    const wrong = row.scope !== 'agent';
+    const wrong = state === 'wrong-scope';
     const body = {
       error: wrong ? `This is a ${row.scope} token. Asking for a run takes an agent token; make one in the dashboard.`
         : state === 'revoked' ? 'This agent token was revoked; make a new one in the dashboard.' : 'This agent token has expired; make a new one in the dashboard.',
@@ -134,7 +134,7 @@ export async function serveAgentCall(req, res, ctx) {
     const made = await runs.request({
       forge: () => auth.forgeForUser(row.user_id), who: { login: row.login, userId: row.user_id }, limits: { auth, now: ctx.now }, via: { token },
       stillAllowed: async () => {
-        const again = findToken(await auth.store(), /** @type {string} */ (presented), now());
+        const again = findToken(await auth.store(), /** @type {string} */ (presented), now(), 'agent');
         if (again && again.state === 'active') return null;
         return again && again.state === 'expired' ? 'This agent token expired while the request was being checked; nothing was posted.' : 'This agent token was revoked while the request was being checked; nothing was posted.';
       },
