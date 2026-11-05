@@ -11,7 +11,7 @@ export default {
   port: 3350,
   host: '127.0.0.1',
   publicUrl: null,
-  worktrees: '.claude/worktrees',
+  worktrees: '.claude/worktrees',   // or { dir: '.claude/worktrees', maxAgeDays: 30 }
   proposals: 'docs/specs/proposals',   // or { dir: 'docs/specs/proposals', approveLands: true }
   topology: 'topology.json',
   personas: { roles: ['admin', 'member'], parent: 'root' },
@@ -33,7 +33,7 @@ export default {
 | `forge` | `{ type: 'github' \| 'forgejo', url, repo: 'owner/name', mergeMethod?, baseBranch? }`: where issues, PRs and (v1) sign-in live; with it the explorer has the [issues and PRs panel](issues-and-prs.md). `mergeMethod` is how the panel lands a green pull request: `merge` (the default), `squash` or `rebase`, the way the repo lands its own. `baseBranch` is the branch the pipeline's "Start a spec" branches from and opens its draft pull request into (`main` when unset) |
 | `port`, `host` | where `serve` listens. Without sign-in the host must be loopback; with it and an https `publicUrl`, any address ([sign-in](sign-in.md)) |
 | `publicUrl` | the origin people open it at; sign-in needs it (the OAuth callback is `<publicUrl>/auth/callback`) |
-| `worktrees` | a folder of git worktrees; each one's proposals are listed too, as drafts |
+| `worktrees` | a folder of git worktrees; each one's proposals that differ from the checkout's are listed too, as drafts. The folder as a string, or `{ dir?, maxAgeDays? }` ([below](#worktrees)) |
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
@@ -91,6 +91,23 @@ proposals: { dir: 'docs/specs/proposals', approveLands: true },   // or an objec
 | `approveLands` | `true` or `false` (default **false**). When true, approving a spec (the **Approve** button, or an approval through the [review API](proposals.md)) also lands its pull request once the pull request is mergeable and every check is green: no second click. It is opt-in, for teams where approving a spec means the docs are good. [Land on approval](proposals.md#land-on-approval) says what it does and what stops it |
 
 Nothing else is accepted: an unknown key, a `dir` that leaves the repo, or an `approveLands` that is not `true` or `false` fails the config at start-up, naming the key. `approveLands` needs [sign-in](sign-in.md) (an approval is a signed-in maintainer's, and it lands as them); with it on and no sign-in cornfield does not start, and says so.
+
+## Worktrees
+
+`worktrees` is the folder of git worktrees, and like `proposals` it has two spellings that mean the same thing for the folder:
+
+```js
+worktrees: '.claude/worktrees',                           // the folder (the default); a string works as it always did
+worktrees: { dir: '.claude/worktrees', maxAgeDays: 30 },  // or an object: the folder is `dir` (optional), and the options sit beside it
+worktrees: null,                                          // no worktrees are looked at
+```
+
+| Key | What it is |
+|---|---|
+| `dir` | the folder, inside the repo, written relative to it. Default `.claude/worktrees` |
+| `maxAgeDays` | a number of days above 0 (default: none, every worktree is listed). A worktree whose newest proposal file was changed longer ago than this is left out. The age is the newest modification time among the worktree's proposal files, so a worktree you are still writing in always stays |
+
+Nothing else is accepted: an unknown key, a `dir` that leaves the repo, or a `maxAgeDays` that is not a number above 0 fails the config at start-up, naming the key. How the worktrees are read, and why a slow folder cannot hold the server up, is in [proposals](proposals.md#many-worktrees-and-slow-folders).
 
 ## Hooks
 

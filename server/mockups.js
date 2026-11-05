@@ -209,7 +209,7 @@ export async function serveMockups(req, res, match, url, where, forgeFor) {
   const slug = match[1];
   const position = match[2] === undefined ? null : Number(match[2]);
   const source = url.searchParams.get('source') || null;
-  const entry = findProposalFile(where, slug, source);
+  const entry = await findProposalFile(where, slug, source);
   if (!entry) {
     if (forgeFor && pullNumber(source) !== null) return servePull(req, res, where, forgeFor, slug, /** @type {string} */ (source), position);
     return refuse(res, 404, 'No such proposal');
