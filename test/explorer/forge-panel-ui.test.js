@@ -566,7 +566,7 @@ describe('the Agents tab', () => {
   it('is a third tab that reads the work in one request, once, and groups it by proposal, then issue, then neither', async () => {
     const server = await open();
     expect(tab().getAttribute('aria-pressed')).toBe('true');
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work']);
+    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work', '/api/agent-runs']); // the runs (issue #80) come with the work
     expect(titles()).toEqual(['Proposal 0013-meals', '#5 Sign-in', 'Not linked to an issue or a proposal']);
     expect(rowTitles(groups()[0])).toEqual(['Meals page']);
     expect(rowTitles(groups()[1])).toEqual(['Lint everything', 'Branch claude/5-notes']);

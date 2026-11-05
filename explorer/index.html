@@ -247,6 +247,13 @@
             </div>
           </div>
         </section>
+        <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Agents tab; each run's state, what it is about, links, and Stop -->
+        <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden>
+          <h3 id="forge-runs-title" class="hx-forge-runs-title">Agent runs</h3>
+          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
+          <p id="forge-runs-note" class="hx-forge-notice" hidden></p>
+          <ul id="forge-runs-list" class="hx-forge-files" aria-label="Runs"></ul>
+        </section>
         <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
         <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
         <p id="forge-rate" class="hx-forge-rate hx-faint"></p>
@@ -318,6 +325,26 @@
         <button type="button" class="hx-btn" data-action="forge-confirm-cancel">Cancel</button>
         <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go">Land it</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Start an agent (forge-panel.js): kind, profile, a brief, and a confirm step; a modal dialog over a scrim, the focus stays in it -->
+  <div id="agent-start" class="hx-confirm-scrim" hidden>
+    <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="agent-start-title" aria-describedby="agent-start-words">
+      <h2 id="agent-start-title" class="hx-confirm-title">Start an agent</h2>
+      <p id="agent-start-about" class="hx-forge-meta"></p>
+      <form id="agent-start-form" class="hx-forge-confirm" novalidate>
+      <label class="hx-forge-field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
+      <label id="agent-profile-field" class="hx-forge-field" hidden>Profile<select id="agent-profile" class="hx-forge-select"></select></label>
+      <label class="hx-forge-field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
+      <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
+      <p id="agent-start-words" class="hx-confirm-note"></p>
+      <p id="agent-start-msg" class="hx-forge-msg hx-forge-msg--bad" role="alert" hidden></p>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-action="agent-start-cancel">Cancel</button>
+        <button type="submit" class="hx-btn hx-btn--approve" id="agent-start-go">Ask the runner</button>
+      </div>
+      </form>
     </div>
   </div>
 
