@@ -120,6 +120,12 @@ export const state = {
   forgeLit: null,
 
   /**
+   * The runs on the map (explorer/runs-map.js): `{ flight: Map<nodeId, runId[]>, collide: Map<nodeId, runId[]>, runs }` for the open runs'
+   * nodes, or null when there are none. The map's marks over the nodes are drawn from it.
+   */
+  runsMap: null,
+
+  /**
    * Which threads mention which nodes (forge-panel.js, docs/threads.md), for a node's panel: `{ for(nodeId) -> thread[] | null,
    * ensure(), open(number) }`, or null when threads are off or there is no forge. `for` answers null until the list has been
    * read; `ensure` reads it (once) and repaints the panel's "Mentioned in"; `open` shows a thread in the issues and PRs panel.

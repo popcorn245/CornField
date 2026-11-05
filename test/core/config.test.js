@@ -123,7 +123,7 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {} };
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {}, refuseCollisions: false };
     expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
     expect(c.agents).toEqual(defaults);

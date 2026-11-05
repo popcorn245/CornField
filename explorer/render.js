@@ -150,6 +150,14 @@ function paint() {
   // The labels repaint only when the camera, the scene or the size changed, never on a packet frame
   const labels = getLabelLayer();
   if (labels) labels.draw(scene, state.camera);
+  paintHooks.forEach((fn) => fn(scene, state.camera));
+}
+
+/** Things drawn over the map by the page itself (the runs' marks, explorer/runs-map.js): called after each draw with the scene and the camera */
+const paintHooks = new Set();
+export function onPaint(fn) {
+  paintHooks.add(fn);
+  return () => paintHooks.delete(fn);
 }
 
 const scheduler = createFrameScheduler({

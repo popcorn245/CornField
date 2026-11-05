@@ -150,7 +150,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
-  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {} },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {}, refuseCollisions: false },
   hooks: [],
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
@@ -163,7 +163,7 @@ export const DEFAULTS = Object.freeze({
 const KEYS = Object.keys(DEFAULTS);
 /** The keys of `proposals` when it is an object: the folder, and whether an approval also lands the spec PR (opt-in, off unless true) */
 export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits', 'refuseCollisions'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -332,6 +332,7 @@ export function configProblems(c) {
 function agentRunProblems(a) {
   const out = [];
   if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(' or ')}: a request is posted on the forge (push and pull come later).`);
+  if (a.refuseCollisions !== undefined && typeof a.refuseCollisions !== 'boolean') out.push('agents.refuseCollisions is true or false: whether a new request that names a node an open run is already changing is refused (false unless set).');
   if (a.maxOpen !== undefined && !(Number.isInteger(a.maxOpen) && a.maxOpen >= 1 && a.maxOpen <= MAX_OPEN_CEILING)) out.push(`agents.maxOpen is a whole number from 1 to ${MAX_OPEN_CEILING}: the most open runs cornfield asks for at once (${DEFAULT_MAX_OPEN} unless set).`);
   if (a.profiles !== undefined) {
     if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {

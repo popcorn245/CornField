@@ -924,3 +924,40 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--hx-control-h
 .hx-thread-compose { font-family: inherit; min-height: 8em; }
 .hx-thread-open { display: block; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 #forge-idea[hidden], #idea-form[hidden], #idea-message[hidden] { display: none; }
+
+/* ---- agent runs on the map (explorer/runs-map.js, issue #82) ---- */
+.hx-run-overlay { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.hx-run-overlay[hidden] { display: none; }
+.hx-run-mark { position: absolute; width: 0; height: 0; --r: 14px; }
+.hx-run-ring { position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); box-sizing: border-box; border-radius: 50%; border: 2px solid var(--hx-teal-text); }
+/* In flight: the ring pulses outward and fades; when motion is reduced it is a still, slightly thicker ring */
+.hx-run-mark--flight .hx-run-ring { animation: hx-run-pulse 1.8s ease-out infinite; }
+@keyframes hx-run-pulse { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.55); opacity: 0.1; } }
+.hx-run-overlay.is-static .hx-run-ring { animation: none; transform: none; opacity: 1; border-width: 3px; }
+@media (prefers-reduced-motion: reduce) { .hx-run-ring { animation: none !important; transform: none; opacity: 1; border-width: 3px; } }
+/* Collision: dashed, a sign and words; the same ring whether or not colour is seen */
+.hx-run-mark--collision .hx-run-ring { border: 3px dashed var(--hx-amber); animation: none; }
+.hx-run-tag { position: absolute; left: 0; top: calc(var(--r) + 4px); transform: translateX(-50%); white-space: nowrap; padding: 1px 7px; border-radius: 9999px; border: 1px solid var(--hx-amber); background: var(--hx-well); color: var(--hx-amber); font-size: 11px; font-weight: 700; }
+.hx-run-swatch { display: inline-block; width: 14px; height: 14px; flex: none; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--hx-teal-text); }
+.hx-run-swatch--collision { border: 2px dashed var(--hx-amber); }
+
+/* The Runs view (forge-panel.js, runs-view.js): each run, its limits beside what was reported, its timeline; the compare puts profiles side by side */
+.hx-runs-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.hx-run { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--hx-line); border-radius: 10px; background: var(--hx-control); overflow-wrap: anywhere; min-width: 0; }
+.hx-run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.hx-run-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.hx-run-collide { margin: 0; padding: 2px 8px; border: 1px dashed var(--hx-amber); border-radius: 8px; color: var(--hx-amber); font-weight: 600; }
+.hx-run-limits { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; margin: 0; font-size: 11px; }
+.hx-run-limits dt { color: var(--hx-slate-300); font-weight: 600; }
+.hx-run-limits dd { margin: 0; color: var(--hx-text-2); }
+.hx-run-timeline { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0 0 0 18px; font-size: 11px; }
+.hx-run-timeline li { color: var(--hx-text-2); }
+.hx-run-timeline time { color: var(--hx-slate-300); margin-right: 6px; }
+.hx-run-note { display: block; color: var(--hx-slate-300); white-space: pre-wrap; }
+.hx-run-compare { border: 1px solid var(--hx-line); border-left: 4px solid var(--hx-teal-strong); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.hx-run-compare-title { margin: 0; font-size: 12px; font-weight: 700; color: var(--hx-text-1); }
+.hx-run-columns { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0; padding: 0; list-style: none; }
+@media (min-width: 1100px) {
+  .hx-forge:has(.hx-run-compare) { width: min(780px, calc(100% - 24px)); }
+  .hx-run-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

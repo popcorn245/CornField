@@ -240,6 +240,13 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return (await client.list(`repos/${repo}/pulls/${n}/files?limit=${PER_PAGE}`, { what: `the files of ${pullWhat(n)}` })).map(toFile);
     },
 
+    async compare(base, head) {
+      const { body } = await client.request('GET', `repos/${repo}/compare/${segments(base)}...${segments(head)}`, { what: `the files of ${head} against ${base} in ${forge.repo}` });
+      // Forgejo's comparison lists commits; only a version that also lists files can say which nodes a branch touches
+      if (!Array.isArray(body?.files)) throw new ForgeError('This Forgejo does not list the files of a comparison.', { code: 'invalid', forge: NAME });
+      return body.files.map(toFile);
+    },
+
     async pullCommits(n) {
       return (await client.list(`repos/${repo}/pulls/${n}/commits?limit=${PER_PAGE}`, { what: `the commits of ${pullWhat(n)}` })).map(toCommit);
     },

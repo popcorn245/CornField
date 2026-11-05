@@ -18,6 +18,7 @@
  *   runs          the agent runs cornfield asked for: the request, where it was posted, the latest report, the pull request found for
  *                 it and when anything last happened (server/agent-runs.js, migration 7); review_tokens also keep a scope
  *   run_seen      what has been seen of each run (a comment judged, a hook event sent), so a restart sends and judges nothing twice
+ *   run_events    what happened to each run, in order, for its timeline; run_reads what was read to work out its nodes (migration 9, issue #82)
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
@@ -199,6 +200,33 @@ export const MIGRATIONS = Object.freeze([
     key         TEXT NOT NULL,                    -- 'c:<comment>:<n>' a block judged, 'ev:…' a hook event sent, 'commits:<pull>@<sha>'
     at          TEXT NOT NULL,
     PRIMARY KEY (run_id, key)
+  ) STRICT;
+  `,
+  // 8: reserved for push and pull transports and runner tokens (#81); nothing here, so that the next one is 9 whichever lands first
+  `-- reserved: #81`,
+  // 9: runs on the map (server/agent-runs.js, issue #82): what happened to each run in order (the timeline), and what was read to
+  // work out the nodes it changes, kept by head sha so the forge is asked once per push
+  `
+  CREATE TABLE run_events (
+    run_id  TEXT NOT NULL,
+    key     TEXT NOT NULL,                        -- what happened, once: 'report:<comment>:<n>', 'push:<sha>', 'pull:<n>:opened', 'checks:<sha>:<summary>' ...
+    at      TEXT NOT NULL,                        -- when it happened (the forge's time where it says, else when cornfield saw it)
+    kind    TEXT NOT NULL CHECK (kind IN ('claimed', 'report', 'stop-requested', 'push', 'pull-opened', 'checks', 'review', 'merged', 'closed')),
+    actor   TEXT,
+    ref     TEXT,                                 -- the report's state, the sha pushed, the pull request number, the checks summary, the review's verdict
+    note    TEXT,                                 -- the runner's words, as written: the page escapes them
+    url     TEXT,
+    PRIMARY KEY (run_id, key)
+  ) STRICT;
+  CREATE INDEX run_events_at ON run_events (run_id, at);
+
+  CREATE TABLE run_reads (
+    run_id  TEXT NOT NULL,
+    source  TEXT NOT NULL CHECK (source IN ('files', 'mentions')),   -- the files a branch changes at sha, or the [[mentions]] of what the run is about
+    sha     TEXT NOT NULL DEFAULT '',
+    data    TEXT NOT NULL CHECK (json_valid(data)),
+    at      TEXT NOT NULL,
+    PRIMARY KEY (run_id, source)
   ) STRICT;
   `,
 ]);

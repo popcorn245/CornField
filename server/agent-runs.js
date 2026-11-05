@@ -28,6 +28,19 @@
  * Every attempt past step 1 is a row in `actions` (`agent-request`), refusals included. The audit never holds a brief, a token's secret or a
  * credential: the request's shape, the brief's length, and the token's id and label.
  *
+ * ## On the map (issue #82)
+ *
+ * Each run in the API carries `nodes` (the ids of the map's nodes it is changing), `nodesFrom`, `collidesWith` and a `timeline`:
+ *
+ *   - **nodes** come from the files the run has changed once it has a branch or a trusted pull request: the pull request's files, or a
+ *     comparison of the branch with the base (`forge.compare`), read once for each head sha (`run_reads`) and mapped with `nodesForFile` against the checkout's
+ *     map each time they are asked for. Before the first push: the request's own `nodes` and the `[[mentions]]` in the opening post of what the run is about
+ *   - **collidesWith** lists the other OPEN runs that share a node with this one (an open run only: a finished or quiet run marks nothing)
+ *   - `agents.refuseCollisions` (off unless set) refuses a new request that names a node an open run is already changing (409 `collision`), in the
+ *     transaction that takes the place for it, right after the cap check. Only the nodes a request names are checked: its `nodes`
+ *   - the **timeline** is the request, the runner's reports, pushes, the pull request, its checks, how it ended, a stop request, and quiet: the first
+ *     and last are worked out from the row, the rest are kept as they are seen (`run_events`, one row for each, so a second look adds none)
+ *
  * ## What counts as open
  *
  * A run is **open** unless it is finished or quiet (`statusOf`): finished is the runner's report `done`, `failed` or `stopped`, or its pull
@@ -62,9 +75,13 @@
  *   checks: string | null, last_activity: string }} RunRow
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
 import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, MAX_NOTE_CHARS } from '../core/agent-contract.js';
 import { quietAfterMs } from '../core/config.js';
+import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
+import { readTopology } from '../core/validate.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 
@@ -81,6 +98,15 @@ export const FOLLOW_FLOOR_MS = 48 * 3_600_000;
 export const RESERVATION_MS = 10 * 60_000;
 /** The runs a listing answers */
 export const LIST_LIMIT = 200;
+/** The most events a run's timeline holds */
+export const TIMELINE_LIMIT = 100;
+/** How much of a request's brief the API shows (the Runs view groups runs by it) */
+export const BRIEF_SHOWN = 2000;
+/** The most runs whose subject's opening post is read for mentions in one look, and how long a reading is kept */
+export const MAX_MENTION_READS = 10;
+/** The most runs whose changed files are read in one look */
+export const MAX_FILE_READS = 10;
+export const MENTIONS_KEEP_MS = 3_600_000;
 /** The keys of a request as the API and the button send it: the contract's fields, less what cornfield writes, plus `force` */
 export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'force']);
 
@@ -145,7 +171,7 @@ const subjectWords = (refs) => [refs.issue != null && `issue #${refs.issue}`, re
  * @param {number} nowMs
  * @param {number} quietMs
  */
-export function publicRun(row, nowMs, quietMs) {
+export function publicRun(row, nowMs, quietMs, extra = {}) {
   const { status, open } = statusOf(row, nowMs, quietMs);
   let limits = null;
   try { limits = JSON.parse(row.request).limits ?? null; } catch { limits = null; }
@@ -159,7 +185,28 @@ export function publicRun(row, nowMs, quietMs) {
     stopRequested: row.stop_requested_at ? { at: row.stop_requested_at, by: row.stop_requested_by } : null,
     pull: row.pull != null ? { number: row.pull, state: row.pull_state, url: row.pull_url, by: row.pull_by, trusted: row.pull_trusted === 1, via: row.linked_via } : null,
     branch: row.branch, headSha: row.head_sha, checks: row.checks, lastActivity: row.last_activity,
+    ...extra,
   };
+}
+
+/**
+ * The run's story in order: the request first, what was seen (`events`, oldest first), and "quiet" last when the run is. Pure.
+ * @param {RunRow} row
+ * @param {{ at: string, kind: string, actor: string | null, ref: string | null, note: string | null, url: string | null }[]} events
+ * @param {{ status: string }} now `statusOf`'s answer
+ * @param {number} quietMs
+ */
+export function timelineOf(row, events, now, quietMs) {
+  const out = [{ at: row.requested_at, kind: 'requested', actor: row.requested_by, ref: row.profile, note: null, url: row.comment_url }];
+  out.push(...events);
+  if (now.status === 'quiet') out.push({ at: iso(Date.parse(row.last_activity) + quietMs), kind: 'quiet', actor: null, ref: null, note: null, url: null });
+  return out;
+}
+
+/** The ids a request names, the ones the map knows when it is known */
+function requestNodes(request, known) {
+  const ids = Array.isArray(request?.nodes) ? request.nodes.filter((n) => typeof n === 'string') : [];
+  return known ? ids.filter((id) => known.has(id)) : ids;
 }
 
 /**
@@ -190,6 +237,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   const runnerSet = new Set((Array.isArray(agents.runners) ? agents.runners : []).map(lower));
   const authorSet = new Set((Array.isArray(agents.authors) ? agents.authors : []).map(lower));
   const quietMs = quietAfterMs(config);
+  const refuseCollisions = agents.refuseCollisions === true;
   const log = (what) => console.error(`[cornfield] agent runs: ${what}`);
   let following = null;
 
@@ -200,6 +248,82 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       log(`an audit row (${entry.action}) could not be written: ${words(err)}`);
     }
   };
+
+  // -------------------------------------------------------------------------
+  //  Nodes and collisions
+  // -------------------------------------------------------------------------
+
+  /** The checkout's map, read again when the file changes (a sync): `{ nodes, ids }`, empty when there is none */
+  let mapCache = { stamp: '', nodes: /** @type {{ id: string, file?: string }[]} */ ([]), ids: /** @type {Set<string>} */ (new Set()) };
+  function theMap() {
+    let stamp = '';
+    try { stamp = String(fs.statSync(path.join(config.root, config.topology)).mtimeMs); } catch { stamp = ''; }
+    if (stamp === mapCache.stamp) return mapCache;
+    let nodes = [];
+    try { nodes = readTopology(config)?.nodes ?? []; } catch { nodes = []; }
+    nodes = Array.isArray(nodes) ? nodes.filter((n) => n && typeof n.id === 'string') : [];
+    mapCache = { stamp, nodes, ids: new Set(nodes.map((n) => n.id)) };
+    return mapCache;
+  }
+
+  const readOf = (db, runId, source) => {
+    const r = /** @type {{ sha: string, data: string } | undefined} */ (db.prepare('SELECT sha, data FROM run_reads WHERE run_id = ? AND source = ?').get(runId, source));
+    if (!r) return null;
+    try { return { sha: r.sha, data: JSON.parse(r.data) }; } catch { return null; }
+  };
+
+  /**
+   * The nodes a run is changing: from the files at its head when they were read, else (before the first push, or before the files
+   * were read) what the request names and what the opening post of its subject mentions.
+   * @returns {{ nodes: string[], from: 'files' | 'request' }}
+   */
+  function nodesOfRow(db, row) {
+    const map = theMap();
+    if (row.head_sha) {
+      const files = readOf(db, row.run_id, 'files');
+      if (files && files.sha === row.head_sha && Array.isArray(files.data)) {
+        const ids = new Set();
+        for (const f of files.data) {
+          for (const p of [f.path, f.previousPath]) if (typeof p === 'string') for (const n of nodesForFile(p, map.nodes)) ids.add(n.id);
+        }
+        return { nodes: [...ids], from: 'files' };
+      }
+    }
+    let request = null;
+    try { request = JSON.parse(row.request); } catch { request = null; }
+    const ids = new Set(requestNodes(request, map.ids.size ? map.ids : null));
+    const mentions = readOf(db, row.run_id, 'mentions');
+    if (mentions && Array.isArray(mentions.data)) for (const id of resolveMentions(mentions.data, map.nodes).ids) ids.add(id);
+    return { nodes: [...ids], from: 'request' };
+  }
+
+  /** What the runs add to their public form: the nodes, the open runs they share a node with, and the timeline */
+  function extrasFor(db, rows, at) {
+    const open = openRows(db, at);
+    const openIds = new Set(open.map((r) => r.run_id));
+    const nodesOf = new Map();
+    for (const r of new Map([...open, ...rows].map((x) => [x.run_id, x])).values()) nodesOf.set(r.run_id, nodesOfRow(db, r));
+    const events = new Map();
+    if (rows.length) {
+      const ask = db.prepare('SELECT at, kind, actor, ref, note, url FROM run_events WHERE run_id = ? ORDER BY at, rowid LIMIT ?');
+      for (const r of rows) events.set(r.run_id, ask.all(r.run_id, TIMELINE_LIMIT));
+    }
+    return new Map(rows.map((r) => {
+      const mine = nodesOf.get(r.run_id);
+      const collidesWith = openIds.has(r.run_id)
+        ? open.filter((o) => o.run_id !== r.run_id && nodesOf.get(o.run_id).nodes.some((id) => mine.nodes.includes(id))).map((o) => o.run_id)
+        : [];
+      let brief = '';
+      try { brief = String(JSON.parse(r.request).brief ?? '').slice(0, BRIEF_SHOWN); } catch { brief = ''; }
+      return [r.run_id, { brief, nodes: mine.nodes, nodesFrom: mine.from, collidesWith, timeline: timelineOf(r, events.get(r.run_id) ?? [], statusOf(r, at, quietMs), quietMs) }];
+    }));
+  }
+
+  /** Writes what happened to a run, once: the key says what, so a second look at the same thing adds nothing */
+  function keepEvent(db, runId, ev) {
+    db.prepare('INSERT OR IGNORE INTO run_events (run_id, key, at, kind, actor, ref, note, url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(runId, ev.key, ev.at, ev.kind, ev.actor ?? null, ev.ref ?? null, ev.note ?? null, ev.url ?? null);
+  }
 
   /** The runs of this repo that are open as of now (the cap and the one-per-subject rule count these) */
   function openRows(db, at) {
@@ -216,6 +340,17 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       const open = openRows(db, at);
       if (open.length >= cap) {
         throw new Refused(409, `${repo} already has ${open.length} open run${open.length === 1 ? '' : 's'}, the most cornfield asks for (agents.maxOpen is ${cap}): ${open.map((r) => r.run_id).join(', ')}. Wait for one to finish or go quiet, or stop one.`, 'cap-reached');
+      }
+      if (refuseCollisions) {
+        const map = theMap();
+        const wanted = requestNodes(request, map.ids.size ? map.ids : null);
+        for (const r of open) {
+          const theirs = nodesOfRow(db, r).nodes;
+          const shared = wanted.filter((id) => theirs.includes(id));
+          if (shared.length) {
+            throw new Refused(409, `${shared.length === 1 ? 'The node' : 'The nodes'} ${shared.join(', ')} ${shared.length === 1 ? 'is' : 'are'} already being changed by the open run ${r.run_id} (agents.refuseCollisions is on). Wait for it to finish or go quiet, or stop it, or ask for a request that leaves ${shared.length === 1 ? 'it' : 'them'} out.`, 'collision');
+          }
+        }
       }
       if (!force) {
         const clash = open.find((r) => (r.profile ?? null) === (request.profile ?? null)
@@ -352,7 +487,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       hooks?.emit('agent.requested', { request: made, actor: me.login });
       try { onAsk?.(); } catch { /* the poll is a convenience */ }
       const row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(made.runId));
-      return { run: publicRun(row, now(), quietMs), request: made, comment: { id: posted.id, url: posted.url ?? null, number } };
+      return { run: publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)), request: made, comment: { id: posted.id, url: posted.url ?? null, number } };
     } catch (err) {
       if (status === null) {
         const out = describe(err);
@@ -418,6 +553,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       db.exec('BEGIN IMMEDIATE');
       try {
         db.prepare('UPDATE runs SET stop_requested_at = ?, stop_requested_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ?').run(stamp, me.login, stamp, row.run_id);
+        keepEvent(db, row.run_id, { key: `stop:${posted.id}`, at: stamp, kind: 'stop-requested', actor: me.login, note: note || null, url: posted.url ?? null });
         db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
         db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:stop:${posted.id}:c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
         db.exec('COMMIT');
@@ -429,7 +565,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       await audit({ login: me.login, action: 'agent-stop', target, request: { ...asked, ...(note ? { noteChars: note.length } : {}) }, status: 201, answer: { comment: posted.id, url: posted.url ?? null } });
       const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
       hooks?.emit('run.stopRequested', runPayload(after, me.login));
-      return { run: publicRun(after, now(), quietMs), comment: { id: posted.id, url: posted.url ?? null } };
+      return { run: publicRun(after, now(), quietMs, extrasFor(db, [after], now()).get(after.run_id)), comment: { id: posted.id, url: posted.url ?? null } };
     } catch (err) {
       if (!done) {
         const out = describe(err);
@@ -456,14 +592,15 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const db = await auth.store();
     const at = now();
     const rows = /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND comment_id <> '' ORDER BY requested_at DESC, run_id DESC LIMIT ?").all(repo, limit));
-    return { runs: rows.map((r) => publicRun(r, at, quietMs)), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length };
+    const extras = extrasFor(db, rows, at);
+    return { runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length, refuseCollisions };
   }
 
   /** One run, or null */
   async function get(runId) {
     const db = await auth.store();
     const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare("SELECT * FROM runs WHERE run_id = ? AND repo = ? AND comment_id <> ''").get(runId, repo)) : undefined;
-    return row ? publicRun(row, now(), quietMs) : null;
+    return row ? publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)) : null;
   }
 
   /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window */
@@ -495,6 +632,62 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return following;
   }
 
+  /**
+   * What the map needs from the forge, kept in `run_reads` so it is asked once: for a run with a head (a trusted pull request, or a branch)
+   * the files it changes, read again only when the head moved; for a run with no head yet, the `[[mentions]]` in the opening post of what it is about.
+   * A failure is logged and tried again at the next look. At most `MAX_FILE_READS` and `MAX_MENTION_READS` a look.
+   */
+  async function readNodes(forge, db, rows, at) {
+    const save = db.prepare('INSERT OR REPLACE INTO run_reads (run_id, source, sha, data, at) VALUES (?, ?, ?, ?, ?)');
+    let files = 0;
+    let mentions = 0;
+    let base = null;
+    for (const row of rows) {
+      if (!statusOf(row, at, quietMs).open) continue;
+      if (row.head_sha) {
+        const had = readOf(db, row.run_id, 'files');
+        if (had && had.sha === row.head_sha) continue;
+        if (files >= MAX_FILE_READS) continue;
+        files += 1;
+        try {
+          let list;
+          if (row.pull != null && row.pull_trusted === 1) list = await forge.pullFiles(row.pull);
+          else {
+            base ??= config.forge.baseBranch || await forge.defaultBranch();
+            list = await forge.compare(base, row.head_sha);
+          }
+          save.run(row.run_id, 'files', row.head_sha, JSON.stringify(list.map((f) => ({ path: f.path, previousPath: f.previousPath ?? null, status: f.status }))), iso(at));
+        } catch (err) {
+          log(`the files of ${row.run_id} could not be read: ${words(err)}`);
+        }
+        continue;
+      }
+      const had = readOf(db, row.run_id, 'mentions');
+      const stamp = /** @type {{ at: string } | undefined} */ (db.prepare("SELECT at FROM run_reads WHERE run_id = ? AND source = 'mentions'").get(row.run_id));
+      if (had && stamp && at - Date.parse(stamp.at) < MENTIONS_KEEP_MS) continue;
+      if (mentions >= MAX_MENTION_READS) continue;
+      let refs = null;
+      try { refs = JSON.parse(row.request).refs; } catch { refs = null; }
+      const text = refs?.proposal != null && refs.pull != null ? ['pull', refs.pull] : refs?.thread != null || refs?.issue != null ? ['issue', refs.thread ?? refs.issue] : null;
+      if (!text) continue;
+      mentions += 1;
+      try {
+        const item = text[0] === 'pull' ? await forge.pull(text[1]) : await forge.issue(text[1]);
+        save.run(row.run_id, 'mentions', '', JSON.stringify(parseMentions(item.body ?? '').refs), iso(at));
+      } catch (err) {
+        // A thread that is a pull request is not an issue to the forge: ask for it as one
+        try {
+          if (text[0] === 'issue' && err instanceof ForgeError && err.code === 'not-found') {
+            const item = await forge.pull(text[1]);
+            save.run(row.run_id, 'mentions', '', JSON.stringify(parseMentions(item.body ?? '').refs), iso(at));
+          } else throw err;
+        } catch (again) {
+          log(`what ${row.run_id} is about could not be read for mentions: ${words(again)}`);
+        }
+      }
+    }
+  }
+
   async function followRuns(forge) {
     const db = await auth.store();
     const at = now();
@@ -509,6 +702,9 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const events = [];
     /** @type {Map<string, string>} the cause of the latest change of each run, for the key of its finished event */
     const cause = new Map();
+    /** @type {{ runId: string, key: string, at: string, kind: string, actor?: string | null, ref?: string | null, note?: string | null, url?: string | null }[]} what happened, for the timelines */
+    const happened = [];
+    const happen = (row, ev) => { happened.push({ runId: row.run_id, ...ev }); };
     /** @type {{ login: string | null, request: object, answer: object, target: number }[]} audit rows to write after */
     const audits = [];
 
@@ -581,6 +777,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         const firstLink = row.pull == null;
         const state = pr.state === 'merged' ? 'merged' : pr.state === 'closed' ? 'closed' : 'open';
         const earlier = row.pull_state;
+        const pushedBefore = row.head_sha;
         let trusted = row.pull_trusted === 1;
         if (firstLink) {
           try { trusted = await trustedAuthor(pr.author?.login ?? null); } catch (err) { log(`who opened #${pr.number} could not be asked: ${words(err)}`); continue; }
@@ -589,6 +786,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         // A stranger's branch is not the run's: only a trusted pull request says where the run pushes
         if (trusted) Object.assign(row, { branch: pr.head.ref || null, head_sha: pr.head.sha || null });
         dirty.add(row.run_id);
+        if (trusted && firstLink) happen(row, { key: `pull:${pr.number}:opened`, at: pr.createdAt, kind: 'pull-opened', actor: pr.author?.login ?? null, ref: `#${pr.number}`, url: pr.url ?? null });
+        if (trusted && pr.head.sha && pr.head.sha !== pushedBefore) happen(row, { key: `push:${pr.head.sha}`, at: iso(at), kind: 'push', actor: pr.author?.login ?? null, ref: pr.head.sha, note: pr.head.ref || null });
         if (trusted) touch(row, pr.updatedAt);
         if (firstLink) {
           out.linked += 1;
@@ -597,6 +796,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           if (trusted) queue(row, 'run.state', `ev:linked:${pr.number}`, pr.author?.login ?? null, 'working');
         }
         if (trusted && state !== 'open' && earlier !== state) {
+          happen(row, { key: `pull:${pr.number}:${state}`, at: (state === 'merged' && pr.mergedAt) || pr.updatedAt || iso(at), kind: state, actor: pr.author?.login ?? null, ref: `#${pr.number}`, url: pr.url ?? null });
           cause.set(row.run_id, `pull:${pr.number}:${state}`);
           queue(row, 'run.state', `ev:pull:${pr.number}:${state}`, pr.author?.login ?? null, state);
         }
@@ -683,11 +883,13 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         touch(row, when);
         out.reports += 1;
         cause.set(row.run_id, key);
+        happen(row, { key: `report:${key}`, at: when, kind: r.state === 'claimed' ? 'claimed' : 'report', actor: login, ref: r.state, note: r.note ?? null, url: r.url ?? null });
         if (r.state === 'claimed') queue(row, 'run.claimed', 'ev:claimed', login, 'claimed');
         if (r.state !== previous) queue(row, 'run.state', `ev:state:${id}:${key}`, login, r.state);
       } else {
         if (!row.stop_requested_at) Object.assign(row, { stop_requested_at: when, stop_requested_by: login });
         touch(row, when);
+        happen(row, { key: `stop:${id}`, at: when, kind: 'stop-requested', actor: login, note: block.value.note ?? null });
         queue(row, 'run.stopRequested', `ev:stop:${id}:${key}`, login, 'stop-requested');
       }
     }
@@ -698,7 +900,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       try {
         const checks = await forge.checks(row.head_sha);
         const summary = !checks.length ? 'none' : checks.some((c) => c.state === 'failure') ? 'failure' : checks.some((c) => c.state === 'queued' || c.state === 'running') ? 'running' : checks.some((c) => c.state === 'success') ? 'success' : 'none';
-        if (summary !== row.checks) { row.checks = summary; dirty.add(row.run_id); }
+        if (summary !== row.checks) {
+          row.checks = summary;
+          dirty.add(row.run_id);
+          happen(row, { key: `checks:${row.head_sha}:${summary}`, at: iso(at), kind: 'checks', ref: summary });
+        }
       } catch (err) {
         log(`the checks of #${row.pull} could not be read: ${words(err)}`);
       }
@@ -713,12 +919,16 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           if (b.name !== row.branch || b.sha !== row.head_sha) {
             Object.assign(row, { branch: b.name, head_sha: b.sha });
             touch(row, iso(at)); // a push: the forge does not say when, so now
+            happen(row, { key: `push:${b.sha}`, at: iso(at), kind: 'push', ref: b.sha, note: b.name });
           }
         }
       } catch (err) {
         log(`the branches could not be listed: ${words(err)}`);
       }
     }
+
+    // ---- the files each run has changed (once for each head sha), and what its subject mentions before its first push -----------------
+    await readNodes(forge, db, [...cur.values()], at);
 
     // ---- kept first, then announced ------------------------------------------------------------------------------------------------
     for (const row of cur.values()) {
@@ -744,6 +954,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
             r.pull, r.pull_state, r.pull_url, r.pull_by, r.pull_trusted, r.linked_via, r.branch, r.head_sha, r.checks, r.last_activity, id);
       }
       for (const e of events) if (mark.run(e.runId, e.key, iso(at)).changes === 1) fresh.push(e);
+      for (const ev of happened) keepEvent(db, ev.runId, ev);
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }

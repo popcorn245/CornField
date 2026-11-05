@@ -34,6 +34,7 @@ export const LAYER_DEFS = [
   { key: 'container', label: 'Containers', color: '#d6d3d1', desc: 'One service of a stack, from its compose file' },
   { key: 'device', label: 'Devices', color: '#2dd4bf', desc: 'Cameras, and live: phones, NFC tags, Home Assistant devices', live: true },
   { key: 'house', label: 'House', color: '#a3e635', desc: 'Floors and rooms (live)', live: true },
+  { key: 'runs', label: 'Runs in flight', color: '#5eead4', desc: 'A pulsing ring on the nodes an open agent run is changing; a dashed ring and a warning where two runs change the same node', overlay: true },
   { key: 'persona', label: 'People', color: '#fb7185', desc: 'Personas, with a live count of their accounts (never a name)', live: true },
 ];
 
@@ -68,6 +69,7 @@ export function renderLayerToggles() {
   const counts = {};
   state.nodes.forEach((n) => { const key = n.type === 'external' ? externalLayer(n) : layerOf(n.type); counts[key] = (counts[key] || 0) + 1; });
   counts.flow = state.edges.filter((e) => e.kind === 'flow').length;
+  counts.runs = state.runsMap ? state.runsMap.flight.size : 0;
 
   container.innerHTML = LAYER_DEFS.map((layer) => {
     const on = state.activeLayers[layer.key] !== false;

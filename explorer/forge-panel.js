@@ -69,8 +69,10 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords,
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
+import { runsHtml } from './runs-view.js';
+import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
   landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
@@ -116,6 +118,8 @@ const ui = {
   notes: freshNotes(), // the Release notes view
   runs: null, // { data, error } of the Agents tab's runs: what /api/agent-runs answered
   runNote: null, // { text, ok }: what the last Stop came to
+  runSel: null, // the run lit on the map (Light on the map), by id
+  runTimelines: new Set(), // the runs whose timeline is open
   agent: null, // { opener, refs, posting } while the Start an agent dialog is open
 };
 
@@ -130,6 +134,9 @@ function freshIdea() {
 }
 
 let wired = false;
+let runsTimer = 0;
+/** How often the runs are read again while one is open */
+export const RUNS_POLL_MS = 60_000;
 let threadToken = 0;
 let indexToken = 0;
 let indexLoading = false;
@@ -188,9 +195,29 @@ async function loadWork(refresh, token) {
 }
 
 /** Loads the runs for the Agents tab (a refresh also has cornfield look at the forge for their reports first); a failure is a line, never a blank panel */
-async function loadRuns(refresh) {
+async function loadRuns(refresh, { say = true } = {}) {
+  const before = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
   const res = await request(runsUrl(refresh), refresh);
   ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
+  if (!(ui.runs && ui.runs.data)) return;
+  // The map shows the open runs' nodes; a run lit on the map follows its nodes; what changed is said, once the first answer is in
+  setRunsOnMap(ui.runs.data.runs);
+  if (ui.runSel) relightRun();
+  const said = say ? changeWords(before, ui.runs.data.runs) : [];
+  if (said.length) announce(said.join('. '));
+}
+
+/** Looks at the runs now and then while any is open, so the marks on the map and the words follow the runs (not while the tab is hidden) */
+function scheduleRunsPoll() {
+  clearTimeout(runsTimer);
+  runsTimer = setTimeout(async () => {
+    const open = ui.runs && ui.runs.data && ui.runs.data.open > 0;
+    if (open && !(typeof document !== 'undefined' && document.hidden)) {
+      await loadRuns(false);
+      paint();
+    }
+    scheduleRunsPoll();
+  }, RUNS_POLL_MS);
 }
 
 /** Loads the list the kind and state name (again, past the server's cache, on a refresh) */
@@ -293,7 +320,10 @@ export function clearPull() {
 /** What the selected pull request lights, worked out again: for the nodes now on the map */
 function relight() {
   ui.nodesSeen = state.nodes;
-  if (ui.threadDetail) {
+  if (ui.runSel) {
+    const run = runById(ui.runSel);
+    state.forgeLit = run ? litOfRun(run) : null;
+  } else if (ui.threadDetail) {
     ui.litThread = litForThread(ui.threadDetail.thread, state.nodes);
     state.forgeLit = { changed: ui.litThread.changed, failing: ui.litThread.failing };
   } else if (ui.deployItem) {
@@ -359,6 +389,7 @@ export function clearDeploy() {
 
 /** Forgets the selected thread without painting: another thing is being selected */
 function dropThread() {
+  ui.runSel = null;
   threadToken++;
   ui.thread = null;
   ui.threadDetail = null;
@@ -370,6 +401,7 @@ function dropThread() {
 async function selectThread(n) {
   const token = ++threadToken;
   pullToken++;
+  ui.runSel = null;
   ui.selected = null;
   ui.detail = null;
   ui.detailError = '';
@@ -924,6 +956,8 @@ function findAgain(el) {
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
   if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
+  if (el.dataset.runSelect) return `[data-run-select="${el.dataset.runSelect}"]`;
+  if (el.dataset.runTimeline) return `[data-run-timeline="${el.dataset.runTimeline}"]`;
   return null;
 }
 
@@ -1004,20 +1038,51 @@ function paintRuns() {
   note.textContent = words;
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }
-  list.innerHTML = data.runs.length ? data.runs.map(runHtml).join('') : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
+  list.innerHTML = data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
 }
 
-function runHtml(run) {
-  const links = [
-    safeUrl(run.comment && run.comment.url) ? `<a class="hx-link" href="${escHtml(run.comment.url)}" target="_blank" rel="noreferrer">Request on ${escHtml(forgeName())} <span class="hx-sr-only">(new tab)</span></a>` : '',
-    run.pull && safeUrl(run.pull.url) ? `<a class="hx-link" href="${escHtml(run.pull.url)}" target="_blank" rel="noreferrer">Pull request #${run.pull.number} <span class="hx-sr-only">(new tab)</span></a>${run.pull.trusted ? '' : ' <span class="hx-faint">(not from a runner, so it moves nothing)</span>'}` : '',
-    run.report && safeUrl(run.report.url) ? `<a class="hx-link" href="${escHtml(run.report.url)}" target="_blank" rel="noreferrer">Runner\'s logs <span class="hx-sr-only">(new tab)</span></a>` : '',
-  ].filter(Boolean).join(' · ');
-  const why = statusWhy(run);
-  const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${escHtml(run.report.note)}</p>` : '';
-  const stop = canStop(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${escHtml(run.runId)}" aria-label="Stop run ${escHtml(run.runId)}"${ui.busy ? ' disabled' : ''}>Stop</button>` : '';
-  return `<li class="hx-forge-file"><span class="hx-forge-state hx-forge-state--${escHtml(run.status === 'done' || run.status === 'merged' ? 'success' : run.status === 'failed' ? 'failure' : run.status === 'quiet' || run.status === 'stop-requested' ? 'queued' : 'running')}">${escHtml(statusWords(run))}</span> <span class="hx-name">${escHtml(run.kind)} on ${escHtml(aboutWords(run.refs))}</span> ${stop}
-    <p class="hx-forge-meta">${escHtml(runMeta(run, now()))}</p>${why ? `<p class="hx-forge-why hx-faint">${escHtml(why)}</p>` : ''}${note}${links ? `<p class="hx-forge-meta">${links}</p>` : ''}</li>`;
+/** What the Runs view needs to know of the page */
+function viewContext() {
+  const f = ui.config && ui.config.forge;
+  const base = f && safeUrl(f.url) ? f.url.replace(/\/+$/, '') : null;
+  return {
+    esc: escHtml, safeUrl, forgeName: forgeName(), forgeType: f ? f.type : 'github', repoUrl: base && f.repo ? `${base}/${f.repo}` : null,
+    now: now(), nodes: state.nodes, selected: ui.runSel, timelines: ui.runTimelines, busy: !!ui.busy,
+  };
+}
+
+const runById = (id) => ((ui.runs && ui.runs.data && ui.runs.data.runs) || []).find((r) => r.runId === id) || null;
+
+/** The nodes of a selected run, worked out again (the runs were read again, or the map changed) */
+function relightRun() {
+  if (!runById(ui.runSel)) ui.runSel = null;
+  relight();
+}
+
+/** Lights the nodes of a run on the map, like a pull request; the same button lets go of it */
+function selectRun(id) {
+  const run = runById(id);
+  if (!run) return;
+  if (ui.runSel === id) {
+    ui.runSel = null;
+    relight();
+    announce(`Run ${id} no longer lit on the map`);
+    return;
+  }
+  const had = ui.runSel;
+  pullToken++;
+  dropThread();
+  Object.assign(ui, { selected: null, detail: null, detailError: '', lit: null, landing: null, note: null, deploy: null, deployItem: null, litDeploy: null });
+  ui.runSel = id;
+  relight();
+  const n = (run.nodes || []).length;
+  announce(n ? `Run ${id}: ${n} ${n === 1 ? 'node' : 'nodes'} lit on the map${had ? '' : ''}` : `Run ${id} has no node on the map yet`);
+}
+
+/** Opens or closes the timeline of a run (it stays open when the list is drawn again) */
+function toggleTimeline(id) {
+  if (ui.runTimelines.has(id)) ui.runTimelines.delete(id); else ui.runTimelines.add(id);
+  paint();
 }
 
 /** The panel's lines for the Release notes view: the status, a failure, the rate limit; the rest is paintNotes */
@@ -1039,11 +1104,11 @@ function drawNotes() {
 function paintButton() {
   const btn = $('forge-btn');
   if (!btn) return;
-  const lit = ui.selected !== null || !!ui.deployItem || ui.thread !== null;
+  const lit = ui.selected !== null || !!ui.deployItem || ui.thread !== null || !!ui.runSel;
   const tag = $('forge-btn-lit');
   tag.hidden = !lit;
-  tag.textContent = ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
-  btn.setAttribute('aria-label', ui.thread !== null ? `Issues and pull requests, thread ${ui.thread} selected` : ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
+  tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  btn.setAttribute('aria-label', ui.runSel ? 'Issues and pull requests, a run lit on the map' : ui.thread !== null ? `Issues and pull requests, thread ${ui.thread} selected` : ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
   btn.setAttribute('aria-expanded', String(ui.open));
 }
 
@@ -1374,7 +1439,7 @@ async function stopRun(runId) {
   ui.busy = '';
   ui.runNote = { text: stopWords(res.status, res.body, runId), ok: res.ok };
   announce(ui.runNote.text);
-  await loadRuns(false);
+  await loadRuns(false, { say: false });
   paint();
 }
 
@@ -1508,6 +1573,10 @@ function onClick(e) {
   if (agent) { openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
   const stop = t.closest('[data-forge-stop]');
   if (stop) { stopRun(stop.dataset.forgeStop); return; }
+  const pick = t.closest('[data-run-select]');
+  if (pick) { selectRun(pick.dataset.runSelect); return; }
+  const timeline = t.closest('[data-run-timeline]');
+  if (timeline) { toggleTimeline(timeline.dataset.runTimeline); return; }
   const unland = t.closest('[data-forge-landing-cancel]');
   if (unland) { cancelLanding(Number(unland.dataset.forgeLandingCancel)); return; }
   const merge = t.closest('[data-forge-merge]');
@@ -1604,6 +1673,11 @@ export function initForgePanel(config, opts = {}) {
   registerSheet('forge', panel);
   paintFilters();
   paint();
+  // The map shows the open runs whether or not the panel is open: read them once now, and again now and then while any is open
+  if (config.agents && config.agents.runs) {
+    loadRuns(false).then(() => { if (ui.kind === 'work') paint(); }, () => {});
+    scheduleRunsPoll();
+  }
   if (!wired) {
     wired = true;
     btn.addEventListener('click', toggleForge);
@@ -1651,5 +1725,7 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   indexCache = null;
   state.forgeLit = null;
   state.threadIndex = null;
-  Object.assign(ui, { thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
+  clearTimeout(runsTimer);
+  clearRunsOnMap();
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
 }

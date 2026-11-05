@@ -86,6 +86,7 @@
  *   createIssue(issue: { title: string, body: string, labels?: string[] }): Promise<Issue>,
  *   pullFiles(n: number): Promise<PullFile[]>,
  *   pullCommits(n: number): Promise<PullCommit[]>,
+ *   compare(base: string, head: string): Promise<PullFile[]>,   // the files a branch changes against another (optional: a forge that cannot list them throws `invalid`)
  *   comments(n: number, opts?: { since?: string }): Promise<Comment[]>,
  *   comment(n: number, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
@@ -280,6 +281,10 @@ export function wrap(a, forge) {
     },
     pullFiles: async (n) => a.pullFiles(number(n)),
     pullCommits: async (n) => a.pullCommits(number(n)),
+    compare: async (base, head) => {
+      if (typeof a.compare !== 'function') throw invalid('This forge does not list the files of a comparison.');
+      return a.compare(text(base, 'The base branch'), text(head, 'The branch'));
+    },
     comments: async (n, opts) => {
       if (opts !== undefined && (opts === null || typeof opts !== 'object' || Array.isArray(opts))) throw invalid('The options are an object.');
       const since = opts && opts.since;
