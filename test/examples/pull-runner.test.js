@@ -11,7 +11,7 @@ import path from 'node:path';
 // @ts-expect-error plain JS module, no declarations
 import { parseModelAnswer, promptFor, ask, runOnce } from '../../examples/runner/pull-runner.mjs';
 
-const request = (extra = {}) => ({ version: 1, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', kind: 'code', refs: { issue: 12 }, brief: 'Add the meals page.', requestedBy: 'maintainer-one', ...extra });
+const request = (extra = {}) => ({ version: 1, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', kind: 'code', refs: { issue: 12 }, brief: 'Add the meals page.', requestedBy: 'maintainer-one', requestedAt: '2026-11-05T09:30:00Z', ...extra });
 const answer = (obj) => JSON.stringify(obj);
 
 describe('parseModelAnswer', () => {
@@ -48,14 +48,14 @@ describe('ask', () => {
 describe('runOnce', () => {
   const secret = ['cf_', 'nt_', 'B'.repeat(43)].join('');
   /** A cornfield with one queued request, an Ollama and a forge, all fake; what each was asked is kept */
-  function world({ claimStatus = 200, model = answer({ summary: 'Add meals', files: [{ path: 'web/meals.js', content: 'export {};\n' }] }), stop = false, kind = 'code' } = {}) {
+  function world({ claimStatus = 200, model = answer({ summary: 'Add meals', files: [{ path: 'web/meals.js', content: 'export {};\n' }] }), stop = false, kind = 'code', extra = {} } = {}) {
     const seen = { reports: [], git: [], pulls: [] };
     const fetch = async (url, init = {}) => {
       const u = new URL(url);
       const json = (status, body) => ({ ok: status < 400, status, json: async () => body });
       if (u.host === 'cf.test') {
         expect(init.headers.authorization).toBe(`Bearer ${secret}`);
-        if (u.pathname === '/api/agent-requests') return json(200, { ok: true, requests: [request({ kind })] });
+        if (u.pathname === '/api/agent-requests') return json(200, { ok: true, requests: [request({ kind, ...extra })] });
         if (u.pathname.endsWith('/claim')) return json(claimStatus, { ok: claimStatus === 200 });
         if (init.method === 'POST') { seen.reports.push(JSON.parse(init.body)); return json(200, { ok: true }); }
         return json(200, { ok: true, run: { stopRequested: stop } });
@@ -76,6 +76,8 @@ describe('runOnce', () => {
     expect(await runOnce({ env: env(d), fetch: w.fetch, exec: w.exec, log: () => {} })).toBe('run-01JC8Z3Q5M7VXK2RT9N4B6HDEF');
     expect(fs.readFileSync(path.join(d, 'web/meals.js'), 'utf8')).toBe('export {};\n');
     expect(w.seen.git.map((g) => g[1])).toEqual(['fetch', 'switch', 'add', 'commit', 'push']);
+    // never forced, and to the run's own branch by its full name
+    expect(w.seen.git[4]).toEqual(['git', 'push', 'origin', 'HEAD:refs/heads/agent/run-01JC8Z3Q5M7VXK2RT9N4B6HDEF']);
     expect(w.seen.git[3][3]).toContain('Cornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF');
     expect(w.seen.env).toMatchObject({ GIT_AUTHOR_NAME: 'runner', GIT_COMMITTER_EMAIL: 'runner@example.org' });
     // the forge token travels in the environment, never in an argument
@@ -111,5 +113,32 @@ describe('runOnce', () => {
     await runOnce({ env: env(dir()), fetch: w.fetch, exec: w.exec, log: () => {} });
     expect(w.seen.reports[1]).toEqual({ state: 'done', note: 'A short summary.' });
     expect(w.seen.git).toEqual([]);
+  });
+
+  it('claims nothing it would not ask for itself: a credential, a key it does not know, a branch git could read as an option or a refspec', async () => {
+    for (const extra of [{ brief: `use ${['gh', 'p_'].join('')}${'a'.repeat(36)}` }, { token: 'x' }, { branch: '-f' }, { branch: 'x:refs/heads/main' }, { branch: '+main' }, { branch: 'a/../b' }]) {
+      const w = world({ extra });
+      expect(await runOnce({ env: env(dir()), fetch: w.fetch, exec: w.exec, log: () => {} }), JSON.stringify(extra)).toBeNull();
+      expect(w.seen.reports).toEqual([]);
+      expect(w.seen.git).toEqual([]);
+    }
+  });
+
+  it('does not push to the base branch, and does not write through a link in the clone', async () => {
+    const onMain = world({ extra: { branch: 'main' } });
+    await runOnce({ env: env(dir()), fetch: onMain.fetch, exec: onMain.exec, log: () => {} });
+    expect(onMain.seen.reports.map((r) => r.state)).toEqual(['working', 'failed']);
+    expect(onMain.seen.reports[1].note).toMatch(/does not go on main/);
+    expect(onMain.seen.git).toEqual([]);
+    const d = dir();
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pull-runner-outside-'));
+    fs.symlinkSync(outside, path.join(d, 'web'));
+    const linked = world();
+    await runOnce({ env: env(d), fetch: linked.fetch, exec: linked.exec, log: () => {} });
+    expect(linked.seen.reports.map((r) => r.state)).toEqual(['working', 'failed']);
+    expect(fs.readdirSync(outside)).toEqual([]);
+    expect(JSON.stringify(linked.seen.reports)).not.toContain(secret);
+    fs.rmSync(d, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
   });
 });

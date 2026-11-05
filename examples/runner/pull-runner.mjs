@@ -24,6 +24,9 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+// The contract, vendored beside this file (a copy of cornfield's core/agent-contract.js, kept byte for byte): every request is checked with it
+// before it is claimed, so a credential, a stray key or an unsafe branch name is refused as strictly as cornfield refuses it
+import { branchProblem, validateRequest } from './agent-contract.js';
 
 const MAX_FILES = 20;
 const MAX_FILE_CHARS = 200_000;
@@ -88,26 +91,50 @@ const sh = (cmd, args, { cwd, env }) => new Promise((resolve, reject) => {
   execFile(cmd, args, { cwd, env: { ...process.env, ...env } }, (err, out, errOut) => (err ? reject(new Error(`${cmd} ${args[0]} failed: ${errOut.trim().split('\n')[0]}`)) : resolve(out)));
 });
 
+/**
+ * The branch a request's work goes on: its hint, or `agent/<runId>`. Never the base branch, and never a name git could read as an option or a
+ * refspec (`main:main`, `+x`, `-f`): only what the contract's `branchProblem` accepts. Throws in words.
+ */
+export function branchFor(request, base) {
+  const branch = request.branch || `agent/${request.runId}`;
+  const problem = branchProblem(branch);
+  if (problem) throw new Error(`The branch ${problem}`);
+  if (branch === base || branch === 'HEAD') throw new Error(`The work does not go on ${branch}: a run pushes a branch of its own.`);
+  return branch;
+}
+
+/** Writes one file inside the clone: refused when it, or a folder on its way, is a link (it could point out of the clone) */
+function writeInside(dir, rel, content) {
+  const root = fs.realpathSync(dir);
+  const target = path.join(root, rel);
+  let at = root;
+  for (const part of rel.split('/').slice(0, -1)) {
+    at = path.join(at, part);
+    if (fs.existsSync(at)) {
+      if (fs.lstatSync(at).isSymbolicLink() || !fs.lstatSync(at).isDirectory()) throw new Error(`"${rel}" goes through ${path.relative(root, at)}, which is not a plain folder.`);
+    } else fs.mkdirSync(at);
+  }
+  if (fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink()) throw new Error(`"${rel}" is a link; the runner does not write through one.`);
+  fs.writeFileSync(target, content);
+}
+
 /** Writes the files on a new branch, commits as the runner, pushes, and opens the pull request. Answers its link. */
 export async function publish({ request, answer, env, fetch, exec = sh }) {
   const dir = env.REPO_DIR;
   const base = env.BASE_BRANCH || 'main';
-  const branch = request.branch || `agent/${request.runId}`;
+  const branch = branchFor(request, base);
   const identity = { GIT_AUTHOR_NAME: env.GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL: env.GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME: env.GIT_AUTHOR_NAME, GIT_COMMITTER_EMAIL: env.GIT_AUTHOR_EMAIL };
   // The forge token goes in the environment, not on the command line (where `ps` shows it)
   const auth = `Basic ${Buffer.from(`x-access-token:${env.FORGE_TOKEN}`).toString('base64')}`;
   const git = (...args) => exec('git', args, { cwd: dir, env: { ...identity, GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.extraHeader', GIT_CONFIG_VALUE_0: `Authorization: ${auth}` } });
   await git('fetch', 'origin', base);
   await git('switch', '-C', branch, `origin/${base}`);
-  for (const f of answer.files) {
-    const target = path.join(dir, f.path);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, f.content);
-  }
+  for (const f of answer.files) writeInside(dir, f.path, f.content);
   await git('add', '--', ...answer.files.map((f) => f.path));
   // The trailer is how cornfield finds this work: the run id travels with the commit and the pull request
   await git('commit', '-m', `${answer.summary}\n\nCornfield-Run: ${request.runId}`);
-  await git('push', '--force-with-lease', 'origin', branch);
+  // A new branch of the run's own, never forced: a branch that is already there (someone else's work) makes the push fail
+  await git('push', 'origin', `HEAD:refs/heads/${branch}`);
   const github = (env.FORGE_TYPE || 'github') === 'github';
   const root = env.FORGE_URL ? env.FORGE_URL.replace(/\/+$/, '') : '';
   const api = github ? (root ? `${root}/api/v3` : 'https://api.github.com') : `${root}/api/v1`;
@@ -122,10 +149,12 @@ export async function publish({ request, answer, env, fetch, exec = sh }) {
 /** One pass: claim the oldest request and do it. Resolves with the run id it handled, or null when there was nothing to do. */
 export async function runOnce({ env, fetch = globalThis.fetch, exec, log = console.error }) {
   const cf = cornfield({ fetch, url: env.CORNFIELD_URL, token: env.CORNFIELD_RUNNER_TOKEN });
-  const request = (await cf.queue()).find((r) => r.version === 1);
+  // Only a request the contract accepts is claimed: cornfield checks it too, and this runner does not take its word for it
+  const request = (await cf.queue()).map((r) => validateRequest(r)).find((c) => c.ok)?.value;
   if (!request || !(await cf.claim(request.runId))) return null;
   const say = (s) => log(`[pull-runner] ${request.runId}: ${s}`);
-  const clean = (s) => String(s).replaceAll(env.FORGE_TOKEN || '\0', '***').slice(0, NOTE_CHARS);
+  // Neither of the runner's own secrets goes in a note (cornfield would refuse one shaped like a credential anyway)
+  const clean = (s) => [env.FORGE_TOKEN, env.CORNFIELD_RUNNER_TOKEN].filter(Boolean).reduce((t, secret) => t.replaceAll(secret, '***'), String(s)).slice(0, NOTE_CHARS);
   try {
     await cf.report(request.runId, 'working');
     const text = await ask({ fetch, ollamaUrl: env.OLLAMA_URL || 'http://127.0.0.1:11434', model: env.OLLAMA_MODEL, prompt: promptFor(request) });

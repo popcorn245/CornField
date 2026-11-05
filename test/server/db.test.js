@@ -185,8 +185,14 @@ describe('migration 8 (push and pull transports, runner tokens)', () => {
     db.prepare('DELETE FROM review_tokens WHERE id = 3').run(); // the highest id is gone: the sequence must still remember it
     db.prepare(`INSERT INTO runs (run_id, repo, kind, issue, target, comment_id, request, requested_by, requested_by_id, requested_at, last_activity)
       VALUES ('run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', 'o/n', 'code', 12, 12, '77', '{}', 'maint', '1', ?, ?)`).run(at, at);
+    // One revoked and used, one used: every column of every row comes through as it was
+    db.prepare("UPDATE review_tokens SET revoked_at = '2026-11-02T00:00:00.000Z', last_used = '2026-11-01T12:00:00.000Z' WHERE id = 1").run();
+    db.prepare("UPDATE review_tokens SET last_used = '2026-11-03T00:00:00.000Z' WHERE id = 2").run();
+    const before = db.prepare('SELECT id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope FROM review_tokens ORDER BY id').all();
 
     expect(migrate(db)).toEqual({ from: 7, to: 8 });
+    expect(db.prepare('SELECT id, token_hash, user_id, login, label, created_at, expires_at, revoked_at, last_used, scope FROM review_tokens ORDER BY id').all()).toEqual(before);
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     expect(db.prepare('SELECT id, label, scope FROM review_tokens ORDER BY id').all()).toEqual([{ id: 1, label: 'review one', scope: 'review' }, { id: 2, label: 'agent one', scope: 'agent' }]);
     expect(db.prepare('SELECT run_id, transport, claimed_by, claimed_at, comment_id FROM runs').all()).toEqual([{ run_id: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', transport: 'forge', claimed_by: null, claimed_at: null, comment_id: '77' }]);
     expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used', 'scope']);

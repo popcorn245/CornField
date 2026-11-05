@@ -472,7 +472,7 @@ describe('the review API', () => {
       expect(reviewRows().map((r) => r.status)).toEqual([404, 404, 404]);
     });
 
-    it('asks the forge now whether the owner still maintains the repo: a demoted owner is refused (403) with the token still live', async () => {
+    it('asks the forge now whether the owner still maintains the repo: a demoted owner is refused (403), and the token is revoked for good', async () => {
       const { secret } = await mint();
       expect((await call(secret, approve())).status).toBe(200);
       clock += 60_000;
@@ -481,11 +481,12 @@ describe('the review API', () => {
       expect(res.status, res.text).toBe(403);
       expect(res.json.error).toMatch(/not one now/);
       expect(world.posted).toHaveLength(1);
-      expect(last()).toMatchObject({ login: 'maintainer-one', action: 'review', status: 403 });
-      // the owner is a maintainer again: the same token works again
+      expect(rows().some((r) => r.action === 'token-revoke' && r.answer.revoked === 1 && r.request.reason === 'owner-not-maintainer')).toBe(true);
+      // the owner is a maintainer again: the token stays revoked, and a new one is made
       world.demoted.clear();
       clock += 60_000;
-      expect((await call(secret, approve())).status).toBe(200);
+      const again = await call(secret, approve());
+      expect([again.status, again.json.error]).toEqual([403, expect.stringMatching(/revoked/)]);
     });
 
     it('does not post with a sign-in that has expired, though the token is still live (401)', async () => {

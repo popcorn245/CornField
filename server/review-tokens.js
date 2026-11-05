@@ -166,6 +166,17 @@ export function listTokens(db, userId, now, scope) {
 }
 
 /**
+ * Revokes every live token of an owner, of every scope (review, agent, runner): what is done when cornfield learns they no longer maintain the
+ * repo. A token revoked already keeps its first time. Answers how many were revoked.
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {string} userId
+ * @param {number} now
+ */
+export function revokeOwnerTokens(db, userId, now) {
+  return Number(db.prepare('UPDATE review_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').run(iso(now), String(userId)).changes);
+}
+
+/**
  * Revokes one of an owner's tokens, for good. Another owner's id is no token to them. Revoking a token that is
  * revoked already keeps the first time.
  * @param {import('node:sqlite').DatabaseSync} db

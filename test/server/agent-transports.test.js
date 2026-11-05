@@ -128,7 +128,7 @@ describe('the push and pull transports', () => {
     if (key === 'POST /login/oauth/access_token') return { body: { access_token: MAINT, token_type: 'bearer' } };
     if (key === 'DELETE /api/v3/applications/test-client-id/token') return { status: 204 };
     if (key === `GET ${API}/user`) return base['GET /user'];
-    if (key === `GET ${GH}`) return { body: { id: 1, full_name: 'owner/name', permissions: { admin: false, maintain: true, push: true, triage: true, pull: true } } };
+    if (key === `GET ${GH}`) return { body: { id: 1, full_name: 'owner/name', permissions: world.demoted ? { admin: false, maintain: false, push: false, triage: false, pull: true } : { admin: false, maintain: true, push: true, triage: true, pull: true } } };
     if (!target.startsWith(GH)) return { status: 404, body: { message: 'Not Found' } };
     const url = new URL(target.slice(GH.length), 'http://x');
     const p = decodeURIComponent(url.pathname);
@@ -174,7 +174,7 @@ describe('the push and pull transports', () => {
   });
   beforeEach(async () => {
     clock += 3 * 60_000;
-    world = { issues: [12, 13, 14, 15, 16], posted: [] };
+    world = { issues: [12, 13, 14, 15, 16], posted: [], demoted: false };
     rcv.got.length = 0;
     fake.requests.length = 0;
     data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-transports-'));
@@ -518,6 +518,62 @@ describe('the push and pull transports', () => {
       expect((await claim(runner.secret, runId)).status).toBe(409);
       expect((await report(runner.secret, runId, { state: 'done' })).status).toBe(403);
       expect((await view(runner.secret, runId)).status).toBe(403);
+    });
+  });
+
+  describe('an owner who stops maintaining the repo', () => {
+    const tokenStates = () => {
+      const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+      const out = db.prepare('SELECT scope, revoked_at FROM review_tokens ORDER BY id').all().map((r) => [r.scope, r.revoked_at === null ? 'live' : 'revoked']);
+      db.close();
+      return out;
+    };
+    const minted = async () => {
+      await boot('pull');
+      const runner = await mint('runner', 'laptop');
+      const agent = await mint('agent', 'chat bot');
+      const review = await mint('review', 'reviewer');
+      return { runner, agent, review };
+    };
+
+    it('needs no live sign-in for a runner token to work: the runner has its own identity', async () => {
+      const { runner } = await minted();
+      expect((await page('POST', '/auth/sign-out', undefined)).status).toBe(303);
+      expect((await queue(runner.secret)).status).toBe(200);
+    });
+
+    it('loses every API token at the 15-minute re-check that finds it out: runner, agent and review alike', async () => {
+      const { runner } = await minted();
+      expect((await queue(runner.secret)).status).toBe(200);
+      world.demoted = true;
+      later(16 * 60_000);
+      expect((await page('GET', '/topology.json')).status).toBe(403); // the re-check: not a maintainer now
+      expect(tokenStates()).toEqual([['runner', 'revoked'], ['agent', 'revoked'], ['review', 'revoked']]);
+      const res = await queue(runner.secret);
+      expect([res.status, res.json.error]).toEqual([403, expect.stringMatching(/revoked/)]);
+      expect(rows().find((r) => r.action === 'token-revoke')).toMatchObject({ login: 'maintainer-one', answer: { revoked: 3 }, request: { reason: 'owner-not-maintainer' } });
+      // a maintainer again: the tokens stay revoked; new ones are made
+      world.demoted = false;
+      later(16 * 60_000);
+      expect((await queue(runner.secret)).status).toBe(403);
+    });
+
+    it('loses them when signing in shows it, and a runner call refuses on what cornfield last heard, without asking the forge', async () => {
+      const { runner } = await minted();
+      world.demoted = true;
+      later();
+      await signedIn(srv.port, 'c-maint'); // signs in as a reader now
+      expect(tokenStates().every(([, s]) => s === 'revoked')).toBe(true);
+      // The cheap guard: a token that is somehow still live is refused when the owner's newest sign-in says reader
+      world.demoted = false;
+      const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+      db.prepare('UPDATE review_tokens SET revoked_at = NULL').run();
+      db.close();
+      const asked = fake.requests.length;
+      const res = await queue(runner.secret);
+      expect([res.status, res.json.error]).toEqual([403, expect.stringMatching(/does not maintain owner\/name any more/)]);
+      expect(fake.requests.length).toBe(asked);
+      expect(tokenStates().every(([, s]) => s === 'revoked')).toBe(true);
     });
   });
 

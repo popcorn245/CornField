@@ -34,8 +34,12 @@
  *   a live runner token                 whatever the engine answers: 200, or 400, 403, 404, 409, 429
  *
  * **The token is not asked of the forge.** A runner has its own identity, and cornfield's forge sign-in of the token's owner may well have
- * ended by the time a runner polls. What bounds a runner token is its scope, its expiry (90 days at most), and that its owner revokes it in
- * the dashboard at once. (Review and agent tokens, which act as their owner on the forge, are checked against the forge on every call.)
+ * ended by the time a runner polls. What bounds a runner token is its scope, its expiry (90 days at most), that its owner revokes it in
+ * the dashboard at once, and that **an owner who stops maintaining the repo loses it**: whenever cornfield learns that (their sign-in, the
+ * 15-minute re-check, any question it puts to the forge with their token) all their API tokens are revoked (`auth.demoted`), and each call
+ * here also refuses, and revokes, when the owner's newest sign-in says they are not a maintainer (`auth.knownPermission`). No sign-in on
+ * record is no answer: the token goes on. (Review and agent tokens, which act as their owner on the forge, are checked against the forge on
+ * every call.)
  *
  * Nothing in an answer is a credential: the request is the contract's (validated again on the way out), and a run shows its state.
  */
@@ -46,7 +50,7 @@ import { bearerOf, findToken, scopeOfShape, touchToken } from './review-tokens.j
 import { QUEUE_LIMIT } from './agent-runs.js';
 import { refusal } from './submit-review.js';
 import { Refused, countAttempt } from './throttle.js';
-import { ForgeError } from './forge.js';
+import { ForgeError, isMaintainer } from './forge.js';
 
 export const REQUESTS_PATH = '/api/agent-requests';
 /** Calls one runner token may make in a minute: a runner polls, so this is well over a person's ceiling */
@@ -163,6 +167,14 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
   if (flood) {
     req.resume();
     return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
+  }
+  // The cheap guard: what cornfield last heard of the owner's permission (their newest sign-in's). A runner needs no live sign-in, so no sign-in
+  // at all is no answer; one that says they no longer maintain the repo refuses the call and revokes their tokens there and then
+  const known = await auth.knownPermission(row.user_id);
+  if (known !== null && !isMaintainer(known)) {
+    req.resume();
+    await auth.demoted(row.user_id, row.login, known);
+    return refuse(row.login, { reason: 'owner-not-maintainer', token }, 403, { error: `This runner token's owner, ${row.login}, does not maintain ${repo} any more, so it is revoked.`, code: 'forbidden' });
   }
   touchToken(/** @type {import('node:sqlite').DatabaseSync} */ (db), row.id, now());
   const who = row.login;
