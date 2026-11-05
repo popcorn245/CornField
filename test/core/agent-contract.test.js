@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import * as c from '../../core/agent-contract.js';
-import { ZW } from '../../server/defuse.js';
+import { ZW } from '../../core/defuse.js';
 
 const ID = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF';
 const ID2 = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG';
-const request = (over = {}) => ({ version: 1, runId: ID, kind: 'code', refs: { issue: 12 }, requestedBy: 'maintainer-one', requestedAt: '2026-11-05T09:30:00Z', ...over });
+const request = (over = {}) => ({ version: 1, runId: ID, kind: 'code', refs: { issue: 12 }, brief: 'Fix it.', requestedBy: 'maintainer-one', requestedAt: '2026-11-05T09:30:00Z', ...over });
 const full = () => request({
   profile: 'claude', refs: { issue: 12, proposal: '0014-planner', thread: 30 }, branch: 'agent/fix-auth', brief: 'Make the login retry.\nKeep it small.',
   limits: { minutes: 30, turns: 40, cost: 2.5 }, nodes: ['core-server-auth', 'server/auth.js'],
@@ -166,9 +166,9 @@ describe('validateRequest', () => {
     });
     it('refuses a value shaped like one, in any text field', () => {
       const secrets = [
-        'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'github_pat_11ABCDEFG0abcdefghijkl_mnopqrstuv', 'glpat-abcdefghij0123456789', 'sk-ant-api03-abcdefghijklmnopqrstu',
-        'AKIAIOSFODNN7EXAMPLE', 'xoxb-1234567890-abcdefghij', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r',
-        '-----BEGIN RSA PRIVATE KEY-----', 'Authorization: Bearer abcdefghijklmnopqrstuvwx', 'https://user:hunter2@example.com/repo.git',
+        'ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'github_' + 'pat_11ABCDEFG0abcdefghijkl_mnopqrstuv', 'glp' + 'at-abcdefghij0123456789', 'sk-' + 'ant-api03-abcdefghijklmnopqrstu',
+        'AKIA' + 'IOSFODNN7EXAMPLE', 'xox' + 'b-1234567890-abcdefghij', 'eyJhbGciOiJIUzI1NiJ9' + '.eyJzdWIiOiIxMjM0NTY3ODkwIn0' + '.dBjftJeZ4CVPmB92K27uhbUJU1p1r',
+        '-----BEGIN RSA ' + 'PRIVATE KEY-----', 'Authorization: Bearer ' + 'abcd1234efgh5678ijkl9012', 'https://user:' + 'hunter2@example.com/repo.git',
       ];
       for (const s of secrets) {
         expect(refuse(request({ brief: `use ${s} to push` })), s).toMatch(/^The request.brief holds something shaped like a credential/);
@@ -179,13 +179,30 @@ describe('validateRequest', () => {
     });
     it('does not mistake prose for a credential', () => {
       expect(c.validateRequest(request({ brief: 'Rotate the token handling in server/auth.js; see https://example.com/docs. Use sk for short, and ghp is a prefix.' })).ok).toBe(true);
+      // Words that hold a prefix, and long hyphenated words after one: the detectors want a token's start and a token's digits
+      for (const brief of [
+        'Fix the desk-booking-service-for-small-teams page', 'Move the risk-assessment-workflow-for-reviewers', 'Ask-for-a-password-reset-flow-in-the-settings',
+        'Add Bearer authentication-for-the-internal-gateway', 'Explain how the bearer token-refresh-and-rotation-logic works',
+        'Never store the API token, the client secret or a password in the config; the runner uses its own credentials.',
+        'Clone git@github.com:owner/repo.git, and read https://example.org/a?b=c#d', 'Compare http://localhost:8080/health with https://x.example:443/',
+        'Rename masks-and-filters-in-the-explorer-panel', 'The sk-learn-compatible-transformers-and-estimators section', 'AKIA is the prefix of an AWS key id',
+      ]) expect(c.validateRequest(request({ brief })).ok, brief).toBe(true);
+    });
+    it('reads a long brief or note in linear time, whatever it holds', () => {
+      // Shapes that made the old patterns quadratic: one long word, a scheme followed by colons, a run of prefixes
+      for (const s of ['a'.repeat(20000), `x://${':'.repeat(19990)}`, `x://${'a:'.repeat(9990)}`, 'sk-'.repeat(6600), 'Bearer '.repeat(2800), 'eyJ'.repeat(6600), `${'a'.repeat(19000)}://`]) {
+        const t = performance.now();
+        c.validateRequest(request({ brief: s.slice(0, c.MAX_BRIEF_CHARS) }));
+        c.validateReport({ state: 'working', note: s.slice(0, c.MAX_NOTE_CHARS) });
+        expect(performance.now() - t, s.slice(0, 12)).toBeLessThan(150);
+      }
     });
   });
 });
 
 describe('createRequest', () => {
   it('writes the run id and the time, then checks', () => {
-    const r = c.createRequest({ kind: 'code', refs: { issue: 12 }, requestedBy: 'maintainer-one' }, { now: () => Date.UTC(2026, 10, 5, 9, 30, 0, 456), random: () => new Uint8Array(10).fill(1) });
+    const r = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: 'Fix it.', requestedBy: 'maintainer-one' }, { now: () => Date.UTC(2026, 10, 5, 9, 30, 0, 456), random: () => new Uint8Array(10).fill(1) });
     expect(r.ok).toBe(true);
     expect(r.value.requestedAt).toBe('2026-11-05T09:30:00Z');
     expect(c.runIdTime(r.value.runId).getTime()).toBe(Date.UTC(2026, 10, 5, 9, 30, 0, 456));
@@ -425,7 +442,7 @@ describe('findRunId', () => {
 const SCHEMA = JSON.parse(fs.readFileSync(new URL('../../docs/agent-contract.schema.json', import.meta.url), 'utf8'));
 
 /** Draft 2020-12, only what agent-contract.schema.json uses: any keyword it does not know throws, so the schema cannot outgrow the checker unseen */
-const KNOWN = new Set(['$schema', '$id', '$ref', '$defs', 'title', 'description', 'type', 'const', 'enum', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'items', 'maxItems', 'properties', 'required', 'additionalProperties', 'minProperties', 'propertyNames', 'not', 'allOf', 'oneOf']);
+const KNOWN = new Set(['anyOf', 'dependentRequired', '$schema', '$id', '$ref', '$defs', 'title', 'description', 'type', 'const', 'enum', 'pattern', 'minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'items', 'maxItems', 'properties', 'required', 'additionalProperties', 'minProperties', 'propertyNames', 'not', 'allOf', 'oneOf']);
 function check(schema, value, root = SCHEMA) {
   for (const k of Object.keys(schema)) if (!KNOWN.has(k)) throw new Error(`the test checker does not know "${k}"`);
   if (schema.$ref) {
@@ -458,6 +475,7 @@ function check(schema, value, root = SCHEMA) {
     const keys = Object.keys(value);
     if ((schema.required ?? []).some((k) => !(k in value))) return false;
     if (schema.minProperties !== undefined && keys.length < schema.minProperties) return false;
+    for (const [k, needs] of Object.entries(schema.dependentRequired ?? {})) if (k in value && needs.some((n) => !(n in value))) return false;
     if (schema.propertyNames && !keys.every((k) => check(schema.propertyNames, k, root))) return false;
     for (const k of keys) {
       if (schema.properties?.[k]) {
@@ -468,13 +486,14 @@ function check(schema, value, root = SCHEMA) {
   if (schema.not && check(schema.not, value, root)) return false;
   if (schema.allOf && !schema.allOf.every((s) => check(s, value, root))) return false;
   if (schema.oneOf && schema.oneOf.filter((s) => check(s, value, root)).length !== 1) return false;
+  if (schema.anyOf && !schema.anyOf.some((s) => check(s, value, root))) return false;
   return true;
 }
 const valid = (v) => check(SCHEMA, v);
 
 const GOOD = [
   request(), full(),
-  request({ kind: 'summary', refs: { thread: 7 } }), request({ kind: 'proposal', refs: { proposal: 'x' } }), request({ kind: 'brief', brief: '' }),
+  request({ kind: 'summary', refs: { thread: 7 } }), request({ kind: 'proposal', refs: { proposal: 'x' } }), request({ kind: 'brief', brief: '' }), request({ refs: { proposal: '0014-planner', pull: 40 } }),
   request({ requestedAt: '2026-11-05T09:30:00.5Z' }), request({ branch: 'a/b.c-d_e' }), request({ limits: {} }), request({ nodes: [] }),
   request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
   request({ brief: 'Rotate the token handling in server/auth.js' }), request({ requestedBy: 'x'.repeat(40) }),
@@ -485,7 +504,7 @@ const GOOD = [
 const BAD = [
   null, [], 'x', 3, {}, { version: 1 },
   request({ version: 2 }), request({ version: '1' }), request({ runId: 'run-1' }), request({ runId: ID.toLowerCase() }), request({ kind: 'build' }),
-  request({ extra: 1 }), request({ refs: {} }), request({ refs: { pr: 1 } }), request({ refs: { issue: 0 } }), request({ refs: { issue: 1.5 } }), request({ refs: { thread: '3' } }), request({ refs: { proposal: '../x' } }),
+  request({ extra: 1 }), request({ refs: {} }), request({ refs: { pull: 40 } }), request({ refs: { issue: 1, pull: 40 } }), request({ refs: { proposal: 'x', pull: 0 } }), request({ brief: undefined }), request({ refs: { pr: 1 } }), request({ refs: { issue: 0 } }), request({ refs: { issue: 1.5 } }), request({ refs: { thread: '3' } }), request({ refs: { proposal: '../x' } }),
   request({ profile: '' }), request({ profile: '-x' }), request({ profile: 'a'.repeat(65) }),
   ...['', '-rf', '/abs', 'trail/', 'a//b', 'a..b', 'end.', '.hidden', 'a/.b', 'a.lock', 'a.lock/b', 'sp ace', 'a~b', 'a^b', 'a:b', 'a?b', 'a*b', 'a[b', 'a\\b', 'a@{b', 'x'.repeat(201)].map((branch) => request({ branch })),
   request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS + 1) }), request({ brief: 3 }),
@@ -493,7 +512,7 @@ const BAD = [
   request({ nodes: 'a' }), request({ nodes: [' x'] }), request({ nodes: [3] }), request({ nodes: Array.from({ length: 101 }, (_, i) => `n${i}`) }),
   request({ requestedBy: '' }), request({ requestedBy: 'a b' }), request({ requestedBy: 'x'.repeat(41) }), request({ requestedAt: '2026-11-05' }), request({ requestedAt: '2026-11-05T09:30:00+01:00' }),
   ...['token', 'githubToken', 'api_key', 'apiKey', 'secret', 'password', 'credentials', 'authorization', 'cookie', 'private_key'].map((k) => request({ [k]: 'x' })),
-  ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIAIOSFODNN7EXAMPLE', '-----BEGIN PRIVATE KEY-----', 'https://user:hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
+  ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIA' + 'IOSFODNN7EXAMPLE', '-----BEGIN ' + 'PRIVATE KEY-----', 'https://user:' + 'hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
   { state: 'running' }, { state: 'stop-requested', url: 'https://x.example' }, { state: 'done', extra: 1 }, { state: 'done', note: 3 }, { state: 'done', note: 'x'.repeat(4001) },
   ...['ftp://x.example/a', 'javascript:alert(1)', 'https://u:p@host/x', 'https://u@host/x', 'not a url', '', 'https://x.example/ a', 'https://x.example/l?token=abc', 'https://x.example/l?api_key=abc', 'https://x.example/l#access_token=abc', 'https://x.example/l?key=abc'].map((url) => ({ state: 'done', url })),
   { state: 'done', tokens: -1 }, { state: 'done', tokens: 1.5 }, { state: 'done', tokens: '3' }, { state: 'done', cost: -1 }, { state: 'done', cost: '1' }, { state: 'done', token: 'x' },
@@ -531,6 +550,9 @@ describe('the JSON Schema', () => {
     expect(SCHEMA.$defs.request.properties.limits.additionalProperties).toBe(false);
     // The request lists exactly the keys the validator allows
     expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'runId', 'version']);
+    expect(Object.keys(req.properties.refs.properties)).toEqual(['issue', 'proposal', 'pull', 'thread']);
+    // What the spec's table does not mark optional is required
+    expect(req.required).toEqual(['version', 'runId', 'kind', 'refs', 'brief', 'requestedBy', 'requestedAt']);
   });
   it('agrees with the validator on every good example', () => {
     for (const ex of GOOD) {
@@ -573,11 +595,123 @@ describe('the JSON Schema', () => {
     expect(valid(request({ requestedAt: '2026-02-30T00:00:00Z' }))).toBe(true);
   });
   it('accepts what the module writes', () => {
-    const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, requestedBy: 'maintainer-one', branch: 'agent/x', limits: { turns: 5 } }).value;
+    const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: 'Fix it.', requestedBy: 'maintainer-one', branch: 'agent/x', limits: { turns: 5 } }).value;
     expect(valid(made)).toBe(true);
     for (const b of c.parseRunBlocks(c.formatRunComment(made.runId, made))) expect(valid(b.value)).toBe(true);
   });
   it('the checker is not asleep: it rejects a schema keyword it does not know', () => {
     expect(() => check({ format: 'uri' }, 'x')).toThrow(/does not know/);
+  });
+});
+
+describe('reading hostile text (lead review of #85)', () => {
+  const req = () => request({ brief: 'Fix it.' });
+  const block = fenced(ID, req());
+  const ids = (text) => c.readRunBlocks(text).blocks.map((b) => b.runId);
+
+  it('finds a block with Windows line ends, and not one in a quoted reply or an indented one', () => {
+    expect(ids(`Asked.\r\n\r\n${block.replace(/\n/g, '\r\n')}\r\n`)).toEqual([ID]);
+    expect(ids(block.split('\n').map((l) => `> ${l}`).join('\n'))).toEqual([]);
+    expect(ids(block.split('\n').map((l) => `    ${l}`).join('\n'))).toEqual([]);
+  });
+  it('does not read a block inside another fence: a ```` or ~~~ example, or a ```js block', () => {
+    expect(ids(`An example:\n\n\`\`\`\`\n${block}\n\`\`\`\`\n`)).toEqual([]);
+    expect(ids(`~~~\n${block}\n~~~`)).toEqual([]);
+    expect(ids(`\`\`\`js\nconst s = \`\n${block}\n`)).toEqual([]);
+    // and finds the real one after the example
+    expect(ids(`\`\`\`\`markdown\n${fenced(ID2, request({ runId: ID2 }))}\n\`\`\`\`\n\n${block}`)).toEqual([ID]);
+  });
+  it('does not read a block nobody closed, and stays linear on a megabyte of unclosed fences', () => {
+    expect(ids(`\`\`\`cornfield-run ${ID}\n${JSON.stringify(req())}`)).toEqual([]);
+    const t = performance.now();
+    expect(c.readRunBlocks(`\`\`\`cornfield-run x\n${'a'.repeat(10)}\n`.repeat(30000)).blocks).toEqual([]);
+    expect(c.readRunBlocks(`\`\`\`cornfield-run ${ID}\n`.repeat(25000)).blocks).toEqual([]);
+    expect(performance.now() - t).toBeLessThan(1000);
+  });
+  it('is not fooled by a fence closed with a longer one, or a closing line that holds more', () => {
+    expect(ids(`\`\`\`cornfield-run ${ID}\n${JSON.stringify(req())}\n\`\`\`\`\n`)).toEqual([ID]);
+    expect(ids(`\`\`\`cornfield-run ${ID}\n${JSON.stringify(req())}\n\`\`\` trailing\n`)).toEqual([]);
+  });
+});
+
+describe('the trailer in a pull request body (lead review of #85)', () => {
+  it('does not count one inside a code block, or indented as code', () => {
+    expect(c.parseTrailer(`How to use it:\n\n\`\`\`\nCornfield-Run: ${ID}\n\`\`\`\n`)).toBeNull();
+    expect(c.parseTrailer(`~~~text\nCornfield-Run: ${ID}\n~~~`)).toBeNull();
+    expect(c.parseTrailer(`\`\`\`\`\n\`\`\`\nCornfield-Run: ${ID}\n\`\`\`\n\`\`\`\``)).toBeNull();
+    expect(c.parseTrailer(`Example:\n\n    Cornfield-Run: ${ID}\n`)).toBeNull();
+    expect(c.parseTrailer(`\tCornfield-Run: ${ID}`)).toBeNull();
+    // an unclosed fence runs to the end, as Markdown reads it
+    expect(c.parseTrailer(`\`\`\`\nCornfield-Run: ${ID}`)).toBeNull();
+  });
+  it('counts the real one after an example, and the example does not win by coming last', () => {
+    expect(c.parseTrailer(`Cornfield-Run: ${ID}\n\nLike this:\n\n\`\`\`\nCornfield-Run: ${ID2}\n\`\`\``)).toBe(ID);
+    expect(c.findRunId({ body: `\`\`\`\nCornfield-Run: ${ID2}\n\`\`\``, commits: [`x\n\nCornfield-Run: ${ID}`] })).toEqual({ runId: ID, via: 'commit' });
+  });
+});
+
+describe('refs.pull', () => {
+  it('names the spec pull request of a proposal, and only with one', () => {
+    expect(c.validateRequest(request({ refs: { proposal: '0014-planner', pull: 40 } })).value.refs).toEqual({ proposal: '0014-planner', pull: 40 });
+    expect(c.validateRequest(request({ refs: { issue: 3, pull: 40 } })).error).toMatch(/comes with one/);
+    expect(c.validateRequest(request({ refs: { pull: 40 } })).ok).toBe(false);
+    const made = c.createRequest({ kind: 'code', refs: { proposal: '0014-planner', pull: 40 }, brief: '', requestedBy: 'maintainer-one' }).value;
+    expect(c.formatRunComment(made.runId, made).split('\n')[0]).toContain(`proposal 0014-planner (pull request #${ZW}40)`);
+  });
+  it('the brief is required, and may be empty', () => {
+    expect(c.validateRequest(request({ brief: undefined })).error).toMatch(/"brief" is the text/);
+    expect(c.validateRequest(request({ brief: '' })).ok).toBe(true);
+  });
+});
+
+describe('a forge conversation (runBlocksOf, runAuthors)', () => {
+  const at = '2026-11-05T09:30:00Z';
+  const later = '2026-11-05T09:40:00Z';
+  const comment = (id, login, body, updatedAt = at) => ({ id, author: login ? { login } : null, body, url: `https://x.test/c/${id}`, createdAt: at, updatedAt });
+  const ask = fenced(ID, request());
+  const report = (state) => fenced(ID, { state });
+  const comments = [
+    comment(1, 'maintainer-one', `Asked.\n\n${ask}`),
+    comment(2, 'drive-by', `Me too:\n\n${fenced(ID2, request({ runId: ID2 }))}`),
+    comment(3, 'runner-bot', report('claimed')),
+    comment(4, 'maintainer-one', report('working'), later), // edited after it was posted
+    comment(5, null, report('done')), // a deleted account
+    comment(6, 'runner-bot', fenced(ID, '{"state":"nope"}')),
+    comment(7, 'someone', 'no blocks here, only the word cornfield-run'),
+  ];
+  const trusted = new Set(['maintainer-one', 'runner-bot']);
+
+  it('keeps trusted, unedited blocks with where they came from, and sets the rest aside with the reason', () => {
+    const r = c.runBlocksOf(comments, { trust: (login) => trusted.has(login) });
+    expect(r.blocks.map((b) => [b.comment.id, b.by, b.type, b.runId])).toEqual([['1', 'maintainer-one', 'request', ID], ['3', 'runner-bot', 'report', ID]]);
+    expect(r.blocks[0]).toMatchObject({ at, comment: { url: 'https://x.test/c/1' } });
+    expect(r.ignored.map((b) => [b.comment.id, b.by, b.why])).toEqual([['2', 'drive-by', 'author'], ['4', 'maintainer-one', 'edited'], ['5', null, 'author']]);
+    expect(r.refused.map((b) => [b.comment.id, b.by])).toEqual([['6', 'runner-bot']]);
+    expect(c.latestBlock(r.blocks, ID, 'report').value).toEqual({ state: 'claimed' });
+  });
+  it('asks trust about each block, so a runner may report but not request', () => {
+    const r = c.runBlocksOf(comments, { trust: (login, b) => login === 'maintainer-one' || (login === 'runner-bot' && b.type === 'report') });
+    expect(r.blocks.map((b) => b.comment.id)).toEqual(['1', '3']);
+    const r2 = c.runBlocksOf([comment(9, 'runner-bot', ask)], { trust: (login, b) => login === 'runner-bot' && b.type === 'report' });
+    expect(r2.blocks).toEqual([]);
+    expect(r2.ignored.map((b) => b.why)).toEqual(['author']);
+  });
+  it('names the authors worth asking about, newest first, once each', () => {
+    expect(c.runAuthors(comments)).toEqual(['someone', 'runner-bot', 'maintainer-one', 'drive-by']);
+    expect(c.runAuthors(null)).toEqual([]);
+  });
+  it('needs a trust function, and takes anything else quietly', () => {
+    expect(() => c.runBlocksOf(comments)).toThrow(/trust/);
+    expect(c.runBlocksOf(null, { trust: () => true })).toEqual({ blocks: [], ignored: [], refused: [] });
+    expect(c.runBlocksOf([null, { body: 3 }], { trust: () => true })).toEqual({ blocks: [], ignored: [], refused: [] });
+  });
+});
+
+describe('where it can be loaded', () => {
+  it('imports nothing from server/ and nothing from node:, so the browser can load it too', () => {
+    for (const f of ['../../core/agent-contract.js', '../../core/defuse.js']) {
+      const src = fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+      expect(src, f).not.toMatch(/from ['"](node:|\.\.\/server\/)/);
+    }
   });
 });

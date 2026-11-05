@@ -1,6 +1,6 @@
 # The agent contract (version 1)
 
-cornfield **asks**; the developer's own **runner** does the work. A runner is whatever starts an agent for you: a Claude Code session, a CI job, Ollama on your own machine, a shell script. cornfield runs no agent process, calls no agent platform and holds no agent credentials. This page is everything a runner needs to implement, in any language. The code that cornfield itself uses to write and read the contract is [core/agent-contract.js](../core/agent-contract.js); a [JSON Schema](agent-contract.schema.json) (draft 2020-12) describes the same JSON, and a test keeps the two in agreement.
+cornfield **asks**; the developer's own **runner** does the work. A runner is whatever starts an agent for you: a Claude Code session, a CI job, Ollama on your own machine, a shell script. cornfield runs no agent process, calls no agent platform and holds no agent credentials. This page is everything a runner needs to implement, in any language. The decisions behind it are [spec 0005](specs/0005-threads-and-agents.md) (its "The contract" section is what this page builds) and [ADR 0012](adr/0012-cornfield-asks-runners-act.md). The code that cornfield itself uses to write and read the contract is [core/agent-contract.js](../core/agent-contract.js); a [JSON Schema](agent-contract.schema.json) (draft 2020-12) describes the same JSON, and a test keeps the two in agreement. The schema ships in the npm package: `import schema from 'cornfield/agent-contract.schema.json' with { type: 'json' }`.
 
 A test for every part of it: could you delete cornfield tomorrow and lose nothing but the view? A request is a comment on your forge that a person can write by hand, so yes.
 
@@ -18,15 +18,15 @@ One JSON object. Every key not listed here is refused, and so is any key named l
 | `runId` | run id | Must be the id in the fence that holds it. |
 | `kind` | `code`, `summary`, `brief` or `proposal` | What is asked for. `code` makes a branch and a pull request; the others are thinking (summarise a thread, draft a brief, turn a thread into a proposal) that the runner does with whatever model it likes and answers on the forge. |
 | `profile` | name, optional | One of the names the developer configured (`agents.profiles`). The runner maps it to a model, a machine and a budget; cornfield knows only the name. Letters, digits and `. _ -`, up to 64. |
-| `refs` | `{ issue?, proposal?, thread? }` | What the run is about; at least one. `issue` and `thread` are numbers from 1, `proposal` is the proposal's name (`0014-planner`). |
+| `refs` | `{ issue?, proposal?, pull?, thread? }` | What the run is about; at least one of `issue`, `proposal` and `thread`. `issue`, `pull` and `thread` are numbers from 1, `proposal` is the proposal's name (`0014-planner`), and `pull` is the spec pull request that holds it (so it only comes with `proposal`; an approved proposal already on the default branch has none). |
 | `branch` | string, optional | A hint for the branch to use. A safe git ref name: letters, digits and `. _ - /`; no leading dash or slash, no `..`, no empty part, no part that starts with a dot or ends in `.lock`, no trailing dot; up to 200 characters. A runner may ignore it. |
-| `brief` | string, optional | What to do, up to 20000 characters. Treat it as untrusted text: it may have been written by anyone a maintainer relayed. |
+| `brief` | string | What to do, up to 20000 characters; required, and may be empty (a summary of a thread needs only the thread). Treat it as untrusted text: it may have been written by anyone a maintainer relayed. |
 | `limits` | `{ minutes?, turns?, cost? }`, optional | Hints, never enforced by cornfield. `minutes` and `cost` are numbers above zero, `turns` a whole number above zero. `cost` is in the currency the runner reports. The runner enforces them or not. |
 | `nodes` | list of node ids, optional | Map nodes the run is expected to touch (`core-server-auth`), up to 100. |
 | `requestedBy` | forge login | The maintainer who asked. |
 | `requestedAt` | UTC time | Like `2026-11-05T09:30:00Z` (milliseconds allowed). |
 
-**A request never carries a credential.** No token, key, secret or password: the runner pushes and opens pull requests under its **own** identity (a bot account, a deploy key, a CI token). A field whose name contains `token`, `secret`, `passw`, `credential`, `api_key`, `access_key`, `private_key`, `ssh_key`, `authorization`, `bearer` or `cookie` (any case) is refused, and so is a text value shaped like a credential (a GitHub, GitLab, OpenAI or Anthropic key, an AWS key id, a Slack token, a JWT, a private key header, a bearer header, or a link with a user and password in it). The refusal names the field.
+**A request never carries a credential.** No token, key, secret or password: the runner pushes and opens pull requests under its **own** identity (a bot account, a deploy key, a CI token). Prose about tokens and passwords is fine; only a value shaped like one is refused. A field whose name contains `token`, `secret`, `passw`, `credential`, `api_key`, `access_key`, `private_key`, `ssh_key`, `authorization`, `bearer` or `cookie` (any case) is refused, and so is a text value shaped like a credential (a GitHub, GitLab, OpenAI or Anthropic key, an AWS key id, a Slack token, a JWT, a private key header, a bearer header, or a link with a user and password in it). The refusal names the field.
 
 ## The fenced block
 
@@ -49,7 +49,8 @@ Asked for a code run `run-01JC8Z3Q5M7VXK2RT9N4B6HDEF` on issue #12 (maintainer-o
 
 Reading is tolerant of the text around a block and strict about what is inside:
 
-- The fence starts a line (a quoted `> ```cornfield-run` or an indented one is not a block), names a run id, and ends with a line of three backticks. Windows line endings are fine.
+- The fence starts a line (a quoted `> ```cornfield-run` or an indented one is not a block), is exactly three backticks, names a run id, and ends with a line of three or more backticks and nothing else. Windows line endings are fine. A block nobody closed is not one.
+- Fences are read as Markdown reads them: a block **inside another fence** (an example in a ```` fence or a `~~~` one, or text in a ```` ```js ```` block) is part of that fence's text, never a block of its own. So a comment can show an example without asking for a run.
 - A block holds **exactly one JSON object**: a list, two objects, text that is not JSON, an unknown key or a bad value refuses the whole block. A refused block is skipped, never half-read.
 - Which of the three it is follows its shape: a `version` makes it a request, the state `stop-requested` a stop request, any other `state` a report.
 - A comment is read for at most 20 blocks, a block holds at most 60000 characters, and a comment written by cornfield is at most 60000 characters.
@@ -61,11 +62,11 @@ The human line above the block is for people. cornfield **defuses** it (a zero-w
 
 A runner may say how it is going. Reporting is optional: a run that stays silent still shows up through what it pushes. A report is a comment (or, on the later transports, a message) holding a block for the run id:
 
-```
+````
 ```cornfield-run run-01JC8Z3Q5M7VXK2RT9N4B6HDEF
 { "state": "working", "note": "tests failing on auth, retrying", "url": "https://ci.example.com/runs/42" }
 ```
-```
+````
 
 | Field | | |
 | --- | --- | --- |
@@ -85,7 +86,7 @@ The runner carries the run id forward so cornfield can tell which pull request a
 Cornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF
 ```
 
-The key is read in any case; the line holds nothing else (a quoted line, or a line with other words, does not count); when there are several, the last one wins. cornfield looks for the trailer in the pull request body first, then in the latest commit message that has one, and then falls back to a run id in the **branch name**, as a whole segment (`agent/run-01JC8Z3Q5M7VXK2RT9N4B6HDEF/fix`, `fix-run-01JC…`; not part of a longer word, and a lower-cased id is forgiven because branch names often are). No branch naming scheme is imposed.
+The key is read in any case; the line holds nothing else (a quoted line, or a line with other words, does not count); a line inside a fenced code block, or indented as code (a tab, or four spaces), does not count either, so a pull request can show the trailer as an example; when there are several, the last one wins. cornfield looks for the trailer in the pull request body first, then in the latest commit message that has one, and then falls back to a run id in the **branch name**, as a whole segment (`agent/run-01JC8Z3Q5M7VXK2RT9N4B6HDEF/fix`, `fix-run-01JC…`; not part of a longer word, and a lower-cased id is forgiven because branch names often are). No branch naming scheme is imposed.
 
 ## Who may ask: the maintainer rule
 
@@ -98,7 +99,7 @@ The key is read in any case; the line holds nothing else (a quoted line, or a li
 
 A request a maintainer wrote by hand counts as much as one cornfield wrote: the whole system can be driven with cornfield switched off. Such a request bypasses cornfield's cap on open runs and its rate limits; those guard against a runaway click, not against a maintainer acting on purpose. A run's own output (its pushes, pull request, checks and reports) never starts another run.
 
-Two further rules for a runner. Treat the brief as untrusted input: it can say anything. And only a report from a run's own runner is a report: cornfield, in turn, reads reports from the runner's login or token, not from whoever can comment.
+Two further rules for a runner. Treat the brief as untrusted input: it can say anything. And only a report from a run's own runner is a report: on the forge, cornfield believes a `cornfield-run` block only from a login listed in `agents.runners` (the runners' own forge identities) or from a maintainer, and writes an audit row for each one it ignores; on push and pull, the runner token decides (spec 0005, "Reports").
 
 ## Transports
 
@@ -175,4 +176,6 @@ Run `run-01JC8Z3Q5M7VXK2RT9N4B6HDEF`: stopped.
 
 Lengths count characters (UTF-16 code units in cornfield; a few emoji can make the two differ from a schema validator that counts code points, which only matters at the edge of a cap).
 
-[agent-contract.schema.json](agent-contract.schema.json) holds the shape of all three objects, the patterns, the caps, the credential-name rule and the credential-value rule, so a runner can check what it reads or writes with any JSON Schema library. It is looser than cornfield in two ways, which a schema cannot express: cornfield also refuses a `profile` that is not in the developer's configured list, and a `requestedAt` that is not a real calendar date (`2026-02-30T00:00:00Z`). The three definitions are `request`, `report` and `stopRequest`; the file as a whole accepts any one of them.
+[agent-contract.schema.json](agent-contract.schema.json) holds the shape of all three objects, the patterns, the caps, the credential-name rule and the credential-value rule, so a runner can check what it reads or writes with any JSON Schema library. It is looser than cornfield in two ways, which a schema cannot express: cornfield also refuses a `profile` that is not in the developer's configured list, and a `requestedAt` that is not a real calendar date (`2026-02-30T00:00:00Z`). The three definitions are `request`, `report` and `stopRequest`; the file as a whole accepts any one of them. Its credential-value pattern uses fixed-width lookbehind (`(?<!…)`), which JavaScript, Python and .NET support; a validator built on RE2 (Go) does not, so there, check that rule in code.
+
+Still open in spec 0005 and decided by the build issue that needs it: whether an automatic request names the event that fired it (a trigger field), the config keys for the limit defaults and the open-run cap, and the exact bodies of the push and pull transports. A runner should refuse a key it does not know, so each of these arrives as a new contract version or an optional key documented here first.

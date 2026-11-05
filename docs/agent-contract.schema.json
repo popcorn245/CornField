@@ -29,6 +29,7 @@
         "runId",
         "kind",
         "refs",
+        "brief",
         "requestedBy",
         "requestedAt"
       ],
@@ -56,7 +57,7 @@
           "type": "string",
           "maxLength": 64,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           },
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
           "description": "A name the runner maps to a model, a machine and a budget. When the developer configured a list, only those names."
@@ -64,7 +65,6 @@
         "refs": {
           "type": "object",
           "additionalProperties": false,
-          "minProperties": 1,
           "properties": {
             "issue": {
               "type": "integer",
@@ -75,22 +75,50 @@
               "type": "string",
               "maxLength": 120,
               "not": {
-                "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+                "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
               },
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$"
+            },
+            "pull": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647,
+              "description": "The spec pull request that holds the proposal; only with proposal."
             },
             "thread": {
               "type": "integer",
               "minimum": 1,
               "maximum": 2147483647
             }
+          },
+          "anyOf": [
+            {
+              "required": [
+                "issue"
+              ]
+            },
+            {
+              "required": [
+                "proposal"
+              ]
+            },
+            {
+              "required": [
+                "thread"
+              ]
+            }
+          ],
+          "dependentRequired": {
+            "pull": [
+              "proposal"
+            ]
           }
         },
         "branch": {
           "type": "string",
           "maxLength": 200,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           },
           "minLength": 1,
           "description": "A hint: a safe git ref name.",
@@ -109,7 +137,7 @@
           "type": "string",
           "maxLength": 20000,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           }
         },
         "limits": {
@@ -137,7 +165,7 @@
             "type": "string",
             "maxLength": 200,
             "not": {
-              "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+              "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
             },
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$"
           }
@@ -146,7 +174,7 @@
           "type": "string",
           "maxLength": 40,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           },
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$"
         },
@@ -177,14 +205,14 @@
           "type": "string",
           "maxLength": 4000,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           }
         },
         "url": {
           "type": "string",
           "maxLength": 2000,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           },
           "pattern": "^https?://[^\\s/@?#]+([/?#]\\S*)?$",
           "description": "Where the runner keeps its logs.",
@@ -222,7 +250,7 @@
           "type": "string",
           "maxLength": 4000,
           "not": {
-            "pattern": "gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{15,}|gto-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|[bB][eE][aA][rR][eE][rR]\\s+[A-Za-z0-9._~+/=-]{20,}|[A-Za-z][A-Za-z0-9+.-]*://[^\\s/@]+:[^\\s/@]+@"
+            "pattern": "(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}|(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}|(?<![A-Za-z0-9])glpat-[A-Za-z0-9_-]{15,}|(?<![A-Za-z0-9])gto-[A-Za-z0-9]{20,}|(?<![A-Za-z0-9])sk-(?=[A-Za-z0-9_-]{20})[A-Za-z_-]{0,40}[0-9]|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}|(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}|(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{5,}|-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----|(?<![A-Za-z0-9])[bB][eE][aA][rR][eE][rR][ \\t]+(?=[A-Za-z0-9._~+/=-]{20})[A-Za-z._~+/=-]{0,40}[0-9]|(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]{0,31}://[^\\s/@:]+:[^\\s/@]+@"
           }
         }
       }
