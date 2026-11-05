@@ -1,6 +1,6 @@
 # ADR 0012: cornfield asks; the developer's runners act
 
-Status: proposed (maintainer, 2026-11-05), with [spec 0005](../specs/0005-threads-and-agents.md). Supersedes [ADR 0007](0007-track-agents-do-not-launch.md) once accepted.
+Status: proposed (maintainer, 2026-11-05), with [spec 0005](../specs/0005-threads-and-agents.md), which the maintainer approved for building the same day. Supersedes [ADR 0007](0007-track-agents-do-not-launch.md), which is marked so. Amends [ADR 0006](0006-safe-actions-only.md) (two safe actions) and [ADR 0003](0003-own-server-sqlite-forge-adapters.md) (threads live on the forge).
 
 ## Decision
 

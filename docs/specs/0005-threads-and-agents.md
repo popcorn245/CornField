@@ -1,6 +1,6 @@
 # Spec 0005: threads, agents and how they plug in (v2)
 
-Status: **grilled, awaiting approval** (maintainer and PM, 2026-11-05). All ten questions are answered below. Nothing is built until this is approved on the map.
+Status: **approved** (maintainer, 2026-11-05: "yes, get this built"). All ten questions are answered below, and [the contract](#the-contract) at the end gathers what a runner and cornfield must agree on. Per [ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md), each build issue that adds or changes a module, a route, a store or a flow still carries its proposal on the map.
 
 Issues: [#14 PIPE-01 Alignment threads](https://github.com/popcorn245/CornField/issues/14), [#19 PIPE-06 Launching agents](https://github.com/popcorn245/CornField/issues/19).
 
@@ -25,7 +25,7 @@ Starting an agent from cornfield only **asks**: cornfield publishes a request (t
 A request reaches the runner in one of three ways, all carrying the **same versioned JSON request**, so a runner can switch transport without changing what it reads:
 
 1. **The forge (default).** "Start an agent" leaves the request on the forge itself, where the developer's existing automation already listens (Forgejo or GitHub Actions on `issue_comment`, a bot, anything). The request is visible and audited on the forge even with cornfield gone. The exact carrier (a comment with a fenced block, a label, or both) is settled in the contract.
-2. **Push.** A signed `agent.requested` event to a configured URL, through the hooks that exist (#66).
+2. **Push.** A signed `agent.requested` event to a configured URL, through the hooks that exist (#66). Its body carries the request, so like `session.expiring` it has a body of its own rather than the proposal fields the other events share.
 3. **Pull.** cornfield keeps the request; a runner asks for queued work with a runner token and claims one. Works from behind NAT.
 
 - **Why the forge first:** it is the one thing every stack already has, and it keeps cornfield a view on top rather than a hub everything must pass through.
@@ -61,12 +61,12 @@ Every request carries a **run id** that cornfield mints (`run-<ulid>`).
 - **A request carries no credentials.** The runner pushes and opens pull requests under its **own** identity (a bot account, a deploy key, a CI token), which is also what the Agents tab marks as agent-made.
 - **A request is made as the maintainer who clicked.** On the forge transport it is posted with that maintainer's own token, as reviews are, so the forge shows who asked and keeps the record.
 - **The runner acts only on a request whose author is a maintainer now.** This is the same rule reviews follow. The example recipes check it in their first lines, and the docs say it plainly: without it, anyone who can comment could start an agent.
-- **A request written by hand on the forge counts.** Any maintainer-authored request block is a real request, so the whole system can be driven with cornfield switched off. cornfield is only a convenient way to write one. Such a request bypasses cornfield's cap and rate limits; those guard against a runaway click, not against a maintainer acting on purpose.
-- **Push and pull:** requests are HMAC-signed with a secret from the environment, as hooks are. Pull uses **runner tokens**, minted and revoked in the dashboard like review tokens, that may only read and claim requests and report on their runs.
+- **A request written by hand on the forge counts.** Any maintainer-authored request block is a real request, so the whole system can be driven with cornfield switched off. cornfield is only a convenient way to write one. Such a request bypasses all three of D4's limits (the cap, the rate limit and one run per issue or proposal), since cornfield never sees it before the runner does; they guard against a runaway click, not against a maintainer acting on purpose. cornfield still shows the run once it sees it, collision marks included (D9).
+- **Push and pull:** requests are HMAC-signed with a secret from the environment, as hooks are (`CORNFIELD_HOOK_SECRET`, #66). Pull uses **runner tokens**, minted and revoked in the dashboard like review tokens (#67), that may only read and claim requests and report on their runs.
 
 ### D6. A thread is a forge conversation, and every step has a hook (2026-11-05)
 
-This changes the earlier plan (the vision and #14) to keep threads in cornfield's SQLite file. That would fail the test above.
+This changes the earlier plan (the vision, the roadmap, #14 and [ADR 0003](../adr/0003-own-server-sqlite-forge-adapters.md), which listed threads among what the SQLite file holds) to keep threads in cornfield's SQLite file. That would fail the test above. ADR 0003 carries an amendment saying so.
 
 - **An idea is an issue, and its thread is that issue's comments.** A proposal's thread is its spec pull request's conversation. cornfield adds structure with fenced blocks, as reviews and runs do. SQLite only caches.
 - **Writing into a thread needs nothing from cornfield.** People, agents and bridges comment on the forge as themselves. A busy agent posts summaries and links to its own logs (`url`), not every step.
@@ -112,7 +112,7 @@ This changes the earlier plan (the vision and #14) to keep threads in cornfield'
 
   A trigger may fire only on an event a maintainer caused: `spec.approved`, `build.opened`, or a `thread.message` holding an explicit `/agent` command from a maintainer. Every automatic request names the maintainer whose act caused it, and the cap and the one-run-per-issue rule still apply.
 - **No chaining.** A run's own output (its pushes, pull request, checks or reports) never fires another automatic request. A run's pull request is reviewed by a person, or through the review API, before anything else fires. That is how a fleet is kept from talking to itself.
-- **ADRs.** ADR 0007 ("tracks agents, does not launch them") is superseded by [ADR 0012](../adr/0012-cornfield-asks-runners-act.md), proposed with this spec. ADR 0006 gains two safe actions: ask a runner to start or stop a run, and open an idea issue or post a request in a thread. Each is posted as the maintainer and only ever asks.
+- **ADRs.** ADR 0007 ("tracks agents, does not launch them") is superseded by [ADR 0012](../adr/0012-cornfield-asks-runners-act.md), proposed with this spec. [ADR 0006](../adr/0006-safe-actions-only.md) gains two safe actions, recorded there as an amendment: ask a runner to start or stop a run, and open an idea issue or post a request in a thread. Each is posted as the maintainer and only ever asks.
 
 ## The questions, as they were asked
 
@@ -129,3 +129,68 @@ Each was answered in turn; the answers are the decisions above.
 8. ~~Models.~~ D8.
 9. ~~What cornfield shows of a run while it is going.~~ D9.
 10. ~~The safe-actions line for v2, and automation.~~ D10.
+
+## The contract
+
+What D2 to D5, D8 and D10 imply, gathered for whoever builds a runner or cornfield's side of it. It restates the decisions; nothing here is new. Anything they leave open is marked **settle in build**: the first build issue that needs it decides it, and writes it into the runner docs.
+
+### The request (JSON, version 1)
+
+One JSON object, the same on every transport (D2):
+
+| Field | What it is | From |
+|---|---|---|
+| `version` | `1`. A runner refuses a version it does not know. | D2 |
+| `runId` | `run-<ulid>`, minted by cornfield, or by whoever writes the request by hand. | D3 |
+| `kind` | `code`, `summary`, `brief` or `proposal`. | D8 |
+| `profile` | optional: one name from `agents.profiles`, which the runner maps to a model, a machine and a budget. cornfield knows only the name. | D8 |
+| `issue`, `proposal`, `thread` | what the run is about: an issue number, a proposal slug (with its spec PR), a thread (the issue or PR whose comments it is). At least one; which combinations are allowed is **settle in build**. | D1, D7 |
+| `branch` | optional: a branch hint. The runner may use another; cornfield imposes no naming scheme. | D1, D3 |
+| `brief` | the text the runner hands to its agent. | D1 |
+| `limits` | optional: `{ minutes, turns, cost }`, hints from config defaults, editable per request. The runner enforces them or not. | D4 |
+| `requestedBy` | the maintainer who asked: the one who clicked, the token's owner (API), or whose act fired a trigger. | D5, D10 |
+
+A request never holds a credential (D5). Still **settle in build**: the config keys for the limit defaults and the open-run cap; whether an automatic request also names the event that fired it; a timestamp field; and the field names for the issue, proposal and thread references.
+
+### Where a request is put
+
+- **Forge (default).** Posted as a comment by the requesting maintainer, with their own forge token, as reviews are (D5). That needs the maintainer's live sign-in, as review tokens do (#67, #73); `session.expiring` warns a day ahead. The carrier (a fenced block, a label, or both) is **settle in build** (D2 leaves it open). Where the comment goes: in the thread it came from (D7). For a request made elsewhere, the issue or the spec PR it is about is **settle in build**.
+- **Push.** The `agent.requested` hook event, signed with `CORNFIELD_HOOK_SECRET` like every hook (#66), its body holding the request. The exact body is **settle in build**.
+- **Pull.** cornfield keeps the request; a runner token lists queued requests and claims one (D2, D5). The endpoints are **settle in build**.
+- **The runner's rule:** act only on a request whose author is a maintainer of the repo *now* (D5), the rule reviews follow (ADR 0005). On push and pull, the signature or the token stands in for the author.
+
+### The run id on the forge
+
+The runner carries the id forward as a trailer in the pull request's body or in its commits:
+
+```
+Cornfield-Run: run-01JC…
+```
+
+cornfield matches the trailer first, then a branch name that holds the id (D3).
+
+### Reports: the `cornfield-run` block
+
+A fenced block whose info string names the run, holding one JSON object (D3):
+
+````
+```cornfield-run run-01JC…
+{ "state": "working", "note": "tests failing on auth, retrying", "url": "https://…/logs" }
+```
+````
+
+- `state` (required): one of `claimed`, `working`, `done`, `failed`, `stopped`, written by the runner. `stop-requested` is the one state cornfield writes (below).
+- `note` and `url` are optional, and so are `tokens` and `cost`, the only figures cornfield shows about cost; it never estimates (D4).
+- On the forge it is a comment on the request; on push or pull it is the same JSON sent to cornfield with the runner token.
+- Reporting is optional: a silent run is seen through its pushes (D3).
+- Still **settle in build:** whose `cornfield-run` comments cornfield believes on the forge transport (the runner posts as its own identity, which is not a maintainer, so the maintainer rule cannot be the test); when a run counts as no longer open (a final state, its pull request closed or landed, or a quiet period: D4 says "goes quiet" without a length).
+
+### Stopping a run
+
+A stop is the same block with `"state": "stop-requested"`, sent for the run id over the transport the request used, as the maintainer who clicked (D4). The runner decides what stopping means. cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet. A runner should honour a stop only from a maintainer, as it does a request (D5).
+
+### What cornfield enforces, and what it only shows
+
+- **Enforced, on requests cornfield makes** (button, API, trigger): at most 3 open runs per repo by default (configurable), a per-maintainer rate limit, and one open run per issue or proposal unless asked on purpose (D4, D10). A refusal says why. A request written by hand on the forge bypasses all three (D5).
+- **Triggers** fire only on `spec.approved`, `build.opened`, or a maintainer's `thread.message` holding `/agent`; never on a run's own output (D10). A `thread.message` is seen when cornfield next looks (D6), so a trigger fires within the poll interval, and the request is posted as the maintainer whose act caused it. What happens when that maintainer has no live sign-in is **settle in build**; landing on approval is the precedent (it stops, says why, and writes an audit row).
+- **Shown, never enforced:** the limits beside what the runner reports, cost only as reported, and stop requested (D4).

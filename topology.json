@@ -5077,7 +5077,82 @@
       "from": "page-doc-docs-specs-0005-threads-and-agents",
       "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0006-safe-actions-only",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0006-safe-actions-only",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0007-track-agents-do-not-launch",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-roadmap",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0003-own-server-sqlite-forge-adapters",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0005-threads-and-agents",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-vision",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T08:32:53.630Z"
+  "updatedAt": "2026-11-05T08:43:10.226Z"
 }
