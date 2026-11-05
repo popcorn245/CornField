@@ -15,6 +15,9 @@
  *   thread_seen   the (repo, issue, comment) triples whose thread.* hook event was sent, and each thread's last-seen time, so a
  *                 restart sends none twice and a look asks the forge only for what is new (server/hooks.js, server/threads.js);
  *                 a row with `issue = 0` says the repo's threads have been looked at once
+ *   runs          the agent runs cornfield asked for: the request, where it was posted, the latest report, the pull request found for
+ *                 it and when anything last happened (server/agent-runs.js, migration 7); review_tokens also keep a scope
+ *   run_seen      what has been seen of each run (a comment judged, a hook event sent), so a restart sends and judges nothing twice
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
@@ -146,6 +149,56 @@ export const MIGRATIONS = Object.freeze([
     stamp       TEXT NOT NULL DEFAULT '',       -- the forge's own time: the comment's last edit, or (on the '' row) the thread's last update when it was looked at
     at          TEXT NOT NULL,                  -- when cornfield first saw it
     PRIMARY KEY (repo, issue, comment)
+  ) STRICT;
+  `,
+  // 7: agent runs (server/agent-runs.js, spec 0005): a table of the runs cornfield asked for, what it has seen of them, and a scope on
+  // the API tokens so one store holds review tokens and agent tokens
+  `
+  ALTER TABLE review_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'review' CHECK (scope IN ('review', 'agent'));  -- what the token may call: POST /api/reviews, or POST /api/agent-requests
+
+  CREATE TABLE runs (
+    run_id            TEXT PRIMARY KEY,           -- run-<ulid>, minted with the request
+    repo              TEXT NOT NULL,              -- 'owner/name'
+    kind              TEXT NOT NULL,
+    profile           TEXT,
+    issue             INTEGER,                    -- what the run is about (at least one of the three)
+    proposal          TEXT,
+    thread            INTEGER,
+    target            INTEGER NOT NULL,           -- the issue or pull request the request, and the stop, were posted on
+    comment_id        TEXT NOT NULL DEFAULT '',   -- the request comment; '' while the post is in flight (the row already counts as open)
+    comment_url       TEXT,
+    request           TEXT NOT NULL CHECK (json_valid(request)),   -- the request as posted: no credential in it, ever
+    requested_by      TEXT NOT NULL,
+    requested_by_id   TEXT NOT NULL,
+    requested_at      TEXT NOT NULL,
+    via               TEXT NOT NULL DEFAULT 'dashboard',           -- 'dashboard' | 'api'
+    state             TEXT NOT NULL DEFAULT 'requested' CHECK (state IN ('requested', 'claimed', 'working', 'done', 'failed', 'stopped')),   -- the runner's latest report
+    reported_at       TEXT,
+    reported_by       TEXT,
+    note              TEXT,
+    url               TEXT,
+    tokens            INTEGER,
+    cost              REAL,
+    stop_requested_at TEXT,
+    stop_requested_by TEXT,
+    pull              INTEGER,                    -- the pull request that carries the run's id
+    pull_state        TEXT CHECK (pull_state IS NULL OR pull_state IN ('open', 'merged', 'closed')),
+    pull_url          TEXT,
+    pull_by           TEXT,
+    pull_trusted      INTEGER NOT NULL DEFAULT 0, -- 1 when its author is a runner, a listed agent author or a maintainer: only then does it move the state
+    linked_via        TEXT CHECK (linked_via IS NULL OR linked_via IN ('body', 'commit', 'branch')),
+    branch            TEXT,
+    head_sha          TEXT,
+    checks            TEXT CHECK (checks IS NULL OR checks IN ('success', 'failure', 'running', 'none')),
+    last_activity     TEXT NOT NULL               -- the latest report, push or pull request activity (or the request itself)
+  ) STRICT;
+  CREATE INDEX runs_repo ON runs (repo, requested_at);
+
+  CREATE TABLE run_seen (
+    run_id      TEXT NOT NULL,                    -- '' for what belongs to no run (a pull request's commits already read)
+    key         TEXT NOT NULL,                    -- 'c:<comment>:<n>' a block judged, 'ev:…' a hook event sent, 'commits:<pull>@<sha>'
+    at          TEXT NOT NULL,
+    PRIMARY KEY (run_id, key)
   ) STRICT;
   `,
 ]);

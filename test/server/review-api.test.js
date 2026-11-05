@@ -685,7 +685,8 @@ describe('the review API', () => {
       expect(callers(/\bsubmitReview\(/)).toEqual(['proposals.js', 'review-api.js', 'submit-review.js']);
       // the comment is posted in submit-review.js, and by the one-off carry-over of Stage 1 reviews in reviews.js
       expect(callers(/\bpostReview\(/)).toEqual(['reviews.js', 'submit-review.js']);
-      expect(callers(/\bforge\.comment\(/)).toEqual(['reviews.js']);
+      // …and, since agent runs (server/agent-runs.js), by the request and the stop request of a run: a block of a different kind, which no review reads
+      expect(callers(/\bforge\.comment\(/)).toEqual(['agent-runs.js', 'reviews.js']);
     });
   });
 });

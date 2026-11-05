@@ -37,7 +37,7 @@ export default {
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
-| `agents` | what marks work as made by an agent: `authors`, `labels`, `branchPrefixes` (lists, empty by default) and `bots` (default true: `[bot]` accounts count). The Agents tab of the issues and PRs panel uses it: [agents](agents.md) |
+| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `limits`): [agents](agents.md), [below](#agents) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
@@ -52,6 +52,24 @@ export default {
 Env vars win over the file: `CORNFIELD_PORT` (or `PORT`), `CORNFIELD_HOST`, `CORNFIELD_PUBLIC_URL`, `CORNFIELD_DATA`, `CORNFIELD_CONFIG`. Sign-in is env only, never the file: `CORNFIELD_GITHUB_CLIENT_ID` and `CORNFIELD_GITHUB_CLIENT_SECRET` (or the `FORGEJO` pair) and `CORNFIELD_SESSION_SECRET` ([sign-in](sign-in.md)). `CORNFIELD_HOOK_SECRET` signs the [hooks](#hooks) and, like the sign-in secrets, is never in the file. `CORNFIELD_HA_URL` and `CORNFIELD_HA_TOKEN` are read only by the server, for the `home-assistant` house source; with both set and no `sources.house`, the house comes from Home Assistant ([house.md](house.md#home-assistant-directly)).
 
 **Never put a secret in the config.** Source options are sent to the browser; v1's OAuth secrets come from env only.
+
+## Agents
+
+```js
+agents: {
+  // what marks work as made by an agent (docs/agents.md)
+  authors: ['claude-bot'], labels: ['agent'], branchPrefixes: ['claude/'], bots: true,
+  // asking for runs (docs/agents.md#launching-a-run)
+  transport: 'forge',                  // the only one for now: the request is a comment on the forge
+  maxOpen: 3,                          // the most open runs per repo cornfield asks for (1 to 100)
+  profiles: ['claude', 'local-qwen'],  // names a request may carry; the runner maps each to a model, a machine and a budget
+  runners: ['claude-bot'],             // forge logins whose reports count, besides maintainers
+  quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h')
+  limits: { minutes: 30, turns: 40, cost: 5 },   // hints put in every request; a request may change them; the runner enforces them or not
+},
+```
+
+Each key is checked when the config loads and a wrong one fails start-up naming it. `profiles` are letters, digits and `. _ -`; a request naming a profile not on the list is refused (so is any profile when the list is empty). `runners` is the allow-list of the runners' own accounts: a `cornfield-run` report from anyone else who is not a maintainer is ignored and written to the audit table. `quietAfter` uses the same durations as [`hookPoll`](#hook-poll). None of these holds a secret, and no model, provider or key is ever configured in cornfield.
 
 ## Proposals
 
@@ -94,7 +112,15 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 | `thread.linked` | a thread now points at the map or at a proposal: a message with a `[[node]]` mention that resolves or a `cornfield-thread` block, or a spec PR that names it with `Thread: #n`. Carries `nodes` and `proposal` |
 | `session.expiring` | a maintainer's [sign-in](sign-in.md#how-long-a-session-lasts) ends within 24 hours, so a review token or a landing that acts with it is about to be refused. cornfield looks once an hour, so it arrives between 24 and 23 hours before the end (at once, for a 1 day session). **Once for each session**, recorded in `cornfield.db`, so a restart does not repeat it; a maintainer signed in twice (a laptop and a phone) gets one for each, each with its own `expiresAt`. A session that was signed out or has ended never sends it, nor does a signed-in reader who is not a maintainer. Its body is only `{ event, at, actor, expiresAt, mapUrl }`: `actor` is the maintainer's login, `expiresAt` when the session ends (ISO 8601). It is the only event with no `slug` or `pull` |
 
-Each event is a POST of one JSON body:
+| `agent.requested` | a maintainer asked for an agent run (the dashboard's Start an agent, or the request API). Sent at once. Its body is its own: `{ event, at, request, actor, mapUrl }`, where `request` is the [contract's](agent-contract.md) request JSON, which holds no credential by construction (it is checked again on the way out), and `actor` is who asked |
+| `run.claimed` | the run's runner reported `claimed` |
+| `run.state` | a run changed state: a report with another state, its pull request found, merged or closed |
+| `run.stopRequested` | a maintainer asked a run to stop (through cornfield, or by hand on the forge) |
+| `run.finished` | a run ended: `done`, `failed`, `stopped`, or its pull request merged or closed |
+
+The `run.*` events are noticed when cornfield looks at the forge (the [spec poll](#hook-poll), or a Refresh), each once, even across a restart. Their body is `{ "event", "at", "runId", "state", "pull"?, "issue"?, "actor", "mapUrl" }`: `state` is the state the event is about, `pull` the run's pull request and `issue` its issue or thread when there are any, and `actor` who caused it (the reporting login, the maintainer, or the pull request's author).
+
+Each other event is a POST of one JSON body:
 
 ```json
 {
@@ -132,6 +158,7 @@ export function verify(raw, header, secret, maxAgeMs = 300_000) {
 hookPoll: { specs: '5m' },   // the default; '90s', '5m', '1h'… or false for none
 ```
 
+- **Runs.** The same timer follows [agent runs](agents.md#following-a-run): it is started when a run is asked for (or was, before a restart), looks at the forge only while a run is waiting for a report or a push, and uses the same interval, so `hookPoll: false` leaves runs to the Refresh button.
 - **When it runs.** By default, when some hook subscribes to `spec.ready` or to a `thread.*` event while threads are on (by name, or with `events: '*'`): every 5 minutes, the first look 15 seconds after start. With no such hook it is off, and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
 - **The interval** is a whole number with `s`, `m` or `h`, from **60s** (a floor, so the forge is not hammered) to **1h**. Anything else fails the config at start-up, naming the key. The key is separate from the `hooks` list, which stays a list.
 - **Whose token.** Never one from the config. The poll looks as the newest live [sign-in](sign-in.md#the-spec-poll) of a user the forge says is a maintainer of the repo *right now* (the check the [review API](proposals.md) makes before it posts). With no such session it does nothing and keeps running: it says so once in the log, not on every tick, and says so again when a maintainer is back. The log also names whose sign-in it looks with, each time that changes. That token only ever reads: who its owner is, their permission, and the open spec PRs; someone the forge says is no longer a maintainer is asked the first two and nothing else. A restart keeps the sessions (they are in the SQLite file, the tokens encrypted), so the poll looks with them as soon as it runs.

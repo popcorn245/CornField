@@ -17,7 +17,7 @@ import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
 const V1_TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
-const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'sessions', 'thread_seen'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'run_seen', 'runs', 'sessions', 'thread_seen'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -50,7 +50,7 @@ describe('openStore', () => {
     expect(columns(db, 'reviews')).toEqual(['repo', 'pr', 'slug', 'verdict', 'note', 'edits', 'author', 'comment_id', 'at']);
     expect(columns(db, 'actions')).toEqual(['id', 'at', 'login', 'action', 'target', 'request', 'status', 'answer']);
     expect(columns(db, 'forge_cache')).toEqual(['key', 'etag', 'body', 'fetched_at', 'expires_at']);
-    expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used']);
+    expect(columns(db, 'review_tokens')).toEqual(['id', 'token_hash', 'user_id', 'login', 'label', 'created_at', 'expires_at', 'revoked_at', 'last_used', 'scope']);
     expect(columns(db, 'hook_seen')).toEqual(['repo', 'pr', 'head_sha', 'slug', 'at']);
     expect(columns(db, 'thread_seen')).toEqual(['repo', 'issue', 'comment', 'stamp', 'at']);
     expect(columns(db, 'landings')).toEqual(['repo', 'pull', 'slug', 'sha', 'user_id', 'login', 'started', 'state']);
@@ -125,6 +125,25 @@ describe('openStore', () => {
   it('needs a data folder', () => {
     expect(() => openStore('')).toThrow('openStore needs the data folder.');
     expect(() => openStore(undefined)).toThrow('openStore needs the data folder.');
+  });
+});
+
+describe('migration 7 on a file at 6', () => {
+  it('keeps the review tokens a file holds, as review tokens, and adds the runs', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-db-7-'));
+    try {
+      const six = openStore(dir, { migrations: MIGRATIONS.slice(0, 6) });
+      six.prepare("INSERT INTO review_tokens (token_hash, user_id, login, label, created_at, expires_at) VALUES ('h', '1001', 'maintainer-one', 'old bot', '2026-11-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z')").run();
+      six.close();
+      const db = openStore(dir);
+      expect(schemaVersion(db)).toBe(MIGRATIONS.length);
+      expect(db.prepare('SELECT label, scope FROM review_tokens').all()).toEqual([{ label: 'old bot', scope: 'review' }]);
+      expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('runs', 'run_seen') ORDER BY name").all().map((r) => r.name)).toEqual(['run_seen', 'runs']);
+      expect(() => db.prepare("UPDATE review_tokens SET scope = 'admin'").run()).toThrow(/CHECK/);
+      db.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

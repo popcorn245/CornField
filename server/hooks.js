@@ -23,6 +23,11 @@
  *                  what is there and sends nothing; each (repo, thread, comment) is sent once, across restarts (`thread_seen`)
  *   session.expiring  a maintainer's sign-in ends within a day (`watchSessions`, below). Its body is its own:
  *                   `{ event, at, actor, expiresAt, mapUrl }`
+ *   agent.requested  a maintainer asked for an agent run (server/agent-runs.js). Its body is its own: `{ event, at, request, actor, mapUrl }`,
+ *                   `request` being the whole request JSON of the contract (docs/agent-contract.md), which holds no credential by construction
+ *   run.claimed  run.state  run.stopRequested  run.finished   a run was claimed by its runner, changed state, was asked to stop, ended. They are
+ *                   seen when cornfield looks (the spec poll, server/spec-poll.js), each once. Their body is their own:
+ *                   `{ event, at, runId, state, pull?, issue?, actor, mapUrl }`
  *
  * **A hook never gets in the way.** `emit` returns at once and never throws; the delivery runs in the background, from a
  * queue in memory. A failed delivery (a network error, a timeout, anything but a 2xx) is tried again after 1s, 5s and 30s
@@ -46,6 +51,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { HOOK_EVENTS } from '../core/config.js';
 import { pullProposals, readPullProposal } from './proposal-pulls.js';
 import { proposalHash } from './reviews.js';
+import { validateRequest } from '../core/agent-contract.js';
 
 /** @typedef {ReturnType<typeof createHooks>} Hooks */
 
@@ -194,6 +200,19 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
   function bodyOf(event, p) {
     // A session's end has no spec, pull request or proposal: its body is only who, until when, and where cornfield is
     if (event === 'session.expiring') return JSON.stringify({ event, at: new Date(now()).toISOString(), actor: p.actor ?? null, expiresAt: p.expiresAt ?? null, mapUrl: publicUrl || null });
+    // A request goes out as it was posted, and is checked once more on the way: nothing like a credential can leave through a hook
+    if (event === 'agent.requested') {
+      const checked = validateRequest(p.request);
+      if (!checked.ok) throw new Error(checked.error);
+      return JSON.stringify({ event, at: new Date(now()).toISOString(), request: checked.value, actor: p.actor ?? null, mapUrl: publicUrl || null });
+    }
+    // The events of a run (claimed, state, stopRequested, finished) say which run, in what state, and about what
+    if (event.startsWith('run.')) {
+      return JSON.stringify({
+        event, at: new Date(now()).toISOString(), runId: p.runId ?? null, state: p.state ?? null,
+        ...(p.pull != null ? { pull: p.pull } : {}), ...(p.issue != null ? { issue: p.issue } : {}), actor: p.actor ?? null, mapUrl: publicUrl || null,
+      });
+    }
     // A thread's event is only which thread, which comment, who and what it links to: never the words said
     if (event.startsWith('thread.')) {
       const out = { event, at: new Date(now()).toISOString(), thread: p.thread ?? null };

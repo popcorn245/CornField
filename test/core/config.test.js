@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
@@ -123,15 +123,16 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    expect(DEFAULTS.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {} };
+    expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
-    expect(c.agents).toEqual({ authors: [], labels: [], branchPrefixes: [], bots: true });
+    expect(c.agents).toEqual(defaults);
     expect(c.agents).not.toBe(DEFAULTS.agents);
   });
 
   it('take the keys of the file over the defaults, and the rest stay', async () => {
     const c = await loadConfig(repo("export default { agents: { branchPrefixes: ['claude/'], labels: ['agent', 'needs human'], bots: false } };"), { env: {} });
-    expect(c.agents).toEqual({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false });
+    expect(c.agents).toMatchObject({ authors: [], labels: ['agent', 'needs human'], branchPrefixes: ['claude/'], bots: false, maxOpen: 3, quietAfter: '24h' });
   });
 
   it('are checked: the shape, the keys, and what a name may be', () => {
@@ -292,5 +293,23 @@ describe('loadDerivers and browserSources', () => {
     const own = browserSources({ sources: { live: { use: './tools/live.js', options: { url: '/api/world' } } } });
     expect(own.live).toEqual({ module: '/repo/tools/live.js', options: { url: '/api/world' } });
     expect(fs.existsSync(path.join(CORNFIELD, 'plugins/house/browser.js'))).toBe(true);
+  });
+});
+
+describe('the agents keys that ask for and follow runs (spec 0005)', () => {
+  it('are checked strictly: transport, maxOpen, profiles, runners, quietAfter and limits', () => {
+    expect(configProblems({ agents: { transport: 'forge', maxOpen: 5, profiles: ['claude', 'local-qwen'], runners: ['claude-bot', 'ci[bot]'], quietAfter: '12h', limits: { minutes: 30, turns: 40, cost: 2.5 } } })).toEqual([]);
+    const text = configProblems({ agents: { transport: 'push', maxOpen: 0, profiles: ['two words', 'a', 'a'], runners: ['has space'], quietAfter: '1m', limits: { minutes: -1, turns: 1.5, tokens: 3 } } }).join('\n');
+    for (const want of ['agents.transport is "forge"', 'agents.maxOpen is a whole number from 1 to 100', 'agents.profiles is a list', 'agents.runners is a list', 'under the floor of 5m', 'agents.limits.minutes is a number above zero', 'agents.limits.turns is a whole number', 'agents.limits.tokens: the keys are']) expect(text).toContain(want);
+    expect(configProblems({ agents: { quietAfter: '90 days' } }).join()).toContain('agents.quietAfter is a duration');
+    expect(configProblems({ agents: { quietAfter: '9999h' } }).join()).toContain('over the ceiling');
+  });
+
+  it('read quietAfter with the duration parser of hookPoll', async () => {
+    const { quietAfterMs } = await import('../../core/config.js');
+    expect(quietAfterMs({ agents: {} })).toBe(24 * 3_600_000);
+    expect(quietAfterMs({ agents: { quietAfter: '90m' } })).toBe(90 * 60_000);
+    const c = await loadConfig(repo("export default { agents: { runners: ['claude-bot'], profiles: ['claude'] } };"), { env: {} });
+    expect(c.agents).toMatchObject({ transport: 'forge', maxOpen: 3, runners: ['claude-bot'], profiles: ['claude'], quietAfter: '24h' });
   });
 });

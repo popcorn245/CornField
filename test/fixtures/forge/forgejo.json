@@ -74,6 +74,12 @@
   "GET /repos/owner/name/pulls/9": {
     "body": { "id": 901, "number": 9, "title": "Old work", "state": "closed", "draft": false, "merged": true, "user": { "id": 1001, "login": "maintainer-one", "html_url": "https://forgejo.example.com/maintainer-one" }, "labels": [], "head": { "ref": "old", "sha": "9990000000000000000000000000000000000000" }, "base": { "ref": "main" }, "html_url": "https://forgejo.example.com/owner/name/pulls/9", "created_at": "2026-10-10T10:00:00Z", "updated_at": "2026-10-11T10:00:00Z", "merged_at": "2026-10-11T10:00:00Z", "merge_commit_sha": "9990000000000000000000000000000000000009" }
   },
+  "GET /repos/owner/name/pulls/12/commits?limit=50": {
+    "body": [
+      { "sha": "c100000000000000000000000000000000000000", "commit": { "message": "Add the meals page" } },
+      { "sha": "c200000000000000000000000000000000000000", "commit": { "message": "Wire it up\n\nCornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF" } }
+    ]
+  },
   "GET /repos/owner/name/pulls/12/files?limit=50": {
     "headers": { "x-total-count": "4" },
     "body": [
