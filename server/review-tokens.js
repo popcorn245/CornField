@@ -6,9 +6,9 @@
  * (server/agent-api.js). The store over the `review_tokens` table of `cornfield.db` (server/db.js); nothing here knows
  * about HTTP.
  *
- *   - **A token has a scope,** `review` or `agent`, and is good for the one API its scope names; each API refuses the other's
- *     token (403) and says so. One store serves both, so hashing, expiry, revoking, `last_used` and the limits are written
- *     once and cannot drift. A review token is `cf_rt_…` and an agent token `cf_at_…`, so a leaked one is told apart on
+ *   - **A token has a scope,** `review`, `agent` or `runner`, and is good for the one API its scope names; each API refuses the
+ *     others' tokens (403) and says so. One store serves both, so hashing, expiry, revoking, `last_used` and the limits are written
+ *     once and cannot drift. A review token is `cf_rt_…`, an agent token `cf_at_…` and a runner token `cf_nt_…`, so a leaked one is told apart on
  *     sight (and by a secret scanner). Rows from before scopes existed are review tokens.
  *   - A token is its prefix and 32 random bytes in base64url. It is shown once, when it is made; only its SHA-256 is
  *     kept. A presented token is found by the hash of what was presented (an indexed equality on a hash of a 256-bit
@@ -22,7 +22,7 @@
  *
  * Times are ISO strings, as everywhere in the file; `now` is milliseconds and is passed in, so tests need no clock.
  *
- * @typedef {'review' | 'agent'} TokenScope
+ * @typedef {'review' | 'agent' | 'runner'} TokenScope
  * @typedef {{ id: number, user_id: string, login: string, label: string, scope: TokenScope, created_at: string, expires_at: string, revoked_at: string | null, last_used: string | null }} TokenRow
  * @typedef {'active' | 'expired' | 'revoked'} TokenState
  */
@@ -30,8 +30,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 
 /** The scopes a token may have, and what each one's tokens start with, so a leaked one is recognised (by a secret scanner too) */
-export const SCOPES = Object.freeze(['review', 'agent']);
-export const PREFIXES = Object.freeze({ review: 'cf_rt_', agent: 'cf_at_' });
+export const SCOPES = Object.freeze(['review', 'agent', 'runner']);
+export const PREFIXES = Object.freeze({ review: 'cf_rt_', agent: 'cf_at_', runner: 'cf_nt_' });
 /** What a review token starts with (the original, kept for the callers that always had it) */
 export const TOKEN_PREFIX = PREFIXES.review;
 /** Random bytes in a token */
@@ -43,7 +43,7 @@ export const MAX_ACTIVE = 20;
 export const MAX_LABEL = 60;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** A token as presented: the prefix and base64url (43 characters for 32 bytes); anything else is not one */
-const TOKEN_SHAPE = /^cf_(?:rt|at)_[A-Za-z0-9_-]{43,128}$/;
+const TOKEN_SHAPE = /^cf_(?:rt|at|nt)_[A-Za-z0-9_-]{43,128}$/;
 /** A label is words: letters, digits, spaces and a little punctuation. No backtick, no @, no newline: the comment quotes it */
 const LABEL = /^[\p{L}\p{N}][\p{L}\p{N} ._:/()-]*$/u;
 const COLUMNS = 'id, user_id, login, label, scope, created_at, expires_at, revoked_at, last_used';
@@ -53,6 +53,12 @@ const iso = (ms) => new Date(ms).toISOString();
 /** The SHA-256 of a token, as hex: what the table keeps */
 export function hashToken(token) {
   return createHash('sha256').update(String(token)).digest('hex');
+}
+
+/** Which scope a presented token's shape names (by its prefix; the row's `scope` is what counts), or null when it is not shaped like one of ours */
+export function scopeOfShape(token) {
+  if (typeof token !== 'string' || !TOKEN_SHAPE.test(token)) return null;
+  return /** @type {TokenScope} */ (Object.keys(PREFIXES).find((k) => token.startsWith(PREFIXES[k])) ?? null);
 }
 
 /**

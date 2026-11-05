@@ -57,13 +57,13 @@
  * @typedef {{ run_id: string, repo: string, kind: string, profile: string | null, issue: number | null, proposal: string | null, thread: number | null,
  *   target: number, comment_id: string, comment_url: string | null, request: string, requested_by: string, requested_by_id: string, requested_at: string,
  *   via: string, state: string, reported_at: string | null, reported_by: string | null, note: string | null, url: string | null, tokens: number | null,
- *   cost: number | null, stop_requested_at: string | null, stop_requested_by: string | null, pull: number | null, pull_state: string | null,
+ *   cost: number | null, transport: 'forge' | 'push' | 'pull', claimed_by: number | null, claimed_at: string | null, stop_requested_at: string | null, stop_requested_by: string | null, pull: number | null, pull_state: string | null,
  *   pull_url: string | null, pull_by: string | null, pull_trusted: number, linked_via: string | null, branch: string | null, head_sha: string | null,
  *   checks: string | null, last_activity: string }} RunRow
  */
 
 import { ForgeError, isMaintainer } from './forge.js';
-import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, MAX_NOTE_CHARS } from '../core/agent-contract.js';
+import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
 import { quietAfterMs } from '../core/config.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
@@ -81,15 +81,20 @@ export const FOLLOW_FLOOR_MS = 48 * 3_600_000;
 export const RESERVATION_MS = 10 * 60_000;
 /** The runs a listing answers */
 export const LIST_LIMIT = 200;
+/** The queued requests a runner's listing answers at most, oldest first */
+export const QUEUE_LIMIT = 50;
+/** The runs that are over once the runner has said so */
 /** The keys of a request as the API and the button send it: the contract's fields, less what cornfield writes, plus `force` */
 export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'force']);
 
 /** The states in which a run is over for good unless the runner says more */
 export const FINISHED = Object.freeze(['done', 'failed', 'stopped', 'merged', 'closed']);
 const REPORT_FINISHED = ['done', 'failed', 'stopped'];
+/** Where a run is looked up for the dashboard and the poll: posted on the forge, or (push and pull) there is no comment to wait for */
+const POSTED = "(comment_id <> '' OR transport <> 'forge')";
 
 /** cornfield's own API tokens (server/review-tokens.js): the contract's credential check does not know their shape, so a request and a report are checked for it here */
-const OWN_TOKEN = /cf_(?:rt|at)_[A-Za-z0-9_-]{20,}/;
+const OWN_TOKEN = /cf_(?:rt|at|nt)_[A-Za-z0-9_-]{20,}/;
 
 const iso = (ms) => new Date(ms).toISOString();
 const lower = (s) => String(s).toLowerCase();
@@ -152,7 +157,8 @@ export function publicRun(row, nowMs, quietMs) {
   return {
     runId: row.run_id, kind: row.kind, profile: row.profile,
     refs: { ...(row.issue != null ? { issue: row.issue } : {}), ...(row.proposal != null ? { proposal: row.proposal } : {}), ...(row.thread != null ? { thread: row.thread } : {}) },
-    status, open, requestedBy: row.requested_by, requestedAt: row.requested_at, via: row.via, target: row.target,
+    status, open, requestedBy: row.requested_by, requestedAt: row.requested_at, via: row.via, transport: row.transport, target: row.target,
+    claimedAt: row.claimed_at,
     comment: row.comment_id ? { id: row.comment_id, url: row.comment_url } : null,
     limits,
     report: row.reported_at ? { state: row.state, at: row.reported_at, by: row.reported_by, note: row.note, url: row.url, tokens: row.tokens, cost: row.cost } : null,
@@ -190,6 +196,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   const runnerSet = new Set((Array.isArray(agents.runners) ? agents.runners : []).map(lower));
   const authorSet = new Set((Array.isArray(agents.authors) ? agents.authors : []).map(lower));
   const quietMs = quietAfterMs(config);
+  /** How requests travel from now on (`agents.transport`); a run keeps the transport it was asked for with */
+  const transport = /** @type {'forge' | 'push' | 'pull'} */ (agents.transport ?? 'forge');
   const log = (what) => console.error(`[cornfield] agent runs: ${what}`);
   let following = null;
 
@@ -224,10 +232,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           throw new Refused(409, `${subjectWords(request.refs)} already has an open run${clash.profile ? ` under the profile ${clash.profile}` : ''}: ${clash.run_id} (${statusOf(clash, at, quietMs).status}). To ask for another on purpose, send "force": true${profiles.length ? ', or pick another profile' : ''}.`, 'run-open');
         }
       }
-      db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, request, requested_by, requested_by_id, requested_at, via, last_activity)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, request, requested_by, requested_by_id, requested_at, via, last_activity, transport)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(request.runId, repo, request.kind, request.profile ?? null, request.refs.issue ?? null, request.refs.proposal ?? null, request.refs.thread ?? null,
-          target, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, via ? 'api' : 'dashboard', iso(at));
+          target, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, via ? 'api' : 'dashboard', iso(at), transport);
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
@@ -253,6 +261,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     }
     if (typeof body.brief === 'string') out.briefChars = body.brief.length;
     if (body.force === true) out.force = true;
+    if (transport !== 'forge') out.transport = transport;
     if (via) Object.assign(out, { via: 'api', token: via.token });
     return out;
   }
@@ -326,10 +335,14 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         }
       }
       target = `${repo}#${number}`;
-      let comment = formatRunComment(made.runId, made, { profiles });
-      if (via) {
-        const [head, ...rest] = comment.split('\n\n');
-        comment = [`${head} Sent through the agent API with the token \`${via.token.label}\`.`, ...rest].join('\n\n');
+      // On the forge the request is a comment. On push and pull there is none: the run is recorded and the transport delivers it
+      let comment = null;
+      if (transport === 'forge') {
+        comment = formatRunComment(made.runId, made, { profiles });
+        if (via) {
+          const [head, ...rest] = comment.split('\n\n');
+          comment = [`${head} Sent through the agent API with the token \`${via.token.label}\`.`, ...rest].join('\n\n');
+        }
       }
 
       // The token once more, after every forge call: one revoked or expired meanwhile does not ask
@@ -339,20 +352,22 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       }
       const db = await auth.store();
       reserve(db, made, { target: number, who, via, force: force === true });
-      let posted;
-      try {
-        posted = await forge.comment(number, comment);
-      } catch (err) {
-        db.prepare('DELETE FROM runs WHERE run_id = ?').run(made.runId);
-        throw err;
+      let posted = null;
+      if (comment !== null) {
+        try {
+          posted = await forge.comment(number, comment);
+        } catch (err) {
+          db.prepare('DELETE FROM runs WHERE run_id = ?').run(made.runId);
+          throw err;
+        }
+        db.prepare('UPDATE runs SET comment_id = ?, comment_url = ? WHERE run_id = ?').run(posted.id, posted.url ?? null, made.runId);
       }
-      db.prepare('UPDATE runs SET comment_id = ?, comment_url = ? WHERE run_id = ?').run(posted.id, posted.url ?? null, made.runId);
       status = 201;
-      await audit({ login: me.login, action: 'agent-request', target, request: { ...asked, target: number }, status, answer: { comment: posted.id, url: posted.url ?? null } });
+      await audit({ login: me.login, action: 'agent-request', target, request: { ...asked, target: number }, status, answer: posted ? { comment: posted.id, url: posted.url ?? null } : { transport, queued: transport === 'pull' } });
       hooks?.emit('agent.requested', { request: made, actor: me.login });
       try { onAsk?.(); } catch { /* the poll is a convenience */ }
       const row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(made.runId));
-      return { run: publicRun(row, now(), quietMs), request: made, comment: { id: posted.id, url: posted.url ?? null, number } };
+      return { run: publicRun(row, now(), quietMs), request: made, comment: posted ? { id: posted.id, url: posted.url ?? null, number } : null };
     } catch (err) {
       if (status === null) {
         const out = describe(err);
@@ -406,30 +421,45 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         const why = await ctx.stillAllowed();
         if (why) throw new Refused(403, why, 'forbidden');
       }
-      let comment;
-      try {
-        comment = formatRunComment(row.run_id, { state: 'stop-requested', ...(note ? { note } : {}) }, { line: `Asked run \`${row.run_id}\` to stop (${me.login}, in cornfield${via ? `, through the agent API with the token \`${via.token.label}\`` : ''}).` });
-      } catch (err) {
-        throw new Refused(400, words(err), 'invalid');
-      }
-      const posted = await forge.comment(row.target, comment);
       const stamp = iso(now());
+      /** A pull run nobody has claimed has no runner to stop: cornfield ends it itself, saying so (the one `stopped` it writes) */
+      const unclaimed = row.transport === 'pull' && row.claimed_by == null && row.state === 'requested';
+      let posted = null;
+      if (row.transport === 'forge') {
+        let comment;
+        try {
+          comment = formatRunComment(row.run_id, { state: 'stop-requested', ...(note ? { note } : {}) }, { line: `Asked run \`${row.run_id}\` to stop (${me.login}, in cornfield${via ? `, through the agent API with the token \`${via.token.label}\`` : ''}).` });
+        } catch (err) {
+          throw new Refused(400, words(err), 'invalid');
+        }
+        posted = await forge.comment(row.target, comment);
+      }
       // Judged already: the follow that reads this comment back must not fire the hook again
       db.exec('BEGIN IMMEDIATE');
       try {
         db.prepare('UPDATE runs SET stop_requested_at = ?, stop_requested_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ?').run(stamp, me.login, stamp, row.run_id);
-        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
-        db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:stop:${posted.id}:c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
+        if (posted) {
+          db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
+          db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:stop:${posted.id}:c:${posted.id}:${row.run_id}:stop-request:0`, stamp);
+        }
+        if (unclaimed) {
+          const ended = db.prepare("UPDATE runs SET state = 'stopped', reported_at = ?, reported_by = ?, note = ? WHERE run_id = ? AND state = 'requested' AND claimed_by IS NULL").run(stamp, me.login, 'Stopped before a runner claimed it.', row.run_id).changes;
+          if (ended !== 1) throw new Refused(409, `Run ${row.run_id} was claimed just now; ask again to stop it.`, 'conflict');
+        }
         db.exec('COMMIT');
       } catch (err) {
         try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
         throw err;
       }
       done = true;
-      await audit({ login: me.login, action: 'agent-stop', target, request: { ...asked, ...(note ? { noteChars: note.length } : {}) }, status: 201, answer: { comment: posted.id, url: posted.url ?? null } });
+      await audit({ login: me.login, action: 'agent-stop', target, request: { ...asked, ...(note ? { noteChars: note.length } : {}) }, status: 201, answer: posted ? { comment: posted.id, url: posted.url ?? null } : { transport: row.transport, ...(unclaimed ? { stopped: true } : {}) } });
       const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
       hooks?.emit('run.stopRequested', runPayload(after, me.login));
-      return { run: publicRun(after, now(), quietMs), comment: { id: posted.id, url: posted.url ?? null } };
+      if (unclaimed) {
+        hooks?.emit('run.state', { ...runPayload(after, me.login), state: 'stopped' });
+        hooks?.emit('run.finished', { ...runPayload(after, me.login), state: 'stopped' });
+      }
+      return { run: publicRun(after, now(), quietMs), comment: posted ? { id: posted.id, url: posted.url ?? null } : null };
     } catch (err) {
       if (!done) {
         const out = describe(err);
@@ -455,21 +485,21 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   async function list({ limit = LIST_LIMIT } = {}) {
     const db = await auth.store();
     const at = now();
-    const rows = /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND comment_id <> '' ORDER BY requested_at DESC, run_id DESC LIMIT ?").all(repo, limit));
+    const rows = /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} ORDER BY requested_at DESC, run_id DESC LIMIT ?`).all(repo, limit));
     return { runs: rows.map((r) => publicRun(r, at, quietMs)), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length };
   }
 
   /** One run, or null */
   async function get(runId) {
     const db = await auth.store();
-    const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare("SELECT * FROM runs WHERE run_id = ? AND repo = ? AND comment_id <> ''").get(runId, repo)) : undefined;
+    const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare(`SELECT * FROM runs WHERE run_id = ? AND repo = ? AND ${POSTED}`).get(runId, repo)) : undefined;
     return row ? publicRun(row, now(), quietMs) : null;
   }
 
   /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window */
   function followable(db, at) {
     const window = Math.max(2 * quietMs, FOLLOW_FLOOR_MS);
-    return /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND comment_id <> '' AND last_activity > ? AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?")
+    return /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} AND last_activity > ? AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?`)
       .all(repo, iso(at - window), MAX_FOLLOWED));
   }
 
@@ -606,7 +636,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     // ---- the comments -----------------------------------------------------
     /** @type {Map<number, Set<string>>} */
     const places = new Map();
-    for (const r of cur.values()) for (const n of [r.target, r.pull]) if (n != null) places.set(n, (places.get(n) ?? new Set()).add(r.run_id));
+    // A run asked for over push or pull is reported to over the API, with a runner token: a comment on the forge does not move it
+    for (const r of cur.values()) if (r.transport === 'forge') for (const n of [r.target, r.pull]) if (n != null) places.set(n, (places.get(n) ?? new Set()).add(r.run_id));
     /** @type {{ row: RunRow, id: string, key: string, at: string, by: string | null, block: any }[]} */
     const heard = [];
     for (const [number, ids] of places) {
@@ -759,14 +790,121 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return out;
   }
 
+  // -------------------------------------------------------------------------
+  //  Runners: pull and push (a runner token, server/runner-api.js; spec 0005 D2, D5)
+  // -------------------------------------------------------------------------
+
+  /** @typedef {{ id: number, label: string }} RunnerToken the runner token a call came with */
+
+  const runnerActor = (token) => `runner:${token.label}`;
+
+  /** A run for a runner: the state it is in as cornfield derives it, and whether a maintainer asked it to stop. Nothing else about the run, no credential */
+  function runnerView(row) {
+    const st = statusOf(row, now(), quietMs);
+    return { runId: row.run_id, state: st.status, reported: row.state === 'requested' ? null : row.state, stopRequested: row.stop_requested_at != null, ...(row.stop_requested_at ? { stopRequestedAt: row.stop_requested_at } : {}), open: st.open, finished: st.finished };
+  }
+
+  /** The run a runner token names, or a `Refused`: 404 when there is none, 403 when the token may not touch it */
+  function runnerRun(db, token, runId) {
+    const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare(`SELECT * FROM runs WHERE run_id = ? AND repo = ? AND ${POSTED}`).get(runId, repo)) : undefined;
+    if (!row) throw new Refused(404, 'cornfield has no such run.', 'not-found');
+    if (row.transport === 'forge') throw new Refused(403, 'This run was asked for on the forge, not over push or pull. A runner token does not reach it: report it as a cornfield-run comment.', 'forbidden');
+    if (row.transport === 'pull' && row.claimed_by == null) throw new Refused(403, 'Nobody has claimed this run. Claim it first: POST /api/agent-requests/<runId>/claim.', 'forbidden');
+    if (row.claimed_by != null && row.claimed_by !== token.id) throw new Refused(403, 'Another runner token holds this run. Only the token that claimed it (for a pushed run, the first to report on it) reads and reports on it.', 'forbidden');
+    return row;
+  }
+
+  /**
+   * The requests waiting for a runner to claim: pull runs nobody has claimed, not asked to stop, not quiet, oldest first, at most `QUEUE_LIMIT`.
+   * Each is the contract's request as it was made, checked once more on the way out.
+   */
+  async function queued() {
+    const db = await auth.store();
+    const at = now();
+    const rows = /** @type {RunRow[]} */ (db.prepare("SELECT * FROM runs WHERE repo = ? AND transport = 'pull' AND state = 'requested' AND claimed_by IS NULL AND stop_requested_at IS NULL AND last_activity > ? ORDER BY requested_at, run_id LIMIT ?")
+      .all(repo, iso(at - quietMs), QUEUE_LIMIT));
+    return rows.flatMap((r) => {
+      const checked = validateRequest(safeJson(r.request));
+      if (!checked.ok) { log(`the request ${r.run_id} is not a valid request any more and is not offered: ${checked.error}`); return []; }
+      return [checked.value];
+    });
+  }
+
+  const safeJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
+
+  /**
+   * Claims a queued request for a runner token. ONE statement decides who wins (`UPDATE … WHERE claimed_by IS NULL`), so two claims at once
+   * cannot both succeed: the second is a 409. Answers the request and the run as the runner sees it.
+   * @param {RunnerToken} token
+   * @param {unknown} runId
+   */
+  async function claim(token, runId) {
+    const db = await auth.store();
+    const at = now();
+    const stamp = iso(at);
+    const won = typeof runId === 'string' ? db.prepare(`UPDATE runs SET claimed_by = ?, claimed_at = ?, state = 'claimed', reported_at = ?, reported_by = ?, note = NULL, last_activity = MAX(last_activity, ?)
+      WHERE run_id = ? AND repo = ? AND transport = 'pull' AND state = 'requested' AND claimed_by IS NULL AND stop_requested_at IS NULL AND last_activity > ?`)
+      .run(token.id, stamp, stamp, token.label, stamp, runId, repo, iso(at - quietMs)).changes === 1 : false;
+    const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ? AND repo = ?').get(runId, repo)) : undefined;
+    if (!row) throw new Refused(404, 'cornfield has no such request.', 'not-found');
+    if (!won) {
+      if (row.transport !== 'pull') throw new Refused(409, `This request goes over ${row.transport === 'push' ? 'push (an agent.requested hook event), not pull' : 'the forge, not pull'}; there is nothing to claim.`, 'conflict');
+      if (row.claimed_by != null) throw new Refused(409, 'Another runner claimed this request first.', 'already-claimed');
+      if (row.stop_requested_at) throw new Refused(409, 'A maintainer asked to stop this run before anyone claimed it.', 'conflict');
+      if (statusOf(row, at, quietMs).quiet) throw new Refused(409, 'This request has waited past agents.quietAfter and is no longer offered.', 'conflict');
+      throw new Refused(409, `This request is ${row.state}; there is nothing to claim.`, 'conflict');
+    }
+    const checked = validateRequest(safeJson(row.request));
+    hooks?.emit('run.claimed', { ...runPayload(row, runnerActor(token)), state: 'claimed' });
+    hooks?.emit('run.state', { ...runPayload(row, runnerActor(token)), state: 'claimed' });
+    return { request: checked.ok ? checked.value : null, run: runnerView(row), row };
+  }
+
+  /** One run as the runner that holds it sees it: `GET /api/runs/<runId>`, how a runner learns it was asked to stop */
+  async function runnerGet(token, runId) {
+    const db = await auth.store();
+    return runnerView(runnerRun(db, token, runId));
+  }
+
+  /**
+   * A runner's report: the contract's report JSON, from the token that holds the run (the one that claimed it; for a pushed run, the first to
+   * report). The same run state and hooks as a report on the forge. A run that is over takes no more.
+   * @param {RunnerToken} token
+   * @param {unknown} runId
+   * @param {unknown} body
+   */
+  async function report(token, runId, body) {
+    const db = await auth.store();
+    const row = runnerRun(db, token, runId);
+    if (OWN_TOKEN.test(JSON.stringify(body ?? null))) throw new Refused(400, 'The report holds something shaped like a cornfield token. A report never carries a credential.', 'invalid');
+    const checked = validateReport(body);
+    if (!checked.ok) throw new Refused(400, checked.error, 'invalid');
+    const r = checked.value;
+    const at = now();
+    const was = statusOf(row, at, quietMs);
+    if (was.finished) throw new Refused(409, `Run ${row.run_id} is ${was.status}; it takes no more reports.`, 'conflict');
+    const stamp = iso(at);
+    const changed = db.prepare(`UPDATE runs SET state = ?, reported_at = ?, reported_by = ?, note = ?, url = ?, tokens = COALESCE(?, tokens), cost = COALESCE(?, cost),
+      claimed_by = COALESCE(claimed_by, ?), claimed_at = COALESCE(claimed_at, ?), last_activity = MAX(last_activity, ?)
+      WHERE run_id = ? AND (claimed_by IS NULL OR claimed_by = ?) AND state NOT IN ('done', 'failed', 'stopped')`)
+      .run(r.state, stamp, token.label, r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, row.run_id, token.id).changes;
+    if (changed !== 1) throw new Refused(409, `Run ${row.run_id} changed while the report was being taken; read it again (GET /api/runs/${row.run_id}).`, 'conflict');
+    const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
+    const actor = runnerActor(token);
+    if (r.state === 'claimed' && row.state !== 'claimed') hooks?.emit('run.claimed', { ...runPayload(after, actor), state: r.state });
+    if (r.state !== row.state) hooks?.emit('run.state', { ...runPayload(after, actor), state: r.state });
+    if (REPORT_FINISHED.includes(r.state)) hooks?.emit('run.finished', { ...runPayload(after, actor), state: r.state });
+    return { run: runnerView(after), row: after, was: row };
+  }
+
   /** Drops what a crash left: a request that was never posted. Run once at start. */
   async function resume() {
     const db = await auth.store();
-    const gone = db.prepare("DELETE FROM runs WHERE comment_id = '' AND requested_at < ?").run(iso(now() - RESERVATION_MS)).changes;
+    const gone = db.prepare("DELETE FROM runs WHERE comment_id = '' AND transport = 'forge' AND requested_at < ?").run(iso(now() - RESERVATION_MS)).changes;
     if (gone) log(`${gone} request${gone === 1 ? '' : 's'} that never reached the forge ${gone === 1 ? 'was' : 'were'} dropped`);
   }
 
-  return { request, stop, list, get, follow, hasWork, resume, maxOpen: cap, profiles };
+  return { request, stop, list, get, follow, hasWork, resume, queued, claim, runnerGet, report, maxOpen: cap, profiles, transport };
 }
 
 /** @typedef {ReturnType<typeof createRuns>} Runs */

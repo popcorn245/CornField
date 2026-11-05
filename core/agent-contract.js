@@ -125,6 +125,8 @@ const EDGE = '(?<![A-Za-z0-9])';
  */
 export const CREDENTIAL_VALUE_SOURCE = [
   `${EDGE}gh[pousr]_[A-Za-z0-9]{30,}`,
+  // cornfield's own API tokens: review (cf_rt_), agent (cf_at_) and runner (cf_nt_). Nothing here ever holds one
+  `${EDGE}cf_(?:rt|at|nt)_[A-Za-z0-9_-]{20,}`,
   `${EDGE}github_pat_[A-Za-z0-9_]{20,}`,
   `${EDGE}glpat-[A-Za-z0-9_-]{15,}`,
   `${EDGE}gto-[A-Za-z0-9]{20,}`,
