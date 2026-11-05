@@ -17,7 +17,7 @@
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
- *     worktrees: '.claude/worktrees',         // a folder of git worktrees whose unpushed proposals are listed too
+ *     worktrees: '.claude/worktrees',         // a folder of git worktrees whose unpushed proposals are listed too; or { dir, maxAgeDays } to leave out worktrees untouched that long (docs/config.md#worktrees)
  *     proposals: 'docs/specs/proposals',      // where proposal files live, in the checkout and in each worktree; or { dir, approveLands } (docs/config.md#proposals)
  *     topology: 'topology.json',
  *     personas: { roles: null },              // the roles a persona may have (null: any)
@@ -165,6 +165,9 @@ export const DEFAULTS = Object.freeze({
 const KEYS = Object.keys(DEFAULTS);
 /** The keys of `proposals` when it is an object: the folder, and whether an approval also lands the spec PR (opt-in, off unless true) */
 export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
+/** The keys of `worktrees` when it is an object: the folder, and how many days without a change leave a worktree out of the list (default: none is left out) */
+export const WORKTREES_KEYS = Object.freeze(['dir', 'maxAgeDays']);
+const MAX_WORKTREE_AGE_DAYS = 36500;
 const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits', 'on', 'refuseCollisions'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -301,8 +304,15 @@ export function configProblems(c) {
     if (!isObject(c.releaseNotes)) out.push('"releaseNotes" is { breakingLabel }.');
     else if (c.releaseNotes.breakingLabel !== undefined && (!isText(c.releaseNotes.breakingLabel) || c.releaseNotes.breakingLabel.includes(','))) out.push('releaseNotes.breakingLabel is a label\'s name, like "breaking".');
   }
-  for (const key of ['worktrees', 'topology']) {
-    if (c[key] !== undefined && c[key] !== null && !inRepo(c[key])) out.push(`"${key}" is a folder or file inside the repo, written relative to it.`);
+  if (c.topology !== undefined && c.topology !== null && !inRepo(c.topology)) out.push('"topology" is a folder or file inside the repo, written relative to it.');
+  // The folder as a string (always so), or { dir?, maxAgeDays? }
+  if (c.worktrees !== undefined && c.worktrees !== null) {
+    if (isObject(c.worktrees)) {
+      for (const k of Object.keys(c.worktrees)) if (!WORKTREES_KEYS.includes(k)) out.push(`worktrees.${k}: the keys are ${WORKTREES_KEYS.join(', ')}.`);
+      if (c.worktrees.dir !== undefined && !inRepo(c.worktrees.dir)) out.push('worktrees.dir is the folder of git worktrees, inside the repo and written relative to it.');
+      const age = c.worktrees.maxAgeDays;
+      if (age !== undefined && !(typeof age === 'number' && Number.isFinite(age) && age > 0 && age <= MAX_WORKTREE_AGE_DAYS)) out.push(`worktrees.maxAgeDays is a number of days above 0 and at most ${MAX_WORKTREE_AGE_DAYS}: a worktree whose newest proposal is older is left out.`);
+    } else if (!inRepo(c.worktrees)) out.push('"worktrees" is a folder inside the repo, written relative to it (or { dir, maxAgeDays }).');
   }
   // The folder as a string (always so), or { dir?, approveLands? }: the object form is how the folder's options are set
   if (c.proposals !== undefined && c.proposals !== null) {
@@ -453,6 +463,9 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
   // `proposals` is the folder to everything downstream, whichever way the file wrote it; the options are read from `approveLands`
   config.approveLands = isObject(raw.proposals) && raw.proposals.approveLands === true;
   config.proposals = (isObject(raw.proposals) ? raw.proposals.dir : raw.proposals) ?? DEFAULTS.proposals;
+  // `worktrees` is the folder to everything downstream (null: no worktrees are looked at); the age limit is read from `worktreeMaxAgeDays`
+  config.worktreeMaxAgeDays = isObject(raw.worktrees) && raw.worktrees.maxAgeDays !== undefined ? raw.worktrees.maxAgeDays : null;
+  config.worktrees = isObject(raw.worktrees) ? (raw.worktrees.dir ?? DEFAULTS.worktrees) : config.worktrees;
   if (env.CORNFIELD_PORT) config.port = Number(env.CORNFIELD_PORT);
   if (env.PORT && !env.CORNFIELD_PORT) config.port = Number(env.PORT);
   if (env.CORNFIELD_HOST) config.host = env.CORNFIELD_HOST;

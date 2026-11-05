@@ -169,7 +169,7 @@ export function createCornfieldServer(config, opts = {}) {
   const csp = cspOf(importMap);
   const repoModules = repoModuleDirs(config);
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
-  const where = { root, proposals: config.proposals, worktrees: config.worktrees, topology: config.topology, dataDir: config.dataDir, publicHost };
+  const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost };
   const fixtureCache = new Map();
   const lander = config.approveLands ? createLander({ config, where, auth, hooks, now: opts.now, timer: opts.landTimer }) : null;
   if (lander) {

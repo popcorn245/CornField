@@ -30,7 +30,7 @@
  * `unreviewed` (or `missing`).
  */
 
-import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { mockupsOf } from '../core/proposal.js';
@@ -70,33 +70,40 @@ function sendJson(res, status, body) {
 }
 const refuse = (res, status, message) => sendJson(res, status, { error: message });
 
-/** The proposal's parsed JSON for a local entry, or null */
-function readLocalProposal(entry) {
+/** The proposal's parsed JSON for a local entry, or null: what the listing parsed, else the file read without blocking */
+async function readLocalProposal(entry) {
+  if (entry.parsed) return entry.parsed.error === undefined ? entry.parsed.proposal ?? null : null;
   try {
-    return JSON.parse(fs.readFileSync(entry.file, 'utf8'));
+    return JSON.parse(await fsp.readFile(entry.file, 'utf8'));
   } catch {
     return null;
   }
 }
 
 /** The bytes of a mockup of a local proposal, or null: the path is resolved with links followed and must stay in the proposal's folder, be a plain file, and be at most MOCKUP_MAX_BYTES */
-export function readLocalMockup(entry, rel) {
+export async function readLocalMockup(entry, rel) {
   try {
-    const dir = fs.realpathSync(path.dirname(entry.file));
-    const real = fs.realpathSync(path.join(dir, ...rel.split('/')));
+    const dir = await fsp.realpath(path.dirname(entry.file));
+    const real = await fsp.realpath(path.join(dir, ...rel.split('/')));
     if (!real.startsWith(dir + path.sep)) return null;
-    const stats = fs.statSync(real);
+    const stats = await fsp.stat(real);
     if (!stats.isFile() || stats.size > MOCKUP_MAX_BYTES) return null;
-    return fs.readFileSync(real);
+    return await fsp.readFile(real);
   } catch {
     return null;
   }
 }
 
-const hashItems = (entry, items) => items.map((m) => {
-  const bytes = readLocalMockup(entry, m.path);
+/** One mockup at a time: a worktree on a slow mount is not hammered */
+const hashItems = async (entry, items) => {
+  const out = [];
+  for (const m of items) out.push(await hashItem(entry, m));
+  return out;
+};
+const hashItem = async (entry, m) => {
+  const bytes = await readLocalMockup(entry, m.path);
   return { node: m.node, path: m.path, sha256: bytes ? sha256(bytes) : null };
-});
+};
 
 /**
  * Whether each mockup is what was approved.
@@ -209,18 +216,18 @@ export async function serveMockups(req, res, match, url, where, forgeFor) {
   const slug = match[1];
   const position = match[2] === undefined ? null : Number(match[2]);
   const source = url.searchParams.get('source') || null;
-  const entry = findProposalFile(where, slug, source);
+  const entry = await findProposalFile(where, slug, source);
   if (!entry) {
     if (forgeFor && pullNumber(source) !== null) return servePull(req, res, where, forgeFor, slug, /** @type {string} */ (source), position);
     return refuse(res, 404, 'No such proposal');
   }
-  const proposal = readLocalProposal(entry);
+  const proposal = await readLocalProposal(entry);
   if (!proposal) return refuse(res, 422, 'The proposal could not be read');
   const items = mockupsOf(proposal);
   // A proposal here has no PR to be reviewed on: nothing it lists has been approved
-  if (position === null) return sendJson(res, 200, describe(slug, entry.source, items, hashItems(entry, items), null));
+  if (position === null) return sendJson(res, 200, describe(slug, entry.source, items, await hashItems(entry, items), null));
   const item = items.find((m) => m.index === position);
-  const bytes = item ? readLocalMockup(entry, item.path) : null;
+  const bytes = item ? await readLocalMockup(entry, item.path) : null;
   if (!item || !bytes) return refuse(res, 404, 'No such mockup');
   return sendBytes(req, res, item.path, bytes);
 }

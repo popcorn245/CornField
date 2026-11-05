@@ -216,7 +216,7 @@ describe('a proposal whose build has landed', () => {
       const typo = { version: 1, title: 'Typo', summary: 's', nodes: { add: [{ id: 'table-t', label: 't', type: 'table' }, { id: 'page-x', label: '/x', type: 'page', parent: 'nowhere' }] } };
       fs.writeFileSync(path.join(dir, 'docs/specs/proposals/0020-landed.json'), JSON.stringify(landed));
       fs.writeFileSync(path.join(dir, 'docs/specs/proposals/0021-typo.json'), JSON.stringify(typo));
-      const list = listProposals(whereOf(dir));
+      const list = await listProposals(whereOf(dir));
       expect(list.find((e     ) => e.slug === '0020-landed').errors).toBe(0);
       // the dangling parent still counts: only what a landing explains is let go
       expect(list.find((e     ) => e.slug === '0021-typo').errors).toBe(1);

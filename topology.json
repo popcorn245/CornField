@@ -1838,6 +1838,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The markup of the Runs view in the Agents tab (issue #82), as strings: each run's state as a word, its profile, its limits beside what the runner reported, its thread, branch, pull request and chec… (explorer/runs-view.js)"
+    },
+    {
+      "id": "core-server-proposal-walk",
+      "label": "proposal-walk.js",
+      "type": "core",
+      "file": "server/proposal-walk.js",
+      "summary": "Finding the proposal files of the checkout and of its worktrees without ever holding up the server.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Finding the proposal files of the checkout and of its worktrees without ever holding up the server. (server/proposal-walk.js)"
     }
   ],
   "edges": [
@@ -5805,7 +5815,17 @@
       "to": "core-core-validate",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-proposal-walk"
+    },
+    {
+      "from": "core-server-files",
+      "to": "core-server-proposal-walk",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T10:41:14.192Z"
+  "updatedAt": "2026-11-05T11:40:44.799Z"
 }

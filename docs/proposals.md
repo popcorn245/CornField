@@ -79,7 +79,19 @@ On the map:
 npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the header
 ```
 
-or open one straight away at `http://127.0.0.1:3350/?proposal=0002-checkout`. A draft in a worktree shows in the list with the worktree's name.
+or open one straight away at `http://127.0.0.1:3350/?proposal=0002-checkout`. A draft in a worktree shows in the list with the worktree's name. A worktree starts as a copy of the checkout, so a worktree file with the same contents as the checkout's file of the same name (line endings ignored) is not a draft and is not listed.
+
+### Many worktrees and slow folders
+
+The worktrees are read without ever holding up the server, so a worktrees folder on a slow filesystem (a Windows drive seen from WSL, a network mount) never freezes `/healthz` or any other route while the list is built:
+
+- Everything is read asynchronously, at most 8 files and folders at a time, handing the event loop back often. It is plain async I/O; no worker thread is needed.
+- Each file's result is **kept in memory by its path, modification time and size**. Listing again with nothing changed lists the folders and checks each file's stamp, and reads no file's contents; only a file that changed is read again, and a file that is gone is forgotten. At most 20,000 files are kept.
+- The checkout's files are compared by a hash of their contents (kept the same way), so a draft is whatever differs from the checkout, and a worktree file stops being listed, or starts to be, when the checkout's copy changes.
+- Lists asked for at the same moment (the dashboard and the hook poll) share one pass over the folders.
+- To leave out worktrees nobody has touched in a while, set `worktrees: { maxAgeDays }` ([config](config.md#worktrees)).
+
+The first list after a start still has to read every worktree file once, to know whether it is a copy; on a slow folder it takes as long as the folder takes, but only that list waits, not the server.
 
 With a `forge` and [sign-in](sign-in.md) configured, the list also holds the proposals of **open pull requests** that add or change a file directly in the proposals folder, each read at the PR's head commit and listed as `Spec PR #23 by someone` (a draft PR says so). That is how a proposal gets reviewed before it is merged: open the spec PR and pick it from the menu. A PR that deletes a proposal lists nothing; one that only touches code is not listed. The PRs are asked of the forge with the signed-in maintainer's own token, so a private repo's PRs show for those who can see them. If the forge cannot be asked (it is down, or the sign-in has to be renewed) the menu says why above the list and still lists the checkout and the worktrees. What a PR's head commit holds is read once and kept (in memory), so opening the menu again asks the forge only for the open PRs; a PR pushed to is read again at its new head. Without a forge the list is the checkout and the worktrees, as before.
 
