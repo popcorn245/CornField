@@ -174,3 +174,26 @@ describe('review tokens', () => {
     });
   });
 });
+
+describe('the scope, at lookup', () => {
+  it('answers wrong-scope for a token asked for as the other API\'s, or whose prefix is not its row\'s scope', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-scope-'));
+    const db = openStore(dir);
+    try {
+      const T = Date.parse('2026-11-05T10:00:00Z');
+      const owner = { userId: '1001', login: 'maintainer-one', label: 'bot' };
+      const review = mintToken(db, { ...owner, scope: 'review' }, T).token;
+      const agent = mintToken(db, { ...owner, label: 'agent bot', scope: 'agent' }, T).token;
+      expect(findToken(db, review, T, 'review').state).toBe('active');
+      expect(findToken(db, review, T, 'agent').state).toBe('wrong-scope');
+      expect(findToken(db, agent, T, 'agent').state).toBe('active');
+      expect(findToken(db, agent, T, 'review').state).toBe('wrong-scope');
+      // A row whose scope was changed under it (not by cornfield) does not make a review token good for agents
+      db.prepare("UPDATE review_tokens SET scope = 'agent' WHERE token_hash = ?").run(hashToken(review));
+      expect(findToken(db, review, T, 'agent').state).toBe('wrong-scope');
+    } finally {
+      db.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

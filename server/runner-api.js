@@ -136,7 +136,7 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
 
   const presented = bearerOf(req.headers.authorization);
   const db = presented ? await auth.store() : null;
-  const found = presented && db ? findToken(db, presented, now()) : null;
+  const found = presented && db ? findToken(db, presented, now(), 'runner') : null;
   if (!found) {
     req.resume();
     const flood = countAttempt(ctx, NO_TOKEN_LOGIN, now(), ANONYMOUS_PER_MINUTE);
@@ -148,11 +148,11 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
 
   const { row, state } = found;
   const token = { id: row.id, label: row.label };
-  if (row.scope !== 'runner' || state !== 'active') {
+  if (state !== 'active') {
     req.resume();
     const flood = countAttempt(ctx, row.user_id, now());
     if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
-    const wrong = row.scope !== 'runner';
+    const wrong = state === 'wrong-scope';
     return refuse(row.login, { reason: wrong ? 'wrong-scope' : state, token, ...(wrong ? { scope: row.scope } : {}) }, 403, {
       error: wrong ? `This is ${row.scope === 'agent' ? 'an' : 'a'} ${row.scope} token. Runners take a runner token; make one in the dashboard.`
         : state === 'revoked' ? 'This runner token was revoked; make a new one in the dashboard.' : 'This runner token has expired; make a new one in the dashboard.',
@@ -239,8 +239,8 @@ export async function serveStrayRunner(req, res, reqPath, ctx) {
   let owner = null;
   let token;
   if (presented && auth.enabled) {
-    const found = findToken(await auth.store(), presented, now());
-    if (found && found.row.scope === 'runner') { owner = found.row.login; token = { id: found.row.id, label: found.row.label }; }
+    const found = findToken(await auth.store(), presented, now(), 'runner');
+    if (found && found.state !== 'wrong-scope') { owner = found.row.login; token = { id: found.row.id, label: found.row.label }; }
   }
   const flood = owner === null ? countAttempt(ctx, NO_TOKEN_LOGIN, now(), ANONYMOUS_PER_MINUTE) : countAttempt(ctx, `runner|${token.id}`, now(), RUNNER_PER_MINUTE);
   if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);

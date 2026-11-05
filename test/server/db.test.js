@@ -128,6 +128,25 @@ describe('openStore', () => {
   });
 });
 
+describe('migration 7 on a file at 6', () => {
+  it('keeps the review tokens a file holds, as review tokens, and adds the runs', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-db-7-'));
+    try {
+      const six = openStore(dir, { migrations: MIGRATIONS.slice(0, 6) });
+      six.prepare("INSERT INTO review_tokens (token_hash, user_id, login, label, created_at, expires_at) VALUES ('h', '1001', 'maintainer-one', 'old bot', '2026-11-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z')").run();
+      six.close();
+      const db = openStore(dir);
+      expect(schemaVersion(db)).toBe(MIGRATIONS.length);
+      expect(db.prepare('SELECT label, scope FROM review_tokens').all()).toEqual([{ label: 'old bot', scope: 'review' }]);
+      expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name IN ('runs', 'run_seen') ORDER BY name").all().map((r) => r.name)).toEqual(['run_seen', 'runs']);
+      expect(() => db.prepare("UPDATE review_tokens SET scope = 'admin'").run()).toThrow(/CHECK/);
+      db.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the migrations', () => {
   it('end with the version the file says, and are numbered from 1 in the order they run', () => {
     const db = new DatabaseSync(':memory:');

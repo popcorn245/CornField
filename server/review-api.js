@@ -93,7 +93,7 @@ export async function serveReviewCall(req, res, ctx) {
   // The token, from the header alone; a cookie is not looked at
   const presented = bearerOf(req.headers.authorization);
   const db = presented ? await auth.store() : null;
-  const found = presented && db ? findToken(db, presented, now()) : null;
+  const found = presented && db ? findToken(db, presented, now(), 'review') : null;
   if (!found) {
     req.resume();
     const reason = presented ? 'unknown-token' : 'no-token';
@@ -107,7 +107,7 @@ export async function serveReviewCall(req, res, ctx) {
   const { row, state } = found;
   const token = { id: row.id, label: row.label };
   // An agent token asks for runs and is no review token: refused whatever its state, and not counted as used
-  if (row.scope !== 'review') {
+  if (state === 'wrong-scope') {
     req.resume();
     const flood = countAttempt(ctx, row.user_id, now());
     if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
@@ -139,7 +139,7 @@ export async function serveReviewCall(req, res, ctx) {
       forge: () => auth.forgeForUser(row.user_id), where, repo, who: { login: row.login, userId: row.user_id },
       record: (entry) => auth.record(entry), limits: { auth, now: ctx.now }, via: { token }, requireSha256: true, hooks: ctx.hooks, lander: ctx.lander,
       stillAllowed: async () => {
-        const again = findToken(await auth.store(), /** @type {string} */ (presented), now());
+        const again = findToken(await auth.store(), /** @type {string} */ (presented), now(), 'review');
         if (again && again.state === 'active') return null;
         return again && again.state === 'expired' ? 'This review token expired while the review was being checked; nothing was posted.' : 'This review token was revoked while the review was being checked; nothing was posted.';
       },
