@@ -31,6 +31,7 @@
     "./plugins/*": "./plugins/*",
     "./deriver-kit": "./core/deriver-kit.js",
     "./server": "./server/server.js",
+    "./agent-contract.schema.json": "./core/agent-contract.schema.json",
     "./package.json": "./package.json"
   },
   "files": [

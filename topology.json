@@ -1584,7 +1584,7 @@
       "label": "defuse.js",
       "type": "core",
       "file": "server/defuse.js",
-      "summary": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or …",
+      "summary": "Moved to core/defuse.js, so core/ (core/agent-contract.js) can use it without importing server code.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or … (server/defuse.js)"
@@ -1698,6 +1698,36 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "ADR 0012: cornfield asks; the developer's runners act (docs/adr/0012-cornfield-asks-runners-act.md)."
+    },
+    {
+      "id": "core-core-agent-contract",
+      "label": "agent-contract.js",
+      "type": "core",
+      "file": "core/agent-contract.js",
+      "summary": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md). (core/agent-contract.js)"
+    },
+    {
+      "id": "page-doc-docs-agent-contract",
+      "type": "page",
+      "label": "/docs/agent-contract",
+      "file": "docs/agent-contract.md",
+      "summary": "The agent contract (version 1)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The agent contract (version 1) (docs/agent-contract.md)."
+    },
+    {
+      "id": "core-core-defuse",
+      "label": "defuse.js",
+      "type": "core",
+      "file": "core/defuse.js",
+      "summary": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or … (core/defuse.js)"
     }
   ],
   "edges": [
@@ -5152,7 +5182,51 @@
       "from": "page-doc-docs-vision",
       "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-agent-contract"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-agent-contract"
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "core-core-agent-contract",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-defuse"
+    },
+    {
+      "from": "core-core-agent-contract",
+      "to": "core-core-defuse",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-defuse",
+      "to": "core-core-defuse",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-specs-0005-threads-and-agents",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-agent-contract",
+      "to": "page-doc-docs-adr-0012-cornfield-asks-runners-act",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-05T08:43:10.226Z"
+  "updatedAt": "2026-11-05T09:05:52.558Z"
 }
