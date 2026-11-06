@@ -50,7 +50,7 @@
  * @typedef {{ runId: string, type: 'request', value: RunRequest } | { runId: string, type: 'report', value: RunReport } | { runId: string, type: 'stop-request', value: StopRequest } | { runId: string, type: 'answer', value: RunAnswer }} RunBlock
  */
 
-import { defuse, ZW } from './defuse.js';
+import { defuse, quoteInert } from './defuse.js';
 
 /** Ten (or `n`) random bytes, from the Web Crypto API that Node and the browser both have */
 const randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
@@ -530,16 +530,6 @@ function defaultLine(runId, type, value) {
 }
 
 /**
- * A note, quoted line by line and inert. Every line end `readRunBlocks` knows (`\r` alone too) is made `\n` before the split, so no
- * line escapes its `> `; backticks and runs of tildes are broken, so no fence opens in it; `&`, `<` and `[` are escaped, so it makes no
- * HTML, Markdown link or image, and `[[node]]` mentions no node; mentions, references and links are defused. The block keeps the note as sent.
- */
-function quoteNote(note) {
-  const text = defuse(note).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\[/g, '\\[').replace(/`/g, "'").replace(/~(?=~)/g, `~${ZW}`);
-  return text.split(/\r\n?|\n/).map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
-}
-
-/**
  * The text of a comment for a request, a report, a stop request or an answer: a human line (defused: it pings and links nobody), the note of a
  * report or stop request quoted and defused (an answer's text is in the block only), then the block. The block keeps every value as sent, for the runner.
  * @param {string} runId
@@ -553,7 +543,7 @@ export function formatRunComment(runId, body, { line, profiles } = {}) {
   const head = oneLine(line ?? defaultLine(runId, checked.type, checked.value));
   // An answer's text is the maintainer's words to the runner: it travels in the block only, never quoted beside it
   const note = checked.type === 'request' || checked.type === 'answer' ? '' : (checked.value.note ?? '').trim();
-  const quoted = note ? `\n\n${quoteNote(note)}` : '';
+  const quoted = note ? `\n\n${quoteInert(note)}` : '';
   const out = `${head}${quoted}\n\n${block}`;
   if (out.length > MAX_COMMENT_CHARS) throw new RangeError(`That is too long for a comment (${out.length} characters, at most ${MAX_COMMENT_CHARS}); shorten the brief or the note.`);
   return out;

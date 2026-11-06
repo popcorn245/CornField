@@ -380,10 +380,19 @@ describe('the block', () => {
     // Outside the block, every line of the note is quoted and inert
     const quoted = text.slice(0, text.indexOf('```cornfield-run ' + ID));
     for (const line of quoted.split(/\r\n?|\n/).slice(2)) expect(line === '' || line.startsWith('>')).toBe(true);
-    expect(quoted.slice(quoted.indexOf('\n\n'))).not.toMatch(/\r|`|~~~|(?<!\\)\[|<|@bob|:\/\//);
+    expect(quoted.slice(quoted.indexOf('\n\n'))).not.toMatch(/\r|`|~~~|(?<!\\)(?:\\\\)*\[|<|@bob|:\/\//);
     expect(quoted).toContain('/agent run it');
     expect(quoted).toContain(`> cc @${ZW}bob and \\[\\[core-server-auth]]`);
     expect(quoted).toContain('&lt;b>x&lt;/b> &amp;amp;');
+  });
+  it('quotes a note inert whatever escapes, quote marks and line ends it holds', () => {
+    // A backslash of the note's own must not undo the escape of a [ (\\[ would be a backslash, then a live link or image)
+    const note = ['\\[x](/elsewhere) !\\[i](/img.png) \\&lt;b>', '> quoted already', '>', '   ', '   ~~~', '    ```cornfield-run ' + ID2, 'a\r\nb\rc'].join('\n');
+    const text = c.formatRunComment(ID, { state: 'done', note });
+    expect(c.readRunBlocks(text)).toEqual({ blocks: [{ runId: ID, type: 'report', value: { state: 'done', note } }], refused: [] });
+    const quoted = text.slice(text.indexOf('\n\n') + 2, text.indexOf('```cornfield-run ' + ID));
+    expect(quoted.trimEnd().split('\n')).toEqual(['> \\\\\\[x](/elsewhere) !\\\\\\[i](/img.png) \\\\&amp;lt;b>', '> > quoted already', '> >', '>', `>    ~${ZW}~${ZW}~`,
+      `>     '''cornfield-run ${ID2}`, '> a', '> b', '> c']);
   });
   it('refuses to write what the contract refuses', () => {
     expect(() => c.formatRunBlock('nope', request())).toThrow(/not a run id/);
