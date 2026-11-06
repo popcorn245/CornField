@@ -672,6 +672,17 @@ describe('the push and pull transports', () => {
     });
   });
 
+  describe('the timeline of a runner', () => {
+    it('has one Claimed line when the runner claims and then reports claimed', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'claimed', note: 'Starting.' })).status).toBe(200);
+      const line = (await page('GET', '/api/agent-runs')).json.runs[0].timeline;
+      expect(line.map((e) => [e.kind, e.ref])).toEqual([['requested', null], ['claimed', 'claimed'], ['report', 'claimed']]);
+    });
+  });
+
   describe('rows from before a runner was named as itself', () => {
     it('still read: a login as the reporter and as a timeline actor is shown as it was', async () => {
       const { runId } = await pulled();

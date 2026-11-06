@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 // @ts-expect-error plain JS module, no declarations
 import { openStore } from '../../server/db.js';
 // @ts-expect-error plain JS module, no declarations
-import { TOKEN_PREFIX, DEFAULT_DAYS, MAX_DAYS, MAX_ACTIVE, MAX_LABEL, hashToken, bearerOf, labelProblem, daysOf, stateOf, mintToken, findToken, touchToken, listTokens, revokeToken, runnerBy, runnerTokenOf, byToText, byFromText, byLabel } from '../../server/review-tokens.js';
+import { TOKEN_PREFIX, DEFAULT_DAYS, MAX_DAYS, MAX_ACTIVE, MAX_LABEL, hashToken, bearerOf, labelProblem, daysOf, stateOf, mintToken, findToken, touchToken, listTokens, revokeToken, runnerBy, runnerTokenOf, byToText, byFromText } from '../../server/review-tokens.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-10-19T12:00:00Z');
@@ -212,7 +212,5 @@ describe('who a runner token acts as', () => {
     expect(byFromText('{not json')).toBe('{not json');
     expect(byFromText(null)).toBe(null);
     expect(byToText('maintainer-one')).toBe('maintainer-one');
-    expect(byLabel(by)).toBe('bucket-bot');
-    expect(byLabel('maintainer-one')).toBe('maintainer-one');
   });
 });

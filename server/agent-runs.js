@@ -1195,7 +1195,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       .run(r.state, stamp, runnerText(token), r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, row.run_id, token.id).changes;
     if (changed !== 1) throw new Refused(409, `Run ${row.run_id} changed while the report was being taken; read it again (GET /api/runs/${row.run_id}).`, 'conflict');
     const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
-    keepEvent(db, row.run_id, { key: `report:runner:${token.id}:${stamp}:${r.state}`, at: stamp, kind: r.state === 'claimed' ? 'claimed' : 'report', actor: runnerText(token), ref: r.state, note: r.note ?? null, url: r.url ?? null });
+    // A report of `claimed` on a run the claim route already claimed is a report, not a second "Claimed" line
+    keepEvent(db, row.run_id, { key: `report:runner:${token.id}:${stamp}:${r.state}`, at: stamp, kind: r.state === 'claimed' && row.state !== 'claimed' ? 'claimed' : 'report', actor: runnerText(token), ref: r.state, note: r.note ?? null, url: r.url ?? null });
     const actor = runnerActor(token);
     if (r.state === 'claimed' && row.state !== 'claimed') hooks?.emit('run.claimed', { ...runPayload(after, actor), state: r.state });
     if (r.state !== row.state) hooks?.emit('run.state', { ...runPayload(after, actor), state: r.state });

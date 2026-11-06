@@ -88,11 +88,6 @@ export function byFromText(text) {
   return text;
 }
 
-/** The name `by` is shown as: a runner's label, else the login as it is */
-export function byLabel(by) {
-  return by && typeof by === 'object' ? by.label : by ?? null;
-}
-
 const iso = (ms) => new Date(ms).toISOString();
 
 /** The SHA-256 of a token, as hex: what the table keeps */
