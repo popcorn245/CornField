@@ -82,7 +82,7 @@ import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, ru
 import { quietAfterMs } from '../core/config.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
 import { readTopology } from '../core/validate.js';
-import { findPullProposal, listPullProposals, readPullProposal } from './proposal-pulls.js';
+import { findPullProposal, listPullProposals, pullProposals, readPullProposal } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 import { byFromText, byToText, runnerBy } from './review-tokens.js';
 
@@ -244,6 +244,8 @@ function requestNodes(request, known) {
  * @property {{ auth: object, now?: () => number }} limits what server/throttle.js counts by
  * @property {{ token: { id: number, label: string } } | null} [via] set when the request came through the API: the token it came with
  * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the cap is taken: null to go on, or why not
+ * @property {number} [landed] set only by the `spec.approved` trigger: the spec pull request the approval was on. If no open pull request holds the
+ *   proposal because that one has since merged, the request is about the proposal as it is on the default branch (no `refs.pull`) and is posted there
  * @property {{ event: string, ref: string }} [trigger] set only by an opt-in trigger (server/triggers.js): what caused this request. It is written into the
  *   request (`trigger: { event, by, ref }`, `by` being the maintainer asking) and the audit row, and the run's `via` is 'trigger'. A caller's body can never set it
  */
@@ -493,11 +495,16 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       else if (made.refs.proposal != null) {
         const listed = await listPullProposals(forge, folder, { hooks: null });
         entry = listed.entries.find((e) => e.slug === made.refs.proposal) ?? null;
-        if (!entry) throw new Refused(404, listed.problem ? `The open spec pull requests could not be read: ${listed.problem}` : `No open spec pull request holds the proposal ${made.refs.proposal}, so there is nowhere to post the request.`, 'not-found');
-        number = entry.pull.number;
-        made = build(me.login, number);
-        runId = made.runId;
-        Object.assign(asked, { runId });
+        if (entry) {
+          number = entry.pull.number;
+          made = build(me.login, number);
+          runId = made.runId;
+          Object.assign(asked, { runId });
+        } else if (ctx.landed != null && (entry = await landedEntry(forge, ctx.landed, made.refs.proposal))) {
+          // A trigger's approval landed its spec pull request first (proposals.approveLands): the proposal is on the default branch, so
+          // the request names no pull request ("an approved proposal already on the default branch has none") and is posted on the merged one
+          number = ctx.landed;
+        } else throw new Refused(404, listed.problem ? `The open spec pull requests could not be read: ${listed.problem}` : `No open spec pull request holds the proposal ${made.refs.proposal}, so there is nowhere to post the request.`, 'not-found');
       } else number = /** @type {number} */ (made.refs.issue);
       if (made.refs.issue != null) {
         try {
@@ -729,19 +736,41 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   }
 
   /**
+   * The proposal `slug` as merged pull request `n` held it, or null: not merged, gone, or it never held that proposal. Read of the forge
+   * (its files at its head), not taken from the trigger's word, so a request is posted only on a pull request that landed the proposal.
+   * @param {import('./forge.js').Forge} forge
+   * @param {number} n
+   * @param {string} slug
+   */
+  async function landedEntry(forge, n, slug) {
+    let pull;
+    try {
+      pull = await forge.pull(n);
+    } catch (err) {
+      if (err instanceof ForgeError && err.code === 'not-found') return null;
+      throw err;
+    }
+    if (pull.state !== 'merged') return null;
+    return (await pullProposals(forge, folder, pull)).find((e) => e.slug === slug) ?? null;
+  }
+
+  /**
    * What a run is about, as references the map resolves (spec 0005 D9: "before the first push, the nodes come from what the request was
    * about: the proposal, or the thread's mentions"): the `[[mentions]]` in the opening post of its thread, issue or spec PR, and for a
    * proposal the ids of every node it touches (what it adds, changes and removes, the parents of what it adds, and the ends of the edges it
-   * adds, changes and removes). Asks the forge; throws what it throws. `entry`: the spec PR's listing when the caller has it already.
+   * adds, changes and removes). Asks the forge; throws what it throws. `entry`: the spec PR's listing when the caller has it already. A proposal
+   * with no `pull` (one a trigger asked about after it landed) is read from the merged pull request `target` the request was posted on.
    * @returns {Promise<string[]>}
    */
-  async function subjectRefs(forge, refs, entry = null) {
+  async function subjectRefs(forge, refs, entry = null, target = null) {
     const out = [];
     const add = (r) => { if (typeof r === 'string' && r !== '' && !out.includes(r)) out.push(r); };
-    if (refs?.proposal != null && refs.pull != null) {
-      const pull = await forge.pull(refs.pull);
+    // A request about a proposal and a conversation is read as the conversation's when it names no spec pull request
+    const at = refs?.pull ?? entry?.pull.number ?? (refs?.thread == null && refs?.issue == null ? target : null);
+    if (refs?.proposal != null && at != null) {
+      const pull = await forge.pull(at);
       parseMentions(pull.body ?? '').refs.forEach(add);
-      const found = entry ?? await findPullProposal(forge, folder, refs.proposal, refs.pull);
+      const found = entry ?? (refs.pull != null ? await findPullProposal(forge, folder, refs.proposal, refs.pull) : await landedEntry(forge, at, refs.proposal));
       if (found) {
         let proposal = null;
         try { proposal = JSON.parse(await readPullProposal(forge, folder, found)); } catch (err) { if (!(err instanceof SyntaxError)) throw err; }
@@ -804,10 +833,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (mentions >= MAX_MENTION_READS) continue;
       let refs = null;
       try { refs = JSON.parse(row.request).refs; } catch { refs = null; }
-      if (!(refs?.proposal != null && refs.pull != null) && refs?.thread == null && refs?.issue == null) continue;
+      if (!(refs?.proposal != null && (refs.pull != null || row.target != null)) && refs?.thread == null && refs?.issue == null) continue;
       mentions += 1;
       try {
-        save.run(row.run_id, 'mentions', '', JSON.stringify(await subjectRefs(forge, refs)), iso(at));
+        save.run(row.run_id, 'mentions', '', JSON.stringify(await subjectRefs(forge, refs, null, row.target)), iso(at));
       } catch (err) {
         log(`what ${row.run_id} is about could not be read for its nodes: ${words(err)}`);
       }
