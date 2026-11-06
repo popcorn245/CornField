@@ -28,6 +28,8 @@
  *   trigger.skipped  an opt-in trigger (`agents.on`, server/triggers.js) was going to request a run and did not: the maintainer whose act caused it has no
  *                   live sign-in (`reason: 'no-session'`), or the request was refused (the cap, the one-run-per-subject rule, the rate limit: the refusal's code).
  *                   Its body is its own: `{ event, at, trigger: { event, by, ref }, by, reason, mapUrl }`
+ *   runner.offline  on the pull transport, the last live runner token has not polled for `agents.runnerQuietAfter` (3 minutes unless set; server/runner-presence.js).
+ *                   Once, and again only after a runner has been seen online again. Its body is its own: `{ event, at, label, lastSeen, mapUrl }`, never a token
  *   run.claimed  run.state  run.stopRequested  run.finished   a run was claimed by its runner, changed state, was asked to stop, ended. They are
  *                   seen when cornfield looks (the spec poll, server/spec-poll.js), each once. Their body is their own:
  *                   `{ event, at, runId, state, pull?, issue?, actor, mapUrl }`
@@ -216,6 +218,8 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
       const t = p.trigger && typeof p.trigger === 'object' ? { event: p.trigger.event ?? null, by: p.trigger.by ?? null, ref: p.trigger.ref ?? null } : null;
       return JSON.stringify({ event, at: new Date(now()).toISOString(), trigger: t, by: p.by ?? null, reason: p.reason ?? null, mapUrl: publicUrl || null });
     }
+    // The runner that went quiet: its label and when it last polled, never a token
+    if (event === 'runner.offline') return JSON.stringify({ event, at: new Date(now()).toISOString(), label: p.label ?? null, lastSeen: p.lastSeen ?? null, mapUrl: publicUrl || null });
     // A request goes out as it was posted, and is checked once more on the way: nothing like a credential can leave through a hook
     if (event === 'agent.requested') {
       const checked = validateRequest(p.request);

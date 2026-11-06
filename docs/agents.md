@@ -193,6 +193,15 @@ A runner asks, claims, works and reports. Every answer is JSON `{ ok, … }`, or
 
 A claimed run with no report within `agents.quietAfter` goes quiet as usual; a later report makes it open again. The `run.claimed`, `run.state` and `run.finished` [hooks](config.md#hooks) fire for these reports as they do for reports on the forge (the actor is `runner:<token label>`).
 
+### Is a runner there?
+
+On `pull` a queued run waits silently when nobody polls, so cornfield keeps when each runner token last polled and says so. Any call a live runner token makes to the routes above (the queue read, a claim, a report) counts; it is stored on the token (`last_used`, nothing else is kept). A revoked or expired token is not a runner.
+
+- **Where it shows.** One line in the Agents tab, over the runs, and on the **Start an agent** dialog: "Runner online · last seen 20 s ago", or "No runner has polled for 5 min: a queued run will wait" ("No runner has polled yet" before the first poll). It is words, not colour, and a change from one to the other is said through the live region. It is shown on `pull` only.
+- **The window.** `agents.runnerQuietAfter`, 3 minutes unless set (`1m` to `60m`; [config](config.md#agents)). A runner that polls every 15 to 60 seconds stays well inside it.
+- **The API.** `GET /api/agent-runs` has `runnerPresence: { transport, online, lastSeen, quietAfterMs, runners: [{ label, lastSeen }] }` (live tokens that have polled, newest first; never a token). The runs listing's `runners` is, as before, the count of `agents.runners` logins.
+- **The hook.** [`runner.offline`](config.md#hooks) fires once when the last live runner goes quiet: `{ event, at, label, lastSeen, mapUrl }`. It fires again only after a runner has been online again.
+
 ### Push
 
 The existing `agent.requested` hook is the push: a POST of `{ event, at, request, actor, mapUrl }` to the configured URL, signed with `CORNFIELD_HOOK_SECRET`, retried as every hook is (see [hooks](config.md#hooks)). The runner verifies it with two checks, in this order, before it does anything:

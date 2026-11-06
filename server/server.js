@@ -48,7 +48,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel } from '../core/config.js';
+import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel, runnerQuietAfterMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -65,6 +65,7 @@ import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
 import { createSpecPoll } from './spec-poll.js';
+import { createRunnerWatch } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -191,6 +192,10 @@ export function createCornfieldServer(config, opts = {}) {
   const runsEvery = config.hookPoll === undefined ? DEFAULTS.hookPoll.specs : config.hookPoll.specs;
   const pollMs = specMs ?? (runs && runsEvery !== false ? parseDuration(runsEvery) : null);
   const specPoll = pollMs ? createSpecPoll({ config, where, auth, hooks, runs, specs: specMs !== null, intervalMs: pollMs, now: opts.now, timer: opts.specPollTimer }) : null;
+  // On the pull transport, says once (the `runner.offline` hook event) when the last live runner has stopped polling; only if a hook asks for it
+  const runnerWatch = runs && transport === 'pull' && hooks && hookWants(config, ['runner.offline'])
+    ? createRunnerWatch({ auth, hooks, quietMs: runnerQuietAfterMs(config), now: opts.now, timer: opts.runnerWatchTimer })
+    : null;
   let serverClosed = false;
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
@@ -230,13 +235,14 @@ export function createCornfieldServer(config, opts = {}) {
     }
   });
   server.on('listening', () => {
+    runnerWatch?.start();
     if (specMs !== null) specPoll?.start();
     else if (specPoll && runs) {
       // Runs asked for before a restart are followed again from the start
       runs.hasWork().then((work) => { if (work && !serverClosed) specPoll.start(); }).catch(() => {});
     }
   });
-  server.on('close', () => { serverClosed = true; specPoll?.close(); lander?.close(); hooks?.close(); auth.close(); });
+  server.on('close', () => { serverClosed = true; specPoll?.close(); runnerWatch?.close(); lander?.close(); hooks?.close(); auth.close(); });
   return server;
 
   async function answer(req, res) {

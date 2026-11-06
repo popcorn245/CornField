@@ -156,11 +156,11 @@ describe('the push and pull transports', () => {
     return { port: /** @type {import('node:net').AddressInfo} */ (server.address()).port, close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(() => resolve(undefined)); }) };
   };
   /** (Re)starts the server under this transport */
-  const boot = async (transport, extra = {}) => {
+  const boot = async (transport, extra = {}, serverOpts = {}) => {
     await srv?.close();
     Object.assign(config, { hooks: [{ url: rcv.url, events: '*' }], ...extra });
     config.agents.transport = transport;
-    srv = await start(config);
+    srv = await start(config, serverOpts);
     cookie = await signedIn(srv.port, 'c-maint');
   };
 
@@ -735,6 +735,75 @@ describe('the push and pull transports', () => {
       for (let i = 0; i < 130; i++) if ((await queue(runner.secret)).status === 429) limited += 1;
       expect(limited).toBe(10);
       expect(runnerRows().length).toBeLessThan(5);
+    });
+  });
+  describe('whether a runner is online (issue #99)', () => {
+    const presence = async () => (await page('GET', '/api/agent-runs')).json.runnerPresence;
+
+    it('records each poll per token and shows it in the runs listing, with a revoked token left out', async () => {
+      await boot('pull');
+      const a = await mint('runner', 'laptop');
+      const b = await mint('runner', 'server');
+      expect(await presence()).toMatchObject({ transport: 'pull', online: false, lastSeen: null, quietAfterMs: 180_000, runners: [] });
+      const t0 = new Date(clock).toISOString();
+      // an empty queue read is a poll: an idle runner is still there
+      const empty = await queue(a.secret);
+      expect([empty.status, empty.json.requests]).toEqual([200, []]);
+      expect(await presence()).toMatchObject({ online: true, lastSeen: t0, runners: [{ label: 'laptop', lastSeen: t0 }] });
+      later(30_000);
+      const t1 = new Date(clock).toISOString();
+      expect((await queue(b.secret)).status).toBe(200);
+      expect((await presence()).runners).toEqual([{ label: 'server', lastSeen: t1 }, { label: 'laptop', lastSeen: t0 }]);
+      // a call the engine refuses still came from a live runner token, so it counts too
+      later(10_000);
+      const t2 = new Date(clock).toISOString();
+      expect((await call(a.secret, 'GET', '/api/agent-requests?state=other')).status).toBe(400);
+      expect((await presence()).runners[0]).toEqual({ label: 'laptop', lastSeen: t2 });
+      later(4 * 60_000);
+      expect(await presence()).toMatchObject({ online: false, lastSeen: t2 });
+      expect((await queue(a.secret)).status).toBe(200);
+      expect((await presence()).online).toBe(true);
+      expect((await page('POST', `/api/runner-tokens/${a.token.id}/revoke`, {})).status).toBe(200);
+      expect((await presence()).runners.map((r) => r.label)).toEqual(['server']);
+      // never a token in the answer
+      expect(JSON.stringify(await presence())).not.toMatch(/cf_nt_/);
+    });
+
+    it('has no watch off the pull transport, and the listing says which transport it is', async () => {
+      let started = 0;
+      await boot('push', {}, { runnerWatchTimer: { setInterval: () => { started++; return 1; }, clearInterval: () => {} } });
+      expect(started).toBe(0);
+      expect((await presence()).transport).toBe('push');
+    });
+
+    it('fires runner.offline once when the last runner has been quiet for the window, and again only after one returned', async () => {
+      let tick;
+      await boot('pull', {}, { runnerWatchTimer: { setInterval: (fn) => { tick = fn; return 1; }, clearInterval: () => {} } });
+      const runner = await mint('runner', 'laptop');
+      expect((await queue(runner.secret)).status).toBe(200);
+      const seen = new Date(clock).toISOString();
+      tick();
+      later(2 * 60_000);
+      tick();
+      await new Promise((r) => setTimeout(r, 100));
+      expect(rcv.of('runner.offline')).toEqual([]);
+      later(2 * 60_000);
+      tick();
+      const got = await rcv.next('runner.offline');
+      expect(got).toHaveLength(1);
+      expect(got[0].body).toEqual({ event: 'runner.offline', at: new Date(clock).toISOString(), label: 'laptop', lastSeen: seen, mapUrl: PUBLIC });
+      expect(got[0].raw.toString()).not.toMatch(/cf_nt_/);
+      later(10 * 60_000);
+      tick();
+      await new Promise((r) => setTimeout(r, 100));
+      expect(rcv.of('runner.offline')).toHaveLength(1);
+      // back, then quiet again: a second event
+      expect((await queue(runner.secret)).status).toBe(200);
+      tick();
+      await new Promise((r) => setTimeout(r, 50));
+      later(4 * 60_000);
+      tick();
+      expect(await rcv.next('runner.offline', 2)).toHaveLength(2);
     });
   });
 });

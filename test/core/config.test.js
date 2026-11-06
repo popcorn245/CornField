@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, parseDuration, specPollMs } from '../../core/config.js';
+import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, runnerQuietAfterMs, parseDuration, specPollMs } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
 
 const made = [];
@@ -46,7 +46,7 @@ describe('configProblems', () => {
     const url = (u) => hooks({ url: u, events: '*' });
 
     it('takes { url, events } with events from the five names, or "*"', () => {
-      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped']);
+      expect(HOOK_EVENTS).toEqual(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped', 'runner.offline']);
       expect(configProblems({ hooks: [] })).toEqual([]);
       expect(configProblems(hooks({ url: 'https://chat.example.org/h?x=1', events: ['spec.ready', 'pr.landed'] }, { url: 'https://b.example.org', events: '*' }))).toEqual([]);
       expect(configProblems(hooks({ url: 'https://a.example.org', events: [...HOOK_EVENTS] }))).toEqual([]);
@@ -123,7 +123,7 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', limits: {}, on: {}, refuseCollisions: false };
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', runnerQuietAfter: '3m', limits: {}, on: {}, refuseCollisions: false };
     expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
     expect(c.agents).toEqual(defaults);
@@ -378,6 +378,16 @@ describe('the agents keys that ask for and follow runs (spec 0005)', () => {
     expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: ['agent.requested'] }] })).toEqual([]);
     expect(configProblems({ ...push, hooks: [{ url: 'https://runner.example.org/hook', events: '*' }] })).toEqual([]);
     expect(configProblems({ agents: { transport: 'smoke-signals' } }).join()).toContain('"forge", "push", "pull"');
+  });
+
+  it('check agents.runnerQuietAfter, the quiet window of a runner that polls (issue #99)', () => {
+    for (const ok of ['1m', '3m', '10m', '1h']) expect(configProblems({ agents: { runnerQuietAfter: ok } }), ok).toEqual([]);
+    const bad = (v) => configProblems({ agents: { runnerQuietAfter: v } }).join('\n');
+    expect(bad('30s')).toContain('under the floor of 1m');
+    expect(bad('2h')).toContain('over the ceiling of 1h');
+    for (const v of ['soon', 3, '']) expect(bad(v), String(v)).toContain('agents.runnerQuietAfter is a duration');
+    expect(runnerQuietAfterMs({ agents: {} })).toBe(180_000);
+    expect(runnerQuietAfterMs({ agents: { runnerQuietAfter: '5m' } })).toBe(300_000);
   });
 
   it('read quietAfter with the duration parser of hookPoll', async () => {

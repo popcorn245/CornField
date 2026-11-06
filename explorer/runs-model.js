@@ -91,6 +91,34 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
+/** "20 s", "5 min", "2 h": how long ago, short enough for a line */
+function agoShort(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  return `${Math.floor(s / 3600)} h`;
+}
+
+/**
+ * Whether a runner is there, from the runs listing's `runnerPresence` (issue #99): 'online', 'offline' (it polled once, not lately), 'none' (no
+ * live runner token has polled), or null where it does not apply (not the pull transport). Worked out against `nowMs`, so it ages on the page.
+ */
+export function runnerState(presence, nowMs) {
+  if (!presence || presence.transport !== 'pull') return null;
+  const seen = typeof presence.lastSeen === 'string' ? Date.parse(presence.lastSeen) : NaN;
+  if (!Number.isFinite(seen)) return 'none';
+  return nowMs - seen < (presence.quietAfterMs || 180_000) ? 'online' : 'offline';
+}
+
+/** The one line: "Runner online · last seen 20 s ago", or "No runner has polled for 5 min: a queued run will wait"; '' where it does not apply */
+export function runnerWords(presence, nowMs) {
+  const state = runnerState(presence, nowMs);
+  if (state === 'online') return `Runner online · last seen ${agoShort(nowMs - Date.parse(presence.lastSeen))} ago`;
+  if (state === 'offline') return `No runner has polled for ${agoShort(nowMs - Date.parse(presence.lastSeen))}: a queued run will wait`;
+  if (state === 'none') return 'No runner has polled yet: a queued run will wait';
+  return '';
+}
+
 /**
  * The body of a start. Only what the person chose; the server writes the run id, the time and who asked, and checks the rest.
  * @param {{ kind: string, profile?: string, brief?: string, refs: object, force?: boolean }} input

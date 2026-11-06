@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, runsStatus, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -63,7 +63,7 @@ function fakeServer(opts = {}) {
     const at = '2026-11-05T11:58:00.000Z';
     if (init.method === 'POST' && u.pathname === '/api/agent-runs') return opts.start ? json(opts.start.status, opts.start.body) : json(201, { ok: true, request: { runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEH' }, run: RUN });
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
-    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
+    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at, rate: '', items: [] });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, at, rate: '', pulls: [pr(50, 'Meals page', 'Closes #7', 'agent/meals'), pr(40, 'Meals spec', '', 'spec/0040-meals')], issues: [issue(7, 'Meals page')], branches: [], specs: [{ pull: 40, slug: '0040-meals' }], agents: {} });
@@ -72,7 +72,7 @@ function fakeServer(opts = {}) {
   return { calls, posts: () => calls.filter((c) => c.init.method === 'POST'), urls: () => calls.map((c) => c.url) };
 }
 
-function mount() {
+function mount(clock = () => NOW, extra = {}) {
   document.head.innerHTML = `<title>cornfield</title><style>${css}</style>`;
   document.body.innerHTML = body;
   document.documentElement.lang = 'en';
@@ -90,8 +90,8 @@ function mount() {
   resetKeyboardForTests();
   initKeyboard();
   initSheets();
-  resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock: () => NOW });
+  resetForgePanelForTests(clock);
+  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock });
 }
 const openIssues = async () => { openForge(); await settle(); click(q('[data-forge-kind="issues"]')); await settle(); };
 const openAgents = async () => { openForge(); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
@@ -313,10 +313,11 @@ describe('the runs on the Agents tab', () => {
 describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
   it('passes axe with the runs listed and with the dialog open, a refusal showing', async () => {
     document.documentElement.dataset.theme = theme;
-    fakeServer({ start: { status: 409, body: { ok: false, code: 'run-open', error: 'issue #7 already has an open run.' } } });
+    fakeServer({ presence: { transport: 'pull', online: false, lastSeen: null, quietAfterMs: 180_000, runners: [] }, start: { status: 409, body: { ok: false, code: 'run-open', error: 'issue #7 already has an open run.' } } });
     mount();
     document.documentElement.dataset.theme = theme;
     await openAgents();
+    expect($('forge-runs-runner').hidden).toBe(false);
     expect(await audit()).toEqual([]);
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
@@ -324,5 +325,73 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     await settle();
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
+  });
+});
+
+describe('whether a runner is online (issue #99)', () => {
+  const at = (secondsAgo) => new Date(NOW - secondsAgo * 1000).toISOString();
+  const presence = (secondsAgo, extra = {}) => ({ transport: 'pull', online: secondsAgo !== null && secondsAgo < 180, lastSeen: secondsAgo === null ? null : at(secondsAgo), quietAfterMs: 180_000, runners: [], ...extra });
+
+  it('says the state in words, only on the pull transport', () => {
+    document.body.innerHTML = body;
+    expect(runnerWords(presence(20), NOW)).toBe('Runner online \u00b7 last seen 20 s ago');
+    expect(runnerWords(presence(300), NOW)).toBe('No runner has polled for 5 min: a queued run will wait');
+    expect(runnerWords(presence(null), NOW)).toBe('No runner has polled yet: a queued run will wait');
+    expect(runnerState(presence(20), NOW)).toBe('online');
+    expect(runnerState(presence(300), NOW)).toBe('offline');
+    expect(runnerWords({ ...presence(20), transport: 'forge' }, NOW)).toBe('');
+    expect(runnerWords(undefined, NOW)).toBe('');
+  });
+
+  it('shows one line in the Agents tab when a runner is online', async () => {
+    fakeServer({ presence: presence(20) });
+    mount();
+    await openAgents();
+    expect($('forge-runs-runner').hidden).toBe(false);
+    expect($('forge-runs-runner').textContent).toBe('Runner online \u00b7 last seen 20 s ago');
+  });
+
+  it('shows the warning on the Start dialog when none has polled lately', async () => {
+    fakeServer({ presence: presence(360) });
+    mount();
+    await openIssues();
+    click(q('[data-forge-agent="issue:7"]'));
+    await settle();
+    expect($('agent-start').hidden).toBe(false);
+    expect($('agent-start-runner').hidden).toBe(false);
+    expect($('agent-start-runner').textContent).toBe('No runner has polled for 6 min: a queued run will wait');
+  });
+
+  it.each(['forge', 'push'])('shows nothing on the %s transport, in the Agents tab or the Start dialog', async (transport) => {
+    fakeServer({ presence: presence(20, { transport }) });
+    mount();
+    await openAgents();
+    expect($('forge-runs-runner').hidden).toBe(true);
+    await openIssues();
+    click(q('[data-forge-agent="issue:7"]'));
+    await settle();
+    expect($('agent-start-runner').hidden).toBe(true);
+  });
+
+  it('says once, as the runs are looked at again, when the runner goes quiet though the listing has not changed, and once when it is back', async () => {
+    let clock = NOW;
+    const p = presence(20);
+    fakeServer({ presence: p });
+    vi.useFakeTimers();
+    try {
+      // with runs on, the page reads them at once and again every minute while one is open, whether or not the panel is
+      mount(() => clock, { agents: { runs: true } });
+      await vi.advanceTimersByTimeAsync(100);
+      const poll = async () => { $('map-announcer').textContent = ''; await vi.advanceTimersByTimeAsync(60_000); await vi.advanceTimersByTimeAsync(100); return $('map-announcer').textContent; };
+      clock += 5 * 60_000;
+      expect(await poll()).toMatch(/No runner has polled for 5 min: a queued run will wait/);
+      clock += 60_000;
+      expect(await poll()).not.toMatch(/runner/i);
+      p.lastSeen = new Date(clock - 5_000).toISOString();
+      expect(await poll()).toMatch(/Runner online · last seen 5 s ago/);
+      expect(await poll()).not.toMatch(/runner/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

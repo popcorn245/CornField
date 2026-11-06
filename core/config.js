@@ -13,7 +13,7 @@
  *     },
  *     forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' },   // or type 'forgejo'; mergeMethod: 'merge' | 'squash' | 'rebase'; baseBranch: 'main'
  *     deploys: { workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } },   // which workflow runs are deploys, and what they restart (docs/deploys.md)
- *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md); and how runs are asked for and followed: transport, maxOpen, profiles, runners, quietAfter, limits (docs/config.md#agents)
+ *     agents: { authors: [], labels: [], branchPrefixes: [], bots: true },   // what marks work as made by an agent (docs/agents.md); and how runs are asked for and followed: transport, maxOpen, profiles, runners, quietAfter, runnerQuietAfter, limits (docs/config.md#agents)
  *     port: 3350,
  *     host: '127.0.0.1',                      // loopback, unless sign-in is configured with an https publicUrl (server/bind.js)
  *     publicUrl: null,                        // the origin people open it at; sign-in needs it (server/auth.js)
@@ -70,7 +70,7 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped', 'runner.offline']);
 /** The events that come from looking at threads (server/threads.js): a poll that wants any of them looks at threads too */
 export const THREAD_EVENTS = Object.freeze(['thread.opened', 'thread.message', 'thread.linked']);
 /** The keys of `threads` when it is an object, and the label's longest length */
@@ -129,6 +129,10 @@ export const QUIET_MIN_MS = 5 * 60_000;
 export const QUIET_MAX_MS = 30 * 24 * 3_600_000;
 /** The most profiles and runners a config lists */
 export const MAX_PROFILES = 20;
+/** `agents.runnerQuietAfter`: how long no live runner token may go without polling before the runner is offline (pull transport, issue #99); its bounds in milliseconds */
+export const DEFAULT_RUNNER_QUIET_AFTER = '3m';
+export const RUNNER_QUIET_MIN_MS = 60_000;
+export const RUNNER_QUIET_MAX_MS = 3_600_000;
 export const MAX_RUNNERS = 50;
 
 /**
@@ -136,6 +140,9 @@ export const MAX_RUNNERS = 50;
  * @param {{ agents?: { quietAfter?: string } }} config a loaded config
  */
 export const quietAfterMs = (config) => parseDuration(config.agents?.quietAfter ?? DEFAULT_QUIET_AFTER) ?? parseDuration(DEFAULT_QUIET_AFTER);
+
+/** How long a runner token may go without polling before no runner is online, in milliseconds: `agents.runnerQuietAfter`, '3m' unless set */
+export const runnerQuietAfterMs = (config) => parseDuration(config.agents?.runnerQuietAfter ?? DEFAULT_RUNNER_QUIET_AFTER) ?? parseDuration(DEFAULT_RUNNER_QUIET_AFTER);
 
 export const DEFAULTS = Object.freeze({
   title: null,
@@ -152,7 +159,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
-  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, limits: {}, on: {}, refuseCollisions: false },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, runnerQuietAfter: DEFAULT_RUNNER_QUIET_AFTER, limits: {}, on: {}, refuseCollisions: false },
   hooks: [],
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
@@ -168,7 +175,7 @@ export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
 /** The keys of `worktrees` when it is an object: the folder, and how many days without a change leave a worktree out of the list (default: none is left out) */
 export const WORKTREES_KEYS = Object.freeze(['dir', 'maxAgeDays']);
 const MAX_WORKTREE_AGE_DAYS = 36500;
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'limits', 'on', 'refuseCollisions'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'runnerQuietAfter', 'limits', 'on', 'refuseCollisions'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -390,6 +397,12 @@ function agentRunProblems(a) {
     if (ms === null) out.push('agents.quietAfter is a duration like "90m", "24h" or "72h".');
     else if (ms < QUIET_MIN_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is under the floor of 5m; use "5m" or more.`);
     else if (ms > QUIET_MAX_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is over the ceiling of 30 days; use "720h" or less.`);
+  }
+  if (a.runnerQuietAfter !== undefined) {
+    const ms = parseDuration(a.runnerQuietAfter);
+    if (ms === null) out.push('agents.runnerQuietAfter is a duration like "3m" or "10m": how long a runner may go without polling before it counts as offline (3m unless set).');
+    else if (ms < RUNNER_QUIET_MIN_MS) out.push(`agents.runnerQuietAfter ${JSON.stringify(a.runnerQuietAfter)} is under the floor of 1m; use "1m" or more.`);
+    else if (ms > RUNNER_QUIET_MAX_MS) out.push(`agents.runnerQuietAfter ${JSON.stringify(a.runnerQuietAfter)} is over the ceiling of 1h; use "60m" or less.`);
   }
   if (a.on !== undefined) out.push(...triggerProblems(a));
   if (a.limits !== undefined) {

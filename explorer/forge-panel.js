@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -119,6 +119,7 @@ const ui = {
   runs: null, // { data, error } of the Agents tab's runs: what /api/agent-runs answered
   runNote: null, // { text, ok }: what the last Stop came to
   runSel: null, // the run lit on the map (Light on the map), by id
+  runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
   runTimelines: new Set(), // the runs whose timeline is open
   agent: null, // { opener, refs, posting } while the Start an agent dialog is open
 };
@@ -206,6 +207,12 @@ async function loadRuns(refresh, { say = true } = {}) {
   syncRunsPoll();
   if (ui.runSel) relightRun();
   const said = say ? changeWords(before, ui.runs.data.runs) : [];
+  // A runner appearing or going quiet is said once, when the state changes (the line itself is plain text, not a live region). The state last
+  // shown is kept, not worked out again from the last listing: a runner that goes quiet is the same listing judged later
+  const was = ui.runnerSaid;
+  const is = runnerState(ui.runs.data.runnerPresence, now());
+  ui.runnerSaid = is;
+  if (say && was && is && was !== is) said.push(runnerWords(ui.runs.data.runnerPresence, now()));
   if (said.length) announce(said.join('. '));
 }
 
@@ -1116,6 +1123,7 @@ function paintRuns() {
   note.hidden = !words;
   note.className = `hx-forge-notice${!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
   note.textContent = words;
+  paintRunner('forge-runs-runner', data);
   const trig = $('forge-runs-trigger');
   if (trig) {
     const skipped = data ? triggerNotice(data) : '';
@@ -1125,6 +1133,15 @@ function paintRuns() {
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }
   list.innerHTML = data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
+}
+
+/** The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply */
+function paintRunner(id, data) {
+  const el = $(id);
+  if (!el) return;
+  const words = data ? runnerWords(data.runnerPresence, now()) : '';
+  el.hidden = !words;
+  el.textContent = words;
 }
 
 /** What the Runs view needs to know of the page */
@@ -1424,6 +1441,7 @@ async function openAgent(ref, opener) {
   if (!ui.agent) return;
   const profiles = (ui.runs && ui.runs.data && ui.runs.data.profiles) || [];
   $('agent-start-about').textContent = `About ${aboutWords(refs)}`;
+  paintRunner('agent-start-runner', ui.runs && ui.runs.data);
   $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
   $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
   $('agent-profile-field').hidden = !profiles.length;
@@ -1830,5 +1848,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
 }
