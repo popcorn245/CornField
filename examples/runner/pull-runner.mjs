@@ -16,6 +16,7 @@
  *   REPO_DIR                 a clone of the repo that only this runner uses (it switches branches in it)
  *   GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL   the runner's own git identity
  *   POLL_SECONDS (30), ONCE=1 (one pass, then exit), BASE_BRANCH (main)
+ *   ASK_FIRST=1              for code: report `waiting` with the plan and publish only once a maintainer answers Continue (or a reply)
  *
  * The runner acts only on requests that reach it with its token, which a maintainer made: the token stands in for the request's author. Keep
  * the token as secret as the forge token. Run it as `node pull-runner.mjs`.
@@ -146,8 +147,22 @@ export async function publish({ request, answer, env, fetch, exec = sh }) {
   return (await res.json()).html_url;
 }
 
+/**
+ * Asks a maintainer (docs/agent-contract.md#reports-stopping-and-waiting): reports `waiting` with a note, then reads the run every `every` ms
+ * until it is answered or asked to stop. A new wait clears the last answer, so any answer seen belongs to this one. Resolves with the answer.
+ */
+export async function waitForAnswer(cf, runId, note, { sleep, every }) {
+  await cf.report(runId, 'waiting', { note });
+  for (;;) {
+    const run = await cf.run(runId);
+    if (!run || run.stopRequested || run.finished) return { action: 'stop' };
+    if (run.answer) return run.answer;
+    await sleep(every);
+  }
+}
+
 /** One pass: claim the oldest request and do it. Resolves with the run id it handled, or null when there was nothing to do. */
-export async function runOnce({ env, fetch = globalThis.fetch, exec, log = console.error }) {
+export async function runOnce({ env, fetch = globalThis.fetch, exec, log = console.error, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const cf = cornfield({ fetch, url: env.CORNFIELD_URL, token: env.CORNFIELD_RUNNER_TOKEN });
   // Only a request the contract accepts is claimed: cornfield checks it too, and this runner does not take its word for it
   const request = (await cf.queue()).map((r) => validateRequest(r)).find((c) => c.ok)?.value;
@@ -166,7 +181,19 @@ export async function runOnce({ env, fetch = globalThis.fetch, exec, log = conso
     if (request.kind !== 'code') {
       await cf.report(request.runId, 'done', { note: clean(text) });
     } else {
-      const url = await publish({ request, answer: parseModelAnswer(text), env, fetch, exec });
+      let plan = parseModelAnswer(text);
+      if (env.ASK_FIRST === '1') {
+        const paths = plan.files.map((f) => f.path).join(', ');
+        const answer = await waitForAnswer(cf, request.runId, clean(`Plan ready: ${plan.summary} (${paths}). Continue to publish it, Stop, or reply to change it.`), { sleep, every: Math.max(5, Number(env.POLL_SECONDS) || 30) * 1000 });
+        if (answer.action === 'stop') {
+          await cf.report(request.runId, 'stopped', { note: 'Stopped at the plan, before anything was published.' });
+          return request.runId;
+        }
+        await cf.report(request.runId, 'working');
+        // A reply is the maintainer's words to the model: the plan is asked for again with them
+        if (answer.action === 'reply') plan = parseModelAnswer(await ask({ fetch, ollamaUrl: env.OLLAMA_URL || 'http://127.0.0.1:11434', model: env.OLLAMA_MODEL, prompt: `${promptFor(request)}\n\nA maintainer answered your plan: ${answer.text}` }));
+      }
+      const url = await publish({ request, answer: plan, env, fetch, exec });
       await cf.report(request.runId, 'done', { note: 'Opened a pull request.', url });
     }
     say('done');
