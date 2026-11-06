@@ -129,6 +129,13 @@ describe('landing on approval', () => {
     world.asked.push(`${method} ${p}`);
     if (world.down && /\/check-runs$/.test(p)) return { status: 503, body: { message: 'Service Unavailable' } };
     if (method === 'GET' && p === '/pulls/40') return { body: { ...world.pull, mergeable_state: world.mergeState } };
+    // The open pull requests (a trigger's request looks for the proposal's spec PR here); `listGate` holds the answer until it resolves
+    if (method === 'GET' && p === '/pulls' && url.searchParams.get('state') === 'open') {
+      const answer = () => ({ body: world.pull.state === 'open' ? [world.pull] : [] });
+      if (world.listGate) { const gate = world.listGate; world.listGate = null; return gate.then(answer); }
+      return answer();
+    }
+    if (method === 'GET' && p === '/pulls/40/commits') return { body: [] };
     if (method === 'GET' && p === '/pulls/40/files') return { body: [PATH, ...Object.keys(world.others)].map((filename) => ({ filename, status: 'modified', additions: 1, deletions: 0, changes: 1 })) };
     if (method === 'GET' && p === '/issues/40/comments') return { body: world.comments };
     if (method === 'POST' && p === '/issues/40/comments') {
@@ -152,6 +159,7 @@ describe('landing on approval', () => {
     if (method === 'PUT' && p === '/pulls/40/merge') {
       world.merges.push(JSON.parse(req.body));
       world.pull.state = 'closed';
+      world.pull.merged_at = new Date(clock).toISOString();
       return { body: { sha: 'f'.repeat(40), merged: true } };
     }
     return { status: 404, body: { message: 'Not Found' } };
@@ -182,10 +190,11 @@ describe('landing on approval', () => {
   beforeAll(async () => { fake = await fakeForge(routes); });
   afterAll(async () => { await fake.close(); });
   /** Each test has its own data folder and server; `landing` is the config key */
-  const boot = async (landing = true) => {
+  const boot = async (landing = true, { on } = {}) => {
     data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-lander-'));
     config = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: data } });
     Object.assign(config, { forge: { type: 'github', url: fake.url, repo: 'owner/name' }, publicUrl: PUBLIC, approveLands: landing, hooks: [{ url: 'https://hooks.example.test/cf', events: ['pr.landed'] }] });
+    if (on) config.agents = { ...config.agents, on };
     srv = await start(config);
     cookie = await signedIn(srv.port, 'c-maint');
   };
@@ -658,6 +667,50 @@ describe('landing on approval', () => {
       expect((await page('GET', '/api/forge/pulls/40/landing/cancel')).status).toBe(405);
       expect(landings()[0].state).toBe('pending');
       expect(timer.waiting()).toHaveLength(1);
+    });
+  });
+
+  describe('with the spec.approved trigger (issue #97)', () => {
+    const ON = { 'spec.approved': { kind: 'code' } };
+    const requests = () => world.posted.filter((c) => c.body.includes('```cornfield-run'));
+    const runRows = () => query('SELECT * FROM runs');
+    /** The request as cornfield made it (its comment carries the same JSON) */
+    const requestOf = () => JSON.parse(String(runRows()[0].request));
+
+    it('approve, land, then the trigger reads: the run is asked for on the landed proposal, on the merged pull request', async () => {
+      await boot(true, { on: ON });
+      // The trigger's look for the open spec PRs is answered only once the landing has merged it: the order #97 was about
+      let merged;
+      world.listGate = new Promise((r) => { merged = r; });
+      await approveByButton();
+      await until('the merge', () => world.merges.length === 1);
+      merged();
+      await until('the request', () => requests().length === 1);
+      await settle();
+      expect(requests()).toHaveLength(1);
+      const asked = requestOf();
+      expect(asked.refs).toEqual({ proposal: SLUG });
+      expect(asked.trigger).toEqual({ event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' });
+      expect(runRows()).toEqual([expect.objectContaining({ via: 'trigger', proposal: SLUG, target: 40 })]);
+      expect(audit('trigger-skipped')).toEqual([]);
+      expect(audit('agent-request')).toEqual([expect.objectContaining({ target: 'owner/name#40', status: 201, request: expect.objectContaining({ refs: { proposal: SLUG }, trigger: { event: 'spec.approved', ref: 'pull:40' }, target: 40 }) })]);
+    });
+
+    it('approve, the trigger reads, then it lands: the run names the open spec pull request, and it is still one run', async () => {
+      await boot(true, { on: ON });
+      // The checks are held until the request is posted, so the landing merges after it
+      let green;
+      world.gate = new Promise((r) => { green = r; });
+      await approveByButton();
+      await until('the request', () => requests().length === 1);
+      expect(world.merges).toEqual([]);
+      green();
+      await until('the merge', () => world.merges.length === 1);
+      await settle();
+      expect(requests()).toHaveLength(1);
+      expect(requestOf().refs).toEqual({ proposal: SLUG, pull: 40 });
+      expect(runRows()).toEqual([expect.objectContaining({ via: 'trigger', proposal: SLUG, target: 40 })]);
+      expect(audit('trigger-skipped')).toEqual([]);
     });
   });
 

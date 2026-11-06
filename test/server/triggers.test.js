@@ -66,6 +66,10 @@ function setup({ on = ON, config = {}, signedIn = ['maintainer-one', 'maintainer
     commits: new Map(),
     checks: new Map(),
     specPulls: [{ number: 40, slug: '0040-meals' }],
+    /** What a pull request that is no longer open held, by number: a merged one's files are still the forge's to list */
+    held: {},
+    /** The proposal file's text, at any head */
+    proposalText: null,
   };
   const say = (number, login, body, extra = {}) => {
     const c = { id: String(world.nextComment++), author: { login }, body, url: `https://forge.test/c/${world.nextComment}`, createdAt: stamp(), updatedAt: stamp(), ...extra };
@@ -86,8 +90,8 @@ function setup({ on = ON, config = {}, signedIn = ['maintainer-one', 'maintainer
     pulls: async (q) => (q?.state === 'open' && q?.limit === undefined
       ? world.specPulls.map((s) => ({ number: s.number, title: 'Spec', state: 'open', draft: false, author: { login: 'maintainer-two' }, head: { sha: `${'a'.repeat(39)}${s.number % 10}`, ref: `spec/${s.slug}` }, url: `https://forge.test/pull/${s.number}` }))
       : world.pulls),
-    pullFiles: async (n) => [{ path: `${FOLDER}/${world.specPulls.find((s) => s.number === n)?.slug ?? 'x'}.json`, status: 'added' }],
-    file: async () => '{}',
+    pullFiles: async (n) => [{ path: `${FOLDER}/${world.specPulls.find((s) => s.number === n)?.slug ?? world.held[n] ?? 'x'}.json`, status: 'added' }],
+    file: async () => world.proposalText ?? '{}',
     pull: async (n) => {
       const p = world.pulls.find((x) => x.number === n);
       if (!p) throw new ForgeError('no such pull request', { code: 'not-found' });
@@ -367,7 +371,7 @@ describe('the /agent command', () => {
 
 describe('spec.approved after the approval landed the spec pull request (proposals.approveLands)', () => {
   /** The spec pull request merged before the trigger read it: no open one holds the proposal any more */
-  const land = (t) => { t.world.specPulls.length = 0; t.world.pulls[0].state = 'merged'; };
+  const land = (t, slug = '0040-meals') => { t.world.specPulls.length = 0; t.world.pulls[0].state = 'merged'; t.world.held[40] = slug; };
 
   it('asks for the run on the landed proposal: refs.proposal with no pull, the cause still pull:<n>, posted on the merged pull request', async () => {
     const t = setup();
@@ -401,6 +405,26 @@ describe('spec.approved after the approval landed the spec pull request (proposa
     await t.fire('spec.approved', approved());
     expect(t.runRows()).toHaveLength(1);
     expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['cap-reached']);
+  });
+
+  it('reads what the merged pull request held, not the event\'s word: one that never held the proposal is skipped with not-found', async () => {
+    const t = setup();
+    land(t, '0041-other');
+    await t.fire('spec.approved', approved());
+    expect(t.posted()).toEqual([]);
+    expect(t.runRows()).toEqual([]);
+    expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['not-found']);
+  });
+
+  it('marks the landed proposal\'s nodes for collisions, read from the merged pull request (agents.refuseCollisions)', async () => {
+    const t = setup({ config: { refuseCollisions: true } });
+    land(t);
+    t.world.proposalText = JSON.stringify({ version: 1, title: 'Meals', nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'app-a' }] } });
+    await t.fire('spec.approved', approved());
+    const [row] = t.runRows();
+    expect(row).toMatchObject({ proposal: '0040-meals', target: 40 });
+    const read = t.db.prepare("SELECT data FROM run_reads WHERE run_id = ? AND source = 'mentions'").get(row.run_id);
+    expect(JSON.parse(read.data)).toEqual(expect.arrayContaining(['page-meals', 'app-a']));
   });
 
   it('is unchanged when the pull request did not merge (closed, or gone): skipped with not-found', async () => {

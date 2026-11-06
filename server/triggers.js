@@ -40,7 +40,8 @@
  *
  * **approveLands.** With `proposals.approveLands`, an approval may land the spec pull request before the trigger's request reads it. The
  * request then finds no open proposal and asks for the run on the landed one: `refs: { proposal }` with no `pull`, posted on the merged spec
- * pull request, the cause unchanged (`pull:<n>`). Either order works; the cap and the one-run-per-subject rule apply as always.
+ * pull request, the cause unchanged (`pull:<n>`), once the forge says that pull request merged and its files held the proposal (else
+ * `not-found`). Either order works; the cap and the one-run-per-subject rule apply as always.
  *
  * **No live sign-in.** If the maintainer has no live session, the trigger does nothing else (cornfield holds no forge token of its own, and
  * another maintainer's would put words in their name): an audit row (`trigger-skipped`), the hook event `trigger.skipped`
