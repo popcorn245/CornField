@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -257,7 +257,11 @@ async function loadList(refresh = false, quiet = false) {
   ui.loading = false;
   if (res.ok) {
     ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '', problem: res.body.problem || '' };
-    if (ui.kind === 'threads') repaintThreads();
+    if (ui.kind === 'threads') {
+      repaintThreads();
+      // A thread's row names the state of the run that is about it (issue #104): the runs are read, once, when the tab is the first thing opened
+      if (!ui.runs) loadRuns(false, { say: false }).then(() => { if (ui.open && ui.kind === 'threads') paint(); }, () => {});
+    }
     if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
   } else {
     ui.error = errorWords(res.status, res.body);
@@ -850,9 +854,13 @@ function threadHtml(t) {
   const link = safeUrl(t.url);
   const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open thread ${t.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
   const note = [t.proposals && t.proposals.length ? `Proposal ${t.proposals.map((p) => p.slug).join(', ')}` : '', t.idea ? `Idea #${t.idea}` : ''].filter(Boolean).join(' · ');
+  // The run that is about this thread, as a word (issue #104): the Agents tab's list, read for every tab, says it; the row only names its state
+  const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
+  const run = runOnThread(runs, t.number);
+  const runWord = run ? `<span class="hx-forge-state hx-forge-state--${runTone(run)}" data-thread-run="${escHtml(run.runId)}">${escHtml(threadRunWords(runs, t.number))}</span> ` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}">
     <span class="hx-forge-title">${escHtml(t.title)}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}">${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> <span class="hx-forge-label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}">${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
 }
 
 function itemHtml(item, before = '', after = '') {

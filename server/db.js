@@ -21,6 +21,8 @@
  *   run_seen      what has been seen of each run (a comment judged, a hook event sent), so a restart sends and judges nothing twice
  *   run_events    what happened to each run, in order, for its timeline; run_reads what was read to work out its nodes (migration 9, issue #82);
  *                 migration 10 lets a run wait (state 'waiting') and keeps a maintainer's answer to it (answer_* on runs, 'answered' events)
+ *   run_mirrors   the one status comment cornfield keeps for a run in its thread (migration 11, issue #104): which comment, and a hash of the
+ *                 text last written to it, so a look edits it only when the run has moved
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
@@ -334,6 +336,21 @@ export const MIGRATIONS = Object.freeze([
   DROP TABLE run_events;
   ALTER TABLE run_events_new RENAME TO run_events;
   CREATE INDEX run_events_at ON run_events (run_id, at);
+  `,
+  // 11: a thread for every run (server/agent-runs.js, issue #104): the ONE comment cornfield keeps in a run's thread, edited in place as the run moves.
+  // A table of its own, so no existing table is rebuilt. `busy` is a claim (a time) held while the comment is being posted or edited, so two looks at
+  // once cannot post two comments; `gone` says someone deleted the comment, and cornfield does not post another
+  `
+  CREATE TABLE run_mirrors (
+    run_id      TEXT PRIMARY KEY,
+    number      INTEGER NOT NULL,                 -- the issue or pull request the comment is on
+    comment_id  TEXT,                             -- the forge's id of the comment, once it is posted
+    comment_url TEXT,
+    hash        TEXT NOT NULL DEFAULT '',         -- a hash of the text last written to it
+    busy        TEXT,
+    gone        INTEGER NOT NULL DEFAULT 0 CHECK (gone IN (0, 1)),
+    at          TEXT NOT NULL
+  ) STRICT;
   `,
 ]);
 

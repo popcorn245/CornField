@@ -20,6 +20,8 @@
  *   comments(n, { since })            the comments on an issue or pull request, oldest first; `since` (an ISO time) only those
  *                                     created or edited after it, which is how a thread is followed without reading it all again
  *   comment(n, body)                  posts one, and answers it
+ *   editComment(id, body)             replaces the text of a comment (by the id `comment` answered) and answers it: how a run's one status comment
+ *                                     in its thread is kept up to date (server/agent-runs.js, docs/agents.md#a-thread-for-every-run)
  *   checks(ref)                       the checks on a commit (a branch, a tag or a sha)
  *   rerun(check)                      re-runs one that can be (`check.rerunnable`)
  *   merge(n, { onlyIfGreen: true })   lands an open, ready pull request whose checks are all green, at the head they ran on
@@ -94,6 +96,7 @@
  *   compare(base: string, head: string): Promise<PullFile[]>,   // the files a branch changes against another (optional: a forge that cannot list them throws `invalid`)
  *   comments(n: number, opts?: { since?: string }): Promise<Comment[]>,
  *   comment(n: number, body: string): Promise<Comment>,
+ *   editComment(id: string, body: string): Promise<Comment>,
  *   checks(ref: string): Promise<Check[]>,
  *   rerun(check: Check): Promise<void>,
  *   merge(n: number, opts: { onlyIfGreen: true, method?: MergeMethod, sha?: string }): Promise<{ sha: string }>,
@@ -124,7 +127,7 @@ import { ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'changed', 'pull', 'issue', 'pullFiles', 'pullCommits', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'changed', 'pull', 'issue', 'pullFiles', 'pullCommits', 'comments', 'comment', 'editComment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -305,6 +308,10 @@ export function wrap(a, forge) {
       return a.comments(number(n), since === undefined ? {} : { since: new Date(since).toISOString() });
     },
     comment: async (n, body) => a.comment(number(n), text(body, 'The comment')),
+    editComment: async (id, body) => {
+      if (typeof id !== 'string' || !/^[0-9]{1,20}$/.test(id)) throw invalid('A comment is named by its id, the digits the forge gave it.');
+      return a.editComment(id, bounded(body, 'The comment', MAX_BODY));
+    },
     checks: async (ref) => a.checks(text(ref, 'The commit')),
     rerun: async (check) => {
       if (!check || typeof check.id !== 'string') throw invalid('Re-run which check?');

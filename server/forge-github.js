@@ -257,6 +257,10 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return toComment((await client.request('POST', `repos/${repo}/issues/${n}/comments`, { body: { body }, what: `#${n} in ${forge.repo}` })).body);
     },
 
+    async editComment(id, body) {
+      return toComment((await client.request('PATCH', `repos/${repo}/issues/comments/${id}`, { body: { body }, what: `comment ${id} in ${forge.repo}` })).body);
+    },
+
     async checks(ref) {
       const at = segments(ref);
       const what = `the checks on ${ref} in ${forge.repo}`;
