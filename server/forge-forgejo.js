@@ -191,6 +191,14 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);
     },
 
+    async changed({ since, limit }) {
+      // Without `type` the issues listing holds both kinds; it has no sort, so every page is read and sorted here, oldest update first
+      const q = new URLSearchParams({ state: 'open', since, limit: String(PER_PAGE) });
+      const all = (await client.list(`repos/${repo}/issues?${q}`, { what: `the open issues and pull requests of ${forge.repo} updated since ${since}` }))
+        .map((i) => ({ number: i.number, pull: Boolean(i.pull_request), labels: labelNames(i.labels), updatedAt: i.updated_at }));
+      return all.sort((x, y) => Date.parse(x.updatedAt) - Date.parse(y.updatedAt) || x.number - y.number).slice(0, limit);
+    },
+
     async pull(n) {
       return toPull((await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) })).body);
     },

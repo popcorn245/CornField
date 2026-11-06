@@ -10,6 +10,8 @@
  *   permission(repo, login)           their permission on a repo: admin | maintain | write | triage | read | none
  *   issues({ state, labels, limit })  issues, not pull requests, newest first
  *   pulls({ state, limit })           pull requests, newest first
+ *   changed({ since, limit })         the open issues and pull requests updated at or after `since`, the least recently updated first:
+ *                                     `{ number, pull, labels, updatedAt }` each, one listing for both (what a look for hand-written requests reads)
  *   pull(n)                           one pull request (its head, its state)
  *   issue(n)                          one issue (not a pull request: that is `not-found`)
  *   searchIssues(words)               the issues whose text holds the words (one page; the forge's search, which can lag a moment)
@@ -70,6 +72,8 @@
  * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number }} IssueQuery
  * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number }} PullQuery
  * @typedef {{ limit?: number }} RunQuery
+ * @typedef {{ since: string, limit?: number }} ChangedQuery
+ * @typedef {{ number: number, pull: boolean, labels: string[], updatedAt: string }} Changed
  * @typedef {'merge' | 'squash' | 'rebase'} MergeMethod
  * @typedef {{
  *   forge: 'github' | 'forgejo', repo: string,
@@ -77,6 +81,7 @@
  *   permission(repo: string, login: string): Promise<Permission>,
  *   issues(query?: IssueQuery): Promise<Issue[]>,
  *   pulls(query?: PullQuery): Promise<Pull[]>,
+ *   changed(query: ChangedQuery): Promise<Changed[]>,
  *   pull(n: number): Promise<Pull>,
  *   issue(n: number): Promise<Issue>,
  *   searchIssues(words: string): Promise<Issue[]>,
@@ -102,7 +107,8 @@
  *   createReleaseDraft(input: ReleaseDraftInput): Promise<ReleaseDraft>,
  *   rateLimit(): import('./forge-http.js').RateLimit | null,
  * }} Forge
- * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls' | 'runs'> & {
+ * @typedef {Omit<Forge, 'forge' | 'repo' | 'merge' | 'issues' | 'pulls' | 'runs' | 'changed'> & {
+ *   changed(query: Required<ChangedQuery>): Promise<Changed[]>,
  *   issues(query: Required<IssueQuery>): Promise<Issue[]>,
  *   pulls(query: Required<PullQuery>): Promise<Pull[]>,
  *   runs(query: Required<RunQuery>): Promise<Run[]>,
@@ -118,7 +124,7 @@ import { ForgeError, FILE_MAX_BYTES } from './forge-http.js';
 export { ForgeError, rateLimitWords } from './forge-http.js';
 
 /** The calls of the interface (spec 0001 section 3, with `pull(n)`), and `rateLimit()`: what the last answer said is left */
-export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'pull', 'issue', 'pullFiles', 'pullCommits', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
+export const FORGE_METHODS = Object.freeze(['me', 'permission', 'issues', 'searchIssues', 'pulls', 'changed', 'pull', 'issue', 'pullFiles', 'pullCommits', 'comments', 'comment', 'checks', 'rerun', 'merge', 'runs', 'branches', 'file', 'fileBytes', 'defaultBranch', 'tags', 'tag', 'createReleaseDraft', 'createBranch', 'createFile', 'createPull', 'createIssue', 'rateLimit']);
 export const PERMISSIONS = Object.freeze(['admin', 'maintain', 'write', 'triage', 'read', 'none']);
 /** A check that has finished and does not stand in the way: success, or one the forge says does not count */
 export const GREEN_STATES = Object.freeze(['success', 'neutral', 'skipped']);
@@ -273,6 +279,13 @@ export function wrap(a, forge) {
     },
     issues: async (q) => a.issues(/** @type {Required<IssueQuery>} */ (query(q, true))),
     pulls: async (q) => a.pulls(/** @type {Required<PullQuery>} */ (query(q, false))),
+    changed: async (q) => {
+      if (!q || typeof q !== 'object' || Array.isArray(q)) throw invalid('A query is an object.');
+      const { since, limit = DEFAULT_LIMIT } = q;
+      if (typeof since !== 'string' || !ISO_TIME.test(since) || Number.isNaN(Date.parse(since))) throw invalid('since is a time like 2026-11-05T09:00:00Z.');
+      if (!Number.isSafeInteger(limit) || limit < 1) throw invalid('The limit is a whole number above 0.');
+      return a.changed({ since: new Date(since).toISOString(), limit });
+    },
     pull: async (n) => a.pull(number(n)),
     issue: async (n) => a.issue(number(n)),
     searchIssues: async (words) => {

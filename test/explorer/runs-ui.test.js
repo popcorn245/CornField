@@ -73,7 +73,7 @@ function fakeServer(opts = {}) {
       return json(200, { ok: true });
     }
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
-    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
+    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}), ...(opts.handWritten ? { handWritten: opts.handWritten } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at, rate: '', items: [] });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, at, rate: '', pulls: [pr(50, 'Meals page', 'Closes #7', 'agent/meals'), pr(40, 'Meals spec', '', 'spec/0040-meals')], issues: [issue(7, 'Meals page')], branches: [], specs: [{ pull: 40, slug: '0040-meals' }], agents: {} });
@@ -465,6 +465,27 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     await settle();
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
+    expect(await audit()).toEqual([]);
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('passes axe with a run written by hand and the requests by hand that started nothing (issue #98)', async () => {
+    document.documentElement.dataset.theme = theme;
+    const refused = [
+      { at: '2026-11-05T11:00:00Z', by: 'stranger', number: 7, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEJ', url: 'https://github.com/owner/name/issues/7#c1', why: 'author', reason: 'stranger is not a maintainer now, and only a maintainer\'s request starts a run' },
+      { at: '2026-11-05T10:00:00Z', by: 'maintainer-one', number: 5, runId: null, url: null, why: 'malformed', reason: 'The block is not JSON <b>(it holds exactly one object)</b>.' },
+    ];
+    fakeServer({ runs: [{ ...RUN, via: 'hand', byHand: true }], handWritten: { mode: 'all', refused } });
+    mount();
+    document.documentElement.dataset.theme = theme;
+    await openAgents();
+    const hand = $('forge-runs-hand');
+    expect(hand.hidden).toBe(false);
+    expect(hand.getAttribute('aria-label')).toMatch(/written by hand/);
+    expect(qa('#forge-runs-hand > li')).toHaveLength(2);
+    // escaped, as every forge text is
+    expect(hand.querySelector('b')).toBeNull();
+    expect($('forge-runs-list').textContent).toContain('(by hand)');
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
   });

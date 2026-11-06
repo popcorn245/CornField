@@ -190,6 +190,13 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);
     },
 
+    async changed({ since, limit }) {
+      // The issues listing holds the pull requests too: one call for both, oldest update first so a busy repo's earliest change is never cut off
+      const q = new URLSearchParams({ state: 'open', sort: 'updated', direction: 'asc', since, per_page: String(PER_PAGE) });
+      return (await client.list(`repos/${repo}/issues?${q}`, { what: `the open issues and pull requests of ${forge.repo} updated since ${since}`, limit }))
+        .map((i) => ({ number: i.number, pull: Boolean(i.pull_request), labels: labelNames(i.labels), updatedAt: i.updated_at }));
+    },
+
     async pull(n) {
       return toPull((await client.request('GET', `repos/${repo}/pulls/${n}`, { what: pullWhat(n) })).body);
     },

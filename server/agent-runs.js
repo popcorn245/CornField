@@ -41,6 +41,27 @@
  *   - the **timeline** is the request, the runner's reports, pushes, the pull request, its checks, how it ended, a stop request, and quiet: the first
  *     and last are worked out from the row, the rest are kept as they are seen (`run_events`, one row for each, so a second look adds none)
  *
+ * ## Requests written by hand (`discover`, issue #98)
+ *
+ * A maintainer's own `cornfield-run` request block in a comment on an open issue or pull request becomes a run (`via: 'hand'`, the comment as its
+ * request and its record, sent on as `agents.transport` says like any run: on pull it is queued for a runner, on push it goes out as `agent.requested`).
+ * `discover` is called by the spec poll's tick just before `follow` (and by the dashboard's Refresh); it lists the open issues and pull requests that
+ * changed since the last look (`forge.changed`, one listing, the least recently changed first, from a cursor kept in `run_seen` as `hand-since:<time>` and
+ * never further back than `agents.quietAfter`), reads the comments of the ones whose update it has not read (`scan:<n>@<updatedAt>`; `agents.handWritten`:
+ * all of them, the ones with the threads label, or none), and judges each block once (`run_seen` key `h:…`, an `agent-hand` row in `actions`). The body
+ * of an issue or pull request is not read: anyone with write access may edit it, and the forge does not say when it was.
+ *
+ *   - the author must be a maintainer now (the forge's answer for that login, never what the comment says) and the comment unedited (`runBlocksOf`);
+ *     `requestedBy` and `requestedAt` in the block are claims, replaced by the comment's author and time. A request older than `agents.quietAfter`
+ *     would be quiet at once and is not imported
+ *   - a block whose run id a run already has is never imported: it is cornfield's own post (the same comment, or one still being posted), or a copy of it
+ *     (refused as a duplicate). A fence without an id gets one from cornfield, the same on every look (`handRunId`), confirmed by a reply block in the
+ *     thread that the poll's signed-in maintainer posts (the block's `requestedBy` is the author; the audit row names who posted it). A reply the forge
+ *     refuses is posted on a later look; the run is kept meanwhile (on pull it may be claimed at once)
+ *   - the cap and the one-run-per-subject rule are `reserve`'s, in the same transaction as the insert, so a hand-written request counts toward later
+ *     cap checks and is refused when they say so; the rate limit guards people at the dashboard and does not apply
+ *   - what started nothing (not a maintainer, edited, malformed with the contract's reason, duplicate, old, cap, subject) is kept in `actions` and shown by `list` as `handWritten.refused`
+ *
  * ## Waiting, and the answer (issue #101)
  *
  * A runner may report `waiting` (a note and a link: "plan ready, approve to build"). The run stays open and is shown as Waiting. A maintainer answers
@@ -86,10 +107,11 @@
  */
 
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
-import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateAnswer, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
-import { quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
+import { createRequest, findRunId, fencedBlocks, formatRunComment, isRunId, newRunId, runAuthors, runBlocksOf, runIdFromBranch, validateAnswer, validateReport, validateRequest, CONTRACT_VERSION, EDIT_GRACE_MS, MAX_BLOCKS, MAX_BLOCK_CHARS, MAX_NOTE_CHARS, MAX_TEXT_CHARS, RUN_TAG } from '../core/agent-contract.js';
+import { handWrittenMode, ideaLabel, quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
 import { runnerPresence } from './runner-presence.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
 import { readTopology } from '../core/validate.js';
@@ -121,6 +143,15 @@ export const MAX_FILE_READS = 10;
 export const MENTIONS_KEEP_MS = 3_600_000;
 /** The queued requests a runner's listing answers at most, oldest first */
 export const QUEUE_LIMIT = 50;
+/** The open issues and pull requests listed for hand-written requests, each kind, newest activity first (`agents.handWritten`) */
+export const HAND_TARGETS = 100;
+/** The most conversations whose comments one look reads for hand-written requests; the rest wait for the next look */
+export const MAX_HAND_READS = 30;
+/** The most refused or ignored hand-written blocks the Runs view lists (newest first), and how far back */
+export const HAND_SHOWN = 20;
+export const HAND_SHOWN_MS = 7 * 24 * 3_600_000;
+/** The most hand-written blocks one look judges, so a thread full of them cannot grow the audit table in one tick */
+export const MAX_HAND_JUDGED = 50;
 /** The runs that are over once the runner has said so */
 /** The keys of a request as the API and the button send it: the contract's fields, less what cornfield writes, plus `force` */
 export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'force']);
@@ -208,7 +239,7 @@ export function publicRun(row, nowMs, quietMs, extra = {}) {
   return {
     runId: row.run_id, kind: row.kind, profile: row.profile,
     refs: { ...(row.issue != null ? { issue: row.issue } : {}), ...(row.proposal != null ? { proposal: row.proposal } : {}), ...(row.thread != null ? { thread: row.thread } : {}) },
-    status, open, requestedBy: row.requested_by, requestedAt: row.requested_at, via: row.via, transport: row.transport, target: row.target,
+    status, open, requestedBy: row.requested_by, requestedAt: row.requested_at, via: row.via, byHand: row.via === 'hand', transport: row.transport, target: row.target,
     claimedAt: row.claimed_at,
     comment: row.comment_id ? { id: row.comment_id, url: row.comment_url } : null,
     limits,
@@ -297,6 +328,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   const transport = /** @type {'forge' | 'push' | 'pull'} */ (agents.transport ?? 'forge');
   const log = (what) => console.error(`[cornfield] agent runs: ${what}`);
   let following = null;
+  let discovering = null;
 
   const audit = async (entry) => {
     try {
@@ -397,7 +429,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   }
 
   /** Takes a place for a run: the cap and the one-per-subject rule are checked and the row inserted in one transaction. Throws a `Refused`. */
-  function reserve(db, request, { target, who, via, force, trigger = false, derived = null }) {
+  function reserve(db, request, { target, who, via, force, trigger = false, derived = null, hand = null }) {
     const at = now();
     const mine = subjectKeys(request.refs);
     db.exec('BEGIN IMMEDIATE');
@@ -427,10 +459,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           throw new Refused(409, `${subjectWords(request.refs)} already has an open run${clash.profile ? ` under the profile ${clash.profile}` : ''}: ${clash.run_id} (${statusOf(clash, at, quietMs).status}). To ask for another on purpose, send "force": true${profiles.length ? ', or pick another profile' : ''}.`, 'run-open');
         }
       }
-      db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, request, requested_by, requested_by_id, requested_at, via, last_activity, transport)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      // A hand-written request is already on the forge: its row carries that comment (the record on every transport), and it travels as any request does
+      db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, comment_id, comment_url, request, requested_by, requested_by_id, requested_at, via, last_activity, transport)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(request.runId, repo, request.kind, request.profile ?? null, request.refs.issue ?? null, request.refs.proposal ?? null, request.refs.thread ?? null,
-          target, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, via ? 'api' : trigger ? 'trigger' : 'dashboard', iso(at), transport);
+          target, hand ? hand.comment.id : '', hand ? hand.comment.url : null, JSON.stringify(request), request.requestedBy, String(who.userId), request.requestedAt, hand ? 'hand' : via ? 'api' : trigger ? 'trigger' : 'dashboard', iso(at), transport);
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
@@ -822,6 +855,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
       triggerSkipped: skipped.length ? { count: skipped.length, last: skipped[0].at, reasons } : null,
       refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
+      handWritten: { mode: handMode, refused: discovers ? handRefused(db, at) : [] },
     };
   }
 
@@ -842,6 +876,289 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   /** Whether there is a run to look at: what the spec poll asks before it spends a call of the forge */
   async function hasWork() {
     return followable(await auth.store(), now()).length > 0;
+  }
+
+  // -------------------------------------------------------------------------
+  //  Requests written by hand (issue #98)
+  // -------------------------------------------------------------------------
+
+  const handMode = handWrittenMode(config);
+
+  /** The refused and ignored hand-written blocks of the last days, newest first, for the Runs view: who wrote them, where, and why nothing started */
+  function handRefused(db, at) {
+    const rows = /** @type {{ at: string, login: string, target: string, request: string, answer: string | null }[]} */ (db.prepare("SELECT at, login, target, request, answer FROM actions WHERE action = 'agent-hand' AND (target = ? OR target LIKE ?) AND at > ? ORDER BY id DESC LIMIT 200")
+      .all(repo, `${repo}#%`, iso(at - HAND_SHOWN_MS)));
+    const out = [];
+    for (const r of rows) {
+      const a = safeJson(r.answer) ?? {};
+      if (a.accepted !== false) continue;
+      const q = safeJson(r.request) ?? {};
+      out.push({ at: r.at, by: r.login, number: Number(r.target.slice(r.target.indexOf('#') + 1)) || null, runId: typeof q.runId === 'string' ? q.runId : null, url: typeof a.url === 'string' ? a.url : null, why: typeof a.why === 'string' ? a.why : 'malformed', reason: typeof a.reason === 'string' ? a.reason : '' });
+      if (out.length >= HAND_SHOWN) break;
+    }
+    return out;
+  }
+
+  /**
+   * The request blocks of a comment that have no run id in their fence (a bare `cornfield-run` fence), the ones a maintainer writes by hand when
+   * cornfield is to assign the id: `{ ok, request | error }` for each, in order. The JSON may leave out `version`, `runId`, `requestedBy` and
+   * `requestedAt` (cornfield writes them: the author is the comment's, the time is when it was posted); everything else is checked as any request.
+   */
+  function bareBlocks(text, login, postedAt, commentId) {
+    const out = [];
+    let index = 0;
+    if (typeof text !== 'string' || !text.includes(RUN_TAG)) return out;
+    for (const b of fencedBlocks(text.slice(0, MAX_TEXT_CHARS).replace(/\r\n?/g, '\n'))) {
+      if (b.fence !== '```' || !b.end || b.info.trim() !== RUN_TAG) continue;
+      if (out.length >= MAX_BLOCKS) break;
+      const id = handRunId(commentId, index++, postedAt);
+      if (b.body.length > MAX_BLOCK_CHARS) { out.push({ ok: false, error: `The block is longer than ${MAX_BLOCK_CHARS} characters.` }); continue; }
+      let json;
+      try { json = JSON.parse(b.body); } catch { out.push({ ok: false, error: 'The block is not JSON (it holds exactly one object).' }); continue; }
+      if (!isObject(json)) { out.push({ ok: false, error: 'A request is a JSON object.' }); continue; }
+      if (json.runId !== undefined && !isRunId(json.runId)) { out.push({ ok: false, error: '"runId" is "run-" and a 26 character ULID; leave it out and cornfield assigns one.' }); continue; }
+      const checked = validateRequest({ version: CONTRACT_VERSION, ...json, runId: json.runId ?? id, requestedBy: login, requestedAt: postedAt }, { profiles });
+      out.push(checked.ok ? { ok: true, request: checked.value, assigned: json.runId === undefined } : { ok: false, error: checked.error });
+    }
+    return out;
+  }
+
+  /**
+   * The id cornfield assigns to a bare fence: the same for the same block on every look and after a restart (the time the comment was posted,
+   * then bits of a hash of the repo, the comment and the block's place in it), so a block is never taken twice under two ids
+   */
+  function handRunId(commentId, index, postedAt) {
+    const ms = Date.parse(postedAt);
+    const digest = createHash('sha256').update(`${repo}\0${commentId}\0${index}`).digest();
+    return newRunId({ now: () => (Number.isSafeInteger(ms) && ms >= 0 ? ms : 0), random: () => digest.subarray(0, 10) });
+  }
+
+  /** Whether the engine looks for requests written by hand (`agents.handWritten`): the spec poll asks, so it runs even with no run to follow */
+  const discovers = handMode !== false;
+
+  /**
+   * Reads the comments of the open issues and pull requests for `cornfield-run` request blocks a maintainer wrote by hand, and makes a run of
+   * each valid one (the steps in this module's header, "Requests written by hand"). One look reads at most `MAX_HAND_READS` conversations, the
+   * ones that moved earliest since they were last read; every block is judged once (`run_seen`, an audit row). Never throws.
+   * @param {import('./forge.js').Forge} forge a signed-in maintainer's
+   * @returns {Promise<{ read: number, imported: number, refused: number }>}
+   */
+  function discover(forge) {
+    if (!discovers) return Promise.resolve({ read: 0, imported: 0, refused: 0 });
+    if (discovering) return discovering;
+    discovering = discoverRuns(forge)
+      .catch((err) => {
+        log(`a look for requests written by hand failed: ${words(err)}`);
+        return { read: 0, imported: 0, refused: 0 };
+      })
+      .finally(() => { discovering = null; });
+    return discovering;
+  }
+
+  async function discoverRuns(forge) {
+    const out = { read: 0, imported: 0, refused: 0 };
+    const db = await auth.store();
+    const at = now();
+    const label = ideaLabel(config);
+    const wanted = (x) => handMode === 'all' || (label !== null && Array.isArray(x.labels) && x.labels.includes(label));
+    const seen = (key) => db.prepare("SELECT 1 FROM run_seen WHERE run_id = '' AND key = ?").get(key) !== undefined;
+    const mark = (key) => db.prepare("INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES ('', ?, ?)").run(key, iso(at));
+    // Where the last look got to (`hand-since:<time>`): only what changed since is listed, the least recently changed first, so a busy repo's
+    // oldest change is read before a newer one and none is starved. Never further back than agents.quietAfter: an older request would be refused as old
+    const cursorRow = /** @type {{ key: string } | undefined} */ (db.prepare("SELECT key FROM run_seen WHERE run_id = '' AND key LIKE 'hand-since:%'").get());
+    const since = Math.max(at - quietMs, cursorRow ? Date.parse(cursorRow.key.slice('hand-since:'.length)) || 0 : 0);
+    /** @type {{ number: number, updatedAt: string, labels: string[] }[]} */
+    let targets;
+    try {
+      // `since` is "at or after": what shares the second the cursor stopped at is listed again, and skipped by its key
+      targets = await forge.changed({ since: iso(since), limit: HAND_TARGETS });
+    } catch (err) {
+      log(`the open issues and pull requests could not be listed for requests written by hand: ${words(err)}`);
+      return out;
+    }
+    let cursor = null;
+    let held = false;
+    const advance = (t) => { if (!held && Number.isFinite(Date.parse(t.updatedAt))) cursor = t.updatedAt; };
+    const maintainerOf = new Map();
+    const isMaintainerLogin = (login) => {
+      const k = lower(login);
+      if (!maintainerOf.has(k)) maintainerOf.set(k, forge.permission(repo, login).then(isMaintainer));
+      return maintainerOf.get(k);
+    };
+    let poster = null;
+    const posterLogin = async () => (poster ??= await forge.me().then((m) => m.login, () => null));
+    let judged = 0;
+    let fresh = 0;
+    for (const t of targets) {
+      if (!wanted(t)) { advance(t); continue; }
+      const scanKey = `scan:${t.number}@${t.updatedAt}`;
+      if (seen(scanKey)) { advance(t); continue; }
+      fresh += 1;
+      // The rest wait for the next look, which starts here
+      if (out.read >= MAX_HAND_READS || judged >= MAX_HAND_JUDGED) break;
+      let comments;
+      try {
+        comments = await forge.comments(t.number);
+      } catch (err) {
+        log(`the comments on #${t.number} could not be read for requests written by hand: ${words(err)}`);
+        held = true;
+        continue;
+      }
+      out.read += 1;
+      const standing = new Map();
+      try {
+        for (const login of runAuthors(comments)) standing.set(lower(login), await isMaintainerLogin(login));
+      } catch (err) {
+        log(`who wrote the comments on #${t.number} could not be asked: ${words(err)}`);
+        held = true;
+        continue;
+      }
+      const rowOf = (runId) => /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(runId));
+      let waiting = false;
+      /** @type {{ login: string | null, request: object, answer: object, number: number }[]} */
+      const audits = [];
+      const counts = new Map();
+      const keyOf = (commentId, runId, kind) => {
+        const base = `h:${commentId}:${runId ?? '-'}:${kind}`;
+        const n = counts.get(base) ?? 0;
+        counts.set(base, n + 1);
+        return `${base}:${n}`;
+      };
+      /** Writes one block's outcome down once: its key is kept first, then the audit row follows; true when it is new */
+      const judge = (comment, key, runId, by, answer) => {
+        if (seen(key)) return false;
+        mark(key);
+        judged += 1;
+        audits.push({ login: by ?? 'unknown', request: { runId, type: 'request', comment: comment.id }, answer: { ...answer, ...(comment.url ? { url: comment.url } : {}) }, number: t.number });
+        return true;
+      };
+      const EDITED = 'the comment was edited after it was posted, so its request is not believed';
+      const NOT_MAINTAINER = (by) => `${by ?? 'the author'} is not a maintainer now, and only a maintainer's request starts a run`;
+
+      const found = runBlocksOf(comments, { trust: (login, block) => block.type === 'request' && standing.get(lower(login)) === true, profiles });
+      // Which comments hold a request block for each run id, in the order they were written (comments come oldest first)
+      /** @type {Map<string, string[]>} */
+      const holders = new Map();
+      for (const b of [...found.blocks, ...found.ignored]) if (b.type === 'request') holders.set(b.runId, [...(holders.get(b.runId) ?? []), b.comment.id]);
+      /**
+       * Whether a block is cornfield's reply naming the id it assigned to a bare fence: the run is a hand-written one, its own comment holds no
+       * block with that id, and this is the first other comment that does. A later one is a copy
+       */
+      const isReply = (runId, commentId) => {
+        const row = rowOf(runId);
+        if (!row || row.via !== 'hand' || row.comment_id === commentId) return false;
+        const list = (holders.get(runId) ?? []).filter((id) => id !== row.comment_id);
+        return !(holders.get(runId) ?? []).includes(row.comment_id) && list[0] === commentId;
+      };
+      /** Posts the reply that names the id cornfield assigned, as the poll's signed-in maintainer; false when the forge said no */
+      const reply = async (request) => {
+        const by = await posterLogin();
+        // Refresh looks as whoever pressed it: only a maintainer's sign-in posts a request block, so anyone else's leaves it to the poll's next look
+        if (!by || !(await isMaintainerLogin(by).catch(() => false))) { waiting = true; return null; }
+        try {
+          const posted = await forge.comment(t.number, formatRunComment(request.runId, request, {
+            profiles,
+            line: `Run \`${request.runId}\` is the id cornfield assigned to ${request.requestedBy}'s request above, written by hand: a ${request.kind} run, followed like any other. The request is ${request.requestedBy}'s; this reply was posted by cornfield${by ? ` with ${by}'s sign-in` : ''}.`,
+          }));
+          return { comment: posted.id, url: posted.url ?? null, postedBy: by };
+        } catch (err) {
+          log(`the id of a request written by hand on #${t.number} could not be posted, so it is posted on a later look: ${words(err)}`);
+          waiting = true;
+          return null;
+        }
+      };
+
+      /** Takes a place for one request from a maintainer; null when there is nothing to say (cornfield's own, or left for the next look), else the outcome */
+      const take = async (comment, request, assigned) => {
+        const row = rowOf(request.runId);
+        if (row) {
+          // cornfield's own request, or one taken before: the run is that comment's
+          if (row.comment_id === comment.id) return null;
+          // cornfield has reserved the id and is about to post it: not yet anyone's copy, so looked at again next time
+          if (row.transport === 'forge' && row.comment_id === '') { waiting = true; return null; }
+          return { accepted: false, why: 'duplicate', reason: `run ${row.run_id} already has this id, so this block is not imported again (cornfield never starts a second run for one block). Write a block without an id and cornfield assigns one` };
+        }
+        if (at - Date.parse(request.requestedAt) >= quietMs) return { accepted: false, why: 'old', reason: 'posted more than agents.quietAfter ago, so the run would be quiet at once and count for nothing; write it again to ask now' };
+        try {
+          reserve(db, request, { target: t.number, who: { userId: '' }, via: null, force: false, hand: { comment } });
+        } catch (err) {
+          if (err instanceof Refused) return { accepted: false, why: err.code ?? 'refused', reason: err.message };
+          throw err;
+        }
+        // On push and pull the run goes out as any request does: the hook is the delivery, the queue holds it for a runner to claim
+        if (transport !== 'forge') hooks?.emit('agent.requested', { request, actor: request.requestedBy });
+        // The thread stays the record: the id cornfield assigned is written beside the request, as a block a runner can read. The run is kept
+        // if that fails (on pull it may be claimed already): the next look posts it
+        const posted = assigned ? await reply(request) : null;
+        return { accepted: true, kind: request.kind, transport, ...(posted ? { reply: posted } : {}) };
+      };
+
+      /** @type {{ comment: { id: string, url: string | null }, by: string, request: any, assigned: boolean }[]} */
+      const accepted = [];
+      for (const b of found.blocks) accepted.push({ comment: b.comment, by: b.by, request: { ...b.value, requestedBy: b.by, requestedAt: b.at }, assigned: false });
+      for (const c of comments) {
+        const by = c.author?.login ?? null;
+        if (!by || typeof c.body !== 'string') continue;
+        const maintainer = standing.get(lower(by)) === true;
+        const edited = c.updatedAt !== undefined && !(Date.parse(c.updatedAt) - Date.parse(c.createdAt) <= EDIT_GRACE_MS);
+        const comment = { id: String(c.id), url: c.url ?? null };
+        for (const r of bareBlocks(c.body, by, c.createdAt, comment.id)) {
+          // Not a maintainer's: a block that is not even a request is nobody's business; a good one is shown as ignored, with the reason
+          if (!r.ok) { if (maintainer && judge(comment, keyOf(comment.id, null, 'refused'), null, by, { accepted: false, why: 'malformed', reason: r.error })) out.refused += 1; continue; }
+          if (!maintainer || edited) { if (judge(comment, keyOf(comment.id, r.request.runId, edited && maintainer ? 'edited' : 'author'), r.request.runId, by, { accepted: false, why: !maintainer ? 'author' : 'edited', reason: !maintainer ? NOT_MAINTAINER(by) : EDITED })) out.refused += 1; continue; }
+          accepted.push({ comment, by, request: r.request, assigned: r.assigned });
+        }
+      }
+      accepted.sort((x, y) => Date.parse(x.request.requestedAt) - Date.parse(y.request.requestedAt) || Number(x.comment.id) - Number(y.comment.id));
+      for (const a of accepted) {
+        const key = keyOf(a.comment.id, a.request.runId, 'request');
+        if (isReply(a.request.runId, a.comment.id)) continue;
+        // An id cornfield assigned whose reply is not in the thread (the forge said no, or cornfield stopped before it was posted): posted now
+        const row = rowOf(a.request.runId);
+        if (a.assigned && row && row.comment_id === a.comment.id && !(holders.get(a.request.runId) ?? []).length) {
+          const posted = await reply(a.request);
+          if (posted) await audit({ login: a.by, action: 'agent-hand', target: `${repo}#${t.number}`, request: { runId: a.request.runId, type: 'request', comment: a.comment.id }, answer: { accepted: true, kind: a.request.kind, transport: row.transport, reply: posted } });
+          if (!seen(key)) mark(key);
+          continue;
+        }
+        if (seen(key)) continue;
+        const outcome = await take(a.comment, a.request, a.assigned);
+        if (outcome === null) continue;
+        judge(a.comment, key, a.request.runId, a.by, outcome);
+        if (outcome.accepted) out.imported += 1; else out.refused += 1;
+      }
+      for (const b of found.ignored) {
+        if (b.type !== 'request') continue;
+        // cornfield's own request (or its reply), by a maintainer who has since stopped being one, is not a stranger's
+        const own = rowOf(b.runId);
+        if (own && own.comment_id === b.comment.id) continue;
+        if (isReply(b.runId, b.comment.id)) continue;
+        if (judge(b.comment, keyOf(b.comment.id, b.runId, b.why), b.runId, b.by, { accepted: false, why: b.why, reason: b.why === 'edited' ? EDITED : NOT_MAINTAINER(b.by) })) out.refused += 1;
+      }
+      // What is not strictly a request, from a maintainer: shown with the reason. A block of a run cornfield has (a report with a stray key) is the follow's to judge
+      for (const r of found.refused) {
+        if (r.error.startsWith('The fence names ""')) continue; // a fence with no id: read above
+        if (!r.by || standing.get(lower(r.by)) !== true) continue;
+        if (r.runId && rowOf(r.runId)) continue;
+        if (judge(r.comment, keyOf(r.comment.id, r.runId, 'refused'), r.runId, r.by, { accepted: false, why: 'malformed', reason: r.error })) out.refused += 1;
+      }
+      for (const a of audits) await audit({ login: a.login ?? 'unknown', action: 'agent-hand', target: `${repo}#${a.number}`, request: a.request, status: null, answer: a.answer });
+      // Read at this update: not read again until the conversation moves, unless something was left for the next look (which then starts here)
+      if (waiting) held = true;
+      else {
+        db.prepare("DELETE FROM run_seen WHERE run_id = '' AND key LIKE ?").run(`scan:${t.number}@%`);
+        mark(scanKey);
+        advance(t);
+      }
+    }
+    // A page of only what was read before, all of one second, would be listed again and again: the look steps past that second once it is a
+    // minute old (nothing more can be written in it then)
+    if (!held && fresh === 0 && cursor !== null && Date.parse(cursor) <= since && Date.parse(cursor) < at - 60_000) cursor = iso(Date.parse(cursor) + 1000);
+    if (cursor !== null) {
+      db.prepare("DELETE FROM run_seen WHERE run_id = '' AND key LIKE 'hand-since:%'").run();
+      mark(`hand-since:${cursor}`);
+    }
+    return out;
   }
 
   /**
@@ -1406,7 +1723,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return hit ? hit.run_id : null;
   }
 
-  return { request, stop, answer, list, get, follow, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
+  return { request, stop, answer, list, get, follow, discover, discovers, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
 }
 
 /** @typedef {ReturnType<typeof createRuns>} Runs */
