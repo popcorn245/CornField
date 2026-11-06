@@ -160,11 +160,11 @@ The answer is 201 `{ ok, run, request, comment }`. `requestedBy` is the token's 
 
 ### Totals of tokens and cost
 
-Under the status line the Runs view adds up what runners reported: in all, per proposal and per day, as plain lines (`Reported in all: 2107 tokens, cost 1.3 over 3 runs.`). The numbers are the runners' `tokens` and `cost`, added as sent and never estimated; the currency is the runner's. A run counts once, by its latest report (a report's numbers are the run's total so far, so a later one replaces an earlier one). A day is the UTC date the run was requested; a proposal's line adds the runs that name it; only the last 30 days and 50 proposals are listed. Runs that reported neither number are not counted. The same numbers are in `totals` of `GET /api/agent-runs`.
+Under the status line the Runs view adds up what runners reported: in all, per proposal and per day, as plain lines (`Reported in all: 2107 tokens, cost 1.30 over 3 runs.`). The numbers are the runners' `tokens` and `cost`, added as sent and never estimated; the currency is the runner's. A run counts once, by its latest report: a report's numbers are the run's total so far, so a later one replaces an earlier one, even a smaller one (a runner that restarted its counter). A day is the UTC date of the run's latest report, as the cost is incurred when the runner works (a run asked for at 23:50 and worked the next morning counts on the morning); a proposal's line adds the runs that name it. Only the 30 latest days and 50 proposals are listed, and never without today or a proposal with an open run. Runs that reported neither number are not counted. The view shows the cost to 2 decimals; `totals` of `GET /api/agent-runs` has the same numbers unrounded (to 9 decimals), as `{ all, byProposal, byDay }`, each `{ runs, tokens, cost }` with `null` for a number no run reported.
 
 ### Limits per profile
 
-`agents.limits` may hold limits for every profile and for one profile ([config](config.md#agents)). The request made from the dialog, the request API or a trigger starts from those of its profile, and what the request sets itself wins key by key. They stay hints: cornfield enforces nothing and the runner reads them from the request.
+`agents.limits` may hold limits for every profile and for one profile ([config](config.md#agents)). The request made from the dialog, the request API or a trigger starts from those of its profile, and what the request sets itself wins key by key. They stay hints: cornfield enforces nothing and the runner reads them from the request. The Start dialog shows, under the profile, the limits the request will carry for the profile chosen (read-only; cornfield fills them in when it makes the request).
 
 ## Runs on the map
 

@@ -126,9 +126,9 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
-/** "1,200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated */
+/** "1200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
 function saidWords(t) {
-  return [t.tokens != null && `${t.tokens} tokens`, t.cost != null && `cost ${t.cost}`].filter(Boolean).join(', ');
+  return [t.tokens != null && `${t.tokens} tokens`, typeof t.cost === 'number' && `cost ${t.cost.toFixed(2)}`].filter(Boolean).join(', ');
 }
 
 /**
@@ -183,6 +183,22 @@ export function startBody({ kind, profile, brief, refs, force }) {
   if (profile) out.profile = profile;
   if (force) out.force = true;
   return out;
+}
+
+const LIMIT_WORDS = [['minutes', (n) => `${n} ${n === 1 ? 'minute' : 'minutes'}`], ['turns', (n) => `${n} ${n === 1 ? 'turn' : 'turns'}`], ['cost', (n) => `cost ${n}`], ['tokens', (n) => `${n} tokens`]];
+
+/**
+ * The limits a request for `profile` will carry, in one line for the Start dialog: the config's flat `agents.limits`, then the profile's own
+ * over them key by key (as core/config.js `limitDefaults`; the server fills them in, this only shows them). '' when the config sets none.
+ * @param {Record<string, any> | undefined} limits the `limits` of `GET /api/agent-runs`
+ * @param {string} profile '' for none
+ */
+export function limitsWords(limits, profile) {
+  if (!limits || typeof limits !== 'object' || !Object.keys(limits).length) return '';
+  const names = LIMIT_WORDS.map(([k]) => k);
+  const own = profile && !names.includes(profile) && limits[profile] && typeof limits[profile] === 'object' ? limits[profile] : {};
+  const said = LIMIT_WORDS.map(([k, say]) => { const n = own[k] ?? limits[k]; return typeof n === 'number' ? say(n) : ''; }).filter(Boolean);
+  return said.length ? `Limits it will carry (hints for the runner): ${said.join(', ')}.` : 'It will carry no limits.';
 }
 
 /** What a start came to, in words */
