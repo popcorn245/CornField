@@ -237,6 +237,8 @@ function requestNodes(request, known) {
  * @property {{ auth: object, now?: () => number }} limits what server/throttle.js counts by
  * @property {{ token: { id: number, label: string } } | null} [via] set when the request came through the API: the token it came with
  * @property {() => string | null | Promise<string | null>} [stillAllowed] asked once more just before the cap is taken: null to go on, or why not
+ * @property {number} [landed] set only by the `spec.approved` trigger: the spec pull request the approval was on. If no open pull request holds the
+ *   proposal because that one has since merged, the request is about the proposal as it is on the default branch (no `refs.pull`) and is posted there
  * @property {{ event: string, ref: string }} [trigger] set only by an opt-in trigger (server/triggers.js): what caused this request. It is written into the
  *   request (`trigger: { event, by, ref }`, `by` being the maintainer asking) and the audit row, and the run's `via` is 'trigger'. A caller's body can never set it
  */
@@ -486,11 +488,16 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       else if (made.refs.proposal != null) {
         const listed = await listPullProposals(forge, folder, { hooks: null });
         entry = listed.entries.find((e) => e.slug === made.refs.proposal) ?? null;
-        if (!entry) throw new Refused(404, listed.problem ? `The open spec pull requests could not be read: ${listed.problem}` : `No open spec pull request holds the proposal ${made.refs.proposal}, so there is nowhere to post the request.`, 'not-found');
-        number = entry.pull.number;
-        made = build(me.login, number);
-        runId = made.runId;
-        Object.assign(asked, { runId });
+        if (entry) {
+          number = entry.pull.number;
+          made = build(me.login, number);
+          runId = made.runId;
+          Object.assign(asked, { runId });
+        } else if (ctx.landed != null && (await forge.pull(ctx.landed)).state === 'merged') {
+          // A trigger's approval landed its spec pull request first (proposals.approveLands): the proposal is on the default branch, so
+          // the request names no pull request ("an approved proposal already on the default branch has none") and is posted on the merged one
+          number = ctx.landed;
+        } else throw new Refused(404, listed.problem ? `The open spec pull requests could not be read: ${listed.problem}` : `No open spec pull request holds the proposal ${made.refs.proposal}, so there is nowhere to post the request.`, 'not-found');
       } else number = /** @type {number} */ (made.refs.issue);
       if (made.refs.issue != null) {
         try {

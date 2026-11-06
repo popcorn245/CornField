@@ -365,6 +365,54 @@ describe('the /agent command', () => {
   });
 });
 
+describe('spec.approved after the approval landed the spec pull request (proposals.approveLands)', () => {
+  /** The spec pull request merged before the trigger read it: no open one holds the proposal any more */
+  const land = (t) => { t.world.specPulls.length = 0; t.world.pulls[0].state = 'merged'; };
+
+  it('asks for the run on the landed proposal: refs.proposal with no pull, the cause still pull:<n>, posted on the merged pull request', async () => {
+    const t = setup();
+    land(t);
+    await t.fire('spec.approved', approved());
+    const [p, ...more] = t.posted();
+    expect(more).toEqual([]);
+    expect(p).toMatchObject({ number: 40, by: 'maintainer-one' });
+    expect(p.request.refs).toEqual({ proposal: '0040-meals' });
+    expect(p.request.trigger).toEqual({ event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' });
+    expect(validateRequest(p.request, { profiles: ['claude'] }).ok).toBe(true);
+    expect(t.runRows()).toEqual([expect.objectContaining({ via: 'trigger', proposal: '0040-meals', target: 40 })]);
+    expect(t.rows('trigger-skipped')).toEqual([]);
+  });
+
+  it('keeps the one-run-per-subject rule: a run already open on the proposal skips it with run-open', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    await t.fire('spec.approved', approved()); // asked while the pull request was open
+    land(t);
+    t.wait(61_000);
+    await t.fire('spec.approved', approved({ headSha: 'c'.repeat(40) }));
+    expect(t.runRows()).toHaveLength(1);
+    expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['run-open']);
+  });
+
+  it('keeps the cap: at the limit the landed proposal is refused with cap-reached', async () => {
+    const t = setup({ config: { maxOpen: 1 } });
+    await t.runs.request({ forge: () => t.as('maintainer-one'), who: { login: 'maintainer-one', userId: '1001' }, limits: { auth: t.auth, now: () => t.clock.now } }, { body: { kind: 'code', refs: { issue: 12 }, brief: '' } });
+    land(t);
+    t.wait(10_000);
+    await t.fire('spec.approved', approved());
+    expect(t.runRows()).toHaveLength(1);
+    expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['cap-reached']);
+  });
+
+  it('is unchanged when the pull request did not merge (closed, or gone): skipped with not-found', async () => {
+    const t = setup();
+    t.world.specPulls.length = 0;
+    t.world.pulls[0].state = 'closed';
+    await t.fire('spec.approved', approved());
+    expect(t.runRows()).toEqual([]);
+    expect(t.rows('trigger-skipped').map((r) => r.answer.reason)).toEqual(['not-found']);
+  });
+});
+
 describe('no live sign-in, and a refusal', () => {
   it('does nothing else: an audit row, trigger.skipped, nothing posted, and the notice for the dashboard', async () => {
     const t = setup({ signedIn: ['maintainer-two'] }); // maintainer-one is not signed in

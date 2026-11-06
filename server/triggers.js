@@ -38,9 +38,9 @@
  * over (finished, or quiet: what the cap counts). While one is open, the trigger is skipped with `run-open` (`trigger-skipped` and the
  * hook), whatever its profile; the one-run-per-subject rule of the request path only clashes within a profile.
  *
- * **approveLands.** With `proposals.approveLands`, an approval may land the spec pull request before the trigger's request reads it; the
- * request then finds no open proposal and the trigger is skipped with `not-found` (audited, and the hook). The proposal is on the default
- * branch by then: ask for the run with the button, or use the `build.opened` trigger, which fires after the build issue is opened.
+ * **approveLands.** With `proposals.approveLands`, an approval may land the spec pull request before the trigger's request reads it. The
+ * request then finds no open proposal and asks for the run on the landed one: `refs: { proposal }` with no `pull`, posted on the merged spec
+ * pull request, the cause unchanged (`pull:<n>`). Either order works; the cap and the one-run-per-subject rule apply as always.
  *
  * **No live sign-in.** If the maintainer has no live session, the trigger does nothing else (cornfield holds no forge token of its own, and
  * another maintainer's would put words in their name): an audit row (`trigger-skipped`), the hook event `trigger.skipped`
@@ -257,6 +257,8 @@ export function createTriggers({ config, auth, runs, hooks, now = Date.now }) {
       await runs.request({
         forge: () => forge, who: { login: cause.by, userId: String(userId) }, limits: { auth, now },
         trigger: { event: cause.event, ref: cause.ref },
+        // An approval that landed its spec pull request first leaves the proposal on the default branch: the request goes on the merged one
+        ...(event === 'spec.approved' ? { landed: cause.subject } : {}),
       }, { body });
     } catch (err) {
       if (!(err instanceof Refused) && !(err instanceof ForgeError)) log(`a ${event} trigger failed: ${err instanceof Error ? err.stack || err.message : err}`);
