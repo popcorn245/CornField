@@ -209,6 +209,12 @@ describe('spec.approved and build.opened', () => {
     expect(t.rows('trigger-skipped')).toEqual([]);
   });
 
+  it('carries the profile\'s limits over the flat ones in the request it makes (CF-27)', async () => {
+    const t = setup({ config: { limits: { minutes: 30, claude: { cost: 5, minutes: 60 } } } });
+    await t.fire('spec.approved', approved());
+    expect(t.posted()[0].request.limits).toEqual({ minutes: 60, cost: 5 });
+  });
+
   it('names whichever maintainer approved, not the first one signed in', async () => {
     const t = setup();
     await t.fire('spec.approved', approved({ actor: 'maintainer-two' }));

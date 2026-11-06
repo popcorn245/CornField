@@ -69,9 +69,9 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
-import { runsHtml } from './runs-view.js';
+import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
@@ -1133,6 +1133,12 @@ function paintRuns() {
     trig.hidden = !skipped;
     trig.textContent = skipped;
   }
+  const totals = $('forge-runs-totals');
+  if (totals) {
+    const lines = data ? totalsLines(data.totals) : [];
+    totals.hidden = !lines.length;
+    totals.innerHTML = totalsHtml(viewContext(), lines);
+  }
   const hand = $('forge-runs-hand');
   if (hand) {
     const lines = data ? handLines(data) : [];
@@ -1454,6 +1460,7 @@ async function openAgent(ref, opener) {
   $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
   $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
   $('agent-profile-field').hidden = !profiles.length;
+  paintLimits();
   $('agent-brief').value = '';
   $('agent-force').checked = false;
   $('agent-force-field').hidden = true;
@@ -1468,6 +1475,15 @@ async function openAgent(ref, opener) {
   agentEl().hidden = false;
   $('agent-kind').focus();
   announce(`Start an agent on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+}
+
+/** The limits the request will carry for the chosen profile, read-only under the select; the server fills them in */
+function paintLimits() {
+  const el = $('agent-limits');
+  if (!el) return;
+  const words = limitsWords(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
+  el.hidden = !words;
+  el.textContent = words;
 }
 
 /** Closes the dialog; the focus goes back to the button that opened it unless told not to */
@@ -1849,6 +1865,7 @@ export function initForgePanel(config, opts = {}) {
       agent.addEventListener('click', onAgentClick);
       agent.addEventListener('keydown', onAgentKey);
       agent.querySelector('form').addEventListener('submit', submitAgent);
+      $('agent-profile').addEventListener('change', paintLimits);
     }
     const confirm = confirmEl();
     if (confirm) {

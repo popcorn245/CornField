@@ -126,6 +126,26 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
+/** "1200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
+function saidWords(t) {
+  return [t.tokens != null && `${t.tokens} tokens`, typeof t.cost === 'number' && `cost ${t.cost.toFixed(2)}`].filter(Boolean).join(', ');
+}
+
+/**
+ * The totals of what runners reported, as plain lines: all runs, then per proposal, then per day (UTC). Empty when nothing was reported.
+ * `totals` is the server's `{ all, byProposal, byDay }` (each entry `{ runs, tokens, cost }`).
+ * @returns {string[]}
+ */
+export function totalsLines(totals) {
+  if (!totals || !totals.all) return [];
+  const runs = (t) => `${t.runs} ${t.runs === 1 ? 'run' : 'runs'}`;
+  const out = [`Reported in all: ${saidWords(totals.all)} over ${runs(totals.all)}.`];
+  const list = (head, rows, name) => { if (rows && rows.length) out.push(`${head}: ${rows.map((r) => `${name(r)} ${saidWords(r)} (${runs(r)})`).join('; ')}.`); };
+  list('Per proposal', totals.byProposal, (r) => r.proposal);
+  list('Per day (UTC)', totals.byDay, (r) => r.day);
+  return out;
+}
+
 /** "20 s", "5 min", "2 h": how long ago, short enough for a line */
 function agoShort(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -163,6 +183,22 @@ export function startBody({ kind, profile, brief, refs, force }) {
   if (profile) out.profile = profile;
   if (force) out.force = true;
   return out;
+}
+
+const LIMIT_WORDS = [['minutes', (n) => `${n} ${n === 1 ? 'minute' : 'minutes'}`], ['turns', (n) => `${n} ${n === 1 ? 'turn' : 'turns'}`], ['cost', (n) => `cost ${n}`], ['tokens', (n) => `${n} tokens`]];
+
+/**
+ * The limits a request for `profile` will carry, in one line for the Start dialog: the config's flat `agents.limits`, then the profile's own
+ * over them key by key (as core/config.js `limitDefaults`; the server fills them in, this only shows them). '' when the config sets none.
+ * @param {Record<string, any> | undefined} limits the `limits` of `GET /api/agent-runs`
+ * @param {string} profile '' for none
+ */
+export function limitsWords(limits, profile) {
+  if (!limits || typeof limits !== 'object' || !Object.keys(limits).length) return '';
+  const names = LIMIT_WORDS.map(([k]) => k);
+  const own = profile && !names.includes(profile) && limits[profile] && typeof limits[profile] === 'object' ? limits[profile] : {};
+  const said = LIMIT_WORDS.map(([k, say]) => { const n = own[k] ?? limits[k]; return typeof n === 'number' ? say(n) : ''; }).filter(Boolean);
+  return said.length ? `Limits it will carry (hints for the runner): ${said.join(', ')}.` : 'It will carry no limits.';
 }
 
 /** What a start came to, in words */

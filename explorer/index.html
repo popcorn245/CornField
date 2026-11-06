@@ -281,6 +281,7 @@
           <p id="forge-runs-runner" class="hx-forge-meta" hidden></p>
           <p id="forge-runs-note" class="hx-forge-notice" hidden></p>
           <p id="forge-runs-trigger" class="hx-forge-notice" hidden></p>
+          <div id="forge-runs-totals" role="group" aria-label="Tokens and cost the runners reported" hidden></div>
           <ul id="forge-runs-hand" class="hx-forge-meta" aria-label="Requests written by hand that started nothing" hidden></ul>
           <ul id="forge-runs-list" class="hx-forge-files" aria-label="Runs"></ul>
         </section>
@@ -367,6 +368,7 @@
       <form id="agent-start-form" class="hx-forge-confirm" novalidate>
       <label class="hx-forge-field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
       <label id="agent-profile-field" class="hx-forge-field" hidden>Profile<select id="agent-profile" class="hx-forge-select"></select></label>
+      <p id="agent-limits" class="hx-forge-meta" hidden></p>
       <label class="hx-forge-field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
       <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
       <p id="agent-start-words" class="hx-confirm-note"></p>
