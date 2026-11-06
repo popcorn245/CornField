@@ -132,8 +132,9 @@ describe('validateRequest', () => {
   describe('limits', () => {
     it('are positive numbers', () => {
       expect(c.validateRequest(request({ limits: {} })).ok).toBe(true);
-      expect(c.validateRequest(request({ limits: { minutes: 0.5, turns: 1, cost: 0.01 } })).ok).toBe(true);
-      for (const f of ['minutes', 'turns', 'cost']) for (const bad of [0, -1, '5', NaN, Infinity, null]) expect(refuse(request({ limits: { [f]: bad } }))).toBe(`"limits.${f}" is a number above zero.`);
+      expect(c.validateRequest(request({ limits: { minutes: 0.5, turns: 1, cost: 0.01, tokens: 1000 } })).ok).toBe(true);
+      expect(refuse(request({ limits: { tokens: 2.5 } }))).toBe('"limits.tokens" is a whole number.');
+      for (const f of ['minutes', 'turns', 'cost', 'tokens']) for (const bad of [0, -1, '5', NaN, Infinity, null]) expect(refuse(request({ limits: { [f]: bad } }))).toBe(`"limits.${f}" is a number above zero.`);
       expect(refuse(request({ limits: { turns: 2.5 } }))).toBe('"limits.turns" is a whole number.');
       for (const bad of [[], 'x', null]) expect(refuse(request({ limits: bad }))).toMatch(/"limits" is/);
     });
@@ -539,7 +540,7 @@ const GOOD = [
   request(), full(),
   request({ kind: 'summary', refs: { thread: 7 } }), request({ kind: 'proposal', refs: { proposal: 'x' } }), request({ kind: 'brief', brief: '' }), request({ refs: { proposal: '0014-planner', pull: 40 } }),
   request({ requestedAt: '2026-11-05T09:30:00.5Z' }), request({ branch: 'a/b.c-d_e' }), request({ limits: {} }), request({ nodes: [] }),
-  request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
+  request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ limits: { tokens: 1 } }), request({ limits: { minutes: 30, tokens: Number.MAX_SAFE_INTEGER } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
   request({ brief: 'Rotate the token handling in server/auth.js' }), request({ requestedBy: 'x'.repeat(40) }),
   request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'build.opened', by: 'maintainer-one', ref: 'issue:12' } }), request({ trigger: { event: 'thread.message', by: 'maintainer-one', ref: 'comment:9001' } }),
   ...c.REPORT_STATES.map((state) => ({ state })),
@@ -555,7 +556,7 @@ const BAD = [
   request({ profile: '' }), request({ profile: '-x' }), request({ profile: 'a'.repeat(65) }),
   ...['', '-rf', '/abs', 'trail/', 'a//b', 'a..b', 'end.', '.hidden', 'a/.b', 'a.lock', 'a.lock/b', 'sp ace', 'a~b', 'a^b', 'a:b', 'a?b', 'a*b', 'a[b', 'a\\b', 'a@{b', 'x'.repeat(201)].map((branch) => request({ branch })),
   request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS + 1) }), request({ brief: 3 }),
-  request({ limits: { minutes: 0 } }), request({ limits: { turns: 2.5 } }), request({ limits: { cost: -1 } }), request({ limits: { hours: 1 } }), request({ limits: { minutes: '5' } }),
+  request({ limits: { minutes: 0 } }), request({ limits: { turns: 2.5 } }), request({ limits: { cost: -1 } }), request({ limits: { hours: 1 } }), request({ limits: { minutes: '5' } }), request({ limits: { tokens: 0 } }), request({ limits: { tokens: 1.5 } }), request({ limits: { tokens: '5' } }), request({ limits: { tokens: 2 ** 60 } }),
   request({ nodes: 'a' }), request({ nodes: [' x'] }), request({ nodes: [3] }), request({ nodes: Array.from({ length: 101 }, (_, i) => `n${i}`) }),
   request({ trigger: 'spec.approved' }), request({ trigger: {} }), request({ trigger: [] }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one' } }),
   request({ trigger: { event: 'run.finished', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'spec.ready', by: 'maintainer-one', ref: 'pull:40' } }),
@@ -650,6 +651,20 @@ describe('the JSON Schema', () => {
       }
     }
     expect(n).toBeGreaterThan(100);
+  });
+  it('agrees on mutations of each limit, tokens among them, and a request without tokens is as it was', () => {
+    const odd = [undefined, null, 0, 1, -1, 1.5, '', 'x', true, [], {}, 2 ** 53, 2 ** 60, Number.MAX_SAFE_INTEGER, 1e-6];
+    const limits = { minutes: 30, turns: 40, cost: 2.5, tokens: 1000 };
+    for (const key of Object.keys(limits)) {
+      for (const o of odd) {
+        const l = { ...limits };
+        if (o === undefined) delete l[key]; else l[key] = o;
+        const ex = request({ limits: l });
+        expect(check(SCHEMA.$defs.request, ex), `limits.${key}=${JSON.stringify(o)}`).toBe(c.validateRequest(ex).ok);
+      }
+    }
+    const before = full();
+    expect(c.validateRequest(before)).toEqual({ ok: true, value: before });
   });
   it('is looser than the validator in exactly the documented ways', () => {
     // Rules a schema cannot hold: the developer's profile list, and a date that does not exist

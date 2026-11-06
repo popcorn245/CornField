@@ -75,6 +75,11 @@ function answerHtml(ctx, run) {
     <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="Send reply to run ${id}"${off}>Reply</button></div>`;
 }
 
+/** The totals as plain lines (see `totalsLines`), escaped; '' when there are none */
+export function totalsHtml(ctx, lines) {
+  return lines.map((l) => `<p class="hx-forge-meta">${ctx.esc(l)}</p>`).join('');
+}
+
 /** One run */
 export function runHtml(ctx, run, all) {
   const lit = ctx.selected === run.runId;

@@ -217,6 +217,21 @@ describe('the agent API', () => {
       expect(list.json.runs[0]).toMatchObject({ runId: res.json.request.runId, status: 'requested', via: 'api', profile: 'claude' });
     });
 
+    it('starts from the profile\'s limits over the flat ones, and the caller\'s own win, from the API and from the dashboard alike (CF-27)', async () => {
+      config.agents.limits = { minutes: 30, claude: { cost: 5, minutes: 60 } };
+      const { secret } = await mint();
+      const api = await call(secret, code({ profile: 'claude', limits: { cost: 1 } }));
+      expect(api.status, api.text).toBe(201);
+      expect(api.json.request.limits).toEqual({ minutes: 60, cost: 1 });
+      later();
+      const dash = await page('POST', '/api/agent-runs', code({ refs: { issue: 13 }, profile: 'claude' }));
+      expect(dash.status, dash.text).toBe(201);
+      expect(dash.json.request.limits).toEqual({ minutes: 60, cost: 5 });
+      later();
+      const flat = await call(secret, code({ refs: { issue: 14 }, profile: 'local-qwen', limits: { tokens: 1000 } }));
+      expect(flat.json.request.limits).toEqual({ minutes: 30, tokens: 1000 });
+    });
+
     it('marks the token as used', async () => {
       const { secret } = await mint();
       expect((await page('GET', '/api/agent-tokens')).json.tokens[0].lastUsed).toBeNull();

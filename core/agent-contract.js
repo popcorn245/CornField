@@ -38,7 +38,7 @@
  *
  * @typedef {'code' | 'summary' | 'brief' | 'proposal'} RunKind
  * @typedef {{ issue?: number, proposal?: string, pull?: number, thread?: number }} RunRefs
- * @typedef {{ minutes?: number, turns?: number, cost?: number }} RunLimits
+ * @typedef {{ minutes?: number, turns?: number, cost?: number, tokens?: number }} RunLimits
  * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief: string,
  *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string, trigger?: { event: 'spec.approved' | 'build.opened' | 'thread.message', by: string, ref: string } }} RunRequest
  * @typedef {'claimed' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped'} ReportState
@@ -94,7 +94,7 @@ const TRIGGER_KEYS = ['event', 'by', 'ref'];
 /** The events an opt-in trigger may fire on (`agents.on`, spec 0005 D10): each is something a maintainer did */
 export const TRIGGER_EVENTS = Object.freeze(['spec.approved', 'build.opened', 'thread.message']);
 const REF_KEYS = ['issue', 'proposal', 'pull', 'thread'];
-const LIMIT_KEYS = ['minutes', 'turns', 'cost'];
+const LIMIT_KEYS = ['minutes', 'turns', 'cost', 'tokens'];
 const REPORT_KEYS = ['state', 'note', 'url', 'tokens', 'cost'];
 const STOP_KEYS = ['state', 'note'];
 const ANSWER_KEYS = ['state', 'action', 'text'];
@@ -333,7 +333,7 @@ export function validateRequest(body, { profiles } = {}) {
   }
 
   if (body.limits !== undefined) {
-    if (!isObject(body.limits)) return no('"limits" is { minutes, turns, cost }.');
+    if (!isObject(body.limits)) return no('"limits" is { minutes, turns, cost, tokens }.');
     const limitKeys = keyProblem(body.limits, LIMIT_KEYS, '"limits"');
     if (limitKeys) return no(limitKeys);
     for (const field of LIMIT_KEYS) {
@@ -341,6 +341,7 @@ export function validateRequest(body, { profiles } = {}) {
       if (n === undefined) continue;
       if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return no(`"limits.${field}" is a number above zero.`);
       if (field === 'turns' && !Number.isInteger(n)) return no('"limits.turns" is a whole number.');
+      if (field === 'tokens' && !Number.isSafeInteger(n)) return no('"limits.tokens" is a whole number.');
     }
   }
 

@@ -400,6 +400,8 @@ function agentRunProblems(a) {
     if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {
       out.push(`agents.profiles is a list of at most ${MAX_PROFILES} different names ("claude", "local-qwen"): letters, digits and . _ -, at most 64 characters each. The runner maps each to a model; cornfield only knows the name.`);
     }
+    // agents.limits keys a profile's own limits by its name, so a profile may not be named like a limit
+    else for (const p of a.profiles) if (LIMIT_NAMES.includes(p)) out.push(`agents.profiles ${JSON.stringify(p)} is the name of a limit (${LIMIT_NAMES.join(', ')}); name the profile something else.`);
   }
   if (a.runners !== undefined) {
     if (!Array.isArray(a.runners) || a.runners.length > MAX_RUNNERS || !a.runners.every((r) => isText(r) && r === r.trim() && !/[\s,]/.test(r))) {
@@ -419,14 +421,51 @@ function agentRunProblems(a) {
     else if (ms > RUNNER_QUIET_MAX_MS) out.push(`agents.runnerQuietAfter ${JSON.stringify(a.runnerQuietAfter)} is over the ceiling of 1h; use "60m" or less.`);
   }
   if (a.on !== undefined) out.push(...triggerProblems(a));
-  if (a.limits !== undefined) {
-    if (!isObject(a.limits)) out.push('agents.limits is { minutes?, turns?, cost? }: hints the runner may enforce.');
-    else {
-      for (const k of Object.keys(a.limits)) if (!['minutes', 'turns', 'cost'].includes(k)) out.push(`agents.limits.${k}: the keys are minutes, turns, cost.`);
-      for (const k of ['minutes', 'cost']) if (a.limits[k] !== undefined && !(typeof a.limits[k] === 'number' && Number.isFinite(a.limits[k]) && a.limits[k] > 0)) out.push(`agents.limits.${k} is a number above zero.`);
-      if (a.limits.turns !== undefined && !(Number.isInteger(a.limits.turns) && a.limits.turns > 0 && a.limits.turns <= MAX_NUMBER)) out.push('agents.limits.turns is a whole number above zero.');
+  if (a.limits !== undefined) out.push(...limitProblems(a));
+  return out;
+}
+
+/** The keys of a request's `limits`, in the contract's order (core/agent-contract.js) */
+export const LIMIT_NAMES = Object.freeze(['minutes', 'turns', 'cost', 'tokens']);
+
+/** What is wrong with `agents.limits`, as lines: the flat limits for every profile, and the profiles' own (`{ claude: { cost: 5 } }`) */
+function limitProblems(a) {
+  const out = [];
+  const say = 'agents.limits is { minutes?, turns?, cost?, tokens? } for every profile, and { <profile>: { minutes?, turns?, cost?, tokens? } } for one: hints the runner may enforce.';
+  if (!isObject(a.limits)) return [say];
+  const profiles = Array.isArray(a.profiles) ? a.profiles : [];
+  const check = (set, at) => {
+    for (const k of Object.keys(set)) if (!LIMIT_NAMES.includes(k)) out.push(`${at}.${k}: the keys are ${LIMIT_NAMES.join(', ')}.`);
+    for (const k of LIMIT_NAMES) {
+      const n = set[k];
+      if (n === undefined) continue;
+      const whole = k === 'turns' || k === 'tokens';
+      if (!(typeof n === 'number' && Number.isFinite(n) && n > 0 && (!whole || (Number.isInteger(n) && n <= MAX_NUMBER)))) out.push(`${at}.${k} is a ${whole ? 'whole number' : 'number'} above zero.`);
     }
+  };
+  const flat = {};
+  for (const [k, v] of Object.entries(a.limits)) {
+    if (LIMIT_NAMES.includes(k)) { flat[k] = v; continue; }
+    if (!isObject(v)) { out.push(`agents.limits.${k}: the keys are ${LIMIT_NAMES.join(', ')}, or the name of a profile with its own limits.`); continue; }
+    if (!profiles.includes(k)) { out.push(`agents.limits.${k} is not one of agents.profiles (${profiles.join(', ') || 'none listed'}).`); continue; }
+    check(v, `agents.limits.${k}`);
   }
+  check(flat, 'agents.limits');
+  return out;
+}
+
+/**
+ * The limits a request starts from: the flat `agents.limits`, then the profile's own over them key by key. A request's explicit limits are
+ * laid over this by the caller. Returns a new object (empty when nothing is configured).
+ * @param {Record<string, any> | undefined} limits `agents.limits`
+ * @param {string | undefined} profile
+ */
+export function limitDefaults(limits, profile) {
+  const out = {};
+  if (!isObject(limits)) return out;
+  for (const k of LIMIT_NAMES) if (limits[k] !== undefined) out[k] = limits[k];
+  const own = typeof profile === 'string' && !LIMIT_NAMES.includes(profile) ? limits[profile] : undefined;
+  if (isObject(own)) for (const k of LIMIT_NAMES) if (own[k] !== undefined) out[k] = own[k];
   return out;
 }
 
