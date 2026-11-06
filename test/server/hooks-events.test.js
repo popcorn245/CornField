@@ -429,7 +429,8 @@ describe('event hooks', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-hooks-poll-'));
     const mine = await receiver();
     const poll = handTimer();
-    const cfg = { ...config, dataDir: dir, hooks: [{ url: mine.url, events: ['spec.ready'] }], hookPoll: { specs: '2m' } };
+    // the count below is of the spec PRs' listings, so the look for requests written by hand (which lists open pull requests too) is off
+    const cfg = { ...config, dataDir: dir, hooks: [{ url: mine.url, events: ['spec.ready'] }], hookPoll: { specs: '2m' }, agents: { ...config.agents, handWritten: false } };
     world.pulls[0].draft = false;
     world.pulls[0].head.sha = H1;
     const listed = () => fake.requests.filter((r) => r.method === 'GET' && r.url.startsWith(`${GH}/pulls?`)).length;

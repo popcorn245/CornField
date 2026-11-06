@@ -28,6 +28,10 @@
  * database alone, so an idle repo costs the forge nothing), the same tick hands the same maintainer's forge to `runs.follow`, which reads the
  * runs' comments and pull requests. A server with no `spec.ready` hook still polls for runs (`specs: false`) and then does nothing else.
  *
+ * **Requests written by hand** (issue #98, `agents.handWritten`, on by default) ride the same tick: before the follow, `runs.discover` reads the comments of
+ * the open issues and pull requests that changed since they were last read, so a maintainer's own `cornfield-run` block becomes a run and is followed in this very look.
+ * That makes the tick worth running with no run at all, so the server starts it for them too; `handWritten: false` returns to "only runs cornfield asked for".
+ *
  * **Never in the way.** One tick runs at a time (the next is scheduled when one ends, so a slow forge cannot pile them up).
  * A forge error is logged and never thrown; the next tick waits twice the interval until one succeeds. The timer is
  * unref'd and `close()` clears it.
@@ -73,7 +77,7 @@ export async function findMaintainerForge({ auth, repo, now = Date.now }) {
  *   where: { proposals: string },
  *   auth: { store: () => Promise<import('node:sqlite').DatabaseSync>, forgeForUser: (userId: string) => Promise<import('./forge.js').Forge> },
  *   hooks: import('./hooks.js').Hooks | null,
- *   runs?: { hasWork: () => Promise<boolean>, follow: (forge: import('./forge.js').Forge) => Promise<unknown> } | null,
+ *   runs?: { hasWork: () => Promise<boolean>, follow: (forge: import('./forge.js').Forge) => Promise<unknown>, discovers?: boolean, discover?: (forge: import('./forge.js').Forge) => Promise<{ imported: number }> } | null,
  *   specs?: boolean,
  *   intervalMs: number,
  *   now?: () => number,
@@ -125,7 +129,9 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
     } catch (err) {
       log(`the runs could not be counted: ${words(err)}`);
     }
-    if (!specs && !followRuns) return 'ok';
+    // Requests written by hand (agents.handWritten) are looked for even when there is no run yet: that is how the first one is found
+    const discovers = Boolean(runs && runs.discovers && runs.discover);
+    if (!specs && !followRuns && !discovers) return 'ok';
     let found;
     try {
       found = await maintainerForge();
@@ -158,6 +164,16 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
         }
       } catch (err) {
         log(`failed: ${words(err)}`);
+        out = 'error';
+      }
+    }
+    if (discovers && !closed) {
+      try {
+        const found2 = await /** @type {any} */ (runs).discover(found.forge);
+        // A run just found is followed in this same look
+        if (found2 && found2.imported > 0) followRuns = true;
+      } catch (err) {
+        log(`the requests written by hand could not be looked for: ${words(err)}`);
         out = 'error';
       }
     }

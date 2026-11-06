@@ -37,7 +37,7 @@ export default {
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
-| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `runnerQuietAfter`, `limits`, `refuseCollisions`): [agents](agents.md), [below](#agents) |
+| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `runnerQuietAfter`, `limits`, `refuseCollisions`, `handWritten`): [agents](agents.md), [below](#agents) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
@@ -69,6 +69,7 @@ agents: {
   limits: { minutes: 30, turns: 40, cost: 5 },   // hints put in every request; a request may change them; the runner enforces them or not
   // opt-in triggers, off by default (docs/agents.md#triggers): a run requested by something a maintainer did
   on: { 'spec.approved': { kind: 'code', profile: 'claude' } },
+  handWritten: true,                   // read the open issues' and pull requests' comments for request blocks a maintainer wrote by hand: true (all), 'labeled' (the threads label only) or false (docs/agents.md#requests-written-by-hand)
   refuseCollisions: false,             // true: refuse a new request whose `nodes` an open run is already changing (docs/agents.md#runs-on-the-map)
 },
 ```
@@ -183,8 +184,8 @@ export function verify(raw, header, secret, maxAgeMs = 300_000) {
 hookPoll: { specs: '5m' },   // the default; '90s', '5m', '1h'… or false for none
 ```
 
-- **Runs.** The same timer follows [agent runs](agents.md#following-a-run): it is started when a run is asked for (or was, before a restart), looks at the forge only while a run is waiting for a report or a push, and uses the same interval, so `hookPoll: false` leaves runs to the Refresh button.
-- **When it runs.** By default, when some hook subscribes to `spec.ready` or to a `thread.*` event while threads are on (by name, or with `events: '*'`), or when `agents.on` has a `thread.message` trigger (which needs no hook): every 5 minutes, the first look 15 seconds after start. With no such hook it is off, and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
+- **Runs.** The same timer follows [agent runs](agents.md#following-a-run): it is started when a run is asked for (or was, before a restart), looks at the forge only while a run is waiting for a report or a push, and uses the same interval, so `hookPoll: false` leaves runs to the Refresh button. Unless `agents.handWritten` is `false`, it also reads the open issues' and pull requests' comments for [requests written by hand](agents.md#requests-written-by-hand), which starts it with no run at all.
+- **When it runs.** By default, when some hook subscribes to `spec.ready` or to a `thread.*` event while threads are on (by name, or with `events: '*'`), or when `agents.on` has a `thread.message` trigger (which needs no hook): every 5 minutes, the first look 15 seconds after start. With no such hook it is off (unless `agents.handWritten` asks it to look for requests written by hand, which it does by default), and `hookPoll` changes nothing. `hookPoll: false` (or `{ specs: false }`) turns it off even then; the dashboard still triggers the event as before.
 - **The interval** is a whole number with `s`, `m` or `h`, from **60s** (a floor, so the forge is not hammered) to **1h**. Anything else fails the config at start-up, naming the key. The key is separate from the `hooks` list, which stays a list.
 - **Whose token.** Never one from the config. The poll looks as the newest live [sign-in](sign-in.md#the-spec-poll) of a user the forge says is a maintainer of the repo *right now* (the check the [review API](proposals.md) makes before it posts). With no such session it does nothing and keeps running: it says so once in the log, not on every tick, and says so again when a maintainer is back. The log also names whose sign-in it looks with, each time that changes. That token only ever reads: who its owner is, their permission, and the open spec PRs; someone the forge says is no longer a maintainer is asked the first two and nothing else. A restart keeps the sessions (they are in the SQLite file, the tokens encrypted), so the poll looks with them as soon as it runs.
 - **The same look.** The poll calls the listing the dashboard uses, so the rules above are unchanged: a draft is never announced, the first look after `hooks` is added announces nothing, and each (pull request, head commit, proposal) is sent once. A poll and a dashboard look never announce the same head twice.

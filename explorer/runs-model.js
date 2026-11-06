@@ -50,7 +50,7 @@ export function statusWhy(run) {
 
 /** A line of facts: who asked and when, the profile, the limits asked for beside what the runner reported */
 export function runMeta(run, nowMs) {
-  const parts = [`asked ${relativeTime(run.requestedAt, nowMs)} by ${run.requestedBy}`];
+  const parts = [`asked ${relativeTime(run.requestedAt, nowMs)} by ${run.requestedBy}${run.byHand ? ' (by hand)' : ''}`];
   if (run.profile) parts.push(`profile ${run.profile}`);
   const l = run.limits || {};
   const limits = [l.minutes != null && `${l.minutes} min`, l.turns != null && `${l.turns} turns`, l.cost != null && `cost ${l.cost}`].filter(Boolean);
@@ -80,6 +80,15 @@ export function triggerNotice(data) {
     out.push(`${count} ${count === 1 ? 'trigger was' : 'triggers were'} refused in the last day (${refused.map(([why, c]) => `${why} ${c}`).join(', ')}), so nothing was asked.`);
   }
   return out.join(' ');
+}
+
+/**
+ * The hand-written `cornfield-run` blocks that started nothing (`handWritten.refused`), one line each: who wrote it, where, and why. Empty when none.
+ * @returns {string[]}
+ */
+export function handLines(data) {
+  const list = data && data.handWritten && Array.isArray(data.handWritten.refused) ? data.handWritten.refused : [];
+  return list.map((r) => `Request by hand from ${r.by}${r.number ? ` on #${r.number}` : ''}${r.runId ? ` (${r.runId})` : ''} started nothing: ${r.reason || r.why}`);
 }
 
 /** Whether a Stop is offered: the run is open and nobody has asked it to stop yet */

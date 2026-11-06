@@ -306,7 +306,8 @@ describe('the server', () => {
   const hook = (events) => [{ url: 'https://chat.example.org/h', events }];
 
   it('is off when no hook asks for spec.ready, and when hookPoll is false', async () => {
-    for (const extra of [{ hooks: hook(['pr.landed']) }, { hooks: hook('*'), hookPoll: { specs: false } }, { hooks: hook('*'), hookPoll: false }]) {
+    // Requests written by hand (agents.handWritten) are looked for by default, which alone starts the poll; turned off, nothing does
+    for (const extra of [{ hooks: hook(['pr.landed']), agents: { handWritten: false } }, { hooks: hook('*'), hookPoll: { specs: false } }, { hooks: hook('*'), hookPoll: false }]) {
       const s = await boot(extra);
       expect(s.timer.count, JSON.stringify(extra)).toBe(0);
       await s.close();

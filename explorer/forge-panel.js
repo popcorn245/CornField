@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -1129,6 +1129,12 @@ function paintRuns() {
     const skipped = data ? triggerNotice(data) : '';
     trig.hidden = !skipped;
     trig.textContent = skipped;
+  }
+  const hand = $('forge-runs-hand');
+  if (hand) {
+    const lines = data ? handLines(data) : [];
+    hand.hidden = !lines.length;
+    hand.innerHTML = lines.map((l) => `<li>${escHtml(l)}</li>`).join('');
   }
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }
