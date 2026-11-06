@@ -989,15 +989,15 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       for (const a of accepted) {
         const key = keyOf(a.comment.id, a.request.runId, 'request');
         if (isReply(a.request.runId, a.comment.id)) continue;
-        if (seen(key)) {
-          // An id cornfield assigned whose reply is not in the thread (the forge said no, or cornfield stopped before it was posted): posted now
-          const row = rowOf(a.request.runId);
-          if (a.assigned && row && row.comment_id === a.comment.id && !(holders.get(a.request.runId) ?? []).length) {
-            const posted = await reply(a.request);
-            if (posted) await audit({ login: a.by, action: 'agent-hand', target: `${repo}#${t.number}`, request: { runId: a.request.runId, type: 'request', comment: a.comment.id }, answer: { accepted: true, kind: a.request.kind, transport: row.transport, reply: posted } });
-          }
+        // An id cornfield assigned whose reply is not in the thread (the forge said no, or cornfield stopped before it was posted): posted now
+        const row = rowOf(a.request.runId);
+        if (a.assigned && row && row.comment_id === a.comment.id && !(holders.get(a.request.runId) ?? []).length) {
+          const posted = await reply(a.request);
+          if (posted) await audit({ login: a.by, action: 'agent-hand', target: `${repo}#${t.number}`, request: { runId: a.request.runId, type: 'request', comment: a.comment.id }, answer: { accepted: true, kind: a.request.kind, transport: row.transport, reply: posted } });
+          if (!seen(key)) mark(key);
           continue;
         }
+        if (seen(key)) continue;
         const outcome = await take(a.comment, a.request, a.assigned);
         if (outcome === null) continue;
         judge(a.comment, key, a.request.runId, a.by, outcome);

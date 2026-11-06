@@ -223,6 +223,24 @@ describe('a request written by hand', () => {
     expect((await t.runs.list()).handWritten.refused).toEqual([]);
   });
 
+  it('with no id, taken just before a restart and never confirmed, is confirmed by the next look, once', async () => {
+    const t = setup();
+    t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
+    await t.runs.discover(t.forge);
+    const [run] = (await t.runs.list()).runs;
+    // as if cornfield stopped after the run was kept and before anything else: no reply, no key, no scan
+    t.world.comments.set(12, t.world.comments.get(12).slice(0, 1));
+    t.db.prepare("DELETE FROM run_seen WHERE run_id = ''").run();
+    const again = createRuns({ config: t.cfg, where: { proposals: t.cfg.proposals }, auth: t.auth, hooks: t.hooks, now: () => t.clock.now });
+    expect(await again.discover(t.forge)).toMatchObject({ imported: 0, refused: 0 });
+    expect(t.world.comments.get(12)).toHaveLength(2);
+    expect(readRunBlocks(t.world.comments.get(12)[1].body).blocks[0].runId).toBe(run.runId);
+    t.touch(12);
+    await again.discover(t.forge);
+    expect(t.world.comments.get(12)).toHaveLength(2);
+    expect(t.db.prepare('SELECT count(*) AS n FROM runs').get().n).toBe(1);
+  });
+
   it('with no id in the fence keeps the id it was given on every look and after a restart, so it never starts a second run', async () => {
     const t = setup();
     t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
