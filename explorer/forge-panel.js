@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -121,6 +121,7 @@ const ui = {
   runSel: null, // the run lit on the map (Light on the map), by id
   runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
   runTimelines: new Set(), // the runs whose timeline is open
+  runReplies: new Map(), // the reply typed so far for each waiting run, so a repaint (the runs are looked at again) keeps it
   agent: null, // { opener, refs, posting } while the Start an agent dialog is open
 };
 
@@ -1043,6 +1044,8 @@ function findAgain(el) {
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
   if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
+  if (el.dataset.runReply) return `[data-run-reply="${el.dataset.runReply}"]`;
+  if (el.dataset.runAnswer) return `[data-run-answer="${el.dataset.runAnswer}"][data-run-id="${el.dataset.runId}"]`;
   if (el.dataset.runSelect) return `[data-run-select="${el.dataset.runSelect}"]`;
   if (el.dataset.runTimeline) return `[data-run-timeline="${el.dataset.runTimeline}"]`;
   return null;
@@ -1150,7 +1153,7 @@ function viewContext() {
   const base = f && safeUrl(f.url) ? f.url.replace(/\/+$/, '') : null;
   return {
     esc: escHtml, safeUrl, forgeName: forgeName(), forgeType: f ? f.type : 'github', repoUrl: base && f.repo ? `${base}/${f.repo}` : null,
-    now: now(), nodes: state.nodes, selected: ui.runSel, timelines: ui.runTimelines, busy: !!ui.busy,
+    now: now(), nodes: state.nodes, selected: ui.runSel, timelines: ui.runTimelines, replies: ui.runReplies, busy: !!ui.busy,
   };
 }
 
@@ -1547,6 +1550,29 @@ async function stopRun(runId) {
   paint();
 }
 
+/** Answers a waiting run: Continue, Stop, or a reply with the text typed. One POST, then the runs are read again */
+async function answerRun(runId, action) {
+  if (ui.busy) return;
+  const text = ui.runReplies.get(runId) || '';
+  if (action === 'reply' && text.trim() === '') {
+    ui.runNote = { text: 'Write a reply first.', ok: false };
+    announce(ui.runNote.text);
+    paint();
+    return;
+  }
+  ui.busy = 'answer';
+  ui.runNote = null;
+  announce(`Answering ${runId}`);
+  paint();
+  const res = await post(answerUrl(runId), answerBody(action, text));
+  ui.busy = '';
+  if (res.ok && action === 'reply') ui.runReplies.delete(runId);
+  ui.runNote = { text: answerWordsFor(res.status, res.body, runId, action), ok: res.ok };
+  announce(ui.runNote.text);
+  await loadRuns(false, { say: false });
+  paint();
+}
+
 // ---------------------------------------------------------------------------
 //  Opening and closing
 // ---------------------------------------------------------------------------
@@ -1678,6 +1704,8 @@ function onClick(e) {
   if (agent) { openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
   const stop = t.closest('[data-forge-stop]');
   if (stop) { stopRun(stop.dataset.forgeStop); return; }
+  const answer = t.closest('[data-run-answer]');
+  if (answer) { answerRun(answer.dataset.runId, answer.dataset.runAnswer); return; }
   const pick = t.closest('[data-run-select]');
   if (pick) { selectRun(pick.dataset.runSelect); return; }
   const timeline = t.closest('[data-run-timeline]');
@@ -1742,6 +1770,7 @@ function onChange(e) {
 }
 
 function onInput(e) {
+  if (e.target.dataset && e.target.dataset.runReply) { ui.runReplies.set(e.target.dataset.runReply, e.target.value); return; }
   if (e.target.id !== 'forge-text') return;
   ui.filters.text = e.target.value;
   filtersChanged(false);
@@ -1751,6 +1780,7 @@ function onInput(e) {
 
 /** Escape anywhere in the panel closes it, and the button has the focus again (a field's own Escape comes first) */
 function onKey(e) {
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.runReply && !e.defaultPrevented) { e.preventDefault(); answerRun(e.target.dataset.runReply, 'reply'); return; }
   if (e.key === 'Enter' && e.target.id === 'notes-tag' && !e.defaultPrevented) { e.preventDefault(); postDraft(); return; }
   if (e.key === 'Escape' && !e.defaultPrevented && ui.notes.confirm && e.target.closest && e.target.closest('#notes-confirm')) {
     e.preventDefault();
@@ -1848,5 +1878,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
 }

@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -44,6 +44,10 @@ const RUN = {
   report: { state: 'working', at: '2026-11-05T11:30:00Z', by: 'runner-bot', note: 'tests <img src=x onerror=alert(1)> failing', url: 'https://ci.example.org/1', tokens: 1200, cost: 0.4 },
   pull: { number: 50, state: 'open', url: 'https://git.example.test/owner/name/pull/50', by: 'runner-bot', trusted: true, via: 'body' },
 };
+const WAITING = {
+  ...RUN, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEW', status: 'waiting', profile: null, refs: { issue: 9 }, pull: null, checks: null, answer: null,
+  report: { state: 'waiting', at: '2026-11-05T11:40:00Z', by: 'runner-bot', note: 'Plan ready <b>approve</b> to build', url: 'https://plans.example.org/42', tokens: null, cost: null },
+};
 const QUIET = { ...RUN, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG', status: 'quiet', open: false, profile: null, report: null, pull: null, refs: { proposal: '0040-meals' } };
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
@@ -62,6 +66,12 @@ function fakeServer(opts = {}) {
     const u = new URL(url, 'http://localhost');
     const at = '2026-11-05T11:58:00.000Z';
     if (init.method === 'POST' && u.pathname === '/api/agent-runs') return opts.start ? json(opts.start.status, opts.start.body) : json(201, { ok: true, request: { runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEH' }, run: RUN });
+    if (init.method === 'POST' && /\/answer$/.test(u.pathname)) {
+      const sent = JSON.parse(init.body);
+      if (opts.answer) return json(opts.answer.status, opts.answer.body);
+      runs = runs.map((r) => (u.pathname.includes(r.runId) ? { ...r, answer: { ...sent, at, by: 'maintainer-one' } } : r));
+      return json(200, { ok: true });
+    }
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
     if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
@@ -307,6 +317,113 @@ describe('the runs on the Agents tab', () => {
     mount();
     await openAgents();
     expect($('forge-runs-list').textContent).toMatch(/No agent has been asked for yet/);
+  });
+});
+
+describe('a run that waits for an answer (issue #101)', () => {
+  const waiting = (extra = {}) => ({ runs: [{ ...WAITING, ...extra }], profiles: [] });
+
+  it('says it is waiting, with the runner\'s note escaped and its link, and offers Continue, Stop and a reply field, not the plain Stop', async () => {
+    fakeServer(waiting());
+    mount();
+    await openAgents();
+    const row = q('#forge-runs-list > li');
+    expect(row.textContent).toContain('Waiting');
+    expect(row.textContent).toContain('Runner: Plan ready <b>approve</b> to build');
+    expect(row.querySelector('b')).toBe(null);
+    expect(row.textContent).toMatch(/goes on once a maintainer answers/);
+    expect([...row.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toContain('https://plans.example.org/42');
+    expect(row.textContent).toContain('Runner\'s link');
+    expect(qa('[data-run-answer]').map((b) => [b.dataset.runAnswer, b.textContent])).toEqual([['continue', 'Continue'], ['stop', 'Stop'], ['reply', 'Reply']]);
+    expect(q('[data-forge-stop]')).toBe(null);
+    expect(q('[data-run-reply]').closest('label').textContent).toContain('Reply to run');
+    // an ordinary working run keeps its Stop and has no answers
+    expect(canAnswer({ ...RUN })).toBe(false);
+  });
+
+  it('sends Continue, Stop and a reply as one answer each, says what it came to, and shows the answer', async () => {
+    const server = fakeServer(waiting());
+    mount();
+    await openAgents();
+    click(q('[data-run-answer="continue"]'));
+    await settle();
+    expect(server.posts().map((p) => [p.url, JSON.parse(p.init.body)])).toEqual([[`/api/agent-runs/${WAITING.runId}/answer`, { action: 'continue' }]]);
+    expect($('forge-runs-note').textContent).toMatch(/Answered run-01JC8Z3Q5M7VXK2RT9N4B6HDEW: continue\. The runner picks it up/);
+    expect(q('#forge-runs-list > li').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
+    expect(await said()).toMatch(/Answered/);
+    // the reply: empty is not sent; typed text is, once, and the field is empty again
+    click(q('[data-run-answer="reply"]'));
+    await settle();
+    expect(server.posts()).toHaveLength(1);
+    expect($('forge-runs-note').textContent).toBe('Write a reply first.');
+    const field = q('[data-run-reply]');
+    field.value = '  Use the second <i>plan</i>.  ';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    click(q('[data-run-answer="reply"]'));
+    await settle();
+    expect(JSON.parse(server.posts()[1].init.body)).toEqual({ action: 'reply', text: 'Use the second <i>plan</i>.' });
+    expect(q('[data-run-reply]').value).toBe('');
+    expect(q('#forge-runs-list > li').textContent).toContain('answered: reply: Use the second <i>plan</i>.');
+    expect(q('#forge-runs-list i')).toBe(null);
+    click(q('[data-run-answer="stop"]'));
+    await settle();
+    expect(JSON.parse(server.posts()[2].init.body)).toEqual({ action: 'stop' });
+  });
+
+  it('keeps a half-typed reply when the runs are drawn again, and sends it on Enter', async () => {
+    const server = fakeServer(waiting());
+    mount();
+    await openAgents();
+    const field = q('[data-run-reply]');
+    field.focus();
+    field.value = 'half a thou';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    click(q('[data-action="refresh-forge"]'));
+    await settle();
+    expect(q('[data-run-reply]').value).toBe('half a thou');
+    key(q('[data-run-reply]'), 'Enter');
+    await settle();
+    expect(JSON.parse(server.posts().at(-1).init.body)).toEqual({ action: 'reply', text: 'half a thou' });
+  });
+
+  it('says a refusal in the server\'s words', async () => {
+    fakeServer({ ...waiting(), answer: { status: 409, body: { ok: false, code: 'conflict', error: 'Run is not waiting for an answer.' } } });
+    mount();
+    await openAgents();
+    click(q('[data-run-answer="continue"]'));
+    await settle();
+    expect($('forge-runs-note').textContent).toBe('Run is not waiting for an answer.');
+  });
+
+  it('words the state, the answers and the timeline', () => {
+    document.body.innerHTML = body;
+    expect(statusWords(WAITING)).toBe('Waiting');
+    expect(canAnswer(WAITING)).toBe(true);
+    expect(canAnswer({ ...WAITING, stopRequested: { at: 'x', by: 'y' }, status: 'stop-requested' })).toBe(false);
+    expect(answerBody('continue', 'ignored')).toEqual({ action: 'continue' });
+    expect(answerBody('reply', ' hi ')).toEqual({ action: 'reply', text: 'hi' });
+    expect(answerWords({ action: 'reply', text: 'plan B' })).toBe('reply: plan B');
+    expect(answerWords({ action: 'stop' })).toBe('stop');
+    expect(answerWordsFor(null, null, 'r', 'stop')).toMatch(/did not answer/);
+    expect(answerWordsFor(401, null, 'r', 'stop')).toMatch(/sign-in has ended/);
+    expect(answerWordsFor(200, { ok: true }, 'r', 'stop')).toMatch(/to stop/);
+    expect(timelineWords({ kind: 'answered', ref: 'reply', actor: 'maintainer-one', note: 'plan B' })).toEqual({ what: 'Answered reply by maintainer-one', note: 'plan B' });
+  });
+});
+
+describe.each(['dark', 'light'])('accessibility, %s theme, a waiting run', (theme) => {
+  it('passes axe with a waiting run, with its answer showing, and its timeline open', async () => {
+    document.documentElement.dataset.theme = theme;
+    fakeServer({ runs: [{ ...WAITING, answer: { action: 'reply', text: 'plan B', at: '2026-11-05T11:45:00Z', by: 'maintainer-one' }, timeline: [{ at: '2026-11-05T11:40:00Z', kind: 'report', actor: 'runner-bot', ref: 'waiting', note: 'Plan ready', url: null }] }, WAITING.runId && { ...WAITING, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEZ', refs: { issue: 11 } }], profiles: [] });
+    mount();
+    document.documentElement.dataset.theme = theme;
+    await openAgents();
+    expect(qa('[data-run-answer="continue"]')).toHaveLength(2);
+    expect(await audit()).toEqual([]);
+    click(q('[data-run-timeline]'));
+    await settle();
+    expect(await audit()).toEqual([]);
+    delete document.documentElement.dataset.theme;
   });
 });
 

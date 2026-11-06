@@ -8,8 +8,9 @@
  * - **A run id,** `run-` and a 26 character ULID (Crockford base32): `newRunId`, `isRunId`.
  * - **The request,** JSON v1, checked strictly (`validateRequest`, `createRequest`). It carries no credential, ever: a field
  *   named like a token, a secret or a password is refused, and so is a value shaped like one.
- * - **The report** a runner may send (`validateReport`: claimed, working, done, failed, stopped) and **the stop request**
- *   cornfield sends (`validateStopRequest`: `stop-requested`).
+ * - **The report** a runner may send (`validateReport`: claimed, working, waiting, done, failed, stopped), **the stop request**
+ *   cornfield sends (`validateStopRequest`: `stop-requested`) and **the answer** a maintainer gives a run that reported `waiting`
+ *   (`validateAnswer`: `answered`, with an `action` of continue, stop or reply).
  * - **The fenced block,** one form for all three, modelled on the review block of ADR 0005 (server/reviews.js):
  *
  *       Asked for a code run `run-01JC…` on #12 (maintainer-one, in cornfield).
@@ -20,7 +21,7 @@
  *
  *   `formatRunComment` writes it (the human line is defused, so it pings and links nobody), `readRunBlocks` and
  *   `parseRunBlocks` read it back: tolerant of the text around a block, strict about what is inside. A block that is not
- *   strictly a request, a report or a stop request is skipped, and `readRunBlocks` says which and why.
+ *   strictly a request, a report, a stop request or an answer is skipped, and `readRunBlocks` says which and why.
  * - **The trailer,** `Cornfield-Run: run-…` on its own line of a pull request body or a commit message, with the run id in a
  *   branch name as the fallback (`parseTrailer`, `runIdFromBranch`, `findRunId`).
  *
@@ -40,11 +41,13 @@
  * @typedef {{ minutes?: number, turns?: number, cost?: number }} RunLimits
  * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief: string,
  *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string, trigger?: { event: 'spec.approved' | 'build.opened' | 'thread.message', by: string, ref: string } }} RunRequest
- * @typedef {'claimed' | 'working' | 'done' | 'failed' | 'stopped'} ReportState
+ * @typedef {'claimed' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped'} ReportState
  * @typedef {{ state: ReportState, note?: string, url?: string, tokens?: number, cost?: number }} RunReport
  * @typedef {{ state: 'stop-requested', note?: string }} StopRequest
+ * @typedef {'continue' | 'stop' | 'reply'} AnswerAction
+ * @typedef {{ state: 'answered', action: AnswerAction, text?: string }} RunAnswer
  * @typedef {{ ok: true, value: any } | { ok: false, error: string }} Checked
- * @typedef {{ runId: string, type: 'request', value: RunRequest } | { runId: string, type: 'report', value: RunReport } | { runId: string, type: 'stop-request', value: StopRequest }} RunBlock
+ * @typedef {{ runId: string, type: 'request', value: RunRequest } | { runId: string, type: 'report', value: RunReport } | { runId: string, type: 'stop-request', value: StopRequest } | { runId: string, type: 'answer', value: RunAnswer }} RunBlock
  */
 
 import { defuse } from './defuse.js';
@@ -58,11 +61,14 @@ const randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
 
 export const CONTRACT_VERSION = 1;
 export const RUN_KINDS = ['code', 'summary', 'brief', 'proposal'];
-export const REPORT_STATES = ['claimed', 'working', 'done', 'failed', 'stopped'];
+export const REPORT_STATES = ['claimed', 'working', 'waiting', 'done', 'failed', 'stopped'];
 export const STOP_STATE = 'stop-requested';
+/** The state of an answer block, and what a maintainer may answer a `waiting` run */
+export const ANSWER_STATE = 'answered';
+export const ANSWER_ACTIONS = ['continue', 'stop', 'reply'];
 /** The brief, in characters */
 export const MAX_BRIEF_CHARS = 20000;
-/** A report's or a stop request's note, in characters */
+/** A report's or a stop request's note, and an answer's text, in characters */
 export const MAX_NOTE_CHARS = 4000;
 export const MAX_URL_CHARS = 2000;
 export const MAX_NODES = 100;
@@ -91,6 +97,7 @@ const REF_KEYS = ['issue', 'proposal', 'pull', 'thread'];
 const LIMIT_KEYS = ['minutes', 'turns', 'cost'];
 const REPORT_KEYS = ['state', 'note', 'url', 'tokens', 'cost'];
 const STOP_KEYS = ['state', 'note'];
+const ANSWER_KEYS = ['state', 'action', 'text'];
 
 // ---------------------------------------------------------------------------
 //  Patterns. Each is plain ECMAScript with no flags, so the JSON Schema can carry the same source.
@@ -391,7 +398,7 @@ export function createRequest(fields, { profiles, now = Date.now, random } = {})
 }
 
 // ---------------------------------------------------------------------------
-//  The report, and the stop request
+//  The report, the stop request and the answer
 // ---------------------------------------------------------------------------
 
 function noteAndUrl(body, no) {
@@ -449,17 +456,42 @@ export function validateStopRequest(body) {
 }
 
 /**
+ * Checks an answer: `{ state: 'answered', action, text? }`. A maintainer sends it to a run that reported `waiting`: `continue` (go on),
+ * `stop` (the same as a stop request) or `reply` (go on with `text`, which a reply must have). cornfield or a maintainer sends it; the
+ * runner decides what it means.
+ * @param {unknown} body
+ * @returns {Checked}
+ */
+export function validateAnswer(body) {
+  const no = (error) => ({ ok: false, error });
+  if (!isObject(body)) return no('An answer is a JSON object with a state.');
+  const keys = keyProblem(body, ANSWER_KEYS, 'An answer');
+  if (keys) return no(keys);
+  const secret = valueProblem(body, 'The answer');
+  if (secret) return no(secret);
+  if (body.state !== ANSWER_STATE) return no(`"state" is "${ANSWER_STATE}".`);
+  if (!ANSWER_ACTIONS.includes(body.action)) return no(`"action" is one of ${ANSWER_ACTIONS.join(', ')}.`);
+  if (body.text !== undefined) {
+    const problem = text(body.text, 'text', MAX_NOTE_CHARS);
+    if (problem) return no(problem);
+  }
+  if (body.action === 'reply' && (body.text === undefined || body.text.trim() === '')) return no('A reply has "text": what the maintainer says.');
+  return { ok: true, value: { state: ANSWER_STATE, action: body.action, ...(body.text !== undefined && body.text.trim() !== '' ? { text: body.text } : {}) } };
+}
+
+/**
  * Checks whatever a `cornfield-run` block holds, by its shape: a `version` makes it a request, the state `stop-requested` a
- * stop request, any other state a report.
+ * stop request, the state `answered` an answer, any other state a report.
  * @param {unknown} body
  * @param {{ profiles?: string[] }} [opts]
- * @returns {{ ok: true, type: 'request' | 'report' | 'stop-request', value: any } | { ok: false, error: string }}
+ * @returns {{ ok: true, type: 'request' | 'report' | 'stop-request' | 'answer', value: any } | { ok: false, error: string }}
  */
 export function validateRunBody(body, opts) {
   if (Array.isArray(body)) return { ok: false, error: 'A cornfield-run block holds one JSON object, not a list.' };
   if (!isObject(body)) return { ok: false, error: 'A cornfield-run block holds one JSON object.' };
   const [type, checked] = 'version' in body || 'runId' in body ? ['request', validateRequest(body, opts)]
     : body.state === STOP_STATE ? ['stop-request', validateStopRequest(body)]
+    : body.state === ANSWER_STATE ? ['answer', validateAnswer(body)]
     : 'state' in body ? ['report', validateReport(body)]
     : ['request', validateRequest(body, opts)]; // neither shape: the request check names the first key or field that is wrong
   return checked.ok ? { ok: true, type, value: checked.value } : checked;
@@ -471,7 +503,7 @@ export function validateRunBody(body, opts) {
 
 const FENCE = '```';
 
-/** The block for a checked request, report or stop request, as text: the fence named for the run, the JSON, the closing fence. Throws on anything that is not strictly one. */
+/** The block for a checked request, report, stop request or answer, as text: the fence named for the run, the JSON, the closing fence. Throws on anything that is not strictly one. */
 export function formatRunBlock(runId, body, opts) {
   if (!isRunId(runId)) throw new TypeError(`${shown(runId)} is not a run id.`);
   const checked = validateRunBody(body, opts);
@@ -492,14 +524,15 @@ function defaultLine(runId, type, value) {
     return `Asked for a ${value.kind} run \`${runId}\` on ${about}${value.profile ? ` with the profile ${value.profile}` : ''} (${value.requestedBy}, in cornfield).`;
   }
   if (type === 'stop-request') return `Asked run \`${runId}\` to stop.`;
+  if (type === 'answer') return `Answered run \`${runId}\`: ${value.action}.`;
   return `Run \`${runId}\`: ${value.state}.`;
 }
 
 /**
- * The text of a comment for a request, a report or a stop request: a human line (defused: it pings and links nobody), the note of a
- * report or stop request quoted and defused, then the block. The block keeps every value as sent, for the runner.
+ * The text of a comment for a request, a report, a stop request or an answer: a human line (defused: it pings and links nobody), the note of a
+ * report or stop request (the text of an answer) quoted and defused, then the block. The block keeps every value as sent, for the runner.
  * @param {string} runId
- * @param {RunRequest | RunReport | StopRequest} body
+ * @param {RunRequest | RunReport | StopRequest | RunAnswer} body
  * @param {{ line?: string, profiles?: string[] }} [opts] `line`: your own human line, in place of the default
  * @returns {string}
  */
@@ -507,7 +540,7 @@ export function formatRunComment(runId, body, { line, profiles } = {}) {
   const block = formatRunBlock(runId, body, { profiles });
   const checked = validateRunBody(body, { profiles });
   const head = oneLine(line ?? defaultLine(runId, checked.type, checked.value));
-  const note = checked.type === 'request' ? '' : (checked.value.note ?? '').trim();
+  const note = checked.type === 'request' ? '' : ((checked.type === 'answer' ? checked.value.text : checked.value.note) ?? '').trim();
   const quoted = note ? `\n\n${defuse(note).split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
   const out = `${head}${quoted}\n\n${block}`;
   if (out.length > MAX_COMMENT_CHARS) throw new RangeError(`That is too long for a comment (${out.length} characters, at most ${MAX_COMMENT_CHARS}); shorten the brief or the note.`);
@@ -545,7 +578,7 @@ export function* fencedBlocks(text) {
 
 /**
  * Every block a comment's text holds, in order, and every block that was refused with the reason. A block that is not strictly a
- * request, a report or a stop request is refused: not JSON, a list, two objects, a key it does not have, a credential, a fence
+ * request, a report, a stop request or an answer is refused: not JSON, a list, two objects, a key it does not have, a credential, a fence
  * that names no run id, a request for another run than its fence names. Text around a block, a quoted block (`> ```…`), an
  * indented one, one nobody closed, and one inside another fence (a ```` example) are ignored (`fencedBlocks`). Nothing is thrown,
  * and the time it takes is linear in the text.
@@ -626,8 +659,8 @@ export function runAuthors(comments) {
  * - `blocks`: from an author `trust(login)` accepts, in a comment not edited after it was posted;
  * - `ignored`: well formed, but from someone else (or a deleted account), or in an edited comment: the spec wants one audit row
  *   for each, so they are kept with the reason;
- * - `refused`: not strictly a request, report or stop request (`readRunBlocks`), with the author.
- * Whom to trust is the caller's to decide, because it takes the forge: a maintainer now for a request or a stop, a login in
+ * - `refused`: not strictly a request, report, stop request or answer (`readRunBlocks`), with the author.
+ * Whom to trust is the caller's to decide, because it takes the forge: a maintainer now for a request, a stop or an answer, a login in
  * `agents.runners` or a maintainer for a report (spec 0005). `trust` is asked once per block, with the block, so it can tell them
  * apart.
  * @param {RunComment[]} comments
@@ -665,7 +698,7 @@ export function parseRunBlocks(body, opts) {
  * drops the ones whose author is not a maintainer, or whose comment was edited), or null. Later wins.
  * @param {RunBlock[]} blocks
  * @param {string} runId
- * @param {'request' | 'report' | 'stop-request'} type
+ * @param {'request' | 'report' | 'stop-request' | 'answer'} type
  * @returns {RunBlock | null}
  */
 export function latestBlock(blocks, runId, type) {

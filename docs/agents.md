@@ -188,7 +188,7 @@ A runner asks, claims, works and reports. Every answer is JSON `{ ok, … }`, or
 
 1. `GET /api/agent-requests?state=queued` lists the requests waiting: `{ ok, requests: [<request JSON>, …], limit }`, oldest first, at most 50. A request is queued until it is claimed, asked to stop, or goes quiet. (Poll every 15 to 60 seconds; a token may call 120 times a minute. An empty read is written to the audit table at most once in ten minutes.)
 2. `POST /api/agent-requests/<runId>/claim` claims one, atomically. The answer is 200 `{ ok, request, run }`, and the run is now `claimed`, held by that token. **A second claim of the same request is 409** (`already-claimed`), whoever makes it, even the winner; two runners racing for one request cannot both get it. 409 also says when the request is not a pull request, was stopped, or has gone quiet.
-3. `POST /api/runs/<runId>` reports, with the [report JSON](agent-contract.md#reports-and-stopping): `{ "state": "working", "note": "…", "url": "https://…/logs" }`. It is checked by the contract (an unknown state or key, a bad `url`, a count below zero, or anything shaped like a credential, by key or by value, is 400, and nothing changes). **Only the token that claimed a run may report on it or read it** (403 for another). A run that is `done`, `failed` or `stopped` takes no more reports (409). The answer is `{ ok, run }`.
+3. `POST /api/runs/<runId>` reports, with the [report JSON](agent-contract.md#reports-stopping-and-waiting): `{ "state": "working", "note": "…", "url": "https://…/logs" }`. It is checked by the contract (an unknown state or key, a bad `url`, a count below zero, or anything shaped like a credential, by key or by value, is 400, and nothing changes). **Only the token that claimed a run may report on it or read it** (403 for another). A run that is `done`, `failed` or `stopped` takes no more reports (409). The answer is `{ ok, run }`.
 4. Do the work under the runner's own identity and carry the run id forward as a `Cornfield-Run: run-…` trailer in the pull request or its commits.
 
 A claimed run with no report within `agents.quietAfter` goes quiet as usual; a later report makes it open again. The `run.claimed`, `run.state` and `run.finished` [hooks](config.md#hooks) fire for these reports as they do for reports on the forge (the actor is `runner:<token label>`).
@@ -228,7 +228,20 @@ A push has no forge comment to reply in, so the runner reports with `POST /api/r
 
 ### Stopping on push and pull
 
-A maintainer's Stop is recorded and cornfield sends the `run.stopRequested` hook (on push, the runner's own hook subscription can listen for it). A runner does not have to be pushed it: **`GET /api/runs/<runId>`** with its token answers `{ ok, run: { runId, state, reported, stopRequested, stopRequestedAt?, open, finished } }`. `state` is what cornfield shows (`claimed`, `working`, `stop-requested`, `quiet`, `done`, …) and `stopRequested` is true once a maintainer asked, so a runner checks it between steps; every report's answer carries the same `run`. The runner decides what stopping means and reports `stopped` when it has. A pull request nobody has claimed yet has no runner to ask: cornfield stops it itself (the one `stopped` it writes) and it leaves the queue. The stop's `note` is only carried on the forge transport.
+A maintainer's Stop is recorded and cornfield sends the `run.stopRequested` hook (on push, the runner's own hook subscription can listen for it). A runner does not have to be pushed it: **`GET /api/runs/<runId>`** with its token answers `{ ok, run: { runId, state, reported, stopRequested, stopRequestedAt?, open, finished } }`. `state` is what cornfield shows (`claimed`, `working`, `waiting`, `stop-requested`, `quiet`, `done`, …) and `stopRequested` is true once a maintainer asked, so a runner checks it between steps; every report's answer carries the same `run`. The runner decides what stopping means and reports `stopped` when it has. A pull request nobody has claimed yet has no runner to ask: cornfield stops it itself (the one `stopped` it writes) and it leaves the queue. The stop's `note` is only carried on the forge transport.
+
+### Waiting, and the answer
+
+A runner that has to ask reports `waiting` with a `note` and a `url` ([the contract](agent-contract.md#reports-stopping-and-waiting)). The run stays open and the Runs view shows **Waiting** with the note and the link, and three answers: **Continue**, **Stop**, and a text field with **Reply** (Enter in the field sends it). They are plain buttons in the run's own row; nothing else changes in the view. The `run.waiting` hook fires when the wait begins and `run.answered` when a maintainer answers (its body adds `action`: `continue`, `stop` or `reply`; a reply's words are never in a hook or the audit, only their length). When the runner goes on and reports `working`, `run.state` fires as for any change.
+
+On push and pull the answer comes back through `GET /api/runs/<runId>` the way `stopRequested` does: `{ ok, run: { runId, state: "waiting", …, answer: { action, text?, at, by } } }`, and every report's answer carries the same `run`. One answer is kept: a second replaces the first, until the runner reports something other than `waiting`; a new wait clears it. A Stop answer is a Stop: it sets `stopRequested`, sends `run.stopRequested`, and is audited as `agent-stop`; the answer is kept beside it. On the forge the answer is a `cornfield-run` block in a comment by the maintainer. The dashboard's call is `POST /api/agent-runs/<runId>/answer` with `{ action, text? }` (a signed-in maintainer, from the page, like Stop); it is audited as `agent-answer`.
+
+```js
+// between steps, a pull runner that asked and is waiting
+const { run } = (await get(`/api/runs/${runId}`)).json;
+if (run.stopRequested) return stop();
+if (run.answer && run.answer.at > lastAnswerAt) { lastAnswerAt = run.answer.at; /* continue, or read run.answer.text */ }
+```
 
 ### A recipe
 

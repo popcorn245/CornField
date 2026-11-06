@@ -261,6 +261,46 @@ describe('validateStopRequest', () => {
   });
 });
 
+describe('the waiting state and the answer (issue #101)', () => {
+  it('takes waiting as a report state with a note and a link, and refuses a state it does not know', () => {
+    expect(c.REPORT_STATES).toContain('waiting');
+    const waiting = { state: 'waiting', note: 'Plan ready, approve to build', url: 'https://plans.example.com/42' };
+    expect(c.validateReport(waiting)).toEqual({ ok: true, value: waiting });
+    expect(c.validateReport({ state: 'paused' }).error).toMatch(/"state" is one of .*waiting/);
+    expect(c.validateRunBody(waiting).type).toBe('report');
+  });
+  it('is answered, an action, and a text that a reply must have', () => {
+    expect(c.validateAnswer({ state: 'answered', action: 'continue' })).toEqual({ ok: true, value: { state: 'answered', action: 'continue' } });
+    expect(c.validateAnswer({ state: 'answered', action: 'stop', text: 'wrong branch' }).value).toEqual({ state: 'answered', action: 'stop', text: 'wrong branch' });
+    expect(c.validateAnswer({ state: 'answered', action: 'reply', text: 'Use the second plan.' }).ok).toBe(true);
+    expect(c.validateAnswer({ state: 'answered', action: 'reply' }).error).toMatch(/A reply has "text"/);
+    expect(c.validateAnswer({ state: 'answered', action: 'reply', text: '   ' }).error).toMatch(/A reply has "text"/);
+    expect(c.validateAnswer({ state: 'answered', action: 'approve' }).error).toBe('"action" is one of continue, stop, reply.');
+    expect(c.validateAnswer({ state: 'done', action: 'continue' }).error).toBe('"state" is "answered".');
+    expect(c.validateAnswer({ state: 'answered', action: 'continue', note: 'x' }).error).toMatch(/"note", which the contract does not have/);
+    expect(c.validateAnswer({ state: 'answered', action: 'reply', text: 3 }).error).toBe('"text" is text.');
+    expect(c.validateAnswer({ state: 'answered', action: 'continue', token: 'x' }).error).toMatch(/credential/);
+    expect(c.validateAnswer({ state: 'answered', action: 'reply', text: 'use ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8' }).ok).toBe(false);
+    expect(c.validateAnswer([]).error).toMatch(/JSON object/);
+    expect(c.validateRunBody({ state: 'answered', action: 'continue' }).type).toBe('answer');
+  });
+  it('round-trips as a block, with the reply quoted in the human line and defused', () => {
+    for (const answer of [{ state: 'answered', action: 'continue' }, { state: 'answered', action: 'stop' }, { state: 'answered', action: 'reply', text: 'Use plan B.\n@everyone #1' }]) {
+      const text = c.formatRunComment(ID, answer);
+      expect(c.parseRunBlocks(text)).toEqual([{ runId: ID, type: 'answer', value: answer }]);
+      expect(text.startsWith(`Answered run \`${ID}\`: ${answer.action}.`)).toBe(true);
+    }
+    expect(c.formatRunComment(ID, { state: 'answered', action: 'reply', text: 'Use plan B' })).toContain('> Use plan B');
+    expect(() => c.formatRunBlock(ID, { state: 'answered', action: 'reply' })).toThrow(/A reply has/);
+  });
+  it('is read from a comment, and an answer with a stray key is refused with the reason', () => {
+    const bad = c.readRunBlocks(fenced(ID, { state: 'answered', action: 'continue', who: 'me' }));
+    expect(bad.blocks).toEqual([]);
+    expect(bad.refused[0].error).toMatch(/"who", which the contract does not have/);
+    expect(c.latestBlock(c.parseRunBlocks(`${fenced(ID, { state: 'answered', action: 'continue' })}\n${fenced(ID, { state: 'answered', action: 'stop' })}`), ID, 'answer').value.action).toBe('stop');
+  });
+});
+
 describe('validateRunBody', () => {
   it('picks the shape', () => {
     expect(c.validateRunBody(request()).type).toBe('request');
@@ -502,6 +542,8 @@ const GOOD = [
   ...c.REPORT_STATES.map((state) => ({ state })),
   { state: 'working', note: 'n', url: 'https://ci.example.com/run/1?page=2', tokens: 0, cost: 0 }, { state: 'done', cost: 1.25, tokens: 99 },
   { state: 'stop-requested' }, { state: 'stop-requested', note: 'wrong branch' },
+  { state: 'waiting', note: 'Plan ready, approve to build', url: 'https://plans.example.com/42' },
+  { state: 'answered', action: 'continue' }, { state: 'answered', action: 'stop', text: 'wrong branch' }, { state: 'answered', action: 'reply', text: 'Use the second plan.' },
 ];
 const BAD = [
   null, [], 'x', 3, {}, { version: 1 },
@@ -523,13 +565,16 @@ const BAD = [
   ...['ftp://x.example/a', 'javascript:alert(1)', 'https://u:p@host/x', 'https://u@host/x', 'not a url', '', 'https://x.example/ a', 'https://x.example/l?token=abc', 'https://x.example/l?api_key=abc', 'https://x.example/l#access_token=abc', 'https://x.example/l?key=abc'].map((url) => ({ state: 'done', url })),
   { state: 'done', tokens: -1 }, { state: 'done', tokens: 1.5 }, { state: 'done', tokens: '3' }, { state: 'done', cost: -1 }, { state: 'done', cost: '1' }, { state: 'done', token: 'x' },
   { state: 'stop-requested', note: 'x'.repeat(4001) }, { state: 'stop-requested', apiKey: 'x' },
+  { state: 'waiting', note: 3 }, { state: 'waiting', extra: 1 }, { state: 'paused' },
+  { state: 'answered' }, { state: 'answered', action: 'approve' }, { state: 'answered', action: 'reply', note: 'x' }, { state: 'answered', action: 'reply', text: 3 },
+  { state: 'answered', action: 'reply', text: 'x'.repeat(4001) }, { state: 'answered', action: 'continue', apiKey: 'x' }, { state: 'answered', action: 'continue', url: 'https://x.example' },
   { ...request(), state: 'done' }, { state: 'claimed', version: 1 },
 ];
 
 describe('the JSON Schema', () => {
   it('is draft 2020-12 and parses as a plain JSON file', () => {
     expect(SCHEMA.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
-    expect(Object.keys(SCHEMA.$defs).sort()).toEqual(['report', 'request', 'runId', 'stopRequest']);
+    expect(Object.keys(SCHEMA.$defs).sort()).toEqual(['answer', 'report', 'request', 'runId', 'stopRequest']);
   });
   it('says what the module says: caps, patterns and enums', () => {
     const req = SCHEMA.$defs.request;
@@ -557,7 +602,11 @@ describe('the JSON Schema', () => {
     expect(SCHEMA.$defs.report.properties.url.maxLength).toBe(c.MAX_URL_CHARS);
     expect(SCHEMA.$defs.report.properties.state.enum).not.toContain(c.STOP_STATE);
     // No property of any definition is left open
-    for (const def of ['request', 'report', 'stopRequest']) expect(SCHEMA.$defs[def].additionalProperties).toBe(false);
+    expect(SCHEMA.$defs.answer.properties.state.const).toBe(c.ANSWER_STATE);
+    expect(SCHEMA.$defs.answer.properties.action.enum).toEqual(c.ANSWER_ACTIONS);
+    expect(SCHEMA.$defs.answer.properties.text.maxLength).toBe(c.MAX_NOTE_CHARS);
+    expect(SCHEMA.$defs.report.properties.state.enum).toContain('waiting');
+    for (const def of ['request', 'report', 'stopRequest', 'answer']) expect(SCHEMA.$defs[def].additionalProperties).toBe(false);
     expect(SCHEMA.$defs.request.properties.refs.additionalProperties).toBe(false);
     expect(SCHEMA.$defs.request.properties.limits.additionalProperties).toBe(false);
     // The request lists exactly the keys the validator allows
@@ -569,7 +618,7 @@ describe('the JSON Schema', () => {
   it('agrees with the validator on every good example', () => {
     for (const ex of GOOD) {
       const body = ex;
-      const kind = 'version' in body ? c.validateRequest(body) : body.state === 'stop-requested' ? c.validateStopRequest(body) : c.validateReport(body);
+      const kind = 'version' in body ? c.validateRequest(body) : body.state === 'stop-requested' ? c.validateStopRequest(body) : body.state === 'answered' ? c.validateAnswer(body) : c.validateReport(body);
       expect(kind.ok, JSON.stringify(ex)).toBe(true);
       expect(valid(ex), JSON.stringify(ex)).toBe(true);
     }
@@ -584,14 +633,14 @@ describe('the JSON Schema', () => {
     // Put each field of each good request through a set of odd values; the two must say the same thing wherever the schema speaks
     const odd = [undefined, null, 0, 1, -1, 1.5, '', 'x', ' ', true, [], {}, [1], { a: 1 }, 'run-1', 2 ** 60, 'a'.repeat(300)];
     let n = 0;
-    for (const base of [full(), { state: 'working', note: 'n', url: 'https://x.example/', tokens: 1, cost: 1 }, { state: 'stop-requested', note: 'n' }]) {
+    for (const base of [full(), { state: 'working', note: 'n', url: 'https://x.example/', tokens: 1, cost: 1 }, { state: 'stop-requested', note: 'n' }, { state: 'answered', action: 'continue', text: 'n' }]) {
       for (const key of Object.keys(base)) {
         for (const o of odd) {
           const ex = { ...base };
           if (o === undefined) delete ex[key]; else ex[key] = o;
-          const type = 'version' in ex || 'runId' in ex ? 'request' : ex.state === 'stop-requested' ? 'stop' : 'report';
-          const ok = (type === 'request' ? c.validateRequest(ex) : type === 'stop' ? c.validateStopRequest(ex) : c.validateReport(ex)).ok;
-          const schemaSays = type === 'request' ? check(SCHEMA.$defs.request, ex) : type === 'stop' ? check(SCHEMA.$defs.stopRequest, ex) : check(SCHEMA.$defs.report, ex);
+          const type = 'version' in ex || 'runId' in ex ? 'request' : ex.state === 'stop-requested' ? 'stop' : ex.state === 'answered' ? 'answer' : 'report';
+          const ok = (type === 'request' ? c.validateRequest(ex) : type === 'stop' ? c.validateStopRequest(ex) : type === 'answer' ? c.validateAnswer(ex) : c.validateReport(ex)).ok;
+          const schemaSays = type === 'request' ? check(SCHEMA.$defs.request, ex) : type === 'stop' ? check(SCHEMA.$defs.stopRequest, ex) : type === 'answer' ? check(SCHEMA.$defs.answer, ex) : check(SCHEMA.$defs.report, ex);
           expect(schemaSays, `${type} ${key}=${JSON.stringify(o)}`).toBe(ok);
           n++;
         }

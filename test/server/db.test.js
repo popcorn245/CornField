@@ -174,7 +174,7 @@ describe('migration 8 (push and pull transports, runner tokens)', () => {
   const at = '2026-11-01T00:00:00.000Z';
 
   it('moves a file at version 7 to 8: tokens, their ids and their sequence kept, runner scope allowed, runs get a transport', () => {
-    expect(MIGRATIONS).toHaveLength(9); // 9 is runs on the map, below
+    expect(MIGRATIONS.length).toBeGreaterThanOrEqual(9); // 9 is runs on the map, 10 a run that waits, below
     const db = new DatabaseSync(':memory:');
     migrate(db, MIGRATIONS.slice(0, 7));
     expect(schemaVersion(db)).toBe(7);
@@ -212,11 +212,35 @@ describe('migration 9 (runs on the map)', () => {
     const db = new DatabaseSync(':memory:');
     migrate(db, MIGRATIONS.slice(0, 8));
     expect(schemaVersion(db)).toBe(8);
-    expect(migrate(db)).toEqual({ from: 8, to: 9 });
+    expect(migrate(db, MIGRATIONS.slice(0, 9))).toEqual({ from: 8, to: 9 });
     db.prepare("INSERT INTO run_events (run_id, key, at, kind) VALUES ('r', 'push:a', '2026-11-05T10:00:00Z', 'push')").run();
     expect(() => db.prepare("INSERT INTO run_events (run_id, key, at, kind) VALUES ('r', 'x', '2026-11-05T10:00:00Z', 'review')").run()).toThrow(); // nothing records a review
     db.prepare("INSERT INTO run_reads (run_id, source, sha, data, at) VALUES ('r', 'files', 'a', 'null', '2026-11-05T10:00:00Z')").run(); // a forge that cannot list them
     expect(() => db.prepare("INSERT INTO run_reads (run_id, source, sha, data, at) VALUES ('r', 'mentions', '', 'not json', '2026-11-05T10:00:00Z')").run()).toThrow();
+    db.close();
+  });
+});
+
+describe('migration 10 (a run that waits for an answer, issue #101)', () => {
+  it('moves a file at version 9 to 10: the rows and indexes kept, waiting and answers allowed, nothing else', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db, MIGRATIONS.slice(0, 9));
+    const insert = db.prepare(`INSERT INTO runs (run_id, repo, kind, target, comment_id, request, requested_by, requested_by_id, requested_at, state, note, transport, claimed_by, last_activity)
+      VALUES (?, 'owner/name', 'code', 7, '77', '{}', 'maintainer-one', '1', '2026-11-05T10:00:00Z', ?, 'kept', 'pull', 3, '2026-11-05T10:05:00Z')`);
+    insert.run('run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', 'working');
+    expect(() => insert.run('run-01JC8Z3Q5M7VXK2RT9N4B6HDEG', 'waiting')).toThrow(); // not yet
+    db.prepare("INSERT INTO run_events (run_id, key, at, kind, actor, ref, note) VALUES ('run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', 'report:a', '2026-11-05T10:01:00Z', 'report', 'x', 'working', 'n')").run();
+    expect(() => db.prepare("INSERT INTO run_events (run_id, key, at, kind) VALUES ('r', 'x', '2026-11-05T10:00:00Z', 'answered')").run()).toThrow();
+    expect(migrate(db)).toEqual({ from: 9, to: MIGRATIONS.length });
+    expect(db.prepare('SELECT run_id, state, note, transport, claimed_by, comment_id, answer_action FROM runs').all()).toEqual([{ run_id: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEF', state: 'working', note: 'kept', transport: 'pull', claimed_by: 3, comment_id: '77', answer_action: null }]);
+    expect(db.prepare('SELECT key, kind, note FROM run_events').all()).toEqual([{ key: 'report:a', kind: 'report', note: 'n' }]);
+    expect(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'index' AND name IN ('runs_repo', 'runs_queue', 'run_events_at') ORDER BY name").all().map((r) => r.name)).toEqual(['run_events_at', 'runs_queue', 'runs_repo']);
+    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    insert.run('run-01JC8Z3Q5M7VXK2RT9N4B6HDEG', 'waiting');
+    db.prepare("UPDATE runs SET answer_action = 'reply', answer_text = 'plan B', answer_at = '2026-11-05T10:06:00Z', answer_by = 'maintainer-one' WHERE state = 'waiting'").run();
+    expect(() => db.prepare("UPDATE runs SET answer_action = 'approve'").run()).toThrow();
+    expect(() => db.prepare("UPDATE runs SET state = 'paused'").run()).toThrow();
+    db.prepare("INSERT INTO run_events (run_id, key, at, kind, ref, note) VALUES ('r', 'answer:1', '2026-11-05T10:00:00Z', 'answered', 'reply', 'plan B')").run();
     db.close();
   });
 });

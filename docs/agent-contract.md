@@ -49,7 +49,7 @@ The field is optional (a request from a click or the API has none), strict (no o
 
 ## The fenced block
 
-A request, a report and a stop request all travel in one form, the same pattern as a review ([ADR 0005](adr/0005-reviews-are-pr-comments.md)): a line a person can read, then a fenced block whose tag is `cornfield-run` and whose info string is the run id.
+A request, a report, a stop request and an answer all travel in one form, the same pattern as a review ([ADR 0005](adr/0005-reviews-are-pr-comments.md)): a line a person can read, then a fenced block whose tag is `cornfield-run` and whose info string is the run id.
 
 ````
 Asked for a code run `run-01JC8Z3Q5M7VXK2RT9N4B6HDEF` on issue #12 (maintainer-one, in cornfield).
@@ -71,13 +71,13 @@ Reading is tolerant of the text around a block and strict about what is inside:
 - The fence starts a line (a quoted `> ```cornfield-run` or an indented one is not a block), is exactly three backticks, names a run id, and ends with a line of three or more backticks and nothing else. Windows line endings are fine. A block nobody closed is not one.
 - Fences are read as Markdown reads them: a block **inside another fence** (an example in a ```` fence or a `~~~` one, or text in a ```` ```js ```` block) is part of that fence's text, never a block of its own. So a comment can show an example without asking for a run.
 - A block holds **exactly one JSON object**: a list, two objects, text that is not JSON, an unknown key or a bad value refuses the whole block. A refused block is skipped, never half-read.
-- Which of the three it is follows its shape: a `version` makes it a request, the state `stop-requested` a stop request, any other `state` a report.
+- Which of the four it is follows its shape: a `version` makes it a request, the state `stop-requested` a stop request, the state `answered` an answer, any other `state` a report.
 - A comment is read for at most 20 blocks, a block holds at most 60000 characters, and a comment written by cornfield is at most 60000 characters.
 - When there are several blocks for a run, **the latest one wins**. A comment edited after it was posted should not be trusted, as reviews are not.
 
 The human line above the block is for people. cornfield **defuses** it (a zero-width space after every `@`, `#`, `://` and `www.`), so it pings and links nobody; the JSON keeps every value as sent. A runner that posts a block should do the same to its own line and never put a mention in it.
 
-## Reports and stopping
+## Reports, stopping and waiting
 
 A runner may say how it is going. Reporting is optional: a run that stays silent still shows up through what it pushes. A report is a comment (or, on push and pull, the same JSON sent to `POST /api/runs/<runId>` with a runner token, without the fence) holding a block for the run id:
 
@@ -89,13 +89,21 @@ A runner may say how it is going. Reporting is optional: a run that stays silent
 
 | Field | | |
 | --- | --- | --- |
-| `state` | required | `claimed`, `working`, `done`, `failed` or `stopped`. |
+| `state` | required | `claimed`, `working`, `waiting`, `done`, `failed` or `stopped`. |
 | `note` | optional | Up to 4000 characters. Shown quoted. |
 | `url` | optional | Where the runner keeps its logs; `http` or `https`, no user and password in it, no credential in its query. cornfield links out and never shows logs. |
 | `tokens` | optional | A whole number, zero or more. |
 | `cost` | optional | A number, zero or more. Shown as sent; cornfield never estimates. |
 
 **Stopping.** cornfield asks a run to stop with the same block and `{ "state": "stop-requested" }`, with an optional `note` and nothing else. The runner decides what stopping means. cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet. `stop-requested` is not a state a runner reports.
+
+**Waiting.** A runner that has to stop and ask ("plan ready, approve to build", "needs a decision") reports `waiting`, with the usual `note` (the question) and `url` (a link to the plan or the question). Like every state beyond `claimed` and `done` it is optional: a runner that never waits never sends it, and the contract version stays 1. A waiting run is **open** (it is not finished and counts toward the cap, though like any run it goes quiet after `agents.quietAfter` with no report, so a runner that waits long reports `waiting` again now and then), and cornfield shows it as the word "Waiting" with the note and the link. `waiting` is not a stop, and nothing in cornfield times it out.
+
+**Answering.** A maintainer answers from the Runs view with **Continue**, **Stop** or a **Reply** (text). The answer is the same block, one more shape: `{ "state": "answered", "action": "continue" | "stop" | "reply", "text"? }`, with nothing else. A `reply` must have a `text` (up to 4000 characters, shown quoted); on the other two it is optional. It carries no credential, like every block: a key named like a credential or a value shaped like one refuses it. What it asks: `continue` go on; `reply` go on, with the maintainer's words; `stop` the same as a stop request (cornfield also sends the stop request itself, so a runner that only knows how to stop need not read answers). The runner decides what each means and reports `working` (or `stopped`, `failed`, `done`) when it has the answer.
+
+- **Forge.** cornfield posts the answer block as a comment on the run's thread, as the maintainer who clicked (a Stop is posted as the stop request). Anyone else's answer block is ignored; so is an edited comment, and one for a run that is not waiting. A maintainer may also answer by hand with such a block.
+- **Pull and push.** The answer is kept on the run and comes back the way a stop does, through `GET /api/runs/<runId>`: `answer: { action, text?, at, by }`, where `at` is when it was given and `by` the maintainer. Every report's answer carries the same `run`. There is one answer at a time: **a second answer replaces the first**, until the runner reports something other than `waiting`. The answer stays readable after that, so a runner that reads late still sees it; a **new** wait (a `waiting` report after another state) clears it, and a `waiting` report while already waiting (a heartbeat) keeps it. A runner compares `at` with the last answer it handled.
+- A run that is not waiting takes no answer (409), nor does one that is over or was asked to stop.
 
 ## The trailer
 
@@ -126,7 +134,7 @@ All three carry the same JSON, so a runner can switch transport without changing
 
 1. **The forge.** "Start an agent" (or `POST /api/agent-requests`) posts the comment above, with the maintainer's own token (`requestedBy` is that maintainer), on the issue or thread (or the spec pull request, for a proposal). Precisely, cornfield posts it on `refs.thread` if there is one, else on the open spec pull request holding `refs.proposal` (named in `refs.pull`), else on `refs.issue`; the human line says it came through the API when it did, naming the token's label. cornfield records each request, follows the run and reads its reports as described in [agents](agents.md#launching-a-run); the stop request is posted in the same place. The runner listens where the developer's automation already listens (a GitHub or Forgejo Actions workflow on `issue_comment`, a bot, anything), applies the maintainer rule, and replies with report blocks as comments. The forge shows who asked and keeps the record.
 2. **Push.** cornfield records the request and sends it as a signed `agent.requested` hook event: a POST of `{ "event": "agent.requested", "at", "request", "actor", "mapUrl" }`, where `request` is exactly the request JSON above. `X-Cornfield-Signature` is `sha256=` and the HMAC-SHA256 of the raw body under `CORNFIELD_HOOK_SECRET`. The runner **verifies the signature on the raw bytes in constant time, refuses an old `at`, and checks `request` against the schema**, then applies the maintainer rule (the signature stands in for the author); the code is in [agents](agents.md#push). It reports with `POST /api/runs/<runId>` and a runner token. Nothing is posted to the forge.
-3. **Pull.** cornfield records the request and keeps it queued. A runner with a **runner token** (`cf_nt_…`, made in the dashboard) lists it with `GET /api/agent-requests?state=queued` (the request JSON, oldest first), claims it with `POST /api/agent-requests/<runId>/claim` (atomic: a second claim is 409), and reports with `POST /api/runs/<runId>`, the report JSON above, checked by `validateReport`; only the token that claimed a run may report on it. It learns of a stop by `GET /api/runs/<runId>` (`state`, `stopRequested`). This works from behind NAT. A runner token reaches only these routes, and is never in a request, a report or a hook: it is the runner's credential to cornfield.
+3. **Pull.** cornfield records the request and keeps it queued. A runner with a **runner token** (`cf_nt_…`, made in the dashboard) lists it with `GET /api/agent-requests?state=queued` (the request JSON, oldest first), claims it with `POST /api/agent-requests/<runId>/claim` (atomic: a second claim is 409), and reports with `POST /api/runs/<runId>`, the report JSON above, checked by `validateReport`; only the token that claimed a run may report on it. It learns of a stop by `GET /api/runs/<runId>` (`state`, `stopRequested`), and of an answer to a `waiting` report in the same read (`answer`). This works from behind NAT. A runner token reaches only these routes, and is never in a request, a report or a hook: it is the runner's credential to cornfield.
 
 On push and pull a `cornfield-run` comment on the forge does not move the run: the runner token decides. cornfield's own tokens (`cf_rt_`, `cf_at_`, `cf_nt_`) are credential-shaped like the rest, so a request or a report holding one is refused.
 
@@ -197,6 +205,6 @@ Run `run-01JC8Z3Q5M7VXK2RT9N4B6HDEF`: stopped.
 
 Lengths count characters (UTF-16 code units in cornfield; a few emoji can make the two differ from a schema validator that counts code points, which only matters at the edge of a cap).
 
-[agent-contract.schema.json](../core/agent-contract.schema.json) holds the shape of all three objects, the patterns, the caps, the credential-name rule and the credential-value rule, so a runner can check what it reads or writes with any JSON Schema library. It is looser than cornfield in three ways, which a schema cannot express: cornfield also refuses a `profile` that is not in the developer's configured list, a `requestedAt` that is not a real calendar date (`2026-02-30T00:00:00Z`), and a `trigger.by` that is not the request's `requestedBy`. The three definitions are `request`, `report` and `stopRequest`; the file as a whole accepts any one of them. Its credential-value pattern uses fixed-width lookbehind (`(?<!…)`), which JavaScript, Python and .NET support; a validator built on RE2 (Go) does not, so there, check that rule in code.
+[agent-contract.schema.json](../core/agent-contract.schema.json) holds the shape of all four objects, the patterns, the caps, the credential-name rule and the credential-value rule, so a runner can check what it reads or writes with any JSON Schema library. It is looser than cornfield in four ways, which a schema cannot express: cornfield also refuses a `profile` that is not in the developer's configured list, a `requestedAt` that is not a real calendar date (`2026-02-30T00:00:00Z`), a `trigger.by` that is not the request's `requestedBy`, and a `reply` with no `text`. The four definitions are `request`, `report`, `stopRequest` and `answer`; the file as a whole accepts any one of them. Its credential-value pattern uses fixed-width lookbehind (`(?<!…)`), which JavaScript, Python and .NET support; a validator built on RE2 (Go) does not, so there, check that rule in code.
 
 Still open in spec 0005 and decided by the build issue that needs it: whether an automatic request names the event that fired it (a trigger field), the config keys for the limit defaults and the open-run cap (the push body and the pull routes are settled and documented above). A runner should refuse a key it does not know, so each of these arrives as a new contract version or an optional key documented here first.
