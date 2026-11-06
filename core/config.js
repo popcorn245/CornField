@@ -159,7 +159,7 @@ export const DEFAULTS = Object.freeze({
   personas: { roles: null, parent: 'root' },
   cloud: { parent: 'root' },
   releaseNotes: { breakingLabel: 'breaking' },
-  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, runnerQuietAfter: DEFAULT_RUNNER_QUIET_AFTER, limits: {}, on: {}, refuseCollisions: false },
+  agents: { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: DEFAULT_MAX_OPEN, profiles: [], runners: [], quietAfter: DEFAULT_QUIET_AFTER, runnerQuietAfter: DEFAULT_RUNNER_QUIET_AFTER, limits: {}, on: {}, refuseCollisions: false, handWritten: true },
   hooks: [],
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
@@ -175,7 +175,7 @@ export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
 /** The keys of `worktrees` when it is an object: the folder, and how many days without a change leave a worktree out of the list (default: none is left out) */
 export const WORKTREES_KEYS = Object.freeze(['dir', 'maxAgeDays']);
 const MAX_WORKTREE_AGE_DAYS = 36500;
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'runnerQuietAfter', 'limits', 'on', 'refuseCollisions'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'runnerQuietAfter', 'limits', 'on', 'refuseCollisions', 'handWritten'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -249,6 +249,7 @@ export function configProblems(c) {
       }
       if (c.agents.bots !== undefined && typeof c.agents.bots !== 'boolean') out.push('agents.bots is true or false: whether a bot account ("[bot]" or the forge\'s Bot type) counts as an agent.');
       out.push(...agentRunProblems(c.agents));
+      if (c.agents.handWritten === 'labeled' && c.threads === false) out.push('agents.handWritten is "labeled", which needs the threads label, and threads are off (threads: false): use true or false.');
       if (isObject(c.agents.on) && c.agents.on['thread.message'] !== undefined && c.threads === false) out.push('agents.on["thread.message"] needs threads, which are off (threads: false): the /agent command is read in a thread.');
     }
   }
@@ -373,6 +374,17 @@ function triggerProblems(a) {
   return out;
 }
 
+/**
+ * Which open issues and pull requests are read for `cornfield-run` request blocks a maintainer wrote by hand (`agents.handWritten`, issue #98):
+ * `'all'` (the default, `true`), `'labeled'` (only those carrying the threads label), or `false` for none.
+ * @param {{ agents?: { handWritten?: unknown } }} config
+ * @returns {false | 'all' | 'labeled'}
+ */
+export const handWrittenMode = (config) => {
+  const v = config.agents?.handWritten;
+  return v === false ? false : v === 'labeled' ? 'labeled' : 'all';
+};
+
 /** The triggers a config turns on, as `[event, { kind, profile?, brief? }]` (none when off, which is the default) */
 export const triggersOf = (config) => Object.entries(isObject(config.agents?.on) ? config.agents.on : {}).filter(([e]) => TRIGGER_EVENTS.includes(e));
 
@@ -381,6 +393,7 @@ function agentRunProblems(a) {
   const out = [];
   if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(', ')}: where a request goes: "forge" posts it as a comment (the default), "push" sends it as an agent.requested hook event, "pull" keeps it for a runner to claim (docs/agents.md#transports).`);
   if (a.refuseCollisions !== undefined && typeof a.refuseCollisions !== 'boolean') out.push('agents.refuseCollisions is true or false: whether a new request that names a node an open run is already changing is refused (false unless set).');
+  if (a.handWritten !== undefined && a.handWritten !== true && a.handWritten !== false && a.handWritten !== 'labeled') out.push('agents.handWritten is true (the default: a maintainer\'s hand-written request block on any open issue or pull request becomes a run), "labeled" (only on those with the threads label) or false (cornfield follows only the runs it asked for): docs/agents.md#requests-written-by-hand.');
   if (a.maxOpen !== undefined && !(Number.isInteger(a.maxOpen) && a.maxOpen >= 1 && a.maxOpen <= MAX_OPEN_CEILING)) out.push(`agents.maxOpen is a whole number from 1 to ${MAX_OPEN_CEILING}: the most open runs cornfield asks for at once (${DEFAULT_MAX_OPEN} unless set).`);
   if (a.profiles !== undefined) {
     if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {

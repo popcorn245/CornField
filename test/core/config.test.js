@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, runnerQuietAfterMs, parseDuration, specPollMs, limitDefaults } from '../../core/config.js';
+import { configProblems, handWrittenMode, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, runnerQuietAfterMs, parseDuration, specPollMs, limitDefaults } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
 
 const made = [];
@@ -123,7 +123,7 @@ describe('the deploys key', () => {
 
 describe('the agents rules', () => {
   it('are empty by default, with bot accounts counted', async () => {
-    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', runnerQuietAfter: '3m', limits: {}, on: {}, refuseCollisions: false };
+    const defaults = { authors: [], labels: [], branchPrefixes: [], bots: true, transport: 'forge', maxOpen: 3, profiles: [], runners: [], quietAfter: '24h', runnerQuietAfter: '3m', limits: {}, on: {}, refuseCollisions: false, handWritten: true };
     expect(DEFAULTS.agents).toEqual(defaults);
     const c = await loadConfig(repo(), { env: {} });
     expect(c.agents).toEqual(defaults);
@@ -140,6 +140,17 @@ describe('the agents rules', () => {
     const text = configProblems({ agents: { authors: ['two words', ''], labels: 'agent', branchPrefixes: [1], bots: 'yes', colour: 1 } }).join('\n');
     for (const want of ['agents.authors is a list of account names', 'agents.labels is a list of label names', 'agents.branchPrefixes is a list of branch name starts', 'agents.bots is true or false', 'agents.colour']) expect(text, want).toContain(want);
     expect(configProblems({ agents: [] }).join()).toContain('"agents" is { authors');
+  });
+
+  it('read requests written by hand by default (handWritten), for all, for the threads label, or not at all', () => {
+    for (const v of [true, false, 'labeled']) expect(configProblems({ agents: { handWritten: v } }), String(v)).toEqual([]);
+    for (const v of ['all', 'yes', 1, null, []]) expect(configProblems({ agents: { handWritten: v } }).join(), String(v)).toContain('agents.handWritten is true');
+    expect(configProblems({ threads: false, agents: { handWritten: 'labeled' } }).join()).toContain('needs the threads label');
+    expect(handWrittenMode({})).toBe('all');
+    expect(handWrittenMode({ agents: {} })).toBe('all');
+    expect(handWrittenMode({ agents: { handWritten: true } })).toBe('all');
+    expect(handWrittenMode({ agents: { handWritten: 'labeled' } })).toBe('labeled');
+    expect(handWrittenMode({ agents: { handWritten: false } })).toBe(false);
   });
 });
 

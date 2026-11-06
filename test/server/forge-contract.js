@@ -47,6 +47,16 @@ function writeRoutes(type) {
     [`GET /repos/owner/name/issues/12/comments?${github ? 'per_page=100' : 'limit=50'}&since=2026-10-17T10%3A21%3A00.000Z`]: {
       body: [{ id: 9002, user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, body: 'second', html_url: `${base}/owner/name/pulls/12#issuecomment-9002`, created_at: '2026-10-17T10:20:00Z', updated_at: '2026-10-17T10:25:00Z' }],
     },
+    // A look for requests written by hand (docs/agents.md#requests-written-by-hand): the open issues and pull requests changed since a time, in one listing
+    [github
+      ? 'GET /repos/owner/name/issues?state=open&sort=updated&direction=asc&since=2026-10-17T00%3A00%3A00.000Z&per_page=100'
+      : 'GET /repos/owner/name/issues?state=open&since=2026-10-17T00%3A00%3A00.000Z&limit=50']: {
+      // GitHub sorts as asked; Forgejo cannot, so its answer comes newest first and the adapter sorts it
+      body: (github ? (x) => x : (x) => [...x].reverse())([
+        { number: 5, title: 'Sign-in', state: 'open', labels: [{ name: 'idea' }], updated_at: '2026-10-17T09:00:00Z' },
+        { number: 12, title: 'Meals page', state: 'open', labels: [], pull_request: { url: `${base}/pulls/12` }, updated_at: '2026-10-17T10:25:00Z' },
+      ]),
+    },
     ...(github ? {} : {
       'GET /repos/owner/name/labels?limit=50': { body: [{ id: 7, name: 'Idea' }, { id: 8, name: 'v1' }] },
       'POST /repos/owner/name/labels': (req) => ({ status: 201, body: { id: 9, name: json(req).name } }),
@@ -122,6 +132,15 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(open[0].labels).toEqual(['agent']);
       expect((await forge.pulls({ state: 'closed' })).map((p) => [p.number, p.state])).toEqual([[9, 'merged'], [8, 'closed']]);
       expect((await forge.pulls({ limit: 1 })).map((p) => p.number)).toEqual([13]);
+    });
+
+    it('changed(): the open issues and pull requests updated since a time, in one listing, the least recently updated first', async () => {
+      expect(await forge.changed({ since: '2026-10-17T00:00:00Z' })).toEqual([
+        { number: 5, pull: false, labels: ['idea'], updatedAt: '2026-10-17T09:00:00Z' },
+        { number: 12, pull: true, labels: [], updatedAt: '2026-10-17T10:25:00Z' },
+      ]);
+      expect((await forge.changed({ since: '2026-10-17T00:00:00Z', limit: 1 })).map((c) => c.number)).toEqual([5]);
+      await forgeError(() => forge.changed({ since: 'yesterday' }), 'invalid');
     });
 
     it('pull(): one, with its head', async () => {

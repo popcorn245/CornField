@@ -239,7 +239,9 @@ export function createCornfieldServer(config, opts = {}) {
     if (specMs !== null) specPoll?.start();
     else if (specPoll && runs) {
       // Runs asked for before a restart are followed again from the start
-      runs.hasWork().then((work) => { if (work && !serverClosed) specPoll.start(); }).catch(() => {});
+      // (or, with agents.handWritten on, even with none: a request written by hand is found by the same look)
+      if (runs.discovers) specPoll.start();
+      else runs.hasWork().then((work) => { if (work && !serverClosed) specPoll.start(); }).catch(() => {});
     }
   });
   server.on('close', () => { serverClosed = true; specPoll?.close(); runnerWatch?.close(); lander?.close(); hooks?.close(); auth.close(); });

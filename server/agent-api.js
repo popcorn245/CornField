@@ -184,7 +184,10 @@ export async function serveRunRoutes(req, res, reqPath, ctx) {
     const url = new URL(req.url || '/', 'http://localhost');
     if (url.searchParams.get('follow') === '1') {
       try {
-        await runs.follow(auth.forgeFor(session));
+        const forge = auth.forgeFor(session);
+        // Requests written by hand first, so a run just found is followed in the same look
+        await runs.discover(forge);
+        await runs.follow(forge);
       } catch (err) {
         console.error(`[cornfield] agent runs: the dashboard's look at the forge could not begin: ${err instanceof Error ? err.message : err}`);
       }
