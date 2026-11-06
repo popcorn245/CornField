@@ -8,11 +8,15 @@
  *
  *   - **No `cornfield-run` block.** Not a request, not a report, not a stop request, not an answer: no fence at all. A follow reads
  *     reports from a maintainer and the comment is written as one, so a copy of a report would be read back as a second report; a
- *     request block would be a hand-written request (`discover`). The runner's words (a note, a link) are quoted line by line (`> `), as
- *     the contract's own comments do: a fence, a `/agent` line (server/triggers.js) or a heading in them is text inside a quote.
+ *     request block would be a hand-written request (`discover`). The runner's note is quoted line by line (`> `), as the contract's own
+ *     comments do, after every line end the forge knows (`\r` too) is made `\n`, and its backticks and runs of tildes are broken: no fence
+ *     opens in it, and a `/agent` line (server/triggers.js) or a heading in it is text inside a quote.
  *   - **Defused.** Every mention, reference and link in what a runner or a person wrote is broken (core/defuse.js), and a `[[node]]`
- *     mention is broken too, so the comment pings nobody, links nothing and lights nothing on the map. The only live link is the run's
- *     pull request, whose number and address are the forge's own.
+ *     mention is broken too, so the comment pings nobody, links nothing and lights nothing on the map; `<` and `[` are escaped, so no HTML,
+ *     Markdown link or image (`[x](//elsewhere)`) is made of it either. The only live link is the run's pull request, whose number and
+ *     address are the forge's own; the runner's `url` is never written (the dashboard shows it).
+ *   - **Only what moves.** No time a runner sends changes the text: a runner reporting the same state every few seconds writes the same
+ *     comment, so its hash is unchanged and nothing is edited.
  *   - **No secret.** It is made of the run's public form (`publicRun`), which holds none, and a report's text was checked for credentials
  *     when it was accepted (core/agent-contract.js); the text is cut short besides.
  *
@@ -25,9 +29,8 @@ import { defuse, ZW } from '../core/defuse.js';
 /** The marker on the first line (an HTML comment, which the forge does not show). It does not contain the contract's tag, `cornfield-run` */
 export const MIRROR_TAG = 'cornfield:run-status';
 
-/** The most of a runner's note, and of a link, the comment holds */
+/** The most of a runner's note the comment holds */
 export const NOTE_SHOWN = 1000;
-export const LINK_SHOWN = 300;
 
 const STATUS_WORDS = {
   requested: 'Requested', claimed: 'Claimed', working: 'Working', waiting: 'Waiting', done: 'Done', failed: 'Failed', stopped: 'Stopped',
@@ -37,15 +40,19 @@ const STATUS_WORDS = {
 /** The state of a run as a word, the one the dashboard shows */
 export const statusWord = (status) => STATUS_WORDS[status] ?? String(status);
 
-/** Text for someone else's eyes: mentions, references and links broken, `[[` too, and made one line */
-const plain = (s) => defuse(String(s ?? '').replace(/\s+/g, ' ').trim()).replace(/\[\[/g, `[${ZW}[`).replace(/`/g, "'");
+/** Markdown that could make a link, an image or HTML of someone else's words, made plain: `<` as an entity, `[` escaped (so `[[` is no node either) */
+const inert = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\[/g, '\\[');
+
+/** Text for someone else's eyes: mentions, references and links broken, no link, image or HTML made of it, and made one line */
+const plain = (s) => inert(defuse(String(s ?? '').replace(/\s+/g, ' ').trim())).replace(/`/g, "'");
 
 /** A run's note, quoted line by line and cut short */
 function quote(note) {
   const text = String(note ?? '').trim();
   if (!text) return '';
   const cut = text.length > NOTE_SHOWN ? `${text.slice(0, NOTE_SHOWN)} …` : text;
-  return defuse(cut).replace(/\[\[/g, `[${ZW}[`).split(/\r?\n/).map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
+  // Every line end Markdown (and readRunBlocks) knows is a line end here, so no line of the note escapes its `> `; no fence opens inside the quote
+  return inert(defuse(cut)).replace(/`/g, "'").replace(/~(?=~)/g, `~${ZW}`).split(/\r\n?|\n/).map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
 }
 
 /** An address the forge gave, safe to put in a link; null for anything else */
@@ -74,7 +81,8 @@ export function formatRunStatus(run) {
 
   const facts = [];
   const r = run.report;
-  if (r) facts.push(`Reported ${plain(r.state)}${whoWords(r.by) ? ` by ${whoWords(r.by)}` : ''}, ${plain(r.at)}.`);
+  // Not the report's time: a runner that says the same thing again must not edit the comment (the dashboard has the time)
+  if (r) facts.push(`Reported ${plain(r.state)}${whoWords(r.by) ? ` by ${whoWords(r.by)}` : ''}.`);
   else facts.push('No report from a runner yet.');
   if (run.stopRequested) facts.push(`${plain(run.stopRequested.by)} asked it to stop (${plain(run.stopRequested.at)}); the runner decides what that means.`);
   if (run.answer) facts.push(`${plain(run.answer.by ?? 'A maintainer')} answered: ${plain(run.answer.action)}.`);
@@ -89,8 +97,6 @@ export function formatRunStatus(run) {
 
   const note = r ? quote(r.note) : '';
   if (note) lines.push('', note);
-  const link = r && typeof r.url === 'string' && r.url ? plain(r.url).slice(0, LINK_SHOWN) : '';
-  if (link) lines.push('', `Link from the runner: \`${link}\``);
 
   lines.push('', '_cornfield keeps this one comment up to date as the run moves, and starts nothing from it._');
   return lines.join('\n');

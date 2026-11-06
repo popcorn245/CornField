@@ -301,4 +301,23 @@ describe('migration 10 on a file that already has runs (every column, #108 and #
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('migration 11 (a thread for every run, #104) adds run_mirrors to a file with runs and changes no run', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db, MIGRATIONS.slice(0, 10));
+    seed(db);
+    const runsBefore = db.prepare('SELECT * FROM runs ORDER BY run_id').all();
+    const eventsBefore = db.prepare('SELECT * FROM run_events ORDER BY run_id, key').all();
+    expect(migrate(db, MIGRATIONS.slice(0, 11))).toEqual({ from: 10, to: 11 });
+    expect(db.prepare('SELECT * FROM runs ORDER BY run_id').all()).toEqual(runsBefore);
+    expect(db.prepare('SELECT * FROM run_events ORDER BY run_id, key').all()).toEqual(eventsBefore);
+    // no run has a status comment yet: the first look posts one for a run that has moved
+    expect(db.prepare('SELECT count(*) AS n FROM run_mirrors').get().n).toBe(0);
+    db.prepare("INSERT INTO run_mirrors (run_id, number, at) VALUES (?, 12, '2026-11-05T12:00:00Z')").run(RUN_A);
+    expect(db.prepare('SELECT comment_id, hash, busy, gone FROM run_mirrors').get()).toEqual({ comment_id: null, hash: '', busy: null, gone: 0 });
+    expect(() => db.prepare("UPDATE run_mirrors SET gone = 2").run()).toThrow();
+    expect(() => db.prepare("INSERT INTO run_mirrors (run_id, number, at) VALUES (?, 12, '2026-11-05T12:00:00Z')").run(RUN_A)).toThrow(); // one per run
+    expect(db.prepare('PRAGMA integrity_check').get().integrity_check).toBe('ok');
+    db.close();
+  });
 });

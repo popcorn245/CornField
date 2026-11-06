@@ -81,13 +81,14 @@
  * stop request or answer to anything; the text is defused; the poll's tick, `discover` and the triggers read it and find nothing to do.
  *
  *   - **when**: at once for a run asked for over push or pull (the thread otherwise never hears of it), after a stop request or an answer, and on every
- *     look (`follow`) for any run whose text has changed: a runner's report over push or pull reaches the thread at the next look. A run asked for on
+ *     look (`follow`) for any run whose text has changed. A runner's report over push or pull that moves the state is nudged there just after it is
+ *     answered, with the last look's forge if that look is recent (`nudge`, `NUDGE_FRESH_MS`); else it reaches the thread at the next look. A run asked for on
  *     the forge gets it once there is something beyond its request to say (its request comment is already in the thread)
  *   - **who**: the maintainer whose forge made the call, so a run's comment is written as the maintainer who asked when they are at the dashboard, and as the
  *     poll's signed-in maintainer when it is a look that finds a change. A comment edited by someone else is overwritten at the next change; one deleted
  *     is not posted again (`gone`)
  *   - **less noise**: an edit notifies nobody, so a run costs its thread one notification however long it runs. `agents.mirror: false` turns it all off
- *   - at most `MAX_MIRRORS` comments a look; a forge that refuses one is logged and tried again at the next look
+ *   - at most `MAX_MIRRORS` comments a look (a refusal counts); a forge that refuses one is logged and tried again at the next look
  *
  * ## What counts as open
  *
@@ -172,6 +173,8 @@ export const HAND_SHOWN_MS = 7 * 24 * 3_600_000;
 /** The most status comments one look posts or edits (the rest wait for the next look), and how long a claim on one is held before it is taken as lost */
 export const MAX_MIRRORS = 10;
 export const MIRROR_BUSY_MS = 2 * 60_000;
+/** How recent the last look must be for a runner's report to nudge its status comment with that look's sign-in (older: the next look writes it) */
+export const NUDGE_FRESH_MS = 10 * 60_000;
 /** The most hand-written blocks one look judges, so a thread full of them cannot grow the audit table in one tick */
 export const MAX_HAND_JUDGED = 50;
 /** The runs that are over once the runner has said so */
@@ -351,6 +354,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   const log = (what) => console.error(`[cornfield] agent runs: ${what}`);
   let following = null;
   let discovering = null;
+  /** The forge of the last look (a maintainer's sign-in: the poll's, or the one at the dashboard who asked to look now), and when; a report nudges with it */
+  let lastLook = null;
+  /** The runs whose status comment a report has nudged and that is not written yet: one nudge at a time per run */
+  const nudging = new Set();
 
   const audit = async (entry) => {
     try {
@@ -449,23 +456,25 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
    * @param {import('./forge.js').Forge} forge
    * @param {any} db
    * @param {RunRow} row
-   * @returns {Promise<boolean>} whether the forge was written to
+   * @returns {Promise<'' | 'written' | 'refused'>} what the forge was asked, if anything: a refusal counts toward a look's `MAX_MIRRORS` too
    */
   async function mirrorRun(forge, db, row) {
-    if (!mirrorOn || !worthMirroring(row) || typeof forge.editComment !== 'function') return false;
+    if (!mirrorOn || !worthMirroring(row) || typeof forge.editComment !== 'function') return '';
     let claimed = false;
+    let asked = false;
     try {
       const at = now();
       const body = formatRunStatus(publicRun(row, at, quietMs));
       const hash = createHash('sha256').update(body).digest('hex');
       let m = /** @type {{ number: number, comment_id: string | null, hash: string, busy: string | null, gone: number } | undefined} */ (db.prepare('SELECT * FROM run_mirrors WHERE run_id = ?').get(row.run_id));
-      if (m && (m.gone === 1 || (m.comment_id && m.hash === hash))) return false;
+      if (m && (m.gone === 1 || (m.comment_id && m.hash === hash))) return '';
       db.prepare('INSERT OR IGNORE INTO run_mirrors (run_id, number, at) VALUES (?, ?, ?)').run(row.run_id, row.target, iso(at));
       claimed = db.prepare('UPDATE run_mirrors SET busy = ? WHERE run_id = ? AND (busy IS NULL OR busy < ?)').run(iso(at), row.run_id, iso(at - MIRROR_BUSY_MS)).changes === 1;
-      if (!claimed) return false;
+      if (!claimed) return '';
       // What the other look wrote while this one waited for the claim is read again
       m = /** @type {any} */ (db.prepare('SELECT * FROM run_mirrors WHERE run_id = ?').get(row.run_id));
-      if (m.gone === 1 || (m.comment_id && m.hash === hash)) return false;
+      if (m.gone === 1 || (m.comment_id && m.hash === hash)) return '';
+      asked = true;
       if (!m.comment_id) {
         const posted = await forge.comment(m.number, body);
         db.prepare('UPDATE run_mirrors SET comment_id = ?, comment_url = ?, hash = ?, at = ? WHERE run_id = ?').run(posted.id, posted.url ?? null, hash, iso(now()), row.run_id);
@@ -480,10 +489,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           log(`the status comment of ${row.run_id} on #${m.number} is gone, so it is no longer kept`);
         }
       }
-      return true;
+      return 'written';
     } catch (err) {
       log(`the status comment of ${row.run_id} could not be written: ${words(err)}`);
-      return false;
+      return asked ? 'refused' : '';
     } finally {
       if (claimed) {
         try { db.prepare('UPDATE run_mirrors SET busy = NULL WHERE run_id = ?').run(row.run_id); } catch { /* the database closed with the server */ }
@@ -1278,6 +1287,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
    * @returns {Promise<{ followed: number, reports: number, ignored: number, linked: number, mirrored?: number }>}
    */
   function follow(forge) {
+    lastLook = { forge, at: now() };
     if (following) return following;
     following = followRuns(forge)
       .catch((err) => {
@@ -1695,10 +1705,13 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     // ---- the status comment of each run, edited when its text has moved (a runner's report over push or pull is first heard of here) ----------------
     if (mirrorOn) {
       let written = 0;
+      let asked = 0;
       for (const id of cur.keys()) {
-        if (written >= MAX_MIRRORS) break;
+        if (asked >= MAX_MIRRORS) break;
         const row = /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(id));
-        if (row && await mirrorRun(forge, db, row)) written += 1;
+        const did = row ? await mirrorRun(forge, db, row) : '';
+        if (did) asked += 1;
+        if (did === 'written') written += 1;
       }
       out.mirrored = written;
     }
@@ -1818,7 +1831,26 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     if (r.state !== row.state) hooks?.emit('run.state', { ...runPayload(after, actor), state: r.state });
     if (newWait) hooks?.emit('run.waiting', { ...runPayload(after, actor), state: r.state });
     if (REPORT_FINISHED.includes(r.state)) hooks?.emit('run.finished', { ...runPayload(after, actor), state: r.state });
+    if (r.state !== row.state) nudge(db, row.run_id);
     return { run: runnerView(after), row: after, was: row };
+  }
+
+  /**
+   * A runner's report over push or pull that moved its run's state is taken to its thread soon, not at the next look: the status comment is
+   * written after the report has been answered, with the forge of the last look if it is recent (`NUDGE_FRESH_MS`). With none, or for a report
+   * that only changes the note, the next look writes it. Never throws; the runner's answer never waits for it.
+   */
+  function nudge(db, runId) {
+    if (!mirrorOn || !lastLook || now() - lastLook.at > NUDGE_FRESH_MS || nudging.has(runId)) return;
+    const { forge } = lastLook;
+    nudging.add(runId);
+    const later = setImmediate(async () => {
+      try {
+        const row = /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(runId));
+        if (row) await mirrorRun(forge, db, row);
+      } catch { /* the database closed with the server: the next look writes it */ } finally { nudging.delete(runId); }
+    });
+    if (typeof later.unref === 'function') later.unref();
   }
 
   /** Drops what a crash left: a request that was never posted. Run once at start. */
