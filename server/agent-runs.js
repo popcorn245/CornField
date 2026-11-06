@@ -84,6 +84,7 @@ import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.j
 import { readTopology } from '../core/validate.js';
 import { findPullProposal, listPullProposals, pullProposals, readPullProposal } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
+import { byFromText, byToText, runnerBy } from './review-tokens.js';
 
 /** Requests one person may make in a minute (a ceiling of its own; every other action is counted by `ATTEMPTS_PER_MINUTE` and `PER_MINUTE`) */
 export const AGENT_REQUESTS_PER_MINUTE = 6;
@@ -156,6 +157,12 @@ export function statusOf(row, nowMs, quietMs) {
   return { status, open: !finished && !quiet, finished, quiet };
 }
 
+/** Who a stored `by` is for a hook event: `runner:<label>` for a runner, else the login */
+function actorText(text) {
+  const by = byFromText(text);
+  return by && typeof by === 'object' ? `runner:${by.label}` : by;
+}
+
 /** The numbers a run is about, as keys for the one-per-subject rule: an issue and a thread are conversations (numbers are shared by issues and pull requests) */
 function subjectKeys(refs) {
   const out = [];
@@ -184,7 +191,7 @@ export function publicRun(row, nowMs, quietMs, extra = {}) {
     claimedAt: row.claimed_at,
     comment: row.comment_id ? { id: row.comment_id, url: row.comment_url } : null,
     limits,
-    report: row.reported_at ? { state: row.state, at: row.reported_at, by: row.reported_by, note: row.note, url: row.url, tokens: row.tokens, cost: row.cost } : null,
+    report: row.reported_at ? { state: row.state, at: row.reported_at, by: byFromText(row.reported_by), note: row.note, url: row.url, tokens: row.tokens, cost: row.cost } : null,
     stopRequested: row.stop_requested_at ? { at: row.stop_requested_at, by: row.stop_requested_by } : null,
     pull: row.pull != null ? { number: row.pull, state: row.pull_state, url: row.pull_url, by: row.pull_by, trusted: row.pull_trusted === 1, via: row.linked_via } : null,
     branch: row.branch, headSha: row.head_sha, checks: row.checks, lastActivity: row.last_activity,
@@ -201,7 +208,7 @@ export function publicRun(row, nowMs, quietMs, extra = {}) {
  */
 export function timelineOf(row, events, now, quietMs) {
   const out = [{ at: row.requested_at, kind: 'requested', actor: row.requested_by, ref: row.profile, note: null, url: row.comment_url }];
-  out.push(...events);
+  out.push(...events.map((e) => ({ ...e, actor: byFromText(e.actor) })));
   if (now.status === 'quiet') out.push({ at: iso(Date.parse(row.last_activity) + quietMs), kind: 'quiet', actor: null, ref: null, note: null, url: null });
   return out;
 }
@@ -1078,7 +1085,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     // ---- kept first, then announced ------------------------------------------------------------------------------------------------
     for (const row of cur.values()) {
       const now2 = statusOf(row, at, quietMs);
-      if (now2.finished && !FINISHED.includes(before.get(row.run_id) ?? '')) queue(row, 'run.finished', `ev:finished:${cause.get(row.run_id) ?? now2.status}`, row.reported_by ?? row.pull_by, now2.status);
+      if (now2.finished && !FINISHED.includes(before.get(row.run_id) ?? '')) queue(row, 'run.finished', `ev:finished:${cause.get(row.run_id) ?? now2.status}`, actorText(row.reported_by) ?? row.pull_by, now2.status);
     }
     /** @type {typeof events} */
     const fresh = [];
@@ -1119,9 +1126,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   //  Runners: pull and push (a runner token, server/runner-api.js; spec 0005 D2, D5)
   // -------------------------------------------------------------------------
 
-  /** @typedef {{ id: number, label: string }} RunnerToken the runner token a call came with */
+  /** @typedef {{ id: number, label: string, mintedBy?: { login: string, userId: string } }} RunnerToken the runner token a call came with */
 
   const runnerActor = (token) => `runner:${token.label}`;
+  /** What a runner's act writes into the timeline: the runner, with the maintainer who minted the token kept in `mintedBy` */
+  const runnerText = (token) => byToText(runnerBy(token));
 
   /** A run for a runner: the state it is in as cornfield derives it, and whether a maintainer asked it to stop. Nothing else about the run, no credential */
   function runnerView(row) {
@@ -1169,7 +1178,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const stamp = iso(at);
     const won = typeof runId === 'string' ? db.prepare(`UPDATE runs SET claimed_by = ?, claimed_at = ?, state = 'claimed', reported_at = ?, reported_by = ?, note = NULL, last_activity = MAX(last_activity, ?)
       WHERE run_id = ? AND repo = ? AND transport = 'pull' AND state = 'requested' AND claimed_by IS NULL AND stop_requested_at IS NULL AND last_activity > ?`)
-      .run(token.id, stamp, stamp, token.label, stamp, runId, repo, iso(at - quietMs)).changes === 1 : false;
+      .run(token.id, stamp, stamp, runnerText(token), stamp, runId, repo, iso(at - quietMs)).changes === 1 : false;
     const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ? AND repo = ?').get(runId, repo)) : undefined;
     if (!row) throw new Refused(404, 'cornfield has no such request.', 'not-found');
     if (!won) {
@@ -1179,6 +1188,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (statusOf(row, at, quietMs).quiet) throw new Refused(409, 'This request has waited past agents.quietAfter and is no longer offered.', 'conflict');
       throw new Refused(409, `This request is ${row.state}; there is nothing to claim.`, 'conflict');
     }
+    keepEvent(db, row.run_id, { key: `claim:${token.id}:${stamp}`, at: stamp, kind: 'claimed', actor: runnerText(token), ref: 'claimed' });
     const checked = validateRequest(safeJson(row.request));
     hooks?.emit('run.claimed', { ...runPayload(row, runnerActor(token)), state: 'claimed' });
     hooks?.emit('run.state', { ...runPayload(row, runnerActor(token)), state: 'claimed' });
@@ -1211,9 +1221,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const changed = db.prepare(`UPDATE runs SET state = ?, reported_at = ?, reported_by = ?, note = ?, url = ?, tokens = COALESCE(?, tokens), cost = COALESCE(?, cost),
       claimed_by = COALESCE(claimed_by, ?), claimed_at = COALESCE(claimed_at, ?), last_activity = MAX(last_activity, ?)
       WHERE run_id = ? AND (claimed_by IS NULL OR claimed_by = ?) AND state NOT IN ('done', 'failed', 'stopped')`)
-      .run(r.state, stamp, token.label, r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, row.run_id, token.id).changes;
+      .run(r.state, stamp, runnerText(token), r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, row.run_id, token.id).changes;
     if (changed !== 1) throw new Refused(409, `Run ${row.run_id} changed while the report was being taken; read it again (GET /api/runs/${row.run_id}).`, 'conflict');
     const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
+    // A report of `claimed` on a run the claim route already claimed is a report, not a second "Claimed" line
+    keepEvent(db, row.run_id, { key: `report:runner:${token.id}:${stamp}:${r.state}`, at: stamp, kind: r.state === 'claimed' && row.state !== 'claimed' ? 'claimed' : 'report', actor: runnerText(token), ref: r.state, note: r.note ?? null, url: r.url ?? null });
     const actor = runnerActor(token);
     if (r.state === 'claimed' && row.state !== 'claimed') hooks?.emit('run.claimed', { ...runPayload(after, actor), state: r.state });
     if (r.state !== row.state) hooks?.emit('run.state', { ...runPayload(after, actor), state: r.state });
