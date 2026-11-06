@@ -119,6 +119,7 @@ const ui = {
   runs: null, // { data, error } of the Agents tab's runs: what /api/agent-runs answered
   runNote: null, // { text, ok }: what the last Stop came to
   runSel: null, // the run lit on the map (Light on the map), by id
+  runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
   runTimelines: new Set(), // the runs whose timeline is open
   agent: null, // { opener, refs, posting } while the Start an agent dialog is open
 };
@@ -198,7 +199,6 @@ async function loadWork(refresh, token) {
 /** Loads the runs for the Agents tab (a refresh also has cornfield look at the forge for their reports first); a failure is a line, never a blank panel */
 async function loadRuns(refresh, { say = true } = {}) {
   const before = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
-  const beforePresence = ui.runs && ui.runs.data ? ui.runs.data.runnerPresence : null;
   const res = await request(runsUrl(refresh), refresh);
   ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
   if (!(ui.runs && ui.runs.data)) return;
@@ -207,9 +207,11 @@ async function loadRuns(refresh, { say = true } = {}) {
   syncRunsPoll();
   if (ui.runSel) relightRun();
   const said = say ? changeWords(before, ui.runs.data.runs) : [];
-  // A runner appearing or going quiet is said once, when the state changes (the line itself is plain text, not a live region)
-  const was = runnerState(beforePresence, now());
+  // A runner appearing or going quiet is said once, when the state changes (the line itself is plain text, not a live region). The state last
+  // shown is kept, not worked out again from the last listing: a runner that goes quiet is the same listing judged later
+  const was = ui.runnerSaid;
   const is = runnerState(ui.runs.data.runnerPresence, now());
+  ui.runnerSaid = is;
   if (say && was && is && was !== is) said.push(runnerWords(ui.runs.data.runnerPresence, now()));
   if (said.length) announce(said.join('. '));
 }
@@ -1846,5 +1848,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runNote: null, agent: null });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
 }

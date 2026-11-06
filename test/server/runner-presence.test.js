@@ -96,6 +96,38 @@ describe('runner presence', () => {
       expect(events[1][1].label).toBe('laptop');
     });
 
+    it('does not announce the same quiet spell twice when the clock steps back, and says nothing once closed', async () => {
+      const a = runner('laptop');
+      const { w, events } = watch();
+      touchToken(db, a.id, now);
+      expect(await w.check()).toBe('online');
+      now += 10 * MIN;
+      expect(await w.check()).toBe('offline');
+      now -= 9 * MIN; // the clock steps back: the same poll looks recent again
+      expect(await w.check()).toBe('online');
+      now += 10 * MIN;
+      expect(await w.check()).toBe('quiet');
+      expect(events).toHaveLength(1);
+      touchToken(db, a.id, now);
+      expect(await w.check()).toBe('online');
+      w.close();
+      now += 10 * MIN;
+      await w.check();
+      expect(events).toHaveLength(1);
+    });
+
+    it('starts with an unref\'d timer and stops it on close', () => {
+      const calls = [];
+      const handle = { unref: () => calls.push('unref') };
+      const w = createRunnerWatch({ auth: { store: async () => db }, hooks: null, quietMs: QUIET, now: () => now,
+        timer: { setInterval: (fn, ms) => { calls.push(['set', ms]); return handle; }, clearInterval: (h) => calls.push(['clear', h === handle]) } });
+      w.start();
+      w.start();
+      w.close();
+      w.start();
+      expect(calls).toEqual([['set', 30_000], 'unref', ['clear', true]]);
+    });
+
     it('does not fire for a runner whose token was revoked', async () => {
       const a = runner('laptop');
       const { w, events } = watch();

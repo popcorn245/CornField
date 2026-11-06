@@ -72,7 +72,7 @@ function fakeServer(opts = {}) {
   return { calls, posts: () => calls.filter((c) => c.init.method === 'POST'), urls: () => calls.map((c) => c.url) };
 }
 
-function mount() {
+function mount(clock = () => NOW, extra = {}) {
   document.head.innerHTML = `<title>cornfield</title><style>${css}</style>`;
   document.body.innerHTML = body;
   document.documentElement.lang = 'en';
@@ -90,8 +90,8 @@ function mount() {
   resetKeyboardForTests();
   initKeyboard();
   initSheets();
-  resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock: () => NOW });
+  resetForgePanelForTests(clock);
+  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock });
 }
 const openIssues = async () => { openForge(); await settle(); click(q('[data-forge-kind="issues"]')); await settle(); };
 const openAgents = async () => { openForge(); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
@@ -313,10 +313,11 @@ describe('the runs on the Agents tab', () => {
 describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
   it('passes axe with the runs listed and with the dialog open, a refusal showing', async () => {
     document.documentElement.dataset.theme = theme;
-    fakeServer({ start: { status: 409, body: { ok: false, code: 'run-open', error: 'issue #7 already has an open run.' } } });
+    fakeServer({ presence: { transport: 'pull', online: false, lastSeen: null, quietAfterMs: 180_000, runners: [] }, start: { status: 409, body: { ok: false, code: 'run-open', error: 'issue #7 already has an open run.' } } });
     mount();
     document.documentElement.dataset.theme = theme;
     await openAgents();
+    expect($('forge-runs-runner').hidden).toBe(false);
     expect(await audit()).toEqual([]);
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
@@ -361,10 +362,36 @@ describe('whether a runner is online (issue #99)', () => {
     expect($('agent-start-runner').textContent).toBe('No runner has polled for 6 min: a queued run will wait');
   });
 
-  it('shows nothing off the pull transport', async () => {
-    fakeServer({ presence: presence(20, { transport: 'forge' }) });
+  it.each(['forge', 'push'])('shows nothing on the %s transport, in the Agents tab or the Start dialog', async (transport) => {
+    fakeServer({ presence: presence(20, { transport }) });
     mount();
     await openAgents();
     expect($('forge-runs-runner').hidden).toBe(true);
+    await openIssues();
+    click(q('[data-forge-agent="issue:7"]'));
+    await settle();
+    expect($('agent-start-runner').hidden).toBe(true);
+  });
+
+  it('says once, as the runs are looked at again, when the runner goes quiet though the listing has not changed, and once when it is back', async () => {
+    let clock = NOW;
+    const p = presence(20);
+    fakeServer({ presence: p });
+    vi.useFakeTimers();
+    try {
+      // with runs on, the page reads them at once and again every minute while one is open, whether or not the panel is
+      mount(() => clock, { agents: { runs: true } });
+      await vi.advanceTimersByTimeAsync(100);
+      const poll = async () => { $('map-announcer').textContent = ''; await vi.advanceTimersByTimeAsync(60_000); await vi.advanceTimersByTimeAsync(100); return $('map-announcer').textContent; };
+      clock += 5 * 60_000;
+      expect(await poll()).toMatch(/No runner has polled for 5 min: a queued run will wait/);
+      clock += 60_000;
+      expect(await poll()).not.toMatch(/runner/i);
+      p.lastSeen = new Date(clock - 5_000).toISOString();
+      expect(await poll()).toMatch(/Runner online · last seen 5 s ago/);
+      expect(await poll()).not.toMatch(/runner/i);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

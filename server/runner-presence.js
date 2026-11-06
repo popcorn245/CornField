@@ -11,6 +11,7 @@
  *   - `createRunnerWatch` fires the `runner.offline` hook event, once: when a runner was seen online and the last live one has now been quiet
  *     for the window. It fires again only after a runner has been seen online again. A token revoked or expired is no runner, and ending one on
  *     purpose is not news. After a restart the first look only learns the state, so a runner that was already quiet is not announced twice.
+ *     Only a poll newer than the one last announced re-arms it, so the clock stepping back cannot announce the same quiet spell twice.
  *     The body is `{ event, at, label, lastSeen, mapUrl }`: the label of the runner that polled last, never a token (server/hooks.js).
  *
  * Only the pull transport has runners that ask, so the watch is made for it alone. Times are ISO strings in the file; `now` is milliseconds.
@@ -55,16 +56,24 @@ export function runnerPresence(db, now, quietMs) {
 export function createRunnerWatch({ auth, hooks, quietMs, now = Date.now, timer = { setInterval, clearInterval } }) {
   /** Whether a runner has been seen online since the last time one was announced offline */
   let armed = false;
+  /** The last poll an announcement was about: only a newer one re-arms, so a clock stepped back cannot make one quiet spell fire twice */
+  let announced = null;
   let handle = null;
   let closed = false;
 
   /** @returns {Promise<'online' | 'offline' | 'quiet' | 'none'>} what this look found: 'offline' only when the event was fired */
   async function check() {
-    const p = runnerPresence(await auth.store(), now(), quietMs);
-    if (p.online) { armed = true; return 'online'; }
+    const db = await auth.store();
+    if (closed) return 'none';
+    const p = runnerPresence(db, now(), quietMs);
+    if (p.online) {
+      if (announced === null || (p.lastSeen !== null && Date.parse(p.lastSeen) > Date.parse(announced))) armed = true;
+      return 'online';
+    }
     if (!p.runners.length) { armed = false; return 'none'; }
     if (!armed) return 'quiet';
     armed = false;
+    announced = p.lastSeen;
     hooks?.emit('runner.offline', { label: p.runners[0].label, lastSeen: p.lastSeen });
     return 'offline';
   }

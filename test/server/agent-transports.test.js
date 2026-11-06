@@ -716,22 +716,34 @@ describe('the push and pull transports', () => {
       const b = await mint('runner', 'server');
       expect(await presence()).toMatchObject({ transport: 'pull', online: false, lastSeen: null, quietAfterMs: 180_000, runners: [] });
       const t0 = new Date(clock).toISOString();
-      expect((await queue(a.secret)).status).toBe(200);
+      // an empty queue read is a poll: an idle runner is still there
+      const empty = await queue(a.secret);
+      expect([empty.status, empty.json.requests]).toEqual([200, []]);
       expect(await presence()).toMatchObject({ online: true, lastSeen: t0, runners: [{ label: 'laptop', lastSeen: t0 }] });
       later(30_000);
       const t1 = new Date(clock).toISOString();
       expect((await queue(b.secret)).status).toBe(200);
       expect((await presence()).runners).toEqual([{ label: 'server', lastSeen: t1 }, { label: 'laptop', lastSeen: t0 }]);
-      // a refused call is not a poll
+      // a call the engine refuses still came from a live runner token, so it counts too
+      later(10_000);
+      const t2 = new Date(clock).toISOString();
       expect((await call(a.secret, 'GET', '/api/agent-requests?state=other')).status).toBe(400);
+      expect((await presence()).runners[0]).toEqual({ label: 'laptop', lastSeen: t2 });
       later(4 * 60_000);
-      expect(await presence()).toMatchObject({ online: false, lastSeen: t1 });
+      expect(await presence()).toMatchObject({ online: false, lastSeen: t2 });
       expect((await queue(a.secret)).status).toBe(200);
       expect((await presence()).online).toBe(true);
       expect((await page('POST', `/api/runner-tokens/${a.token.id}/revoke`, {})).status).toBe(200);
       expect((await presence()).runners.map((r) => r.label)).toEqual(['server']);
       // never a token in the answer
       expect(JSON.stringify(await presence())).not.toMatch(/cf_nt_/);
+    });
+
+    it('has no watch off the pull transport, and the listing says which transport it is', async () => {
+      let started = 0;
+      await boot('push', {}, { runnerWatchTimer: { setInterval: () => { started++; return 1; }, clearInterval: () => {} } });
+      expect(started).toBe(0);
+      expect((await presence()).transport).toBe('push');
     });
 
     it('fires runner.offline once when the last runner has been quiet for the window, and again only after one returned', async () => {
