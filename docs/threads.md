@@ -78,10 +78,14 @@ Three [hook](config.md#hooks) events say that a thread moved:
 - **What a look costs.** A tick with nothing new costs the issue listing (one call a page, labelled `idea`), the open PR listing the spec poll makes already, and one call for each open spec PR's comments (since the last one seen). An idea whose last-update time has not moved since the previous look is not read again; one that has is read from its newest seen comment on (`since`).
 - **A thread is only a thread when the label says so.** An issue that gets the label later is first seen then, so its existing comments are announced once. The poll reads the newest 200 ideas.
 
+## Runs in a thread
+
+A [run](agents.md) asked for from a thread (or an issue, or a proposal) is about that conversation, and the thread hears of it: cornfield keeps **one status comment per run** in it and edits it as the run moves, so a thread shows where its run stands, and a proposal's thread shows the run's pull request once it opens. The comment is written as a maintainer, defused like every comment cornfield posts, and holds no `cornfield-run` block, so it can start no run; [how, and why one edited comment](agents.md#a-thread-for-every-run). In the Threads tab the row of a thread names the state of its run (`Run: Working`). The status comment is an ordinary comment to the threads: it is a `thread.message` like any other, and it holds no mention, so it lights nothing on the map.
+
 ## What cornfield stores
 
 Nothing of a thread's. `cornfield.db` has the kept answers (`forge_cache`, a minute's cache so a page load is not a dozen calls), the audit of what cornfield did (`actions`), and `thread_seen`: which comments a hook was told about and when each thread was last looked at. Delete it and no thread, message or link is lost; a hook may announce again what it announced before, once.
 
 ## Forge calls it adds
 
-Both adapters (GitHub, Forgejo) behind the [forge interface](../server/forge.js) gained two things: `comments(n, { since })` returns only the comments created or edited after a time, and `createIssue({ title, body, labels })` puts labels on the new issue (GitHub by name; Forgejo takes ids, so the adapter looks the label up and makes it when the repo lacks it). Listing issues by label and commenting were there already.
+Both adapters (GitHub, Forgejo) behind the [forge interface](../server/forge.js) gained `editComment(id, body)` (the one edit cornfield makes: its own run status comment, [above](#runs-in-a-thread)) and two earlier things: `comments(n, { since })` returns only the comments created or edited after a time, and `createIssue({ title, body, labels })` puts labels on the new issue (GitHub by name; Forgejo takes ids, so the adapter looks the label up and makes it when the repo lacks it). Listing issues by label and commenting were there already.

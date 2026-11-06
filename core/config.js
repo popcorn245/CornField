@@ -175,7 +175,7 @@ export const PROPOSALS_KEYS = Object.freeze(['dir', 'approveLands']);
 /** The keys of `worktrees` when it is an object: the folder, and how many days without a change leave a worktree out of the list (default: none is left out) */
 export const WORKTREES_KEYS = Object.freeze(['dir', 'maxAgeDays']);
 const MAX_WORKTREE_AGE_DAYS = 36500;
-const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'runnerQuietAfter', 'limits', 'on', 'refuseCollisions', 'handWritten'];
+const AGENT_KEYS = ['authors', 'labels', 'branchPrefixes', 'bots', 'transport', 'maxOpen', 'profiles', 'runners', 'quietAfter', 'runnerQuietAfter', 'limits', 'on', 'refuseCollisions', 'handWritten', 'mirror'];
 const PROFILE_NAME = new RegExp(PROFILE_SOURCE);
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
@@ -393,6 +393,7 @@ function agentRunProblems(a) {
   const out = [];
   if (a.transport !== undefined && !AGENT_TRANSPORTS.includes(a.transport)) out.push(`agents.transport is ${AGENT_TRANSPORTS.map((t) => JSON.stringify(t)).join(', ')}: where a request goes: "forge" posts it as a comment (the default), "push" sends it as an agent.requested hook event, "pull" keeps it for a runner to claim (docs/agents.md#transports).`);
   if (a.refuseCollisions !== undefined && typeof a.refuseCollisions !== 'boolean') out.push('agents.refuseCollisions is true or false: whether a new request that names a node an open run is already changing is refused (false unless set).');
+  if (a.mirror !== undefined && typeof a.mirror !== 'boolean') out.push('agents.mirror is true (the default) or false: whether cornfield keeps one status comment per run in the thread the run is about, edited as the run moves (docs/agents.md#a-thread-for-every-run).');
   if (a.handWritten !== undefined && a.handWritten !== true && a.handWritten !== false && a.handWritten !== 'labeled') out.push('agents.handWritten is true (the default: a maintainer\'s hand-written request block on any open issue or pull request becomes a run), "labeled" (only on those with the threads label) or false (cornfield follows only the runs it asked for): docs/agents.md#requests-written-by-hand.');
   if (a.maxOpen !== undefined && !(Number.isInteger(a.maxOpen) && a.maxOpen >= 1 && a.maxOpen <= MAX_OPEN_CEILING)) out.push(`agents.maxOpen is a whole number from 1 to ${MAX_OPEN_CEILING}: the most open runs cornfield asks for at once (${DEFAULT_MAX_OPEN} unless set).`);
   if (a.profiles !== undefined) {

@@ -80,6 +80,7 @@ function fakeServer(opts = {}) {
       const answer = opts.posts && opts.posts[u.pathname];
       return answer ? json(answer.status ?? 200, answer.body) : json(404, { ok: false, error: 'No such action.' });
     }
+    if (u.pathname === '/api/agent-runs') return opts.runs ? json(200, { ok: true, runs: opts.runs, open: opts.runs.filter((r) => r.open).length, maxOpen: 3, profiles: [], runners: 0 }) : json(404, { ok: false, error: 'No such route.' });
     if (u.pathname === '/api/forge/threads') return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', label: 'idea', problem: opts.problem || null, items: opts.threads || THREADS });
     const one = /^\/api\/forge\/threads\/(\d+)$/.exec(u.pathname);
     if (one && DETAIL[one[1]]) return json(200, { ok: true, forge: 'github', repo: 'owner/name', at, rate: '', thread: opts.detail ? opts.detail(DETAIL[one[1]]) : DETAIL[one[1]] });
@@ -127,8 +128,9 @@ describe('the Threads tab', () => {
     const server = fakeServer();
     mount();
     await openThreads();
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/threads?state=open&limit=100']);
+    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/threads?state=open&limit=100', '/api/agent-runs']); // the runs, once, for the rows' run state
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Rework sign-in', 'Spec: Meals', 'A quiet one']);
+    expect(qa('[data-thread-run]')).toEqual([]); // no run is about any of them
     const first = rows()[0];
     expect(first.textContent).toContain('Idea');
     expect(first.textContent).toContain('#41 · maintainer-one · 2 comments');
@@ -139,6 +141,28 @@ describe('the Threads tab', () => {
     expect(first.querySelector('a.hx-forge-out').getAttribute('aria-label')).toBe('Open thread 41 on GitHub (new tab)');
     expect($('forge-status').textContent).toBe('3 of 3 threads, as of 2 minutes ago');
     expect(await said()).toBe('3 threads shown');
+  });
+
+  it('shows the state of the run that is about a thread, as a word on its row (issue #104)', async () => {
+    const run = (runId, status, extra = {}) => ({ runId, status, open: !['done', 'failed', 'stopped', 'merged', 'closed'].includes(status), requestedAt: '2026-10-19T09:00:00Z', target: 41, refs: { thread: 41 }, thread: { number: 41, mirror: null }, ...extra });
+    fakeServer({ runs: [
+      run('run-01JC8Z3Q5M7VXK2RT9N4B6HDE1', 'done', { requestedAt: '2026-10-18T09:00:00Z' }),
+      run('run-01JC8Z3Q5M7VXK2RT9N4B6HDE2', 'waiting'),
+      // the spec pull request's conversation, by the number the server says (a proposal's run), and an older answer that has only `target`
+      run('run-01JC8Z3Q5M7VXK2RT9N4B6HDE3', 'working', { target: 40, refs: { proposal: '0040-meals' }, thread: { number: 40, mirror: { url: 'https://git.example.test/c/1' } } }),
+      { runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDE4', status: 'failed', open: false, requestedAt: '2026-10-19T08:00:00Z', target: 42, refs: { issue: 42 } },
+    ] });
+    mount();
+    await openThreads();
+    await settle();
+    const word = (n) => rows().find((r) => r.querySelector('[data-forge-thread]').dataset.forgeThread === String(n)).querySelector('[data-thread-run]');
+    // the open run is the one shown, and the other on the same thread is counted
+    expect(word(41).textContent).toBe('Run: Waiting (+1)');
+    expect(word(41).dataset.threadRun).toBe('run-01JC8Z3Q5M7VXK2RT9N4B6HDE2');
+    expect(word(41).className).toContain('hx-forge-state--queued');
+    expect(word(40).textContent).toBe('Run: Working');
+    expect(word(42).textContent).toBe('Run: Failed');
+    expect(word(42).className).toContain('hx-forge-state--failure');
   });
 
   it('is filtered by state and by a search over the title, number and author', async () => {

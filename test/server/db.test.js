@@ -17,7 +17,7 @@ import { CORNFIELD } from '../helpers.js';
 
 const V1_SQL = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'db', 'v1.sql'), 'utf8');
 const V1_TABLES = ['actions', 'forge_cache', 'reviews', 'sessions'];
-const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'run_events', 'run_reads', 'run_seen', 'runs', 'sessions', 'thread_seen'];
+const TABLES = ['actions', 'forge_cache', 'hook_seen', 'landings', 'review_tokens', 'reviews', 'run_events', 'run_mirrors', 'run_reads', 'run_seen', 'runs', 'sessions', 'thread_seen'];
 
 const tables = (db) => db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((r) => r.name);
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);

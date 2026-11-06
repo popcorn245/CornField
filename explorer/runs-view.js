@@ -9,9 +9,8 @@
  */
 
 import { relativeTime } from './review-model.js';
-import { aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
+import { runTone, aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 
-const TONE = { done: 'success', merged: 'success', failed: 'failure', quiet: 'queued', 'stop-requested': 'queued', waiting: 'queued' };
 
 /**
  * @typedef {object} ViewContext
@@ -80,7 +79,7 @@ function answerHtml(ctx, run) {
 export function runHtml(ctx, run, all) {
   const lit = ctx.selected === run.runId;
   const open = ctx.timelines.has(run.runId);
-  const tone = TONE[run.status] || 'running';
+  const tone = runTone(run);
   const why = statusWhy(run);
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);

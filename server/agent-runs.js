@@ -71,6 +71,24 @@
  * a stop request (`stop`), so it behaves in every way as a Stop does; the answer is recorded beside it. A report of `waiting` after another state
  * clears the answer of the wait before. Hooks: `run.waiting` (the runner asked), `run.answered` (a maintainer answered; the action, never the text).
  *
+ * ## A thread for every run (`mirror`, issue #104)
+ *
+ * A run is about a conversation: its `target`, the issue, thread or spec pull request its request was (or, over push and pull, would have been)
+ * posted on. cornfield keeps **one status comment per run** there and **edits it in place** as the run moves (the forge's `editComment`;
+ * `run_mirrors` keeps its id and a hash of the text last written, so a look that finds nothing new writes nothing). The comment (server/run-thread.js)
+ * holds the state as a word, who asked, the runner's last report with its note quoted, the branch, and the run's pull request, linked once it opens
+ * (so a run from a proposal shows its pull request in the proposal's thread). It never holds a `cornfield-run` block, so it is no request, report,
+ * stop request or answer to anything; the text is defused; the poll's tick, `discover` and the triggers read it and find nothing to do.
+ *
+ *   - **when**: at once for a run asked for over push or pull (the thread otherwise never hears of it), after a stop request or an answer, and on every
+ *     look (`follow`) for any run whose text has changed: a runner's report over push or pull reaches the thread at the next look. A run asked for on
+ *     the forge gets it once there is something beyond its request to say (its request comment is already in the thread)
+ *   - **who**: the maintainer whose forge made the call, so a run's comment is written as the maintainer who asked when they are at the dashboard, and as the
+ *     poll's signed-in maintainer when it is a look that finds a change. A comment edited by someone else is overwritten at the next change; one deleted
+ *     is not posted again (`gone`)
+ *   - **less noise**: an edit notifies nobody, so a run costs its thread one notification however long it runs. `agents.mirror: false` turns it all off
+ *   - at most `MAX_MIRRORS` comments a look; a forge that refuses one is logged and tried again at the next look
+ *
  * ## What counts as open
  *
  * A run is **open** unless it is finished or quiet (`statusOf`): finished is the runner's report `done`, `failed` or `stopped`, or its pull
@@ -118,6 +136,7 @@ import { readTopology } from '../core/validate.js';
 import { findPullProposal, listPullProposals, pullProposals, readPullProposal } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 import { byFromText, byToText, runnerBy } from './review-tokens.js';
+import { formatRunStatus } from './run-thread.js';
 
 /** Requests one person may make in a minute (a ceiling of its own; every other action is counted by `ATTEMPTS_PER_MINUTE` and `PER_MINUTE`) */
 export const AGENT_REQUESTS_PER_MINUTE = 6;
@@ -150,6 +169,9 @@ export const MAX_HAND_READS = 30;
 /** The most refused or ignored hand-written blocks the Runs view lists (newest first), and how far back */
 export const HAND_SHOWN = 20;
 export const HAND_SHOWN_MS = 7 * 24 * 3_600_000;
+/** The most status comments one look posts or edits (the rest wait for the next look), and how long a claim on one is held before it is taken as lost */
+export const MAX_MIRRORS = 10;
+export const MIRROR_BUSY_MS = 2 * 60_000;
 /** The most hand-written blocks one look judges, so a thread full of them cannot grow the audit table in one tick */
 export const MAX_HAND_JUDGED = 50;
 /** The runs that are over once the runner has said so */
@@ -398,15 +420,75 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       const ask = db.prepare('SELECT at, kind, actor, ref, note, url FROM run_events WHERE run_id = ? ORDER BY at, rowid LIMIT ?');
       for (const r of rows) events.set(r.run_id, ask.all(r.run_id, TIMELINE_LIMIT));
     }
+    const mirrors = new Map(rows.length ? /** @type {{ run_id: string, comment_url: string | null, gone: number }[]} */ (db.prepare(`SELECT run_id, comment_url, gone FROM run_mirrors WHERE run_id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.run_id))).map((m) => [m.run_id, m]) : []);
     return new Map(rows.map((r) => {
       const mine = nodesOf.get(r.run_id);
+      const kept = mirrors.get(r.run_id);
       const collidesWith = openIds.has(r.run_id)
         ? open.filter((o) => o.run_id !== r.run_id && nodesOf.get(o.run_id).nodes.some((id) => mine.nodes.includes(id))).map((o) => o.run_id)
         : [];
       let brief = '';
       try { brief = String(JSON.parse(r.request).brief ?? '').slice(0, BRIEF_SHOWN); } catch { brief = ''; }
-      return [r.run_id, { brief, nodes: mine.nodes, nodesFrom: mine.from, collidesWith, timeline: timelineOf(r, events.get(r.run_id) ?? [], statusOf(r, at, quietMs), quietMs) }];
+      return [r.run_id, { brief, nodes: mine.nodes, nodesFrom: mine.from, collidesWith, timeline: timelineOf(r, events.get(r.run_id) ?? [], statusOf(r, at, quietMs), quietMs),
+        thread: { number: r.target, mirror: kept && kept.comment_url && kept.gone === 0 ? { url: kept.comment_url } : null } }];
     }));
+  }
+
+  // -------------------------------------------------------------------------
+  //  A thread for every run (issue #104): one status comment, edited in place
+  // -------------------------------------------------------------------------
+
+  const mirrorOn = agents.mirror !== false;
+
+  /** Whether a run has something to say in its thread beyond its request: always over push and pull (no request comment is there), else once it has moved */
+  const worthMirroring = (row) => row.transport !== 'forge' || statusOf(row, now(), quietMs).status !== 'requested';
+
+  /**
+   * Posts or edits the status comment of a run, if its text has changed since it was last written. Never throws: a forge that refuses is logged and
+   * the next look tries again. One claim (`busy`) at a time per run, so a look and a request at once cannot post two comments.
+   * @param {import('./forge.js').Forge} forge
+   * @param {any} db
+   * @param {RunRow} row
+   * @returns {Promise<boolean>} whether the forge was written to
+   */
+  async function mirrorRun(forge, db, row) {
+    if (!mirrorOn || !worthMirroring(row) || typeof forge.editComment !== 'function') return false;
+    let claimed = false;
+    try {
+      const at = now();
+      const body = formatRunStatus(publicRun(row, at, quietMs));
+      const hash = createHash('sha256').update(body).digest('hex');
+      let m = /** @type {{ number: number, comment_id: string | null, hash: string, busy: string | null, gone: number } | undefined} */ (db.prepare('SELECT * FROM run_mirrors WHERE run_id = ?').get(row.run_id));
+      if (m && (m.gone === 1 || (m.comment_id && m.hash === hash))) return false;
+      db.prepare('INSERT OR IGNORE INTO run_mirrors (run_id, number, at) VALUES (?, ?, ?)').run(row.run_id, row.target, iso(at));
+      claimed = db.prepare('UPDATE run_mirrors SET busy = ? WHERE run_id = ? AND (busy IS NULL OR busy < ?)').run(iso(at), row.run_id, iso(at - MIRROR_BUSY_MS)).changes === 1;
+      if (!claimed) return false;
+      // What the other look wrote while this one waited for the claim is read again
+      m = /** @type {any} */ (db.prepare('SELECT * FROM run_mirrors WHERE run_id = ?').get(row.run_id));
+      if (m.gone === 1 || (m.comment_id && m.hash === hash)) return false;
+      if (!m.comment_id) {
+        const posted = await forge.comment(m.number, body);
+        db.prepare('UPDATE run_mirrors SET comment_id = ?, comment_url = ?, hash = ?, at = ? WHERE run_id = ?').run(posted.id, posted.url ?? null, hash, iso(now()), row.run_id);
+      } else {
+        try {
+          await forge.editComment(m.comment_id, body);
+          db.prepare('UPDATE run_mirrors SET hash = ?, at = ? WHERE run_id = ?').run(hash, iso(now()), row.run_id);
+        } catch (err) {
+          if (!(err instanceof ForgeError) || err.code !== 'not-found') throw err;
+          // Someone deleted it: they meant it, so cornfield does not post another
+          db.prepare('UPDATE run_mirrors SET gone = 1, at = ? WHERE run_id = ?').run(iso(now()), row.run_id);
+          log(`the status comment of ${row.run_id} on #${m.number} is gone, so it is no longer kept`);
+        }
+      }
+      return true;
+    } catch (err) {
+      log(`the status comment of ${row.run_id} could not be written: ${words(err)}`);
+      return false;
+    } finally {
+      if (claimed) {
+        try { db.prepare('UPDATE run_mirrors SET busy = NULL WHERE run_id = ?').run(row.run_id); } catch { /* the database closed with the server */ }
+      }
+    }
   }
 
   /** Writes what happened to a run, once: the key says what, so a second look at the same thing adds nothing */
@@ -618,7 +700,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       await audit({ login: me.login, action: 'agent-request', target, request: { ...asked, target: number }, status, answer: posted ? { comment: posted.id, url: posted.url ?? null } : { transport, queued: transport === 'pull' } });
       hooks?.emit('agent.requested', { request: made, actor: me.login });
       try { onAsk?.(); } catch { /* the poll is a convenience */ }
-      const row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(made.runId));
+      let row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(made.runId));
+      // Over push and pull no request comment is in the thread: the run's status comment is, as the maintainer who asked
+      await mirrorRun(forge, db, row);
+      row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(made.runId));
       return { run: publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)), request: made, comment: posted ? { id: posted.id, url: posted.url ?? null, number } : null };
     } catch (err) {
       if (status === null) {
@@ -712,6 +797,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         hooks?.emit('run.state', { ...runPayload(after, me.login), state: 'stopped' });
         hooks?.emit('run.finished', { ...runPayload(after, me.login), state: 'stopped' });
       }
+      await mirrorRun(forge, db, after);
       return { run: publicRun(after, now(), quietMs, extrasFor(db, [after], now()).get(after.run_id)), comment: posted ? { id: posted.id, url: posted.url ?? null } : null };
     } catch (err) {
       if (!done) {
@@ -815,6 +901,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       await audit({ login: me.login, action: 'agent-answer', target, request: { ...asked, action: a.action, ...(a.text ? { textChars: a.text.length } : {}) }, status: 201, answer: posted ? { comment: posted.id, url: posted.url ?? null } : { transport: row.transport } });
       const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
       hooks?.emit('run.answered', { ...runPayload(after, me.login), action: a.action });
+      await mirrorRun(forge, db, after);
       return { run: publicRun(after, now(), quietMs, extrasFor(db, [after], now()).get(after.run_id)), comment: posted ? { id: posted.id, url: posted.url ?? null } : null };
     } catch (err) {
       if (!done) {
@@ -1165,7 +1252,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
    * Looks at the forge for what the runs I follow have left (the steps in this module's header). One at a time: a follow that is running
    * is the answer to another asked meanwhile. Never throws; resolves with a count.
    * @param {import('./forge.js').Forge} forge a signed-in maintainer's
-   * @returns {Promise<{ followed: number, reports: number, ignored: number, linked: number }>}
+   * @returns {Promise<{ followed: number, reports: number, ignored: number, linked: number, mirrored?: number }>}
    */
   function follow(forge) {
     if (following) return following;
@@ -1290,7 +1377,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const db = await auth.store();
     const at = now();
     const rows = followable(db, at);
-    const out = { followed: rows.length, reports: 0, ignored: 0, linked: 0 };
+    const out = { followed: rows.length, reports: 0, ignored: 0, linked: 0, mirrored: 0 };
     if (!rows.length) return out;
     /** @type {Map<string, RunRow>} the rows as they will be written: patched in place as the forge is read */
     const cur = new Map(rows.map((r) => [r.run_id, { ...r }]));
@@ -1581,6 +1668,16 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     for (const e of fresh) {
       const row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(e.runId));
       hooks?.emit(e.event, { ...runPayload(row, e.actor), state: e.state, ...(e.action ? { action: e.action } : {}) });
+    }
+    // ---- the status comment of each run, edited when its text has moved (a runner's report over push or pull is first heard of here) ----------------
+    if (mirrorOn) {
+      let written = 0;
+      for (const id of cur.keys()) {
+        if (written >= MAX_MIRRORS) break;
+        const row = /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(id));
+        if (row && await mirrorRun(forge, db, row)) written += 1;
+      }
+      out.mirrored = written;
     }
     return out;
   }

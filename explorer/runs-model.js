@@ -39,6 +39,32 @@ export function statusWords(run) {
   return words[run.status] || run.status;
 }
 
+/** The colour class (`hx-forge-state--<tone>`) of a run's state: done and merged are green, failed red, a run that is waiting on someone or has gone quiet amber, the rest in motion */
+export const RUN_TONE = Object.freeze({ done: 'success', merged: 'success', failed: 'failure', quiet: 'queued', 'stop-requested': 'queued', waiting: 'queued' });
+export const runTone = (run) => RUN_TONE[run.status] || 'running';
+
+/**
+ * The run to show on the row of a thread (issue #104): the run whose conversation the thread is (`thread.number`, which the server fills in;
+ * `target` for an older answer), an open one before a finished one, then the newest. `null` when no run is about it.
+ * @param {{ status: string, open?: boolean, requestedAt?: string, target?: number, thread?: { number: number } }[] | null | undefined} runs
+ * @param {number} number the thread's number (its issue, or its spec pull request)
+ */
+export function runOnThread(runs, number) {
+  if (!Array.isArray(runs)) return null;
+  const mine = runs.filter((r) => (r.thread && Number.isInteger(r.thread.number) ? r.thread.number : r.target) === number);
+  if (!mine.length) return null;
+  const newest = (a, b) => Date.parse(b.requestedAt || 0) - Date.parse(a.requestedAt || 0);
+  return [...mine.filter((r) => r.open === true).sort(newest), ...mine.filter((r) => r.open !== true).sort(newest)][0];
+}
+
+/** What a thread's row says of its run, in a few words: "Run: Working" (more than one run on it: "Run: Working (+1)") */
+export function threadRunWords(runs, number) {
+  const run = runOnThread(runs, number);
+  if (!run) return '';
+  const more = runs.filter((r) => (r.thread && Number.isInteger(r.thread.number) ? r.thread.number : r.target) === number).length - 1;
+  return `Run: ${statusWords(run)}${more > 0 ? ` (+${more})` : ''}`;
+}
+
 /** Why a state is what it is, for people who ask: one line under the state */
 export function statusWhy(run) {
   switch (run.status) {
