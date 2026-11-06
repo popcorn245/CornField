@@ -41,11 +41,21 @@
  *   - the **timeline** is the request, the runner's reports, pushes, the pull request, its checks, how it ended, a stop request, and quiet: the first
  *     and last are worked out from the row, the rest are kept as they are seen (`run_events`, one row for each, so a second look adds none)
  *
+ * ## Waiting, and the answer (issue #101)
+ *
+ * A runner may report `waiting` (a note and a link: "plan ready, approve to build"). The run stays open and is shown as Waiting. A maintainer answers
+ * from the run (`answer`): **Continue**, **Stop** or a **reply** with text. Over push and pull the answer is kept on the run (one answer: a second
+ * replaces the first, until the runner reports again) and comes back through `GET /api/runs/<runId>` as `answer: { action, text?, at, by }`, the
+ * way `stopRequested` does. On the forge it is posted as a `cornfield-run` `answered` block, as the maintainer, like a stop request. A **Stop** is
+ * a stop request (`stop`), so it behaves in every way as a Stop does; the answer is recorded beside it. A report of `waiting` after another state
+ * clears the answer of the wait before. Hooks: `run.waiting` (the runner asked), `run.answered` (a maintainer answered; the action, never the text).
+ *
  * ## What counts as open
  *
  * A run is **open** unless it is finished or quiet (`statusOf`): finished is the runner's report `done`, `failed` or `stopped`, or its pull
  * request merged or closed; **quiet** is no report, push or pull request activity within `agents.quietAfter` (24h unless set). A quiet run
- * is shown as quiet and counts toward neither the cap nor the one-per-subject rule; a later report or push makes it open again.
+ * is shown as quiet and counts toward neither the cap nor the one-per-subject rule; a later report or push makes it open again. A run **waiting**
+ * on a maintainer (its runner reported `waiting`, nobody asked it to stop) is never quiet: a human owes it an answer, so it keeps counting.
  *
  * ## Following (`follow`)
  *
@@ -63,14 +73,14 @@
  *   - **the branches**, for a run that has no pull request yet: a branch whose name holds the run id, and when its head moves
  *
  * Everything seen is kept in `runs` and `run_seen` (server/db.js) before any hook is sent, and each comment is judged once and each hook event
- * sent once (a `run_seen` key), so a restart re-reads the forge and fires nothing twice. Hooks: `run.claimed`, `run.state`, `run.stopRequested`,
- * `run.finished` (server/hooks.js).
+ * sent once (a `run_seen` key), so a restart re-reads the forge and fires nothing twice. Hooks: `run.claimed`, `run.state`, `run.waiting`, `run.answered`,
+ * `run.stopRequested`, `run.finished` (server/hooks.js).
  *
  * @typedef {import('../core/agent-contract.js').RunRequest} RunRequest
  * @typedef {{ run_id: string, repo: string, kind: string, profile: string | null, issue: number | null, proposal: string | null, thread: number | null,
  *   target: number, comment_id: string, comment_url: string | null, request: string, requested_by: string, requested_by_id: string, requested_at: string,
  *   via: string, state: string, reported_at: string | null, reported_by: string | null, note: string | null, url: string | null, tokens: number | null,
- *   cost: number | null, transport: 'forge' | 'push' | 'pull', claimed_by: number | null, claimed_at: string | null, stop_requested_at: string | null, stop_requested_by: string | null, pull: number | null, pull_state: string | null,
+ *   cost: number | null, transport: 'forge' | 'push' | 'pull', claimed_by: number | null, claimed_at: string | null, stop_requested_at: string | null, stop_requested_by: string | null, answer_action: string | null, answer_text: string | null, answer_at: string | null, answer_by: string | null, pull: number | null, pull_state: string | null,
  *   pull_url: string | null, pull_by: string | null, pull_trusted: number, linked_via: string | null, branch: string | null, head_sha: string | null,
  *   checks: string | null, last_activity: string }} RunRow
  */
@@ -78,7 +88,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
-import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
+import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateAnswer, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
 import { quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
 import { runnerPresence } from './runner-presence.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
@@ -127,13 +137,18 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const words = (err) => (err instanceof Error ? err.message : String(err));
 const maxIso = (a, b) => (Date.parse(b) > Date.parse(a) ? b : a);
 
+/** Whether a run is waiting on a maintainer: its runner reported `waiting` and nobody has asked it to stop. Such a run is exempt from quiet */
+const waitsOnMaintainer = (row) => row.state === 'waiting' && !row.stop_requested_at;
+
 /**
  * What a run is, as of `nowMs`, from the runner's reports and what the forge shows. Pure.
  *
  *   done / failed / stopped    the runner's latest report
  *   merged / closed            its (trusted) pull request ended
- *   quiet                      nothing happened within `quietMs`
+ *   quiet                      nothing happened within `quietMs`, unless it is waiting (below)
  *   stop-requested             a maintainer asked it to stop and the runner has not said so
+ *   waiting                    the runner's latest report: it asks a maintainer (open: the run is not over). A run waiting on a maintainer
+ *                              never goes quiet, so it keeps counting toward the cap; once a maintainer asks it to stop, or it reports again, quiet applies again
  *   claimed / working          the runner's latest report
  *   working                    no report, but a (trusted) pull request or a branch carries its id: a silent runner is seen through what it pushes
  *   requested                  asked for, nothing seen yet
@@ -149,7 +164,7 @@ export function statusOf(row, nowMs, quietMs) {
   let status;
   if (REPORT_FINISHED.includes(row.state)) status = row.state;
   else if (ended) status = /** @type {string} */ (row.pull_state);
-  else if (nowMs - Date.parse(row.last_activity) >= quietMs) status = 'quiet';
+  else if (!waitsOnMaintainer(row) && nowMs - Date.parse(row.last_activity) >= quietMs) status = 'quiet';
   else if (row.stop_requested_at) status = 'stop-requested';
   else if (row.state !== 'requested') status = row.state;
   else status = (row.pull_trusted === 1 && row.pull) || row.branch ? 'working' : 'requested';
@@ -174,6 +189,11 @@ function subjectKeys(refs) {
 
 const subjectWords = (refs) => [refs.issue != null && `issue #${refs.issue}`, refs.thread != null && refs.thread !== refs.issue && `thread #${refs.thread}`, refs.proposal != null && `proposal ${refs.proposal}`].filter(Boolean).join(' and ');
 
+/** A maintainer's answer to the latest wait as the API shows it (the runner reads the same), or null */
+function answerOf(row) {
+  return row.answer_at ? { action: row.answer_action, ...(row.answer_text ? { text: row.answer_text } : {}), at: row.answer_at, by: row.answer_by } : null;
+}
+
 /**
  * A run for the dashboard and the API: derived status, the request's limits beside the runner's report, no credential, nothing that is the
  * database's own. Text the runner wrote (a note, a link) is data for the page to escape.
@@ -194,6 +214,7 @@ export function publicRun(row, nowMs, quietMs, extra = {}) {
     limits,
     report: row.reported_at ? { state: row.state, at: row.reported_at, by: byFromText(row.reported_by), note: row.note, url: row.url, tokens: row.tokens, cost: row.cost } : null,
     stopRequested: row.stop_requested_at ? { at: row.stop_requested_at, by: row.stop_requested_by } : null,
+    answer: answerOf(row),
     pull: row.pull != null ? { number: row.pull, state: row.pull_state, url: row.pull_url, by: row.pull_by, trusted: row.pull_trusted === 1, via: row.linked_via } : null,
     branch: row.branch, headSha: row.head_sha, checks: row.checks, lastActivity: row.last_activity,
     ...extra,
@@ -671,6 +692,109 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     }
   }
 
+  /**
+   * A maintainer's answer to a run that reported `waiting`: `continue`, `stop` or a `reply` (text). Throws like `stop`.
+   * - **Stop** is `stop` itself (the same checks, block, audit row and hook), with the answer recorded beside it.
+   * - **Continue and reply** are kept on the run, replacing an earlier answer to the same wait; on the forge the `answered` block is posted
+   *   first, in the same place as the request, as the maintainer who clicked. A run that is not waiting, is over, or was asked to stop is a 409.
+   * @param {RequestContext} ctx
+   * @param {{ runId: unknown, action?: unknown, text?: unknown, problem?: { status: number, message: string } }} input
+   */
+  async function answer(ctx, { runId, action, text, problem }) {
+    const { who, via = null } = ctx;
+    // A Stop to a run that is waiting is a stop request; anything else (not strictly an answer, no such run, not waiting) is refused below as an answer
+    const stopping = action === 'stop' && !problem && validateAnswer({ state: 'answered', action, ...(text !== undefined ? { text } : {}) }).ok
+      && typeof runId === 'string' && /** @type {RunRow | undefined} */ ((await auth.store()).prepare('SELECT state FROM runs WHERE run_id = ? AND repo = ?').get(runId, repo))?.state === 'waiting';
+    if (stopping) {
+      const stopped = await stop(ctx, { runId, note: text, problem });
+      const db = await auth.store();
+      const stamp = iso(now());
+      const kept = db.prepare("UPDATE runs SET answer_action = 'stop', answer_text = ?, answer_at = ?, answer_by = ? WHERE run_id = ? AND state = 'waiting'")
+        .run(typeof text === 'string' && text.trim() !== '' ? text : null, stamp, who.login, stopped.run.runId).changes;
+      const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(stopped.run.runId));
+      if (kept) hooks?.emit('run.answered', { ...runPayload(after, who.login), action: 'stop' });
+      return { ...stopped, run: publicRun(after, now(), quietMs, extrasFor(db, [after], now()).get(after.run_id)) };
+    }
+    const at = ctx.limits.now ?? now;
+    const flood = countAttempt(ctx.limits, who.userId, at());
+    if (flood) throw flood;
+    let target = repo;
+    let done = false;
+    let release = () => {};
+    const asked = { ...(typeof runId === 'string' && runId.length <= 40 ? { runId } : {}), ...(typeof action === 'string' && action.length <= 10 ? { action } : {}), ...(typeof text === 'string' ? { textChars: text.length } : {}), ...(via ? { via: 'api', token: via.token } : {}) };
+    try {
+      if (problem) throw new Refused(problem.status, problem.message, 'invalid');
+      const checked = validateAnswer({ state: 'answered', action, ...(text !== undefined ? { text } : {}) });
+      if (!checked.ok) throw new Refused(400, checked.error, 'invalid');
+      const a = checked.value;
+      const db = await auth.store();
+      const row = typeof runId === 'string' ? /** @type {RunRow | undefined} */ (db.prepare('SELECT * FROM runs WHERE run_id = ? AND repo = ?').get(runId, repo)) : undefined;
+      if (!row) throw new Refused(404, 'cornfield has no such run.', 'not-found');
+      target = `${repo}#${row.target}`;
+      release = throttle(ctx.limits, who.userId, `agent-answer|${row.run_id}`, at());
+      const forge = await ctx.forge();
+      const me = await forge.me();
+      if (String(me.id) !== who.userId) throw new Refused(403, 'The forge says this sign-in is someone else now; sign in again.', 'forbidden');
+      if (!isMaintainer(await forge.permission(repo, me.login))) throw new Refused(403, `Only the repo's maintainers answer agent runs; ${me.login} is not one now.`, 'forbidden');
+      const was = statusOf(row, now(), quietMs);
+      if (was.finished) throw new Refused(409, `Run ${row.run_id} is ${was.status}; there is nothing to answer.`, 'conflict');
+      if (row.stop_requested_at) throw new Refused(409, `${row.stop_requested_by ?? 'A maintainer'} already asked run ${row.run_id} to stop (${row.stop_requested_at}); the runner decides what that means.`, 'conflict');
+      if (row.state !== 'waiting') throw new Refused(409, `Run ${row.run_id} is not waiting for an answer (its runner last reported ${row.state}).`, 'conflict');
+      if (a.action === 'stop') throw new Refused(409, `Run ${row.run_id} changed while the answer was being taken; read it again.`, 'conflict');
+      if (ctx.stillAllowed) {
+        const why = await ctx.stillAllowed();
+        if (why) throw new Refused(403, why, 'forbidden');
+      }
+      const stamp = iso(now());
+      let posted = null;
+      if (row.transport === 'forge') {
+        let comment;
+        try {
+          comment = formatRunComment(row.run_id, a, { line: `Answered run \`${row.run_id}\`: ${a.action} (${me.login}, in cornfield${via ? `, through the agent API with the token \`${via.token.label}\`` : ''}).` });
+        } catch (err) {
+          throw new Refused(400, words(err), 'invalid');
+        }
+        posted = await forge.comment(row.target, comment);
+      }
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        // The runner may have reported again while the forge was asked: it answered the wait it was in, so only a run still waiting takes it
+        // The block just posted is judged already, whatever comes of it: a follow must never read cornfield's own answer back as a maintainer's,
+        // not even one that came too late for the wait it answered (kept even when the answer is refused below)
+        if (posted) {
+          db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:answer:0`, stamp);
+          db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:answered:${posted.id}:c:${posted.id}:${row.run_id}:answer:0`, stamp);
+        }
+        const kept = db.prepare("UPDATE runs SET answer_action = ?, answer_text = ?, answer_at = ?, answer_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ? AND state = 'waiting' AND stop_requested_at IS NULL")
+          .run(a.action, a.text ?? null, stamp, me.login, stamp, row.run_id).changes;
+        if (kept !== 1) {
+          db.exec('COMMIT');
+          throw new Refused(409, `Run ${row.run_id} changed while the answer was being taken; read it again.`, 'conflict');
+        }
+        // Two maintainers answering at once: the last write wins on the run, and the timeline keeps both
+        keepEvent(db, row.run_id, { key: posted ? `answer:${posted.id}` : `answer:cornfield:${stamp}:${me.login}`, at: stamp, kind: 'answered', actor: me.login, ref: a.action, note: a.text ?? null, url: posted ? posted.url ?? null : null });
+        db.exec('COMMIT');
+      } catch (err) {
+        try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
+        throw err;
+      }
+      done = true;
+      await audit({ login: me.login, action: 'agent-answer', target, request: { ...asked, action: a.action, ...(a.text ? { textChars: a.text.length } : {}) }, status: 201, answer: posted ? { comment: posted.id, url: posted.url ?? null } : { transport: row.transport } });
+      const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
+      hooks?.emit('run.answered', { ...runPayload(after, me.login), action: a.action });
+      return { run: publicRun(after, now(), quietMs, extrasFor(db, [after], now()).get(after.run_id)), comment: posted ? { id: posted.id, url: posted.url ?? null } : null };
+    } catch (err) {
+      if (!done) {
+        const out = describe(err);
+        await audit({ login: who.login, action: 'agent-answer', target, request: asked, status: err instanceof ForgeError ? err.status ?? (err.code === 'unavailable' ? null : out.status) : out.status, answer: { error: out.error, code: out.code } });
+        if (!(err instanceof Refused) && !(err instanceof ForgeError)) log(`answering ${asked.runId ?? ''} failed: ${err instanceof Error ? err.stack || err.message : err}`);
+      }
+      throw err;
+    } finally {
+      release();
+    }
+  }
+
   /** The body of a run hook event: which run, in what state, about what, caused by whom */
   function runPayload(row, actor) {
     return { runId: row.run_id, state: statusOf(row, now(), quietMs).status, pull: row.pull ?? undefined, issue: row.issue ?? row.thread ?? undefined, actor };
@@ -708,10 +832,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return row ? publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)) : null;
   }
 
-  /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window */
+  /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window or waiting on a maintainer */
   function followable(db, at) {
     const window = Math.max(2 * quietMs, FOLLOW_FLOOR_MS);
-    return /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} AND last_activity > ? AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?`)
+    return /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} AND (last_activity > ? OR (state = 'waiting' AND stop_requested_at IS NULL)) AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?`)
       .all(repo, iso(at - window), MAX_FOLLOWED));
   }
 
@@ -867,7 +991,9 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
 
     const seen = (runId, key) => db.prepare('SELECT 1 FROM run_seen WHERE run_id = ? AND key = ?').get(runId, key) !== undefined;
     const touch = (row, when) => { row.last_activity = maxIso(row.last_activity, iso(Number.isFinite(Date.parse(when)) ? Date.parse(when) : at)); dirty.add(row.run_id); };
-    const queue = (row, event, key, actor, state) => { events.push({ runId: row.run_id, event, key, actor, state }); };
+    const queue = (row, event, key, actor, state, action) => { events.push({ runId: row.run_id, event, key, actor, state, ...(action ? { action } : {}) }); };
+    /** The runs whose answer columns this look changed (written on their own, so a look that began before an answer was kept cannot undo it) */
+    const answered = new Set();
 
     // Who counts: runners by the config, maintainers by what the forge says now (asked once per login per look)
     const maintainerOf = new Map();
@@ -986,8 +1112,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       const trust = (login, block) => {
         const who = standing.get(lower(login));
         if (!who) return false;
-        // A report: a runner (agents.runners) or a maintainer. A stop request: a maintainer. A request is not ours to follow
-        return block.type === 'report' ? who.runner || who.maintainer : block.type === 'stop-request' ? who.maintainer : false;
+        // A report: a runner (agents.runners) or a maintainer. A stop request and an answer: a maintainer. A request is not ours to follow
+        return block.type === 'report' ? who.runner || who.maintainer : block.type === 'stop-request' || block.type === 'answer' ? who.maintainer : false;
       };
       const found = runBlocksOf(comments, { trust });
       const counts = new Map();
@@ -1015,7 +1141,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         if (!row || !ids.has(b.runId) || b.type === 'request') continue;
         const key = keyOf(b.comment.id, b.runId, b.type);
         const reason = b.why === 'edited' ? 'edited after it was posted, so it is not believed'
-          : b.type === 'report' ? 'not from a runner (agents.runners) or a maintainer' : 'a stop request is believed only from a maintainer';
+          : b.type === 'report' ? 'not from a runner (agents.runners) or a maintainer' : `${b.type === 'answer' ? 'an answer' : 'a stop request'} is believed only from a maintainer`;
         if (judge(row, b.comment.id, key, b.by, b.type, { ...(b.value.state ? { state: b.value.state } : {}) }, { accepted: false, reason })) out.ignored += 1;
       }
       // A block that is not strictly the contract's (a credential in a report, a stray key) is turned away, and written down once
@@ -1034,12 +1160,29 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           state: r.state, reported_at: when, reported_by: login, note: r.note ?? null, url: r.url ?? null,
           tokens: r.tokens ?? row.tokens, cost: r.cost ?? row.cost,
         });
+        // A new wait is a new question: the answer to the last one is not its answer
+        if (r.state === 'waiting' && previous !== 'waiting') {
+          Object.assign(row, { answer_action: null, answer_text: null, answer_at: null, answer_by: null });
+          answered.add(row.run_id);
+        }
         touch(row, when);
         out.reports += 1;
         cause.set(row.run_id, key);
         happen(row, { key: `report:${key}`, at: when, kind: r.state === 'claimed' ? 'claimed' : 'report', actor: login, ref: r.state, note: r.note ?? null, url: r.url ?? null });
         if (r.state === 'claimed') queue(row, 'run.claimed', 'ev:claimed', login, 'claimed');
         if (r.state !== previous) queue(row, 'run.state', `ev:state:${id}:${key}`, login, r.state);
+        if (r.state === 'waiting' && previous !== 'waiting') queue(row, 'run.waiting', `ev:waiting:${id}:${key}`, login, 'waiting');
+      } else if (block.type === 'answer') {
+        // An answer to a run that is not waiting answers nothing (the runner went on, or it asked nothing), nor does one after a stop request: it is kept in the audit only
+        if (row.state !== 'waiting' || (row.stop_requested_at && block.value.action !== 'stop')) continue;
+        const a = block.value;
+        Object.assign(row, { answer_action: a.action, answer_text: a.text ?? null, answer_at: when, answer_by: login });
+        answered.add(row.run_id);
+        if (a.action === 'stop' && !row.stop_requested_at) Object.assign(row, { stop_requested_at: when, stop_requested_by: login });
+        touch(row, when);
+        happen(row, { key: `answer:${id}`, at: when, kind: 'answered', actor: login, ref: a.action, note: a.text ?? null });
+        queue(row, 'run.answered', `ev:answered:${id}:${key}`, login, 'waiting', a.action);
+        if (a.action === 'stop') queue(row, 'run.stopRequested', `ev:stop:${id}:${key}`, login, 'stop-requested');
       } else {
         if (!row.stop_requested_at) Object.assign(row, { stop_requested_at: when, stop_requested_by: login });
         touch(row, when);
@@ -1106,6 +1249,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
           last_activity = MAX(last_activity, ?) WHERE run_id = ?`)
           .run(r.state, r.reported_at, r.reported_by, r.note, r.url, r.tokens, r.cost, r.stop_requested_at, r.stop_requested_by,
             r.pull, r.pull_state, r.pull_url, r.pull_by, r.pull_trusted, r.linked_via, r.branch, r.head_sha, r.checks, r.last_activity, id);
+        if (answered.has(id)) db.prepare('UPDATE runs SET answer_action = ?, answer_text = ?, answer_at = ?, answer_by = ? WHERE run_id = ?').run(r.answer_action, r.answer_text, r.answer_at, r.answer_by, id);
       }
       for (const e of events) if (mark.run(e.runId, e.key, iso(at)).changes === 1) fresh.push(e);
       for (const ev of happened) keepEvent(db, ev.runId, ev);
@@ -1119,7 +1263,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     }
     for (const e of fresh) {
       const row = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(e.runId));
-      hooks?.emit(e.event, { ...runPayload(row, e.actor), state: e.state });
+      hooks?.emit(e.event, { ...runPayload(row, e.actor), state: e.state, ...(e.action ? { action: e.action } : {}) });
     }
     return out;
   }
@@ -1134,10 +1278,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   /** What a runner's act writes into the timeline: the runner, with the maintainer who minted the token kept in `mintedBy` */
   const runnerText = (token) => byToText(runnerBy(token));
 
-  /** A run for a runner: the state it is in as cornfield derives it, and whether a maintainer asked it to stop. Nothing else about the run, no credential */
+  /** A run for a runner: the state it is in as cornfield derives it, whether a maintainer asked it to stop, and the answer to its wait if there is one. Nothing else about the run, no credential */
   function runnerView(row) {
     const st = statusOf(row, now(), quietMs);
-    return { runId: row.run_id, state: st.status, reported: row.state === 'requested' ? null : row.state, stopRequested: row.stop_requested_at != null, ...(row.stop_requested_at ? { stopRequestedAt: row.stop_requested_at } : {}), open: st.open, finished: st.finished };
+    return { runId: row.run_id, state: st.status, reported: row.state === 'requested' ? null : row.state, stopRequested: row.stop_requested_at != null, ...(row.stop_requested_at ? { stopRequestedAt: row.stop_requested_at } : {}), ...(row.answer_at ? { answer: answerOf(row) } : {}), open: st.open, finished: st.finished };
   }
 
   /** The run a runner token names, or a `Refused`: 404 when there is none, 403 when the token may not touch it */
@@ -1197,7 +1341,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return { request: checked.ok ? checked.value : null, run: runnerView(row), row };
   }
 
-  /** One run as the runner that holds it sees it: `GET /api/runs/<runId>`, how a runner learns it was asked to stop */
+  /** One run as the runner that holds it sees it: `GET /api/runs/<runId>`, how a runner learns it was asked to stop, or answered */
   async function runnerGet(token, runId) {
     const db = await auth.store();
     return runnerView(runnerRun(db, token, runId));
@@ -1220,10 +1364,14 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const was = statusOf(row, at, quietMs);
     if (was.finished) throw new Refused(409, `Run ${row.run_id} is ${was.status}; it takes no more reports.`, 'conflict');
     const stamp = iso(at);
+    // A new wait is a new question: the answer to the last one goes (a repeat of `waiting` while waiting keeps it)
+    const newWait = r.state === 'waiting' && row.state !== 'waiting';
     const changed = db.prepare(`UPDATE runs SET state = ?, reported_at = ?, reported_by = ?, note = ?, url = ?, tokens = COALESCE(?, tokens), cost = COALESCE(?, cost),
-      claimed_by = COALESCE(claimed_by, ?), claimed_at = COALESCE(claimed_at, ?), last_activity = MAX(last_activity, ?)
+      claimed_by = COALESCE(claimed_by, ?), claimed_at = COALESCE(claimed_at, ?), last_activity = MAX(last_activity, ?),
+      answer_action = CASE WHEN ? THEN NULL ELSE answer_action END, answer_text = CASE WHEN ? THEN NULL ELSE answer_text END,
+      answer_at = CASE WHEN ? THEN NULL ELSE answer_at END, answer_by = CASE WHEN ? THEN NULL ELSE answer_by END
       WHERE run_id = ? AND (claimed_by IS NULL OR claimed_by = ?) AND state NOT IN ('done', 'failed', 'stopped')`)
-      .run(r.state, stamp, runnerText(token), r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, row.run_id, token.id).changes;
+      .run(r.state, stamp, runnerText(token), r.note ?? null, r.url ?? null, r.tokens ?? null, r.cost ?? null, token.id, stamp, stamp, +newWait, +newWait, +newWait, +newWait, row.run_id, token.id).changes;
     if (changed !== 1) throw new Refused(409, `Run ${row.run_id} changed while the report was being taken; read it again (GET /api/runs/${row.run_id}).`, 'conflict');
     const after = /** @type {RunRow} */ (db.prepare('SELECT * FROM runs WHERE run_id = ?').get(row.run_id));
     // A report of `claimed` on a run the claim route already claimed is a report, not a second "Claimed" line
@@ -1231,6 +1379,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     const actor = runnerActor(token);
     if (r.state === 'claimed' && row.state !== 'claimed') hooks?.emit('run.claimed', { ...runPayload(after, actor), state: r.state });
     if (r.state !== row.state) hooks?.emit('run.state', { ...runPayload(after, actor), state: r.state });
+    if (newWait) hooks?.emit('run.waiting', { ...runPayload(after, actor), state: r.state });
     if (REPORT_FINISHED.includes(r.state)) hooks?.emit('run.finished', { ...runPayload(after, actor), state: r.state });
     return { run: runnerView(after), row: after, was: row };
   }
@@ -1257,7 +1406,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return hit ? hit.run_id : null;
   }
 
-  return { request, stop, list, get, follow, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
+  return { request, stop, answer, list, get, follow, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
 }
 
 /** @typedef {ReturnType<typeof createRuns>} Runs */

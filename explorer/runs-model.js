@@ -11,6 +11,7 @@ import { relativeTime } from './review-model.js';
 export const RUNS_URL = '/api/agent-runs';
 export const runsUrl = (follow) => (follow ? `${RUNS_URL}?follow=1` : RUNS_URL);
 export const stopUrl = (runId) => `${RUNS_URL}/${encodeURIComponent(runId)}/stop`;
+export const answerUrl = (runId) => `${RUNS_URL}/${encodeURIComponent(runId)}/answer`;
 
 /** The kinds of run (the contract's), and what each asks the runner for */
 export const KINDS = Object.freeze([
@@ -32,7 +33,7 @@ export function aboutWords(refs) {
 /** The state of a run, said short */
 export function statusWords(run) {
   const words = {
-    requested: 'Requested', claimed: 'Claimed', working: 'Working', done: 'Done', failed: 'Failed', stopped: 'Stopped',
+    requested: 'Requested', claimed: 'Claimed', working: 'Working', waiting: 'Waiting', done: 'Done', failed: 'Failed', stopped: 'Stopped',
     'stop-requested': 'Stop requested', quiet: 'Quiet', merged: 'Merged', closed: 'Closed',
   };
   return words[run.status] || run.status;
@@ -44,6 +45,9 @@ export function statusWhy(run) {
     case 'quiet': return 'Nothing reported or pushed for a while, so it no longer counts toward the limit. A report or a push brings it back.';
     case 'stop-requested': return `${run.stopRequested && run.stopRequested.by ? run.stopRequested.by : 'A maintainer'} asked it to stop. The runner decides what that means; this stays until it says stopped, or the run goes quiet.`;
     case 'requested': return 'Waiting for a runner to pick it up. cornfield only asks; it starts nothing.';
+    case 'waiting': return run.answer
+      ? `${run.answer.by || 'A maintainer'} answered: ${answerWords(run.answer)}. The runner picks the answer up and goes on; answer again to change it until it does.`
+      : 'The runner stopped to ask and goes on once a maintainer answers: Continue, Stop, or a reply.';
     default: return '';
   }
 }
@@ -84,6 +88,28 @@ export function triggerNotice(data) {
 
 /** Whether a Stop is offered: the run is open and nobody has asked it to stop yet */
 export const canStop = (run) => run.open === true && !run.stopRequested;
+
+/** Whether the run asks for an answer (Continue, Stop, Reply): the runner reported `waiting` and nobody has asked it to stop */
+export const canAnswer = (run) => run.open === true && run.status === 'waiting' && !run.stopRequested;
+
+/** An answer, said short: "continue", "stop", "reply: use the second plan" */
+export function answerWords(answer) {
+  if (!answer) return '';
+  return answer.action === 'reply' ? `reply: ${answer.text || ''}`.trim() : answer.action;
+}
+
+/** The body of an answer: the action, and a reply's text (trimmed); Continue and Stop carry none */
+export function answerBody(action, text) {
+  return action === 'reply' ? { action, text: (text || '').trim() } : { action };
+}
+
+/** What an answer came to */
+export function answerWordsFor(status, body, runId, action) {
+  if (status === null) return 'cornfield did not answer; nothing was sent.';
+  if (status === 401) return 'Your sign-in has ended. Sign in again to answer a run.';
+  if (body && body.ok) return action === 'stop' ? `Asked ${runId} to stop. The runner decides what that means.` : `Answered ${runId}: ${action}. The runner picks it up and goes on.`;
+  return (body && body.error) || `The answer was refused (${status}).`;
+}
 
 /** The summary line over the list: "2 open of 3 allowed, 5 runs" */
 export function runsStatus(data) {
@@ -234,6 +260,7 @@ export function timelineWords(entry) {
     case 'pull-opened': return { what: `Opened pull request ${entry.ref || ''}${by}`.trim(), note: '' };
     case 'checks': return { what: { success: 'Checks passed', failure: 'Checks failed', running: 'Checks running', none: 'No checks' }[entry.ref] || 'Checks changed', note: '' };
     case 'stop-requested': return { what: `Asked to stop${by}`, note: entry.note || '' };
+    case 'answered': return { what: `Answered ${entry.ref || ''}${by}`.replace(/\s+/g, ' ').trim(), note: entry.note || '' };
     case 'merged': return { what: `Landed: pull request ${entry.ref || ''} merged`, note: '' };
     case 'closed': return { what: `Pull request ${entry.ref || ''} closed without landing`, note: '' };
     case 'quiet': return { what: 'Went quiet: nothing reported or pushed for a while', note: '' };

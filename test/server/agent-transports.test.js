@@ -372,6 +372,130 @@ describe('the push and pull transports', () => {
       expect((await report(runner.secret, runId, { state: 'working' })).json.run).toMatchObject({ state: 'working', open: true });
     });
 
+    it('stores a waiting report with its note and link, lists the run as waiting, and fires run.waiting once for the wait (issue #101)', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'working' })).status).toBe(200);
+      later(1000);
+      const waiting = await report(runner.secret, runId, { state: 'waiting', note: 'Plan ready, approve to build', url: 'https://plans.example.org/42' });
+      expect(waiting.status, waiting.text).toBe(200);
+      expect(waiting.json.run).toMatchObject({ state: 'waiting', reported: 'waiting', open: true, finished: false, stopRequested: false });
+      expect(waiting.json.run.answer).toBeUndefined();
+      // a heartbeat while waiting is the same wait
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'waiting', note: 'Still waiting', url: 'https://plans.example.org/42' })).status).toBe(200);
+      const list = await page('GET', '/api/agent-runs');
+      expect(list.json.open).toBe(1);
+      expect(list.json.runs[0]).toMatchObject({ runId, status: 'waiting', open: true, answer: null, report: { state: 'waiting', note: 'Still waiting', url: 'https://plans.example.org/42' } });
+      expect(list.json.runs[0].timeline.map((e) => [e.kind, e.ref])).toEqual([['requested', null], ['claimed', 'claimed'], ['report', 'working'], ['report', 'waiting'], ['report', 'waiting']]);
+      await rcv.next('run.waiting');
+      expect(rcv.of('run.waiting').map((g) => g.body).filter((b) => b.runId === runId)).toEqual([expect.objectContaining({ runId, state: 'waiting', issue: 12, actor: 'runner:laptop' })]);
+      expect(rcv.of('run.state').filter((g) => g.body.runId === runId).map((g) => g.body.state)).toEqual(['claimed', 'working', 'waiting']);
+      // a state the contract does not have is still refused
+      expect((await report(runner.secret, runId, { state: 'paused' })).status).toBe(400);
+    });
+
+    it('records Continue, a reply and a second answer that replaces the first, and returns the answer on the pull read (issue #101)', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      // not waiting yet: nothing to answer
+      later();
+      const early = await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'continue' });
+      expect(early.status, early.text).toBe(409);
+      expect(early.json.error).toMatch(/not waiting/);
+      expect((await report(runner.secret, runId, { state: 'waiting', note: 'Approve the plan?', url: 'https://plans.example.org/42' })).status).toBe(200);
+
+      later();
+      const cont = await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'continue' });
+      expect(cont.status, cont.text).toBe(200);
+      expect(cont.json.comment).toBeNull();
+      expect(world.posted).toEqual([]);
+      const at1 = new Date(clock).toISOString();
+      expect(cont.json.run.answer).toEqual({ action: 'continue', at: at1, by: 'maintainer-one' });
+      expect((await view(runner.secret, runId)).json.run).toMatchObject({ state: 'waiting', stopRequested: false, answer: { action: 'continue', at: at1, by: 'maintainer-one' } });
+
+      later();
+      const reply = await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'reply', text: 'Use the second plan.' });
+      expect(reply.status, reply.text).toBe(200);
+      const at2 = new Date(clock).toISOString();
+      const seen = (await view(runner.secret, runId)).json.run;
+      expect(seen.answer).toEqual({ action: 'reply', text: 'Use the second plan.', at: at2, by: 'maintainer-one' });
+      // every report's answer carries the same run, answer included
+      later(1000);
+      const heartbeat = await report(runner.secret, runId, { state: 'waiting', note: 'Approve the plan?' });
+      expect(heartbeat.json.run.answer).toMatchObject({ action: 'reply', text: 'Use the second plan.' });
+
+      // the dashboard lists it, and the timeline and the audit record both answers, without the words in the audit
+      const listed = (await page('GET', '/api/agent-runs')).json.runs[0];
+      expect(listed.answer).toMatchObject({ action: 'reply', text: 'Use the second plan.' });
+      expect(listed.timeline.filter((e) => e.kind === 'answered').map((e) => [e.ref, e.note, e.actor])).toEqual([['continue', null, 'maintainer-one'], ['reply', 'Use the second plan.', 'maintainer-one']]);
+      const audited = rows().filter((r) => r.action === 'agent-answer');
+      expect(audited.map((r) => [r.status, r.request.action])).toEqual([[409, 'continue'], [201, 'continue'], [201, 'reply']]);
+      expect(JSON.stringify(audited)).not.toContain('second plan');
+      expect(audited[2].request.textChars).toBe('Use the second plan.'.length);
+      await rcv.next('run.answered', 2);
+      expect(rcv.of('run.answered').map((g) => [g.body.action, g.body.actor, g.body.runId])).toEqual([['continue', 'maintainer-one', runId], ['reply', 'maintainer-one', runId]]);
+      expect(JSON.stringify(rcv.of('run.answered').map((g) => g.body))).not.toContain('second plan');
+
+      // the runner goes on: the answer stays for it to read, nothing more can be answered, and a new wait clears it
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'working' })).json.run).toMatchObject({ state: 'working', answer: { action: 'reply' } });
+      later();
+      expect((await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'continue' })).status).toBe(409);
+      later(1000);
+      const again = await report(runner.secret, runId, { state: 'waiting', note: 'Second question' });
+      expect(again.json.run.answer).toBeUndefined();
+      expect((await view(runner.secret, runId)).json.run.answer).toBeUndefined();
+      expect((await page('GET', '/api/agent-runs')).json.runs[0].answer).toBeNull();
+      await rcv.next('run.waiting', 2);
+      expect(rcv.of('run.waiting')).toHaveLength(2);
+    });
+
+    it('treats Stop as an answer like a Stop: a stop request the runner reads, the hook, the audit, and no more answers (issue #101)', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'waiting', note: 'Approve?' })).status).toBe(200);
+      later();
+      const stop = await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'stop', text: 'Not this one.' });
+      expect(stop.status, stop.text).toBe(200);
+      expect(stop.json.run).toMatchObject({ status: 'stop-requested', stopRequested: { by: 'maintainer-one' }, answer: { action: 'stop', text: 'Not this one.', by: 'maintainer-one' } });
+      const seen = (await view(runner.secret, runId)).json.run;
+      expect(seen).toMatchObject({ state: 'stop-requested', stopRequested: true, answer: { action: 'stop' } });
+      expect(stop.json.run.timeline.map((e) => e.kind)).toContain('stop-requested');
+      await rcv.next('run.stopRequested');
+      await rcv.next('run.answered');
+      expect(rcv.of('run.stopRequested')).toHaveLength(1);
+      expect(rcv.of('run.answered')[0].body).toMatchObject({ runId, action: 'stop' });
+      expect(rows().filter((r) => r.action === 'agent-stop').map((r) => r.status)).toEqual([201]);
+      // it was stopped: another stop or answer is a conflict, and the runner ends it as it does after any Stop
+      later();
+      expect((await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'continue' })).status).toBe(409);
+      expect((await page('POST', `/api/agent-runs/${runId}/stop`, {})).status).toBe(409);
+      expect((await report(runner.secret, runId, { state: 'stopped', note: 'Stopped as asked.' })).json.run).toMatchObject({ state: 'stopped', finished: true });
+    });
+
+    it('refuses an answer that is not one: no action, a reply with no text, a credential, a stray key, another person\'s cookie-less call (issue #101)', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      expect((await report(runner.secret, runId, { state: 'waiting' })).status).toBe(200);
+      later();
+      const url = `/api/agent-runs/${runId}/answer`;
+      for (const body of [{}, { action: 'approve' }, { action: 'reply' }, { action: 'reply', text: '   ' }, { action: 'continue', text: 3 }, { action: 'continue', note: 'x' }, { action: 'reply', text: `use ${GHP}` }]) {
+        const res = await page('POST', url, body);
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        later(1000);
+      }
+      expect((await page('POST', url, [])).status).toBe(400);
+      expect((await page('POST', `/api/agent-runs/run-01JC8Z3Q5M7VXK2RT9N4B6HDEX/answer`, { action: 'continue' })).status).toBe(404);
+      // no cookie, no answer; a runner token is no way in either
+      expect((await page('POST', url, { action: 'continue' }, { as: '' })).status).toBeGreaterThanOrEqual(401);
+      expect((await call(runner.secret, 'POST', url, { action: 'continue' })).status).toBe(403);
+      expect((await view(runner.secret, runId)).json.run.answer).toBeUndefined();
+      expect(JSON.stringify(rows())).not.toContain(GHP);
+    });
+
     it('offers a runner a stop through GET /api/runs/<id>, and stops a request nobody claimed itself', async () => {
       const { runner, runId } = await pulled();
       expect((await claim(runner.secret, runId)).status).toBe(200);

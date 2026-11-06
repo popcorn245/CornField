@@ -48,8 +48,8 @@ describe('ask', () => {
 describe('runOnce', () => {
   const secret = ['cf_', 'nt_', 'B'.repeat(43)].join('');
   /** A cornfield with one queued request, an Ollama and a forge, all fake; what each was asked is kept */
-  function world({ claimStatus = 200, model = answer({ summary: 'Add meals', files: [{ path: 'web/meals.js', content: 'export {};\n' }] }), stop = false, kind = 'code', extra = {} } = {}) {
-    const seen = { reports: [], git: [], pulls: [] };
+  function world({ claimStatus = 200, model = answer({ summary: 'Add meals', files: [{ path: 'web/meals.js', content: 'export {};\n' }] }), stop = false, kind = 'code', extra = {}, reads = [] } = {}) {
+    const seen = { reports: [], git: [], pulls: [], prompts: [] };
     const fetch = async (url, init = {}) => {
       const u = new URL(url);
       const json = (status, body) => ({ ok: status < 400, status, json: async () => body });
@@ -58,9 +58,10 @@ describe('runOnce', () => {
         if (u.pathname === '/api/agent-requests') return json(200, { ok: true, requests: [request({ kind, ...extra })] });
         if (u.pathname.endsWith('/claim')) return json(claimStatus, { ok: claimStatus === 200 });
         if (init.method === 'POST') { seen.reports.push(JSON.parse(init.body)); return json(200, { ok: true }); }
-        return json(200, { ok: true, run: { stopRequested: stop } });
+        // `reads`: what each read of the run says in turn (the last one repeats), for a runner that waits for an answer
+        return json(200, { ok: true, run: reads.length ? (reads.length > 1 ? reads.shift() : reads[0]) : { stopRequested: stop } });
       }
-      if (u.host === 'ollama.test') return json(200, { response: model });
+      if (u.host === 'ollama.test') { seen.prompts.push(JSON.parse(init.body).prompt); return json(200, { response: model }); }
       if (u.host === 'git.test') { seen.pulls.push([u.pathname, JSON.parse(init.body)]); return json(201, { html_url: 'https://git.test/owner/name/pull/5' }); }
       throw new Error(`unexpected ${url}`);
     };
@@ -86,6 +87,29 @@ describe('runOnce', () => {
     expect(w.seen.pulls[0][1].body).toContain('Cornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF');
     expect(w.seen.reports).toEqual([{ state: 'working' }, { state: 'done', note: 'Opened a pull request.', url: 'https://git.test/owner/name/pull/5' }]);
     fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  it('with ASK_FIRST, reports waiting with the plan, reads the run until it is answered, then goes on or stops', async () => {
+    const waiting = { stopRequested: false, finished: false };
+    const sleeps = [];
+    const sleep = async (ms) => { sleeps.push(ms); };
+    const go = world({ reads: [waiting, waiting, waiting, { ...waiting, answer: { action: 'continue', at: '2026-11-05T10:00:00.000Z', by: 'maintainer-one' } }] });
+    await runOnce({ env: { ...env(dir()), ASK_FIRST: '1', POLL_SECONDS: '10' }, fetch: go.fetch, exec: go.exec, log: () => {}, sleep });
+    expect(go.seen.reports.map((r) => r.state)).toEqual(['working', 'waiting', 'working', 'done']);
+    expect(go.seen.reports[1].note).toBe('Plan ready: Add meals (web/meals.js). Continue to publish it, Stop, or reply to change it.');
+    expect(sleeps).toEqual([10_000, 10_000]);
+    expect(go.seen.git.map((g) => g[1])).toContain('push');
+    // a reply asks the model again, with the maintainer's words
+    const reply = world({ reads: [{ ...waiting, answer: { action: 'reply', text: 'Call it dinners.', at: '2026-11-05T10:00:00.000Z', by: 'maintainer-one' } }] });
+    await runOnce({ env: { ...env(dir()), ASK_FIRST: '1' }, fetch: reply.fetch, exec: reply.exec, log: () => {}, sleep });
+    expect(reply.seen.prompts).toHaveLength(2);
+    expect(reply.seen.prompts[1]).toContain('A maintainer answered your plan: Call it dinners.');
+    expect(reply.seen.reports.map((r) => r.state)).toEqual(['working', 'waiting', 'working', 'done']);
+    // Stop (an answer, or a stop request) publishes nothing
+    const stop = world({ reads: [waiting, { ...waiting, stopRequested: true, answer: { action: 'stop', at: '2026-11-05T10:00:00.000Z', by: 'maintainer-one' } }] });
+    await runOnce({ env: { ...env(dir()), ASK_FIRST: '1' }, fetch: stop.fetch, exec: stop.exec, log: () => {}, sleep });
+    expect(stop.seen.reports.map((r) => r.state)).toEqual(['working', 'waiting', 'stopped']);
+    expect(stop.seen.git).toEqual([]);
   });
 
   it('leaves a request someone else claimed first alone', async () => {
