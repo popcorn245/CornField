@@ -284,13 +284,16 @@ describe('the waiting state and the answer (issue #101)', () => {
     expect(c.validateAnswer([]).error).toMatch(/JSON object/);
     expect(c.validateRunBody({ state: 'answered', action: 'continue' }).type).toBe('answer');
   });
-  it('round-trips as a block, with the reply quoted in the human line and defused', () => {
+  it('round-trips as a block, with the reply in the block only', () => {
     for (const answer of [{ state: 'answered', action: 'continue' }, { state: 'answered', action: 'stop' }, { state: 'answered', action: 'reply', text: 'Use plan B.\n@everyone #1' }]) {
       const text = c.formatRunComment(ID, answer);
       expect(c.parseRunBlocks(text)).toEqual([{ runId: ID, type: 'answer', value: answer }]);
       expect(text.startsWith(`Answered run \`${ID}\`: ${answer.action}.`)).toBe(true);
     }
-    expect(c.formatRunComment(ID, { state: 'answered', action: 'reply', text: 'Use plan B' })).toContain('> Use plan B');
+    // The reply's words are in the block only, never quoted beside it
+    const replied = c.formatRunComment(ID, { state: 'answered', action: 'reply', text: 'Use plan B' });
+    expect(replied).not.toContain('> Use plan B');
+    expect(replied.split('Use plan B')).toHaveLength(2);
     expect(() => c.formatRunBlock(ID, { state: 'answered', action: 'reply' })).toThrow(/A reply has/);
   });
   it('is read from a comment, and an answer with a stray key is refused with the reason', () => {

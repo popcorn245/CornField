@@ -530,7 +530,7 @@ function defaultLine(runId, type, value) {
 
 /**
  * The text of a comment for a request, a report, a stop request or an answer: a human line (defused: it pings and links nobody), the note of a
- * report or stop request (the text of an answer) quoted and defused, then the block. The block keeps every value as sent, for the runner.
+ * report or stop request quoted and defused (an answer's text is in the block only), then the block. The block keeps every value as sent, for the runner.
  * @param {string} runId
  * @param {RunRequest | RunReport | StopRequest | RunAnswer} body
  * @param {{ line?: string, profiles?: string[] }} [opts] `line`: your own human line, in place of the default
@@ -540,7 +540,8 @@ export function formatRunComment(runId, body, { line, profiles } = {}) {
   const block = formatRunBlock(runId, body, { profiles });
   const checked = validateRunBody(body, { profiles });
   const head = oneLine(line ?? defaultLine(runId, checked.type, checked.value));
-  const note = checked.type === 'request' ? '' : ((checked.type === 'answer' ? checked.value.text : checked.value.note) ?? '').trim();
+  // An answer's text is the maintainer's words to the runner: it travels in the block only, never quoted beside it
+  const note = checked.type === 'request' || checked.type === 'answer' ? '' : (checked.value.note ?? '').trim();
   const quoted = note ? `\n\n${defuse(note).split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
   const out = `${head}${quoted}\n\n${block}`;
   if (out.length > MAX_COMMENT_CHARS) throw new RangeError(`That is too long for a comment (${out.length} characters, at most ${MAX_COMMENT_CHARS}); shorten the brief or the note.`);
