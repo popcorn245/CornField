@@ -37,7 +37,7 @@ export default {
 | `deploys` | `{ workflows: ['*deploy*'], restarts: { 'Deploy web': ['stack-web'] } }`: which workflow runs are deploys, and the map nodes each restarts; with a `forge` the panel's Deploys list lights them ([deploys](deploys.md)) |
 | `proposals` | where proposal files live, in the checkout, in each worktree and (with a `forge` and sign-in) in open pull requests: the folder as a string, or `{ dir?, approveLands? }` ([below](#proposals)) |
 | `topology` | the map file |
-| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `runnerQuietAfter`, `limits`, `refuseCollisions`, `handWritten`): [agents](agents.md), [below](#agents) |
+| `agents` | what marks work as made by an agent (`authors`, `labels`, `branchPrefixes`, `bots`), and how runs are asked for and followed (`transport`, `maxOpen`, `profiles`, `runners`, `quietAfter`, `runnerQuietAfter`, `limits`, `refuseCollisions`, `handWritten`, `mirror`): [agents](agents.md), [below](#agents) |
 | `personas` | `roles`: the roles a persona may have (null: any kebab-case role); `parent`: the node the personas file hangs under |
 | `cloud` | `parent`: the node the cloud file hangs under |
 | `releaseNotes` | `breakingLabel`: the pull request label that lists a change under "Breaking" in the [release notes](issues-and-prs.md#release-notes) (default `breaking`) |
@@ -69,6 +69,7 @@ agents: {
   limits: { minutes: 30, turns: 40, cost: 5, claude: { cost: 20, tokens: 500000 } },   // hints put in every request (a profile's own over the rest, key by key); a request may change them; the runner enforces them or not
   // opt-in triggers, off by default (docs/agents.md#triggers): a run requested by something a maintainer did
   on: { 'spec.approved': { kind: 'code', profile: 'claude' } },
+  mirror: true,                        // keep one status comment per run in the thread it is about, edited as the run moves (default true; false writes none): docs/agents.md#a-thread-for-every-run
   handWritten: true,                   // read the comments of the open issues and pull requests for request blocks a maintainer wrote by hand: true (all), 'labeled' (the threads label only) or false (none, and no poll for it); a run found goes by `transport` like any (docs/agents.md#requests-written-by-hand)
   refuseCollisions: false,             // true: refuse a new request whose `nodes` an open run is already changing (docs/agents.md#runs-on-the-map)
 },

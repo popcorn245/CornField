@@ -61,6 +61,8 @@ function writeRoutes(type) {
       'GET /repos/owner/name/labels?limit=50': { body: [{ id: 7, name: 'Idea' }, { id: 8, name: 'v1' }] },
       'POST /repos/owner/name/labels': (req) => ({ status: 201, body: { id: 9, name: json(req).name } }),
     }),
+    // Editing a comment of ours (docs/agents.md#a-thread-for-every-run): the same path and body on both forges; an id the forge does not know is a 404
+    'PATCH /repos/owner/name/issues/comments/9003': (req) => ({ body: { id: 9003, user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, body: json(req).body, html_url: `${base}/owner/name/pulls/12#issuecomment-9003`, created_at: '2026-10-17T11:00:00Z', updated_at: '2026-10-17T11:05:00Z' } }),
     'POST /repos/owner/name/pulls': (req) => ({ status: 201, body: pull(30, json(req).title, json(req).head, json(req).base, json(req).draft === true) }),
     'POST /repos/owner/name/issues': (req) => ({ status: 201, body: { number: 31, title: json(req).title, state: 'open', user: { login: 'maintainer-one', html_url: `${base}/maintainer-one` }, labels: [], body: json(req).body, comments: 0, html_url: `${base}/owner/name/issues/31`, created_at: '2026-10-19T10:00:00Z', updated_at: '2026-10-19T10:00:00Z', closed_at: null } }),
   };
@@ -179,6 +181,25 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       const [post] = sent('POST');
       expect(post.headers['content-type']).toBe('application/json');
       expect(JSON.parse(post.body)).toEqual({ body: 'Approved.' });
+    });
+
+    it('editComment(): replaces the text of a comment by its id, as JSON, and answers the comment', async () => {
+      const edited = await forge.editComment('9003', 'Approved, and edited.');
+      expect(edited).toMatchObject({ id: '9003', body: 'Approved, and edited.', author: { login: 'maintainer-one' }, updatedAt: '2026-10-17T11:05:00Z' });
+      const [patch] = sent('PATCH');
+      expect(patch.url).toBe('/repos/owner/name/issues/comments/9003');
+      expect(patch.headers['content-type']).toBe('application/json');
+      expect(JSON.parse(patch.body)).toEqual({ body: 'Approved, and edited.' });
+      expect(sent('POST')).toEqual([]);
+    });
+
+    it('editComment(): a comment the forge does not know is not-found, and a bad id or text is refused before the forge is asked', async () => {
+      await forgeError(() => forge.editComment('1', 'text'), 'not-found');
+      fake.requests.length = 0;
+      for (const bad of ['', 'x', '9003/../1', '12 ', 9003, null, '-1']) await forgeError(() => forge.editComment(bad, 'text'), 'invalid');
+      await forgeError(() => forge.editComment('9003', '   '), 'invalid');
+      await forgeError(() => forge.editComment('9003', 'x'.repeat(60_001)), 'invalid');
+      expect(fake.requests).toEqual([]);
     });
 
     it('checks(): every check on a commit, in the interface\'s states', async () => {

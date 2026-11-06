@@ -144,6 +144,10 @@ describe('the push and pull transports', () => {
       world.posted.push({ auth, body: JSON.parse(req.body).body });
       return { status: 201, body: { id: 9000 + world.posted.length, user: { login: 'maintainer-one' }, body: JSON.parse(req.body).body, html_url: 'https://github.example.com/owner/name/issues/12#issuecomment-1', created_at: new Date(clock).toISOString(), updated_at: new Date(clock).toISOString() } };
     }
+    if (method === 'PATCH' && (m = /^\/issues\/comments\/(\d+)$/.exec(p))) {
+      world.edited.push({ id: m[1], body: JSON.parse(req.body).body });
+      return { body: { id: Number(m[1]), user: { login: 'maintainer-one' }, body: JSON.parse(req.body).body, html_url: 'https://github.example.com/owner/name/issues/12#issuecomment-1', created_at: new Date(clock).toISOString(), updated_at: new Date(clock).toISOString() } };
+    }
     if (method === 'GET' && p === '/pulls') return { body: [] };
     if (method === 'GET' && p === '/branches') return { body: [] };
     return { status: 404, body: { message: 'Not Found' } };
@@ -174,7 +178,7 @@ describe('the push and pull transports', () => {
   });
   beforeEach(async () => {
     clock += 3 * 60_000;
-    world = { issues: [12, 13, 14, 15, 16], posted: [], demoted: false };
+    world = { issues: [12, 13, 14, 15, 16], posted: [], edited: [], demoted: false };
     rcv.got.length = 0;
     fake.requests.length = 0;
     data = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-transports-'));
@@ -228,12 +232,21 @@ describe('the push and pull transports', () => {
     return { agent, runner, asked, runId: asked.json.request.runId };
   };
 
+  /** Over push and pull nothing the contract knows is posted to the forge: at most the run's status comment (issue #104), which holds no block */
+  const onlyStatus = () => {
+    expect(world.posted.length).toBeLessThanOrEqual(1);
+    for (const c of world.posted) {
+      expect(c.body.startsWith('<!-- cornfield:run-status run-')).toBe(true);
+      expect(c.body).not.toContain('```');
+    }
+  };
+
   describe('pull', () => {
     it('a runner behind NAT lists, claims, reports and finishes a run; nothing is posted to the forge, and no forge is asked for the runner', async () => {
       const { runner, asked, runId } = await pulled({ profile: 'claude' });
       expect(asked.json.comment).toBeNull();
       expect(asked.json.run).toMatchObject({ transport: 'pull', status: 'requested', via: 'api', profile: 'claude' });
-      expect(world.posted).toEqual([]);
+      onlyStatus();
       await rcv.next('agent.requested'); // the hook is the same on every transport
 
       const forgeCalls = fake.requests.length;
@@ -270,7 +283,7 @@ describe('the push and pull transports', () => {
 
       // the forge was asked nothing on the runner's behalf, and nothing was posted
       expect(fake.requests.slice(forgeCalls).filter((r) => r.method !== 'GET')).toEqual([]);
-      expect(world.posted).toEqual([]);
+      onlyStatus();
 
       // the hooks, as on the forge: claimed once, a state each time it changed, finished once
       await rcv.next('run.finished');
@@ -410,7 +423,7 @@ describe('the push and pull transports', () => {
       const cont = await page('POST', `/api/agent-runs/${runId}/answer`, { action: 'continue' });
       expect(cont.status, cont.text).toBe(200);
       expect(cont.json.comment).toBeNull();
-      expect(world.posted).toEqual([]);
+      onlyStatus();
       const at1 = new Date(clock).toISOString();
       expect(cont.json.run.answer).toEqual({ action: 'continue', at: at1, by: 'maintainer-one' });
       expect((await view(runner.secret, runId)).json.run).toMatchObject({ state: 'waiting', stopRequested: false, answer: { action: 'continue', at: at1, by: 'maintainer-one' } });
@@ -503,7 +516,7 @@ describe('the push and pull transports', () => {
       const stop = await page('POST', `/api/agent-runs/${runId}/stop`, { note: 'wrong issue' });
       expect(stop.status, stop.text).toBe(200);
       expect(stop.json.comment).toBeNull();
-      expect(world.posted).toEqual([]);
+      onlyStatus();
       const seen = await view(runner.secret, runId);
       expect(seen.json.run).toMatchObject({ state: 'stop-requested', stopRequested: true });
       expect(seen.json.run.stopRequestedAt).toBe(new Date(clock).toISOString());
@@ -581,7 +594,7 @@ describe('the push and pull transports', () => {
       expect(asked.status, asked.text).toBe(201);
       expect(asked.json.comment).toBeNull();
       expect(asked.json.run.transport).toBe('push');
-      expect(world.posted).toEqual([]);
+      onlyStatus();
       const [delivery] = await rcv.next('agent.requested');
       const checked = verifyPush(HOOK_SECRET, delivery.raw, delivery.headers['x-cornfield-signature']);
       expect(checked, JSON.stringify(checked)).toEqual({ ok: true, request: asked.json.request });

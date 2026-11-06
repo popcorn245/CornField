@@ -495,8 +495,11 @@ describe('the agent API', () => {
       const stopped = await page('POST', `/api/agent-runs/${id}/stop`, { note: 'Wrong approach.' });
       expect(stopped.status, stopped.text).toBe(200);
       expect(stopped.json.run).toMatchObject({ status: 'stop-requested', stopRequested: { by: 'maintainer-one' } });
-      expect(world.posted).toHaveLength(2);
+      // the request, the stop request, and the run's status comment (issue #104: it holds no block)
+      expect(world.posted).toHaveLength(3);
       expect(readRunBlocks(world.posted[1].body).blocks).toEqual([{ runId: id, type: 'stop-request', value: { state: 'stop-requested', note: 'Wrong approach.' } }]);
+      expect(world.posted[2].body).toContain('**Run `' + id + '`: Stop requested**');
+      expect(readRunBlocks(world.posted[2].body).blocks).toEqual([]);
       expect(world.posted[1].body.split('\n')[0]).toBe(`Asked run \`${id}\` to stop (maintainer-one, in cornfield).`);
       later(6_000);
       expect((await page('POST', `/api/agent-runs/${id}/stop`, {})).status).toBe(409);

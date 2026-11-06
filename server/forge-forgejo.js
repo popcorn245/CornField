@@ -267,6 +267,10 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return toComment((await client.request('POST', `repos/${repo}/issues/${n}/comments`, { body: { body }, what: `#${n} in ${forge.repo}` })).body);
     },
 
+    async editComment(id, body) {
+      return toComment((await client.request('PATCH', `repos/${repo}/issues/comments/${id}`, { body: { body }, what: `comment ${id} in ${forge.repo}` })).body);
+    },
+
     async checks(ref) {
       const statuses = await client.list(`repos/${repo}/commits/${segments(ref)}/status?limit=${PER_PAGE}`, { what: `the checks on ${ref} in ${forge.repo}`, items: (b) => b?.statuses });
       return statuses.map(toStatus);
