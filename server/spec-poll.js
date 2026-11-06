@@ -28,8 +28,8 @@
  * database alone, so an idle repo costs the forge nothing), the same tick hands the same maintainer's forge to `runs.follow`, which reads the
  * runs' comments and pull requests. A server with no `spec.ready` hook still polls for runs (`specs: false`) and then does nothing else.
  *
- * **Requests written by hand** (issue #98, `agents.handWritten`, on by default) ride the same tick: before the follow, `runs.discover` reads the comments of
- * the open issues and pull requests that changed since they were last read, so a maintainer's own `cornfield-run` block becomes a run and is followed in this very look.
+ * **Requests written by hand** (issue #98, `agents.handWritten`, on by default) ride the same tick: before the follow, `runs.discover` lists the open issues and pull requests changed
+ * since its last look (one call, empty on an idle repo) and reads the comments of those that changed, so a maintainer's own `cornfield-run` block becomes a run and is followed in this very look.
  * That makes the tick worth running with no run at all, so the server starts it for them too; `handWritten: false` returns to "only runs cornfield asked for".
  *
  * **Never in the way.** One tick runs at a time (the next is scheduled when one ends, so a slow forge cannot pile them up).

@@ -65,6 +65,15 @@ function setup({ agents = {}, threads, dir = null } = {}) {
     permission: async (_repo, who) => { world.calls.push(`permission ${who}`); return world.perms[who] ?? 'none'; },
     issues: async () => { world.calls.push('issues'); return listing(world.issues); },
     pulls: async (q) => { world.calls.push(`pulls ${q?.state}`); return q?.state === 'open' ? listing(world.pulls) : []; },
+    // The open issues and pull requests changed since a time, the least recently changed first (server/forge.js `changed`)
+    changed: async ({ since, limit = 1000 }) => {
+      world.calls.push(`changed ${since}`);
+      return [...listing(world.issues).map((x) => ({ ...x, pull: false })), ...listing(world.pulls).map((x) => ({ ...x, pull: true }))]
+        .filter((x) => Date.parse(x.updatedAt) >= Date.parse(since))
+        .sort((x, y) => Date.parse(x.updatedAt) - Date.parse(y.updatedAt) || x.number - y.number)
+        .slice(0, world.pageSize ?? limit)
+        .map(({ number, pull, labels, updatedAt }) => ({ number, pull, labels, updatedAt }));
+    },
     comments: async (n) => { world.calls.push(`comments ${n}`); return world.comments.get(n) ?? []; },
     comment: async (n, body) => {
       if (world.postFails) throw new Error('forge says no');
@@ -162,6 +171,17 @@ describe('a request written by hand', () => {
     expect(t.world.calls.filter((c) => c === 'comments 12')).toHaveLength(2);
   });
 
+  it('costs an idle look one listing of what changed, and no comment is read', async () => {
+    const t = setup();
+    t.say(12, 'maintainer-one', 'just talk');
+    await t.runs.discover(t.forge);
+    t.world.calls.length = 0;
+    t.clock.now += 300_000;
+    await t.runs.discover(t.forge);
+    expect(t.world.calls).toHaveLength(1);
+    expect(t.world.calls[0]).toMatch(/^changed /);
+  });
+
   it('with no id in the fence gets one from cornfield, confirmed by a reply block that is not imported again', async () => {
     const t = setup();
     const c = t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
@@ -183,15 +203,146 @@ describe('a request written by hand', () => {
     expect((await t.runs.get(run.runId)).status).toBe('claimed');
   });
 
-  it('with an id cornfield could not confirm is tried again next look, and leaves no run behind', async () => {
+  it('with an id cornfield could not confirm keeps its run, and the reply is posted on a later look', async () => {
+    const t = setup();
+    const c = t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
+    t.world.postFails = true;
+    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 1 });
+    const [run] = (await t.runs.list()).runs;
+    expect(run.comment.id).toBe(c.id);
+    t.world.postFails = false;
+    // nothing moved on the forge, and the conversation is read again all the same: the reply was left for this look
+    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 0, refused: 0 });
+    const replies = t.world.comments.get(12).filter((x) => readRunBlocks(x.body).blocks.some((bl) => bl.runId === run.runId));
+    expect(replies).toHaveLength(1);
+    expect(t.db.prepare('SELECT count(*) AS n FROM runs').get().n).toBe(1);
+    // and once it is there, it is cornfield's own: not imported, not listed, not posted again
+    t.touch(12);
+    await t.runs.discover(t.forge);
+    expect(t.world.comments.get(12).filter((x) => readRunBlocks(x.body).blocks.some((bl) => bl.runId === run.runId))).toHaveLength(1);
+    expect((await t.runs.list()).handWritten.refused).toEqual([]);
+  });
+
+  it('with no id in the fence keeps the id it was given on every look and after a restart, so it never starts a second run', async () => {
     const t = setup();
     t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
-    t.world.postFails = true;
-    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 0 });
-    expect(t.db.prepare('SELECT count(*) AS n FROM runs').get().n).toBe(0);
-    t.world.postFails = false;
-    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 1 });
+    await t.runs.discover(t.forge);
+    const [run] = (await t.runs.list()).runs;
+    t.touch(12);
+    await t.runs.discover(t.forge);
+    // the run finishes: the subject rule no longer stands in the way, and still the same block is not taken again
+    t.say(12, 'runner-bot', formatRunComment(run.runId, { state: 'done' }));
+    await t.runs.follow(t.forge);
+    const again = createRuns({ config: t.cfg, where: { proposals: t.cfg.proposals }, auth: t.auth, hooks: t.hooks, now: () => t.clock.now });
+    t.touch(12);
+    await again.discover(t.forge);
     expect(t.db.prepare('SELECT count(*) AS n FROM runs').get().n).toBe(1);
+    // the reply is not a copy of the request, and the run is not refused as open on its own issue
+    expect((await again.list()).handWritten.refused).toEqual([]);
+  });
+
+  it('with no id is confirmed by the poll\'s signed-in maintainer, and the block and the audit say whose request it is and who posted it', async () => {
+    const t = setup();
+    t.say(14, 'maintainer-two', fence('', { kind: 'code', refs: { issue: 14 }, brief: 'Fix it' }));
+    await t.runs.discover(t.forge);
+    const [run] = (await t.runs.list()).runs;
+    expect(run.requestedBy).toBe('maintainer-two');
+    const reply = t.world.comments.get(14).at(-1);
+    expect(reply.author.login).toBe('maintainer-one');
+    expect(readRunBlocks(reply.body).blocks[0].value).toMatchObject({ runId: run.runId, requestedBy: 'maintainer-two' });
+    expect(reply.body).toContain("maintainer-two's request");
+    expect(reply.body).toContain("with maintainer-one's sign-in");
+    const row = t.actions().find((x) => x.answer.accepted === true);
+    expect(row).toMatchObject({ login: 'maintainer-two', answer: { reply: { comment: reply.id, postedBy: 'maintainer-one' } } });
+  });
+
+  it('with no id, found by a Refresh from someone who is not a maintainer, waits for a maintainer\'s look to post the reply', async () => {
+    const t = setup();
+    t.say(12, 'maintainer-one', fence('', { kind: 'summary', refs: { issue: 12 }, brief: '' }));
+    const reader = { ...t.forge, me: async () => ({ id: 2002, login: 'stranger' }) };
+    expect(await t.runs.discover(reader)).toMatchObject({ imported: 1 });
+    expect(t.world.comments.get(12)).toHaveLength(1);
+    await t.runs.discover(t.forge);
+    expect(t.world.comments.get(12)).toHaveLength(2);
+    expect(t.world.comments.get(12)[1].author.login).toBe('maintainer-one');
+  });
+
+  it('in the body of an issue, not a comment, is not read', async () => {
+    const t = setup();
+    t.world.issues.get(12).body = block();
+    t.touch(12);
+    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 0, refused: 0 });
+    expect(t.db.prepare('SELECT count(*) AS n FROM runs').get().n).toBe(0);
+  });
+});
+
+describe('the transport (agents.transport)', () => {
+  const TOKEN = { id: 7, label: 'bucket-runner' };
+
+  it('pull: the run is queued for a runner, which claims it and reports on it over the runner API', async () => {
+    const t = setup({ agents: { transport: 'pull' } });
+    t.say(12, 'maintainer-one', fence('', { kind: 'code', refs: { issue: 12 }, brief: 'Do it' }));
+    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 1 });
+    const [run] = (await t.runs.list()).runs;
+    expect(run).toMatchObject({ via: 'hand', transport: 'pull', status: 'requested' });
+    // the forge comment is still the record, with the id cornfield assigned beside it
+    expect(readRunBlocks(t.world.comments.get(12).at(-1).body).blocks[0].runId).toBe(run.runId);
+    expect((await t.runs.queued()).map((r) => r.runId)).toEqual([run.runId]);
+    await t.runs.claim(TOKEN, run.runId);
+    expect(await t.runs.queued()).toEqual([]);
+    await t.runs.report(TOKEN, run.runId, { state: 'working', note: 'on it' });
+    expect(await t.runs.runnerGet(TOKEN, run.runId)).toMatchObject({ runId: run.runId });
+    expect((await t.runs.get(run.runId)).status).toBe('working');
+    // another token is refused as for any pull run; nothing about it being written by hand
+    await expect(t.runs.report({ id: 8, label: 'other' }, run.runId, { state: 'done' })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('push: the run goes out as an agent.requested hook event', async () => {
+    const t = setup({ agents: { transport: 'push' } });
+    t.say(12, 'maintainer-two', block({ requestedBy: 'someone-else' }));
+    expect(await t.runs.discover(t.forge)).toMatchObject({ imported: 1 });
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setTimeout(r, 20));
+    const asked = t.sent.filter((e) => e.event === 'agent.requested');
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ request: { runId: RUN, requestedBy: 'maintainer-two' }, actor: 'maintainer-two' });
+    expect((await t.runs.get(RUN)).transport).toBe('push');
+    // judged once: a second look sends nothing more
+    t.touch(12);
+    await t.runs.discover(t.forge);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(t.sent.filter((e) => e.event === 'agent.requested')).toHaveLength(1);
+  });
+
+  it('forge: no agent.requested, and a runner token does not reach it', async () => {
+    const t = setup();
+    t.say(12, 'maintainer-one', block());
+    await t.runs.discover(t.forge);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(t.sent.filter((e) => e.event === 'agent.requested')).toEqual([]);
+    await expect(t.runs.report(TOKEN, RUN, { state: 'working' })).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('a busy repo', () => {
+  it('reads every changed conversation in time, the least recently changed first, from where the last look stopped', async () => {
+    const t = setup();
+    for (let n = 100; n < 110; n++) t.world.issues.set(n, { number: n, labels: [] });
+    // an old conversation with a request, then nine newer ones that keep changing
+    t.say(100, 'maintainer-one', block({ refs: { issue: 100 } }));
+    for (let n = 101; n < 110; n++) t.say(n, 'maintainer-one', 'talk');
+    t.world.pageSize = 3;
+    const read = [];
+    for (let i = 0; i < 6; i++) {
+      t.world.calls.length = 0;
+      await t.runs.discover(t.forge);
+      read.push(...t.world.calls.filter((c) => c.startsWith('comments')).map((c) => Number(c.split(' ')[1])));
+      // the newest keep moving between looks
+      t.say(109, 'stranger', 'more');
+    }
+    expect(read).toContain(100);
+    expect((await t.runs.get(RUN))).toMatchObject({ via: 'hand', refs: { issue: 100 } });
+    for (let n = 101; n < 109; n++) expect(read).toContain(n);
   });
 });
 
