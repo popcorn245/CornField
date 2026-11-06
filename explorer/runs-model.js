@@ -117,6 +117,26 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
+/** "1,200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated */
+function saidWords(t) {
+  return [t.tokens != null && `${t.tokens} tokens`, t.cost != null && `cost ${t.cost}`].filter(Boolean).join(', ');
+}
+
+/**
+ * The totals of what runners reported, as plain lines: all runs, then per proposal, then per day (UTC). Empty when nothing was reported.
+ * `totals` is the server's `{ all, byProposal, byDay }` (each entry `{ runs, tokens, cost }`).
+ * @returns {string[]}
+ */
+export function totalsLines(totals) {
+  if (!totals || !totals.all) return [];
+  const runs = (t) => `${t.runs} ${t.runs === 1 ? 'run' : 'runs'}`;
+  const out = [`Reported in all: ${saidWords(totals.all)} over ${runs(totals.all)}.`];
+  const list = (head, rows, name) => { if (rows && rows.length) out.push(`${head}: ${rows.map((r) => `${name(r)} ${saidWords(r)} (${runs(r)})`).join('; ')}.`); };
+  list('Per proposal', totals.byProposal, (r) => r.proposal);
+  list('Per day (UTC)', totals.byDay, (r) => r.day);
+  return out;
+}
+
 /** "20 s", "5 min", "2 h": how long ago, short enough for a line */
 function agoShort(ms) {
   const s = Math.max(0, Math.round(ms / 1000));

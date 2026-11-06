@@ -132,8 +132,9 @@ describe('validateRequest', () => {
   describe('limits', () => {
     it('are positive numbers', () => {
       expect(c.validateRequest(request({ limits: {} })).ok).toBe(true);
-      expect(c.validateRequest(request({ limits: { minutes: 0.5, turns: 1, cost: 0.01 } })).ok).toBe(true);
-      for (const f of ['minutes', 'turns', 'cost']) for (const bad of [0, -1, '5', NaN, Infinity, null]) expect(refuse(request({ limits: { [f]: bad } }))).toBe(`"limits.${f}" is a number above zero.`);
+      expect(c.validateRequest(request({ limits: { minutes: 0.5, turns: 1, cost: 0.01, tokens: 1000 } })).ok).toBe(true);
+      expect(refuse(request({ limits: { tokens: 2.5 } }))).toBe('"limits.tokens" is a whole number.');
+      for (const f of ['minutes', 'turns', 'cost', 'tokens']) for (const bad of [0, -1, '5', NaN, Infinity, null]) expect(refuse(request({ limits: { [f]: bad } }))).toBe(`"limits.${f}" is a number above zero.`);
       expect(refuse(request({ limits: { turns: 2.5 } }))).toBe('"limits.turns" is a whole number.');
       for (const bad of [[], 'x', null]) expect(refuse(request({ limits: bad }))).toMatch(/"limits" is/);
     });

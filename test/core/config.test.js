@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, runnerQuietAfterMs, parseDuration, specPollMs } from '../../core/config.js';
+import { configProblems, loadConfig, loadDerivers, browserSources, DEFAULTS, HOOK_EVENTS, runnerQuietAfterMs, parseDuration, specPollMs, limitDefaults } from '../../core/config.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
 
 const made = [];
@@ -364,8 +364,8 @@ describe('agents.on: the opt-in triggers (spec 0005 D10)', () => {
 describe('the agents keys that ask for and follow runs (spec 0005)', () => {
   it('are checked strictly: transport, maxOpen, profiles, runners, quietAfter and limits', () => {
     expect(configProblems({ agents: { transport: 'forge', maxOpen: 5, profiles: ['claude', 'local-qwen'], runners: ['claude-bot', 'ci[bot]'], quietAfter: '12h', limits: { minutes: 30, turns: 40, cost: 2.5 } } })).toEqual([]);
-    const text = configProblems({ agents: { transport: 'telegram', maxOpen: 0, profiles: ['two words', 'a', 'a'], runners: ['has space'], quietAfter: '1m', limits: { minutes: -1, turns: 1.5, tokens: 3 } } }).join('\n');
-    for (const want of ['agents.transport is "forge"', 'agents.maxOpen is a whole number from 1 to 100', 'agents.profiles is a list', 'agents.runners is a list', 'under the floor of 5m', 'agents.limits.minutes is a number above zero', 'agents.limits.turns is a whole number', 'agents.limits.tokens: the keys are']) expect(text).toContain(want);
+    const text = configProblems({ agents: { transport: 'telegram', maxOpen: 0, profiles: ['two words', 'a', 'a'], runners: ['has space'], quietAfter: '1m', limits: { minutes: -1, turns: 1.5, hours: 3 } } }).join('\n');
+    for (const want of ['agents.transport is "forge"', 'agents.maxOpen is a whole number from 1 to 100', 'agents.profiles is a list', 'agents.runners is a list', 'under the floor of 5m', 'agents.limits.minutes is a number above zero', 'agents.limits.turns is a whole number', 'agents.limits.hours: the keys are']) expect(text).toContain(want);
     expect(configProblems({ agents: { quietAfter: '90 days' } }).join()).toContain('agents.quietAfter is a duration');
     expect(configProblems({ agents: { quietAfter: '9999h' } }).join()).toContain('over the ceiling');
   });
@@ -396,5 +396,30 @@ describe('the agents keys that ask for and follow runs (spec 0005)', () => {
     expect(quietAfterMs({ agents: { quietAfter: '90m' } })).toBe(90 * 60_000);
     const c = await loadConfig(repo("export default { agents: { runners: ['claude-bot'], profiles: ['claude'] } };"), { env: {} });
     expect(c.agents).toMatchObject({ transport: 'forge', maxOpen: 3, runners: ['claude-bot'], profiles: ['claude'], quietAfter: '24h' });
+  });
+});
+
+describe('agents.limits, flat and per profile (CF-27)', () => {
+  const problems = (agents) => configProblems({ agents });
+  it('takes the flat limits, a profile\'s own, or both', () => {
+    expect(problems({ limits: { minutes: 30, turns: 40, cost: 5, tokens: 200000 } })).toEqual([]);
+    expect(problems({ profiles: ['claude', 'local-qwen'], limits: { claude: { cost: 5, minutes: 60 }, 'local-qwen': { tokens: 100000 } } })).toEqual([]);
+    expect(problems({ profiles: ['claude'], limits: { minutes: 10, claude: { cost: 5 } } })).toEqual([]);
+  });
+  it('names the key: an unknown profile or key, and a number not above zero', () => {
+    const text = problems({ profiles: ['claude'], limits: { gpt: { cost: 1 }, claude: { cost: 0, minutes: -2, hours: 1, turns: 1.5, tokens: 2.5 } } }).join('\n');
+    for (const want of ['agents.limits.gpt is not one of agents.profiles (claude)', 'agents.limits.claude.cost is a number above zero', 'agents.limits.claude.minutes is a number above zero', 'agents.limits.claude.hours: the keys are minutes, turns, cost, tokens', 'agents.limits.claude.turns is a whole number above zero', 'agents.limits.claude.tokens is a whole number above zero']) expect(text).toContain(want);
+    expect(problems({ limits: { cost: 'five' } }).join()).toContain('agents.limits.cost is a number above zero');
+    expect(problems({ limits: { tokens: 0 } }).join()).toContain('agents.limits.tokens is a whole number above zero');
+    expect(problems({ limits: { claude: 5 } }).join()).toContain('agents.limits.claude: the keys are');
+    expect(problems({ limits: [] }).join()).toContain('agents.limits is { minutes?');
+  });
+  it('limitDefaults lays the profile\'s limits over the flat ones, key by key', () => {
+    const l = { minutes: 30, cost: 1, claude: { cost: 5, tokens: 9 } };
+    expect(limitDefaults(l, 'claude')).toEqual({ minutes: 30, cost: 5, tokens: 9 });
+    expect(limitDefaults(l, 'other')).toEqual({ minutes: 30, cost: 1 });
+    expect(limitDefaults(l, undefined)).toEqual({ minutes: 30, cost: 1 });
+    expect(limitDefaults(undefined, 'claude')).toEqual({});
+    expect(limitDefaults(l, 'cost')).toEqual({ minutes: 30, cost: 1 });
   });
 });

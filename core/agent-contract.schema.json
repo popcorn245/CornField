@@ -158,6 +158,10 @@
             "cost": {
               "type": "number",
               "exclusiveMinimum": 0
+            },
+            "tokens": {
+              "type": "integer",
+              "exclusiveMinimum": 0
             }
           }
         },

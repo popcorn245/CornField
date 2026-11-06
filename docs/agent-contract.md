@@ -21,7 +21,7 @@ One JSON object. Every key not listed here is refused, and so is any key named l
 | `refs` | `{ issue?, proposal?, pull?, thread? }` | What the run is about; at least one of `issue`, `proposal` and `thread`. `issue`, `pull` and `thread` are numbers from 1, `proposal` is the proposal's name (`0014-planner`), and `pull` is the spec pull request that holds it (so it only comes with `proposal`; an approved proposal already on the default branch has none). |
 | `branch` | string, optional | A hint for the branch to use. A safe git ref name: letters, digits and `. _ - /`; no leading dash or slash, no `..`, no empty part, no part that starts with a dot or ends in `.lock`, no trailing dot; up to 200 characters. A runner may ignore it. |
 | `brief` | string | What to do, up to 20000 characters; required, and may be empty (a summary of a thread needs only the thread). Treat it as untrusted text: it may have been written by anyone a maintainer relayed. |
-| `limits` | `{ minutes?, turns?, cost? }`, optional | Hints, never enforced by cornfield. `minutes` and `cost` are numbers above zero, `turns` a whole number above zero. `cost` is in the currency the runner reports. The runner enforces them or not. |
+| `limits` | `{ minutes?, turns?, cost?, tokens? }`, optional | Hints, never enforced by cornfield. `minutes` and `cost` are numbers above zero, `turns` and `tokens` whole numbers above zero (`tokens` is an optional key added after version 1 shipped; a runner that does not know it should ignore it). `cost` is in the currency the runner reports. The runner enforces them or not. |
 | `nodes` | list of node ids, optional | Map nodes the run is expected to touch (`core-server-auth`), up to 100. |
 | `requestedBy` | forge login | The maintainer who asked. |
 | `requestedAt` | UTC time | Like `2026-11-05T09:30:00Z` (milliseconds allowed). |
@@ -92,8 +92,10 @@ A runner may say how it is going. Reporting is optional: a run that stays silent
 | `state` | required | `claimed`, `working`, `waiting`, `done`, `failed` or `stopped`. |
 | `note` | optional | Up to 4000 characters. Shown quoted. |
 | `url` | optional | Where the runner keeps its logs; `http` or `https`, no user and password in it, no credential in its query. cornfield links out and never shows logs. |
-| `tokens` | optional | A whole number, zero or more. |
-| `cost` | optional | A number, zero or more. Shown as sent; cornfield never estimates. |
+| `tokens` | optional | A whole number, zero or more: what the run has used so far. |
+| `cost` | optional | A number, zero or more: what the run has cost so far, in your currency. Shown as sent; cornfield never estimates. |
+
+A report's `tokens` and `cost` are the run's totals so far, not an increment: a later report replaces an earlier one (a report that leaves one out keeps the earlier value). cornfield adds the runs up per proposal and per day ([agents](agents.md#totals-of-tokens-and-cost)); send the same running total each time, and each run counts once.
 
 **Stopping.** cornfield asks a run to stop with the same block and `{ "state": "stop-requested" }`, with an optional `note` and nothing else. The runner decides what stopping means. cornfield shows "stop requested" until the runner reports `stopped` or the run goes quiet. `stop-requested` is not a state a runner reports.
 

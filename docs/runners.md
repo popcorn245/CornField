@@ -342,7 +342,7 @@ case "${PROFILE:-default}" in
 esac
 ```
 
-The name is checked by the contract (letters, digits and `. _ -`) before it gets here, and an unknown one fails the run instead of falling back, so a typo never starts something you did not mean. The same `case` can choose a machine (send `deep` to a runner label with more memory) or hold back a budget (`--max-turns`, a timeout). The request's `limits` (minutes, turns, cost) are hints that these examples do not enforce; read them with `get` if you want to.
+The name is checked by the contract (letters, digits and `. _ -`) before it gets here, and an unknown one fails the run instead of falling back, so a typo never starts something you did not mean. The same `case` can choose a machine (send `deep` to a runner label with more memory) or hold back a budget (`--max-turns`, a timeout). The request's `limits` (minutes, turns, cost, tokens) are hints that these examples do not enforce; read them with `get` if you want to.
 
 ## What to change for your repository
 

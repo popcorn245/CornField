@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -73,7 +73,7 @@ function fakeServer(opts = {}) {
       return json(200, { ok: true });
     }
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
-    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
+    if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.totals ? { totals: opts.totals } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at, rate: '', items: [] });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, at, rate: '', pulls: [pr(50, 'Meals page', 'Closes #7', 'agent/meals'), pr(40, 'Meals spec', '', 'spec/0040-meals')], issues: [issue(7, 'Meals page')], branches: [], specs: [{ pull: 40, slug: '0040-meals' }], agents: {} });
@@ -447,6 +447,53 @@ describe.each(['dark', 'light'])('accessibility, %s theme, a waiting run', (them
     expect(await audit()).toEqual([]);
     click(q('[data-run-timeline]'));
     await settle();
+    expect(await audit()).toEqual([]);
+    delete document.documentElement.dataset.theme;
+  });
+});
+
+const TOTALS = {
+  all: { runs: 3, tokens: 2107, cost: 1.3 },
+  byProposal: [{ proposal: '0040-meals <b>', runs: 2, tokens: 2000, cost: 0.3 }],
+  byDay: [{ day: '2026-11-05', runs: 1, tokens: 7, cost: 1 }, { day: '2026-11-04', runs: 2, tokens: 2100, cost: 0.3 }],
+};
+
+describe('the totals of tokens and cost (CF-27)', () => {
+  it('say what runners reported as sent, in plain lines: all, per proposal, per day', () => {
+    document.body.innerHTML = body;
+    expect(totalsLines(null)).toEqual([]);
+    expect(totalsLines({ all: null, byProposal: [], byDay: [] })).toEqual([]);
+    expect(totalsLines({ all: { runs: 1, tokens: 50, cost: null }, byProposal: [], byDay: [{ day: '2026-11-05', runs: 1, tokens: 50, cost: null }] })).toEqual(['Reported in all: 50 tokens over 1 run.', 'Per day (UTC): 2026-11-05 50 tokens (1 run).']);
+    expect(totalsLines(TOTALS)).toEqual([
+      'Reported in all: 2107 tokens, cost 1.3 over 3 runs.',
+      'Per proposal: 0040-meals <b> 2000 tokens, cost 0.3 (2 runs).',
+      'Per day (UTC): 2026-11-05 7 tokens, cost 1 (1 run); 2026-11-04 2100 tokens, cost 0.3 (2 runs).',
+    ]);
+  });
+
+  it('show in the Runs view, escaped, and stay hidden when nothing was reported', async () => {
+    fakeServer({ totals: TOTALS });
+    mount();
+    await openAgents();
+    expect($('forge-runs-totals').hidden).toBe(false);
+    expect([...$('forge-runs-totals').querySelectorAll('p')].map((p) => p.textContent)).toEqual(totalsLines(TOTALS));
+    expect($('forge-runs-totals').querySelector('b')).toBe(null);
+    closeForge({ restoreFocus: false });
+    fakeServer();
+    mount();
+    await openAgents();
+    expect($('forge-runs-totals').hidden).toBe(true);
+  });
+});
+
+describe.each(['dark', 'light'])('accessibility, %s theme, totals', (theme) => {
+  it('passes axe with the totals showing', async () => {
+    document.documentElement.dataset.theme = theme;
+    fakeServer({ totals: TOTALS });
+    mount();
+    document.documentElement.dataset.theme = theme;
+    await openAgents();
+    expect($('forge-runs-totals').hidden).toBe(false);
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
   });

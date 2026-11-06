@@ -200,6 +200,21 @@ describe('asking for a run', () => {
     expect(b.request.limits).toEqual({ minutes: 30, turns: 40 });
   });
 
+  it('starts from the profile\'s own limits over the flat ones, and the person\'s own still win', async () => {
+    const t = setup({ config: { maxOpen: 10, profiles: ['claude', 'local-qwen'], limits: { minutes: 30, claude: { cost: 5, minutes: 60 } } } });
+    const a = await ask(t, code({ profile: 'claude' }));
+    expect(a.request.limits).toEqual({ minutes: 60, cost: 5 });
+    t.wait(10_000);
+    const b = await ask(t, code({ refs: { issue: 13 }, profile: 'claude', limits: { cost: 1 } }));
+    expect(b.request.limits).toEqual({ minutes: 60, cost: 1 });
+    t.wait(10_000);
+    const c = await ask(t, code({ refs: { issue: 14 }, profile: 'local-qwen' }));
+    expect(c.request.limits).toEqual({ minutes: 30 });
+    t.wait(10_000);
+    const d = await ask(t, code({ refs: { issue: 15 } }));
+    expect(d.request.limits).toEqual({ minutes: 30 });
+  });
+
   it('refuses a profile the config does not list, and takes one it does', async () => {
     const t = setup({ config: { profiles: ['claude', 'local-qwen'] } });
     expect(await ask(t, code({ profile: 'gpt' }))).toMatchObject({ ok: false, status: 400, code: 'invalid' });
@@ -982,5 +997,46 @@ describe('a request never carries a credential', () => {
     t.say(12, 'runner-bot', `\`\`\`cornfield-run ${id}\n{ "state": "working", "note": "key is ${GHP}" }\n\`\`\``);
     await t.runs.follow(t.as('maintainer-one'));
     expect((await t.runs.get(id)).report).toBeNull();
+  });
+});
+
+describe('what the runners reported, added up (CF-27)', () => {
+  const finish = (t, issue, id, over) => t.say(issue, 'runner-bot', formatRunComment(id, { state: 'done', ...over }));
+  const DAY = 86_400_000;
+
+  it('sums tokens and cost per run, per proposal across runs, and per UTC day, as sent', async () => {
+    const t = setup();
+    const a = (await ask(t, { kind: 'code', refs: { proposal: '0040-meals' }, brief: '' })).request.runId;
+    t.wait(60_000);
+    finish(t, 40, a, { tokens: 1000, cost: 0.1 });
+    t.wait(60_000);
+    // a later report replaces the run's earlier one: the run counts once
+    finish(t, 40, a, { tokens: 1500, cost: 0.2 });
+    const b = (await ask(t, { kind: 'code', refs: { proposal: '0040-meals' }, brief: '', force: true })).request.runId;
+    finish(t, 40, b, { tokens: 500, cost: 0.1 });
+    const c = (await ask(t, code({ refs: { issue: 12 } }))).request.runId;
+    finish(t, 12, c, { tokens: 100 });
+    t.wait(DAY);
+    const d = (await ask(t, code({ refs: { issue: 13 } }))).request.runId;
+    finish(t, 13, d, { tokens: 7, cost: 1 });
+    const e = (await ask(t, code({ refs: { issue: 14 } }))).request.runId;
+    finish(t, 14, e, { state: 'done' });
+    await t.runs.follow(t.as('maintainer-one'));
+    const list = await t.runs.list();
+    const per = Object.fromEntries(list.runs.map((r) => [r.runId, r.report && [r.report.tokens, r.report.cost]]));
+    expect(per[a]).toEqual([1500, 0.2]);
+    expect(per[c]).toEqual([100, null]);
+    expect(per[e]).toEqual([null, null]);
+    expect(list.totals.all).toEqual({ runs: 4, tokens: 2107, cost: 1.3 });
+    expect(list.totals.byProposal).toEqual([{ proposal: '0040-meals', runs: 2, tokens: 2000, cost: 0.3 }]);
+    const today = new Date(t.clock.now - DAY).toISOString().slice(0, 10);
+    const tomorrow = new Date(t.clock.now).toISOString().slice(0, 10);
+    expect(list.totals.byDay).toEqual([{ day: tomorrow, runs: 1, tokens: 7, cost: 1 }, { day: today, runs: 3, tokens: 2100, cost: 0.3 }]);
+  });
+
+  it('has no totals before anything is reported', async () => {
+    const t = setup();
+    await ask(t, code());
+    expect((await t.runs.list()).totals).toEqual({ all: null, byProposal: [], byDay: [] });
   });
 });

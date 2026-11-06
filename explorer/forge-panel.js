@@ -69,9 +69,9 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
-import { runsHtml } from './runs-view.js';
+import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
@@ -1132,6 +1132,12 @@ function paintRuns() {
     const skipped = data ? triggerNotice(data) : '';
     trig.hidden = !skipped;
     trig.textContent = skipped;
+  }
+  const totals = $('forge-runs-totals');
+  if (totals) {
+    const lines = data ? totalsLines(data.totals) : [];
+    totals.hidden = !lines.length;
+    totals.innerHTML = totalsHtml(viewContext(), lines);
   }
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }

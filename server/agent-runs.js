@@ -89,7 +89,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
 import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateAnswer, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
-import { quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
+import { limitDefaults, quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
 import { runnerPresence } from './runner-presence.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
 import { readTopology } from '../core/validate.js';
@@ -487,9 +487,9 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (force !== undefined && typeof force !== 'boolean') throw new Refused(400, '"force" is true or false: whether to ask for another run on an issue or proposal that has an open one.', 'invalid');
       const build = (login, pull) => {
         // The config's limits are hints the request starts from; what the person sent wins key by key
-        const base = agents.limits || {};
+        const base = limitDefaults(agents.limits, typeof fields.profile === 'string' ? fields.profile : undefined);
         let limits = fields.limits;
-        if (limits === undefined) limits = Object.keys(base).length ? { ...base } : undefined;
+        if (limits === undefined) limits = Object.keys(base).length ? base : undefined;
         else if (isObject(limits)) limits = { ...base, ...limits };
         // The brief is required by the contract and may be empty; the spec PR that holds a proposal is named beside it
         const refs = pull != null && isObject(fields.refs) ? { ...fields.refs, pull } : fields.refs;
@@ -821,7 +821,23 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return {
       runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
       triggerSkipped: skipped.length ? { count: skipped.length, last: skipped[0].at, reasons } : null,
-      refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
+      totals: totalsOf(db), refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
+    };
+  }
+
+  /**
+   * What the runners reported, added up as sent (never estimated): all runs, per proposal and per UTC day of the request. A run counts its
+   * latest report once. `null` for a number nothing reported.
+   */
+  function totalsOf(db) {
+    const sum = (rows) => rows.map((r) => ({ ...(r.proposal !== undefined ? { proposal: r.proposal } : {}), ...(r.day !== undefined ? { day: r.day } : {}), runs: r.runs, tokens: r.tokens, cost: r.cost === null ? null : Math.round(r.cost * 1e9) / 1e9 }));
+    const from = `FROM runs WHERE repo = ? AND ${POSTED} AND (tokens IS NOT NULL OR cost IS NOT NULL)`;
+    const cols = 'COUNT(*) AS runs, SUM(tokens) AS tokens, SUM(cost) AS cost';
+    const [all] = sum(db.prepare(`SELECT ${cols} ${from}`).all(repo));
+    return {
+      all: all.runs ? all : null,
+      byProposal: sum(db.prepare(`SELECT proposal, ${cols} ${from} AND proposal IS NOT NULL GROUP BY proposal ORDER BY MAX(requested_at) DESC LIMIT 50`).all(repo)),
+      byDay: sum(db.prepare(`SELECT substr(requested_at, 1, 10) AS day, ${cols} ${from} GROUP BY day ORDER BY day DESC LIMIT 30`).all(repo)),
     };
   }
 

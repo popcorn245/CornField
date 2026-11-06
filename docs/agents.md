@@ -81,7 +81,7 @@ Starting an agent only **asks**. The request is the [contract's](agent-contract.
 
 **What counts as open.** A run is open until the runner reports `done`, `failed` or `stopped`, or its pull request is merged or closed, or nothing has happened for `agents.quietAfter` (24h): no report, no push, no pull request activity. A **quiet** run is shown as quiet and counts toward neither rule; a later report or push makes it open again. A run **waiting** on a maintainer (its runner reported `waiting` and nobody has asked it to stop) never goes quiet: it keeps counting until it is answered and the runner reports again ([waiting](#waiting-and-the-answer)).
 
-**Config** (all under `agents`, see [config](config.md#agents)): `on` (the [triggers](#triggers)), `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost }`, hints the runner may enforce, shown beside what it reports) and `transport` (`'forge'` by default, or `'push'` or `'pull'`: [transports](#transports)).
+**Config** (all under `agents`, see [config](config.md#agents)): `on` (the [triggers](#triggers)), `maxOpen`, `profiles` (names the runner maps to a model; cornfield only knows the names), `runners` (forge logins whose reports count, besides maintainers), `quietAfter`, `limits` (`{ minutes, turns, cost, tokens }`, or per profile `{ claude: { cost: 5 } }`: hints the runner may enforce, shown beside what it reports; a request starts from them) and `transport` (`'forge'` by default, or `'push'` or `'pull'`: [transports](#transports)).
 
 ### Following a run
 
@@ -143,6 +143,14 @@ A run's **target** (the thread, issue or spec pull request it was requested on) 
 ```
 
 The answer is 201 `{ ok, run, request, comment }`. `requestedBy` is the token's owner and is never taken from the body. A body with a credential in it, by key or by value, is 400 and nothing is posted. The dashboard's own routes are `GET /api/agent-runs[?follow=1]`, `GET /api/agent-runs/<runId>`, `POST /api/agent-runs` and `POST /api/agent-runs/<runId>/stop`, for a signed-in maintainer from cornfield's own page.
+
+### Totals of tokens and cost
+
+Under the status line the Runs view adds up what runners reported: in all, per proposal and per day, as plain lines (`Reported in all: 2107 tokens, cost 1.3 over 3 runs.`). The numbers are the runners' `tokens` and `cost`, added as sent and never estimated; the currency is the runner's. A run counts once, by its latest report (a report's numbers are the run's total so far, so a later one replaces an earlier one). A day is the UTC date the run was requested; a proposal's line adds the runs that name it; only the last 30 days and 50 proposals are listed. Runs that reported neither number are not counted. The same numbers are in `totals` of `GET /api/agent-runs`.
+
+### Limits per profile
+
+`agents.limits` may hold limits for every profile and for one profile ([config](config.md#agents)). The request made from the dialog, the request API or a trigger starts from those of its profile, and what the request sets itself wins key by key. They stay hints: cornfield enforces nothing and the runner reads them from the request.
 
 ## Runs on the map
 
