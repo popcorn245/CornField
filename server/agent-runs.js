@@ -845,6 +845,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     // The dashboard's notice for triggers that did nothing (server/triggers.js writes a `trigger-skipped` row each time): the last day's, by reason
     const skipped = /** @type {{ at: string, answer: string | null }[]} */ (db.prepare("SELECT at, answer FROM actions WHERE action = 'trigger-skipped' AND (target = ? OR target LIKE ?) AND at > ? ORDER BY id DESC LIMIT 200").all(repo, `${repo}#%`, iso(at - 24 * 3_600_000)));
     const extras = extrasFor(db, rows, at);
+    const openNow = openRows(db, at);
     const reasons = {};
     for (const r of skipped) {
       let why = 'error';
@@ -852,27 +853,33 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       reasons[why] = (reasons[why] || 0) + 1;
     }
     return {
-      runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
+      runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openNow.length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
       triggerSkipped: skipped.length ? { count: skipped.length, last: skipped[0].at, reasons } : null,
-      totals: totalsOf(db), refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
+      totals: totalsOf(db, at, openNow), refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
       handWritten: { mode: handMode, refused: discovers ? handRefused(db, at) : [] },
     };
   }
 
   /**
-   * What the runners reported, added up as sent (never estimated): all runs, per proposal and per UTC day of the request. A run counts its
-   * latest report once. `null` for a number nothing reported.
+   * What the runners reported, added up as sent (never estimated): all runs, per proposal and per UTC day of the run's latest report (cost
+   * is incurred when the runner works, not when it was asked). A run counts its latest report once, even one smaller than the last (a
+   * runner that restarted its counter). `null` for a number nothing reported. The caps never drop today or the proposal of an open run.
    */
-  function totalsOf(db) {
+  function totalsOf(db, at, open) {
     const sum = (rows) => rows.map((r) => ({ ...(r.proposal !== undefined ? { proposal: r.proposal } : {}), ...(r.day !== undefined ? { day: r.day } : {}), runs: r.runs, tokens: r.tokens, cost: r.cost === null ? null : Math.round(r.cost * 1e9) / 1e9 }));
     const from = `FROM runs WHERE repo = ? AND ${POSTED} AND (tokens IS NOT NULL OR cost IS NOT NULL)`;
     const cols = 'COUNT(*) AS runs, SUM(tokens) AS tokens, SUM(cost) AS cost';
     const [all] = sum(db.prepare(`SELECT ${cols} ${from}`).all(repo));
-    return {
-      all: all.runs ? all : null,
-      byProposal: sum(db.prepare(`SELECT proposal, ${cols} ${from} AND proposal IS NOT NULL GROUP BY proposal ORDER BY MAX(requested_at) DESC LIMIT 50`).all(repo)),
-      byDay: sum(db.prepare(`SELECT substr(requested_at, 1, 10) AS day, ${cols} ${from} GROUP BY day ORDER BY day DESC LIMIT 30`).all(repo)),
-    };
+    // 50 proposals, those with an open run first so the cap never drops them; listed by their latest request
+    const live = [...new Set(open.map((r) => r.proposal).filter((p) => p != null))];
+    const proposals = db.prepare(`SELECT proposal, MAX(requested_at) AS last, ${cols} ${from} AND proposal IS NOT NULL GROUP BY proposal
+      ORDER BY proposal IN (SELECT value FROM json_each(?)) DESC, last DESC LIMIT ?`).all(repo, JSON.stringify(live), Math.max(50, live.length))
+      .sort((x, y) => (x.last < y.last ? 1 : x.last > y.last ? -1 : 0));
+    // The day of the latest report, in UTC (a forge may stamp a comment with an offset; date() converts it); today is never cut
+    const today = iso(at).slice(0, 10);
+    const days = db.prepare(`SELECT date(reported_at) AS day, ${cols} ${from} AND reported_at IS NOT NULL GROUP BY day ORDER BY day = ? DESC, day DESC LIMIT 30`).all(repo, today)
+      .sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : 0));
+    return { all: all.runs ? all : null, byProposal: sum(proposals.map(({ last, ...r }) => r)), byDay: sum(days) };
   }
 
   /** One run, or null */

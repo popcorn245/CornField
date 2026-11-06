@@ -1034,6 +1034,48 @@ describe('what the runners reported, added up (CF-27)', () => {
     expect(list.totals.byDay).toEqual([{ day: tomorrow, runs: 1, tokens: 7, cost: 1 }, { day: today, runs: 3, tokens: 2100, cost: 0.3 }]);
   });
 
+  it('counts a run on the UTC day of its latest report, not of its request, and takes a smaller re-report as the run\'s total', async () => {
+    const t = setup();
+    t.wait(13 * 3_600_000 + 50 * 60_000);
+    // asked for at 23:50 on the 5th, worked the next morning
+    const a = (await ask(t, code())).request.runId;
+    t.wait(9 * 3_600_000);
+    t.say(12, 'runner-bot', formatRunComment(a, { state: 'working', tokens: 900, cost: 0.5 }));
+    t.wait(60_000);
+    // the runner restarted its counter: the latest report is the run's total, as sent
+    t.say(12, 'runner-bot', formatRunComment(a, { state: 'done', tokens: 300, cost: 0.1 }));
+    // a forge that stamps its comments with an offset: 23:51 on the 5th at -09:00 is 08:51 UTC on the 6th
+    const b = (await ask(t, code({ refs: { issue: 13 } }))).request.runId;
+    t.say(13, 'runner-bot', formatRunComment(b, { state: 'done', tokens: 5 }), { createdAt: '2026-11-05T23:51:00-09:00', updatedAt: '2026-11-05T23:51:00-09:00' });
+    await t.runs.follow(t.as('maintainer-one'));
+    const { totals } = await t.runs.list();
+    expect(totals.all).toEqual({ runs: 2, tokens: 305, cost: 0.1 });
+    expect(totals.byDay).toEqual([{ day: '2026-11-06', runs: 2, tokens: 305, cost: 0.1 }]);
+  });
+
+  it('never cuts today or the proposal of an open run from the capped lists', async () => {
+    const t = setup({ config: { maxOpen: 10 } });
+    const a = (await ask(t, { kind: 'code', refs: { proposal: '0040-meals' }, brief: '' })).request.runId;
+    t.say(40, 'runner-bot', formatRunComment(a, { state: 'working', tokens: 1 }));
+    await t.runs.follow(t.as('maintainer-one'));
+    const repo = t.row(a).repo;
+    const add = t.db.prepare(`INSERT INTO runs (run_id, repo, kind, proposal, target, comment_id, request, requested_by, requested_by_id, requested_at, state, reported_at, tokens, last_activity)
+      VALUES (?, ?, 'code', ?, 41, ?, '{}', 'maintainer-one', '1001', ?, 'done', ?, 2, ?)`);
+    // 55 newer proposals, and 35 later days (a forge clock ahead of ours), all finished
+    for (let i = 1; i <= 55; i++) {
+      const at = new Date(T0 + 60_000 + i * 1000).toISOString();
+      const day = new Date(T0 + (i <= 35 ? i : 1) * 86_400_000).toISOString();
+      add.run(`run-z${i}`, repo, `p-${i}`, `c${i}`, at, day, at);
+    }
+    const { totals } = await t.runs.list();
+    expect(totals.byProposal).toHaveLength(50);
+    expect(totals.byProposal.map((r) => r.proposal)).toContain('0040-meals');
+    expect(totals.byProposal[0].proposal).toBe('p-55');
+    expect(totals.byDay).toHaveLength(30);
+    expect(totals.byDay.at(-1)).toEqual({ day: '2026-11-05', runs: 1, tokens: 1, cost: null });
+    expect(totals.byDay[0].day).toBe('2026-12-10');
+  });
+
   it('has no totals before anything is reported', async () => {
     const t = setup();
     await ask(t, code());
