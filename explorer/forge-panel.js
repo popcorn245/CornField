@@ -1560,6 +1560,9 @@ async function answerRun(runId, action) {
     paint();
     return;
   }
+  // Where the focus goes back to once it is sent: the reply field after a reply (empty, for the next one), the button after Continue; while the
+  // buttons are disabled the focus has nowhere to stay, so it is put back by hand. A run that no longer asks (a Stop) gets its Timeline button
+  const back = action === 'reply' ? `[data-run-reply="${runId}"]` : `[data-run-answer="${action}"][data-run-id="${runId}"]`;
   ui.busy = 'answer';
   ui.runNote = null;
   announce(`Answering ${runId}`);
@@ -1571,6 +1574,9 @@ async function answerRun(runId, action) {
   announce(ui.runNote.text);
   await loadRuns(false, { say: false });
   paint();
+  const panel = $('forge-panel');
+  const to = panel && [back, `[data-run-timeline="${runId}"]`].map((sel) => panel.querySelector(sel)).find((el) => el && !el.disabled);
+  if (to && to !== document.activeElement) to.focus();
 }
 
 // ---------------------------------------------------------------------------

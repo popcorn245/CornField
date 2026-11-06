@@ -386,6 +386,31 @@ describe('a run that waits for an answer (issue #101)', () => {
     expect(JSON.parse(server.posts().at(-1).init.body)).toEqual({ action: 'reply', text: 'half a thou' });
   });
 
+  it('puts the focus back after an answer is sent: on the button, on the emptied reply field, on the Timeline once the run asks no more', async () => {
+    fakeServer(waiting());
+    mount();
+    await openAgents();
+    q('[data-run-answer="continue"]').focus();
+    click(q('[data-run-answer="continue"]'));
+    await settle();
+    expect(document.activeElement).toBe(q(`[data-run-answer="continue"][data-run-id="${WAITING.runId}"]`));
+    const field = q('[data-run-reply]');
+    field.focus();
+    field.value = 'Plan B';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    key(field, 'Enter');
+    await settle();
+    expect(document.activeElement).toBe(q('[data-run-reply]'));
+    expect(q('[data-run-reply]').value).toBe('');
+    // a Stop that ends the asking: the controls go, the focus does not fall to the page
+    fakeServer({ runs: [{ ...WAITING, status: 'stop-requested', stopRequested: { at: 'x', by: 'maintainer-one' } }], profiles: [] });
+    q('[data-run-answer="stop"]').focus();
+    click(q('[data-run-answer="stop"]'));
+    await settle();
+    expect(q('[data-run-answer]')).toBe(null);
+    expect(document.activeElement).toBe(q(`[data-run-timeline="${WAITING.runId}"]`));
+  });
+
   it('says a refusal in the server\'s words', async () => {
     fakeServer({ ...waiting(), answer: { status: 409, body: { ok: false, code: 'conflict', error: 'Run is not waiting for an answer.' } } });
     mount();
