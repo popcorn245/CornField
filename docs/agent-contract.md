@@ -90,7 +90,7 @@ A runner may say how it is going. Reporting is optional: a run that stays silent
 | Field | | |
 | --- | --- | --- |
 | `state` | required | `claimed`, `working`, `waiting`, `done`, `failed` or `stopped`. |
-| `note` | optional | Up to 4000 characters. Shown quoted. |
+| `note` | optional | Up to 4000 characters. Shown quoted, and inert: in the comment every line of it is behind `> ` whatever line ends it holds, its backticks and tilde runs are broken so it opens no fence, and its mentions, references and links, `[`, `<` and `&` are broken or escaped, so it can neither carry a block nor ping, link or start anything. The block itself keeps the note as sent. |
 | `url` | optional | Where the runner keeps its logs; `http` or `https`, no user and password in it, no credential in its query. cornfield links out and never shows logs. |
 | `tokens` | optional | A whole number, zero or more: what the run has used so far. |
 | `cost` | optional | A number, zero or more: what the run has cost so far, in your currency. Shown as sent; cornfield never estimates. |
