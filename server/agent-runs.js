@@ -54,7 +54,8 @@
  *
  * A run is **open** unless it is finished or quiet (`statusOf`): finished is the runner's report `done`, `failed` or `stopped`, or its pull
  * request merged or closed; **quiet** is no report, push or pull request activity within `agents.quietAfter` (24h unless set). A quiet run
- * is shown as quiet and counts toward neither the cap nor the one-per-subject rule; a later report or push makes it open again.
+ * is shown as quiet and counts toward neither the cap nor the one-per-subject rule; a later report or push makes it open again. A run **waiting**
+ * on a maintainer (its runner reported `waiting`, nobody asked it to stop) is never quiet: a human owes it an answer, so it keeps counting.
  *
  * ## Following (`follow`)
  *
@@ -136,14 +137,18 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const words = (err) => (err instanceof Error ? err.message : String(err));
 const maxIso = (a, b) => (Date.parse(b) > Date.parse(a) ? b : a);
 
+/** Whether a run is waiting on a maintainer: its runner reported `waiting` and nobody has asked it to stop. Such a run is exempt from quiet */
+const waitsOnMaintainer = (row) => row.state === 'waiting' && !row.stop_requested_at;
+
 /**
  * What a run is, as of `nowMs`, from the runner's reports and what the forge shows. Pure.
  *
  *   done / failed / stopped    the runner's latest report
  *   merged / closed            its (trusted) pull request ended
- *   quiet                      nothing happened within `quietMs`
+ *   quiet                      nothing happened within `quietMs`, unless it is waiting (below)
  *   stop-requested             a maintainer asked it to stop and the runner has not said so
- *   waiting                    the runner's latest report: it asks a maintainer (open: the run is not over)
+ *   waiting                    the runner's latest report: it asks a maintainer (open: the run is not over). A run waiting on a maintainer
+ *                              never goes quiet, so it keeps counting toward the cap; once a maintainer asks it to stop, or it reports again, quiet applies again
  *   claimed / working          the runner's latest report
  *   working                    no report, but a (trusted) pull request or a branch carries its id: a silent runner is seen through what it pushes
  *   requested                  asked for, nothing seen yet
@@ -159,7 +164,7 @@ export function statusOf(row, nowMs, quietMs) {
   let status;
   if (REPORT_FINISHED.includes(row.state)) status = row.state;
   else if (ended) status = /** @type {string} */ (row.pull_state);
-  else if (nowMs - Date.parse(row.last_activity) >= quietMs) status = 'quiet';
+  else if (!waitsOnMaintainer(row) && nowMs - Date.parse(row.last_activity) >= quietMs) status = 'quiet';
   else if (row.stop_requested_at) status = 'stop-requested';
   else if (row.state !== 'requested') status = row.state;
   else status = (row.pull_trusted === 1 && row.pull) || row.branch ? 'working' : 'requested';
@@ -697,7 +702,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
    */
   async function answer(ctx, { runId, action, text, problem }) {
     const { who, via = null } = ctx;
-    if (action === 'stop' && !problem) {
+    // A Stop to a run that is waiting is a stop request; anything else (not strictly an answer, no such run, not waiting) is refused below as an answer
+    const stopping = action === 'stop' && !problem && validateAnswer({ state: 'answered', action, ...(text !== undefined ? { text } : {}) }).ok
+      && typeof runId === 'string' && /** @type {RunRow | undefined} */ ((await auth.store()).prepare('SELECT state FROM runs WHERE run_id = ? AND repo = ?').get(runId, repo))?.state === 'waiting';
+    if (stopping) {
       const stopped = await stop(ctx, { runId, note: text, problem });
       const db = await auth.store();
       const stamp = iso(now());
@@ -732,6 +740,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       if (was.finished) throw new Refused(409, `Run ${row.run_id} is ${was.status}; there is nothing to answer.`, 'conflict');
       if (row.stop_requested_at) throw new Refused(409, `${row.stop_requested_by ?? 'A maintainer'} already asked run ${row.run_id} to stop (${row.stop_requested_at}); the runner decides what that means.`, 'conflict');
       if (row.state !== 'waiting') throw new Refused(409, `Run ${row.run_id} is not waiting for an answer (its runner last reported ${row.state}).`, 'conflict');
+      if (a.action === 'stop') throw new Refused(409, `Run ${row.run_id} changed while the answer was being taken; read it again.`, 'conflict');
       if (ctx.stillAllowed) {
         const why = await ctx.stillAllowed();
         if (why) throw new Refused(403, why, 'forbidden');
@@ -750,14 +759,20 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       db.exec('BEGIN IMMEDIATE');
       try {
         // The runner may have reported again while the forge was asked: it answered the wait it was in, so only a run still waiting takes it
-        const kept = db.prepare("UPDATE runs SET answer_action = ?, answer_text = ?, answer_at = ?, answer_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ? AND state = 'waiting' AND stop_requested_at IS NULL")
-          .run(a.action, a.text ?? null, stamp, me.login, stamp, row.run_id).changes;
-        if (kept !== 1) throw new Refused(409, `Run ${row.run_id} changed while the answer was being taken; read it again.`, 'conflict');
-        keepEvent(db, row.run_id, { key: posted ? `answer:${posted.id}` : `answer:cornfield:${stamp}`, at: stamp, kind: 'answered', actor: me.login, ref: a.action, note: a.text ?? null, url: posted ? posted.url ?? null : null });
+        // The block just posted is judged already, whatever comes of it: a follow must never read cornfield's own answer back as a maintainer's,
+        // not even one that came too late for the wait it answered (kept even when the answer is refused below)
         if (posted) {
           db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `c:${posted.id}:${row.run_id}:answer:0`, stamp);
           db.prepare('INSERT OR IGNORE INTO run_seen (run_id, key, at) VALUES (?, ?, ?)').run(row.run_id, `ev:answered:${posted.id}:c:${posted.id}:${row.run_id}:answer:0`, stamp);
         }
+        const kept = db.prepare("UPDATE runs SET answer_action = ?, answer_text = ?, answer_at = ?, answer_by = ?, last_activity = MAX(last_activity, ?) WHERE run_id = ? AND state = 'waiting' AND stop_requested_at IS NULL")
+          .run(a.action, a.text ?? null, stamp, me.login, stamp, row.run_id).changes;
+        if (kept !== 1) {
+          db.exec('COMMIT');
+          throw new Refused(409, `Run ${row.run_id} changed while the answer was being taken; read it again.`, 'conflict');
+        }
+        // Two maintainers answering at once: the last write wins on the run, and the timeline keeps both
+        keepEvent(db, row.run_id, { key: posted ? `answer:${posted.id}` : `answer:cornfield:${stamp}:${me.login}`, at: stamp, kind: 'answered', actor: me.login, ref: a.action, note: a.text ?? null, url: posted ? posted.url ?? null : null });
         db.exec('COMMIT');
       } catch (err) {
         try { db.exec('ROLLBACK'); } catch { /* nothing was begun */ }
@@ -817,10 +832,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return row ? publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)) : null;
   }
 
-  /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window */
+  /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window or waiting on a maintainer */
   function followable(db, at) {
     const window = Math.max(2 * quietMs, FOLLOW_FLOOR_MS);
-    return /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} AND last_activity > ? AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?`)
+    return /** @type {RunRow[]} */ (db.prepare(`SELECT * FROM runs WHERE repo = ? AND ${POSTED} AND (last_activity > ? OR (state = 'waiting' AND stop_requested_at IS NULL)) AND NOT (pull_trusted = 1 AND pull_state IN ('merged', 'closed')) ORDER BY last_activity DESC LIMIT ?`)
       .all(repo, iso(at - window), MAX_FOLLOWED));
   }
 
@@ -1158,8 +1173,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         if (r.state !== previous) queue(row, 'run.state', `ev:state:${id}:${key}`, login, r.state);
         if (r.state === 'waiting' && previous !== 'waiting') queue(row, 'run.waiting', `ev:waiting:${id}:${key}`, login, 'waiting');
       } else if (block.type === 'answer') {
-        // An answer to a run that is not waiting answers nothing (the runner went on, or it asked nothing): it is kept in the audit only
-        if (row.state !== 'waiting') continue;
+        // An answer to a run that is not waiting answers nothing (the runner went on, or it asked nothing), nor does one after a stop request: it is kept in the audit only
+        if (row.state !== 'waiting' || (row.stop_requested_at && block.value.action !== 'stop')) continue;
         const a = block.value;
         Object.assign(row, { answer_action: a.action, answer_text: a.text ?? null, answer_at: when, answer_by: login });
         answered.add(row.run_id);

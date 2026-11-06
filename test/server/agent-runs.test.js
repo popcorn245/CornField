@@ -431,6 +431,11 @@ describe('statusOf', () => {
     expect(at(25 * HOUR, { state: 'done' }).status).toBe('done');
     expect(at(HOUR, { stop_requested_at: 'x', state: 'stopped' }).status).toBe('stopped');
   });
+  it('never makes a run waiting on a maintainer quiet; one asked to stop, or that reported on, goes quiet as usual', () => {
+    expect(at(30 * 24 * HOUR, { state: 'waiting' })).toMatchObject({ status: 'waiting', open: true, quiet: false });
+    expect(at(25 * HOUR, { state: 'waiting', stop_requested_at: 'x' }).status).toBe('quiet');
+    expect(at(25 * HOUR, { state: 'working' }).status).toBe('quiet');
+  });
 });
 
 describe('a run that waits for a maintainer (issue #101)', () => {
@@ -550,6 +555,93 @@ describe('a run that waits for a maintainer (issue #101)', () => {
     await t.runs.follow(t.as('maintainer-one'));
     await settle();
     expect(t.events('run.stopRequested')).toHaveLength(1);
+  });
+
+  it('is never quiet while it waits on a maintainer: it keeps counting toward the cap, is still followed, and quiet applies again once it reports', async () => {
+    const t = setup({ config: { maxOpen: 1 } });
+    const id = await waitingRun(t);
+    t.wait(10 * 24 * HOUR); // far past quietAfter, with nothing from anyone
+    expect(await t.runs.get(id)).toMatchObject({ status: 'waiting', open: true });
+    expect(((await t.runs.get(id)).timeline).some((e) => e.kind === 'quiet')).toBe(false);
+    expect((await t.runs.list()).open).toBe(1);
+    expect(await ask(t, code({ refs: { issue: 13 } }))).toMatchObject({ ok: false, status: 409, code: 'cap-reached' });
+    // still followed, so an answer typed on the forge days later is read
+    t.say(12, 'maintainer-two', formatRunComment(id, { state: 'answered', action: 'continue' }));
+    await t.runs.follow(t.as('maintainer-one'));
+    await settle();
+    expect((await t.runs.get(id)).answer).toMatchObject({ action: 'continue', by: 'maintainer-two' });
+    // the runner goes on: quiet applies again from its report
+    t.wait(10_000);
+    t.say(12, 'runner-bot', formatRunComment(id, { state: 'working' }));
+    await t.runs.follow(t.as('maintainer-one'));
+    expect((await t.runs.get(id)).status).toBe('working');
+    t.wait(25 * HOUR);
+    expect(await t.runs.get(id)).toMatchObject({ status: 'quiet', open: false });
+  });
+
+  it('a Stop to a run that is not waiting is refused as an answer, and posts no stop', async () => {
+    const t = setup();
+    const { request } = await ask(t, code());
+    t.wait(10_000);
+    const before = t.world.comments.get(12).length;
+    await expect(t.runs.answer(t.maintainer(), { runId: request.runId, action: 'stop' })).rejects.toMatchObject({ status: 409 });
+    expect(t.world.comments.get(12)).toHaveLength(before);
+    expect(t.row(request.runId).stop_requested_at).toBeNull();
+    expect(t.rows().filter((r) => r.action === 'agent-answer').map((r) => r.status)).toEqual([409]);
+  });
+
+  it('Stop as an answer and a plain Stop cannot both post: the second is the 409 of a second stop', async () => {
+    const t = setup();
+    const id = await waitingRun(t);
+    t.wait(10_000);
+    await t.runs.answer(t.maintainer(), { runId: id, action: 'stop' });
+    t.wait(10_000);
+    await expect(t.runs.stop(t.maintainer('maintainer-two'), { runId: id })).rejects.toMatchObject({ status: 409 });
+    t.wait(10_000);
+    await expect(t.runs.answer(t.maintainer('maintainer-two'), { runId: id, action: 'stop' })).rejects.toMatchObject({ status: 409 });
+    await t.runs.follow(t.as('maintainer-one'));
+    await settle();
+    expect(t.world.comments.get(12).filter((c) => readRunBlocks(c.body).blocks.some((b) => b.type === 'stop-request'))).toHaveLength(1);
+    expect(t.events('run.stopRequested').filter((e) => e.runId === id)).toHaveLength(1);
+  });
+
+  it('two maintainers answering: one at a time, the last answer wins on the run and the timeline keeps both', async () => {
+    const t = setup({ config: { transport: 'pull' } });
+    const { request } = await ask(t, code());
+    t.db.prepare("UPDATE runs SET state = 'waiting', claimed_by = 1, reported_at = ? WHERE run_id = ?").run(t.stamp(), request.runId);
+    // at the very same moment, one is taken and the other is told to wait (one answer to a run is taken at a time)
+    const both = await Promise.allSettled([
+      t.runs.answer(t.maintainer('maintainer-one'), { runId: request.runId, action: 'continue' }),
+      t.runs.answer(t.maintainer('maintainer-two'), { runId: request.runId, action: 'reply', text: 'Plan B.' }),
+    ]);
+    expect(both.map((r) => r.status === 'fulfilled' ? 200 : r.reason.status)).toEqual([200, 429]);
+    t.wait(10_000);
+    await t.runs.answer(t.maintainer('maintainer-two'), { runId: request.runId, action: 'reply', text: 'Plan B.' });
+    const run = await t.runs.get(request.runId);
+    expect(run.answer).toMatchObject({ action: 'reply', by: 'maintainer-two' });
+    expect(run.timeline.filter((e) => e.kind === 'answered').map((e) => [e.ref, e.actor])).toEqual([['continue', 'maintainer-one'], ['reply', 'maintainer-two']]);
+  });
+
+  it('never reads cornfield\'s own answer back as a maintainer\'s, even one refused because the runner moved on meanwhile', async () => {
+    const t = setup();
+    const id = await waitingRun(t);
+    t.wait(10_000);
+    const ctx = t.maintainer('maintainer-two');
+    const racing = { ...ctx, forge: () => ({ ...t.as('maintainer-two'), comment: async (n, body) => {
+      const c = await t.as('maintainer-two').comment(n, body);
+      t.db.prepare("UPDATE runs SET state = 'working' WHERE run_id = ?").run(id); // the runner reported while the forge was asked
+      return c;
+    } }) };
+    await expect(t.runs.answer(racing, { runId: id, action: 'reply', text: 'Too late.' })).rejects.toMatchObject({ status: 409 });
+    const late = t.world.comments.get(12).at(-1).id;
+    // the runner asks a new question: the late answer on the forge is not its answer, and is not judged again
+    t.wait(10_000);
+    t.say(12, 'runner-bot', formatRunComment(id, { state: 'waiting', note: 'Another question' }));
+    await t.runs.follow(t.as('maintainer-one'));
+    await settle();
+    expect(await t.runs.get(id)).toMatchObject({ status: 'waiting', answer: null });
+    expect(t.events('run.answered')).toHaveLength(0);
+    expect(t.rows().filter((r) => r.request.comment === late)).toEqual([]);
   });
 });
 

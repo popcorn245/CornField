@@ -64,7 +64,7 @@ agents: {
   maxOpen: 3,                          // the most open runs per repo cornfield asks for (1 to 100)
   profiles: ['claude', 'local-qwen'],  // names a request may carry; the runner maps each to a model, a machine and a budget
   runners: ['claude-bot'],             // forge logins whose reports count, besides maintainers
-  quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h')
+  quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h'); never a run waiting on a maintainer
   runnerQuietAfter: '3m',              // pull transport: no runner token has polled this long and no runner is online ("1m" to "60m"; docs/agents.md#is-a-runner-there)
   limits: { minutes: 30, turns: 40, cost: 5 },   // hints put in every request; a request may change them; the runner enforces them or not
   // opt-in triggers, off by default (docs/agents.md#triggers): a run requested by something a maintainer did
