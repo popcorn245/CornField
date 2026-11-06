@@ -50,7 +50,7 @@
  * @typedef {{ runId: string, type: 'request', value: RunRequest } | { runId: string, type: 'report', value: RunReport } | { runId: string, type: 'stop-request', value: StopRequest } | { runId: string, type: 'answer', value: RunAnswer }} RunBlock
  */
 
-import { defuse } from './defuse.js';
+import { defuse, quoteInert } from './defuse.js';
 
 /** Ten (or `n`) random bytes, from the Web Crypto API that Node and the browser both have */
 const randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
@@ -543,7 +543,7 @@ export function formatRunComment(runId, body, { line, profiles } = {}) {
   const head = oneLine(line ?? defaultLine(runId, checked.type, checked.value));
   // An answer's text is the maintainer's words to the runner: it travels in the block only, never quoted beside it
   const note = checked.type === 'request' || checked.type === 'answer' ? '' : (checked.value.note ?? '').trim();
-  const quoted = note ? `\n\n${defuse(note).split(/\r?\n/).map((l) => (l ? `> ${l}` : '>')).join('\n')}` : '';
+  const quoted = note ? `\n\n${quoteInert(note)}` : '';
   const out = `${head}${quoted}\n\n${block}`;
   if (out.length > MAX_COMMENT_CHARS) throw new RangeError(`That is too long for a comment (${out.length} characters, at most ${MAX_COMMENT_CHARS}); shorten the brief or the note.`);
   return out;
