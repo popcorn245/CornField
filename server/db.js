@@ -261,7 +261,9 @@ export const MIGRATIONS = Object.freeze([
   `,
   // 10: a run may wait for a maintainer (server/agent-runs.js, issue #101): the runner's report `waiting` and the maintainer's answer. SQLite cannot
   // change a CHECK, so runs (whose `state` gains 'waiting') and run_events (whose `kind` gains 'answered') are rebuilt the documented way: a new
-  // table, the rows copied, the old one dropped, the new one renamed, the indexes made again. The answer is kept on the run: the latest one only
+  // table, the rows copied, the old one dropped, the new one renamed, the indexes made again. The answer is kept on the run: the latest one only.
+  // No foreign key refers to either table and neither has a trigger, so `PRAGMA foreign_keys` (on, and not changeable inside the migration's
+  // transaction) leaves the rebuild alone; a later migration that adds one must rebuild with that in mind (test/server/db.test.js checks it)
   `
   CREATE TABLE runs_new (
     run_id            TEXT PRIMARY KEY,

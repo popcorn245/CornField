@@ -244,3 +244,61 @@ describe('migration 10 (a run that waits for an answer, issue #101)', () => {
     db.close();
   });
 });
+
+describe('migration 10 on a file that already has runs (every column, #108 and #109 rows)', () => {
+  const RUN_A = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEA';
+  const RUN_B = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEB';
+  const BY = JSON.stringify({ runner: 'laptop', mintedBy: 'maintainer-one' }); // a runner's `by`, kept as JSON text (#108)
+  const seed = (db) => {
+    db.prepare(`INSERT INTO runs (run_id, repo, kind, profile, issue, proposal, thread, target, comment_id, comment_url, request, requested_by, requested_by_id, requested_at, via,
+        state, reported_at, reported_by, note, url, tokens, cost, stop_requested_at, stop_requested_by, pull, pull_state, pull_url, pull_by, pull_trusted, linked_via,
+        branch, head_sha, checks, last_activity, transport, claimed_by, claimed_at)
+      VALUES (?, 'owner/name', 'code', 'fast', 12, '0040-meals', 14, 12, '901', 'https://forge.test/c/901', '{"version":1}', 'maintainer-one', '1001', '2026-11-05T10:00:00Z', 'hand',
+        'working', '2026-11-05T10:01:00Z', 'runner-bot', 'a note', 'https://logs.example.org/1', 1200, 0.42, '2026-11-05T10:02:00Z', 'maintainer-two', 31, 'open', 'https://forge.test/pull/31', 'runner-bot', 1, 'body',
+        'agent/x', 'abc123', 'running', '2026-11-05T10:03:00Z', 'forge', NULL, NULL)`).run(RUN_A);
+    db.prepare(`INSERT INTO runs (run_id, repo, kind, target, request, requested_by, requested_by_id, requested_at, via, state, reported_at, reported_by, last_activity, transport, claimed_by, claimed_at)
+      VALUES (?, 'owner/name', 'summary', 15, '{}', 'maintainer-one', '1001', '2026-11-05T11:00:00Z', 'api', 'claimed', '2026-11-05T11:01:00Z', ?, '2026-11-05T11:01:00Z', 'pull', 4, '2026-11-05T11:01:00Z')`).run(RUN_B, BY);
+    db.prepare("INSERT INTO run_events (run_id, key, at, kind, actor, ref, note, url) VALUES (?, 'stop:901', '2026-11-05T10:02:00Z', 'stop-requested', 'maintainer-two', NULL, 'why', 'https://forge.test/c/902')").run(RUN_A);
+    db.prepare("INSERT INTO run_events (run_id, key, at, kind, actor, ref) VALUES (?, 'report:x', '2026-11-05T11:01:00Z', 'claimed', ?, 'claimed')").run(RUN_B, BY);
+    db.prepare("INSERT INTO run_seen (run_id, key, at) VALUES (?, 'c:901:0', '2026-11-05T10:00:00Z')").run(RUN_A);
+    db.prepare("INSERT INTO run_reads (run_id, source, sha, data, at) VALUES (?, 'files', 'abc123', '[]', '2026-11-05T10:03:00Z')").run(RUN_A);
+  };
+
+  it('copies every row and column unchanged, keeps the indexes and the other run tables, and runs once', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-db10-'));
+    try {
+      const old = new DatabaseSync(path.join(dir, DB_FILE));
+      migrate(old, MIGRATIONS.slice(0, 9));
+      seed(old);
+      const runsBefore = old.prepare('SELECT * FROM runs ORDER BY run_id').all();
+      const eventsBefore = old.prepare('SELECT * FROM run_events ORDER BY run_id, key').all();
+      const indexesBefore = old.prepare("SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all();
+      expect(old.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE type = 'trigger'").get().n).toBe(0); // no trigger to carry over
+      for (const t of ['runs', 'run_events', 'run_seen', 'run_reads']) expect(old.prepare(`PRAGMA foreign_key_list(${t})`).all(), t).toEqual([]); // nothing refers to them, nor they to anything
+      old.close();
+      // openStore turns foreign keys on before it migrates: the rebuild must hold with them on
+      const db = openStore(dir);
+      expect(db.prepare('PRAGMA foreign_keys').get().foreign_keys).toBe(1);
+      expect(schemaVersion(db)).toBe(MIGRATIONS.length);
+      const runsAfter = db.prepare('SELECT * FROM runs ORDER BY run_id').all();
+      expect(runsAfter.map(({ answer_action, answer_text, answer_at, answer_by, ...rest }) => rest)).toEqual(runsBefore);
+      expect(runsAfter.every((r) => r.answer_action === null && r.answer_text === null && r.answer_at === null && r.answer_by === null)).toBe(true);
+      expect(JSON.parse(runsAfter.find((r) => r.run_id === RUN_B).reported_by)).toEqual({ runner: 'laptop', mintedBy: 'maintainer-one' });
+      expect(runsAfter.find((r) => r.run_id === RUN_A).via).toBe('hand');
+      expect(db.prepare('SELECT * FROM run_events ORDER BY run_id, key').all()).toEqual(eventsBefore);
+      expect(db.prepare("SELECT name, tbl_name FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all()).toEqual(indexesBefore);
+      expect(db.prepare("SELECT name FROM sqlite_schema WHERE name LIKE '%_new'").all()).toEqual([]);
+      expect(db.prepare('SELECT count(*) AS n FROM run_seen').get().n).toBe(1);
+      expect(db.prepare('SELECT count(*) AS n FROM run_reads').get().n).toBe(1);
+      expect(db.prepare('PRAGMA integrity_check').get().integrity_check).toBe('ok');
+      // a second open (or a second migrate) changes nothing
+      expect(migrate(db)).toEqual({ from: MIGRATIONS.length, to: MIGRATIONS.length });
+      db.close();
+      const again = openStore(dir);
+      expect(again.prepare('SELECT * FROM runs ORDER BY run_id').all()).toEqual(runsAfter);
+      again.close();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
