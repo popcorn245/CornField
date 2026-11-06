@@ -194,7 +194,9 @@ export function checksWords(run) {
 
 /** One line of a run's timeline, and the runner's words under it (data for the page to escape) */
 export function timelineWords(entry) {
-  const by = entry.actor ? ` by ${entry.actor}` : '';
+  // A runner's act carries `{ kind: 'runner', label, … }`: shown by its label. An older row's actor is the login, shown as it is
+  const who = entry.actor && typeof entry.actor === 'object' ? entry.actor.label : entry.actor;
+  const by = who ? ` by ${who}` : '';
   switch (entry.kind) {
     case 'requested': return { what: `Requested${by}${entry.ref ? ` under the profile ${entry.ref}` : ''}`, note: '' };
     case 'claimed': return { what: `Claimed${by}`, note: entry.note || '' };

@@ -46,7 +46,7 @@
 
 import { readBody } from './proposals.js';
 import { ANONYMOUS_PER_MINUTE, NO_TOKEN_LOGIN } from './review-api.js';
-import { bearerOf, findToken, scopeOfShape, touchToken } from './review-tokens.js';
+import { bearerOf, findToken, runnerBy, runnerTokenOf, scopeOfShape, touchToken } from './review-tokens.js';
 import { QUEUE_LIMIT } from './agent-runs.js';
 import { refusal } from './submit-review.js';
 import { Refused, countAttempt } from './throttle.js';
@@ -151,13 +151,17 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
   }
 
   const { row, state } = found;
-  const token = { id: row.id, label: row.label };
+  const token = runnerTokenOf(row);
+  // The runner acts, not the maintainer who minted its token: the audit names the runner and keeps the maintainer in `mintedBy` (a token of another scope that was presented here is its owner's act)
+  const audited = { id: row.id, label: row.label };
+  const actor = state === 'wrong-scope' ? row.login : `runner:${row.label}`;
+  const by = state === 'wrong-scope' ? {} : { by: runnerBy(token), mintedBy: token.mintedBy };
   if (state !== 'active') {
     req.resume();
     const flood = countAttempt(ctx, row.user_id, now());
     if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
     const wrong = state === 'wrong-scope';
-    return refuse(row.login, { reason: wrong ? 'wrong-scope' : state, token, ...(wrong ? { scope: row.scope } : {}) }, 403, {
+    return refuse(actor, { reason: wrong ? 'wrong-scope' : state, token: audited, ...by, ...(wrong ? { scope: row.scope } : {}) }, 403, {
       error: wrong ? `This is ${row.scope === 'agent' ? 'an' : 'a'} ${row.scope} token. Runners take a runner token; make one in the dashboard.`
         : state === 'revoked' ? 'This runner token was revoked; make a new one in the dashboard.' : 'This runner token has expired; make a new one in the dashboard.',
       code: 'forbidden',
@@ -174,23 +178,22 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
   if (known !== null && !isMaintainer(known)) {
     req.resume();
     await auth.demoted(row.user_id, row.login, known);
-    return refuse(row.login, { reason: 'owner-not-maintainer', token }, 403, { error: `This runner token's owner, ${row.login}, does not maintain ${repo} any more, so it is revoked.`, code: 'forbidden' });
+    return refuse(actor, { reason: 'owner-not-maintainer', token: audited, ...by }, 403, { error: `This runner token's owner, ${row.login}, does not maintain ${repo} any more, so it is revoked.`, code: 'forbidden' });
   }
   touchToken(/** @type {import('node:sqlite').DatabaseSync} */ (db), row.id, now());
-  const who = row.login;
 
   try {
     if (route.action === 'runner-list') {
       req.resume();
       if (url.searchParams.get('state') !== 'queued') throw new Refused(400, 'The only listing is ?state=queued: the requests waiting for a runner.', 'invalid');
       const requests = await runs.queued();
-      if (requests.length || emptyReadDue(auth, row.id, now())) await audit(who, { token }, 200, { ok: true, count: requests.length });
+      if (requests.length || emptyReadDue(auth, row.id, now())) await audit(actor, { token: audited, ...by }, 200, { ok: true, count: requests.length });
       return send(res, 200, { ok: true, requests, limit: QUEUE_LIMIT });
     }
     if (route.action === 'runner-claim') {
       req.resume();
       const claimed = await runs.claim(token, route.runId);
-      await audit(who, { token }, 200, { ok: true, claimed: true }, `${repo}#${claimed.row.target}`);
+      await audit(actor, { token: audited, ...by }, 200, { ok: true, claimed: true }, `${repo}#${claimed.row.target}`);
       return send(res, 200, { ok: true, request: claimed.request, run: claimed.run });
     }
     if (method === 'POST') {
@@ -214,21 +217,21 @@ export async function serveRunnerCall(req, res, route, url, ctx) {
       try {
         if (problem) throw problem;
         const done = await runs.report(token, route.runId, body);
-        await audit(who, { token, ...shape }, 200, { ok: true, state: done.row.state }, `${repo}#${done.row.target}`);
+        await audit(actor, { token: audited, ...by, ...shape }, 200, { ok: true, state: done.row.state }, `${repo}#${done.row.target}`);
         return send(res, 200, { ok: true, run: done.run });
       } catch (err) {
         const out = answerFor(err);
-        await audit(who, { token, ...shape }, out.status, { error: out.body.error, code: out.body.code });
+        await audit(actor, { token: audited, ...by, ...shape }, out.status, { error: out.body.error, code: out.body.code });
         return send(res, out.status, { ok: false, ...out.body }, out.headers);
       }
     }
     req.resume();
     const view = await runs.runnerGet(token, route.runId);
-    await audit(who, { token }, 200, { ok: true, state: view.state });
+    await audit(actor, { token: audited, ...by }, 200, { ok: true, state: view.state });
     return send(res, 200, { ok: true, run: view });
   } catch (err) {
     const out = answerFor(err);
-    await audit(who, { token }, out.status, { error: out.body.error, code: out.body.code });
+    await audit(actor, { token: audited, ...by }, out.status, { error: out.body.error, code: out.body.code });
     return send(res, out.status, { ok: false, ...out.body }, out.headers);
   }
 }
@@ -250,9 +253,10 @@ export async function serveStrayRunner(req, res, reqPath, ctx) {
   const presented = bearerOf(req.headers.authorization);
   let owner = null;
   let token;
+  let by = {};
   if (presented && auth.enabled) {
     const found = findToken(await auth.store(), presented, now(), 'runner');
-    if (found && found.state !== 'wrong-scope') { owner = found.row.login; token = { id: found.row.id, label: found.row.label }; }
+    if (found && found.state !== 'wrong-scope') { owner = `runner:${found.row.label}`; token = { id: found.row.id, label: found.row.label }; by = { by: runnerBy(runnerTokenOf(found.row)), mintedBy: runnerTokenOf(found.row).mintedBy }; }
   }
   const flood = owner === null ? countAttempt(ctx, NO_TOKEN_LOGIN, now(), ANONYMOUS_PER_MINUTE) : countAttempt(ctx, `runner|${token.id}`, now(), RUNNER_PER_MINUTE);
   if (flood) return send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
@@ -260,7 +264,7 @@ export async function serveStrayRunner(req, res, reqPath, ctx) {
     try {
       await auth.record({
         login: owner ?? NO_TOKEN_LOGIN, action: 'runner-call', target: config.forge?.repo ?? '',
-        request: { via: 'api', reason: 'wrong-route', method: String(req.method).slice(0, 10), path: reqPath.slice(0, 80), ...(token ? { token } : {}) }, status: 403, answer: { error: body.error, code: body.code },
+        request: { via: 'api', reason: 'wrong-route', method: String(req.method).slice(0, 10), path: reqPath.slice(0, 80), ...(token ? { token, ...by } : {}) }, status: 403, answer: { error: body.error, code: body.code },
       });
     } catch (err) {
       console.error(`[cornfield] a runner call could not be written to the audit table: ${err instanceof Error ? err.message : err}`);

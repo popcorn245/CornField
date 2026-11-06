@@ -48,6 +48,51 @@ const TOKEN_SHAPE = /^cf_(?:rt|at|nt)_[A-Za-z0-9_-]{43,128}$/;
 const LABEL = /^[\p{L}\p{N}][\p{L}\p{N} ._:/()-]*$/u;
 const COLUMNS = 'id, user_id, login, label, scope, created_at, expires_at, revoked_at, last_used';
 
+/**
+ * Who acted when a runner token did: the runner (the token's label), with the maintainer who minted the token kept apart as `mintedBy`.
+ * A runner token does not act as its owner, so the timeline and the audit name the runner (issue #105).
+ * @typedef {{ kind: 'runner', label: string, tokenId?: number, mintedBy?: { login: string, userId: string } }} RunnerBy
+ * @param {{ id?: number, label: string, mintedBy?: { login: string, userId: string } }} token
+ * @returns {RunnerBy}
+ */
+export function runnerBy(token) {
+  return { kind: 'runner', label: token.label, ...(token.id !== undefined ? { tokenId: token.id } : {}), ...(token.mintedBy ? { mintedBy: token.mintedBy } : {}) };
+}
+
+/** The token a runner call carries from here on: its id and label, and the maintainer who minted it */
+export const runnerTokenOf = (row) => ({ id: row.id, label: row.label, mintedBy: { login: row.login, userId: String(row.user_id) } });
+
+/**
+ * `by` as the TEXT columns keep it: a login stays plain text (the shape every older row has), a runner is JSON. A login never starts with `{`.
+ * @param {string | RunnerBy | null | undefined} by
+ * @returns {string | null}
+ */
+export function byToText(by) {
+  if (by == null || by === '') return null;
+  return typeof by === 'string' ? by : JSON.stringify(by);
+}
+
+/**
+ * `by` as it was kept: the runner object, or the plain login of an older row (or null). Text that only looks like JSON is a plain string.
+ * @param {string | null | undefined} text
+ * @returns {string | RunnerBy | null}
+ */
+export function byFromText(text) {
+  if (typeof text !== 'string' || text === '') return null;
+  if (text.startsWith('{')) {
+    try {
+      const v = JSON.parse(text);
+      if (v && v.kind === 'runner' && typeof v.label === 'string') return v;
+    } catch { /* plain text */ }
+  }
+  return text;
+}
+
+/** The name `by` is shown as: a runner's label, else the login as it is */
+export function byLabel(by) {
+  return by && typeof by === 'object' ? by.label : by ?? null;
+}
+
 const iso = (ms) => new Date(ms).toISOString();
 
 /** The SHA-256 of a token, as hex: what the table keeps */

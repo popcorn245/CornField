@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 // @ts-expect-error plain JS module, no declarations
 import { openStore } from '../../server/db.js';
 // @ts-expect-error plain JS module, no declarations
-import { TOKEN_PREFIX, DEFAULT_DAYS, MAX_DAYS, MAX_ACTIVE, MAX_LABEL, hashToken, bearerOf, labelProblem, daysOf, stateOf, mintToken, findToken, touchToken, listTokens, revokeToken } from '../../server/review-tokens.js';
+import { TOKEN_PREFIX, DEFAULT_DAYS, MAX_DAYS, MAX_ACTIVE, MAX_LABEL, hashToken, bearerOf, labelProblem, daysOf, stateOf, mintToken, findToken, touchToken, listTokens, revokeToken, runnerBy, runnerTokenOf, byToText, byFromText, byLabel } from '../../server/review-tokens.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-10-19T12:00:00Z');
@@ -195,5 +195,24 @@ describe('the scope, at lookup', () => {
       db.close();
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('who a runner token acts as', () => {
+  const row = { id: 7, user_id: 1001, login: 'maintainer-one', label: 'bucket-bot' };
+
+  it('is the runner by its label, with the maintainer who minted the token kept apart', () => {
+    expect(runnerBy(runnerTokenOf(row))).toEqual({ kind: 'runner', label: 'bucket-bot', tokenId: 7, mintedBy: { login: 'maintainer-one', userId: '1001' } });
+  });
+
+  it('is kept as JSON, and an older row (a plain login) reads as it was', () => {
+    const by = runnerBy(runnerTokenOf(row));
+    expect(byFromText(byToText(by))).toEqual(by);
+    expect(byFromText('maintainer-one')).toBe('maintainer-one');
+    expect(byFromText('{not json')).toBe('{not json');
+    expect(byFromText(null)).toBe(null);
+    expect(byToText('maintainer-one')).toBe('maintainer-one');
+    expect(byLabel(by)).toBe('bucket-bot');
+    expect(byLabel('maintainer-one')).toBe('maintainer-one');
   });
 });
