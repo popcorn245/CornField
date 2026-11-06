@@ -9,9 +9,9 @@
  */
 
 import { relativeTime } from './review-model.js';
-import { aboutWords, statusWords, statusWhy, runMeta, canStop, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords } from './runs-model.js';
+import { aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 
-const TONE = { done: 'success', merged: 'success', failed: 'failure', quiet: 'queued', 'stop-requested': 'queued' };
+const TONE = { done: 'success', merged: 'success', failed: 'failure', quiet: 'queued', 'stop-requested': 'queued', waiting: 'queued' };
 
 /**
  * @typedef {object} ViewContext
@@ -25,6 +25,7 @@ const TONE = { done: 'success', merged: 'success', failed: 'failure', quiet: 'qu
  * @property {string | null} selected the run lit on the map
  * @property {Set<string>} timelines the runs whose timeline is open
  * @property {boolean} busy an action is in flight
+ * @property {Map<string, string>} [replies] the reply typed so far for each waiting run, so a repaint keeps it
  */
 
 /** A link that opens a new tab, said so for a screen reader */
@@ -45,7 +46,7 @@ function linksHtml(ctx, run) {
     thread != null && ctx.repoUrl ? link(ctx, `${ctx.repoUrl}/issues/${thread}`, `Thread #${thread}`) : '',
     run.branch ? link(ctx, branchUrl(ctx, run.branch), `Branch ${run.branch}`) : '',
     run.pull ? link(ctx, run.pull.url, `Pull request #${run.pull.number}`, run.pull.trusted ? '' : ' <span class="hx-faint">(not from a runner, so it moves nothing)</span>') : '',
-    link(ctx, run.report && run.report.url, 'Runner\'s log'),
+    link(ctx, run.report && run.report.url, run.status === 'waiting' ? 'Runner\'s link' : 'Runner\'s log'),
   ].filter(Boolean).join(' · ');
 }
 
@@ -57,6 +58,24 @@ function timelineHtml(ctx, run) {
   return `<ol class="hx-run-timeline" id="run-tl-${ctx.esc(run.runId)}" aria-label="Timeline of ${ctx.esc(run.runId)}, oldest first">${items.join('')}</ol>`;
 }
 
+/** What was answered, escaped: the action, a reply's words, who and when */
+function answeredHtml(ctx, run) {
+  const a = run.answer;
+  return `<p class="hx-forge-meta">Answered: ${ctx.esc(answerWords(a))} · ${ctx.esc(a.by || 'a maintainer')}, ${ctx.esc(relativeTime(a.at, ctx.now) || a.at)}</p>`;
+}
+
+/** A waiting run: what was asked (the note and link are shown above) and the three answers, plain buttons and a reply field */
+function answerHtml(ctx, run) {
+  const id = ctx.esc(run.runId);
+  const off = ctx.busy ? ' disabled' : '';
+  const reply = ctx.replies && ctx.replies.get(run.runId) || '';
+  return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" role="group" aria-label="Answer run ${id}">
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="Continue run ${id}"${off}>Continue</button>
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="Stop run ${id}"${off}>Stop</button></div>
+    <label class="hx-forge-field">Reply to run ${id}<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
+    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="Send reply to run ${id}"${off}>Reply</button></div>`;
+}
+
 /** One run */
 export function runHtml(ctx, run, all) {
   const lit = ctx.selected === run.runId;
@@ -64,7 +83,8 @@ export function runHtml(ctx, run, all) {
   const tone = TONE[run.status] || 'running';
   const why = statusWhy(run);
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
-  const stop = canStop(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Stop</button>` : '';
+  const answering = canAnswer(run);
+  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Stop</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);
@@ -78,6 +98,7 @@ export function runHtml(ctx, run, all) {
     <p class="hx-forge-meta">${ctx.esc(checksWords(run))}</p>
     <p class="hx-forge-meta">${names.length ? `Changing ${run.nodesFrom === 'files' ? '' : 'or expected to change '}${ctx.esc(names.join(', '))}` : 'No node on the map yet.'}</p>
     ${links ? `<p class="hx-forge-meta">${links}</p>` : ''}
+    ${answering ? answerHtml(ctx, run) : ''}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
     <div class="hx-run-actions">${stop}
       <button type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="Light the nodes of ${ctx.esc(run.runId)} on the map"${(run.nodes || []).length ? '' : ' disabled'}>${lit ? 'Lit on the map' : 'Light on the map'}</button>
       <button type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>

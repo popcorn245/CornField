@@ -19,7 +19,8 @@
  *                 it and when anything last happened (server/agent-runs.js, migration 7); review_tokens also keep a scope
  *                 (review, agent, or runner: migration 8, which also gives a run its transport and the runner token that claimed it)
  *   run_seen      what has been seen of each run (a comment judged, a hook event sent), so a restart sends and judges nothing twice
- *   run_events    what happened to each run, in order, for its timeline; run_reads what was read to work out its nodes (migration 9, issue #82)
+ *   run_events    what happened to each run, in order, for its timeline; run_reads what was read to work out its nodes (migration 9, issue #82);
+ *                 migration 10 lets a run wait (state 'waiting') and keeps a maintainer's answer to it (answer_* on runs, 'answered' events)
  *                 sessions also keep a forge refresh token, the access token's expiry and when `session.expiring` was sent (migration 5)
  *
  * The schema is a list of numbered migrations (`MIGRATIONS`); the file's `PRAGMA user_version` is the number of
@@ -257,6 +258,82 @@ export const MIGRATIONS = Object.freeze([
     at      TEXT NOT NULL,
     PRIMARY KEY (run_id, source)
   ) STRICT;
+  `,
+  // 10: a run may wait for a maintainer (server/agent-runs.js, issue #101): the runner's report `waiting` and the maintainer's answer. SQLite cannot
+  // change a CHECK, so runs (whose `state` gains 'waiting') and run_events (whose `kind` gains 'answered') are rebuilt the documented way: a new
+  // table, the rows copied, the old one dropped, the new one renamed, the indexes made again. The answer is kept on the run: the latest one only.
+  // No foreign key refers to either table and neither has a trigger, so `PRAGMA foreign_keys` (on, and not changeable inside the migration's
+  // transaction) leaves the rebuild alone; a later migration that adds one must rebuild with that in mind (test/server/db.test.js checks it)
+  `
+  CREATE TABLE runs_new (
+    run_id            TEXT PRIMARY KEY,
+    repo              TEXT NOT NULL,
+    kind              TEXT NOT NULL,
+    profile           TEXT,
+    issue             INTEGER,
+    proposal          TEXT,
+    thread            INTEGER,
+    target            INTEGER NOT NULL,
+    comment_id        TEXT NOT NULL DEFAULT '',
+    comment_url       TEXT,
+    request           TEXT NOT NULL CHECK (json_valid(request)),
+    requested_by      TEXT NOT NULL,
+    requested_by_id   TEXT NOT NULL,
+    requested_at      TEXT NOT NULL,
+    via               TEXT NOT NULL DEFAULT 'dashboard',
+    state             TEXT NOT NULL DEFAULT 'requested' CHECK (state IN ('requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped')),   -- the runner's latest report
+    reported_at       TEXT,
+    reported_by       TEXT,
+    note              TEXT,
+    url               TEXT,
+    tokens            INTEGER,
+    cost              REAL,
+    stop_requested_at TEXT,
+    stop_requested_by TEXT,
+    pull              INTEGER,
+    pull_state        TEXT CHECK (pull_state IS NULL OR pull_state IN ('open', 'merged', 'closed')),
+    pull_url          TEXT,
+    pull_by           TEXT,
+    pull_trusted      INTEGER NOT NULL DEFAULT 0,
+    linked_via        TEXT CHECK (linked_via IS NULL OR linked_via IN ('body', 'commit', 'branch')),
+    branch            TEXT,
+    head_sha          TEXT,
+    checks            TEXT CHECK (checks IS NULL OR checks IN ('success', 'failure', 'running', 'none')),
+    last_activity     TEXT NOT NULL,
+    transport         TEXT NOT NULL DEFAULT 'forge' CHECK (transport IN ('forge', 'push', 'pull')),
+    claimed_by        INTEGER,
+    claimed_at        TEXT,
+    answer_action     TEXT CHECK (answer_action IS NULL OR answer_action IN ('continue', 'stop', 'reply')),   -- a maintainer's answer to the latest wait; a new 'waiting' report clears it
+    answer_text       TEXT,
+    answer_at         TEXT,
+    answer_by         TEXT
+  ) STRICT;
+  INSERT INTO runs_new (run_id, repo, kind, profile, issue, proposal, thread, target, comment_id, comment_url, request, requested_by, requested_by_id, requested_at, via,
+      state, reported_at, reported_by, note, url, tokens, cost, stop_requested_at, stop_requested_by, pull, pull_state, pull_url, pull_by, pull_trusted, linked_via,
+      branch, head_sha, checks, last_activity, transport, claimed_by, claimed_at)
+    SELECT run_id, repo, kind, profile, issue, proposal, thread, target, comment_id, comment_url, request, requested_by, requested_by_id, requested_at, via,
+      state, reported_at, reported_by, note, url, tokens, cost, stop_requested_at, stop_requested_by, pull, pull_state, pull_url, pull_by, pull_trusted, linked_via,
+      branch, head_sha, checks, last_activity, transport, claimed_by, claimed_at FROM runs;
+  DROP TABLE runs;
+  ALTER TABLE runs_new RENAME TO runs;
+  CREATE INDEX runs_repo ON runs (repo, requested_at);
+  CREATE INDEX runs_queue ON runs (repo, transport, state, requested_at);
+
+  CREATE TABLE run_events_new (
+    run_id  TEXT NOT NULL,
+    key     TEXT NOT NULL,
+    at      TEXT NOT NULL,
+    kind    TEXT NOT NULL CHECK (kind IN ('claimed', 'report', 'stop-requested', 'answered', 'push', 'pull-opened', 'checks', 'merged', 'closed')),
+    actor   TEXT,
+    ref     TEXT,                                 -- for 'answered': the action (continue, stop, reply); note is a reply's text
+    note    TEXT,
+    url     TEXT,
+    PRIMARY KEY (run_id, key)
+  ) STRICT;
+  INSERT INTO run_events_new (run_id, key, at, kind, actor, ref, note, url) SELECT run_id, key, at, kind, actor, ref, note, url FROM run_events;
+  DROP TABLE run_events;
+  ALTER TABLE run_events_new RENAME TO run_events;
+  CREATE INDEX run_events_at ON run_events (run_id, at);
   `,
 ]);
 

@@ -64,7 +64,7 @@ agents: {
   maxOpen: 3,                          // the most open runs per repo cornfield asks for (1 to 100)
   profiles: ['claude', 'local-qwen'],  // names a request may carry; the runner maps each to a model, a machine and a budget
   runners: ['claude-bot'],             // forge logins whose reports count, besides maintainers
-  quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h')
+  quietAfter: '24h',                   // a run with no report, push or pull request activity this long is quiet and counts toward nothing ('5m' to '720h'); never a run waiting on a maintainer
   runnerQuietAfter: '3m',              // pull transport: no runner token has polled this long and no runner is online ("1m" to "60m"; docs/agents.md#is-a-runner-there)
   limits: { minutes: 30, turns: 40, cost: 5 },   // hints put in every request; a request may change them; the runner enforces them or not
   // opt-in triggers, off by default (docs/agents.md#triggers): a run requested by something a maintainer did
@@ -139,6 +139,8 @@ A `url` is https; http is only for `localhost`, `127.0.0.1` and `[::1]`, and it 
 | `agent.requested` | a maintainer asked for an agent run (the dashboard's Start an agent, or the request API). Sent at once, on every `agents.transport`; on `push` it is how the runner gets the request ([how to verify it](agents.md#push)). Its body is its own: `{ event, at, request, actor, mapUrl }`, where `request` is the [contract's](agent-contract.md) request JSON, which holds no credential by construction (it is checked again on the way out), and `actor` is who asked |
 | `run.claimed` | the run's runner reported `claimed` |
 | `run.state` | a run changed state: a report with another state, its pull request found, merged or closed |
+| `run.waiting` | a run's runner reported `waiting`: it stopped to ask a maintainer (a plan to approve, a decision). Once for each wait ([how it is answered](agents.md#waiting-and-the-answer)) |
+| `run.answered` | a maintainer answered a waiting run: Continue, Stop or a reply. The body also has `action` (`continue`, `stop` or `reply`); a reply's words are never sent |
 | `run.stopRequested` | a maintainer asked a run to stop (through cornfield, or by hand on the forge) |
 | `run.finished` | a run ended: `done`, `failed`, `stopped`, or its pull request merged or closed |
 | `trigger.skipped` | an opt-in [trigger](agents.md#triggers) (`agents.on`) did not request a run: the maintainer whose act caused it has no live sign-in (`reason: "no-session"`), or the request was refused (`cap-reached`, `run-open`, `rate-limited`, `forbidden`, `invalid`). Nothing was posted. Its body is its own: `{ event, at, trigger, by, reason, mapUrl }`, where `trigger` is `{ event, by, ref }` (the event that was going to fire it, the maintainer, and the pull request, issue or comment, as in the [contract's](agent-contract.md#what-caused-an-automatic-request) `trigger` field) and `by` the maintainer again |

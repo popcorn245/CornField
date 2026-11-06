@@ -30,9 +30,11 @@
  *                   Its body is its own: `{ event, at, trigger: { event, by, ref }, by, reason, mapUrl }`
  *   runner.offline  on the pull transport, the last live runner token has not polled for `agents.runnerQuietAfter` (3 minutes unless set; server/runner-presence.js).
  *                   Once, and again only after a runner has been seen online again. Its body is its own: `{ event, at, label, lastSeen, mapUrl }`, never a token
- *   run.claimed  run.state  run.stopRequested  run.finished   a run was claimed by its runner, changed state, was asked to stop, ended. They are
+ *   run.claimed  run.state  run.waiting  run.answered  run.stopRequested  run.finished   a run was claimed by its runner, changed state, reported
+ *                   `waiting` (it asks a maintainer), was answered, was asked to stop, ended. They are
  *                   seen when cornfield looks (the spec poll, server/spec-poll.js), each once. Their body is their own:
- *                   `{ event, at, runId, state, pull?, issue?, actor, mapUrl }`
+ *                   `{ event, at, runId, state, pull?, issue?, action?, actor, mapUrl }`; `action` (continue, stop or reply) is only on `run.answered`,
+ *                   and a reply's words are never in it
  *
  * **Triggers listen in-process.** `subscribe(fn)` hands a function the same moments the hooks fire at, with the payload resolved, whether or not
  * any hook asks for them (server/triggers.js: `spec.approved`, `build.opened`, `thread.message`). A thread's payload then also holds the
@@ -226,11 +228,12 @@ export function createHooks({ hooks, secret, fetch: doFetch = globalThis.fetch, 
       if (!checked.ok) throw new Error(checked.error);
       return JSON.stringify({ event, at: new Date(now()).toISOString(), request: checked.value, actor: p.actor ?? null, mapUrl: publicUrl || null });
     }
-    // The events of a run (claimed, state, stopRequested, finished) say which run, in what state, and about what
+    // The events of a run (claimed, state, waiting, answered, stopRequested, finished) say which run, in what state, and about what
     if (event.startsWith('run.')) {
       return JSON.stringify({
         event, at: new Date(now()).toISOString(), runId: p.runId ?? null, state: p.state ?? null,
-        ...(p.pull != null ? { pull: p.pull } : {}), ...(p.issue != null ? { issue: p.issue } : {}), actor: p.actor ?? null, mapUrl: publicUrl || null,
+        ...(p.pull != null ? { pull: p.pull } : {}), ...(p.issue != null ? { issue: p.issue } : {}),
+        ...(event === 'run.answered' && ['continue', 'stop', 'reply'].includes(p.action) ? { action: p.action } : {}), actor: p.actor ?? null, mapUrl: publicUrl || null,
       });
     }
     // A thread's event is only which thread, which comment, who and what it links to: never the words said

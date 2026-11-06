@@ -70,7 +70,7 @@ export const FORGE_TYPES = ['github', 'forgejo'];
 /** How a pull request cornfield lands is merged (`forge.mergeMethod`): the way the repo lands its pull requests */
 export const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 /** The events a hook may ask for (`hooks[].events`), and what each one means: docs/config.md#hooks */
-export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.stopRequested', 'run.finished', 'trigger.skipped', 'runner.offline']);
+export const HOOK_EVENTS = Object.freeze(['spec.ready', 'spec.approved', 'spec.sentBack', 'build.opened', 'pr.landed', 'session.expiring', 'thread.opened', 'thread.message', 'thread.linked', 'agent.requested', 'run.claimed', 'run.state', 'run.waiting', 'run.answered', 'run.stopRequested', 'run.finished', 'trigger.skipped', 'runner.offline']);
 /** The events that come from looking at threads (server/threads.js): a poll that wants any of them looks at threads too */
 export const THREAD_EVENTS = Object.freeze(['thread.opened', 'thread.message', 'thread.linked']);
 /** The keys of `threads` when it is an object, and the label's longest length */

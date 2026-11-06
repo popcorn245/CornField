@@ -10,6 +10,7 @@
  *   GET  /api/agent-runs/<runId>         one run
  *   POST /api/agent-runs                 the dashboard's Start an agent: the same body as the API
  *   POST /api/agent-runs/<runId>/stop    { note? } asks the runner to stop
+ *   POST /api/agent-runs/<runId>/answer  { action: 'continue' | 'stop' | 'reply', text? } answers a run that reported `waiting`
  *
  * **The call takes an agent token and nothing else,** exactly as the review API takes a review token (server/review-api.js): it runs
  * before the sign-in guard (a script has no cookie), reads no cookie, needs no same-origin check (a browser never adds an `Authorization`
@@ -156,7 +157,7 @@ export async function serveAgentCall(req, res, ctx) {
  * @returns {Promise<boolean>} whether the path was one of these
  */
 export async function serveRunRoutes(req, res, reqPath, ctx) {
-  const m = /^\/api\/agent-runs(?:\/(run-[0-9A-Za-z]{26}))?(\/stop)?$/.exec(reqPath);
+  const m = /^\/api\/agent-runs(?:\/(run-[0-9A-Za-z]{26}))?(\/stop|\/answer)?$/.exec(reqPath);
   if (!m || (m[2] && !m[1])) return false;
   const { auth, runs, session } = ctx;
   const runId = m[1] ?? null;
@@ -214,9 +215,15 @@ export async function serveRunRoutes(req, res, reqPath, ctx) {
       problem = { status: 400, message: 'The request could not be read.' };
     }
   }
-  if (runId && !problem && (body === null || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((k) => k !== 'note'))) problem = { status: 400, message: 'A stop request is { note? }.' };
+  const answering = m[2] === '/answer';
+  if (runId && !problem && (body === null || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((k) => !(answering ? ['action', 'text'] : ['note']).includes(k)))) {
+    problem = { status: 400, message: answering ? 'An answer is { action: "continue" | "stop" | "reply", text? }.' : 'A stop request is { note? }.' };
+  }
   try {
-    if (runId) {
+    if (runId && answering) {
+      const answered = await runs.answer(ask, { runId, action: /** @type {any} */ (body)?.action, text: /** @type {any} */ (body)?.text, problem });
+      send(res, 200, { ok: true, ...answered });
+    } else if (runId) {
       const stopped = await runs.stop(ask, { runId, note: /** @type {any} */ (body)?.note, problem });
       send(res, 200, { ok: true, ...stopped });
     } else {
