@@ -433,4 +433,8 @@ describe('agents.limits, flat and per profile (CF-27)', () => {
     expect(limitDefaults(undefined, 'claude')).toEqual({});
     expect(limitDefaults(l, 'cost')).toEqual({ minutes: 30, cost: 1 });
   });
+  it('refuses a profile named like a limit, so agents.limits is never ambiguous', () => {
+    for (const name of ['minutes', 'turns', 'cost', 'tokens']) expect(problems({ profiles: ['claude', name] }).join()).toContain(`agents.profiles "${name}" is the name of a limit`);
+    expect(problems({ profiles: ['claude', 'costly'] })).toEqual([]);
+  });
 });

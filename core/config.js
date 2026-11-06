@@ -399,6 +399,8 @@ function agentRunProblems(a) {
     if (!Array.isArray(a.profiles) || a.profiles.length > MAX_PROFILES || !a.profiles.every((p) => typeof p === 'string' && PROFILE_NAME.test(p)) || new Set(a.profiles).size !== a.profiles.length) {
       out.push(`agents.profiles is a list of at most ${MAX_PROFILES} different names ("claude", "local-qwen"): letters, digits and . _ -, at most 64 characters each. The runner maps each to a model; cornfield only knows the name.`);
     }
+    // agents.limits keys a profile's own limits by its name, so a profile may not be named like a limit
+    else for (const p of a.profiles) if (LIMIT_NAMES.includes(p)) out.push(`agents.profiles ${JSON.stringify(p)} is the name of a limit (${LIMIT_NAMES.join(', ')}); name the profile something else.`);
   }
   if (a.runners !== undefined) {
     if (!Array.isArray(a.runners) || a.runners.length > MAX_RUNNERS || !a.runners.every((r) => isText(r) && r === r.trim() && !/[\s,]/.test(r))) {
