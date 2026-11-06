@@ -260,7 +260,11 @@ describe('the push and pull transports', () => {
       // the dashboard sees what the runner said
       const list = await page('GET', '/api/agent-runs');
       expect(list.json.open).toBe(0);
-      expect(list.json.runs[0]).toMatchObject({ runId, status: 'done', transport: 'pull', comment: null, report: { state: 'done', by: 'laptop', note: 'Opened the pull request.', tokens: 1200, cost: 0.12 } });
+      expect(list.json.runs[0]).toMatchObject({ runId, status: 'done', transport: 'pull', comment: null, report: { state: 'done', by: { kind: 'runner', label: 'laptop', mintedBy: { login: 'maintainer-one', userId: '1001' } }, note: 'Opened the pull request.', tokens: 1200, cost: 0.12 } });
+      // the timeline names the runner, not the maintainer who minted its token, and keeps the maintainer in mintedBy
+      const line = list.json.runs[0].timeline;
+      expect(line.map((e) => [e.kind, e.actor?.label ?? e.actor])).toEqual([['requested', 'maintainer-one'], ['claimed', 'laptop'], ['report', 'laptop'], ['report', 'laptop']]);
+      expect(line[1].actor).toMatchObject({ kind: 'runner', label: 'laptop', tokenId: runner.token.id, mintedBy: { login: 'maintainer-one', userId: '1001' } });
       // a finished run takes no more reports
       expect((await report(runner.secret, runId, { state: 'working' })).status).toBe(409);
 
@@ -668,6 +672,31 @@ describe('the push and pull transports', () => {
     });
   });
 
+  describe('the timeline of a runner', () => {
+    it('has one Claimed line when the runner claims and then reports claimed', async () => {
+      const { runner, runId } = await pulled();
+      expect((await claim(runner.secret, runId)).status).toBe(200);
+      later(1000);
+      expect((await report(runner.secret, runId, { state: 'claimed', note: 'Starting.' })).status).toBe(200);
+      const line = (await page('GET', '/api/agent-runs')).json.runs[0].timeline;
+      expect(line.map((e) => [e.kind, e.ref])).toEqual([['requested', null], ['claimed', 'claimed'], ['report', 'claimed']]);
+    });
+  });
+
+  describe('rows from before a runner was named as itself', () => {
+    it('still read: a login as the reporter and as a timeline actor is shown as it was', async () => {
+      const { runId } = await pulled();
+      const db = new DatabaseSync(path.join(data, 'cornfield.db'));
+      try {
+        db.prepare("UPDATE runs SET state = 'working', reported_at = ?, reported_by = 'old-runner' WHERE run_id = ?").run(new Date(clock).toISOString(), runId);
+        db.prepare("INSERT INTO run_events (run_id, key, at, kind, actor, ref) VALUES (?, 'report:old', ?, 'report', 'old-runner', 'working')").run(runId, new Date(clock).toISOString());
+      } finally { db.close(); }
+      const run = (await page('GET', '/api/agent-runs')).json.runs[0];
+      expect(run.report.by).toBe('old-runner');
+      expect(run.timeline.map((e) => e.actor)).toEqual(['maintainer-one', 'old-runner']);
+    });
+  });
+
   describe('the audit', () => {
     it('writes a row for every runner call, with the token\'s id and label and never a secret or a note\'s words', async () => {
       const { runner, agent, runId } = await pulled();
@@ -680,7 +709,8 @@ describe('the push and pull transports', () => {
       const all = runnerRows();
       expect(all.map((r) => [r.action, r.status])).toEqual([['runner-list', 200], ['runner-claim', 200], ['runner-run', 200], ['runner-run', 200], ['runner-run', 400], ['runner-claim', 409]]);
       for (const r of all) expect(r.request).toMatchObject({ via: 'api', token: { id: runner.token.id, label: 'laptop' } });
-      expect(all.map((r) => r.login)).toEqual(Array(6).fill('maintainer-one'));
+      expect(all.map((r) => r.login)).toEqual(Array(6).fill('runner:laptop'));
+      for (const r of all) expect(r.request).toMatchObject({ by: { kind: 'runner', label: 'laptop', tokenId: runner.token.id }, mintedBy: { login: 'maintainer-one', userId: '1001' } });
       expect(all[3].request).toMatchObject({ runId, state: 'working', noteChars: NOTE.length });
       expect(all[4].answer).toMatchObject({ code: 'invalid' });
       expect(all[5].answer).toMatchObject({ code: 'already-claimed' });

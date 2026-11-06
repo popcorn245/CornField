@@ -153,6 +153,14 @@ describe('the words (runs-model.js)', () => {
     ]);
   });
 
+  it('say a runner by its label, and an older row\'s login as it was', () => {
+    const runner = { kind: 'runner', label: 'bucket-bot', tokenId: 3, mintedBy: { login: 'maintainer-one', userId: '1001' } };
+    expect(timelineWords({ kind: 'claimed', actor: runner }).what).toBe('Claimed by bucket-bot');
+    expect(timelineWords({ kind: 'report', ref: 'working', actor: runner }).what).toBe('Reported working by bucket-bot');
+    expect(timelineWords({ kind: 'report', ref: 'working', actor: 'old-login' }).what).toBe('Reported working by old-login');
+    expect(timelineWords({ kind: 'claimed', actor: null }).what).toBe('Claimed');
+  });
+
   it('say what changed, and nothing on the first answer', () => {
     expect(changeWords(null, [A])).toEqual([]);
     expect(changeWords([A, B], [A2, { ...B, status: 'done', open: false }])).toEqual([
