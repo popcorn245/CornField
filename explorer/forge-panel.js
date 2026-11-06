@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -198,6 +198,7 @@ async function loadWork(refresh, token) {
 /** Loads the runs for the Agents tab (a refresh also has cornfield look at the forge for their reports first); a failure is a line, never a blank panel */
 async function loadRuns(refresh, { say = true } = {}) {
   const before = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
+  const beforePresence = ui.runs && ui.runs.data ? ui.runs.data.runnerPresence : null;
   const res = await request(runsUrl(refresh), refresh);
   ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
   if (!(ui.runs && ui.runs.data)) return;
@@ -206,6 +207,10 @@ async function loadRuns(refresh, { say = true } = {}) {
   syncRunsPoll();
   if (ui.runSel) relightRun();
   const said = say ? changeWords(before, ui.runs.data.runs) : [];
+  // A runner appearing or going quiet is said once, when the state changes (the line itself is plain text, not a live region)
+  const was = runnerState(beforePresence, now());
+  const is = runnerState(ui.runs.data.runnerPresence, now());
+  if (say && was && is && was !== is) said.push(runnerWords(ui.runs.data.runnerPresence, now()));
   if (said.length) announce(said.join('. '));
 }
 
@@ -1116,6 +1121,7 @@ function paintRuns() {
   note.hidden = !words;
   note.className = `hx-forge-notice${!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
   note.textContent = words;
+  paintRunner('forge-runs-runner', data);
   const trig = $('forge-runs-trigger');
   if (trig) {
     const skipped = data ? triggerNotice(data) : '';
@@ -1125,6 +1131,15 @@ function paintRuns() {
   const list = $('forge-runs-list');
   if (!data) { list.innerHTML = ''; return; }
   list.innerHTML = data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
+}
+
+/** The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply */
+function paintRunner(id, data) {
+  const el = $(id);
+  if (!el) return;
+  const words = data ? runnerWords(data.runnerPresence, now()) : '';
+  el.hidden = !words;
+  el.textContent = words;
 }
 
 /** What the Runs view needs to know of the page */
@@ -1424,6 +1439,7 @@ async function openAgent(ref, opener) {
   if (!ui.agent) return;
   const profiles = (ui.runs && ui.runs.data && ui.runs.data.profiles) || [];
   $('agent-start-about').textContent = `About ${aboutWords(refs)}`;
+  paintRunner('agent-start-runner', ui.runs && ui.runs.data);
   $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
   $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
   $('agent-profile-field').hidden = !profiles.length;

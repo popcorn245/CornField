@@ -79,7 +79,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
 import { createRequest, findRunId, formatRunComment, runAuthors, runBlocksOf, runIdFromBranch, validateReport, validateRequest, MAX_NOTE_CHARS } from '../core/agent-contract.js';
-import { quietAfterMs } from '../core/config.js';
+import { quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
+import { runnerPresence } from './runner-presence.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
 import { readTopology } from '../core/validate.js';
 import { findPullProposal, listPullProposals, readPullProposal } from './proposal-pulls.js';
@@ -260,6 +261,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   const runnerSet = new Set((Array.isArray(agents.runners) ? agents.runners : []).map(lower));
   const authorSet = new Set((Array.isArray(agents.authors) ? agents.authors : []).map(lower));
   const quietMs = quietAfterMs(config);
+  const runnerQuietMs = runnerQuietAfterMs(config);
   const refuseCollisions = agents.refuseCollisions === true;
   /** How requests travel from now on (`agents.transport`); a run keeps the transport it was asked for with */
   const transport = /** @type {'forge' | 'push' | 'pull'} */ (agents.transport ?? 'forge');
@@ -681,7 +683,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return {
       runs: rows.map((r) => publicRun(r, at, quietMs, extras.get(r.run_id))), open: openRows(db, at).length, maxOpen: cap, profiles, limits: agents.limits || {}, quietAfter: agents.quietAfter, runners: [...runnerSet].length,
       triggerSkipped: skipped.length ? { count: skipped.length, last: skipped[0].at, reasons } : null,
-      refuseCollisions,
+      refuseCollisions, runnerPresence: { transport, ...runnerPresence(db, at, runnerQuietMs) },
     };
   }
 

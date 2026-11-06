@@ -1848,6 +1848,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Finding the proposal files of the checkout and of its worktrees without ever holding up the server. (server/proposal-walk.js)"
+    },
+    {
+      "id": "core-server-runner-presence",
+      "label": "runner-presence.js",
+      "type": "core",
+      "file": "server/runner-presence.js",
+      "summary": "Whether a runner is there (issue #99).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Whether a runner is there (issue #99). (server/runner-presence.js)"
     }
   ],
   "edges": [
@@ -5825,7 +5835,23 @@
       "to": "core-server-proposal-walk",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-runner-presence"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-runner-presence",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-runner-presence",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-05T11:40:44.799Z"
+  "updatedAt": "2026-11-06T08:43:11.708Z"
 }
