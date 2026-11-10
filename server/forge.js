@@ -141,7 +141,8 @@ const MAX_LABELS = 5;
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
 const MERGE_METHODS = ['merge', 'squash', 'rebase'];
 const STATES = ['open', 'closed', 'all'];
-const REPO = /^[\w.-]+\/[\w.-]+$/;
+/** owner/name, neither made only of dots (`..` would walk out of `repos/` in the API's path) */
+const REPO = /^(?!\.+\/)[\w.-]+\/(?!\.+$)[\w.-]+$/;
 /** A tag name a release draft may carry: no spaces, no `..`, no leading dash, at most 100 characters */
 const TAG_NAME = /^[\w][\w./+-]{0,99}$/;
 /** The most a release's body may hold (GitHub's own limit) */
