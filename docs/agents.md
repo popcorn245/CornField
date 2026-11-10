@@ -290,6 +290,23 @@ for (;;) {
 
 [`examples/runner/pull-runner.mjs`](../examples/runner/pull-runner.mjs) in the repository is a dependency-free Node pull loop: it claims a request, asks an Ollama model (`POST /api/generate`, base URL from `OLLAMA_URL`) for the change, writes it as a branch, a commit and a pull request under the runner's own git identity and forge token, and reports. Read the top of the file for its environment variables. It checks every request with the contract beside it (`examples/runner/agent-contract.js`, a byte-for-byte copy of cornfield's) before it claims one, so a credential, an unknown key or an unsafe branch name is never claimed; it never pushes to the base branch and never forces a push (a branch that is already there makes it fail); it does not write through a link in its clone; and neither the runner token nor the forge token goes in the model's prompt or a note. It is a recipe, not a dependency, and is not part of the package.
 
+## Deep links
+
+A link posted in chat lands in the right place on one tap. The address carries what to open:
+
+| Link | What it opens |
+|---|---|
+| `/?run=<runId>` | The Agents tab with that run lit on the map and scrolled into view (the run's row has the focus) |
+| `/?issue=<n>` | The Issues tab with that issue's **Start an agent** button focused, ready to press. The dialog is not opened for you |
+| `/?proposal=<slug>&start=1` | The proposal opened over the map, and the **Start an agent** dialog on it |
+
+- **On a phone** (under 768px) the sheet it opens is expanded, not collapsed: the panel for a run or an issue, the proposal bar for a proposal.
+- **An id that is not there** (no such run, no such issue, no such proposal, or a value that cannot be one) is a short line in the panel, or in the proposal bar for a proposal, and is said through the live region. It is never a blank panel, and no dialog opens on it. A run asked for a moment ago is looked for once more, past the cache, before it is called missing. The value is shown as text, never as markup.
+- **An issue that is not in the open list** is asked for once, on its own (`GET /api/forge/issues/<n>`): a closed one is called closed ("Issue N is closed: its title", with a link to it on the forge), an open one past the end of the list is called open, and only one the forge does not have is called missing. The Start an agent button is focused only for an issue in the list.
+- **Without a sign-in** the usual sign-in page comes first, and the link survives the round trip to the forge. The page's button carries the path and query of the link as `/auth/start?return=…`; the return is kept in the state cookie of the OAuth round trip, under the same signature as the state, so it cannot be swapped on the way. After the forge sends the person back, the callback sends them to the link as an absolute URL on the public origin (`CORNFIELD_PUBLIC_URL`). If the callback fails, **Try again** keeps the link too. Only a same-origin relative path is followed, checked both as given and as the URL parser leaves it (so `/.//x` and `/%2e//x`, which resolve to `//x`, are refused too): an absolute URL (`https://…`), a protocol-relative one (`//…`), a backslash, a control character, a path under `/auth/`, or one longer than 1024 characters once encoded is dropped, and the sign-in ends at `/` as it always did. A sign-in that was already under way when cornfield was updated to this is refused with "started before cornfield was updated" and is simply started again.
+- **A reload does not open it again.** Once a link is followed, `run`, `issue` and `start` are taken out of the address (without a new history entry). `?proposal=` stays, because it follows the open proposal and a reload should bring the same proposal back.
+- A link needs a forge in the config, like the panel itself. Without one it says so through the live region and opens nothing.
+
 ## By keyboard and screen reader
 
 The tab is a button in the panel's Show group, like the other two. Each group is a heading with the list under it, so a screen reader can move by headings; the two switches are checkboxes. Loading, a switch changing and a failure are said through the map's live region ([accessibility](accessibility.md)); the mark is the word "Agent" and its reason, not a colour. The Start an agent dialog is modal: the focus stays in it, Escape and Cancel close it and give the focus back to the button, and a refusal is read out as an alert. A run's state is a word, not a colour. On a phone it is the same bottom sheet.
