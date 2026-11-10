@@ -23,9 +23,11 @@
  *   lightColor(css, role)                one colour for the light ground (memoised)
  *   themed(css, theme, role)             the same, or the colour untouched in the dark theme
  *   lightenScene(scene)                  every colour of a built scene, in place (scene.js calls it)
- *   contrast(a, b)                       the WCAG contrast ratio of two CSS colours
+ *   contrast(a, b)                       the WCAG contrast ratio of two CSS colours (core/color.js)
  *   parseColor(css)                      a CSS colour as [r, g, b, a] (scene.js re-exports it for the renderers)
  */
+
+import { parseColor, luminance, ratio, contrast } from '../core/color.js';
 
 export const THEME_CHOICES = ['system', 'light', 'dark'];
 /** Where the choice is kept in the browser (theme.js); `?theme=` in the address wins over it, without being kept */
@@ -101,28 +103,9 @@ export function themeWords(choice, theme) {
 //  Colour arithmetic
 // ---------------------------------------------------------------------------
 
-/** `#rgb`, `#rrggbb`, `rgb(...)` or `rgba(...)` → `[r, g, b, a]` (0..255, alpha 0..1); transparent for anything else. scene.js re-exports it. */
-export function parseColor(css) {
-  const s = String(css).trim().toLowerCase();
-  let m = /^#([0-9a-f]{3})$/.exec(s);
-  if (m) return [...m[1]].map((h) => parseInt(h + h, 16)).concat(1);
-  m = /^#([0-9a-f]{6})$/.exec(s);
-  if (m) return [parseInt(m[1].slice(0, 2), 16), parseInt(m[1].slice(2, 4), 16), parseInt(m[1].slice(4, 6), 16), 1];
-  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(s);
-  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
-  return [0, 0, 0, 0];
-}
-
-const channel = (v) => {
-  const c = v / 255;
-  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-};
-/** WCAG relative luminance of `[r, g, b]` (0..255) */
-export const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-const ratio = (la, lb) => (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-
-/** The WCAG contrast ratio of two opaque CSS colours (alpha is ignored) */
-export const contrast = (a, b) => ratio(luminance(parseColor(a)), luminance(parseColor(b)));
+// The colour arithmetic (parseColor, luminance, ratio, contrast) is core/color.js, shared with `cornfield validate`'s contrast check;
+// scene.js and the tests still import it from here.
+export { parseColor, luminance, contrast };
 
 /** `[r, g, b]` (0..255) to `[h, s, l]` (h in degrees, s and l 0..1) */
 export function toHsl([r, g, b]) {

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EXPLORER, CORNFIELD } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
-import { contrast } from '../../explorer/theme-model.js';
+import { contrast } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
 import { MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, mapTokenNames } from '../../explorer/map-style.js';
 

@@ -13,6 +13,7 @@
  *     default: 'day',                                               // the name used until a viewer picks one
  *     icons: { app: './tools/cornfield/icons/app.svg' },            // an icon per node kind, drawn inside the node on the map (svg or png)
  *     pixelated: true,                                              // small icons are drawn crisp (nearest-neighbour), not smoothed
+ *     contrast: 'error',                                            // 'warn' turns a failing contrast pair in `validate` into a warning
  *   }
  *
  * A theme is CSS only: never script, never inlined into the page.
@@ -22,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NODE_THEMES } from './schema.js';
 
-export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'icons', 'pixelated']);
+export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'icons', 'pixelated', 'contrast']);
 /** The node kinds an icon may be set for: every node type of the map */
 export const ICON_KINDS = Object.freeze(Object.keys(NODE_THEMES));
 /** The file types of a node icon */
@@ -66,7 +67,7 @@ export function fontUrl(v) {
  */
 export function themeProblems(t) {
   if (t === undefined) return [];
-  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default?, icons?, pixelated? }.'];
+  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }.'];
   const out = [];
   for (const k of Object.keys(t)) if (!THEME_KEYS.includes(k)) out.push(`theme.${k}: the keys are ${THEME_KEYS.join(', ')}.`);
   if (t.css !== undefined && t.css !== null && !cssPathInRepo(t.css)) out.push('theme.css is one stylesheet (a .css file) inside the repo, written relative to it, like "./tools/cornfield/theme.css".');
@@ -101,6 +102,7 @@ export function themeProblems(t) {
       }
     }
   }
+  if (t.contrast !== undefined && t.contrast !== 'error' && t.contrast !== 'warn') out.push('theme.contrast is "error" (a pair below WCAG AA fails validate; the default) or "warn" (it is a warning).');
   if (t.default !== undefined && t.default !== null) {
     if (!isText(t.default)) out.push('theme.default is the name of one of theme.names.');
     else if (!names.includes(t.default)) out.push(`theme.default "${t.default}" is not one of theme.names (${names.join(', ') || 'none are listed'}).`);
@@ -195,7 +197,7 @@ const FORBIDDEN = [
  * @param {string} text
  * @param {string} gap
  */
-function withoutComments(text, gap) {
+export function withoutComments(text, gap) {
   let out = '';
   let quote = null;
   for (let i = 0; i < text.length; i++) {
