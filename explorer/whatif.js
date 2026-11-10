@@ -535,6 +535,7 @@ function mountDrawerBox() {
   drawerBox.id = 'whatif-drawer';
   drawerBox.className = 'hx-block hx-whatif-drawer';
   drawerBox.hidden = true;
+  drawerBox.tabIndex = -1; // holds the focus while it is painted again (paintDrawer)
   block.after(drawerBox); // under the facts, the mockups and the threads: the node comes first, the tools to edit it after
   drawerBox.addEventListener('click', onClick);
   return drawerBox;
@@ -566,9 +567,22 @@ function edgeToHtml(n) {
     </div>`;
 }
 
+/** Paints the box; when the keyboard was in it (a Remove, a Bring back), the focus stays in it rather than falling to the page */
 function paintDrawer() {
   const box = mountDrawerBox();
   if (!box) return;
+  const was = box.contains(document.activeElement) ? document.activeElement : null;
+  const same = (el) => el.tagName === was.tagName && ['whatif', 'id', 'from', 'to', 'kind', 'flow', 'edgeTo'].every((k) => el.dataset[k] === was.dataset[k]);
+  fillDrawer(box);
+  if (!was || box.hidden) return;
+  const next = [...box.querySelectorAll('button:not([disabled]), select, summary')].find(same)
+    // the button pressed is gone: Remove became Bring it back (or back again), or an edge left the list
+    || ((was.tagName === 'BUTTON' || was === box) && (box.querySelector('[data-whatif="bring-back"]:not([disabled])') || (was.closest('details') && box.querySelector('summary')) || box.querySelector('button:not([disabled])')))
+    || box; // nothing to hold it yet (the map is mid-rebuild): the box keeps it for the next paint
+  next.focus({ preventScroll: true });
+}
+
+function fillDrawer(box) {
   const open = !!state.proposal && ui.editing && (!!state.selectedNode || !!state.selectedEdge); // behind the toolbar's Edit, like the rest of the what-if tools
   box.hidden = !open;
   if (!open) { box.innerHTML = ''; return; }
@@ -581,9 +595,9 @@ function paintDrawer() {
     if (kindOfMark(e) === 'removed' && e.mark !== 'edit') { box.hidden = true; return; } // the proposal's own removal: not for an edit to undo
     if (e.mark === 'edit' && e.editOp === 'removed') {
       const i = removalIndex('remove-edge', (x) => edgeKey(x) === key);
-      box.innerHTML = `${title}<p class="hx-faint">You removed this edge.</p><button type="button" class="hx-btn hx-btn--quiet hx-textact" data-whatif="bring-back" data-index="${i}"${i < 0 ? ' disabled' : ''}>Bring it back</button>${message}`;
+      box.innerHTML = `${title}<p class="hx-faint">You removed this edge.</p><button type="button" class="hx-btn hx-btn--quiet" data-whatif="bring-back" data-index="${i}"${i < 0 ? ' disabled' : ''}>Bring it back</button>${message}`;
     } else {
-      box.innerHTML = `${title}<button type="button" class="hx-btn hx-btn--quiet hx-textact" data-whatif="remove-edge" data-from="${escHtml(e.from)}" data-to="${escHtml(e.to)}" data-kind="${escHtml(e.kind || '')}" data-flow="${escHtml(e.flow || '')}" title="Take this edge out of the proposal's map">Remove in this proposal</button>${message}`;
+      box.innerHTML = `${title}<button type="button" class="hx-btn hx-btn--quiet" data-whatif="remove-edge" data-from="${escHtml(e.from)}" data-to="${escHtml(e.to)}" data-kind="${escHtml(e.kind || '')}" data-flow="${escHtml(e.flow || '')}" title="Take this edge out of the proposal's map">Remove in this proposal</button>${message}`;
     }
     paintMessages();
     return;
@@ -593,7 +607,7 @@ function paintDrawer() {
   if (n.mark === 'removed') { box.hidden = true; return; } // the proposal's own removal
   if (n.mark === 'edit' && n.editOp === 'removed') {
     const i = removalIndex('remove-node', (x) => x.id === n.id);
-    box.innerHTML = `${title}<p class="hx-faint">You removed this node.</p><button type="button" class="hx-btn hx-btn--quiet hx-textact" data-whatif="bring-back" data-index="${i}"${i < 0 ? ' disabled' : ''}>Bring it back</button>${message}`;
+    box.innerHTML = `${title}<p class="hx-faint">You removed this node.</p><button type="button" class="hx-btn hx-btn--quiet" data-whatif="bring-back" data-index="${i}"${i < 0 ? ' disabled' : ''}>Bring it back</button>${message}`;
     paintMessages();
     return;
   }
@@ -602,7 +616,7 @@ function paintDrawer() {
   const rows = shown.map((e) => `<li class="hx-whatif-edit"><span class="hx-whatif-edit-text">${escHtml(edgeName(e))} <span class="hx-faint">${escHtml(e.kind === 'flow' ? `flow, ${e.flow}` : e.kind || 'ownership')}</span></span><button type="button" class="hx-textbtn" data-whatif="remove-edge" data-from="${escHtml(e.from)}" data-to="${escHtml(e.to)}" data-kind="${escHtml(e.kind || '')}" data-flow="${escHtml(e.flow || '')}" aria-label="Remove the edge ${escHtml(edgeName(e))}">Remove</button></li>`);
   const help = n.mark === 'edit' || n.mark === 'added' ? 'Takes it out of this proposal, with whatever hangs on it.' : 'Shows the map without it.';
   box.innerHTML = `${title}
-    <button type="button" class="hx-btn hx-btn--quiet hx-textact" data-whatif="remove-node" data-id="${escHtml(n.id)}" title="${escHtml(help)}">Remove in this proposal</button>
+    <button type="button" class="hx-btn hx-btn--quiet" data-whatif="remove-node" data-id="${escHtml(n.id)}" title="${escHtml(help)}">Remove in this proposal</button>
     ${edgeToHtml(n)}
     ${edges.length ? `<details class="hx-whatif-edges"><summary>Its edges (${edges.length})</summary><ul class="hx-whatif-list">${rows.join('')}</ul>${edges.length > shown.length ? `<p class="hx-faint">and ${edges.length - shown.length} more</p>` : ''}</details>` : ''}
     ${message}`;

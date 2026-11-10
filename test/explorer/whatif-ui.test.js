@@ -256,7 +256,6 @@ describe('removing a node', () => {
     click($('proposal-edit'));
     expect(q('#whatif-drawer').hidden).toBe(false);
     expect(q('#whatif-drawer .hx-sec-title').textContent).toBe('Try a change');
-    expect(q('#whatif-drawer .hx-block-title')).toBeNull();
     click($('proposal-edit'));
     expect(q('#whatif-drawer').hidden).toBe(true);
   });
@@ -265,6 +264,7 @@ describe('removing a node', () => {
     await pick('page-keep');
     expect(q('#whatif-drawer').hidden).toBe(false);
     expect(q('#whatif-drawer [data-whatif="remove-node"]').classList.contains('hx-btn--quiet')).toBe(true);
+    expect(q('#whatif-drawer [data-whatif="remove-node"]').classList.contains('hx-textact')).toBe(false); // a button with its border, not a text link
     expect(q('#whatif-drawer [data-whatif="remove-node"]').textContent).toBe('Remove in this proposal');
     expect(q('#whatif-drawer summary').textContent).toBe('Its edges (1)');
   });
@@ -291,6 +291,15 @@ describe('removing a node', () => {
     click(q('#whatif-drawer [data-whatif="bring-back"]'));
     expect(markOf('page-keep')).toBe('none');
     expect(getEdits()).toEqual([]);
+  });
+
+  it('keeps the keyboard in the box: Remove hands the focus to Bring it back, and back again', async () => {
+    await pick('page-keep');
+    q('#whatif-drawer [data-whatif="remove-node"]').focus();
+    click(q('#whatif-drawer [data-whatif="remove-node"]'));
+    expect(document.activeElement).toBe(q('#whatif-drawer [data-whatif="bring-back"]'));
+    click(q('#whatif-drawer [data-whatif="bring-back"]'));
+    expect(document.activeElement).toBe(q('#whatif-drawer [data-whatif="remove-node"]'));
   });
 
   it('a node the proposal added is dropped, with what hangs on it and the steps that point at it', async () => {

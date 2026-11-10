@@ -8,7 +8,7 @@
  *    (`legend`), in the panel (`title`, `color`). The one place these live: scene.js, the legend, the panel and
  *    the House view's Cloud band (CLOUD-08) all read them here; the outage colours (CLOUD-07) are `color`.
  *  - `externalLayer(node)`: the Layers key of an `external` node, `cloud` or `web` (the public web, spec D3).
- *  - `cloudBadges`, `planLabel`, `cloudUsedBy`: what the node panel shows of a cloud node, as data.
+ *  - `planLabel`, `cloudUsedBy`: what the node panel shows of a cloud node, as data.
  *  - `cloudPanelHtml(node, nodes, edges)`: the node panel's facts for it, as HTML (panels.js puts them under the head).
  *
  * Nothing here reads an env var name, a token or a registry `match` list: a cloud node does not carry them, and
@@ -43,12 +43,6 @@ const TIER_WORDS = { free: 'Free', paid: 'Paid', unknown: 'Plan unknown', off: '
 export function planLabel(plan) {
   if (!plan || !TIER_WORDS[plan.tier]) return '';
   return plan.note ? `${TIER_WORDS[plan.tier]} · ${plan.note}` : TIER_WORDS[plan.tier];
-}
-
-/** The kind and the roles, as the panel's badges: ['Cloud', 'runtime', 'account'], or ['Public web', 'not cloud'] */
-export function cloudBadges(node) {
-  if (node.kind === 'web') return ['Public web', 'not cloud'];
-  return ['Cloud', ...(node.roles || [])];
 }
 
 /** What a user of a cloud service is called, one and many (`nounOf(type, n)`: the outage scenario's words too) */
@@ -94,7 +88,7 @@ export function cloudUsedBy(node, nodes, edges) {
 }
 
 /** The fact names for the groups of users, short enough for the panel's key column (the long words are WHEN_STYLES `title`) */
-const WHEN_KEYS = { run: 'Breaks now', deploy: 'Next deploy', renew: 'Next renewal' };
+const WHEN_KEYS = { run: 'Breaks now', deploy: 'Breaks on deploy', renew: 'Breaks on renewal' };
 
 const fact = (key, rows) => (rows.length ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${esc(key)}</div><div class="hx-fact-v">${capped(rows)}</div></div>` : '');
 const line = (body) => `<div class="hx-line">${body}</div>`;
@@ -108,7 +102,7 @@ function userRow(item, mixed) {
 }
 
 /** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node. A quiet button under the facts. */
-const playButton = (node) => `<button type="button" class="hx-btn hx-btn--quiet hx-textact hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">Play: ${esc(String(node.label || node.id))} is down</button>`;
+const playButton = (node) => `<button type="button" class="hx-btn hx-btn--quiet hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">Play: ${esc(String(node.label || node.id))} is down</button>`;
 
 /**
  * The node panel's facts for a cloud node (kind `cloud`) or the public web (kind `web`), in the node panel's key/value
@@ -119,8 +113,8 @@ const playButton = (node) => `<button type="button" class="hx-btn hx-btn--quiet 
 export function cloudPanelHtml(node, nodes, edges) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const label = (id) => String((byId.get(id) || { label: id }).label || id);
-  const roles = node.kind === 'web' ? [] : cloudBadges(node).slice(1);
-  const hasPlan = node.kind !== 'web';
+  const web = node.kind === 'web'; // the public web: no plan, no roles, no Play
+  const roles = web ? [] : node.roles || [];
   const used = cloudUsedBy(node, nodes, edges).map((g) => {
     const mixed = g.types.length > 1;
     return fact(WHEN_KEYS[g.when], g.types.flatMap((t) => t.items.map((i) => userRow(i, mixed))));
@@ -130,11 +124,11 @@ export function cloudPanelHtml(node, nodes, edges) {
     .map((e) => line(`<span>${name(label(e.to))}${e.label ? `<span class="hx-faint"> · ${esc(e.label)}</span>` : ''}</span>`));
   const pushes = edges.filter((e) => e.kind === 'delivers' && e.from === node.id).map((e) => line(name(label(e.to))));
 
-  return (hasPlan ? fact('Plan', [line(esc(planLabel(node.plan) || TIER_WORDS.unknown))]) : '')
+  return (web ? '' : fact('Plan', [line(esc(planLabel(node.plan) || TIER_WORDS.unknown))]))
     + fact('Roles', roles.length ? [line(esc(roles.join(', ')))] : [])
     + fact('If it\'s down', [line(esc(node.breaks || 'Not described yet.'))])
     + used
     + fact('Relies on', relies)
     + fact('Pushes to', pushes)
-    + (node.kind === 'web' ? '' : playButton(node)); // the public web is never down as a whole (spec D3)
+    + (web ? '' : playButton(node)); // the public web is never down as a whole (spec D3)
 }

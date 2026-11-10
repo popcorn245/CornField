@@ -125,13 +125,13 @@ describe('the cloud node panel', () => {
     expect($('drawer-description').textContent).toBe('DNS for example.test.');
     const meta = $('drawer-meta-list');
     expect(meta.querySelector('.hx-facts')).not.toBeNull();
-    expect(Object.keys(facts(meta))).toEqual(['File', 'Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Next renewal']);
+    expect(Object.keys(facts(meta))).toEqual(['File', 'Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Breaks on renewal']);
     const f = facts(meta);
     expect(f.Plan).toBe('Free');
     expect(f.Roles).toBe('runtime, account');
     expect(f['If it\'s down']).toBe('Now: names stop resolving.');
     expect(f['Breaks now']).toContain('join.example.test');
-    expect(f['Next renewal']).toContain('caddy');
+    expect(f['Breaks on renewal']).toContain('caddy');
     expect(meta.textContent).not.toContain('Not run by this stack'); // the old external panel is not shown
     for (const gone of ['.hx-cloud-badges', '.hx-cloud-when', '.hx-glyph', '.hx-count', '.hx-sec strong']) expect(meta.querySelector(gone), gone).toBeNull();
   });
@@ -141,6 +141,7 @@ describe('the cloud node panel', () => {
     await selectNode(state.nodes.find((n) => n.id === 'ext-cloudflare'));
     const play = $('drawer-meta-list').querySelector('[data-action="play-outage"]');
     expect(play.classList.contains('hx-btn--quiet')).toBe(true);
+    expect(play.classList.contains('hx-textact')).toBe(false); // a button with its border, not a text link
     expect(play.textContent).toBe('Play: Cloudflare is down');
   });
 
@@ -148,7 +149,7 @@ describe('the cloud node panel', () => {
     mount();
     await selectNode(state.nodes.find((n) => n.id === 'ext-docker-hub'));
     expect(facts($('drawer-meta-list')).Plan).toBe('Free · Anonymous pulls');
-    expect(facts($('drawer-meta-list'))['Next deploy']).toContain('caddy');
+    expect(facts($('drawer-meta-list'))['Breaks on deploy']).toContain('caddy');
     await selectNode(state.nodes.find((n) => n.id === 'ext-public-web'));
     expect($('drawer-badge').textContent).toBe('Public web');
     expect(facts($('drawer-meta-list')).Plan).toBeUndefined();

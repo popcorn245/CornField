@@ -10,7 +10,7 @@ import { CAP } from '../../explorer/capped.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  WHEN_STYLES, whenOf, whenDash, externalLayer, planLabel, cloudBadges, cloudUsedBy, cloudPanelHtml,
+  WHEN_STYLES, whenOf, whenDash, externalLayer, planLabel, cloudUsedBy, cloudPanelHtml,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/cloud-model.js';
 
@@ -82,12 +82,7 @@ describe('the layer of an outside node', () => {
   });
 });
 
-describe('the badges and the plan', () => {
-  it('says the kind and the roles', () => {
-    expect(cloudBadges(cloudflare)).toEqual(['Cloud', 'runtime', 'account']);
-    expect(cloudBadges(node('ext-public-web', 'external', { kind: 'web' }))).toEqual(['Public web', 'not cloud']);
-  });
-
+describe('the plan', () => {
   it('says the plan in words, with its note', () => {
     expect(planLabel({ tier: 'free' })).toBe('Free');
     expect(planLabel({ tier: 'paid' })).toBe('Paid');
@@ -144,7 +139,7 @@ describe('the panel', () => {
   const keys = facts.map(([k]) => k);
 
   it('is the node panel\'s key/value facts: the plan, the roles, the breaks line, then each when\'s users in order', () => {
-    expect(keys).toEqual(['Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Next deploy', 'Next renewal', 'Relies on']);
+    expect(keys).toEqual(['Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Breaks on deploy', 'Breaks on renewal', 'Relies on']);
     expect(Object.fromEntries(facts)).toMatchObject({ Plan: 'Free', Roles: 'runtime, account', 'If it\'s down': 'Now: names stop resolving. At the next renewal: no certificate.' });
     expect(html.match(/class="hx-fact" data-corn="section"/g)).toHaveLength(facts.length);
   });

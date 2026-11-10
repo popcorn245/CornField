@@ -251,6 +251,8 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 
 Where the stylesheets once had a one-off tint, they mix a token: `color-mix(in srgb, var(--corn-added) 14%, transparent)`. Where they had many near-identical values, they now share the nearest step: the radii 8 and 12px became `--corn-radius-sm` and `--corn-radius`; the font sizes 9 and 10.5px became `--corn-text-2xs`, 16px became `--corn-text-lg`; a 10px padding is `--corn-space-3` (8px), 14px and 18px are `--corn-space-4` and `-5`, a 2px gap is `calc(var(--corn-space-1) / 2)`; a 3px accent bar is `--corn-border-strong`. Lengths that are not one of these (a width, a height, a position) stay in the stylesheets.
 
+**Three tokens are gone** (CF-46): `--corn-warn-soft`, `--corn-bad-soft` and `--corn-info-soft`. Only the cloud panel's old plan pills and kind badge read them, and the panel now shows its plan and roles as plain facts. A theme that still sets them breaks nothing, since an unused custom property does nothing; delete them. `--corn-ok-soft` stays.
+
 ## The map
 
 The map canvas is drawn from tokens too. Its renderers (WebGL, and the Canvas 2D one it falls back to) and its label layer read the `--corn-map-*` custom properties below from the page's computed style when the page loads and again whenever the theme changes (`data-theme`, `data-theme-name`, a theme stylesheet finishing loading, or `prefers-color-scheme` flipping), then draw again. Both draw the same, so a token set once styles both.
