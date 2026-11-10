@@ -16,6 +16,7 @@ import { collapseSheet } from './sheets.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
 import { t } from './strings.js';
+import { capped, toggleCapped } from './capped.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
 
 const $ = (id) => document.getElementById(id);
@@ -40,8 +41,8 @@ const factKey = (title) => {
   return FACT_KEYS[plain] || plain;
 };
 /** One fact: its name, and what it says. A fact with nothing in it is not shown. */
-const section = (title, rows) => (rows.length ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(factKey(title))}</div><div class="hx-fact-v">${rows.join('')}</div></div>` : '');
-const varList = (vars) => `<div class="hx-chips">${vars.map((v) => `<code class="hx-var">${escHtml(v)}</code>`).join('')}</div>`;
+const section = (title, rows) => (rows.length ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(factKey(title))}</div><div class="hx-fact-v">${capped(rows)}</div></div>` : '');
+const varList = (vars) => `<div class="hx-chips">${capped(vars.map((v) => `<code class="hx-var">${escHtml(v)}</code>`))}</div>`;
 const edgesOf = (kind, side, id) => state.edges.filter((e) => e.kind === kind && e[side] === id);
 
 /** Table <-> page data: which keys a page's render reads, which forms write, what ROM re-bakes */
@@ -226,6 +227,7 @@ export async function selectNode(node) {
   render();
 
   const metaList = $('drawer-meta-list');
+  if (!metaList.dataset.moreBound) { metaList.dataset.moreBound = '1'; metaList.addEventListener('click', (e) => { toggleCapped(e.target); }); }
   const openBtn = $('drawer-open-btn');
   const title = $('drawer-title');
 

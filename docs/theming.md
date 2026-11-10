@@ -230,6 +230,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-text-md` | 13px |
 | `--corn-text-base` | 14px |
 | `--corn-text-lg` | 15px, a panel's title |
+| `--corn-text-xl` | 20px, the node panel's heading |
 | **Shape** | |
 | `--corn-radius-xs` | 3px, a tag |
 | `--corn-radius-sm` | 6px, a button, a field |

@@ -14,6 +14,7 @@
 
 import { state, nameOf, escHtml } from './state.js';
 import { themed } from './theme-model.js';
+import { capped } from './capped.js';
 
 export const FLOW_STYLES = {
   outbox: { color: '#f59e0b', label: 'Outbox → API (writes)' },
@@ -149,7 +150,7 @@ export function renderFlowLegend() {
 export function flowSummary(node) {
   const flows = state.edges.filter((e) => e.kind === 'flow' && (e.from === node.id || e.to === node.id));
   const fact = (key, list, out) => (list.length
-    ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${key}</div><div class="hx-fact-v">${list.map((e) => `<div class="hx-line"><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`).join('')}</div></div>`
+    ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${key}</div><div class="hx-fact-v">${capped(list.map((e) => `<div class="hx-line"><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`))}</div></div>`
     : '');
   return fact('Sends to', flows.filter((e) => e.from === node.id), true) + fact('Gets from', flows.filter((e) => e.to === node.id && e.from !== node.id), false);
 }
