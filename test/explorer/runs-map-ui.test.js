@@ -33,7 +33,7 @@ import { toggleLayer } from '../../explorer/layers.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 const NOW = Date.parse('2026-11-05T12:00:00Z');
 const MAP = { nodes: [
   { id: 'orders', type: 'page', x: 100, y: 100, r: 14, color: '#38bdf8', label: 'orders', degree: 0 },

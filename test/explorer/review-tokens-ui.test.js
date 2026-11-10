@@ -14,7 +14,7 @@ import { initReviewTokens, openTokens, closeTokens, resetReviewTokensForTests } 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 
 const $ = (id) => document.getElementById(id);
 const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
