@@ -227,6 +227,7 @@ function mount() {
     root = document.createElement('div');
     root.id = 'whatif';
     root.className = 'hx-whatif';
+    root.dataset.corn = 'whatif';
     root.setAttribute('aria-label', 'Try a change');
     root.innerHTML = `
       <div class="hx-whatif-row" role="toolbar" aria-label="Try a change">
@@ -516,6 +517,7 @@ function mountDrawerBox() {
   drawerBox = document.createElement('div');
   drawerBox.id = 'whatif-drawer';
   drawerBox.className = 'hx-block hx-whatif-drawer';
+  drawerBox.dataset.corn = 'whatif-drawer';
   drawerBox.hidden = true;
   block.parentElement.insertBefore(drawerBox, block);
   drawerBox.addEventListener('click', onClick);
@@ -786,6 +788,7 @@ function showBand(from, to, hovered) {
     // parsed as HTML, so the svg needs no namespace (and the explorer names no URL outside the tailnet)
     band = document.createElement('div');
     band.className = 'hx-rubber';
+    band.dataset.corn = 'rubber';
     band.setAttribute('aria-hidden', 'true');
     band.innerHTML = '<svg width="100%" height="100%"><line class="hx-rubber-line" data-corn="rubber-line"></line><circle class="hx-rubber-from" r="14"></circle><circle class="hx-rubber-to" r="16"></circle></svg>';
     stage.appendChild(band);

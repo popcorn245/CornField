@@ -59,7 +59,7 @@ export function mockupsSectionHtml(items) {
       <button type="button" class="hx-btn hx-mockup-open" data-mockup="${m.index}" aria-haspopup="dialog" data-corn="mockup-open">${escHtml(m.title)}<span class="hx-sr-only"> (${m.type === 'page' ? 'page' : 'image'}, opens in a window)</span></button>
       <span class="hx-mockup-state hx-mockup-state--${escHtml(m.state)}" data-corn="state-pill" data-corn-state="${escHtml(m.state)}">${escHtml(stateWords(m.state))}</span>
     </li>`).join('');
-  return `<div class="hx-sec hx-mockups" data-mockups data-corn="section">
+  return `<div class="hx-sec hx-mockups" data-mockups data-corn="mockups">
     <strong class="hx-strong" id="hx-mockups-h" data-corn="section-title">${items.length === 1 ? 'Mockup' : 'Mockups'}</strong>
     <ul class="hx-mockup-list" aria-labelledby="hx-mockups-h" data-corn="mockup-list">${rows}</ul>
   </div>`;
