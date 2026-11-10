@@ -123,6 +123,9 @@ function isColor(s) {
 /** `#rgb`, `#rrggbb`, `rgb()` or `rgba()` with every channel in range: what both renderers read as written */
 function inRange(s) {
   if (!parseable(s)) return false;
+  // The numbers as written: parseColor clamps them, and an out-of-range channel must go to the browser to be read
+  const nums = /^rgba?\(/i.test(s.trim()) ? s.slice(s.indexOf('(') + 1, s.lastIndexOf(')')).split(',').map(Number) : null;
+  if (nums && (nums.slice(0, 3).some((c) => !(c >= 0 && c <= 255)) || (nums.length > 3 && !(nums[3] > 0 && nums[3] <= 1)))) return false;
   const [r, g, b, a] = parseColor(s);
   return [r, g, b].every((c) => Number.isFinite(c) && c >= 0 && c <= 255) && Number.isFinite(a) && a > 0 && a <= 1;
 }
