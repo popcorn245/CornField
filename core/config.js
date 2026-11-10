@@ -190,6 +190,20 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 /** A path inside the repo: relative, forward slashes, no `..` segment */
 const inRepo = (p) => isText(p) && !path.isAbsolute(p) && !p.split(/[\\/]/).includes('..');
+/** A forge's origin: http(s), a host name or a bracketed IPv6 address, and a port; no user name, path, query, fragment or backslash */
+const FORGE_ORIGIN = /^https?:\/\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?\/?$/;
+/**
+ * Whether `url` is a forge's origin, and one the URL parser keeps as written: a host it would rewrite to another
+ * (`https://2130706433` and `https://0x7f.1` are 127.0.0.1), an IPv6 address it cannot read, or a port past 65535 is not one
+ */
+const isForgeOrigin = (url) => {
+  const m = typeof url === 'string' ? FORGE_ORIGIN.exec(url) : null;
+  if (!m) return false;
+  try {
+    const u = new URL(url);
+    return m[1].startsWith('[') || u.hostname === m[1].toLowerCase();
+  } catch { return false; }
+};
 
 /**
  * What is wrong with a config object (as the file exports it, before defaults).
@@ -238,8 +252,11 @@ export function configProblems(c) {
     if (!isObject(c.forge)) out.push('"forge" is { type, url, repo }.');
     else {
       if (!FORGE_TYPES.includes(c.forge.type)) out.push(`forge.type is one of ${FORGE_TYPES.join(', ')}.`);
-      if (c.forge.url !== undefined && !/^https?:\/\/[^/\s]+\/?$/.test(String(c.forge.url))) out.push('forge.url is the forge\'s origin, like https://github.com.');
-      if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || ''))) out.push('forge.repo is "owner/name".');
+      if (c.forge.url !== undefined && !isForgeOrigin(c.forge.url)) out.push('forge.url is the forge\'s origin, like https://github.com.');
+      // GitHub and GitHub Enterprise only speak https; a token over http would travel in the clear
+      else if (c.forge.url !== undefined && c.forge.type === 'github' && !/^https:/i.test(String(c.forge.url)) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\/?$/i.test(String(c.forge.url))) out.push('forge.url for GitHub is https (http only for localhost): the token would otherwise travel in the clear.');
+      const repoParts = String(c.forge.repo || '').split('/');
+      if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || '')) || repoParts.some((p) => /^\.+$/.test(p))) out.push('forge.repo is "owner/name".');
       if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);
       if (c.forge.baseBranch !== undefined && !(typeof c.forge.baseBranch === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/.test(c.forge.baseBranch) && !c.forge.baseBranch.includes('..'))) out.push('forge.baseBranch is the branch spec pull requests go into, like "main".');
     }
