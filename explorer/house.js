@@ -166,7 +166,7 @@ function syncHouse() {
       repaintLiveChip();
     }
     const btn = $('preset-house-btn');
-    if (btn) { btn.classList.toggle('hx-btn--active', on); btn.setAttribute('aria-pressed', String(on)); }
+    if (btn) btn.setAttribute('aria-pressed', String(on));
     const stage = stageOf();
     if (stage) stage.classList.toggle('is-house', on);
     if (!els) return;

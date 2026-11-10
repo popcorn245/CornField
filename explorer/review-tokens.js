@@ -161,7 +161,8 @@ export function closeTokens({ restoreFocus = true } = {}) {
   el.hidden = true;
   document.removeEventListener('focusin', keepFocusIn);
   $('tokens-btn').setAttribute('aria-expanded', 'false');
-  if (restoreFocus) $('tokens-btn').focus();
+  // The button is in the account menu, which is shut by now: the focus goes to the menu's button then
+  if (restoreFocus) ($('tokens-btn').closest('[hidden]') ? $('account-btn') : $('tokens-btn')).focus();
 }
 
 function onClick(e) {

@@ -90,15 +90,6 @@ export function themeChoiceFrom(search, stored) {
   return { choice: THEME_CHOICES.includes(stored) ? stored : 'system', fromAddress: false };
 }
 
-/** The choice after `choice` on the toggle: system, light, dark, then system again */
-export const nextChoice = (choice) => THEME_CHOICES[(THEME_CHOICES.indexOf(choice) + 1) % THEME_CHOICES.length];
-
-/** What the toggle says it is set to, in plain words (its label and title) */
-export function themeWords(choice, theme) {
-  if (choice === 'system') return `Theme: follows the system (${theme} now)`;
-  return `Theme: ${choice}`;
-}
-
 // ---------------------------------------------------------------------------
 //  Colour arithmetic
 // ---------------------------------------------------------------------------

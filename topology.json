@@ -1988,6 +1988,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "A long list in the node panel shows its first few items and a quiet \"and 15 more\" button that opens the rest in place (a disclosure: `aria-expanded`). (explorer/capped.js)"
+    },
+    {
+      "id": "core-explorer-account-menu",
+      "label": "account-menu.js",
+      "type": "core",
+      "file": "explorer/account-menu.js",
+      "summary": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it. (explorer/account-menu.js)"
     }
   ],
   "edges": [
@@ -6362,7 +6372,17 @@
       "to": "core-explorer-forge-panel",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-account-menu"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-account-menu",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T19:09:49.426Z"
+  "updatedAt": "2026-11-10T19:17:20.681Z"
 }

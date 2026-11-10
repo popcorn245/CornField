@@ -259,6 +259,8 @@ export function clientConfig(config, signIn = false) {
   return {
     name: 'cornfield',
     version: PKG.version,
+    // Where cornfield's own docs are: the account menu's Docs link
+    docs: PKG.homepage,
     title: config.title,
     links: config.links || [],
     // The theme's names and default, never a file's path (docs/config.md#theme)

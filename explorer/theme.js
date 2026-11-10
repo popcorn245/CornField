@@ -5,7 +5,7 @@
  * decides which theme is on and tells the page:
  *
  *   - the choice is `system` (the default: `prefers-color-scheme`, followed live), `light` or `dark`;
- *     the toggle in the header steps through them and keeps the choice in localStorage
+ *     the System / Dark / Light segment in the account menu sets it and keeps the choice in localStorage
  *     (THEME_STORAGE_KEY). `?theme=light|dark|system` in the address wins, for that visit, and is not kept;
  *   - the theme in force is `<html data-theme="light|dark">`: explorer.css swaps its tokens on it,
  *     theme-boot.js sets it before the first paint (so a light page never flashes dark), and this module
@@ -19,7 +19,7 @@
 import { state, touchScene } from './state.js';
 import { render } from './render.js';
 import { refreshMapStyle } from './map-style.js';
-import { THEME_STORAGE_KEY, nextChoice, resolveTheme, themeChoiceFrom, themeWords } from './theme-model.js';
+import { THEME_STORAGE_KEY, resolveTheme, themeChoiceFrom } from './theme-model.js';
 
 const QUERY = '(prefers-color-scheme: light)';
 let choice = 'system';
@@ -49,14 +49,9 @@ function store(value) {
   } catch { /* storage blocked: the choice still holds for this visit */ }
 }
 
-function syncButton(theme) {
-  const btn = document.getElementById('theme-toggle-btn');
-  if (!btn) return;
-  const words = themeWords(choice, theme);
-  btn.setAttribute('aria-label', `${words}. Change theme`);
-  btn.title = `${words}. Click for ${nextChoice(choice) === 'system' ? 'the system setting' : nextChoice(choice)}`;
-  btn.dataset.choice = choice;
-  btn.querySelectorAll('[data-icon]').forEach((g) => { g.toggleAttribute('hidden', g.dataset.icon !== choice); });
+/** The segment in the account menu says which choice is on (aria-pressed) */
+function syncButtons() {
+  for (const b of document.querySelectorAll('[data-action="set-theme"]')) b.setAttribute('aria-pressed', String(b.dataset.choice === choice));
 }
 
 /** Puts the theme in force on the page and the map */
@@ -64,7 +59,7 @@ function apply() {
   const theme = resolveTheme(choice, prefersLight());
   const root = document.documentElement;
   root.dataset.theme = theme;
-  syncButton(theme);
+  syncButtons();
   refreshMapStyle(); // the map's tokens (--corn-map-*) differ by theme: read them for this one (map-style.js)
   if (state.theme === theme) return;
   state.theme = theme;
@@ -101,6 +96,3 @@ export function setThemeChoice(next) {
   store(choice);
   apply();
 }
-
-/** The header toggle: system, light, dark, system ... */
-export const cycleTheme = () => setThemeChoice(nextChoice(choice));

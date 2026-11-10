@@ -132,11 +132,6 @@ export function screenToWorld(sx, sy) {
   return { x: (sx - state.camera.x) / state.camera.zoom, y: (sy - state.camera.y) / state.camera.zoom };
 }
 
-export function zoomBy(factor) {
-  state.camera.zoom = Math.max(0.25, Math.min(3.0, state.camera.zoom * factor));
-  render();
-}
-
 // ---------------------------------------------------------------------------
 //  When to draw (frame.js has the rules): on demand, not on a timer
 // ---------------------------------------------------------------------------
