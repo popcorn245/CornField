@@ -1868,6 +1868,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The text of a run's **status comment** (issue #104, docs/agents.md#a-thread-for-every-run): the one comment cornfield keeps in the thread a run is about and edits in place as the run moves. (server/run-thread.js)"
+    },
+    {
+      "id": "core-core-theme",
+      "label": "theme.js",
+      "type": "core",
+      "file": "core/theme.js",
+      "summary": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep. (core/theme.js)"
+    },
+    {
+      "id": "core-explorer-theme-names",
+      "label": "theme-names.js",
+      "type": "core",
+      "file": "explorer/theme-names.js",
+      "summary": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load. (explorer/theme-names.js)"
     }
   ],
   "edges": [
@@ -5903,7 +5923,45 @@
       "from": "page-doc-docs-threads",
       "to": "page-doc-docs-agents",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-theme"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-names"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-plugins",
+      "to": "core-explorer-theme-names",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme-names",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-06T10:01:14.591Z"
+  "updatedAt": "2026-11-10T07:55:19.713Z"
 }

@@ -23,12 +23,38 @@ import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
+import { MAX_THEME_BYTES, cssProblems, themeFiles } from './theme.js';
 
 /** How a page is produced today, and whether it is baked to a file */
 export const RENDER_NOW = ['build', 'request', 'build+request', 'rom'];
 export const ROM_MODES = ['bake', 'skip'];
 
 const ONLY_REMOVES_HINT = '(A proposal that adds nothing cannot show it has been built: delete it, or close its spec, in the PR that lands it.)';
+
+/**
+ * The config's theme files (docs/config.md#theme): each one exists, is a plain file inside the repo (a link out of it is refused),
+ * is at most MAX_THEME_BYTES, and is CSS that keeps out of script (core/theme.js `cssProblems`).
+ * @param {{ root: string, theme?: object }} config
+ * @returns {string[]}
+ */
+export function validateThemeFiles(config) {
+  const errors = [];
+  let base;
+  try { base = fs.realpathSync(config.root); } catch { return errors; }
+  for (const { key, rel } of themeFiles(config.theme)) {
+    const where = `theme.${key} (${rel})`;
+    const file = path.resolve(config.root, rel);
+    let real;
+    try { real = fs.realpathSync(file); } catch { errors.push(`${where} does not exist.`); continue; }
+    if (!real.startsWith(base + path.sep)) { errors.push(`${where} leaves the repo (a link or a path that resolves outside it).`); continue; }
+    const stats = fs.statSync(real);
+    if (!stats.isFile()) { errors.push(`${where} is not a file.`); continue; }
+    if (stats.size > MAX_THEME_BYTES) { errors.push(`${where} is ${Math.ceil(stats.size / 1024)} KB; a theme file is at most ${MAX_THEME_BYTES / 1024} KB.`); continue; }
+    const text = fs.readFileSync(real, 'utf8');
+    for (const p of cssProblems(text, { fonts: config.theme.fonts })) errors.push(`${where} ${p}`);
+  }
+  return errors;
+}
 
 /**
  * The schema checks: no files, no derivers.
@@ -220,6 +246,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
     errors.push(`Deriving the map from the code failed: ${err.message}`);
   }
   errors.push(...validatePersonasFile(config.root, config.personas.roles));
+  errors.push(...validateThemeFiles(config));
   errors.push(...validateCloudNodes(topology, config.root));
   errors.push(...validateProposalFiles(topology, path.join(config.root, config.proposals), config.root));
   const io = repoReader(config.root);

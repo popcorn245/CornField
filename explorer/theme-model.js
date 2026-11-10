@@ -30,6 +30,25 @@
 export const THEME_CHOICES = ['system', 'light', 'dark'];
 /** Where the choice is kept in the browser (theme.js); `?theme=` in the address wins over it, without being kept */
 export const THEME_STORAGE_KEY = 'topology-explorer:theme';
+/** Where a viewer's pick among the config's named themes is kept (theme-names.js); theme-boot.js reads the same key */
+export const THEME_NAME_STORAGE_KEY = 'cornfield:theme-name';
+
+/**
+ * The named theme in force: the stored pick when it is one of `names`, else the config's default when that is one, else none ('').
+ * The same rule as theme-boot.js (a test holds them together).
+ * @param {string|null} stored what THEME_NAME_STORAGE_KEY holds
+ * @param {string[]} names the config's theme names
+ * @param {string|null} fallback the config's default
+ * @returns {string}
+ */
+export function themeNameFrom(stored, names, fallback) {
+  if (stored && names.includes(stored)) return stored;
+  return fallback && names.includes(fallback) ? fallback : '';
+}
+
+/** Where a named theme's stylesheet is served (server/server.js); '' for no named theme */
+export const themeNameHref = (name) => (/^[a-z0-9][a-z0-9-]{0,31}$/.test(name) ? `/cornfield/theme/${name}.css` : '');
+
 /** The light page's ground (--hx-bg in explorer.css): what the light colours are measured against */
 export const LIGHT_GROUND = '#f4f6fa';
 /** The dark page's ground, for checking what the dark theme already does */

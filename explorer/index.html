@@ -12,6 +12,8 @@
   <script src="/explorer/theme-boot.js"></script>
   <link rel="stylesheet" href="/explorer/explorer.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
+  <!-- The config's theme (server/server.js puts it here, so it comes after cornfield's own CSS): font stylesheets, the repo's theme.css, a named theme -->
+  <!--@theme-->
 </head>
 <body>
   <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->
@@ -156,6 +158,9 @@
           <g data-icon="dark" hidden><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" fill="currentColor" /></g>
         </svg>
       </button>
+
+      <!-- The named themes of the config (`theme.names`): filled and shown by explorer/theme-names.js; hidden when there are none -->
+      <select id="theme-name-select" class="hx-forge-select" style="width:auto;max-width:9rem" aria-label="Theme" title="Theme" hidden></select>
 
       <!-- The config's links (cornfield.config.js `links`), filled by explorer/plugins.js -->
       <span id="cf-links" class="hx-links"></span>

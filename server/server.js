@@ -16,6 +16,8 @@
  *   GET  /cornfield/house.json          the repo's house file, when `sources.house` is the built-in house source;
  *                                       Home Assistant's floors, areas and devices, when it is `home-assistant`
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
+ *   GET  /cornfield/theme.css, /cornfield/theme/<name>.css
+ *                                       the stylesheets the config's `theme` names (css, names): those files only, as text/css
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
  *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
@@ -50,6 +52,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel, runnerQuietAfterMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
+import { MAX_THEME_BYTES, THEME_NAME, clientTheme, cssProblems, fontOrigins, fontUrl } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
@@ -90,12 +93,68 @@ function importMapOf(config) {
  * The Content-Security-Policy of every page: everything from this origin, nothing from anywhere else
  * (the explorer runs offline from any CDN). An import map is inline, so it is allowed by its hash.
  */
-function cspOf(importMap) {
+function cspOf(importMap, theme) {
+  const { style, font } = fontOrigins(theme);
   const hash = importMap ? ` 'sha256-${createHash('sha256').update(importMap).digest('base64')}'` : '';
   return [
-    "default-src 'self'", `script-src 'self'${hash}`, "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:",
-    "connect-src 'self'", "font-src 'self'", "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "form-action 'self'",
+    "default-src 'self'", `script-src 'self'${hash}`, `style-src 'self' 'unsafe-inline'${style.map((o) => ` ${o}`).join('')}`, "img-src 'self' data: blob:",
+    "connect-src 'self'", `font-src 'self'${font.map((o) => ` ${o}`).join('')}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "form-action 'self'",
   ].join('; ');
+}
+
+/** `<html>` with the named themes on it, for theme-boot.js to read before the first paint (names are plain: core/theme.js THEME_NAME) */
+function themeHtmlTag(theme) {
+  const names = Object.keys(theme.names || {}).filter((n) => THEME_NAME.test(n));
+  return names.length ? `<html lang="en" data-theme-names="${names.join(' ')}"${theme.default && names.includes(theme.default) ? ` data-theme-default="${theme.default}"` : ''}>` : '<html lang="en">';
+}
+
+/**
+ * The links that go after cornfield's own stylesheets, in this order: the allow-listed font stylesheets, the repo's theme.css, and the
+ * default named theme (theme-boot.js, run again after it, points that link at the viewer's choice). Always links, never inlined CSS.
+ */
+function themeHead(theme) {
+  const out = [];
+  for (const f of theme.fonts || []) {
+    const u = fontUrl(f);
+    if (u) out.push(`<link rel="stylesheet" href="${escapeHtml(u.href)}" referrerpolicy="no-referrer" />`);
+  }
+  if (theme.css) out.push('<link rel="stylesheet" href="/cornfield/theme.css" data-cf-theme="css" />');
+  const names = Object.keys(theme.names || {});
+  if (names.length) {
+    out.push(`<link rel="stylesheet" id="cf-theme-name-css" href="${theme.default && names.includes(theme.default) ? `/cornfield/theme/${theme.default}.css` : ''}" data-cf-theme="name" />`);
+    out.push('<script src="/explorer/theme-boot.js"></script>');
+  }
+  return out.join('\n  ');
+}
+
+/** The theme files the config names, by the path they are served at: `Map<'/cornfield/theme.css' | '/cornfield/theme/<name>.css', rel>` */
+function themeFilesOf(config) {
+  const t = config.theme || {};
+  const out = new Map();
+  if (t.css) out.set('/cornfield/theme.css', t.css);
+  for (const [n, rel] of Object.entries(t.names || {})) if (THEME_NAME.test(n)) out.set(`/cornfield/theme/${n}.css`, rel);
+  return out;
+}
+
+/**
+ * Serves one theme file: text/css and nosniff, only a file the config names, only a plain file whose real path is still inside the repo
+ * (a link out is refused), only up to MAX_THEME_BYTES, and only if it passes the same CSS checks as `cornfield validate`.
+ */
+function sendTheme(req, res, config, rel, reqPath) {
+  try {
+    const file = inside(config.root, rel);
+    const real = file && fs.realpathSync(file);
+    const base = fs.realpathSync(config.root);
+    if (!real || !real.startsWith(base + path.sep)) return notFound(res, reqPath);
+    const stats = fs.statSync(real);
+    if (!stats.isFile() || stats.size > MAX_THEME_BYTES) return notFound(res, reqPath);
+    const text = fs.readFileSync(real, 'utf8');
+    if (cssProblems(text, { fonts: config.theme.fonts }).length) return notFound(res, reqPath);
+    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+    return res.end(req.method === 'HEAD' ? undefined : text);
+  } catch {
+    return notFound(res, reqPath);
+  }
 }
 
 /** The browser modules the config names from the repo: each one's folder may be served (its .js files only) */
@@ -120,6 +179,8 @@ export function clientConfig(config, signIn = false) {
     version: PKG.version,
     title: config.title,
     links: config.links || [],
+    // The theme's names and default, never a file's path (docs/config.md#theme)
+    theme: clientTheme(config.theme),
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.approveLands ? { approveLands: true } : {}) } : null,
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },
@@ -167,7 +228,9 @@ export function createCornfieldServer(config, opts = {}) {
   if (config.approveLands && !auth.enabled) throw new Error('The config says proposals.approveLands, but sign-in is not set up. An approval is a signed-in maintainer\'s, and it lands as them, so without sign-in nothing would ever land: set up sign-in (docs/sign-in.md), or remove approveLands.');
   const root = config.root;
   const importMap = importMapOf(config);
-  const csp = cspOf(importMap);
+  const theme = config.theme || {};
+  const csp = cspOf(importMap, theme);
+  const themeFile = themeFilesOf(config);
   const repoModules = repoModuleDirs(config);
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost };
@@ -220,6 +283,8 @@ export function createCornfieldServer(config, opts = {}) {
   const page = () => {
     const html = fs.readFileSync(path.join(EXPLORER_DIR, 'index.html'), 'utf8')
       .replace('<!--@importmap-->', importMap ? `<script type="importmap">${importMap}</script>` : '')
+      .replace('<html lang="en">', themeHtmlTag(theme))
+      .replace('<!--@theme-->', themeHead(theme))
       .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(config.title)} · cornfield</title>`);
     return html;
   };
@@ -313,6 +378,7 @@ export function createCornfieldServer(config, opts = {}) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
       return res.end(req.method === 'HEAD' ? undefined : page());
     }
+    if (themeFile.has(reqPath)) return sendTheme(req, res, config, themeFile.get(reqPath), reqPath);
     if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config, signedIn));
     if (reqPath === '/topology.json') {
       const file = inside(root, config.topology);

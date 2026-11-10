@@ -19,6 +19,7 @@ export default {
   releaseNotes: { breakingLabel: 'breaking' },
   hooks: [{ url: 'https://chat.example.org/hooks/cornfield', events: ['spec.ready', 'spec.approved'] }],
   links: [{ label: 'Docs', href: 'https://example.org/docs' }],
+  theme: { css: './tools/cornfield/theme.css', fonts: ['https://fonts.googleapis.com/css2?family=Nunito&display=swap'], names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' }, default: 'day' },
   proxy: { '/api/': 'http://127.0.0.1:3245' },
   importMap: {},
   dataDir: null,
@@ -45,6 +46,7 @@ export default {
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
 | `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's header |
+| `theme` | `{ css?, fonts?, fontHosts?, names?, default? }`: a repo's own look, CSS only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, and named themes with a picker in the header. [Theme](#theme) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
 | `dataDir` | cornfield's own state: `cornfield.db`, its SQLite file (private to its owner: it holds sessions). Default: `~/.cornfield/<repo folder>`, never inside the checkout |
@@ -200,6 +202,43 @@ hookPoll: { specs: '5m' },   // the default; '90s', '5m', '1h'… or false for n
 - **When the forge fails.** The error is logged, never thrown, and the next look waits twice the interval, until one succeeds.
 
 A hook never blocks or undoes what fired it. Events are sent in the background; a delivery that is not answered with a 2xx within 10 seconds (a redirect is not followed) is tried again after 1, 5 and 30 seconds, then dropped. Every attempt is a row in the audit table (`actions`, action `hook`; it names the hook's origin and the HTTP status, never its path, the secret or the body). Deliveries wait in memory, so a restart forgets the ones still being retried, and a receiver should answer quickly and treat `X-Cornfield-Delivery` as its dedupe key.
+
+## Theme
+
+A repo can restyle cornfield without a fork: `theme` names stylesheets, font stylesheets and named themes. **A theme is CSS only.** It is never script, and it is never inlined into the page: every theme file is a `<link rel="stylesheet">` to a same-origin URL, so the page's Content-Security-Policy (`script-src 'self'`) is unchanged.
+
+```js
+theme: {
+  css: './tools/cornfield/theme.css',                        // loaded after cornfield's own CSS
+  fonts: ['https://fonts.googleapis.com/css2?family=Nunito&display=swap'],
+  fontHosts: [],                                             // only for a fonts host that is not a known pair (below)
+  names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' },
+  default: 'day',                                            // must be one of `names`
+}
+```
+
+| Key | What it is |
+|---|---|
+| `css` | one stylesheet inside the repo, written relative to it and ending in `.css`. The server serves it at `/cornfield/theme.css`, as `text/css` with `X-Content-Type-Options: nosniff`, and the page links it **after** `explorer.css` and `house.css`, so it can override them. |
+| `fonts` | an allow-list (at most 8) of `https:` stylesheet URLs, such as a Google Fonts `css2?family=…` link. Each is added to the page as a `<link rel="stylesheet">` and to the CSP. Any other scheme (`http:`, `data:`, `javascript:`), a URL with credentials, an IP address or a wildcard is refused. |
+| `fontHosts` | the hosts the font *files* come from, for a `fonts` host that is not a known pair. At most 8 plain host names, like `files.example.org`. Only allowed with `fonts`. |
+| `names` | named themes: `{ name: './path.css' }`, at most 12. A name is lower-case letters, digits and hyphens (at most 32 characters). Each file is served at `/cornfield/theme/<name>.css`. |
+| `default` | the name in force until a viewer picks another. One of `names`. Without it, no named theme is on until a viewer picks one, and the picker offers "Standard" (cornfield without a named theme). |
+
+**What the CSP gets.** `style-src` gains the origin of each `fonts` URL and `font-src` gains the same origins plus the font file hosts, and nothing else is widened (`default-src`, `script-src`, `connect-src` and `img-src` stay as they were). The file hosts are known for two stylesheet hosts: `fonts.googleapis.com` (files from `fonts.gstatic.com`) and `fonts.bunny.net` (files from the same host). For any other host in `fonts`, the config is refused until `fontHosts` lists where its font files come from. A font file that a stylesheet in `fonts` names from a host the policy does not list is blocked by the browser.
+
+**Named themes.** With `names`, the server puts `data-theme-names` and `data-theme-default` on `<html>`, and `explorer/theme-boot.js` sets `data-theme-name` on `<html>` before the first paint: the viewer's pick from `localStorage` (`cornfield:theme-name`) when it is still one of `names`, else `default`. It also points the named theme's `<link>` at that file, so a stylesheet scoped to `:root[data-theme-name="night"]` or a whole file per name both work. A small `<select>` in the header, next to the light/dark toggle, switches it and remembers the pick. If storage is blocked, the page still renders and the pick holds for that visit. `data-theme-name` is independent of the light/dark `data-theme`.
+
+The order of stylesheets is: cornfield's own, the `fonts` links, `css`, then the current named theme. `/cornfield/config.json` carries `theme: { names, default }` for the picker, never a file path.
+
+**What `cornfield validate` checks** in each file named by `css` and `names`:
+
+- it exists, is a plain file, and stays inside the repo (a symlink that leads out is refused);
+- it is at most **256 KB**;
+- it is CSS: no NUL bytes, no HTML, balanced braces;
+- it keeps out of script: no `expression(`, `javascript:`, `vbscript:`, `behavior:` or `-moz-binding` (CSS escapes and comments inside the word do not hide it), and no `@import` except of an `https:` URL that is listed in `theme.fonts`.
+
+The server applies the same checks when it serves a file and answers 404 for one that fails, for a file over the cap, and for any path the config does not name. Nothing else of the repo is reachable through these routes.
 
 ## Sources
 

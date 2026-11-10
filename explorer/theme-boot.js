@@ -14,3 +14,22 @@
     || (choice !== 'dark' && !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches));
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
 })();
+
+/*
+ * The named themes of the config (`theme.names`, docs/config.md#theme): the server puts them on <html data-theme-names="a b"
+ * data-theme-default="a">. This puts the viewer's pick (localStorage, when it is one of them) or the default on
+ * <html data-theme-name> before the first paint, and points the named theme's <link id="cf-theme-name-css"> at it. The server includes
+ * this file a second time after that link, which is when the link exists. The same rule as theme-model.js `themeNameFrom` (a test holds them together).
+ */
+(function () {
+  var root = document.documentElement;
+  var names = (root.getAttribute('data-theme-names') || '').split(' ').filter(Boolean);
+  if (!names.length) return;
+  var stored = null;
+  try { stored = window.localStorage.getItem('cornfield:theme-name'); } catch (e) { stored = null; }
+  var fallback = root.getAttribute('data-theme-default');
+  var name = stored && names.indexOf(stored) >= 0 ? stored : (fallback && names.indexOf(fallback) >= 0 ? fallback : '');
+  if (name) root.setAttribute('data-theme-name', name); else root.removeAttribute('data-theme-name');
+  var link = document.getElementById('cf-theme-name-css');
+  if (link) { if (name) link.setAttribute('href', '/cornfield/theme/' + name + '.css'); else link.removeAttribute('href'); }
+})();
