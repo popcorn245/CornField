@@ -135,13 +135,31 @@ describe('the toolbar', () => {
   it('is hidden with no proposal, and shows with one: plain-word buttons and "Your edits (0)"', () => {
     expect($('whatif').hidden).toBe(true);
     open();
+    expect($('whatif').hidden).toBe(true); // behind Edit
+    expect($('proposal-edit').getAttribute('aria-expanded')).toBe('false');
+    click($('proposal-edit'));
     expect($('whatif').hidden).toBe(false);
+    expect($('proposal-edit').getAttribute('aria-expanded')).toBe('true');
     expect($('whatif').closest('#proposal-body')).not.toBeNull();
     expect(qa('#whatif .hx-whatif-row button').map((b) => b.textContent .trim())).toEqual(['Add a node', 'Draw an edge', 'Undo', 'Redo', 'Your edits (0)', 'Steps']);
     expect(tool('undo').disabled).toBe(true);
     expect(tool('redo').disabled).toBe(true);
     closeProposal();
     expect($('whatif').hidden).toBe(true);
+  });
+
+  it('hides again on a second press of Edit, ends a drawing, keeps the edits and counts them on the button', () => {
+    open();
+    expect($('proposal-edit').textContent).toBe('Edit');
+    click($('proposal-edit'));
+    click(tool('draw-edge'));
+    expect(tool('draw-edge').getAttribute('aria-pressed')).toBe('true');
+    click(tool('add-node'));
+    click($('proposal-edit'));
+    expect($('whatif').hidden).toBe(true);
+    expect(tool('draw-edge').getAttribute('aria-pressed')).toBe('false');
+    expect(q('[data-form]')).toBeNull();
+    expect($('proposal-edit').getAttribute('aria-expanded')).toBe('false');
   });
 
   it('with no proposal open the map has no edit marks and the plain nodes', () => {
@@ -666,7 +684,7 @@ describe('steps', () => {
     expect(getEffectiveProposal().scenarios).toEqual([{ id: 'store-a-meal', title: 'Store a meal', steps: [{ node: 'table-t', text: 'A meal is stored.' }] }]);
     expect((q('[data-scenario-select]')                     ).value).toBe('store-a-meal');
     // the scenario list on the stage follows the effective proposal
-    expect(q('.hx-scenarios summary').textContent).toBe('Scenarios · 1');
+    expect([...document.querySelectorAll('.hx-scenarios-item')].map((b) => b.textContent)).toEqual(['Store a meal · 1 step']);
   });
 
   it('the scenario list on the stage shows the edited scenario', async () => {

@@ -74,14 +74,15 @@ const $ = (id        ) => document.getElementById(id)               ;
 const q = (sel        ) => document.querySelector(sel)               ;
 const click = (el         ) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); };
-const approveBtn = () => q('#review [data-review="approved"]')                     ;
-const sendBackBtn = () => q('#review [data-review="notes"]')                     ;
+const approveBtn = () => q('#proposal-bar [data-review="approved"]')                     ;
+const sendBackBtn = () => q('#proposal-bar [data-review="notes"]')                     ;
 const noteBox = () => $('review-note')                       ;
 const status = () => q('#review [data-review-status]').textContent ;
 const msg = () => q('#review [data-review-msg]');
 const hint = () => q('#review [data-review-hint]');
 const pipelineLine = () => q('#review [data-review-pipeline]');
-const typeNote = (text        ) => { noteBox().value = text; noteBox().dispatchEvent(new Event('input', { bubbles: true })); };
+const noteOpen = () => !q('#review [data-review-form]').hidden;
+const typeNote = (text        ) => { if (!noteOpen()) click(sendBackBtn()); noteBox().value = text; noteBox().dispatchEvent(new Event('input', { bubbles: true })); };
 const tool = (name        ) => q(`#whatif [data-whatif="${name}"]`)                     ;
 
 /** Adds a node through the what-if form, so there is an edit to send */
@@ -156,7 +157,10 @@ describe('the buttons', () => {
     open();
     expect($('review').hidden).toBe(false);
     expect($('review').closest('#proposal-body')).not.toBeNull();
-    expect($('whatif').compareDocumentPosition($('review')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(q('.hx-proposal-head').compareDocumentPosition($('review')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // under the toolbar
+    expect(q('.hx-proposal-head').contains(approveBtn())).toBe(true);
+    expect(q('.hx-proposal-head').contains(sendBackBtn())).toBe(true);
+    expect(noteOpen()).toBe(false); // the note opens only when Send back is pressed
     expect(approveBtn().textContent .trim()).toBe('Approve');
     expect(sendBackBtn().textContent .trim()).toBe('Send back');
     expect(q('label[for="review-note"]').textContent).toMatch(/note/i);
@@ -209,6 +213,11 @@ describe('Send back', () => {
     open();
     await settle();
     s.calls.length = 0;
+    click(sendBackBtn()); // the first press opens the note
+    expect(noteOpen()).toBe(true);
+    expect(sendBackBtn().textContent.trim()).toBe('Send back with this note');
+    expect(document.activeElement).toBe(noteBox());
+    expect(msg().hidden).toBe(true);
     click(sendBackBtn());
     await settle();
     expect(msg().hidden).toBe(false);
@@ -225,10 +234,27 @@ describe('Send back', () => {
   it('clears the refusal when the maintainer starts typing', async () => {
     open();
     click(sendBackBtn());
+    click(sendBackBtn());
     await settle();
     expect(msg().hidden).toBe(false);
     typeNote('Smaller.');
     expect(msg().hidden).toBe(true);
+  });
+
+  it('opens a note that Cancel closes, with focus back on Send back and what was typed gone', async () => {
+    const s = fakeServer();
+    open();
+    await settle();
+    s.calls.length = 0;
+    click(sendBackBtn());
+    typeNote('Not now.');
+    click(q('#review [data-review-cancel]'));
+    expect(noteOpen()).toBe(false);
+    expect(sendBackBtn().textContent.trim()).toBe('Send back');
+    expect(sendBackBtn().getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(sendBackBtn());
+    expect(noteBox().value).toBe('');
+    expect(s.calls).toEqual([]);
   });
 
   it('sends the verdict, the note and the edits to the hub, shows "Sent back just now", and empties the edits', async () => {
@@ -249,6 +275,8 @@ describe('Send back', () => {
     expect(status()).toBe('Sent back just now');
     expect(getEdits()).toEqual([]); // they went with the note
     expect(noteBox().value).toBe('');
+    expect(noteOpen()).toBe(false);
+    expect(document.activeElement).toBe(sendBackBtn());
     expect(msg().hidden).toBe(true);
     expect(hint().textContent).toMatch(/1 edit/);
     expect(hint().textContent).toMatch(/drafting agent/);
@@ -283,13 +311,14 @@ describe('Approve', () => {
     expect(hint().textContent).toBe('Your 2 edits are in the review comment on the PR. The drafting agent will fold them into the proposal.');
   });
 
-  it('takes a note when there is one', async () => {
+  it('takes no note, even with the note field open', async () => {
     const s = fakeServer();
     open();
     typeNote('Looks right to me.');
     click(approveBtn());
     await settle();
-    expect(s.puts()[0].body).toMatchObject({ verdict: 'approved', note: 'Looks right to me.' });
+    expect(s.puts()[0].body).toMatchObject({ verdict: 'approved', note: '' });
+    expect(noteOpen()).toBe(false);
   });
 
   it('says nothing about edits when there are none', async () => {

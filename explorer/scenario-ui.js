@@ -308,21 +308,38 @@ function mountList() {
   }
 }
 
-/** Shows or hides the list to match `state.proposal.scenarios` (and hides it while one plays: the bar is the control then) */
+const wiredPlay = new WeakSet();
+
+/** The toolbar's Play button: shown while the open proposal has scenarios and none plays; with one it plays it, with several it opens the list */
+function paintPlay(show) {
+  const btn = document.getElementById('proposal-play');
+  if (!btn) return;
+  btn.hidden = !show;
+  btn.setAttribute('aria-expanded', String(!!list && !list.hidden));
+  if (wiredPlay.has(btn)) return;
+  wiredPlay.add(btn);
+  btn.addEventListener('click', () => {
+    const scenarios = proposalScenarios();
+    if (scenarios.length === 1) playScenario(scenarios[0]);
+    else if (list) { list.hidden = !list.hidden; btn.setAttribute('aria-expanded', String(!list.hidden)); }
+  });
+}
+
+/** Shows or hides the Play button and its list to match the open proposal's scenarios (and hides them while one plays: the player is the control then) */
 export function refreshList() {
   const stage = $stage();
   const scenarios = proposalScenarios();
   const show = !!stage && scenarios.length > 0 && !player;
-  if (!show) { if (list) { list.remove(); list = null; } return; }
+  if (!show) { if (list) { list.remove(); list = null; } paintPlay(false); return; }
   const key = scenarios.map((s) => `${s.id}\u0000${s.title}\u0000${(s.steps || []).length}`).join('\u0001');
-  if (list && list.dataset.key === key) { mountList(); return; }
+  if (list && list.dataset.key === key) { mountList(); paintPlay(true); return; }
+  const wasOpen = !!list && !list.hidden;
   if (list) list.remove();
-  list = document.createElement('details');
+  list = document.createElement('div');
+  list.id = 'proposal-scenarios';
   list.className = 'hx-scenarios glass';
   list.dataset.key = key;
-  const summary = document.createElement('summary');
-  summary.textContent = `Scenarios · ${scenarios.length}`;
-  list.appendChild(summary);
+  list.hidden = !!document.getElementById('proposal-play') && (!wasOpen || scenarios.length < 2); // behind Play when the toolbar has one
   scenarios.forEach((s) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -340,6 +357,7 @@ export function refreshList() {
     if (scenario) playScenario(scenario);
   });
   mountList();
+  paintPlay(true);
 }
 
 // ---------------------------------------------------------------------------

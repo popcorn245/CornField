@@ -434,7 +434,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
 | `forge-panel` | the Issues & PRs panel, with the agent runs |
 | `proposal-bar` | the open proposal's bar |
-| `review-bar`, `whatif` | in the proposal bar: the review part (note, Approve, Send back), the what-if editor |
+| `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens under the toolbar on Send back), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 
 ### Dialogs
@@ -493,8 +493,9 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `closeProposal` | Close |
 | `approve` | Approve |
 | `sendBack` | Send back |
+| `sendBackWithNote` | Send back with this note |
 | `reviewNoteLabel` | Note for the drafting agent |
-| `reviewNotePlaceholder` | What should change? Needed to send it back, optional to approve. |
+| `reviewNotePlaceholder` | What should change? |
 | `tabPulls` | Pull requests |
 | `tabIssues` | Issues |
 | `tabThreads` | Threads |
