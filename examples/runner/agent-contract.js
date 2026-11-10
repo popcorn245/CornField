@@ -40,7 +40,7 @@
  * @typedef {{ issue?: number, proposal?: string, pull?: number, thread?: number }} RunRefs
  * @typedef {{ minutes?: number, turns?: number, cost?: number, tokens?: number }} RunLimits
  * @typedef {{ version: 1, runId: string, kind: RunKind, profile?: string, refs: RunRefs, branch?: string, brief: string,
- *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string, trigger?: { event: 'spec.approved' | 'build.opened' | 'thread.message', by: string, ref: string } }} RunRequest
+ *   limits?: RunLimits, nodes?: string[], requestedBy: string, requestedAt: string, retryOf?: string, trigger?: { event: 'spec.approved' | 'build.opened' | 'thread.message', by: string, ref: string } }} RunRequest
  * @typedef {'claimed' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped'} ReportState
  * @typedef {{ state: ReportState, note?: string, url?: string, tokens?: number, cost?: number }} RunReport
  * @typedef {{ state: 'stop-requested', note?: string }} StopRequest
@@ -89,7 +89,7 @@ export const RUN_TAG = 'cornfield-run';
 /** The key of the trailer */
 export const TRAILER_KEY = 'Cornfield-Run';
 
-const REQUEST_KEYS = ['version', 'runId', 'kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'requestedAt', 'trigger'];
+const REQUEST_KEYS = ['version', 'runId', 'kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'requestedAt', 'retryOf', 'trigger'];
 const TRIGGER_KEYS = ['event', 'by', 'ref'];
 /** The events an opt-in trigger may fire on (`agents.on`, spec 0005 D10): each is something a maintainer did */
 export const TRIGGER_EVENTS = Object.freeze(['spec.approved', 'build.opened', 'thread.message']);
@@ -345,6 +345,10 @@ export function validateRequest(body, { profiles } = {}) {
     }
   }
 
+  if (body.retryOf !== undefined) {
+    if (!isRunId(body.retryOf)) return no('"retryOf" is the run id of the run this one starts again, like run-01JC8Z3Q5M7VXK2RT9N4B6HDEF.');
+  }
+
   if (body.nodes !== undefined) {
     if (!Array.isArray(body.nodes)) return no('"nodes" is a list of node ids.');
     if (body.nodes.length > MAX_NODES) return no(`"nodes" has at most ${MAX_NODES} ids.`);
@@ -369,6 +373,7 @@ export function validateRequest(body, { profiles } = {}) {
   if (body.nodes !== undefined) value.nodes = [...body.nodes];
   value.requestedBy = body.requestedBy;
   value.requestedAt = body.requestedAt;
+  if (body.retryOf !== undefined) value.retryOf = body.retryOf;
   if (body.trigger !== undefined) {
     if (!isObject(body.trigger)) return no('"trigger" is { event, by, ref }: what caused an automatic request.');
     const triggerKeys = keyProblem(body.trigger, TRIGGER_KEYS, '"trigger"');

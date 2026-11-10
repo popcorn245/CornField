@@ -571,6 +571,7 @@ const GOOD = [
   request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ limits: { tokens: 1 } }), request({ limits: { minutes: 30, tokens: Number.MAX_SAFE_INTEGER } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
   request({ brief: 'Rotate the token handling in server/auth.js' }), request({ requestedBy: 'x'.repeat(40) }),
   request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'build.opened', by: 'maintainer-one', ref: 'issue:12' } }), request({ trigger: { event: 'thread.message', by: 'maintainer-one', ref: 'comment:9001' } }),
+  request({ retryOf: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG' }),
   ...c.REPORT_STATES.map((state) => ({ state })),
   { state: 'working', note: 'n', url: 'https://ci.example.com/run/1?page=2', tokens: 0, cost: 0 }, { state: 'done', cost: 1.25, tokens: 99 },
   { state: 'stop-requested' }, { state: 'stop-requested', note: 'wrong branch' },
@@ -590,6 +591,7 @@ const BAD = [
   request({ trigger: { event: 'run.finished', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'spec.ready', by: 'maintainer-one', ref: 'pull:40' } }),
   request({ trigger: { event: 'spec.approved', by: 'a b', ref: 'pull:40' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:x' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'run:40' } }),
   request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', extra: 1 } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', token: 'x' } }),
+  request({ retryOf: 'run-1' }), request({ retryOf: 7 }), request({ retryOf: '' }), request({ retryOf: 'RUN-01JC8Z3Q5M7VXK2RT9N4B6HDEG' }), request({ retryOf: null }),
   request({ requestedBy: '' }), request({ requestedBy: 'a b' }), request({ requestedBy: 'x'.repeat(41) }), request({ requestedAt: '2026-11-05' }), request({ requestedAt: '2026-11-05T09:30:00+01:00' }),
   ...['token', 'githubToken', 'api_key', 'apiKey', 'secret', 'password', 'credentials', 'authorization', 'cookie', 'private_key'].map((k) => request({ [k]: 'x' })),
   ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIA' + 'IOSFODNN7EXAMPLE', '-----BEGIN ' + 'PRIVATE KEY-----', 'https://user:' + 'hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
@@ -619,6 +621,7 @@ describe('the JSON Schema', () => {
     expect(req.properties.nodes.maxItems).toBe(c.MAX_NODES);
     expect(req.properties.nodes.items.maxLength).toBe(c.MAX_NODE_CHARS);
     expect(req.properties.branch.maxLength).toBe(c.MAX_BRANCH_CHARS);
+    expect(req.properties.retryOf.$ref).toBe('#/$defs/runId');
     expect(req.properties.requestedBy.pattern).toBe(c.LOGIN_SOURCE);
     expect(req.properties.requestedAt.pattern).toBe(c.ISO_SOURCE);
     expect(req.properties.trigger.properties.event.enum).toEqual(c.TRIGGER_EVENTS);
@@ -642,7 +645,7 @@ describe('the JSON Schema', () => {
     expect(SCHEMA.$defs.request.properties.refs.additionalProperties).toBe(false);
     expect(SCHEMA.$defs.request.properties.limits.additionalProperties).toBe(false);
     // The request lists exactly the keys the validator allows
-    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'runId', 'trigger', 'version']);
+    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'retryOf', 'runId', 'trigger', 'version']);
     expect(Object.keys(req.properties.refs.properties)).toEqual(['issue', 'proposal', 'pull', 'thread']);
     // What the spec's table does not mark optional is required
     expect(req.required).toEqual(['version', 'runId', 'kind', 'refs', 'brief', 'requestedBy', 'requestedAt']);
@@ -693,6 +696,26 @@ describe('the JSON Schema', () => {
     }
     const before = full();
     expect(c.validateRequest(before)).toEqual({ ok: true, value: before });
+  });
+  it('agrees on mutations of retryOf (issue #100): only a run id is one', () => {
+    const id = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG';
+    const odd = [undefined, null, 0, 1, '', 'x', ' ', true, [], {}, [id], { runId: id }, 'run-1', 'run-', id.toLowerCase(), id.toUpperCase().replace('RUN', 'Run'), `${id} `, ` ${id}`, `${id}\n`,
+      `${id}X`, id.slice(0, -1), id.replace('HDEG', 'HDEI'), id.replace('HDEG', 'HDEL'), id.replace('HDEG', 'HDEO'), id.replace('HDEG', 'HDEU'), id.replace('run-0', 'run-8'), id.replace('run-', 'run_'), 'a'.repeat(300), id];
+    let ok = 0;
+    for (const o of odd) {
+      const ex = full();
+      if (o !== undefined) ex.retryOf = o;
+      const said = c.validateRequest(ex).ok;
+      expect(check(SCHEMA.$defs.request, ex), `retryOf=${JSON.stringify(o)}`).toBe(said);
+      expect(c.validateRunBody(ex).ok, `retryOf=${JSON.stringify(o)}`).toBe(said);
+      if (said) ok++;
+    }
+    // absent, and the one run id
+    expect(ok).toBe(2);
+    // and through a block, as a runner reads it
+    const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: '', requestedBy: 'maintainer-one', retryOf: id }).value;
+    expect(made.retryOf).toBe(id);
+    expect(c.parseRunBlocks(c.formatRunComment(made.runId, made))[0].value.retryOf).toBe(id);
   });
   it('is looser than the validator in exactly the documented ways', () => {
     // Rules a schema cannot hold: the developer's profile list, and a date that does not exist

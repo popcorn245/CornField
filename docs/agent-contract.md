@@ -25,6 +25,7 @@ One JSON object. Every key not listed here is refused, and so is any key named l
 | `nodes` | list of node ids, optional | Map nodes the run is expected to touch (`core-server-auth`), up to 100. |
 | `requestedBy` | forge login | The maintainer who asked. |
 | `requestedAt` | UTC time | Like `2026-11-05T09:30:00Z` (milliseconds allowed). |
+| `retryOf` | run id, optional | Only on a request made with **Start again** (or the API's `retryOf`, or a hand-written block that carries it): the run this one starts again on, one that `failed` or was `stopped`, or a request a runner refused. cornfield checks it names such a run of the same repo before it asks. It records a link and grants nothing. The request is otherwise like any other (`agents.maxOpen` and the one open run per subject and profile apply). A runner that checks against an older copy of the contract refuses a request that has it, so copy the contract files again. |
 | `trigger` | `{ event, by, ref }`, optional | Only on an automatic request: what caused it. See [below](#what-caused-an-automatic-request). |
 
 ### What caused an automatic request
