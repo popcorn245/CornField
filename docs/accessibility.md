@@ -35,7 +35,7 @@ Elsewhere:
 | The scenario player | `Space` plays and pauses, `Left` and `Right` step (the map leaves those keys to it while a scenario plays) |
 | A proposal's what-if edits | `Ctrl+Z` undoes, `Ctrl+Shift+Z` or `Ctrl+Y` redoes, `Escape` backs out of a form or a drawing |
 
-Drawing an edge in a what-if edit is a drag on the map. Without one: select the first node, then in its panel under "Try a change" pick the other end from "Edge to" and press "Draw an edge". The same form opens as at the end of a drag, with the focus on it.
+Drawing an edge in a what-if edit is a drag on the map. Without one: turn on Edit in the proposal toolbar, select the first node, then in its panel under "Try a change" pick the other end from "Edge to" and press "Draw an edge". The same form opens as at the end of a drag, with the focus on it.
 
 ## A walkthrough
 

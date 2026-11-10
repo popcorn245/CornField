@@ -42,7 +42,7 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 |---|---|
 | `--corn-text`, `--corn-text-2`, `--corn-text-3`, `--corn-accent-text`, `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-added-text`, `--corn-edit-text` | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
 | `--corn-text-on-accent` | `--corn-accent`, `--corn-accent-hover` |
-| `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
+| `--corn-ok`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
 | `--corn-ground` (the text on a solid fill) | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-hue-orange`, `--corn-hue-lime`, `--corn-added-text`, `--corn-edit-text` |
 | `--corn-hue-fuchsia` (ROM, a milestone, a link button), `--corn-hue-pink` (a variable) | `--corn-ground`, `--corn-surface-1` (and fuchsia on `--corn-surface-2`) |
 | `--corn-hue-orange` (the data-flow button) | `--corn-surface-2` |
@@ -210,7 +210,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-brand-gradient` | a brand gradient a theme may use; cornfield's own header no longer draws it (since CF-41 the title is `--corn-text`) (light) |
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
-| `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft` | the same, as a tinted background |
+| `--corn-ok-soft` | the same for ok, as a tinted background |
 | **Diff** (shared with the map) | |
 | `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the light values are [theme-model.js](../explorer/theme-model.js) `lightColor` of the dark ones, so the legend matches the map (light) |
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
@@ -460,7 +460,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
-| `badge` | a badge: the node panel's kind, a cloud kind or role, the "Agent" mark |
+| `badge` | a badge: the node panel's kind (type · host), the "Agent" mark |
 | `state-pill` | a state word (`data-corn-state`) |
 | `field` | a labelled form field, its control inside |
 | `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |

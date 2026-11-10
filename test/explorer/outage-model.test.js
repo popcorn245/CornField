@@ -330,7 +330,7 @@ describe('the Play button', () => {
     expect(html).toContain('data-action="play-outage"');
     expect(html).toContain('data-id="ext-cloudflare"');
     expect(html).toContain('Play: Cloudflare is down');
-    expect(html.indexOf('play-outage')).toBeGreaterThan(html.indexOf('Used by:'));
+    expect(html.indexOf('play-outage')).toBeGreaterThan(html.indexOf('Breaks now'));
     expect(cloudPanelHtml(nodes[5], nodes, edges)).not.toContain('play-outage');
   });
 });

@@ -348,7 +348,7 @@ const toText = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, var(--
 export const TEXT_TOKENS = Object.freeze(['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-added-text', '--corn-edit-text']);
 /** The tinted backgrounds, with the text that sits on each */
 export const SOFT_PAIRS = Object.freeze([
-  ['--corn-ok', '--corn-ok-soft'], ['--corn-warn', '--corn-warn-soft'], ['--corn-bad', '--corn-bad-soft'], ['--corn-info', '--corn-info-soft'],
+  ['--corn-ok', '--corn-ok-soft'],
   ['--corn-accent-text', '--corn-accent-soft'], ['--corn-hue-orange-text', '--corn-hue-orange-soft'],
 ]);
 /** Solid fills that carry `--corn-ground` as their text (a pressed data-flow button, a chip, the What-if toggle, the House chip) */

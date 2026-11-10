@@ -115,30 +115,43 @@ describe('the Layers menu', () => {
 });
 
 describe('the cloud node panel', () => {
-  it('fills the drawer: the kind badge, roles, plan, breaks line and Used by by when', async () => {
+  const facts = (meta) => Object.fromEntries([...meta.querySelectorAll('.hx-fact')].map((f) => [f.querySelector('.hx-fact-k').textContent, f.querySelector('.hx-fact-v').textContent]));
+
+  it('has the node panel\'s layout: type, name, one line, then facts', async () => {
     mount();
-    await selectNode(state.nodes.find((n     ) => n.id === 'ext-cloudflare'));
+    await selectNode(state.nodes.find((n) => n.id === 'ext-cloudflare'));
     expect($('drawer-badge').textContent).toBe('Cloud');
     expect($('drawer-title').textContent).toBe('Cloudflare');
+    expect($('drawer-description').textContent).toBe('DNS for example.test.');
     const meta = $('drawer-meta-list');
-    const badges = [...meta.querySelectorAll('.hx-cloud-badges > span')].map((b) => b.textContent);
-    expect(badges).toEqual(['Cloud', 'runtime', 'account', 'Free']);
-    expect(meta.querySelector('.hx-cloud-breaks') .textContent).toBe('Now: names stop resolving.');
-    const groups = [...meta.querySelectorAll('.hx-cloud-when')].map((g) => g.querySelector('.hx-cloud-when-head') .textContent);
-    expect(groups).toEqual(['Breaks now1', 'Breaks at the next certificate renewal1']);
-    expect(meta.querySelector('.hx-cloud-when--run') .textContent).toContain('join.example.test');
-    expect(meta.querySelector('.hx-cloud-when--renew') .textContent).toContain('caddy');
+    expect(meta.querySelector('.hx-facts')).not.toBeNull();
+    expect(Object.keys(facts(meta))).toEqual(['File', 'Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Next renewal']);
+    const f = facts(meta);
+    expect(f.Plan).toBe('Free');
+    expect(f.Roles).toBe('runtime, account');
+    expect(f['If it\'s down']).toBe('Now: names stop resolving.');
+    expect(f['Breaks now']).toContain('join.example.test');
+    expect(f['Next renewal']).toContain('caddy');
     expect(meta.textContent).not.toContain('Not run by this stack'); // the old external panel is not shown
+    for (const gone of ['.hx-cloud-badges', '.hx-cloud-when', '.hx-glyph', '.hx-count', '.hx-sec strong']) expect(meta.querySelector(gone), gone).toBeNull();
   });
 
-  it('shows the plan\'s note, and says Public web for the public web, with no plan', async () => {
+  it('has a quiet Play button under the facts', async () => {
     mount();
-    await selectNode(state.nodes.find((n     ) => n.id === 'ext-docker-hub'));
-    expect($('drawer-meta-list').querySelector('.hx-cloud-plan-note') .textContent).toBe('Anonymous pulls');
-    expect($('drawer-meta-list').querySelector('.hx-cloud-when--deploy')).not.toBeNull();
-    await selectNode(state.nodes.find((n     ) => n.id === 'ext-public-web'));
+    await selectNode(state.nodes.find((n) => n.id === 'ext-cloudflare'));
+    const play = $('drawer-meta-list').querySelector('[data-action="play-outage"]');
+    expect(play.classList.contains('hx-btn--quiet')).toBe(true);
+    expect(play.textContent).toBe('Play: Cloudflare is down');
+  });
+
+  it('shows the plan\'s note with the plan, and says Public web for the public web, with no plan', async () => {
+    mount();
+    await selectNode(state.nodes.find((n) => n.id === 'ext-docker-hub'));
+    expect(facts($('drawer-meta-list')).Plan).toBe('Free · Anonymous pulls');
+    expect(facts($('drawer-meta-list'))['Next deploy']).toContain('caddy');
+    await selectNode(state.nodes.find((n) => n.id === 'ext-public-web'));
     expect($('drawer-badge').textContent).toBe('Public web');
-    expect($('drawer-meta-list').querySelector('.hx-cloud-plan')).toBeNull();
+    expect(facts($('drawer-meta-list')).Plan).toBeUndefined();
     expect($('drawer-meta-list').textContent).toContain('Nothing on the map uses it.');
   });
 });
