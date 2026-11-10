@@ -79,7 +79,7 @@ import {
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
-  threadsUrl, threadUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
+  threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1686,12 +1686,25 @@ export async function openIssueLink(n) {
   const list = current();
   if (!list) return linkMissing(ui.error || 'The issues could not be read.');
   const item = list.items.find((i) => i.number === n);
-  if (!item) return linkMissing(`Issue ${n} is not in the list of open issues.`);
+  if (!item) return issueNotListed(n);
   paint();
   const start = $('forge-list').querySelector(`[data-forge-agent="issue:${n}"]`);
   bringIntoView(start);
   announce(`Issue ${n}: ${item.title}. Start an agent is ready`);
   return true;
+}
+
+/** An issue the open list does not hold: asked for once, directly, so a closed one is called closed and a missing one missing */
+async function issueNotListed(n) {
+  const res = await request(issueUrl(n));
+  if (res.ok && res.body.issue) {
+    const { issue } = res.body;
+    ui.actNote = { ok: false, text: issue.state === 'closed' ? `Issue ${n} is closed: ${issue.title}` : `Issue ${n} is open, but not in the list shown here: ${issue.title}`, url: issue.url };
+    paint();
+    announce(ui.actNote.text);
+    return false;
+  }
+  return linkMissing(res.status === 404 ? `There is no issue ${n}.` : errorWords(res.status, res.body));
 }
 
 /** `?proposal=<slug>&start=1`: the Start dialog on that proposal (the proposal itself is opened by proposal.js) */

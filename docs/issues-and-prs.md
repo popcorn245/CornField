@@ -97,6 +97,7 @@ The routes, for the curious (all behind the sign-in guard):
 | Route | Answers |
 |---|---|
 | `/api/forge/issues?state=open\|closed\|all&labels=a,b&limit=100` | issues (not pull requests) |
+| `/api/forge/issues/<n>` | one issue, open or closed (404 for a pull request or no such issue); a deep link to an issue that is not in the open list asks it ([agents](agents.md#deep-links)) |
 | `/api/forge/pulls?state=open\|closed\|all&limit=100` | pull requests |
 | `/api/forge/pulls/<n>` | one pull request with its files and the checks on its head (each check says whether cornfield can re-run it), and `specs`: the proposals it changes and whether a maintainer has approved each |
 | `POST /api/forge/pulls/<n>/merge` `{ "sha" }` | lands it at that head, if green |

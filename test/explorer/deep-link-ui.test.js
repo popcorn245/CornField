@@ -53,6 +53,9 @@ function fakeServer() {
     const at = '2026-11-05T11:58:00.000Z';
     if (u.pathname === '/api/agent-runs') return json(200, { ok: true, runs: [RUN], open: 1, maxOpen: 3, profiles: ['claude'], limits: {} });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals page'), issue(5, 'Sign-in')] });
+    // One issue, whatever its state: 12 is closed (its title is markup, to be shown as text), 40 open past the list, the rest not there
+    if (u.pathname === '/api/forge/issues/12') return json(200, { ok: true, at, rate: '', issue: { ...issue(12, '<img src=x onerror="window.pwned=1">Old'), state: 'closed', closedAt: at } });
+    if (u.pathname === '/api/forge/issues/40') return json(200, { ok: true, at, rate: '', issue: issue(40, 'Far down') });
     if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at, rate: '', items: [] });
     if (u.pathname === '/api/forge/work') return json(200, { ok: true, at, rate: '', pulls: [], issues: [issue(7, 'Meals page')], branches: [], specs: [], agents: {} });
     return json(404, { ok: false, error: 'No such thing.', code: 'not-found' });
@@ -150,13 +153,40 @@ describe.each([['a desktop', false], ['a phone', true]])('on %s', (_name, onPhon
     expect(window.location.search).toBe('');
   });
 
-  it('?issue= for an issue that is not listed says so', async () => {
-    fakeServer();
+  it('?issue= for an issue that is not listed asks for it once: no such issue is said so', async () => {
+    const srv = fakeServer();
     mount();
     expect(await follow('?issue=99')).toBe(false);
-    expect($('forge-act-note').textContent).toBe('Issue 99 is not in the list of open issues.');
-    expect(await said()).toBe('Issue 99 is not in the list of open issues.');
+    expect($('forge-act-note').textContent).toBe('There is no issue 99.');
+    expect(await said()).toBe('There is no issue 99.');
     expect(q('[data-forge-kind="issues"]').getAttribute('aria-pressed')).toBe('true');
+    expect(srv.urls().filter((u) => u === '/api/forge/issues/99')).toHaveLength(1);
+    expect($('agent-start').hidden).toBe(true);
+  });
+
+  it('?issue= for a closed issue calls it closed, with its title as text and a link to it', async () => {
+    const srv = fakeServer();
+    mount();
+    expect(await follow('?issue=12')).toBe(false);
+    const note = $('forge-act-note');
+    expect(note.textContent).toContain('Issue 12 is closed: <img src=x onerror="window.pwned=1">Old');
+    expect(note.querySelector('img')).toBeNull();
+    expect(note.querySelector('a').getAttribute('href')).toBe('https://git.example.test/owner/name/issues/12');
+    expect(await said()).toBe('Issue 12 is closed: <img src=x onerror="window.pwned=1">Old');
+    expect(srv.urls().filter((u) => u.startsWith('/api/forge/issues/'))).toEqual(['/api/forge/issues/12']);
+    expect($('agent-start').hidden).toBe(true);
+    // An open issue the list does not reach is open, not missing
+    expect(await follow('?issue=40')).toBe(false);
+    expect($('forge-act-note').textContent).toContain('Issue 40 is open, but not in the list shown here: Far down');
+  });
+
+  it('a value in the link is never markup: a bad run id is said as text', async () => {
+    fakeServer();
+    mount();
+    expect(await follow('?run=<img src=x onerror=alert(1)>')).toBe(false);
+    expect(await said()).toBe('"<img src=x onerror=alert(1)>" is not a run id.');
+    expect(document.querySelector('img[src="x"]')).toBeNull();
+    expect(window.location.search).toBe('');
   });
 
   it('?proposal=&start=1 opens the Start dialog on that proposal, and leaves ?proposal= in the address', async () => {
