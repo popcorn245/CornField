@@ -1874,7 +1874,7 @@
       "label": "deep-link.js",
       "type": "core",
       "file": "explorer/deep-link.js",
-      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent …",
+      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Runs tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent bu…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent … (explorer/deep-link.js)"
@@ -6376,5 +6376,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T19:17:15.141Z"
+  "updatedAt": "2026-11-10T19:20:25.978Z"
 }

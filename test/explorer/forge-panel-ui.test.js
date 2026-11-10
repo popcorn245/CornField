@@ -1232,9 +1232,14 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     await settle();
     expect([$('forge-list').hidden, $('forge-detail').hidden]).toEqual([false, true]);
     expect(state.forgeLit).not.toBe(null);
+    click(q('[data-forge-kind="work"]')); // Runs has its own list: a pull request selected on PRs does not replace it
+    await settle();
+    expect([$('forge-list').hidden, $('forge-detail').hidden, $('forge-runs').hidden]).toEqual([false, true, false]);
+    q('[data-forge-kind="pulls"]').focus();
     click(q('[data-forge-kind="pulls"]'));
     await settle();
     expect($('forge-detail').hidden).toBe(false);
+    expect(document.activeElement).toBe(q('[data-forge-kind="pulls"]')); // a tab changed leaves the focus on the tab
     click(q('#forge-detail .hx-forge-back'));
     expect([$('forge-list').hidden, $('forge-detail').hidden, $('notes-open').hidden]).toEqual([false, true, false]);
     expect(document.activeElement).toBe(q('[data-forge-pr="12"]'));

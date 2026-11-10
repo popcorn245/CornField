@@ -1107,7 +1107,7 @@ function detailHtml() {
   const block = mergeBlock(ui.detail);
   const land = block
     ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
-    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
+    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
   const act = `<div class="hx-forge-cta">${land}${url ? `<a class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}`;
   // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
   const waiting = ui.landing && pull.state === 'open'
@@ -1131,7 +1131,7 @@ function detailHtml() {
   const runSection = made
     ? `<h4 class="hx-forge-sub">Run</h4><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${escHtml(pullRunWords(made, now()))}</p>`
     : '';
-  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span>#${pull.number}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
+  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span>#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
   return `${head(escHtml(pull.title), meta)}
     ${act}
     ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}

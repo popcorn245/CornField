@@ -702,6 +702,27 @@ describe('New idea', () => {
     expect($('forge-idea').hidden).toBe(true);
   });
 
+  it('is at the foot of Specs too, unless threads are off; an idea opened there is shown on the Threads tab', async () => {
+    const server = fakeServer({ posts: { '/api/forge/threads': { status: 201, body: { ok: true, action: 'idea', created: true, number: 41, issue: { number: 41, title: 'Rework sign-in', url: URL_OF(41) } } } } });
+    mount();
+    openForge();
+    await settle();
+    expect(q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-idea').hidden).toBe(false);
+    click($('idea-open'));
+    type('idea-title', 'Rework sign-in');
+    click($('idea-send'));
+    await settle();
+    expect(server.posts()).toHaveLength(1);
+    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-detail').hidden).toBe(false);
+    expect($('forge-detail').textContent).toContain('Rework sign-in');
+    mount({ threads: false });
+    openForge();
+    await settle();
+    expect($('forge-idea').hidden).toBe(true);
+  });
+
   it('asks for a title first, and Cancel posts nothing', async () => {
     const server = fakeServer();
     mount();
