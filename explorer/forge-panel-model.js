@@ -61,6 +61,8 @@ export const listKeyOf = (kind, state) => (kind === 'deploys' ? 'deploys' : `${k
 export const threadsUrl = (state) => `/api/forge/threads?state=${state}&limit=${LIST_LIMIT}`;
 export const threadUrl = (n) => `/api/forge/threads/${n}`;
 export const IDEAS_URL = '/api/forge/threads';
+/** The address of one issue, whatever its state */
+export const issueUrl = (n) => `/api/forge/issues/${n}`;
 /** The address of one pull request with its files and checks */
 export const pullUrl = (n) => `/api/forge/pulls/${n}`;
 

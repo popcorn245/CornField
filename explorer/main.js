@@ -13,6 +13,7 @@
  *   proposal.js the proposal overlay (picker, Before / Diff / After); proposal-model.js its pure half
  *   whatif.js   what-if edits on an open proposal (add, remove, draw, steps, undo); whatif-model.js its pure half
  *   review.js   approve a proposal or send it back with a note and the edits; review-model.js its pure half
+ *   deep-link.js  ?run=, ?issue= and ?proposal=…&start=1 land on a run, an issue and a Start dialog
  *   scenario.js the player's pure core      scenario-ui.js  its bar, keys and camera
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
@@ -33,6 +34,7 @@ import { initSheets } from './sheets.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
 import { bindCanvasInput } from './input.js';
 import { initProposals } from './proposal.js';
+import { followDeepLink } from './deep-link.js';
 import { initWhatIf } from './whatif.js';
 import { initReview } from './review.js';
 import { initMockups } from './mockups.js';
@@ -208,18 +210,20 @@ loadTopology().then(async (ok) => {
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional
   const config = await configReady;
   const { liveSource, floorRenderer, checker } = await loadSources(config);
-  initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
+  const forgeOn = initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
   initReviewTokens(config); // review tokens for the review API: only for somebody signed in (review-tokens.js)
   initWhatIf(); // before a proposal can open, so its edits come with it
   initReview(); // after it: the review controls sit under the edit controls on the bar
   initMockups(); // a proposal's screens open from the node they name
-  await initProposals();
+  const proposalOpened = await initProposals();
   // The live layer (live.js): loads only once a live layer goes on in the Layers menu; with no source it stays off
   initLive({ source: liveSource, onSelectionGone: closeDrawer });
   // The House view (house.js): a source's floor renderer draws the plan under the map (plain room boxes without one); /?view=house opens it
   initHouse({ floor: floorRenderer });
   initChecks({ checker }); // scenarios ask the source's checker, when there is one (check.js)
   if (new URLSearchParams(window.location.search).get("view") === "dataflow") setView("dataflow");
+  // /?run=, /?issue= and /?proposal=…&start=1 land on a run, an issue's Start button and a proposal's Start dialog (deep-link.js)
+  followDeepLink({ proposalOpened, forgeOn }).catch((err) => console.error('Following the link failed', err));
   // /?scenario-demo=1 plays a small scenario over real nodes, to look at the player
   maybeStartDemo();
   // /?bench=1 runs the stopwatch (bench.js) once the map is up

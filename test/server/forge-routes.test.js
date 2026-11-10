@@ -155,6 +155,22 @@ describe('the forge routes', () => {
     expect(red.json.checks.map((c) => [c.name, c.state])).toEqual([['lint', 'failure'], ['test', 'running']]);
   });
 
+  it('answers one issue whatever its state; a pull request or a number that is not one is a 404', async () => {
+    const cookie = await signIn();
+    const open = await raw(srv.port, 'GET', '/api/forge/issues/5', { cookie });
+    expect(open.status, open.text).toBe(200);
+    expect(open.json.issue).toMatchObject({ number: 5, title: 'Sign-in', state: 'open' });
+    // The same issue, closed since (asked again past the kept answer)
+    state.override['GET /api/v3/repos/owner/name/issues/5'] = () => ({ body: { number: 5, title: 'Old one', state: 'closed', user: { login: 'maintainer-one' }, labels: [], html_url: 'https://github.example.test/owner/name/issues/5', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z', closed_at: '2026-01-02T00:00:00Z' } });
+    const closed = await raw(srv.port, 'GET', '/api/forge/issues/5', { cookie, 'cache-control': 'no-cache' });
+    expect(closed.status, closed.text).toBe(200);
+    expect(closed.json.issue).toMatchObject({ number: 5, title: 'Old one', state: 'closed' });
+    delete state.override['GET /api/v3/repos/owner/name/issues/5'];
+    expect((await raw(srv.port, 'GET', '/api/forge/issues/12', { cookie })).status).toBe(404);
+    for (const p of ['/api/forge/issues/0', '/api/forge/issues/01', '/api/forge/issues/x', '/api/forge/issues/1234567890']) expect((await raw(srv.port, 'GET', p, { cookie })).status, p).toBe(404);
+    expect((await raw(srv.port, 'GET', '/api/forge/issues/5')).status).toBe(401); // the sign-in guard, before the route
+  });
+
   it('keeps an answer for a minute in forge_cache, per user, and the browser\'s revalidation is a 304', async () => {
     const cookie = await signIn();
     const first = await raw(srv.port, 'GET', '/api/forge/pulls', { cookie });
