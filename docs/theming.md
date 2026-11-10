@@ -4,19 +4,33 @@ Every colour, font, font size, radius, border and outline width, shadow and spac
 
 ## How a brand stylesheet works
 
-- **Load it after cornfield's stylesheets.** `theme.css` in `cornfield.config.js` ([#117](https://github.com/popcorn245/CornField/issues/117)) will serve a repo-local stylesheet after `house.css`. Until then, add a `<link rel="stylesheet">` after `house.css` in `explorer/index.html`.
+- **Load it after cornfield's stylesheets**, with `theme` in `cornfield.config.js` (below).
 - **Set tokens on `:root`.** A token that is made from another one (`--corn-font-display` is `var(--corn-font)`, the `*-soft` tints mix their colour) is worked out on `:root`, so a value set on `body` or a panel does not reach it.
 - **Use cornfield's three selectors.** Dark values, and everything both themes share, are on `:root`. Light values are under both `@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { … } }` (the system setting, before any script runs) and `:root[data-theme="light"] { … }` (the viewer's choice, which `theme-boot.js` puts on `<html>`). Those two are more specific than `:root`, so a token cornfield sets for light has to be set in your light blocks too, or cornfield's light value wins on the light ground. Repeat the same selectors in your file; as it loads later, yours win.
 - **Keep text readable.** Text on `--corn-accent` is `--corn-text-on-accent`; the solid fills of a status or a hue (a pressed data-flow button, a pressed House chip, a sandbox chip) put `--corn-ground` on the hue. [#122](https://github.com/popcorn245/CornField/issues/122) will check a theme's pairs in `validate`; until then, check them against WCAG AA (4.5:1).
 
+## Applying a theme
+
+A brand's tokens live in a repo theme file that `cornfield.config.js` names, and the server links it after `tokens.css`, `explorer.css` and `house.css`, so its values win: see [docs/config.md, Theme](config.md#theme) for the file, the font allow-list, the images and fonts beside it, and what `validate` checks.
+
+```js
+// cornfield.config.js
+export default {
+  theme: { css: './tools/cornfield/theme.css' },
+};
+```
+
+A named theme (`theme.names`) is the same kind of file. Scoped to `:root[data-theme-name="night"]`, it outranks cornfield's dark `:root` block and ties with its light ones, and wins those as it loads later; to give it its own light values, scope them to `:root[data-theme-name="night"][data-theme="light"]`.
+
 ## A complete brand stylesheet
 
-A square-cornered, retro look: no radius anywhere, hard offset shadows, thick borders, its own fonts, a red accent, in both themes. Load it after cornfield's stylesheets and every panel, button, menu and dialog takes it. [test/explorer/tokens.test.js](../test/explorer/tokens.test.js) checks that every name in it is a token and that the light blocks match.
+A square-cornered, retro look: no radius anywhere, hard offset shadows, thick borders, its own fonts, a red accent, in both themes. Saved as `tools/cornfield/theme.css` (with its two fonts in `tools/cornfield/fonts/`) and named by `theme: { css: './tools/cornfield/theme.css' }`, every panel, button, menu and dialog takes it. [test/explorer/tokens.test.js](../test/explorer/tokens.test.js) checks that every name in it is a token and that the light blocks match.
 
 ```css
-/* brand.css: an example brand. Every value below is the brand's own; nothing else changes. */
-@font-face { font-family: "Example Pixel"; src: url("./fonts/example-pixel.woff2") format("woff2"); font-display: swap; }
-@font-face { font-family: "Example Rounded"; src: url("./fonts/example-rounded.woff2") format("woff2"); font-display: swap; }
+/* brand.css: an example brand, as tools/cornfield/theme.css. Every value below is the brand's own; nothing else changes. */
+/* Fonts beside the theme are served at /cornfield/theme/assets/ (docs/config.md#theme) */
+@font-face { font-family: "Example Pixel"; src: url("/cornfield/theme/assets/fonts/example-pixel.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Example Rounded"; src: url("/cornfield/theme/assets/fonts/example-rounded.woff2") format("woff2"); font-display: swap; }
 
 /* Both themes: shapes, type, the accent fill. Dark values follow. */
 :root {

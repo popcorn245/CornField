@@ -6024,7 +6024,12 @@
       "from": "page-doc-docs-theming",
       "to": "core-explorer-theme-model",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-config",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T08:21:14.980Z"
+  "updatedAt": "2026-11-10T08:25:25.675Z"
 }
