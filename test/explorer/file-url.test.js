@@ -18,6 +18,8 @@ import * as render from '../../explorer/render.js';
 import { LAYER_DEFS } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode } from '../../explorer/panels.js';
+// @ts-expect-error plain JS modules, no declarations
+import { showEdgePanel } from '../../explorer/proposal.js';
 
 const GH = { type: 'github', url: 'https://github.com', repo: 'acme/home' };
 const FJ = { type: 'forgejo', url: 'https://forge.example.test/git', repo: 'acme/home' };
@@ -26,6 +28,23 @@ describe('fileUrl', () => {
   it('builds the page of a file at a branch, per forge', () => {
     expect(fileUrl(GH, 'server/server.js', 'main')).toBe('https://github.com/acme/home/blob/main/server/server.js');
     expect(fileUrl(FJ, 'server/server.js', 'main')).toBe('https://forge.example.test/git/acme/home/src/branch/main/server/server.js');
+  });
+
+  it('links at HEAD, the default branch on both forges, when no branch is given', () => {
+    expect(fileUrl(GH, 'a.js')).toBe('https://github.com/acme/home/blob/HEAD/a.js');
+    expect(fileUrl(FJ, 'a.js', undefined)).toBe('https://forge.example.test/git/acme/home/src/branch/HEAD/a.js');
+  });
+
+  it('keeps a branch with a slash as two segments, and a port, a path prefix and nothing of a query or fragment', () => {
+    expect(fileUrl(GH, 'a.js', 'release/1.0')).toBe('https://github.com/acme/home/blob/release/1.0/a.js');
+    expect(fileUrl({ ...FJ, url: 'https://forge.example.test:8443/git/?x=1#y' }, 'a.js', 'main')).toBe('https://forge.example.test:8443/git/acme/home/src/branch/main/a.js');
+  });
+
+  it('leaves encoded and look-alike dots and slashes as file names', () => {
+    expect(fileUrl(GH, '%2e%2e/x', 'main')).toBe('https://github.com/acme/home/blob/main/%252e%252e/x');
+    expect(fileUrl(GH, '\uff0e\uff0e\uff0fx', 'main')).toBe('https://github.com/acme/home/blob/main/%EF%BC%8E%EF%BC%8E%EF%BC%8Fx');
+    expect(fileUrl(GH, 'a.js', '%2e%2e')).toBe('https://github.com/acme/home/blob/%252e%252e/a.js');
+    expect(fileUrl({ ...GH, url: 'https://github.com/a/%2e%2e/' }, 'a.js', 'main')).toBe('https://github.com/acme/home/blob/main/a.js');
   });
 
   it('encodes each segment and keeps the slashes', () => {
@@ -41,13 +60,20 @@ describe('fileUrl', () => {
     expect(fileUrl(FJ, p, 'main')).toBeNull();
   });
 
-  it('refuses a branch that is not a plain name, a forge it has no shape for, and anything but https', () => {
+  it('refuses a branch that is not a plain name, a forge it has no shape for, anything but https, and a user name in the forge\'s URL', () => {
     expect(fileUrl(GH, 'a.js', '../x')).toBeNull();
     expect(fileUrl(GH, 'a.js', 'a\\b')).toBeNull();
     expect(fileUrl({ ...GH, type: 'gitlab' }, 'a.js', 'main')).toBeNull();
     expect(fileUrl({ ...FJ, url: 'http://forge.example.test' }, 'a.js', 'main')).toBeNull();
     expect(fileUrl({ ...FJ, url: 'javascript:alert(1)' }, 'a.js', 'main')).toBeNull();
     expect(fileUrl({ ...FJ, url: 'not a url' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl({ ...GH, url: 'https://github.com@evil.test' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl({ ...GH, url: 'https://u:p@github.com' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl({ ...GH, url: 'https://evil.test\\@github.com' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl({ ...GH, type: 'constructor' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl({ ...GH, type: '__proto__' }, 'a.js', 'main')).toBeNull();
+    expect(fileUrl(GH, 'a.js', 'a//b')).toBeNull();
+    expect(fileUrl(GH, '\ud800', 'main')).toBeNull();
     expect(fileUrl({ ...GH, repo: '../x' }, 'a.js', 'main')).toBeNull();
     expect(fileUrl({ ...GH, repo: 'acme' }, 'a.js', 'main')).toBeNull();
     expect(fileUrl(null, 'a.js', 'main')).toBeNull();
@@ -90,7 +116,7 @@ describe('the node panel\'s primary action', () => {
     mount(GH);
     await pick('page-meals');
     expect($('drawer-file-btn').hidden).toBe(false);
-    expect($('drawer-file-btn').getAttribute('href')).toBe('https://github.com/acme/home/blob/main/packages/web/pages/meals.js');
+    expect($('drawer-file-btn').getAttribute('href')).toBe('https://github.com/acme/home/blob/HEAD/packages/web/pages/meals.js');
     expect($('drawer-file-btn').textContent).toBe('Open file ↗');
     expect($('drawer-file-btn').classList.contains('hx-open')).toBe(true);
     expect($('drawer-open-btn').hidden).toBe(false);
@@ -119,6 +145,14 @@ describe('the node panel\'s primary action', () => {
     await pick('page-meals');
     expect($('drawer-file-btn').hidden).toBe(true);
     expect($('drawer-open-btn').classList.contains('hx-open')).toBe(true);
+  });
+
+  it('is gone on an edge, which has no file of its own', async () => {
+    mount(GH);
+    await pick('page-meals');
+    showEdgePanel(state.edges.find((e) => e.to === 'page-meals'));
+    expect($('drawer-file-btn').hidden).toBe(true);
+    expect($('drawer-open-btn').hidden).toBe(true);
   });
 
   it('passes axe with both actions', async () => {

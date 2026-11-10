@@ -966,6 +966,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* ---- the node panel (panels.js, #138): type · name · one line · facts · mockups · threads · the diff · the actions ------------ */
 .hx-drawer-id { flex: 1; min-width: 0; }
 .hx-kicker { display: flex; flex-wrap: wrap; align-items: center; margin: 0 0 var(--corn-space-2); font-size: var(--corn-text-sm); color: var(--corn-text-3); }
+#drawer-host { white-space: pre; } /* the kicker is a flex row, which drops a leading space: keep " · host" */
 .hx-diffpill { margin-left: var(--corn-space-3); padding: 0 var(--corn-space-3); border-radius: var(--corn-radius-pill); border: var(--corn-border) dashed var(--corn-added); color: var(--corn-added-text); font-size: var(--corn-text-xs); }
 .hx-drawer-id .hx-drawer-title { font-size: var(--corn-text-xl); font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
 .hx-drawer-id .hx-drawer-title.hx-mono { font-family: var(--corn-mono); }
