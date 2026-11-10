@@ -26,6 +26,7 @@
  *     hookPoll: { specs: '5m' },              // how often cornfield looks for ready specs and thread activity on its own, for the spec.ready and thread.* hooks; false turns it off (docs/config.md#hook-poll)
  *     threads: { label: 'idea' },             // an idea is an issue with this label, its thread the issue's comments; false turns threads off (docs/threads.md)
  *     links: [],                              // [{ label, href }] shown in the explorer's header
+ *     theme: {},                              // { css, fonts, fontHosts, names, default }: a repo's own look, CSS only (docs/config.md#theme)
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
  *     dataDir: null,                          // where cornfield keeps its own state (reviews; the SQLite file in v1)
@@ -40,6 +41,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { themeProblems } from './theme.js';
 import { PROFILE_SOURCE, MAX_NUMBER, MAX_BRIEF_CHARS, RUN_KINDS, TRIGGER_EVENTS, CREDENTIAL_VALUE_SOURCE } from './agent-contract.js';
 
 export { TRIGGER_EVENTS };
@@ -164,6 +166,7 @@ export const DEFAULTS = Object.freeze({
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
   links: [],
+  theme: { css: null, fonts: [], fontHosts: [], names: {}, default: null },
   proxy: {},
   importMap: {},
   dataDir: null,
@@ -336,6 +339,7 @@ export function configProblems(c) {
       if (!isObject(l) || !isText(l.label) || !/^(https?:\/\/|\/)/.test(String(l.href || ''))) out.push(`links[${i}] is { label, href } with an http(s) or same-origin href.`);
     });
   }
+  out.push(...themeProblems(c.theme));
   if (c.proxy !== undefined) {
     if (!isObject(c.proxy)) out.push('"proxy" is { "/path/": "http://upstream" }.');
     else for (const [p, t] of Object.entries(c.proxy)) {
@@ -522,6 +526,7 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
     deploys: { ...DEFAULTS.deploys, ...(raw.deploys || {}) },
     agents: { ...DEFAULTS.agents, ...(raw.agents || {}) },
   };
+  config.theme = { ...structuredClone(DEFAULTS.theme), ...(raw.theme || {}) };
   // `threads: false` stays false; an object is read over the default
   config.threads = raw.threads === false ? false : { ...DEFAULTS.threads, ...(raw.threads || {}) };
   // `hookPoll: false` is `{ specs: false }`; an object is read over the default
