@@ -42,28 +42,27 @@ function brandImage(doc, src, kind, alt = '') {
   const img = doc.createElement('img');
   img.setAttribute('src', src);
   img.setAttribute('alt', alt);
-  img.setAttribute('data-cf', `brand-${kind}`);
+  img.setAttribute('data-corn', `brand-${kind}`);
   img.setAttribute('style', `height:${kind === 'logo' ? 22 : 18}px;width:auto;max-width:${kind === 'logo' ? 48 : 160}px;display:block`);
   return img;
 }
 
 /**
  * The repo's brand in the header (docs/config.md#brand): the logo takes the brand mark's place and the wordmark the title text, inside
- * the same button, so its accessible name stays (it names the app: `appName`, else it is as it was); `appName` is the name shown.
+ * the same button, so its accessible name stays. The header text stays the repo's own title; `appName` replaces "cornfield" where
+ * cornfield names itself: the button's accessible name and the page's heading (the tab title and the manifest are the server's).
  */
 function applyBrand(doc, brand, title) {
-  const name = brand.appName || title;
   const button = doc.getElementById('cf-brand');
   if (button && brand.appName) button.setAttribute('aria-label', `${brand.appName}: reset the view`);
   const text = doc.getElementById('cf-title');
-  if (text && name) text.textContent = name;
   if (brand.logo && typeof doc.createElement === 'function') {
     const mark = doc.getElementById('cf-mark');
     if (mark) mark.replaceWith(brandImage(doc, brand.logo, 'logo'));
   }
   if (brand.wordmark && text && typeof doc.createElement === 'function') {
     text.textContent = '';
-    text.appendChild(brandImage(doc, brand.wordmark, 'wordmark', name || ''));
+    text.appendChild(brandImage(doc, brand.wordmark, 'wordmark', title || brand.appName || ''));
   }
   const heading = doc.getElementById('cf-heading');
   if (heading && brand.appName) heading.textContent = `${brand.appName}: the map`;
@@ -72,7 +71,7 @@ function applyBrand(doc, brand, title) {
 /** The small "powered by cornfield" link that stays in the header when a repo brands cornfield */
 function poweredBy(brand) {
   if (!brand || typeof brand.poweredBy !== 'string' || !/^https:\/\//.test(brand.poweredBy)) return '';
-  return `<a class="hx-btn hx-btn--quiet" data-cf="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">powered by cornfield</a>`;
+  return `<a class="hx-btn hx-btn--quiet" data-corn="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">powered by cornfield</a>`;
 }
 
 /** Puts the repo's title, brand and links in the header, and Sign out when the server says who is signed in */

@@ -267,7 +267,7 @@ brand: {
   logo: './tools/cornfield/logo.svg',          // replaces the brand mark in the header
   wordmark: './tools/cornfield/wordmark.svg',  // replaces the title text in the header
   favicon: './tools/cornfield/favicon.png',    // the tab icon
-  appName: 'Acme',                             // replaces "cornfield" in visible chrome and the tab title
+  appName: 'Acme',                             // replaces "cornfield" where cornfield names itself (tab title, heading, manifest)
   color: '#e53e3e',                            // the manifest's theme_color (and the tab's theme-color)
   background: '#ffffff',                       // the manifest's background_color
 }
@@ -278,21 +278,21 @@ Every key is optional. An unknown key is refused.
 | Key | What it is |
 |---|---|
 | `logo` | one `.svg` or `.png` file inside the repo, written relative to it. It takes the place of the brand mark (the green dot) in the header's brand button. |
-| `wordmark` | the same kind of file. It takes the place of the title text beside the logo. On a narrow phone the title text is hidden, and so is the wordmark; the logo stays. |
+| `wordmark` | the same kind of file. It takes the place of the title text (the repo's `title`) beside the logo. On a narrow phone the title text is hidden, and so is the wordmark; the logo stays. |
 | `favicon` | the same kind of file, put in the page as `<link rel="icon">`. |
-| `appName` | the name of the app, up to 64 characters on one line. It replaces "cornfield" in the tab title (`<title>` is `<repo title> · <appName>`), is the name shown in the header and the one the brand button announces ("Acme: reset the view"), and is the manifest's `name`. |
+| `appName` | the name of the app, up to 64 characters on one line. It replaces "cornfield" wherever cornfield names itself: the tab title (`<title>` is `<repo title> · <appName>`), the page's heading ("Acme: the map"), the name the brand button announces ("Acme: reset the view") and the manifest's `name`. It does not replace the repo's `title`, which stays the header's text unless a `wordmark` is set. |
 | `color`, `background` | hex colours, `#rgb` or `#rrggbb`. They are the manifest's `theme_color` and `background_color`, and `color` is also the tab's `<meta name="theme-color">`. Anything else (a name, `rgb()`, `#rrggbbaa`) is refused. |
 
 **How the images are served.** Each is a same-origin URL, `/cornfield/brand/logo.svg`, `/cornfield/brand/wordmark.png`, `/cornfield/brand/favicon.png` (the extension is the file's own). Only a file the config names is served; every other path under `/cornfield/brand/`, a different extension for a configured key, and a request that tries `..` is a 404. Each is sent with its own `Content-Type` (`image/svg+xml` or `image/png`) and `X-Content-Type-Options: nosniff`, is at most **512 KB**, and has to be a plain file whose real path is inside the repo (a symlink that leads out is a 404). An SVG is sent with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`, so opened on its own it runs no script and loads nothing. **An SVG is never inlined into the page**: the header and the manifest only ever point at the URL with an `<img>`, where a browser runs no script in it either. `/cornfield/config.json` carries `brand: { logo, wordmark, favicon, appName, poweredBy }` as URLs and the name, never a path on the machine.
 
-**In the header.** The brand button keeps its place, its action (reset the view) and an accessible name (it is "cornfield: reset the view", or "<appName>: reset the view" with an `appName`); the images are decorative inside it. A small "powered by cornfield" link sits in the header's links area whenever the repo sets a `brand`.
+**In the header.** The brand button keeps its place, its action (reset the view) and an accessible name (it is "cornfield: reset the view", or "<appName>: reset the view" with an `appName`); the images are decorative inside it and carry the styling hooks `data-corn="brand-logo"` and `data-corn="brand-wordmark"`. A small "powered by cornfield" link (`data-corn="powered-by"`) sits in the header's links area whenever the repo sets a `brand`.
 
-**The manifest.** When the config sets any `brand` key, the server answers `/manifest.webmanifest` (`application/manifest+json`) and the page links it with `crossorigin="use-credentials"`, so it is fetched with the sign-in cookie. It holds `name` (the `appName`, else the repo's title), `short_name` (the same, cut to 12 characters), `start_url: "/"`, `display: "standalone"`, `theme_color` and `background_color` when the config sets them, and `icons` from the favicon and the logo (a PNG with its size read from the file, an SVG as `sizes: "any"`). Without a `brand` there is no manifest and no link.
+**The manifest.** The server always answers `/manifest.webmanifest` (`application/manifest+json`), so any cornfield can be installed as an app on a phone, and the page links it with `crossorigin="use-credentials"`, so it is fetched with the sign-in cookie. It holds `name` (the `appName`, else the repo's title), `short_name` (the same, cut to 12 characters), `start_url: "/"`, `display: "standalone"`, `theme_color` and `background_color` when the config sets them, and `icons` from the favicon and the logo (a PNG with its size read from the file, an SVG as `sizes: "any"`). Without a `brand` it is the repo's title and no icons (cornfield ships no favicon of its own).
 
 **What `cornfield validate` checks** for each of `logo`, `wordmark` and `favicon`:
 
 - it exists, is a plain file, and stays inside the repo (a symlink that leads out is refused);
-- its extension is `.svg` or `.png`, and its first bytes are what the extension says: the PNG signature for `.png`, an SVG document (`<svg`, after an optional XML declaration, comments and a doctype) for `.svg`, so a page or a script renamed to `.png` is refused;
+- its extension is `.svg` or `.png`, and its first bytes are what the extension says: the PNG signature and then the `IHDR` chunk for `.png`, an SVG document (`<svg`, after an optional XML declaration, comments and a doctype) for `.svg`, so a page or a script renamed to `.png` is refused;
 - it is at most **512 KB**.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails.

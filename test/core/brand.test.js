@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { configProblems, DEFAULTS } from '../../core/config.js';
 // @ts-expect-error plain JS modules, no declarations
-import { MAX_BRAND_BYTES, brandAssetFile, brandImages, brandOn, clientBrand, magicMatches, manifestOf, pngSize } from '../../core/brand.js';
+import { MAX_BRAND_BYTES, brandAssetFile, brandImages, brandOn, clientBrand, colorOf, magicMatches, manifestOf, pngSize } from '../../core/brand.js';
 // @ts-expect-error plain JS modules, no declarations
 import { validateBrandFiles } from '../../core/validate.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
@@ -88,6 +88,11 @@ describe('magic bytes', () => {
     expect(magicMatches('.png', png())).toBe(true);
     expect(magicMatches('.png', Buffer.from(SVG))).toBe(false);
     expect(magicMatches('.png', Buffer.from('<html></html>'))).toBe(false);
+    // the signature alone is not enough: an IHDR chunk has to follow it, so a signature glued onto a page or an SVG is refused
+    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
+    expect(magicMatches('.png', Buffer.concat([sig, Buffer.from('<html><script>alert(1)</script></html>')]))).toBe(false);
+    expect(magicMatches('.png', Buffer.concat([sig, Buffer.from(SVG)]))).toBe(false);
+    expect(magicMatches('.png', png().subarray(0, 32))).toBe(false);
     expect(magicMatches('.svg', Buffer.from(SVG))).toBe(true);
     expect(magicMatches('.svg', Buffer.from(`\uFEFF<?xml version="1.0"?>\n<!-- c -->\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n${SVG}`))).toBe(true);
     for (const bad of ['<html><svg></svg></html>', '<svgx/>', '<script>alert(1)</script>', '', 'plain text', '<?xml version="1.0"?><html/>']) expect(magicMatches('.svg', Buffer.from(bad)), bad).toBe(false);
@@ -105,6 +110,18 @@ describe('magic bytes', () => {
 describe('the manifest', () => {
   const files = { 'f.png': png(32, 32), 'l.svg': Buffer.from(SVG), 'l2.png': png(512, 512) };
   const read = (rel) => (files[rel] ? { body: files[rel] } : { problem: 'does not exist.' });
+
+  it('is the repo\'s title with no icons when there is no brand', () => {
+    for (const b of [null, undefined, {}]) expect(manifestOf(b, 'Acme home', read)).toEqual({ name: 'Acme home', short_name: 'Acme home', start_url: '/', display: 'standalone', icons: [] });
+  });
+
+  it('carries a colour only when it is a hex colour, even if the config was never checked', () => {
+    const m = manifestOf({ color: 'red"}', background: 'url(x)' }, 'repo', read);
+    expect(m).not.toHaveProperty('theme_color');
+    expect(m).not.toHaveProperty('background_color');
+    expect(colorOf('#e53e3e')).toBe('#e53e3e');
+    for (const bad of ['red', '"><script>', '#e53e3e80', null, 7]) expect(colorOf(bad)).toBeNull();
+  });
 
   it('takes its name from appName, or the repo\'s title, and starts standalone at /', () => {
     expect(manifestOf({ appName: 'Acme' }, 'repo', read)).toEqual({ name: 'Acme', short_name: 'Acme', start_url: '/', display: 'standalone', icons: [] });

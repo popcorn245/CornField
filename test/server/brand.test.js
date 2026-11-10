@@ -31,7 +31,7 @@ function ask(port, target, method = 'GET') {
 const made = [];
 afterAll(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
 
-const PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'), Buffer.from([0, 0, 0, 48, 0, 0, 0, 48]), Buffer.alloc(8)]);
+const PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'), Buffer.from([0, 0, 0, 48, 0, 0, 0, 48]), Buffer.alloc(9)]);
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><script>alert(1)</script><rect width="8" height="8"/></svg>';
 
 /** A copy of the sample repo with `brand` added to its config (or not, for `undefined`) and the given files, served on a free port */
@@ -159,21 +159,49 @@ describe('a brand with only a name', () => {
 });
 
 describe('without a brand', () => {
-  it('keeps the page as it was: no manifest, no icon, the title as before', async () => {
+  it('keeps the title and adds no icon, but still serves a manifest from the title, so any cornfield installs as an app', async () => {
     const s = await serve(undefined);
     try {
       const html = (await ask(s.port, '/')).body;
       expect(html).toContain('<title>Acme home · cornfield</title>');
-      expect(html).not.toMatch(/rel="(icon|manifest)"/);
+      expect(html).not.toContain('rel="icon"');
+      expect(html).not.toContain('theme-color');
+      expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />');
       expect(html).not.toContain('<!--@brand-->');
-      expect((await ask(s.port, '/manifest.webmanifest')).status).toBe(404);
+      const res = await ask(s.port, '/manifest.webmanifest');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/^application\/manifest\+json/);
+      expect(JSON.parse(res.body)).toEqual({ name: 'Acme home', short_name: 'Acme home', start_url: '/', display: 'standalone', icons: [] });
       expect((await ask(s.port, '/cornfield/brand/logo.svg')).status).toBe(404);
       expect(JSON.parse((await ask(s.port, '/cornfield/config.json')).body).brand).toBeNull();
     } finally { await s.close(); }
   });
 });
 
+describe('an app name with replacement patterns in it', () => {
+  it('lands in the title as written, escaped, and does not pull the page into it', async () => {
+    const s = await serve({ appName: "$' $& $` <x>" });
+    try {
+      const html = (await ask(s.port, '/')).body;
+      expect(html).toContain("<title>Acme home · $&#39; $&amp; $` &lt;x&gt;</title>");
+      expect(html.match(/<title>/g)).toHaveLength(1);
+      expect(JSON.parse((await ask(s.port, '/manifest.webmanifest')).body).name).toBe("$' $& $` <x>");
+    } finally { await s.close(); }
+  });
+});
+
 describe('a brand image that is not safe to send', () => {
+  it('is a 404 when a PNG signature is followed by a page or an SVG instead of the IHDR chunk', async () => {
+    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
+    const s = await serve(
+      { logo: 'html.png', favicon: 'svg.png' },
+      { 'html.png': Buffer.concat([sig, Buffer.from('<html><script>alert(1)</script></html>')]), 'svg.png': Buffer.concat([sig, Buffer.from(SVG)]) },
+    );
+    try {
+      for (const p of ['/cornfield/brand/logo.png', '/cornfield/brand/favicon.png']) expect((await ask(s.port, p)).status, p).toBe(404);
+    } finally { await s.close(); }
+  });
+
   it('is a 404 when the bytes do not match, it is too big, or it is a link out of the repo', async () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-brand-out-'));
     made.push(outside);

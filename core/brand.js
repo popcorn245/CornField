@@ -8,7 +8,7 @@
  *     logo: './tools/cornfield/logo.svg',        // replaces the brand mark in the header
  *     wordmark: './tools/cornfield/word.svg',    // replaces the title text in the header
  *     favicon: './tools/cornfield/favicon.png',  // <link rel="icon">
- *     appName: 'Acme',                           // replaces "cornfield" in visible chrome and the tab title
+ *     appName: 'Acme',                           // replaces "cornfield" where cornfield names itself (tab title, heading, manifest)
  *     color: '#e53e3e',                          // the manifest's theme_color (and the tab's theme-color)
  *     background: '#ffffff',                     // the manifest's background_color
  *   }
@@ -63,6 +63,9 @@ export function brandProblems(b) {
   return out;
 }
 
+/** A brand colour as it may reach the page and the manifest: a hex colour, else null (configProblems refuses anything else; this is the second lock) */
+export const colorOf = (v) => (typeof v === 'string' && HEX_COLOR.test(v) ? v : null);
+
 /** Whether the brand sets anything at all */
 export const brandOn = (brand) => Boolean(brand) && BRAND_KEYS.some((k) => !unset(brand[k]));
 
@@ -107,16 +110,16 @@ function looksLikeSvg(buf) {
   return /^<svg[\s>/]/.test(s);
 }
 
-/** Whether a file's bytes are what its extension says (`.png`: the PNG signature; `.svg`: an SVG document) */
+/** Whether a file's bytes are what its extension says (`.png`: the PNG signature, then the IHDR chunk a PNG must start with; `.svg`: an SVG document) */
 export function magicMatches(ext, buf) {
-  if (ext === '.png') return buf.length >= PNG_MAGIC.length && buf.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC);
+  if (ext === '.png') return buf.length >= 33 && buf.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) && buf.readUInt32BE(8) === 13 && buf.toString('latin1', 12, 16) === 'IHDR';
   if (ext === '.svg') return !buf.includes(0) && looksLikeSvg(buf);
   return false;
 }
 
 /** A PNG's width and height from its header, or null */
 export function pngSize(buf) {
-  if (!magicMatches('.png', buf) || buf.length < 24 || buf.toString('latin1', 12, 16) !== 'IHDR') return null;
+  if (!magicMatches('.png', buf)) return null;
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   return w > 0 && h > 0 ? { width: w, height: h } : null;
@@ -148,9 +151,10 @@ export function brandAssetFile(root, rel) {
 }
 
 /**
- * The web app manifest for a brand (served at MANIFEST_PATH): name and short name from `appName` or the repo's title, the favicon
- * and the logo as icons, the colours when the config sets them, standalone, starting at `/`.
- * @param {object} brand
+ * The web app manifest (served at MANIFEST_PATH, with or without a brand, so any cornfield can be installed on a phone): name and
+ * short name from `appName` or the repo's title, the favicon and the logo as icons, the colours when the config sets them,
+ * standalone, starting at `/`. Without a brand: the repo's title and no icons (cornfield ships no favicon of its own).
+ * @param {object | null | undefined} brand
  * @param {string} title the repo's title
  * @param {(rel: string) => { body: Buffer } | { problem: string }} readImage
  */
@@ -171,8 +175,8 @@ export function manifestOf(brand, title, readImage) {
     short_name: [...name].slice(0, 12).join(''),
     start_url: '/',
     display: 'standalone',
-    ...(brand && brand.color ? { theme_color: brand.color } : {}),
-    ...(brand && brand.background ? { background_color: brand.background } : {}),
+    ...(colorOf(brand && brand.color) ? { theme_color: brand.color } : {}),
+    ...(colorOf(brand && brand.background) ? { background_color: brand.background } : {}),
     icons: icons.map((i) => (i.sizes ? i : { src: i.src, type: i.type, purpose: i.purpose })),
   };
 }
