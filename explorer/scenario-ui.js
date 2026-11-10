@@ -315,7 +315,8 @@ function paintPlay(show) {
   const btn = document.getElementById('proposal-play');
   if (!btn) return;
   btn.hidden = !show;
-  btn.setAttribute('aria-expanded', String(!!list && !list.hidden));
+  // with one scenario Play plays it, so it expands nothing
+  if (proposalScenarios().length > 1) btn.setAttribute('aria-expanded', String(!!list && !list.hidden)); else btn.removeAttribute('aria-expanded');
   if (wiredPlay.has(btn)) return;
   wiredPlay.add(btn);
   btn.addEventListener('click', () => {

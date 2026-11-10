@@ -502,6 +502,7 @@ describe('the list with the proposal bar open', () => {
     expect(q('.hx-scenarios').hidden).toBe(true);
     state.proposal = { title: 'P', scenarios: [scenario({ id: 'only', title: 'Only walk' })] };
     touchScene();
+    expect(play.hasAttribute('aria-expanded')).toBe(false); // one scenario: Play plays it, it expands nothing
     play.click();
     expect(q('.hx-player-title').textContent).toBe('Only walk');
     expect(play.hidden).toBe(true); // the player is the control while it plays

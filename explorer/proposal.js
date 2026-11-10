@@ -518,8 +518,8 @@ function onClick(e) {
   const target = e.target.closest ? e.target.closest('[data-action]') : null;
   const action = target && ACTIONS[target.dataset.action];
   if (action) action(target);
-  // A choice in the ⋯ menu, or a click anywhere else, closes it
-  if (moreOpen() && !(target && target.dataset.action === 'toggle-proposal-more')) closeMore();
+  // A choice in the ⋯ menu closes it back onto its button (Close may stop at the what-if confirm); a click anywhere else just closes it
+  if (moreOpen() && !(target && target.dataset.action === 'toggle-proposal-more')) closeMore(!!(target && target.closest('#proposal-more-menu')));
   // Any click outside the picker closes it
   const wrap = $('proposal-wrap');
   if (menuOpen() && wrap && !wrap.contains(e.target)) closeMenu();

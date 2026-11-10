@@ -825,6 +825,15 @@ describe('closing', () => {
     expect(state.proposal).not.toBeNull();
   });
 
+  it('from the ⋯ menu, the confirm leaves the focus on the ⋯ button, not on the hidden menu', () => {
+    addNodeVia({ label: '/shopping', parent: 'app-a' });
+    click($('proposal-more'));
+    click(closeBtn());
+    expect(q('[data-panel="confirm"]').hidden).toBe(false);
+    expect($('proposal-more-menu').hidden).toBe(true);
+    expect(document.activeElement).toBe($('proposal-more'));
+  });
+
   it('"keep" closes and leaves the edits in storage, where the proposal finds them again', () => {
     addNodeVia({ label: '/shopping', parent: 'app-a' });
     click(closeBtn());

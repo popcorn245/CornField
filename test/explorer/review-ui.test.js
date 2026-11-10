@@ -152,12 +152,14 @@ afterEach(() => {
 });
 
 describe('the buttons', () => {
-  it('are on the proposal bar, under the edit controls, in plain words, and not there with no proposal', () => {
+  it('are on the proposal toolbar, in plain words, with the note just before them, and not there with no proposal', () => {
     expect($('review').hidden).toBe(true);
     open();
     expect($('review').hidden).toBe(false);
     expect($('review').closest('#proposal-body')).not.toBeNull();
-    expect(q('.hx-proposal-head').compareDocumentPosition($('review')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // under the toolbar
+    // in the toolbar, just before Send back: Tab goes from the note to Cancel, then to "Send back with this note"
+    expect($('review').nextElementSibling).toBe(q('.hx-proposal-actions'));
+    expect($('review').compareDocumentPosition(sendBackBtn()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(q('.hx-proposal-head').contains(approveBtn())).toBe(true);
     expect(q('.hx-proposal-head').contains(sendBackBtn())).toBe(true);
     expect(noteOpen()).toBe(false); // the note opens only when Send back is pressed

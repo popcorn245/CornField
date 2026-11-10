@@ -59,7 +59,7 @@ const q = (sel) => (root ? root.querySelector(sel) : null);
 /** The toolbar's own buttons: Send back and Approve (index.html) */
 const button = (verdict) => document.querySelector(`#proposal-bar [data-review="${verdict}"]`);
 
-/** The status line, the note field and the lines under the toolbar; added to the bar once, right under the toolbar */
+/** The status line, the note field and the lines under them; added to the toolbar once, just before Send back and Approve, so Tab goes from the note to Cancel and then to "Send back with this note" (on a phone it sits under the counts, above the two buttons; from 768px CSS gives it a row under the toolbar) */
 function mount() {
   const body = $('proposal-body');
   if (!body) return null;
@@ -83,8 +83,8 @@ function mount() {
     // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
     q('.hx-review-label').textContent = t('reviewNoteLabel');
     q('#review-note').setAttribute('placeholder', t('reviewNotePlaceholder'));
-    const head = body.querySelector('.hx-proposal-head');
-    if (head) head.after(root); else body.prepend(root);
+    const actions = body.querySelector('.hx-proposal-actions');
+    if (actions) actions.before(root); else body.prepend(root);
     const bar = $('proposal-bar');
     (bar || root).addEventListener('click', onClick);
     root.addEventListener('input', () => { if (ui.message) { ui.message = ''; paint(); } });
@@ -192,6 +192,7 @@ export async function sendReview(verdict) {
       ui.message = problem;
       ui.noting = true; // the refusal is about the note: show it
       paint();
+      if (isPhone()) expandSheet('proposal');
       noteEl.focus();
       return false;
     }

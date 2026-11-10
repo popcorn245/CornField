@@ -344,7 +344,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 
 /* Before / Diff / After */
 .hx-seg { display: inline-flex; padding: calc(var(--corn-space-1) / 2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); }
-.hx-seg-btn { padding: var(--corn-space-1) var(--corn-space-4); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-seg-btn { height: 26px; padding: 0 var(--corn-space-4); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font-size: var(--corn-text-sm); font-weight: 500; }
 .hx-seg-btn:hover { color: var(--corn-text); }
 .hx-seg-btn.is-on, .hx-seg-btn[aria-pressed="true"] { background: var(--corn-accent); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
 
@@ -385,7 +385,6 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 
 @media (max-width: 639px) {
   .hx-menu--proposals { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
-  .hx-seg-btn { padding: var(--corn-space-1) var(--corn-space-4); }
 }
 
 /* ---- scenario player (scenario-ui.js): the bar while a scenario plays, and the scenario list --------- */
@@ -450,8 +449,9 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-rubber svg { display: block; overflow: visible; }
 .hx-rubber-line { stroke: var(--corn-edit); stroke-width: 3; stroke-dasharray: 8 6; stroke-linecap: round; }
 .hx-rubber-from, .hx-rubber-to { fill: color-mix(in srgb, var(--corn-edit) 15%, transparent); stroke: var(--corn-edit); stroke-width: 2; }
-/* The review (review.js, TOPO-12): the status line and the note that opens under the toolbar on Send back; the buttons are in the toolbar */
-.hx-review { margin-top: var(--corn-space-3); display: flex; flex-direction: column; gap: var(--corn-space-2); }
+/* The review (review.js, TOPO-12): the status line and the note that opens on Send back. It is in the toolbar, just before Send back and
+   Approve (the note's Tab goes on to them); from 768px it takes a row of its own under the toolbar, on a phone it sits under the counts */
+.hx-review { flex: 1 0 100%; order: 1; display: flex; flex-direction: column; gap: var(--corn-space-2); }
 .hx-review[hidden], .hx-review:not(:has(> :not([hidden]))) { display: none; }
 .hx-review-form { display: flex; flex-direction: column; gap: var(--corn-space-2); }
 .hx-review-form[hidden] { display: none; }
@@ -470,7 +470,8 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
    One row from 768px: title, counts (they open the change list), Before / Diff / After, Play, Edit, then Send back,
    Approve (the primary) and a ⋯ menu with Close. The what-if controls sit behind Edit, the scenario list behind Play,
    and the review note opens under the row on Send back. On a phone the row is a sheet: the title, the counts with
-   the current mode (a button that opens the switcher), and Send back and Approve full width, each 44px tall. */
+   the current mode (a button that opens the switcher), the note when it is open, and Send back and Approve full
+   width, each 44px tall. */
 .hx-proposal-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-3) var(--corn-space-4); }
 .hx-proposal-name { flex: 0 1 auto; min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--corn-text-base); font-weight: 650; color: var(--corn-text); }
 .hx-proposal-counts { display: contents; }
@@ -479,7 +480,6 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-proposal-chip .hx-mark-dot { margin: 0 var(--corn-space-2) 0 0; }
 .hx-proposal-sep { margin: 0 var(--corn-space-2); color: var(--corn-text-3); }
 .hx-proposal-mode { display: none; }
-.hx-seg-btn { padding-block: 0; height: 26px; }
 .hx-proposal-tools, .hx-proposal-actions { display: flex; align-items: center; gap: var(--corn-space-3); }
 .hx-proposal-tools .hx-btn { height: 30px; font-size: var(--corn-text-sm); font-weight: 500; }
 #proposal-play[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); }
@@ -504,7 +504,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-mode { display: inline-flex; align-items: center; gap: var(--corn-space-2); padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); font-size: var(--corn-text-sm); font-weight: 600; }
   .hx-proposal-mode::after { content: ""; width: 6px; height: 6px; border: solid currentColor; border-width: 0 var(--corn-border-strong) var(--corn-border-strong) 0; transform: translateY(-2px) rotate(45deg); }
   .hx-proposal-mode[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
-  .hx-seg { grid-column: 1 / -1; order: 3; }
+  .hx-seg, .hx-review { grid-column: 1 / -1; order: 3; }
   .hx-proposal-bar:not([data-mode-open="true"]) .hx-seg { display: none; }
   .hx-seg-btn { flex: 1; height: 44px; font-size: var(--corn-text-md); }
   .hx-proposal-actions { grid-column: 1 / -1; order: 4; display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; gap: var(--corn-space-3); }
@@ -564,7 +564,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-bar { max-height: 50dvh; overflow-y: auto; padding: 0 var(--corn-space-4) var(--corn-space-3); }
   .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-body),
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head),
-  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu) { display: none; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu, .hx-review) { display: none; }
   .hx-proposal-bar[data-sheet-state="expanded"] .hx-scenarios, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-changes, .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
   /* The scenario player: the title, then the step counter and its text on two lines */

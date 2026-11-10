@@ -434,7 +434,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
 | `forge-panel` | the Issues & PRs panel, with the agent runs |
 | `proposal-bar` | the open proposal's bar |
-| `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens under the toolbar on Send back), the what-if editor (behind Edit) |
+| `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 
 ### Dialogs
