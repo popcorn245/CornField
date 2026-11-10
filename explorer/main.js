@@ -28,7 +28,7 @@ import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRende
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
 import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from './layers.js';
-import { closeDrawer, copySpec, selectNode } from './panels.js';
+import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
@@ -135,6 +135,7 @@ const ACTIONS = {
   'clear-search': () => handleSearch(''),
   'close-drawer': () => closeDrawer(),
   'copy-spec': (el) => copySpec(el),
+  'start-run': () => startRun(),
   'select-node': (el) => selectNode(nodeById(el.dataset.id)),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),

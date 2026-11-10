@@ -60,6 +60,17 @@ describe('every browser module', () => {
     }
   });
 
+  it('main.js: every data-action handler calls a name it imports or defines (nothing compiles it, so a missing import shows only on the click)', () => {
+    const src = fs.readFileSync(path.join(EXPLORER, 'main.js'), 'utf8');
+    const known = new Set();
+    for (const [, names] of src.matchAll(/^import\s*\{([^}]*)\}\s*from/gm)) for (const n of names.split(',')) known.add(n.trim().split(/\s+as\s+/).pop());
+    for (const [, n] of src.matchAll(/^(?:export\s+)?(?:async\s+)?(?:function\s+|const\s+|let\s+)([A-Za-z_$][\w$]*)/gm)) known.add(n);
+    const actions = /^const ACTIONS = \{([\s\S]*?)^\};/m.exec(src)[1];
+    const called = [...actions.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\(/g)].map((m) => m[1]);
+    expect(called.length).toBeGreaterThan(10);
+    for (const n of called) expect(known.has(n), `${n} in ACTIONS`).toBe(true);
+  });
+
   it('names no URL outside this origin: the explorer never reaches the internet', () => {
     for (const file of modules()) {
       const code = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');

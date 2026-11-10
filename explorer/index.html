@@ -318,29 +318,24 @@
     <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert data-corn="node-panel">
       <div class="hx-drawer-body">
         <div class="hx-drawer-head">
-          <span class="hx-drawer-title-wrap">
-            <span id="drawer-badge" class="hx-badge" data-corn="badge">ATOM</span>
+          <div class="hx-drawer-id">
+            <p class="hx-kicker"><span id="drawer-badge" data-corn="badge">Atom</span><span id="drawer-host"></span><span id="drawer-diff" class="hx-diffpill" hidden></span></p>
             <h2 id="drawer-title" class="hx-drawer-title">&lt;pop-button&gt;</h2>
-          </span>
+          </div>
           <button type="button" class="hx-close" data-action="close-drawer" aria-label="Close" data-corn-kind="icon">✕</button>
         </div>
 
-        <p id="drawer-description" class="hx-faint hx-lead"></p>
+        <p id="drawer-description" class="hx-lead" hidden></p>
 
         <div class="hx-block">
-          <h3 class="hx-block-title" data-corn-string="propsTitle">Properties &amp; Attributes</h3>
-          <div id="drawer-props-list" class="hx-props"></div>
-        </div>
-
-        <div class="hx-block">
-          <h3 class="hx-block-title" data-corn-string="detailsTitle">Details</h3>
           <div id="drawer-meta-list" class="hx-meta"></div>
         </div>
       </div>
 
       <div class="hx-drawer-foot">
-        <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer">Open ↗</a>
-        <button type="button" class="hx-btn hx-btn--copy" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>
+        <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open route ↗</a>
+        <button type="button" id="drawer-run-btn" class="hx-btn hx-foot-btn" data-action="start-run" data-corn-string="startRun" hidden>Start a run</button>
+        <button type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>
       </div>
     </aside>
     </div>
