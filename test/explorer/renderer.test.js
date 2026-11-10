@@ -54,7 +54,7 @@ describe('renderer-canvas2d', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../explorer/renderer-canvas2d.js'), 'utf8');
     expect(src).not.toMatch(/state\.js/);
     expect(src).not.toMatch(/\bstate\b\./);
-    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js']);
+    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js']);
   });
 
   it('sizes the canvas for the device pixel ratio and scales the context to match', () => {

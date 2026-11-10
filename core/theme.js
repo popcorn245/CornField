@@ -11,6 +11,8 @@
  *     fontHosts: [],                                                // the hosts of the font FILES, when a fonts host is not a known pair
  *     names: { day: './tools/cornfield/day.css' },                  // named themes: data-theme-name on <html>, a picker in the header
  *     default: 'day',                                               // the name used until a viewer picks one
+ *     icons: { app: './tools/cornfield/icons/app.svg' },            // an icon per node kind, drawn inside the node on the map (svg or png)
+ *     pixelated: true,                                              // small icons are drawn crisp (nearest-neighbour), not smoothed
  *   }
  *
  * A theme is CSS only: never script, never inlined into the page.
@@ -18,8 +20,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { NODE_THEMES } from './schema.js';
 
-export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default']);
+export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'icons', 'pixelated']);
+/** The node kinds an icon may be set for: every node type of the map */
+export const ICON_KINDS = Object.freeze(Object.keys(NODE_THEMES));
+/** The file types of a node icon */
+export const ICON_EXTENSIONS = Object.freeze(['.svg', '.png']);
 /** The largest a theme file may be, in bytes */
 export const MAX_THEME_BYTES = 256 * 1024;
 export const MAX_THEME_NAMES = 12;
@@ -59,7 +66,7 @@ export function fontUrl(v) {
  */
 export function themeProblems(t) {
   if (t === undefined) return [];
-  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default? }.'];
+  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default?, icons?, pixelated? }.'];
   const out = [];
   for (const k of Object.keys(t)) if (!THEME_KEYS.includes(k)) out.push(`theme.${k}: the keys are ${THEME_KEYS.join(', ')}.`);
   if (t.css !== undefined && t.css !== null && !cssPathInRepo(t.css)) out.push('theme.css is one stylesheet (a .css file) inside the repo, written relative to it, like "./tools/cornfield/theme.css".');
@@ -97,6 +104,48 @@ export function themeProblems(t) {
   if (t.default !== undefined && t.default !== null) {
     if (!isText(t.default)) out.push('theme.default is the name of one of theme.names.');
     else if (!names.includes(t.default)) out.push(`theme.default "${t.default}" is not one of theme.names (${names.join(', ') || 'none are listed'}).`);
+  }
+  if (t.pixelated !== undefined && typeof t.pixelated !== 'boolean') out.push('theme.pixelated is true or false.');
+  if (t.icons !== undefined) {
+    if (!isObject(t.icons)) out.push('theme.icons is { "<node kind>": "./path.svg" }.');
+    else {
+      for (const [kind, rel] of Object.entries(t.icons)) {
+        if (!ICON_KINDS.includes(kind)) out.push(`theme.icons "${kind}": not a node kind (${ICON_KINDS.join(', ')}).`);
+        const found = themeIconAsset(t, rel);
+        if ('problem' in found) out.push(`theme.icons.${kind} ${found.problem}`);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Where a node icon of the config is served, by its repo path: `{ asset }` (the path after THEME_ASSET_PREFIX) or `{ problem }`.
+ * An icon is an .svg or .png file inside the repo, and inside the theme folder (themeAssetDir): it is served by the route that serves the
+ * images beside a theme, nothing else. No disk is read here (core/validate.js checks the file).
+ * @param {object} theme
+ * @param {unknown} rel the icon's path as the config wrote it
+ * @returns {{ asset: string } | { problem: string }}
+ */
+export function themeIconAsset(theme, rel) {
+  if (!isText(rel) || path.isAbsolute(rel) || /^[a-z]:/i.test(rel) || rel.includes('\0') || rel.includes('\\') || rel.split('/').includes('..')) return { problem: 'is an .svg or .png file inside the repo, written relative to it, like "./tools/cornfield/icons/app.svg".' };
+  if (!ICON_EXTENSIONS.includes(path.posix.extname(rel).toLowerCase())) return { problem: `(${rel}) is not an .svg or .png file.` };
+  const dir = themeAssetDir(theme);
+  if (!dir) return { problem: `(${rel}) cannot be served: icons are served beside the theme files, so the theme needs a stylesheet (theme.css or theme.names) in a folder, not at the top of the repo.` };
+  const norm = path.posix.normalize(rel);
+  if (!norm.startsWith(`${dir}/`)) return { problem: `(${rel}) is outside the theme folder ${dir}, the only folder whose images are served; put the icon under it.` };
+  const asset = themeAssetPath(norm.slice(dir.length + 1));
+  return asset ? { asset } : { problem: `(${rel}) has a name that cannot be served (letters, digits, ".", "_" and "-" only, no segment starting with a dot).` };
+}
+
+/** The icons the browser is told: `{ kind: '/cornfield/theme/assets/<path>' }`, those the config names validly */
+export function iconUrls(theme) {
+  const out = {};
+  if (!theme || !isObject(theme.icons)) return out;
+  for (const [kind, rel] of Object.entries(theme.icons)) {
+    if (!ICON_KINDS.includes(kind)) continue;
+    const found = themeIconAsset(theme, rel);
+    if (!('problem' in found)) out[kind] = THEME_ASSET_PREFIX + found.asset;
   }
   return out;
 }
@@ -301,11 +350,14 @@ export function themeUrlTarget(ref, servedAt) {
   return asset ? { asset } : { problem: why };
 }
 
-/** The theme as the browser is told it: names and the default, never a path on this machine */
+/** The theme as the browser is told it: names and the default, the icons' served paths and the pixelated flag, never a path on this machine */
 export function clientTheme(theme) {
   if (!theme) return null;
   const names = Object.keys(theme.names || {});
-  return names.length ? { names, default: theme.default || null } : null;
+  const icons = iconUrls(theme);
+  const pixelated = theme.pixelated === true;
+  if (!names.length && !Object.keys(icons).length && !pixelated) return null;
+  return { names, default: names.length ? theme.default || null : null, ...(Object.keys(icons).length ? { icons } : {}), ...(pixelated ? { pixelated } : {}) };
 }
 
 /**
@@ -334,4 +386,33 @@ export function themeAssetFile(root, theme, rel) {
   if (!stats.isFile()) return { problem: `${dir}/${rel} is not a file.` };
   if (stats.size > MAX_THEME_ASSET_BYTES) return { problem: `${dir}/${rel} is ${Math.ceil(stats.size / 1024)} KB; an asset beside a theme is at most ${MAX_THEME_ASSET_BYTES / 1024 / 1024} MB.` };
   return { file: real, size: stats.size, type };
+}
+
+/**
+ * What is wrong with the icon files of the config (`theme.icons`): each one exists as a plain file under the theme folder (a link out of it is
+ * refused), is at most MAX_THEME_ASSET_BYTES, and is what its extension says (an .svg is text with an <svg> element and no script, a .png starts
+ * with the PNG signature). The server serves an icon only if themeAssetFile finds it, so this is the same rule.
+ * @param {{ root: string, theme?: object }} config
+ * @returns {string[]}
+ */
+export function themeIconFileProblems(config) {
+  const out = [];
+  const icons = config.theme && isObject(config.theme.icons) ? config.theme.icons : {};
+  for (const [kind, rel] of Object.entries(icons)) {
+    const where = `theme.icons.${kind} (${rel})`;
+    const target = themeIconAsset(config.theme, rel);
+    if ('problem' in target) { out.push(`${where} ${target.problem}`); continue; }
+    const found = themeAssetFile(config.root, config.theme, target.asset);
+    if ('problem' in found) { out.push(`${where} ${found.problem}`); continue; }
+    let head;
+    try { head = fs.readFileSync(found.file); } catch { out.push(`${where} cannot be read.`); continue; }
+    if (path.posix.extname(target.asset).toLowerCase() === '.png') {
+      if (!head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) out.push(`${where} is not a PNG image.`);
+    } else {
+      const text = head.toString('utf8');
+      if (!/<svg[\s>]/i.test(text)) out.push(`${where} is not an SVG image (no <svg> element).`);
+      else if (/<\s*script\b|\son[a-z]+\s*=|javascript\s*:/i.test(text)) out.push(`${where} holds script, which an icon may not (an icon is an image only).`);
+    }
+  }
+  return out;
 }

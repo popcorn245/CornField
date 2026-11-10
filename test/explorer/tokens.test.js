@@ -12,6 +12,8 @@ import path from 'node:path';
 import { EXPLORER, CORNFIELD } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast } from '../../explorer/theme-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, mapTokenNames } from '../../explorer/map-style.js';
 
 const NAMED = 'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgrey darkgreen darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray grey green greenyellow honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgrey lightgreen lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'.split(' ');
 const NAMED_RE = new RegExp(`(?<![\\w-])(${NAMED.join('|')})(?![\\w-])`, 'i');
@@ -182,7 +184,20 @@ describe('tokens.css defines the documented tokens', () => {
     const defined = [...names(darkBlock)];
     expect(defined.filter((t) => !documented.includes(t))).toEqual([]);
     const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n') + tokensCss;
-    expect(defined.filter((t) => !sheets.includes(`var(${t})`))).toEqual([]);
+    // the map's colours (--corn-map-*) are read by script (explorer/map-style.js), not by a stylesheet: the module's own list says which
+    const readByScript = new Set([...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN]);
+    expect(defined.filter((t) => !readByScript.has(t) && !sheets.includes(`var(${t})`))).toEqual([]);
+  });
+
+  it('defines in tokens.css every map token explorer/map-style.js reads, each \`auto\` (the map as it was) but the width and the collision mark', () => {
+    const have = names(darkBlock);
+    expect(mapTokenNames().filter((t) => !have.has(t))).toEqual([]);
+    for (const t of MAP_COLOR_TOKENS) expect(darkBlock, t).toMatch(new RegExp(`${t}:\\s*auto;`));
+    expect(darkBlock).toMatch(/--corn-map-collision:\s*var\(--corn-warn\);/);
+  });
+
+  it('leaves the map tokens out of the light blocks: auto is right on either ground, and a theme sets its own', () => {
+    for (const block of [mediaBlock, attrBlock]) expect([...names(block)].filter((t) => t.startsWith('--corn-map-'))).toEqual([]);
   });
 
   it('keeps the two light blocks in step', () => {

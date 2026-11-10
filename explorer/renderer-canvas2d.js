@@ -9,6 +9,7 @@
  */
 
 import { CORE_RATIO, ARROW, MARK_MIN_PX, looksFor, packetPoint } from './scene.js';
+import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 
 const TAU = Math.PI * 2;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
@@ -109,7 +110,7 @@ function drawEdge(ctx, edge, timeMs, zoom) {
 // ---------------------------------------------------------------------------
 //  Nodes
 // ---------------------------------------------------------------------------
-function drawNode(ctx, node, zoom, looks) {
+function drawNode(ctx, node, zoom, looks, style) {
   ctx.save();
   ctx.globalAlpha = node.alpha;
 
@@ -152,6 +153,22 @@ function drawNode(ctx, node, zoom, looks) {
   circle(ctx, node.x, node.y, node.r * CORE_RATIO);
   ctx.fillStyle = looks.core;
   ctx.fill();
+
+  // The theme's outline (--corn-map-node-*-stroke), just inside the edge of the circle
+  if (node.stroke) {
+    circle(ctx, node.x, node.y, Math.max(0, node.r - node.stroke.width / 2));
+    ctx.strokeStyle = node.stroke.color;
+    ctx.lineWidth = node.stroke.width;
+    ctx.stroke();
+  }
+
+  // The theme's icon for this kind (theme.icons), inside the circle; crisp when the theme is pixelated
+  const image = node.icon && style.icons ? style.icons.get(node.icon) : null;
+  if (image) {
+    const side = node.r * ICON_RATIO;
+    ctx.imageSmoothingEnabled = !style.pixelated;
+    ctx.drawImage(image, node.x - side / 2, node.y - side / 2, side, side);
+  }
   ctx.restore();
 }
 
@@ -161,9 +178,11 @@ function drawNode(ctx, node, zoom, looks) {
 
 /**
  * @param {HTMLCanvasElement} canvas the canvas to draw on
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`)
  * @returns {import('./scene.js').Renderer}
  */
-export function createCanvas2dRenderer(canvas) {
+export function createCanvas2dRenderer(canvas, opts = {}) {
+  const styleOf = opts.mapStyle || getMapStyle;
   const ctx = canvas.getContext('2d');
   let width = 0;
   let height = 0;
@@ -179,7 +198,9 @@ export function createCanvas2dRenderer(canvas) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     },
 
-    draw(scene, camera, timeMs) {
+    draw(drawn, camera, timeMs) {
+      const style = styleOf();
+      const scene = styledScene(drawn, style); // the map in the theme's colours (map-style.js); the scene itself when nothing is set
       ctx.clearRect(0, 0, width, height);
       ctx.save();
       ctx.translate(camera.x, camera.y);
@@ -191,8 +212,8 @@ export function createCanvas2dRenderer(canvas) {
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
       scene.edges.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
-      const looks = looksFor(scene.theme); // the halos, mark rings and core for the scene's ground
-      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks));
+      const looks = looksWith(looksFor(scene.theme), style); // the halos, mark rings and core for the scene's ground, in the theme's colours
+      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 
       ctx.restore();
