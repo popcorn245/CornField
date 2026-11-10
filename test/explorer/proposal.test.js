@@ -13,7 +13,7 @@ import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
 import { applyProposal, summarize } from '../../core/proposal.js';
 import {
-  beforeOf, chipText, fieldRows, markIn, orderAddedLast, parseProposalQuery, pinLanes, placeAddedNodes, proposalPanelHtml, showsEdge, showsNode, touchedIds,
+  beforeOf, chipText, barCounts, fieldRows, markIn, orderAddedLast, parseProposalQuery, pinLanes, placeAddedNodes, proposalPanelHtml, showsEdge, showsNode, touchedIds,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/proposal-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -246,6 +246,15 @@ describe('touchedIds', () => {
   it('is empty for a proposal that touches nothing', () => {
     const { touched } = touchedIds(base.nodes.map((n) => ({ ...n, mark: 'none' })), base.edges.map((e) => ({ ...e, mark: 'none' })));
     expect(touched.size).toBe(0);
+  });
+});
+
+describe('barCounts', () => {
+  it('puts a plus on what is added and the scenarios last, leaves out zeros, and says "No changes" for nothing', () => {
+    expect(barCounts({ added: 4, changed: 1, removed: 0, scenarios: 3 }).map((c) => c.text).join(' · ')).toBe('+4 added · 1 changed · 3 scenarios');
+    expect(barCounts({ added: 0, changed: 0, removed: 2, scenarios: 1 })).toEqual([{ mark: 'removed', text: '2 removed' }, { mark: null, text: '1 scenario' }]);
+    expect(barCounts({ added: 0, changed: 0, removed: 0 })).toEqual([{ mark: null, text: 'No changes' }]);
+    expect(barCounts(null)).toEqual([{ mark: null, text: 'No changes' }]);
   });
 });
 

@@ -32,6 +32,7 @@ const $ = (id) => document.getElementById(id);
 
 /** What the controls are showing; none of it is saved */
 const ui = {
+  editing: false, // the Edit button is on: the controls are showing
   panel: null, // 'edits' | 'steps' | null: the list that is open under the toolbar
   form: null, // { kind: 'node' } | { kind: 'edge', from, to } | null: the small form that is open
   drawing: false, // "Draw an edge" is on
@@ -127,7 +128,7 @@ hooks.bar = () => renderUi();
 function resetUi() {
   endGesture();
   setDrawing(false);
-  Object.assign(ui, { panel: null, form: null, confirm: false, closing: false, scenarioId: null, stepDraft: '', titleDraft: '', notice: '', messages: {}, lastSelected: null });
+  Object.assign(ui, { editing: false, panel: null, form: null, confirm: false, closing: false, scenarioId: null, stepDraft: '', titleDraft: '', notice: '', messages: {}, lastSelected: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +246,10 @@ function mount() {
       <div class="hx-whatif-panel" data-panel="form" hidden></div>
       <div class="hx-whatif-panel" data-panel="edits" hidden></div>
       <div class="hx-whatif-panel" data-panel="steps" hidden></div>`;
+    root.hidden = true;
     body.appendChild(root);
+    const edit = $('proposal-edit');
+    if (edit) edit.addEventListener('click', () => setEditing(!ui.editing));
     root.addEventListener('click', onClick);
     root.addEventListener('submit', onSubmit);
     root.addEventListener('change', onChange);
@@ -260,7 +264,13 @@ const q = (sel) => (root ? root.querySelector(sel) : null);
 function renderUi() {
   const open = !!state.proposal;
   if (!mount()) return;
-  root.hidden = !open;
+  root.hidden = !open || !(ui.editing || ui.confirm || ui.notice); // the confirm on Close and the notice about dropped edits are seen whatever Edit says
+  const edit = $('proposal-edit');
+  if (edit) {
+    edit.setAttribute('aria-expanded', String(ui.editing));
+    edit.classList.toggle('hx-btn--active', ui.editing);
+    edit.textContent = state.whatIf.edits.length ? `Edit · ${state.whatIf.edits.length}` : 'Edit';
+  }
   if (!open) { paintDrawer(); return; }
 
   const wi = state.whatIf;
@@ -289,6 +299,13 @@ function renderUi() {
   paintSteps();
   paintMessages();
   paintDrawer();
+}
+
+/** Edit: shows or hides the controls; hiding them ends a drawing and closes the form, the edits stay */
+function setEditing(on) {
+  ui.editing = on;
+  if (!on) { setDrawing(false); ui.form = null; ui.panel = null; }
+  renderUi();
 }
 
 /** Puts each inline refusal next to its control (and hides the ones with nothing to say) */
@@ -903,6 +920,6 @@ export function resetWhatIfForTests() {
   loadedKey = null;
   saveWarned = false;
   listeners.clear();
-  Object.assign(ui, { panel: null, form: null, drawing: false, confirm: false, closing: false, scenarioId: null, stepDraft: '', titleDraft: '', notice: '', messages: {}, recentParents: [], lastSelected: null });
+  Object.assign(ui, { editing: false, panel: null, form: null, drawing: false, confirm: false, closing: false, scenarioId: null, stepDraft: '', titleDraft: '', notice: '', messages: {}, recentParents: [], lastSelected: null });
   state.whatIf = M.emptyWhatIf();
 }

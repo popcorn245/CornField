@@ -414,7 +414,6 @@ describe('the list of a proposal\'s scenarios', () => {
   it('appears when the proposal has scenarios, naming each with its step count', () => {
     state.proposal = proposal();
     touchScene();
-    expect(q('.hx-scenarios summary').textContent).toBe('Scenarios · 2');
     expect([...document.querySelectorAll('.hx-scenarios-item')].map((b) => b.textContent)).toEqual(['First walk · 4 steps', 'Second walk · 1 step']);
   });
 
@@ -427,7 +426,7 @@ describe('the list of a proposal\'s scenarios', () => {
     state.proposal = { ...proposal(), scenarios: [proposal().scenarios[0]] };
     touchScene();
     expect(q('.hx-scenarios')).not.toBe(list);
-    expect(q('.hx-scenarios summary').textContent).toBe('Scenarios · 1');
+    expect(document.querySelectorAll('.hx-scenarios-item')).toHaveLength(1);
   });
 
   it('plays the one that is clicked, gives way to the bar while it plays, and comes back on close', () => {
@@ -452,6 +451,7 @@ describe('the list of a proposal\'s scenarios', () => {
 describe('the list with the proposal bar open', () => {
   const proposal = () => ({ title: 'P', scenarios: [scenario({ id: 'one', title: 'First walk' }), scenario({ id: 'two', title: 'Second walk' })] });
   const BAR = '<section id="proposal-bar" class="hx-proposal-bar glass"><div id="proposal-body"><div class="hx-proposal-head"></div><p id="proposal-summary" class="hx-proposal-summary"></p><div id="whatif"></div></div></section>';
+  const PLAY = '<button type="button" id="proposal-play" hidden>Play</button>';
   const withBar = () => { q('.hx-stage').insertAdjacentHTML('beforeend', BAR); };
   const css = fs.readFileSync(path.join(here, '../../explorer', 'explorer.css'), 'utf8');
   const rule = (selector        ) => css.split('\n').find((l) => l.startsWith(`${selector} {`)) || '';
@@ -479,12 +479,33 @@ describe('the list with the proposal bar open', () => {
     withBar();
     state.proposal = proposal();
     touchScene();
-    q('.hx-scenarios summary').click();
     (document.querySelectorAll('.hx-scenarios-item')[1]               ).click();
     expect(q('.hx-player-title').textContent).toBe('Second walk');
     expect(q('.hx-scenarios')).toBeNull();
     click('scenario-close');
     expect(q('#proposal-body').contains(q('.hx-scenarios'))).toBe(true);
+  });
+
+  it('is behind a Play button: one scenario plays at once, several open the list', () => {
+    q('.hx-stage').insertAdjacentHTML('beforeend', BAR.replace('<div class="hx-proposal-head"></div>', `<div class="hx-proposal-head">${PLAY}</div>`));
+    const play = q('#proposal-play');
+    expect(play.hidden).toBe(true);
+    state.proposal = proposal();
+    touchScene();
+    expect(play.hidden).toBe(false);
+    expect(q('.hx-scenarios').hidden).toBe(true);
+    expect(play.getAttribute('aria-expanded')).toBe('false');
+    play.click();
+    expect(q('.hx-scenarios').hidden).toBe(false);
+    expect(play.getAttribute('aria-expanded')).toBe('true');
+    play.click();
+    expect(q('.hx-scenarios').hidden).toBe(true);
+    state.proposal = { title: 'P', scenarios: [scenario({ id: 'only', title: 'Only walk' })] };
+    touchScene();
+    expect(play.hasAttribute('aria-expanded')).toBe(false); // one scenario: Play plays it, it expands nothing
+    play.click();
+    expect(q('.hx-player-title').textContent).toBe('Only walk');
+    expect(play.hidden).toBe(true); // the player is the control while it plays
   });
 
   it('moves into the bar when it appears after the list, and back onto the stage when it goes', () => {

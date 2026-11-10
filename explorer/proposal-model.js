@@ -109,6 +109,19 @@ export function chipText(counts) {
   return parts.length ? parts.join(' · ') : 'No changes';
 }
 
+/**
+ * The counts on the toolbar as parts, so each mark can carry its dot: "+4 added", "1 changed", "1 removed", then
+ * "3 scenarios". Zero counts are left out; nothing at all reads "No changes".
+ * @param {{added?:number, changed?:number, removed?:number, scenarios?:number}} counts `summarize(proposal)`
+ * @returns {{mark: string|null, text: string}[]}
+ */
+export function barCounts(counts) {
+  const n = (k) => counts?.[k] || 0;
+  const parts = MARKS.filter((m) => n(m) > 0).map((m) => ({ mark: m, text: `${m === 'added' ? '+' : ''}${n(m)} ${m}` }));
+  if (n('scenarios') > 0) parts.push({ mark: null, text: `${n('scenarios')} ${n('scenarios') === 1 ? 'scenario' : 'scenarios'}` });
+  return parts.length ? parts : [{ mark: null, text: 'No changes' }];
+}
+
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**

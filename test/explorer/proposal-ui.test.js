@@ -241,7 +241,7 @@ describe('the bar', () => {
     await mount('?proposal=0013-meals');
     expect($('proposal-title').textContent).toBe('Meals');
     expect($('proposal-summary').textContent).toBe('Adds /meals.');
-    expect($('proposal-chip').textContent).toBe('2 added · 1 changed · 1 removed');
+    expect($('proposal-chip').textContent).toBe('+2 added · 1 changed · 1 removed');
   });
 
   it('has Before, Diff and After, with Diff pressed first, and each click switches the picture and the pressed button', async () => {
@@ -634,5 +634,73 @@ describe('on a phone: bottom sheets', () => {
     expect(state.coveredBottom).toBe(0);
     handle('proposal-bar').click(); // the handle is hidden by the CSS here; a stray tap changes no layout
     expect(measureCovered()).toBe(0);
+  });
+});
+
+describe('the toolbar', () => {
+  const key = (el         , k        ) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const open = async () => { fakeHub(LISTING, { '0013-meals': good }); await mount('?proposal=0013-meals'); };
+
+  it('is a named group: the title, the counts, Before / Diff / After, Play, Edit, Send back, Approve and ⋯, in that order', async () => {
+    await open();
+    const head = document.querySelector('.hx-proposal-head')             ;
+    expect(head.getAttribute('role')).toBe('group');
+    expect(head.getAttribute('aria-label')).toBeTruthy();
+    const order = ['proposal-title', 'proposal-chip', 'proposal-seg', 'proposal-play', 'proposal-edit'].map((id) => $(id));
+    order.forEach((el, i) => { if (i) expect(order[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); });
+    const sendBack = head.querySelector('[data-review="notes"]')             ;
+    const approve = head.querySelector('[data-review="approved"]')             ;
+    expect($('proposal-edit').compareDocumentPosition(sendBack) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sendBack.compareDocumentPosition(approve) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(approve.compareDocumentPosition($('proposal-more')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect($('proposal-seg').getAttribute('aria-label')).toBe('Compare');
+  });
+
+  it('counts what changes and the scenarios, and names the current mode on the mode button', async () => {
+    await open();
+    expect($('proposal-chip').textContent).toMatch(/^\+\d+ added/);
+    setProposalView('after');
+    expect($('proposal-mode').textContent).toBe('After');
+    click($('proposal-mode'));
+    expect($('proposal-mode').getAttribute('aria-expanded')).toBe('true');
+    expect($('proposal-bar').dataset.modeOpen).toBe('true');
+    click(document.querySelector('[data-view="before"]') );
+    expect($('proposal-mode').textContent).toBe('Before');
+    expect($('proposal-bar').dataset.modeOpen).toBe('false'); // choosing closes the switcher
+  });
+
+  it('keeps Close behind a ⋯ menu button: it opens on a click or the arrow keys, takes focus, moves with the arrows, and Escape closes it back to the button', async () => {
+    await open();
+    const more = $('proposal-more')             ;
+    const menu = $('proposal-more-menu');
+    expect(more.getAttribute('aria-haspopup')).toBe('menu');
+    expect(more.getAttribute('aria-controls')).toBe('proposal-more-menu');
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.hidden).toBe(true);
+    expect(menu.getAttribute('role')).toBe('menu');
+    click(more);
+    expect(menu.hidden).toBe(false);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    const item = menu.querySelector('[role="menuitem"]')             ;
+    expect(item.dataset.action).toBe('close-proposal');
+    expect(document.activeElement).toBe(item);
+    key(item, 'ArrowDown'); // one item: it wraps to itself
+    expect(document.activeElement).toBe(item);
+    key(item, 'Escape');
+    expect(menu.hidden).toBe(true);
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(more);
+    key(more, 'ArrowUp');
+    expect(menu.hidden).toBe(false);
+    click(document.body); // a click elsewhere closes it
+    expect(menu.hidden).toBe(true);
+  });
+
+  it('closes the proposal from the menu', async () => {
+    await open();
+    click($('proposal-more'));
+    click(document.querySelector('#proposal-more-menu [data-action="close-proposal"]') );
+    expect($('proposal-bar').hidden).toBe(true);
+    expect($('proposal-more-menu').hidden).toBe(true);
   });
 });

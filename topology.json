@@ -497,7 +497,7 @@
       "label": "review.js",
       "type": "core",
       "file": "explorer/review.js",
-      "summary": "Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a click does.",
+      "summary": "Approving a proposal and sending it back: the two buttons on the proposal toolbar (index.html), the note that opens under it, and what a click does.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Approve and Send back on the proposal bar: the review goes to the spec PR as a comment, and the bar shows the latest one."
@@ -6336,8 +6336,8 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-forge-panel",
+      "from": "core-explorer-review",
+      "to": "core-explorer-sheets",
       "dashed": true,
       "label": "imports"
     },
@@ -6356,7 +6356,13 @@
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T18:56:47.780Z"
+  "updatedAt": "2026-11-10T19:09:49.426Z"
 }
