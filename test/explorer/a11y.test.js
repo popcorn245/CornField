@@ -184,6 +184,19 @@ describe('axe finds no violation', () => {
       expect(await audit(...PROPOSAL_REGION)).toEqual([]);
     });
 
+    it('the toolbar with Edit, the scenario list, the ⋯ menu and the review note open, in both themes', async () => {
+      const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(document.querySelector('.hx-proposal-head').getAttribute('role')).toBe('group');
+      expect(document.querySelector('.hx-proposal-head').getAttribute('aria-label')).toBeTruthy();
+      click(document.getElementById('proposal-edit'));
+      click(document.getElementById('proposal-more'));
+      expect(document.getElementById('proposal-more-menu').hidden).toBe(false);
+      for (const theme of ['dark', 'light']) {
+        if (theme === 'light') document.documentElement.dataset.theme = 'light';
+        expect(await audit(...PROPOSAL_REGION)).toEqual([]);
+      }
+    });
+
     it('and a node\'s panel open beside them', async () => {
       await selectNode(state.nodes.find((n) => n.id === 'app-a'));
       expect(await audit(...PROPOSAL_REGION)).toEqual([]);

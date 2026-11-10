@@ -190,19 +190,35 @@
 
     <!-- Below 768px the proposal bar, the scenario player and the node panel stack here as bottom sheets (sheets.js); from 768px the dock is display: contents -->
     <div id="sheet-dock" class="hx-dock" data-corn="dock">
-    <!-- The open proposal: counts, Before / Diff / After, problems, close (proposal.js) -->
+    <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Play, Edit, Send back, Approve, ⋯ (proposal.js, review.js, whatif.js, scenario-ui.js) -->
     <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
       <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
       <div id="proposal-body">
-        <div class="hx-proposal-head">
+        <div class="hx-proposal-head" role="group" aria-label="Proposal actions">
           <strong id="proposal-title" class="hx-proposal-name"></strong>
-          <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
-          <div class="hx-seg" role="group" aria-label="Compare">
+          <div class="hx-proposal-counts">
+            <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
+            <button type="button" id="proposal-mode" class="hx-proposal-mode" data-action="toggle-proposal-mode" data-peek-ok aria-expanded="false" aria-controls="proposal-seg" title="Before, Diff or After"></button>
+          </div>
+          <div id="proposal-seg" class="hx-seg" role="group" aria-label="Compare">
             <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="before" aria-pressed="false" data-corn-string="before">Before</button>
             <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="diff" aria-pressed="true" data-corn-string="diff">Diff</button>
             <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false" data-corn-string="after">After</button>
           </div>
-          <button type="button" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map" data-corn-kind="quiet" data-corn-string="closeProposal">Close</button>
+          <div class="hx-proposal-tools">
+            <button type="button" id="proposal-play" class="hx-btn" aria-expanded="false" aria-controls="proposal-scenarios" title="Play one of this proposal's scenarios on the map" hidden>Play</button>
+            <button type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
+          </div>
+          <div class="hx-proposal-actions">
+            <button type="button" class="hx-btn" data-review="notes" data-peek-ok title="Send it back to the drafting agent with a note and your edits" data-corn-string="sendBack">Send back</button>
+            <button type="button" class="hx-btn hx-btn--approve" data-review="approved" data-peek-ok title="Sign this proposal off" data-corn-kind="approve" data-corn-string="approve">Approve</button>
+          </div>
+          <div class="hx-proposal-more">
+            <button type="button" id="proposal-more" class="hx-btn hx-btn--icon" data-action="toggle-proposal-more" aria-haspopup="menu" aria-expanded="false" aria-controls="proposal-more-menu" aria-label="More" data-corn-kind="icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg></button>
+            <div id="proposal-more-menu" class="hx-proposal-more-menu glass" role="menu" aria-label="More" hidden>
+              <button type="button" role="menuitem" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map" data-corn-kind="quiet" data-corn-string="closeProposal">Close</button>
+            </div>
+          </div>
         </div>
         <p id="proposal-summary" class="hx-proposal-summary" hidden></p>
         <details id="proposal-errors" class="hx-proposal-errors" hidden>

@@ -227,6 +227,7 @@ h1, h2, h3, p { margin: 0; }
 .hx-btn:focus-visible, .hx-toggle-row:focus-visible, .hx-textbtn:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }
 .hx-btn--active, .hx-btn--active:hover { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
 .hx-btn--quiet { font-weight: 500; color: var(--corn-text-3); }
+.hx-btn--icon { width: 28px; height: 28px; padding: 0; justify-content: center; font-size: var(--corn-text-base); }
 .hx-btn--rom { width: 100%; justify-content: center; margin-top: var(--corn-space-1); padding: var(--corn-space-2); background: color-mix(in srgb, var(--corn-hue-fuchsia) 20%, transparent); border-color: color-mix(in srgb, var(--corn-hue-fuchsia) 40%, transparent); color: color-mix(in srgb, var(--corn-hue-fuchsia) 60%, var(--corn-text)); font-weight: 700; }
 .hx-btn--rom:hover { background: color-mix(in srgb, var(--corn-hue-fuchsia) 30%, transparent); }
 .hx-btn--copy { padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius); border: 0; }
@@ -408,20 +409,16 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-proposal-meta { display: flex; flex-wrap: wrap; gap: calc(var(--corn-space-1) / 2) var(--corn-space-3); color: var(--corn-text-3); font-size: var(--corn-text-2xs); }
 .hx-proposal-where { color: var(--corn-added-text); }
 
-.hx-proposal-bar { position: absolute; top: 48px; left: 12px; width: min(720px, calc(100% - 24px)); padding: var(--corn-space-3) var(--corn-space-3); border-radius: var(--corn-radius-lg); font-size: var(--corn-text-sm); z-index: 15; user-select: text; }
+.hx-proposal-bar { position: absolute; top: 48px; left: 12px; width: min(960px, calc(100% - 24px)); padding: var(--corn-space-3) var(--corn-space-3); border-radius: var(--corn-radius-lg); font-size: var(--corn-text-sm); z-index: 15; user-select: text; }
 .hx-proposal-bar.is-error { border-color: color-mix(in srgb, var(--corn-removed) 50%, transparent); }
 .hx-proposal-message { color: var(--corn-text-2); }
 .hx-proposal-bar.is-error .hx-proposal-message { color: var(--corn-bad); }
-.hx-proposal-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); }
-.hx-proposal-name { flex: 1 1 140px; min-width: 0; font-size: var(--corn-text-md); color: var(--corn-text); overflow-wrap: anywhere; }
-.hx-proposal-chip { padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-lg); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); color: var(--corn-text-2); font-size: var(--corn-text-xs); font-variant-numeric: tabular-nums; }
-.hx-proposal-chip:hover { background: var(--corn-surface-3); color: var(--corn-text); }
-.hx-proposal-chip:focus-visible, .hx-seg-btn:focus-visible, .hx-change-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }
+.hx-proposal-chip:focus-visible, .hx-proposal-mode:focus-visible, .hx-seg-btn:focus-visible, .hx-change-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }
 .hx-proposal-summary { margin-top: var(--corn-space-2); color: var(--corn-text-2); line-height: 1.45; }
 
 /* Before / Diff / After */
 .hx-seg { display: inline-flex; padding: calc(var(--corn-space-1) / 2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); }
-.hx-seg-btn { padding: var(--corn-space-1) var(--corn-space-4); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-seg-btn { height: 26px; padding: 0 var(--corn-space-4); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font-size: var(--corn-text-sm); font-weight: 500; }
 .hx-seg-btn:hover { color: var(--corn-text); }
 .hx-seg-btn.is-on, .hx-seg-btn[aria-pressed="true"] { background: var(--corn-accent); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
 
@@ -458,11 +455,10 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-change em { color: var(--corn-text-3); text-decoration: none; }
 
 /* The node panel is a 480px slide-over from 768px: the bar makes room for it */
-@media (min-width: 768px) { .hx-stage:has(.drawer-open) .hx-proposal-bar { width: min(720px, calc(100% - 504px)); } }
+@media (min-width: 768px) { .hx-stage:has(.drawer-open) .hx-proposal-bar { width: min(960px, calc(100% - 504px)); } }
 
 @media (max-width: 639px) {
   .hx-menu--proposals { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
-  .hx-seg-btn { padding: var(--corn-space-1) var(--corn-space-4); }
 }
 
 /* ---- scenario player (scenario-ui.js): the bar while a scenario plays, and the scenario list --------- */
@@ -483,7 +479,6 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-player-fill { display: block; height: 100%; width: 0; background: var(--corn-accent-text); }
 
 .hx-scenarios { position: absolute; top: 12px; left: 12px; max-width: min(320px, calc(100% - 24px)); padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); font-size: var(--corn-text-sm); color: var(--corn-text-2); z-index: 12; }
-.hx-scenarios summary { cursor: pointer; font-weight: 600; }
 .hx-scenarios-item { display: block; width: 100%; margin-top: var(--corn-space-2); padding: var(--corn-space-2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); background: transparent; color: var(--corn-text); font-size: var(--corn-text-sm); text-align: left; cursor: pointer; }
 .hx-scenarios-item:hover { background: color-mix(in srgb, var(--corn-accent-hover) 25%, transparent); }
 /* With a proposal open the list is a row of its bar (scenario-ui.js mounts it there), so it opens in the bar's flow and the bar grows to hold it */
@@ -528,21 +523,75 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-rubber svg { display: block; overflow: visible; }
 .hx-rubber-line { stroke: var(--corn-edit); stroke-width: 3; stroke-dasharray: 8 6; stroke-linecap: round; }
 .hx-rubber-from, .hx-rubber-to { fill: color-mix(in srgb, var(--corn-edit) 15%, transparent); stroke: var(--corn-edit); stroke-width: 2; }
-/* Approve and send back (review.js, TOPO-12): under the edit controls on the proposal bar */
-.hx-review { margin-top: var(--corn-space-3); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid color-mix(in srgb, var(--corn-added) 30%, transparent); display: flex; flex-direction: column; gap: var(--corn-space-2); }
-.hx-review[hidden] { display: none; }
+/* The review (review.js, TOPO-12): the status line and the note that opens on Send back. It is in the toolbar, just before Send back and
+   Approve (the note's Tab goes on to them); from 768px it takes a row of its own under the toolbar, on a phone it sits under the counts */
+.hx-review { flex: 1 0 100%; order: 1; display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-review[hidden], .hx-review:not(:has(> :not([hidden]))) { display: none; }
+.hx-review-form { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-review-form[hidden] { display: none; }
 .hx-review-label { color: var(--corn-text-3); font-size: var(--corn-text-xs); }
 .hx-review-note { width: 100%; min-height: 44px; resize: vertical; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); line-height: 1.4; user-select: text; }
 .hx-review-note:focus { outline: var(--corn-focus-width) solid var(--corn-added-text); outline-offset: 1px; }
 .hx-review-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); }
-.hx-review .hx-btn:disabled { opacity: 0.4; cursor: default; }
 .hx-btn--approve { border-color: color-mix(in srgb, var(--corn-added) 50%, transparent); color: var(--corn-added-text); }
 .hx-btn--approve:hover { background: color-mix(in srgb, var(--corn-added) 20%, transparent); color: var(--corn-added-text); }
-.hx-review-status { color: var(--corn-added-text); font-variant-numeric: tabular-nums; }
+.hx-review-status { margin: 0; color: var(--corn-added-text); font-variant-numeric: tabular-nums; }
 .hx-review-status[hidden], .hx-review-msg[hidden], .hx-review-line[hidden] { display: none; }
 .hx-review-msg { margin: 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-removed) 12%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-removed) 35%, transparent); color: var(--corn-bad); line-height: 1.4; }
 .hx-review-line { margin: 0; color: var(--corn-text-2); line-height: 1.4; }
 .hx-proposal-reviewed { color: var(--corn-added-text); }
+/* ---- The proposal toolbar (CF-43): proposal.js, review.js, whatif.js, scenario-ui.js ----------------
+   One row from 768px: title, counts (they open the change list), Before / Diff / After, Play, Edit, then Send back,
+   Approve (the primary) and a ⋯ menu with Close. The what-if controls sit behind Edit, the scenario list behind Play,
+   and the review note opens under the row on Send back. On a phone the row is a sheet: the title, the counts with
+   the current mode (a button that opens the switcher), the note when it is open, and Send back and Approve full
+   width, each 44px tall. */
+.hx-proposal-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-3) var(--corn-space-4); }
+.hx-proposal-name { flex: 0 1 auto; min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--corn-text-base); font-weight: 650; color: var(--corn-text); }
+.hx-proposal-counts { display: contents; }
+.hx-proposal-chip { display: inline-flex; align-items: center; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hx-proposal-chip:hover { color: var(--corn-text); text-decoration: underline; }
+.hx-proposal-chip .hx-mark-dot { margin: 0 var(--corn-space-2) 0 0; }
+.hx-proposal-sep { margin: 0 var(--corn-space-2); color: var(--corn-text-3); }
+.hx-proposal-mode { display: none; }
+.hx-proposal-tools, .hx-proposal-actions { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-proposal-tools .hx-btn { height: 30px; font-size: var(--corn-text-sm); font-weight: 500; }
+#proposal-play[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); }
+#proposal-edit.hx-btn--active { background: var(--corn-edit-text); border-color: var(--corn-edit); color: var(--corn-ground); }
+.hx-proposal-actions { margin-left: auto; }
+.hx-proposal-actions .hx-btn { height: 32px; justify-content: center; padding: 0 var(--corn-space-5); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-proposal-actions .hx-btn--approve, .hx-proposal-actions .hx-btn--approve:hover { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); font-weight: 600; }
+.hx-proposal-actions .hx-btn:disabled { opacity: 0.4; cursor: default; }
+.hx-proposal-more { position: relative; }
+.hx-proposal-more .hx-btn--icon { width: 32px; height: 32px; border-color: transparent; background: none; color: var(--corn-text-3); }
+.hx-proposal-more .hx-btn--icon:hover, .hx-proposal-more .hx-btn--icon[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-proposal-more-menu { position: absolute; top: 100%; right: 0; z-index: 20; display: flex; flex-direction: column; min-width: 160px; margin-top: var(--corn-space-2); padding: var(--corn-space-2); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); box-shadow: var(--corn-shadow); }
+.hx-proposal-more-menu[hidden] { display: none; }
+.hx-proposal-more-menu .hx-btn { width: 100%; height: 32px; border-color: transparent; background: none; color: var(--corn-text-2); font-size: var(--corn-text-sm); }
+.hx-proposal-more-menu .hx-btn:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+
+@media (max-width: 767px) {
+  .hx-proposal-head { display: grid; grid-template-columns: 1fr auto; gap: var(--corn-space-2) var(--corn-space-3); }
+  .hx-proposal-name { grid-column: 1 / -1; order: 1; max-width: none; }
+  .hx-proposal-counts { display: flex; grid-column: 1 / -1; order: 2; align-items: center; flex-wrap: wrap; column-gap: var(--corn-space-2); }
+  .hx-proposal-chip, .hx-proposal-mode { min-height: 44px; }
+  .hx-proposal-mode { display: inline-flex; align-items: center; gap: var(--corn-space-2); padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); font-size: var(--corn-text-sm); font-weight: 600; }
+  .hx-proposal-mode::after { content: ""; width: 6px; height: 6px; border: solid currentColor; border-width: 0 var(--corn-border-strong) var(--corn-border-strong) 0; transform: translateY(-2px) rotate(45deg); }
+  .hx-proposal-mode[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+  .hx-seg, .hx-review { grid-column: 1 / -1; order: 3; }
+  .hx-proposal-bar:not([data-mode-open="true"]) .hx-seg { display: none; }
+  .hx-seg-btn { flex: 1; height: 44px; font-size: var(--corn-text-md); }
+  .hx-proposal-actions { grid-column: 1 / -1; order: 4; display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; gap: var(--corn-space-3); }
+  .hx-proposal-actions .hx-btn { height: auto; min-height: 44px; padding: var(--corn-space-2) var(--corn-space-3); white-space: normal; text-align: center; font-size: var(--corn-text-md); }
+  .hx-proposal-tools { order: 5; }
+  .hx-proposal-tools .hx-btn { height: auto; min-height: 44px; padding: 0 var(--corn-space-5); font-size: var(--corn-text-md); }
+  .hx-proposal-more { display: contents; }
+  .hx-proposal-more .hx-btn--icon { order: 6; width: 44px; height: 44px; }
+  .hx-proposal-more-menu { position: static; grid-column: 1 / -1; order: 7; box-shadow: none; }
+  .hx-proposal-more-menu .hx-btn { height: auto; min-height: 44px; font-size: var(--corn-text-md); }
+  .hx-scenarios-item, .hx-review .hx-btn, .hx-whatif .hx-btn { min-height: 44px; }
+}
+
 /* A proposal's mockups (mockups.js): the buttons in a node's panel and the window one opens in. A mockup is untrusted content, shown in an <img> or a sandboxed <iframe>. */
 .hx-mockup-list { list-style: none; margin: var(--corn-space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); }
 .hx-mockup-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); }
@@ -587,8 +636,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-bar { max-height: 50dvh; overflow-y: auto; padding: 0 var(--corn-space-4) var(--corn-space-3); }
   .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-body),
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head),
-  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :not(.hx-proposal-name):not(.hx-proposal-chip) { display: none; }
-  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu, .hx-review) { display: none; }
   .hx-proposal-bar[data-sheet-state="expanded"] .hx-scenarios, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-changes, .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
   /* The scenario player: the title, then the step counter and its text on two lines */
