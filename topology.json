@@ -1900,6 +1900,16 @@
       "desc": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load. (explorer/theme-names.js)"
     },
     {
+      "id": "page-doc-docs-theming",
+      "type": "page",
+      "label": "/docs/theming",
+      "file": "docs/theming.md",
+      "summary": "Theming: the --corn-* tokens",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Theming: the --corn-* tokens (docs/theming.md)."
+    },
+    {
       "id": "core-core-brand",
       "label": "brand.js",
       "type": "core",
@@ -6017,6 +6027,20 @@
       "label": "imports"
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-theming"
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "core-explorer-theme-model",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-brand"
     },
@@ -6039,5 +6063,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T08:26:51.203Z"
+  "updatedAt": "2026-11-10T08:34:24.131Z"
 }

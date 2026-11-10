@@ -255,36 +255,108 @@ describe('the looks a renderer draws itself', () => {
 // ---------------------------------------------------------------------------
 //  The stylesheet
 // ---------------------------------------------------------------------------
-describe('explorer.css: the light tokens', () => {
-  const cssText = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+describe('tokens.css: the light tokens', () => {
+  const cssText = fs.readFileSync(path.join(EXPLORER, 'tokens.css'), 'utf8');
   const block = (selector) => {
     const at = cssText.indexOf(`${selector} {`);
-    return cssText.slice(at, cssText.indexOf('}', at));
+    return cssText.slice(at, cssText.indexOf('\n}', at));
   };
-  const tokens = (text) => new Map([...text.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const tokens = (text) => new Map([...text.matchAll(/(--corn-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, ' ').trim()]));
   const dark = tokens(block(':root'));
   const light = tokens(block(':root[data-theme="light"]'));
+  const lightByMedia = tokens(block('  :root:not([data-theme="dark"])').replace(/^\s*:root:not\(\[data-theme="dark"\]\) \{/, ''));
 
-  it('sets a light value for every colour token of the dark theme', () => {
-    const colourTokens = [...dark.keys()].filter((k) => /^(--hx-|--surface|--border|--glass-shadow|--bg-gradient|--gradient)/.test(k) && !/font|blur/.test(k));
-    for (const k of colourTokens) expect(light.has(k), k).toBe(true);
+  it('sets a light value for every colour token that differs on the light ground', () => {
+    for (const k of ['--corn-ground', '--corn-surface-1', '--corn-surface-2', '--corn-surface-3', '--corn-line', '--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-added', '--corn-changed', '--corn-removed', '--corn-edit']) {
+      expect(light.has(k), k).toBe(true);
+    }
+  });
+
+  it('gives the light system-setting block the same values as the light attribute block', () => {
+    expect([...lightByMedia]).toEqual([...light]);
   });
 
   it('gives the text tokens at least 4.5:1 on the light ground', () => {
-    for (const k of ['--hx-text', '--hx-ink', '--hx-text-1', '--hx-text-2', '--hx-slate-300', '--hx-slate-400', '--hx-indigo', '--hx-emerald', '--hx-amber', '--hx-sky', '--hx-pink', '--hx-fuchsia', '--hx-red', '--hx-code', '--hx-orange-text', '--hx-teal-text', '--hx-violet-text', '--hx-green-text', '--hx-lime-text']) {
+    for (const k of ['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-hue-orange', '--corn-hue-fuchsia', '--corn-hue-pink', '--corn-hue-lime']) {
       expect(contrast(light.get(k), LIGHT_GROUND), `${k} ${light.get(k)}`).toBeGreaterThanOrEqual(4.5);
       expect(contrast(light.get(k), '#ffffff'), k).toBeGreaterThanOrEqual(4.5);
     }
-    expect(light.get('--hx-bg')).toBe(LIGHT_GROUND);
+    expect(light.get('--corn-ground')).toBe(LIGHT_GROUND);
   });
 
   it('keeps each accent\'s hue from dark to light', () => {
-    for (const k of ['--hx-indigo', '--hx-emerald', '--hx-amber', '--hx-sky', '--hx-pink', '--hx-fuchsia', '--hx-red', '--hx-orange-text', '--hx-teal-text', '--hx-violet-text', '--hx-green-text']) {
+    for (const k of ['--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-info', '--corn-hue-pink', '--corn-hue-fuchsia', '--corn-bad', '--corn-edit']) {
       expect(hueGap(dark.get(k), light.get(k)), k).toBeLessThan(16);
     }
   });
 
-  it('draws the legend swatches in the colour the light map draws', () => {
-    for (const [when, s] of Object.entries(WHEN_STYLES)) expect(cssText).toContain(`.hx-swatch-when--${when} { color: ${lightColor(s.color)}; }`);
+  /** A token's colour in a theme: var() and `color-mix(in srgb, a p%, b)` worked out from the token values */
+  const resolve = (value, theme) => {
+    const v = value.trim();
+    let m = /^var\((--[\w-]+)\)$/.exec(v);
+    if (m) return resolve((theme.get(m[1]) ?? (() => { throw new Error(`no token ${m[1]}`); })()), theme);
+    m = /^color-mix\(in srgb,\s*(.+?)\s+(\d+)%,\s*(.+)\)$/.exec(v);
+    if (m) {
+      const a = parseColor(resolve(m[1], theme)); const b = parseColor(resolve(m[3], theme)); const p = Number(m[2]) / 100;
+      return `rgb(${[0, 1, 2].map((i) => Math.round(a[i] * p + b[i] * (1 - p))).join(', ')})`;
+    }
+    return v;
+  };
+  const themes = { dark, light: new Map([...dark, ...light]) };
+  const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')).join('\n');
+  /** The declarations of the rule whose selector list holds `selector` (the last such rule wins, as in the cascade) */
+  const ruleFor = (selector) => {
+    const out = {};
+    for (const [, sel, body] of sheets.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!sel.split(',').map((x) => x.trim()).includes(selector)) continue;
+      for (const [, k, val] of body.matchAll(/([\w-]+)\s*:\s*([^;]+)/g)) out[k] = val.trim();
+    }
+    return out;
+  };
+
+  // The solid fills: text on a filled hue. On the light ground the hue tokens are deep, so the ground's colour reads as
+  // light text on a deep fill, as it did before the tokens; on the dark ground they are bright, and it reads dark on bright.
+  // A light hue too pale for that (the diff's added and edit) is mixed toward the text colour first.
+  const SOLID_FILLS = [
+    '.hx-btn--active', '.hx-btn--preset.hx-btn--active', '.hx-seg-btn[aria-pressed="true"]', '.hx-forge-tab[aria-pressed="true"]',
+    '.hx-btn--forge[aria-expanded="true"]', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
+    '.hx-whatif .hx-btn--active', '.hx-house-chip[aria-pressed="true"]', '.hx-house-more:hover',
+  ];
+  it.each(SOLID_FILLS)('gives the text on the solid fill %s at least 4.5:1 in both themes', (selector) => {
+    const rule = ruleFor(selector);
+    const fill = rule.background ?? rule['background-color'];
+    const text = rule.color ?? ruleFor('.hx-chip').color; // a sandbox chip without its own colour takes .hx-chip's
+    expect(fill, `${selector} background`).toBeTruthy();
+    expect(text, `${selector} color`).toBeTruthy();
+    for (const [name, theme] of Object.entries(themes)) {
+      const [t, f] = [resolve(text, theme), resolve(fill, theme)];
+      expect(contrast(t, f), `${selector} in ${name}: ${t} on ${f}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // Every text colour the stylesheets set, on the page's ground, in both themes. The swatches are marks, not text (a
+  // line or a dot drawn in currentColor), and the solid fills put their own text on their own fill (above).
+  it('gives every text colour in the stylesheets at least 4.5:1 on the ground, in both themes', () => {
+    const low = [];
+    for (const [, sel, body] of sheets.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (/swatch|hx-mark-dot|hx-glyph|\.hx-chip\b/.test(sel)) continue; // .hx-glyph: a colour from script, mixed by --corn-glyph-mix
+      for (const [, val] of body.matchAll(/(?<![\w-])color\s*:\s*([^;]+)/g)) {
+        if (!/^(var|color-mix)\(/.test(val.trim()) || /transparent/.test(val)) continue;
+        const background = /background(-color)?\s*:\s*([^;]+)/.exec(body)?.[2]?.trim();
+        if (background && !/transparent|none/.test(background)) continue; // its own fill: a solid fill or a tint, checked above
+        for (const [name, theme] of Object.entries(themes)) {
+          const ratio = contrast(resolve(val, theme), resolve('var(--corn-ground)', theme));
+          if (ratio < 4.5) low.push(`${sel.trim()} { color: ${val.trim()} } in ${name}: ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(low).toEqual([]);
+  });
+
+  it('draws the diff tokens in the colour the light map draws', () => {
+    for (const [k, c] of [['added', '#2dd4bf'], ['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
+      expect(dark.get(`--corn-${k}`)).toBe(c);
+      expect(light.get(`--corn-${k}`)).toBe(lightColor(c));
+    }
   });
 });

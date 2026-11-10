@@ -1,0 +1,271 @@
+/* ==========================================================================
+   The explorer's design tokens (docs/theming.md)
+   ==========================================================================
+   The ONLY file in explorer/ that holds a literal colour, font, size, radius, border width, shadow or spacing:
+   explorer.css and house.css read these `--corn-*` custom properties and nothing else (a test holds it,
+   test/explorer/tokens.test.js). A brand re-skins the explorer by loading a stylesheet after this one that
+   redefines some of them.
+
+   Dark is on :root. Light is under BOTH the system setting (when the page has not been told dark) and the
+   page's own choice (<html data-theme="light">, set by theme-boot.js and theme.js), so the page is right
+   before and without the script. The two light blocks below are the same; keep them in step. */
+
+:root {
+  /* Ground and surfaces */
+  --corn-ground: #090d16;
+  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.28) 0%, transparent 45%),
+                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.22) 0%, transparent 45%),
+                       radial-gradient(circle at 50% 50%, rgba(66, 153, 225, 0.10) 0%, transparent 60%);
+  --corn-surface-1: rgba(26, 34, 52, 0.72);
+  --corn-surface-2: rgba(30, 41, 59, 0.8);
+  --corn-surface-3: rgba(51, 65, 85, 0.8);
+  --corn-line: rgba(255, 255, 255, 0.12);
+  --corn-line-soft: rgba(255, 255, 255, 0.07);
+  --corn-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --corn-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+  --corn-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --corn-shadow-color: rgba(0, 0, 0, 0.5);
+  --corn-glow: 8px;
+  --corn-scrim: rgba(0, 0, 0, 0.6);
+  --corn-blur: 16px;
+
+  /* Text */
+  --corn-text: #f8fafc;
+  --corn-text-2: #cbd5e1;
+  --corn-text-3: #94a3b8;
+  --corn-text-on-accent: #fff;
+  --corn-mockup-ground: #fff;
+
+  /* Accent */
+  --corn-accent: #4f46e5;
+  --corn-accent-hover: #6366f1;
+  --corn-accent-text: #818cf8;
+  --corn-accent-soft: color-mix(in srgb, var(--corn-accent-hover) 20%, transparent);
+  --corn-focus: #818cf8;
+  --corn-brand-gradient: linear-gradient(135deg, #4299e1 0%, #818cf8 50%, #e53e3e 100%);
+
+  /* Status: only ever means status */
+  --corn-ok: #34d399;
+  --corn-warn: #fcd34d;
+  --corn-bad: #fca5a5;
+  --corn-info: #7dd3fc;
+  --corn-ok-soft: color-mix(in srgb, var(--corn-ok) 15%, transparent);
+  --corn-warn-soft: color-mix(in srgb, var(--corn-warn) 14%, transparent);
+  --corn-bad-soft: color-mix(in srgb, var(--corn-bad) 12%, transparent);
+  --corn-info-soft: color-mix(in srgb, var(--corn-info) 15%, transparent);
+
+  /* Diff: what a proposal adds, changes, removes and edits (the map draws the same four) */
+  --corn-added: #2dd4bf;
+  --corn-changed: #fbbf24;
+  --corn-removed: #f87171;
+  --corn-edit: #a78bfa;
+  /* The same as text: mixed toward the text colour, so it reads on either ground */
+  --corn-added-text: color-mix(in srgb, var(--corn-added) 60%, var(--corn-text));
+  --corn-edit-text: color-mix(in srgb, var(--corn-edit) 60%, var(--corn-text));
+
+  /* Category hues (never status): the preset, ROM, variable and House accents */
+  --corn-hue-orange: #fb923c;
+  --corn-hue-fuchsia: #e879f9;
+  --corn-hue-pink: #f472b6;
+  --corn-hue-lime: #a3e635;
+
+  /* Type */
+  --corn-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --corn-font-display: var(--corn-font);
+  --corn-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --corn-text-2xs: 10px;
+  --corn-text-xs: 11px;
+  --corn-text-sm: 12px;
+  --corn-text-md: 13px;
+  --corn-text-base: 14px;
+  --corn-text-lg: 15px;
+
+  /* Shape */
+  --corn-radius-xs: 3px;
+  --corn-radius-sm: 6px;
+  --corn-radius: 10px;
+  --corn-radius-lg: 14px;
+  --corn-radius-pill: 999px;
+  --corn-border: 1px;
+  --corn-border-strong: 2px;
+  --corn-focus-width: 2px;
+
+  /* Spacing: padding, gaps and margins are steps of this scale (or calc() over it) */
+  --corn-space: 4px;
+  --corn-space-1: var(--corn-space);
+  --corn-space-2: 6px;
+  --corn-space-3: 8px;
+  --corn-space-4: 12px;
+  --corn-space-5: 16px;
+  --corn-space-6: 24px;
+
+  /* The House view's plan: the house's outline and each room's */
+  --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 18%, transparent);
+  --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 45%, transparent);
+
+  /* How much of a panel glyph's own colour is kept (.hx-glyph) */
+  --corn-glyph-mix: 100%;
+
+  color-scheme: dark;
+}
+
+/* Light: the same names, for the light ground */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --corn-ground: #f4f6fa;
+    --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.12) 0%, transparent 45%),
+                         radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.07) 0%, transparent 45%);
+    --corn-surface-1: rgba(255, 255, 255, 0.8);
+    --corn-surface-2: rgba(241, 245, 249, 0.92);
+    --corn-surface-3: rgba(226, 232, 240, 0.95);
+    --corn-line: rgba(15, 23, 42, 0.12);
+    --corn-line-soft: rgba(15, 23, 42, 0.07);
+    --corn-shadow: 0 8px 28px 0 rgba(15, 23, 42, 0.12);
+    --corn-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.25);
+    --corn-shadow-lg: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+    --corn-shadow-color: rgba(15, 23, 42, 0.25);
+    --corn-glow: 0px;
+    --corn-scrim: rgba(15, 23, 42, 0.35);
+
+    --corn-text: #0f172a;
+    --corn-text-2: #334155;
+    --corn-text-3: #475569;
+
+    --corn-accent-text: #4f46e5;
+    --corn-focus: #4f46e5;
+    --corn-brand-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #dc2626 100%);
+
+    --corn-ok: #047857;
+    --corn-warn: #854d0e;
+    --corn-bad: #b91c1c;
+    --corn-info: #0369a1;
+
+    --corn-added: #209a8b;
+    --corn-changed: #b28103;
+    --corn-removed: #f64c4c;
+    --corn-edit: #9472f9;
+
+    --corn-hue-orange: #c2410c;
+    --corn-hue-fuchsia: #a21caf;
+    --corn-hue-pink: #be185d;
+    --corn-hue-lime: #4d7c0f;
+
+    --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
+    --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 55%, transparent);
+
+    --corn-glyph-mix: 45%;
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --corn-ground: #f4f6fa;
+  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.12) 0%, transparent 45%),
+                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.07) 0%, transparent 45%);
+  --corn-surface-1: rgba(255, 255, 255, 0.8);
+  --corn-surface-2: rgba(241, 245, 249, 0.92);
+  --corn-surface-3: rgba(226, 232, 240, 0.95);
+  --corn-line: rgba(15, 23, 42, 0.12);
+  --corn-line-soft: rgba(15, 23, 42, 0.07);
+  --corn-shadow: 0 8px 28px 0 rgba(15, 23, 42, 0.12);
+  --corn-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.25);
+  --corn-shadow-lg: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+  --corn-shadow-color: rgba(15, 23, 42, 0.25);
+  --corn-glow: 0px;
+  --corn-scrim: rgba(15, 23, 42, 0.35);
+
+  --corn-text: #0f172a;
+  --corn-text-2: #334155;
+  --corn-text-3: #475569;
+
+  --corn-accent-text: #4f46e5;
+  --corn-focus: #4f46e5;
+  --corn-brand-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #dc2626 100%);
+
+  --corn-ok: #047857;
+  --corn-warn: #854d0e;
+  --corn-bad: #b91c1c;
+  --corn-info: #0369a1;
+
+  --corn-added: #209a8b;
+  --corn-changed: #b28103;
+  --corn-removed: #f64c4c;
+  --corn-edit: #9472f9;
+
+  --corn-hue-orange: #c2410c;
+  --corn-hue-fuchsia: #a21caf;
+  --corn-hue-pink: #be185d;
+  --corn-hue-lime: #4d7c0f;
+
+  --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
+  --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 55%, transparent);
+
+  --corn-glyph-mix: 45%;
+
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   The old --hx-* names, as aliases of the tokens above, for one release (scene.js, proposal.js and plugin
+   CSS still read them). They go in the next minor: write --corn-* in new CSS. proposal.js writes
+   --hx-mark-* on :root for the map's own ground; nothing in explorer/*.css reads them any more.
+   ========================================================================== */
+:root {
+  --hx-bg: var(--corn-ground);
+  --hx-text: var(--corn-text);
+  --hx-ink: var(--corn-text);
+  --hx-text-1: var(--corn-text);
+  --hx-text-2: var(--corn-text-2);
+  --hx-slate-300: var(--corn-text-2);
+  --hx-slate-400: var(--corn-text-3);
+  --hx-slate-500: var(--corn-text-3);
+  --hx-slate-600: var(--corn-text-3);
+  --hx-slate-700: var(--corn-surface-3);
+  --hx-slate-800: var(--corn-surface-2);
+  --hx-slate-900: var(--corn-ground);
+  --hx-slate-950: var(--corn-ground);
+  --hx-indigo: var(--corn-accent-text);
+  --hx-indigo-strong: var(--corn-accent);
+  --hx-emerald: var(--corn-ok);
+  --hx-amber: var(--corn-warn);
+  --hx-sky: var(--corn-info);
+  --hx-pink: var(--corn-hue-pink);
+  --hx-fuchsia: var(--corn-hue-fuchsia);
+  --hx-fuchsia-strong: var(--corn-hue-fuchsia);
+  --hx-red: var(--corn-bad);
+  --hx-code: var(--corn-warn);
+  --hx-orange-text: var(--corn-hue-orange);
+  --hx-orange-strong: var(--corn-hue-orange);
+  --hx-teal-text: var(--corn-added-text);
+  --hx-teal-strong: var(--corn-added-text);
+  --hx-violet-text: var(--corn-edit-text);
+  --hx-green-text: var(--corn-ok);
+  --hx-lime-text: var(--corn-hue-lime);
+  --hx-mark-added: var(--corn-added);
+  --hx-mark-changed: var(--corn-changed);
+  --hx-mark-removed: var(--corn-removed);
+  --hx-mark-edit: var(--corn-edit);
+  --hx-control: var(--corn-surface-2);
+  --hx-control-hover: var(--corn-surface-3);
+  --hx-control-off: color-mix(in srgb, var(--corn-ground) 40%, transparent);
+  --hx-well: color-mix(in srgb, var(--corn-ground) 80%, transparent);
+  --hx-well-soft: color-mix(in srgb, var(--corn-ground) 55%, transparent);
+  --hx-line: var(--corn-line);
+  --hx-line-soft: var(--corn-line-soft);
+  --hx-scroll: color-mix(in srgb, var(--corn-text) 18%, transparent);
+  --hx-scroll-hover: color-mix(in srgb, var(--corn-text) 28%, transparent);
+  --hx-swatch-solid: color-mix(in srgb, var(--corn-text) 55%, transparent);
+  --hx-backdrop: var(--corn-scrim);
+  --hx-glyph-mix: var(--corn-glyph-mix);
+  --surface-glass: var(--corn-surface-1);
+  --surface-glass-header: color-mix(in srgb, var(--corn-ground) 88%, transparent);
+  --border-glass: var(--corn-line);
+  --border-subtle: var(--corn-line-soft);
+  --glass-blur: blur(var(--corn-blur));
+  --glass-shadow: var(--corn-shadow);
+  --gradient-primary: var(--corn-brand-gradient);
+  --bg-gradient: var(--corn-ground-image), var(--corn-ground);
+  --pop-font-body: var(--corn-font);
+  --pop-font-mono: var(--corn-mono);
+}
