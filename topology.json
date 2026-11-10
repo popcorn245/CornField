@@ -1978,6 +1978,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries). (explorer/strings.js)"
+    },
+    {
+      "id": "core-explorer-capped",
+      "label": "capped.js",
+      "type": "core",
+      "file": "explorer/capped.js",
+      "summary": "A long list in the node panel shows its first few items and a quiet \"and 15 more\" button that opens the rest in place (a disclosure: `aria-expanded`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A long list in the node panel shows its first few items and a quiet \"and 15 more\" button that opens the rest in place (a disclosure: `aria-expanded`). (explorer/capped.js)"
     }
   ],
   "edges": [
@@ -6332,6 +6342,28 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-capped"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "core-explorer-forge-panel",
       "to": "core-explorer-proposal-model",
       "dashed": true,
@@ -6344,5 +6376,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T19:09:19.840Z"
+  "updatedAt": "2026-11-10T19:17:15.141Z"
 }

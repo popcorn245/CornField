@@ -61,7 +61,7 @@ export function mockupsSectionHtml(items) {
       <span class="hx-mockup-state hx-mockup-state--${escHtml(m.state)}" data-corn="state-pill"${cornStateAttr(m.state)}>${escHtml(stateWords(m.state))}</span>
     </li>`).join('');
   return `<div class="hx-sec hx-mockups" data-mockups data-corn="section">
-    <strong class="hx-strong" id="hx-mockups-h">${items.length === 1 ? 'Mockup' : 'Mockups'}</strong>
+    <h3 class="hx-sec-title" id="hx-mockups-h">${items.length === 1 ? 'Mockup' : 'Mockups'}</h3>
     <ul class="hx-mockup-list" aria-labelledby="hx-mockups-h">${rows}</ul>
   </div>`;
 }

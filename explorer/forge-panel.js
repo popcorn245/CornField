@@ -681,7 +681,7 @@ async function afterIdea(res) {
   const shown = ui.thread === n && ui.threadDetail && ui.threadDetail.thread ? ` ${threadSelectionWords()}` : ui.thread === n && ui.threadError ? ` ${ui.threadError}` : '';
   // Opened from a node: say that its "Mentioned in" lists the new thread
   const listed = about && (threadsFor(about.id) || []).some((t) => t.number === n);
-  announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Mentioned in for ${about.label}.` : ''}${trouble}`);
+  announce(`${ui.idea.message}${shown}${listed ? ` It is listed under Threads for ${about.label}.` : ''}${trouble}`);
 }
 
 /** The New idea bar and form, from `ui.idea`; typed text and the focus are left alone */
@@ -1715,7 +1715,7 @@ function closeAgent({ restoreFocus = true } = {}) {
   el.hidden = true;
   document.removeEventListener('focusin', keepFocusInAgent);
   if (!restoreFocus) return;
-  const back = $('forge-panel').querySelector(opener) || $('forge-title');
+  const back = document.querySelector(opener) || $('forge-title'); // the node panel's Start a run is an opener too
   if (back && !back.disabled) back.focus();
 }
 
@@ -1956,10 +1956,13 @@ async function issueNotListed(n) {
   return linkMissing(res.status === 404 ? `There is no issue ${n}.` : errorWords(res.status, res.body));
 }
 
+/** Whether the Start dialog can open now: the server runs agents and the page has the dialog (the node panel's "Start a run" asks) */
+export const canStartAgent = () => !!(ui.config && ui.config.agents && agentEl());
+
 /** `?proposal=<slug>&start=1`: the Start dialog on that proposal (the proposal itself is opened by proposal.js) */
-export async function openProposalStart(slug) {
+export async function openProposalStart(slug, opener = '#forge-title') {
   if (!ui.config || !agentEl()) return false;
-  await openAgent(`proposal:${slug}`, '#forge-title');
+  await openAgent(`proposal:${slug}`, opener);
   return !!ui.agent;
 }
 

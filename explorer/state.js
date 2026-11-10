@@ -128,7 +128,7 @@ export const state = {
   /**
    * Which threads mention which nodes (forge-panel.js, docs/threads.md), for a node's panel: `{ for(nodeId) -> thread[] | null,
    * ensure(), open(number) }`, or null when threads are off or there is no forge. `for` answers null until the list has been
-   * read; `ensure` reads it (once) and repaints the panel's "Mentioned in"; `open` shows a thread in the issues and PRs panel.
+   * read; `ensure` reads it (once) and repaints the panel's "Threads"; `open` shows a thread in the issues and PRs panel.
    */
   threadIndex: null,
 
