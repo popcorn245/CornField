@@ -165,9 +165,11 @@ describe('sign-in with GitHub, and the guard', () => {
     const page = await get('/?run=run-7&x=1', { accept: 'text/html' });
     expect(page.status).toBe(401);
     expect(page.body).toContain('href="/auth/start?return=%2F%3Frun%3Drun-7%26x%3D1"');
-    expect(await returnedTo('/?run=run-7&x=1')).toBe('/?run=run-7&x=1');
-    expect(await returnedTo('/?proposal=a-b&start=1')).toBe('/?proposal=a-b&start=1');
-    for (const bad of ['https://evil.example/', '//evil.example/x', '/\\evil.example', '\\\\evil.example', 'javascript:alert(1)', '/a\nb', '/auth/start', 'evil', '']) {
+    // The way back is an absolute URL on the public origin, so nothing in it can be read as another host
+    expect(await returnedTo('/?run=run-7&x=1')).toBe(`${PUBLIC}/?run=run-7&x=1`);
+    expect(await returnedTo('/?proposal=a-b&start=1')).toBe(`${PUBLIC}/?proposal=a-b&start=1`);
+    for (const bad of ['https://evil.example/', '//evil.example/x', '/\\evil.example', '\\\\evil.example', 'javascript:alert(1)', '/a\nb', '/auth/start', 'evil', '',
+      '/.//evil.example', '/%2e//evil.example', '/a/..//evil.example', '/\t/evil.example', 'https:evil.example']) {
       expect(await returnedTo(bad), bad).toBe('/');
     }
     expect(await returnedTo(undefined)).toBe('/');
@@ -177,6 +179,48 @@ describe('sign-in with GitHub, and the guard', () => {
     expect(safeReturn('/?issue=4')).toBe('/?issue=4');
     expect(safeReturn('/x/y?a=b')).toBe('/x/y?a=b');
     for (const bad of ['https://a.test', '//a.test', '/\\a.test', '/auth/sign-in', null, undefined, 5, 'x', '/' + 'a'.repeat(2100)]) expect(safeReturn(bad)).toBeNull();
+    // The URL parser resolves dot segments: what it leaves is checked again, so none of these comes out as `//a.test`
+    for (const bad of ['/.//a.test', '/..//a.test', '/%2e//a.test', '/%2E%2E//a.test', '/x/..//a.test', '/\t/a.test', '/\u0000/a', 'https:a.test', '\uFF0F\uFF0Fa.test']) {
+      expect(safeReturn(bad), bad).toBeNull();
+    }
+    // The sign-in routes in any spelling, and a way back that only grows past the limit once percent-encoded
+    for (const bad of ['/AUTH/start', '/%61uth/start', '/x/../auth/start', `/${'é'.repeat(600)}`]) expect(safeReturn(bad), bad).toBeNull();
+    // What browsers do not read as a slash stays an encoded path on this origin
+    expect(safeReturn('/%5Cevil')).toBe('/%5Cevil');
+    expect(safeReturn('/%2F%2Fevil')).toBe('/%2F%2Fevil');
+    expect(safeReturn('/\u2215\u2215evil')).toBe('/%E2%88%95%E2%88%95evil');
+    expect(safeReturn('/\uFF0F\uFF0Fevil')).toBe('/%EF%BC%8F%EF%BC%8Fevil');
+    expect(safeReturn('/a?b=//c#frag')).toBe('/a?b=//c');
+  });
+
+  it('escapes the way back into the sign-in page, and Try again after a failed callback keeps it', async () => {
+    const page = await get('/x?a="><script>alert(1)</script>&b=\'', { accept: 'text/html' });
+    expect(page.status).toBe(401);
+    expect(page.body).not.toContain('<script>alert');
+    const href = /<a class="button" href="([^"]*)">Sign in/.exec(page.body);
+    expect(href && href[1]).toMatch(/^\/auth\/start\?return=[^"<>']*$/);
+    const signIn = await get(`/auth/sign-in?return=${encodeURIComponent('/?issue=4&q="x"')}`);
+    expect(signIn.body).toContain('href="/auth/start?return=%2F%3Fissue%3D4%26q%3D%2522x%2522"');
+    // A callback that fails after a good state: Try again carries the same way back
+    const started = await get(`/auth/start?return=${encodeURIComponent('/?run=run-7')}`);
+    const state = new URL(started.headers.location).searchParams.get('state');
+    const cookie = setCookies(started)['cornfield-oauth'].split(';')[0];
+    expect(cookie.length).toBeLessThan(400);
+    const failed = await get(`/auth/callback?error=access_denied&state=${state}`, { cookie });
+    expect(failed.status).toBe(400);
+    expect(failed.body).toContain('href="/auth/start?return=%2F%3Frun%3Drun-7"');
+  });
+
+  it('refuses a state cookie from before the way back was signed (4 parts), saying so', async () => {
+    const started = await get('/auth/start');
+    const state = new URL(started.headers.location).searchParams.get('state');
+    const cookie = setCookies(started)['cornfield-oauth'].split(';')[0];
+    const old = cookie.replace('..', '.'); // no way back: the 4th part is empty; without it the cookie has the old 4 parts
+    expect(old.split('=')[1].split('.')).toHaveLength(4);
+    const res = await get(`/auth/callback?code=c-maint&state=${state}`, { cookie: old });
+    expect(res.status).toBe(400);
+    expect(res.body).toContain('started before cornfield was updated');
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   /** Signs in with a code, the way a browser does; answers the session cookie (`name=value`) */
