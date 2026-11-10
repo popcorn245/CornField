@@ -1522,10 +1522,7 @@ async function startAgain(runId) {
 
 /** Takes the person to another run of the list: the row scrolls into view and has the focus */
 function goToRun(runId) {
-  const row = [...document.querySelectorAll('#forge-runs-list [data-run]')].find((r) => r.dataset.run === runId);
-  if (!row) return;
-  if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
-  row.focus();
+  bringIntoView([...document.querySelectorAll('#forge-runs-list [data-run]')].find((r) => r.dataset.run === runId));
 }
 
 /** The limits the config gives a request under the chosen profile */
