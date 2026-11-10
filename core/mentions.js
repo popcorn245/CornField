@@ -2,7 +2,7 @@
  * @module core/mentions
  *
  * How a thread points at the map (spec 0005, D7). Pure: no I/O, no DOM, no Node built-ins, so the server (a hook's
- * payload) and the explorer (the lights, a node's "Mentioned in") load the same file.
+ * payload) and the explorer (the lights, a node's "Threads") load the same file.
  *
  *   - **Mentions.** People write `[[core-server-auth]]` (a node's id) or `[[server/auth.js]]` (a repo path) in prose.
  *     `parseMentions` reads them outside code: a fenced block and an inline code span are text about code, not links.

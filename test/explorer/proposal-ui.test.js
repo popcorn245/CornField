@@ -414,12 +414,13 @@ describe('the panel', () => {
     await mount('?proposal=0013-meals');
     await selectNode(state.nodes.find((n     ) => n.id === 'app-a'));
     const meta = $('drawer-meta-list');
-    expect(meta.textContent).toContain('Changed by this proposal');
+    expect(meta.textContent).toContain('In this proposal');
     expect(meta.textContent).toContain('mentions meals');
-    const row = meta.querySelector('.hx-change') ;
-    expect(row.querySelector('.hx-change-field') .textContent).toBe('desc');
-    expect(row.querySelector('.hx-change-before') .textContent).toBe('old words');
-    expect(row.querySelector('.hx-change-after') .textContent).toBe('new words');
+    expect($('drawer-diff').textContent).toMatch(/^Changed by /);
+    const diff = meta.querySelector('[data-proposal-mark="changed"] .hx-diff');
+    expect(diff.textContent).toContain('app-a');
+    expect(diff.querySelector('.hx-change-before').textContent).toBe('old words');
+    expect(diff.querySelector('.hx-change-after').textContent).toBe('new words');
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
   });
 
@@ -429,8 +430,9 @@ describe('the panel', () => {
     await selectNode(state.nodes.find((n     ) => n.id === 'page-old'));
     expect($('drawer-meta-list').textContent).toContain('replaced by /meals');
     await selectNode(state.nodes.find((n     ) => n.id === 'page-new'));
-    expect($('drawer-meta-list').textContent).toContain('Added by this proposal');
-    expect($('drawer-meta-list').textContent).toContain('planner');
+    expect($('drawer-meta-list').textContent).toContain('In this proposal');
+    expect($('drawer-diff').textContent).toMatch(/^Added by /);
+    expect($('drawer-description').textContent).toContain('planner');
   });
 
   it('shows nothing of the proposal for a node it does not touch, nor with no proposal open', async () => {
@@ -475,10 +477,10 @@ describe('marked edges', () => {
     await mount('?proposal=0013-meals');
     showEdgePanel(state.edges.find((e     ) => e.kind === 'writes'));
     expect($('drawer-title').textContent).toBe('/meals → table-t');
-    expect($('drawer-badge').textContent).toBe('EDGE');
+    expect($('drawer-badge').textContent).toBe('Edge');
     expect($('drawer-meta-list').textContent).toContain('Added by this proposal');
     expect($('drawer-meta-list').textContent).toContain('meals.add');
-    expect($('drawer-props-list').textContent).toContain('writes');
+    expect($('drawer-meta-list').textContent).toContain('writes');
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
     expect(state.selectedEdge.kind).toBe('writes');
     expect(state.selectedNode).toBeNull();

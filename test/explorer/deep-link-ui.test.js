@@ -20,7 +20,7 @@ import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js'
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, sheetState } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
-import { closeDrawer } from '../../explorer/panels.js';
+import { closeDrawer, selectNode, startRun } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { parseDeepLink, followDeepLink } from '../../explorer/deep-link.js';
 
@@ -63,7 +63,7 @@ function fakeServer() {
   return { urls: () => calls.map((c) => c.url) };
 }
 
-function mount() {
+function mount(extra = {}) {
   document.head.innerHTML = `<title>cornfield</title><style>${css}</style>`;
   document.body.innerHTML = body;
   document.documentElement.lang = 'en';
@@ -82,7 +82,7 @@ function mount() {
   initKeyboard();
   initSheets();
   resetForgePanelForTests(() => NOW);
-  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } }, { clock: () => NOW });
+  return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock: () => NOW });
 }
 const follow = async (search, opts = {}) => {
   history.replaceState(null, '', `/${search}`);
@@ -208,6 +208,31 @@ describe.each([['a desktop', false], ['a phone', true]])('on %s', (_name, onPhon
     expect($('agent-start').hidden).toBe(true);
     expect(await said()).toBe('No proposal called nope.');
     expect(window.location.search).toBe('?proposal=nope');
+  });
+});
+
+describe("the node panel's Start a run (#138)", () => {
+  afterEach(() => { state.proposalSlug = null; });
+
+  it('shows with a proposal open, opens the Start dialog on it, and Cancel puts the focus back on the button', async () => {
+    fakeServer();
+    mount({ agents: { runs: true } }); // what the server adds with a forge and sign-in (server.js)
+    state.proposalSlug = null;
+    await selectNode(state.nodes[0]);
+    expect($('drawer-run-btn').hidden).toBe(true); // no proposal: nothing to hand an agent
+    state.proposalSlug = '0040-meals';
+    await selectNode(state.nodes[0]);
+    const run = $('drawer-run-btn');
+    expect(run.hidden).toBe(false);
+    run.focus();
+    startRun(); // what its data-action does (main.js)
+    await settle();
+    expect($('agent-start').hidden).toBe(false);
+    expect($('agent-start-about').textContent).toBe('About proposal 0040-meals');
+    expect(document.activeElement).toBe($('agent-kind'));
+    q('#agent-start [data-action="agent-start-cancel"]').click();
+    expect($('agent-start').hidden).toBe(true);
+    expect(document.activeElement).toBe(run);
   });
 });
 

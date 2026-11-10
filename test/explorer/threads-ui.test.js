@@ -381,19 +381,18 @@ describe('a node\'s panel lists the threads that mention it', () => {
     const server = fakeServer();
     mount();
     selectNode(pick('core-hooks'));
-    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    expect(q('#drawer-threads').textContent).not.toContain('Threads');
     await settle();
     expect(server.urls()).toEqual(['/api/forge/threads?state=open&limit=100']);
     const box = q('#drawer-threads');
-    expect(box.textContent).toContain('Mentioned in 2 threads:');
-    expect([...box.querySelectorAll('[data-thread-open]')].map((b) => b.textContent)).toEqual(['#41 Rework sign-in', '#40 Spec: Meals']);
-    expect(box.textContent).toContain('idea');
-    expect(box.textContent).toContain('proposal');
+    expect(box.querySelector('h3').textContent).toBe('Threads');
+    expect([...box.querySelectorAll('[data-thread-open]')].map((b) => b.textContent)).toEqual(['Rework sign-in#41 · 2', 'Spec: Meals#40 · 1']);
+    expect(box.querySelector('[data-thread-open="41"]').getAttribute('aria-label')).toContain('2 comments');
     // the panel is not asked for again for the next node
     selectNode(pick('core-auth'));
     await settle();
     expect(server.urls()).toHaveLength(1);
-    expect(q('#drawer-threads').textContent).toContain('Mentioned in 1 thread:');
+    expect(q('#drawer-threads').textContent).toContain('Threads');
   });
 
   it('a path mention counts for the node that owns the file, and a node nobody mentions has no section', async () => {
@@ -404,7 +403,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     expect(q('#drawer-threads [data-thread-open]').dataset.threadOpen).toBe('41');
     selectNode(pick('core-db'));
     await settle();
-    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    expect(q('#drawer-threads').textContent).not.toContain('Threads');
     expect(q('#drawer-threads [data-thread-open]')).toBe(null);
   });
 
@@ -436,7 +435,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     mount();
     selectNode(pick('core-hooks'));
     await settle();
-    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    expect(q('#drawer-threads').textContent).not.toContain('Threads');
   });
 });
 
@@ -515,7 +514,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
     mount();
     selectNode(pick('core-db'));
     await settle();
-    expect(q('#drawer-threads').textContent).not.toContain('Mentioned');
+    expect(q('#drawer-threads').textContent).not.toContain('Threads');
     click(button());
     await settle();
     type('idea-title', 'Move db.js to its own package');
@@ -542,8 +541,8 @@ describe('Start a thread about this (a node\'s panel)', () => {
     expect(JSON.parse(server.posts()[0].init.body)).toEqual({ title: 'Move db.js to its own package', body: '[[core-db]]\n\nIt has outgrown the server.' });
     expect(posted.some((i) => i.cache === 'reload')).toBe(true); // the forge was asked again, not the minute's cache
     const box = q('#drawer-threads');
-    expect(box.textContent).toContain('Mentioned in 1 thread:');
-    expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('#77 Move db.js to its own package');
+    expect(box.querySelector('h3').textContent).toBe('Threads');
+    expect(box.querySelector('[data-thread-open="77"]').textContent).toBe('Move db.js to its own package#77 · 0');
     expect(document.activeElement).toBe(button());
     // the new thread is selected on the Threads tab, so the node it mentions lights; the words say all of it at once
     expect(q('[data-forge-thread="77"]').getAttribute('aria-pressed')).toBe('true');
@@ -552,7 +551,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
     const words = await said();
     expect(words).toContain('Opened idea #77');
     expect(words).toContain('Thread 77, Move db.js to its own package: 1 message, 1 node lit.');
-    expect(words).toContain('It is listed under Mentioned in for db.js.');
+    expect(words).toContain('It is listed under Threads for db.js.');
   });
 
   it('after posting, the new thread\'s messages pending, then an answer with no thread, then a failure: nothing lit, nothing thrown, all said', async () => {

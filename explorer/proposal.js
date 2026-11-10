@@ -462,18 +462,23 @@ export function markedEdgeAt(x, y, tolerance) {
 export function showEdgePanel(edge) {
   closeDrawer(); // clears a node selection and any panel still loading
   state.selectedEdge = edge;
-  const row = (label, value) => (value ? `<div class="hx-prop"><div class="hx-prop-head"><span class="hx-accent hx-bold">${escHtml(label)}</span><span>${escHtml(value)}</span></div></div>` : '');
+  const row = (label, value) => (value ? `<div class="hx-fact"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
+  const facts = row('Kind', kindOf(edge)) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
 
   $('drawer-title').textContent = `${nameOf(edge.from)} → ${nameOf(edge.to)}`;
-  $('drawer-badge').textContent = 'EDGE';
-  $('drawer-description').textContent = edge.label || '';
-  $('drawer-props-list').innerHTML = row('Kind', kindOf(edge)) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
-  $('drawer-meta-list').innerHTML = `${proposalPanelHtml(edge)}
-    <div><strong class="hx-strong">From:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div>
-    <div><strong class="hx-strong">To:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div>`;
-  const open = $('drawer-open-btn');
-  open.removeAttribute('href');
-  open.textContent = 'A link between two nodes';
+  $('drawer-title').classList.remove('hx-mono');
+  $('drawer-badge').textContent = 'Edge';
+  $('drawer-host').textContent = '';
+  $('drawer-diff').hidden = true;
+  $('drawer-description').textContent = '';
+  $('drawer-description').hidden = true;
+  $('drawer-meta-list').innerHTML = `${facts ? `<div class="hx-facts">${facts}</div>` : ''}
+    <div class="hx-facts">
+      <div class="hx-fact"><div class="hx-fact-k">From</div><div class="hx-fact-v"><button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div></div>
+      <div class="hx-fact"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div></div>
+    </div>${proposalPanelHtml(edge)}`;
+  $('drawer-open-btn').hidden = true;
+  $('drawer-run-btn').hidden = true;
   $('spec-drawer').classList.add('drawer-open');
   $('drawer-backdrop').hidden = false;
   touchScene();
