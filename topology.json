@@ -1404,7 +1404,7 @@
       "label": "forge-panel.js",
       "type": "core",
       "file": "explorer/forge-panel.js",
-      "summary": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t…",
+      "summary": "The Work panel (CF-07, CF-42, spec 0001 section 4; it began as the issues and PRs panel): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
@@ -1874,7 +1874,7 @@
       "label": "deep-link.js",
       "type": "core",
       "file": "explorer/deep-link.js",
-      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent …",
+      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Runs tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent bu…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent … (explorer/deep-link.js)"
@@ -6382,7 +6382,19 @@
       "to": "core-explorer-account-menu",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T19:17:20.681Z"
+  "updatedAt": "2026-11-10T19:24:28.308Z"
 }

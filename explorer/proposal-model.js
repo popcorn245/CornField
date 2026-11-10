@@ -193,6 +193,48 @@ export function proposalPanelHtml(item) {
 }
 
 // ---------------------------------------------------------------------------
+//  A proposal as a row of the Work panel's Specs tab
+// ---------------------------------------------------------------------------
+
+/** What a listing entry's state pill says: its spec PR's state, or "Local" for a proposal that is only in a checkout or a worktree */
+export const specState = (entry) => (entry.pull ? (entry.pull.draft ? 'Draft' : 'Open') : 'Local');
+
+/** Where a listing entry is, as a line of meta: "PR #11", or the checkout or worktree it is in */
+export function specWhere(entry) {
+  if (entry.pull) return `PR #${entry.pull.number}`;
+  return entry.source === 'checkout' ? 'in the checkout' : `in worktree ${entry.source}`;
+}
+
+/**
+ * One row: title, a state pill, a line of what it is for, and the meta (spec number, where it is, +added ~changed −removed, scenarios).
+ * A proposal that could not be read is a row that says why and opens nothing. Same `open-proposal` action as the Proposals menu's row.
+ * @param {{ slug: string, source: string, title?: string, summary?: string, spec?: string, pull?: {number: number, draft?: boolean}, counts?: {added?: number, changed?: number, removed?: number, scenarios?: number}, errors?: number, error?: string }} entry
+ * @param {{ current?: {slug: string, source: string} | null }} [opts] the proposal that is open now
+ */
+export function specRowHtml(entry, { current = null } = {}) {
+  const head = `<span class="hx-forge-title">${escHtml(entry.title || entry.slug)}</span>`;
+  if (entry.error) {
+    return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-spec" data-corn="row">${head}<span class="hx-forge-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-forge-meta">${escHtml(specWhere(entry))}</span></div></li>`;
+  }
+  const state = specState(entry);
+  const tone = state === 'Local' ? '' : ` data-corn-state="${state === 'Draft' ? 'draft' : 'open'}"`;
+  const c = entry.counts || {};
+  const meta = [
+    entry.spec ? `<span>spec ${escHtml(entry.spec)}</span>` : '',
+    `<span>${escHtml(specWhere(entry))}</span>`,
+    c.added ? `<span class="hx-forge-add" title="${c.added} added">+${c.added}</span>` : '',
+    c.changed ? `<span class="hx-forge-chg" title="${c.changed} changed">~${c.changed}</span>` : '',
+    c.removed ? `<span class="hx-forge-del" title="${c.removed} removed">\u2212${c.removed}</span>` : '',
+    c.scenarios ? `<span>${c.scenarios} ${c.scenarios === 1 ? 'scenario' : 'scenarios'}</span>` : '',
+    entry.errors ? `<span class="hx-warn">${entry.errors} ${entry.errors === 1 ? 'problem' : 'problems'}</span>` : '',
+  ].filter(Boolean).join('');
+  const mine = !!current && current.slug === entry.slug && current.source === entry.source;
+  return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" aria-pressed="${mine}" data-corn="row">`
+    + `<span class="hx-forge-line">${head}<span class="hx-forge-state hx-forge-state--${state === 'Draft' ? 'draft' : state === 'Open' ? 'open' : 'neutral'}" data-corn="state-pill"${tone}>${state}</span></span>`
+    + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button></li>`;
+}
+
+// ---------------------------------------------------------------------------
 //  Where an added node sits
 // ---------------------------------------------------------------------------
 

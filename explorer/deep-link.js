@@ -3,7 +3,7 @@
  *
  * Links from chat that land in the right place (issue #103, docs/agents.md "Deep links"):
  *
- *   ?run=<runId>                  the Agents tab, that run lit and in view
+ *   ?run=<runId>                  the Runs tab, that run lit and in view
  *   ?issue=<n>                    the Issues tab, that issue's Start an agent button focused
  *   ?proposal=<slug>&start=1      the proposal opened (proposal.js) and the Start dialog on it
  *

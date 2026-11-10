@@ -53,6 +53,17 @@ let listing = null;
 let listingProblem = null;
 /** Why the server left the open spec PRs out of the last listing (the forge could not be asked), or null */
 let forgeProblem = null;
+/** When the listing was last read (ms), and who wants to hear of a new one (the Work panel's Specs tab, forge-panel.js) */
+let listingAt = 0;
+const listingWatchers = new Set();
+
+/** What the server listed last, for the Work panel's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
+export const proposalListing = () => ({ entries: listing, problem: listingProblem, forgeProblem, at: listingAt });
+/** Calls `fn` each time the list is read again; returns the way to stop */
+export function onProposalListing(fn) {
+  listingWatchers.add(fn);
+  return () => listingWatchers.delete(fn);
+}
 
 // ---------------------------------------------------------------------------
 //  Loading and closing
@@ -63,7 +74,9 @@ export async function loadProposalList() {
   try {
     const res = await fetch('/proposals', { cache: 'no-store' });
     if (!res.ok) throw new Error(`GET /proposals answered ${res.status}`);
-    listing = await res.json();
+    const body = await res.json();
+    if (!Array.isArray(body)) throw new Error('GET /proposals did not answer with a list');
+    listing = body;
     listingProblem = null;
     const said = res.headers.get('X-Proposals-Forge-Error');
     forgeProblem = said ? decodeURIComponent(said) : null;
@@ -72,7 +85,9 @@ export async function loadProposalList() {
     forgeProblem = null;
     listingProblem = err.message || String(err);
   }
+  listingAt = Date.now();
   renderMenu();
+  for (const fn of listingWatchers) fn();
   return listing;
 }
 

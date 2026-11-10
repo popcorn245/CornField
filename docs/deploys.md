@@ -52,11 +52,11 @@ Like every `/api/forge/…` route it is a `GET`, signed-in only, and answers `{ 
 ## In the panel
 
 - **Deploys** is a third tab beside Pull requests and Issues. Each row: the workflow, what it ran for, its state (a word as well as a colour), the branch or tag, the commit, who started it and when, a link out to the run, and what it lights ("Lights 3 nodes", "Not mapped to a node"). Filters: state (succeeded, failed, running or waiting, cancelled or skipped) and a search; there are no labels or authors to pick.
-- **Selecting a deploy** lights the nodes it restarted through the same paint as a pull request: amber with the search-match glow, the rest of the map faded back. A deploy that **failed** lights them red, as a failing check lights its tests. The panel lists the nodes, each with a button that selects it on the map. Select it again, or press **Clear**, to let go; closing the panel leaves the lights on and the header button says `deploy`.
+- **Selecting a deploy** lights the nodes it restarted through the same paint as a pull request: amber with the search-match glow, the rest of the map faded back. A deploy that **failed** lights them red, as a failing check lights its tests. The panel lists the nodes, each with a button that selects it on the map. The back control ("‹ All deploys") lets go; closing the panel leaves the lights on and the header button says `deploy`.
 - Containers, stacks and machines are on layers that start off. Selecting a deploy turns on the layers of the nodes it lights (and says which), because nothing would light otherwise; letting go leaves them as they are.
 - Only one thing is lit at a time: selecting a deploy lets go of a selected pull request, and the other way round.
 - **Refresh** asks the forge again.
 
 ## By keyboard, on a phone
 
-The tab, the rows, Clear and the node buttons are buttons in the tab order; selecting a deploy, what it lights and which layers it turned on are said through the map's live region ([accessibility](accessibility.md)). On a phone the panel is the same bottom sheet; a node button collapses it so the map shows. Colours are the explorer's theme tokens, right in light and dark.
+The tab, the rows, the back control and the node buttons are buttons in the tab order; selecting a deploy, what it lights and which layers it turned on are said through the map's live region ([accessibility](accessibility.md)). On a phone the panel is the same bottom sheet; a node button collapses it so the map shows. Colours are the explorer's theme tokens, right in light and dark.

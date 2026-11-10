@@ -1,7 +1,13 @@
 /**
  * @module explorer/forge-panel
  *
- * The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge
+ * The Work panel (CF-07, CF-42, spec 0001 section 4; it began as the issues and PRs panel): Specs, PRs, Issues, Threads, Runs and Deploys, in
+ * the order of the loop. Specs lists the proposals the header's Proposals menu lists (proposal.js `proposalListing`), a row opens one. A selection
+ * (a PR, a thread, a deploy) REPLACES the list, with a back control named by the list; the State, Label and Author selects sit behind one Filter
+ * chip; Release notes is an action at the foot of the PRs list; `openForge({ tab })` opens it on a tab, and any `data-action="toggle-forge"` toggles it.
+ * The text below describes each view as it was built.
+ *
+ * The repo's pull requests and issues, from whichever forge
  * the config names, read through the server (`/api/forge/…`, server/forge-routes.js; the signed-in maintainer's own
  * token never leaves it). A header button opens it: a slide-over from the left from 768px, a bottom sheet on a phone
  * (sheets.js). With no forge in the config, or no sign-in (Stage 1: there is nobody to ask the forge as, and the
@@ -69,7 +75,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -82,6 +88,8 @@ import {
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 import { cornStateAttr } from './corn-state.js';
+import { proposalListing, onProposalListing, loadProposalList } from './proposal.js';
+import { specRowHtml } from './proposal-model.js';
 import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -92,7 +100,8 @@ const SEARCH_ANNOUNCE_MS = 500;
 const ui = {
   config: null,
   open: false,
-  kind: 'pulls',
+  kind: 'specs', // the tab: specs | pulls | issues | threads | work (Runs) | deploys; 'notes' is the Release notes view, reached from the PRs list
+  filtersOpen: false, // the Filter chip's box
   filters: defaultFilters(),
   lists: {}, // `${kind}|${server state}` -> { items, at, rate, stale }
   work: null, // { grouped, problem, at, rate, stale } of the Agents tab
@@ -100,6 +109,7 @@ const ui = {
   loading: false,
   error: '',
   selected: null, // the pull request's number
+  selectedOn: '', // the tab it was selected on ('pulls' or 'work')
   detail: null, // { pull, files, checks, at, rate, stale } of the selected one
   landing: null, // what waits to land on its approval for the selected pull request ({ slug, by, since }), or null
   detailError: '',
@@ -152,14 +162,20 @@ let pullToken = 0;
 let notesToken = 0;
 let searchTimer = null;
 let offScene = null;
+let offListing = null;
 let now = () => Date.now();
 
 const forgeName = () => FORGE_NAMES[ui.config && ui.config.forge && ui.config.forge.type] || 'the forge';
 const listKey = () => listKeyOf(ui.kind, ui.filters.state);
-const current = () => (ui.kind === 'work' ? ui.work : ui.lists[listKey()]) || null;
+const current = () => (ui.kind === 'work' ? ui.work : ui.kind === 'specs' ? specsList() : ui.lists[listKey()]) || null;
+/** The proposals the Proposals menu lists (proposal.js reads them), as a list of the panel's own shape; null before the first answer */
+function specsList() {
+  const { entries, problem, forgeProblem, at } = proposalListing();
+  return entries ? { items: entries, at: at ? new Date(at).toISOString() : '', rate: '', stale: '', problem: problem || forgeProblem || '' } : null;
+}
 const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
-const kindWords = () => ({ pulls: 'pull request', issues: 'issue', threads: 'thread', deploys: 'deploy' })[ui.kind] || 'piece of work';
+const kindWords = () => ({ specs: 'spec', pulls: 'pull request', issues: 'issue', threads: 'thread', deploys: 'deploy' })[ui.kind] || 'piece of work';
 /** A link only if it is the forge's web address: a forge's JSON is data, not trusted markup */
 const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
 
@@ -251,6 +267,7 @@ function onPageShow() { pageAway = false; syncRunsPoll(); }
 async function loadList(refresh = false, quiet = false) {
   const token = ++listToken;
   if (ui.kind === 'work') return loadWork(refresh, token);
+  if (ui.kind === 'specs') return loadSpecs(token, quiet);
   const key = listKey();
   ui.loading = true;
   ui.error = '';
@@ -274,6 +291,36 @@ async function loadList(refresh = false, quiet = false) {
   paint();
 }
 
+/** Loads the Specs tab: the proposals the server finds (the list the header's Proposals menu shows, proposal.js); always asked again, worktrees come and go */
+async function loadSpecs(token, quiet) {
+  ui.loading = true;
+  ui.error = '';
+  paint();
+  await loadProposalList();
+  if (token !== listToken) return;
+  ui.loading = false;
+  const { entries, problem } = proposalListing();
+  if (!entries) ui.error = `The proposals could not be listed: ${problem || 'no answer'}`;
+  if (!quiet) announce(ui.error || `${plural(entries.length, 'spec')} shown`);
+  paint();
+}
+
+/** The counts on the tabs, read quietly the first time the panel opens: the open pull requests and issues (the Threads and Runs counts come from what those tabs read anyway) */
+function primeCounts() {
+  for (const kind of ['pulls', 'issues']) {
+    const key = listKeyOf(kind, 'open');
+    if (ui.lists[key] || primed.has(kind) || kind === ui.kind) continue;
+    primed.add(kind);
+    request(listUrl(kind, 'open'), false).then((res) => {
+      if (res.ok && !ui.lists[key]) ui.lists[key] = { items: res.body.items || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '', problem: res.body.problem || '' };
+      if (ui.open) paint();
+    });
+  }
+  if (!primed.has('threads')) { primed.add('threads'); ensureThreadsList(); }
+  if (ui.kind !== 'specs' && !proposalListing().entries) loadProposalList();
+}
+const primed = new Set();
+
 /** Selects a pull request: asks for its files and checks, then lights what they are on the map */
 async function selectPull(n) {
   const token = ++pullToken;
@@ -282,6 +329,7 @@ async function selectPull(n) {
   ui.deployItem = null;
   ui.litDeploy = null;
   ui.selected = n;
+  ui.selectedOn = ui.kind; // the PRs list or the Runs tab's groups: its detail replaces that list only
   ui.detail = null;
   ui.landing = null;
   ui.detailError = '';
@@ -301,6 +349,8 @@ async function selectPull(n) {
   }
   ui.detail = { pull: res.body.pull, files: res.body.files || [], checks: res.body.checks || [], specs: res.body.specs || [], at: res.body.at, rate: res.body.rate || '', stale: res.body.stale || '' };
   relight();
+  // The run that made it is on the detail: the runs are read once, if the config has any
+  if (!ui.runs && ui.config.agents && ui.config.agents.runs) loadRuns(false, { say: false }).then(() => { if (ui.selected === n) paint(); }, () => {});
   await loadLanding(n, token);
   $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the pull request's files are what was asked for, not the row that was tapped
   announce(selectionWords());
@@ -611,9 +661,13 @@ async function afterIdea(res) {
   const n = res.body && res.body.number;
   let trouble = '';
   try {
+    // The new thread is shown where threads are: an idea opened from Specs goes on to the Threads tab
+    if (ui.kind !== 'threads') { ui.kind = 'threads'; ui.actNote = null; ui.filters = defaultFilters('threads'); paintFilters(); }
     ui.lists = {};
+    primed.clear(); // the tabs' counts are read again
     indexCache = null;
     await loadList(true, true);
+    if (ui.open) primeCounts();
     ensureThreadsList();
     // The new thread is selected in the list, so what it mentions lights on the map once its messages are in
     if (Number.isInteger(n)) await selectThread(n);
@@ -634,7 +688,8 @@ async function afterIdea(res) {
 function paintIdea() {
   const bar = $('forge-idea');
   if (!bar) return;
-  bar.hidden = ui.kind !== 'threads';
+  // An idea is a thread: with threads off (`threads: false`) there is no New idea, on Specs either
+  bar.hidden = (ui.kind !== 'threads' && ui.kind !== 'specs') || !!detailKey() || !ui.config || ui.config.threads === false;
   $('idea-open').setAttribute('aria-expanded', String(ui.idea.open));
   $('idea-form').hidden = !ui.idea.open;
   $('idea-send').textContent = ui.idea.busy ? 'Opening …' : 'Open the idea';
@@ -817,13 +872,40 @@ function paintNotes() {
 
 const option = (value, label, on) => `<option value="${escHtml(value)}"${on ? ' selected' : ''}>${escHtml(label)}</option>`;
 
+/** Whether the Filter chip applies to the view: the proposals and the release notes have nothing to filter */
+const filterable = () => ui.kind !== 'specs' && ui.kind !== 'notes';
+
+/** How many filters are on: a state other than the default, a label, an author, a search; on Runs, its two checkboxes */
+function activeFilters() {
+  if (ui.kind === 'work') return Number(ui.workFilters.agentsOnly) + Number(ui.workFilters.finished);
+  if (!filterable()) return 0;
+  const f = ui.filters;
+  return Number(f.state !== defaultFilters(ui.kind).state) + Number(!!f.label) + Number(!!f.author) + Number(!!f.text);
+}
+
+/** The Filter chip, its count, and the box behind it */
+function paintChip() {
+  const chip = $('forge-filter-chip');
+  const box = $('forge-filter-box');
+  const on = filterable() && !detailKey();
+  const n = activeFilters();
+  chip.hidden = !on;
+  chip.setAttribute('aria-expanded', String(on && ui.filtersOpen));
+  chip.setAttribute('aria-label', n ? `Filter, ${plural(n, 'filter')} on` : 'Filter');
+  const count = chip.querySelector('.hx-forge-count');
+  count.hidden = !n;
+  count.textContent = String(n);
+  chip.classList.toggle('is-on', n > 0);
+  box.hidden = !(on && ui.filtersOpen);
+}
+
 /** The filters' choices: the states of the kind, the labels and authors of what is loaded */
 function paintFilters() {
-  $('forge-filters').hidden = ui.kind === 'work' || ui.kind === 'notes';
+  $('forge-filters').hidden = ui.kind === 'work' || !filterable();
   $('forge-work-filters').hidden = ui.kind !== 'work';
   $('forge-work-agents').checked = ui.workFilters.agentsOnly;
   $('forge-work-finished').checked = ui.workFilters.finished;
-  if (ui.kind === 'work' || ui.kind === 'notes') return;
+  if (ui.kind === 'work' || !filterable()) return;
   const items = current() && ui.kind !== 'deploys' ? current().items : [];
   const { labels, authors } = facetsOf(items);
   if (ui.filters.label && !labels.includes(ui.filters.label)) ui.filters.label = '';
@@ -912,13 +994,23 @@ function groupsHtml(groups) {
   }).join('');
 }
 
-/** The selected pull request: its checks, its files and the nodes they are */
+/** Which selection replaces the list now, as a key ('pr:12', 'thread:3', 'deploy:9004'), or '' while the list shows. A selection stays lit on the map but shows only on the tab it belongs to. */
+function detailKey() {
+  if (ui.kind === 'threads' && ui.thread !== null) return `thread:${ui.thread}`;
+  if (ui.kind === 'deploys' && ui.deployItem) return `deploy:${ui.deploy}`;
+  if (ui.selected !== null && ui.kind === ui.selectedOn) return `pr:${ui.selected}`;
+  return '';
+}
+
+/** The back control of a detail: an arrow and the name of the list it returns to ("All pull requests") */
+const backHtml = (action, words) => `<button type="button" class="hx-forge-back" data-action="${action}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">${escHtml(words)}</span></button>`;
+
 /** The selected deploy: what it was, and the nodes it restarted (each a button that selects it on the map) */
 function deployDetailHtml() {
   const d = ui.deployItem;
   const lit = ui.litDeploy;
   const url = safeUrl(d.url);
-  const head = `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-deploy" data-corn-kind="quiet">Clear</button></div>
+  const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3>
     <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
   const stale = ui.lists.deploys && ui.lists.deploys.stale;
   let body;
@@ -938,7 +1030,7 @@ const nodeButton = (n) => `<button type="button" class="hx-forge-node" data-forg
 
 /** The selected thread: read-only, its messages as written, a way to reply on the forge, and the nodes its text lights */
 function threadDetailHtml() {
-  const head = (title) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-thread" data-corn-kind="quiet">Clear</button></div>`;
+  const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title">${title}</h3>`;
   if (ui.threadError) return `${head(`Thread ${ui.thread}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
   if (!ui.threadDetail) return `${head(`Thread ${ui.thread}`)}<p class="hx-faint">Loading its messages …</p>`;
   const { thread: t, stale } = ui.threadDetail;
@@ -974,10 +1066,11 @@ function threadDetailHtml() {
 }
 
 function detailHtml() {
-  if (ui.thread !== null) return threadDetailHtml();
-  if (ui.deployItem) return deployDetailHtml();
-  if (ui.selected === null) return '';
-  const head = (title, link) => `<div class="hx-forge-detail-head"><h3 class="hx-forge-detail-title">${title}</h3><button type="button" class="hx-btn hx-btn--quiet" data-action="clear-forge-pr" data-corn-kind="quiet">Clear</button></div>${link || ''}`;
+  const shown = detailKey();
+  if (shown.startsWith('thread:')) return threadDetailHtml();
+  if (shown.startsWith('deploy:')) return deployDetailHtml();
+  if (!shown) return '';
+  const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title">${title}</h3>`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
   if (!ui.detail) return `${head(`Pull request ${ui.selected}`)}<p class="hx-faint">Loading its files and checks …</p>`;
   const { pull, checks, stale } = ui.detail;
@@ -1010,10 +1103,12 @@ function detailHtml() {
     return `<li class="hx-forge-file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
   }).join('');
 
+  // Land it is the one primary action, with Open on the forge beside it; a pull request that cannot land says why in one line
   const block = mergeBlock(ui.detail);
-  const act = block
-    ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
-    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
+  const land = block
+    ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
+    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
+  const act = `<div class="hx-forge-cta">${land}${url ? `<a class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}`;
   // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
   const waiting = ui.landing && pull.state === 'open'
     ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, now()))}</p><button type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
@@ -1030,23 +1125,31 @@ function detailHtml() {
   const key = lit.changed.size || lit.failing.size
     ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
     : '';
-  return `${head(`#${pull.number} ${escHtml(pull.title)}`, `<p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> ${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`)}
+  // Its run: who is running it, their state, the time and the cost (the runs are read for the Runs tab, and once for the first PR selected)
+  const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
+  const made = runOnPull(runs, pull.number);
+  const runSection = made
+    ? `<h4 class="hx-forge-sub">Run</h4><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${escHtml(pullRunWords(made, now()))}</p>`
+    : '';
+  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span>#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
+  return `${head(escHtml(pull.title), meta)}
+    ${act}
     ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
-    <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
-    ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
-    ${build}
-    <h4 class="hx-forge-subact">${escHtml(t('landIt'))}</h4>
     ${note}
     ${waiting}
-    ${act}
+    ${build}
+    <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
+    ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
     <h4 class="hx-forge-sub">${escHtml(plural(lit.files.length, 'file'))} changed, ${mapped} on the map</h4>
     ${key}
-    <ul class="hx-forge-files">${fileRows}</ul>`;
+    <ul class="hx-forge-files">${fileRows}</ul>
+    ${runSection}`;
 }
 
 /** How to find an element of the panel again after it is drawn anew, or null */
 function findAgain(el) {
   if (!el || !el.dataset) return null;
+  if (el.classList.contains('hx-forge-back') && el.closest('#forge-detail')) return '#forge-detail .hx-forge-back'; // the detail is drawn anew as its answer comes in
   if (el.dataset.forgePr) return `[data-forge-pr="${el.dataset.forgePr}"]`;
   if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
   if (el.dataset.forgeThread) return `[data-forge-thread="${el.dataset.forgeThread}"]`;
@@ -1065,23 +1168,66 @@ function findAgain(el) {
   return null;
 }
 
+/** What the focus does when a selection replaces the list, and when it goes back: the key of the selection shown at the last paint, and the tab it was on */
+let shownKey = '';
+let shownKind = '';
+let returnTo = null; // the selector of the row that opened the selection
+
 /** Everything the panel shows, from `ui` (a row or node button that had the focus has it again) */
 function paint() {
   const panel = $('forge-panel');
   if (!panel) return;
-  const again = panel.contains(document.activeElement) ? findAgain(document.activeElement) : null;
+  const had = panel.contains(document.activeElement) ? document.activeElement : null;
+  const again = had ? findAgain(had) : null;
   draw(panel);
   const back = again && panel.querySelector(again);
-  if (back && back !== document.activeElement) back.focus();
+  if (back && back !== document.activeElement && !back.closest('[hidden]')) back.focus();
+  // A selection replaces the list: the focus goes to its back control, and returns to the row when it is let go of
+  // (a tab changed leaves the focus on the tab)
+  const key = detailKey();
+  if (key !== shownKey && shownKind === ui.kind) {
+    if (key) {
+      const target = panel.querySelector('#forge-detail .hx-forge-back');
+      if (target && (had || !shownKey)) target.focus();
+    } else {
+      const row = returnTo && panel.querySelector(returnTo);
+      if (row && !row.closest('[hidden]')) row.focus(); else $('forge-title').focus();
+      returnTo = null;
+    }
+  }
+  shownKey = key;
+  shownKind = ui.kind;
+}
+
+/** The tabs' counts, where there is one: the proposals, the open pull requests and issues and threads, the runs still open */
+function paintCounts() {
+  const open = (key) => (ui.lists[key] ? ui.lists[key].items.length : null);
+  const specs = proposalListing().entries;
+  const runs = ui.runs && ui.runs.data ? ui.runs.data.open : null;
+  const counts = { specs: specs ? specs.length : null, pulls: open('pulls|open'), issues: open('issues|open'), threads: ui.config && ui.config.threads === false ? null : open('threads|open'), work: runs };
+  for (const btn of document.querySelectorAll('#forge-panel [data-forge-kind]')) {
+    const n = counts[btn.dataset.forgeKind];
+    const el = btn.querySelector('.hx-forge-count');
+    if (!el) continue;
+    el.hidden = !n;
+    el.textContent = n ? String(n) : '';
+  }
 }
 
 function draw(panel) {
-  for (const btn of panel.querySelectorAll('[data-forge-kind]')) btn.setAttribute('aria-pressed', String(btn.dataset.forgeKind === ui.kind));
+  for (const btn of panel.querySelectorAll('[data-forge-kind]')) btn.setAttribute('aria-pressed', String(btn.dataset.forgeKind === (ui.kind === 'notes' ? 'pulls' : ui.kind)));
+  paintCounts();
   const notes = ui.kind === 'notes';
-  $('forge-filters').hidden = notes || ui.kind === 'work';
+  const specs = ui.kind === 'specs';
+  const showing = detailKey();
+  $('forge-filters').hidden = notes || ui.kind === 'work' || specs;
   $('forge-work-filters').hidden = ui.kind !== 'work';
-  $('forge-list').hidden = notes;
+  $('forge-bar').hidden = !!showing;
+  paintChip();
+  $('forge-list').hidden = notes || !!showing;
   $('forge-notes').hidden = !notes;
+  $('notes-open').hidden = ui.kind !== 'pulls' || !!showing;
+  $('forge-foot').hidden = notes || !!showing;
   if (notes) {
     drawNotes();
     return;
@@ -1090,15 +1236,16 @@ function draw(panel) {
   const list = current();
   const work = ui.kind === 'work';
   const groups = work ? groupsShown() : [];
-  const shown = list && !work ? filterItems(list.items, ui.kind, ui.filters) : [];
+  const shown = list && !work && !specs ? filterItems(list.items, ui.kind, ui.filters) : [];
   const status = $('forge-status');
-  if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : `Loading ${kindWords()}s from ${forgeName()} …`;
+  if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : specs ? 'Looking for proposals …' : `Loading ${kindWords()}s from ${forgeName()} …`;
   else if (!list) status.textContent = '';
   else if (work) status.textContent = workStatus(groups, list.at, now());
+  else if (specs) status.textContent = `${plural(list.items.length, 'open spec')}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
-  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '') || (ui.kind === 'threads' && list && list.problem ? `Some threads could not all be read: ${list.problem}` : '');
+  const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (specs && list && list.problem ? `The spec PRs could not be listed: ${list.problem}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '') || (ui.kind === 'threads' && list && list.problem ? `Some threads could not all be read: ${list.problem}` : '');
   notice.hidden = !words;
   notice.textContent = words;
 
@@ -1113,16 +1260,21 @@ function draw(panel) {
 
   const rows = $('forge-list');
   if (!list) rows.innerHTML = '';
+  else if (specs) {
+    const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
+    rows.innerHTML = list.items.length ? list.items.map((e) => specRowHtml(e, { current: open })).join('') : '<li class="hx-forge-empty hx-faint">No proposals</li>';
+  }
   else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : `<li class="hx-forge-empty hx-faint">${ui.work.grouped.groups.length ? 'No work matches these filters.' : 'No work here yet.'}</li>`;
   else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
 
   const detail = $('forge-detail');
-  detail.hidden = ui.selected === null && !ui.deployItem && ui.thread === null;
-  detail.setAttribute('aria-label', ui.thread !== null ? 'Selected thread' : ui.deployItem ? 'Selected deploy' : 'Selected pull request');
+  detail.hidden = !showing;
+  detail.setAttribute('aria-label', showing.startsWith('thread:') ? 'Selected thread' : showing.startsWith('deploy:') ? 'Selected deploy' : 'Selected pull request');
   detail.innerHTML = detailHtml();
 
   paintIdea();
-  const rate = (ui.threadDetail && ui.threadDetail.rate) || (ui.detail && ui.detail.rate) || (list && list.rate) || '';
+  $('forge-foot').hidden = $('notes-open').hidden && $('forge-idea').hidden;
+  const rate = (showing && ((ui.threadDetail && ui.threadDetail.rate) || (ui.detail && ui.detail.rate))) || (list && list.rate) || '';
   $('forge-rate').textContent = rate;
   paintRuns();
   paintButton();
@@ -1132,7 +1284,7 @@ function draw(panel) {
 function paintRuns() {
   const box = $('forge-runs');
   if (!box) return;
-  box.hidden = ui.kind !== 'work';
+  box.hidden = ui.kind !== 'work' || !!detailKey();
   if (box.hidden) return;
   const data = ui.runs && ui.runs.data;
   $('forge-runs-status').textContent = data ? runsStatus(data) : ui.loading ? 'Loading the runs …' : '';
@@ -1234,16 +1386,18 @@ function drawNotes() {
   paintButton();
 }
 
-/** The header button says which pull request is lit */
+/** The toggles that open the panel (`data-action="toggle-forge"`: the header's, whatever it calls it) say whether it is open, and the old button which selection is lit */
 function paintButton() {
+  for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.setAttribute('aria-expanded', String(ui.open));
   const btn = $('forge-btn');
   if (!btn) return;
   const lit = ui.selected !== null || !!ui.deployItem || ui.thread !== null || !!ui.runSel;
   const tag = $('forge-btn-lit');
-  tag.hidden = !lit;
-  tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  if (tag) {
+    tag.hidden = !lit;
+    tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
+  }
   btn.setAttribute('aria-label', `${t('issuesAndPrs')}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
-  btn.setAttribute('aria-expanded', String(ui.open));
 }
 
 // ---------------------------------------------------------------------------
@@ -1695,10 +1849,21 @@ async function answerRun(runId, action) {
 
 export const isForgeOpen = () => ui.open;
 
-/** Opens the panel with the focus on its title; the first time, loads the pull requests */
-export function openForge({ load = true } = {}) {
+/** What opened the panel (a toggle in the header), so Escape and Close give the focus back to it */
+let openerEl = null;
+
+/**
+ * Opens the panel with the focus on its title; the first time, loads what its tab shows (the proposals, to start with).
+ * `tab` opens it on that tab ('specs', 'pulls', 'issues', 'threads', 'work' for Runs, 'deploys'), whichever was shown last otherwise.
+ */
+export function openForge({ load = true, tab } = {}) {
   const panel = $('forge-panel');
   if (!panel || panel.hidden) return;
+  if (tab && tab !== (ui.kind === 'notes' ? 'pulls' : ui.kind) && TABS.includes(tab)) { // the Release notes are one level down on PRs
+    ui.kind = tab;
+    ui.filters = defaultFilters(tab);
+    ui.actNote = null;
+  }
   ui.open = true;
   panel.inert = false;
   panel.classList.add('forge-open');
@@ -1706,11 +1871,15 @@ export function openForge({ load = true } = {}) {
   paintButton();
   const title = $('forge-title');
   title.focus();
-  announce('Issues and pull requests');
+  announce('Work');
   if (!load) return; // a deep link loads the list it wants itself (openTab)
+  if (!tab) primeCounts(); // opened by a toggle, not for a tab: the other tabs' counts are read quietly
   if (ui.kind === 'notes') { if (!ui.notes.data && !ui.notes.loading) loadNotes(); else paint(); return; }
-  if (!current()) { paintFilters(); loadList(); } else paint();
+  if (ui.kind === 'specs' || !current()) { paintFilters(); loadList(); } else paint();
 }
+
+/** The tabs, in the order of the loop */
+const TABS = ['specs', 'pulls', 'issues', 'threads', 'work', 'deploys'];
 
 // ---------------------------------------------------------------------------
 //  Deep links (explorer/deep-link.js): a run, an issue, a proposal's Start dialog
@@ -1807,8 +1976,9 @@ export function closeForge({ restoreFocus = true } = {}) {
   panel.inert = true;
   collapseSheet('forge');
   paintButton();
-  if (restoreFocus && hadFocus) $('forge-btn').focus();
-  announce('Issues and pull requests closed');
+  const back = openerEl && openerEl.isConnected ? openerEl : $('forge-btn');
+  if (restoreFocus && hadFocus && back) back.focus();
+  announce('Work closed');
 }
 
 export const toggleForge = () => (ui.open ? closeForge() : openForge());
@@ -1863,32 +2033,31 @@ function onClick(e) {
   const kind = t.closest('[data-forge-kind]');
   if (kind) {
     if (kind.dataset.forgeKind === ui.kind) return;
-    if (kind.dataset.forgeKind === 'notes') {
-      ui.kind = 'notes';
-      if (ui.notes.data || ui.notes.loading) { paint(); announce(`Release notes. ${ui.notes.data ? notesSummary(ui.notes.data) : ''}`); } else loadNotes();
-      return;
-    }
     ui.kind = kind.dataset.forgeKind;
     ui.actNote = null;
     ui.filters = defaultFilters(ui.kind);
     paintFilters();
-    if (current()) filtersChanged(); else { paint(); loadList(); }
+    // The proposals are asked for again each time (worktrees come and go); the other lists keep what they have
+    if (ui.kind === 'specs') { paint(); loadList(false, true); announce(current() ? `${plural(current().items.length, 'spec')} shown` : 'Looking for proposals'); } else if (current()) filtersChanged(); else { paint(); loadList(); }
     return;
   }
   const pr = t.closest('[data-forge-pr]');
   if (pr) {
     const n = Number(pr.dataset.forgePr);
+    returnTo = findAgain(pr); // the row to give the focus back to when the selection is let go of
     if (ui.selected === n) clearPull(); else selectPull(n);
     return;
   }
   const thr = t.closest('[data-forge-thread]');
   if (thr) {
     const n = Number(thr.dataset.forgeThread);
+    returnTo = findAgain(thr);
     if (ui.thread === n) clearThread(); else selectThread(n);
     return;
   }
   const dep = t.closest('[data-forge-deploy]');
   if (dep) {
+    returnTo = findAgain(dep);
     if (ui.deploy === dep.dataset.forgeDeploy) clearDeploy(); else selectDeploy(dep.dataset.forgeDeploy);
     return;
   }
@@ -1934,9 +2103,13 @@ function onClick(e) {
   else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeNotesConfirm(); else openNotesConfirm(); }
   else if (action.dataset.action === 'confirm-notes') postDraft();
   else if (action.dataset.action === 'cancel-notes') { closeNotesConfirm(); announce('Cancelled. Nothing was posted.'); }
-  else if (action.dataset.action === 'clear-forge-pr') { clearPull(); $('forge-title').focus(); }
-  else if (action.dataset.action === 'clear-forge-deploy') { clearDeploy(); $('forge-title').focus(); }
-  else if (action.dataset.action === 'clear-forge-thread') { clearThread(); $('forge-title').focus(); }
+  else if (action.dataset.action === 'clear-forge-pr') clearPull();
+  else if (action.dataset.action === 'clear-forge-deploy') clearDeploy();
+  else if (action.dataset.action === 'clear-forge-thread') clearThread();
+  else if (action.dataset.action === 'toggle-filters') { ui.filtersOpen = !ui.filtersOpen; paintChip(); }
+  else if (action.dataset.action === 'open-notes') openNotes();
+  else if (action.dataset.action === 'close-notes') closeNotes();
+  else if (action.dataset.action === 'open-proposal' && isPhone()) collapseSheet('forge'); // the proposal's own bar and the map are what is wanted now
   else if (action.dataset.action === 'idea-open') toggleIdea(!ui.idea.open);
   else if (action.dataset.action === 'idea-send') {
     // Nothing of it may escape as an unhandled rejection: what went wrong is said, and the form is usable again
@@ -1949,6 +2122,22 @@ function onClick(e) {
     });
   }
   else if (action.dataset.action === 'idea-cancel') { toggleIdea(false); announce('Cancelled. Nothing was opened.'); }
+}
+
+/** The Release notes view, from the PRs list: its own page with a way back */
+function openNotes() {
+  ui.kind = 'notes';
+  ui.actNote = null;
+  if (ui.notes.data || ui.notes.loading) { paint(); announce(`Release notes. ${ui.notes.data ? notesSummary(ui.notes.data) : ''}`); } else loadNotes();
+  $('notes-title').focus();
+}
+
+/** Back from the Release notes to the PRs list, the focus on the button that opened them */
+function closeNotes() {
+  ui.kind = 'pulls';
+  paint();
+  $('notes-open').focus();
+  announce('All pull requests');
 }
 
 function onChange(e) {
@@ -2000,6 +2189,19 @@ function onKey(e) {
   closeForge();
 }
 
+/** Any `data-action="toggle-forge"` opens and closes the panel; one listener on the page, however many times the panel is wired */
+let onToggle = null;
+function wireToggles() {
+  if (onToggle) document.removeEventListener('click', onToggle);
+  onToggle = (e) => {
+    const el = e.target.closest && e.target.closest('[data-action="toggle-forge"]');
+    if (!el) return;
+    openerEl = el;
+    toggleForge();
+  };
+  document.addEventListener('click', onToggle);
+}
+
 /**
  * Wires the panel (main.js calls this once the config is read). With no forge in the config, or nobody signed in,
  * the button and the panel stay hidden, and this returns false.
@@ -2008,13 +2210,15 @@ function onKey(e) {
  * @returns {boolean} whether the panel is on
  */
 export function initForgePanel(config, opts = {}) {
-  const btn = $('forge-btn');
   const panel = $('forge-panel');
-  if (!config || !config.forge || !config.signIn || !btn || !panel) return false;
+  if (!config || !config.forge || !config.signIn || !panel) return false;
   ui.config = config;
   if (opts.clock) now = opts.clock;
-  btn.hidden = false;
+  for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
   panel.hidden = false;
+  // The Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without the panel (no forge, or no sign-in)
+  const proposalsEntry = $('proposal-wrap');
+  if (proposalsEntry) proposalsEntry.hidden = true;
   // `threads: false` in the config turns the tab off; a server that does not say has threads
   const threadsOn = config.threads !== false;
   const tab = panel.querySelector('[data-forge-kind="threads"]');
@@ -2029,7 +2233,7 @@ export function initForgePanel(config, opts = {}) {
   }
   if (!wired) {
     wired = true;
-    btn.addEventListener('click', toggleForge);
+    wireToggles();
     panel.addEventListener('click', onClick);
     panel.addEventListener('change', onChange);
     panel.addEventListener('input', onInput);
@@ -2051,6 +2255,8 @@ export function initForgePanel(config, opts = {}) {
       confirm.addEventListener('keydown', onConfirmKey);
     }
     offScene = onSceneTouch(onNodesChange);
+    // The header's Proposals menu reads the same list: when it is read again the Specs tab and its count follow
+    offListing = onProposalListing(() => { if (ui.open) paint(); });
     // A node's panel lists the threads that mention it; a click there shows one in this panel
     const drawer = $('spec-drawer');
     if (drawer) drawer.addEventListener('click', (e) => {
@@ -2067,8 +2273,17 @@ export function initForgePanel(config, opts = {}) {
 export function resetForgePanelForTests(clock = () => Date.now()) {
   if (ui.confirm) closeConfirm({ restoreFocus: false });
   if (ui.agent) closeAgent({ restoreFocus: false });
+  if (onToggle) document.removeEventListener('click', onToggle);
+  onToggle = null;
+  openerEl = null;
+  primed.clear();
+  shownKey = '';
+  shownKind = '';
+  returnTo = null;
   if (offScene) offScene();
   offScene = null;
+  if (offListing) offListing();
+  offListing = null;
   clearTimeout(searchTimer);
   wired = false;
   now = clock;
@@ -2085,5 +2300,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'specs', filtersOpen: false, filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, selectedOn: '', detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
 }

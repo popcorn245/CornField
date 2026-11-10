@@ -277,6 +277,11 @@ describe('the issues and PRs panel', () => {
     groups: [{ kind: 'area', id: 'app-a', title: 'a', items: [{ number: 13 }] }, { kind: 'other', id: 'other', title: 'Other', items: [{ number: 12 }] }],
     markdown: '### a\n\n- Lint everything ([#13](https://git.example.test/pull/13) by @agent-four) · `/orders`\n\n### Other\n\n- Meals page ([#12](https://git.example.test/pull/12))\n',
   };
+  const SPECS = [
+    { slug: '0013-meals', title: 'Meals', summary: 'Adds /meals, read from the basket.', spec: '0013', source: 'pull/12', pull: { number: 12, draft: false, author: 'agent-four' }, counts: { added: 4, changed: 1, removed: 0, scenarios: 3 }, errors: 0, review: null },
+    { slug: '0014-draft', title: 'Draft idea', summary: '', spec: '0014', source: 'w-1', counts: { added: 1, changed: 0, removed: 2, scenarios: 0 }, errors: 1, review: null },
+    { slug: '0016-broken', title: '0016-broken', source: 'checkout', error: 'It is not valid JSON.' },
+  ];
   const stub = () => vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
     const u = new URL(url, 'http://localhost');
     if (init.method === 'POST') return { ok: true, status: 201, headers: new Headers(), json: async () => ({ ok: true, count: 2, release: { id: '1', url: 'https://git.example.test/releases/1', draft: true } }) };
@@ -287,6 +292,7 @@ describe('the issues and PRs panel', () => {
       branches: [{ name: 'claude/5-notes', sha: 'n', protected: false }, { name: 'claude/lone', sha: 'l', protected: false }],
       specs: [{ pull: 12, slug: '0013-meals' }], specsProblem: null,
     };
+    if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => SPECS };
     const data = u.pathname === '/api/forge/pulls' ? { items: [pr(13, 'Lint everything'), pr(12, 'Meals page', { draft: true, labels: [] })] } : u.pathname === '/api/forge/release-notes' ? NOTES : u.pathname === '/api/forge/work' ? work : u.pathname.endsWith('/12') ? GREEN : DETAIL;
     return { ok: true, status: 200, headers: new Headers(), json: async () => ({ ok: true, at: '2026-10-19T11:58:00.000Z', rate: '48 of 5000 GitHub calls left.', ...data }) };
   }));
@@ -316,7 +322,7 @@ describe('the issues and PRs panel', () => {
   const listsOpen = async () => {
     stub();
     start();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
   };
   const prSelected = async (n = 13) => {
@@ -328,6 +334,36 @@ describe('the issues and PRs panel', () => {
     stub();
     start();
     expect($('forge-panel').inert).toBe(true);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on Specs, the tab it opens on (dark)', async () => {
+    stub();
+    start();
+    openForge();
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(3);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none on Specs in the light theme', async () => {
+    stub();
+    start();
+    light();
+    openForge();
+    await settle();
+    expect(document.querySelectorAll('#forge-list .hx-forge-item').length).toBe(3);
+    expect(await audit(...FORGE)).toEqual([]);
+  });
+
+  it('has none with the Filter chip open and a filter on', async () => {
+    await listsOpen();
+    press('#forge-filter-chip');
+    $('forge-text').value = 'meals';
+    $('forge-text').dispatchEvent(new Event('input', { bubbles: true }));
+    await settle();
+    expect($('forge-filter-chip').getAttribute('aria-expanded')).toBe('true');
+    expect($('forge-filter-chip').getAttribute('aria-label')).toBe('Filter, 1 filter on');
     expect(await audit(...FORGE)).toEqual([]);
   });
 
@@ -356,7 +392,7 @@ describe('the issues and PRs panel', () => {
     stub();
     start();
     light();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     await prSelected();
     expect(await audit(...FORGE)).toEqual([]);
@@ -455,9 +491,9 @@ describe('the issues and PRs panel', () => {
   /** The Release notes tab through its states: the draft, the confirm step, a message after Post and after Copy; each state a test, in either theme */
   const NOTES_STEPS = [
     ['the draft', async () => {
-      openForge();
+      openForge({ tab: 'pulls' });
       await settle();
-      press('[data-forge-kind="notes"]');
+      press('[data-action="open-notes"]');
       await settle();
       expect($('notes-preview').value).toContain('### a');
     }],
@@ -493,9 +529,9 @@ describe('the issues and PRs panel', () => {
   it('reaches every control of the Release notes tab with Tab, names them, and says what the draft is', async () => {
     stub();
     start();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
-    document.querySelector('[data-forge-kind="notes"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document.querySelector('[data-action="open-notes"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
     $('notes-post').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle();
@@ -524,7 +560,7 @@ describe('the issues and PRs panel', () => {
       stubDeploys();
       start();
       if (theme === 'light') light();
-      openForge();
+      openForge({ tab: 'pulls' });
       await settle();
       click(document.querySelector('[data-forge-kind="deploys"]'));
       await settle();
@@ -566,7 +602,7 @@ describe('the issues and PRs panel', () => {
     it('is by keyboard: the tab, the rows and Clear are buttons in the tab order, the selection is announced, Escape closes', async () => {
       stubDeploys();
       start();
-      openForge();
+      openForge({ tab: 'pulls' });
       await settle();
       const tab = document.querySelector('[data-forge-kind="deploys"]');
       expect(tab.tagName).toBe('BUTTON');
@@ -579,12 +615,14 @@ describe('the issues and PRs panel', () => {
       row.focus();
       click(row);
       await settle(40);
-      const again = document.querySelector('[data-forge-deploy="3"]'); // the list is drawn anew; the focus is on the same row
-      expect(document.activeElement).toBe(again);
-      expect(again.getAttribute('aria-pressed')).toBe('true');
+      // The selection replaces the list: the focus moves to its back control, which has a name
+      const back = document.querySelector('#forge-detail .hx-forge-back');
+      expect(document.activeElement).toBe(back);
+      expect(back.textContent.trim()).toBe('All deploys');
+      expect(document.querySelector('#forge-list').hidden).toBe(true);
       expect($('map-announcer').textContent).toBe('Deploy Deploy web of main, succeeded: 1 node restarted and lit, 1 named that is not on the map.');
-      const clear = document.querySelector('[data-action="clear-forge-deploy"]');
-      expect([clear.tagName, clear.tabIndex]).toEqual(['BUTTON', 0]);
+      expect([back.tagName, back.tabIndex]).toEqual(['BUTTON', 0]);
+      expect(back.getAttribute('data-action')).toBe('clear-forge-deploy');
       expect(document.querySelector('#forge-detail').getAttribute('aria-label')).toBe('Selected deploy');
       key($('forge-title'), 'Escape');
       expect(document.activeElement).toBe($('forge-btn'));
@@ -609,7 +647,7 @@ describe('the issues and PRs panel', () => {
       return { ok: !!data, status: data ? 200 : 404, headers: new Headers(), json: async () => (data ? { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...data } : { ok: false, error: 'No.' }) };
     }));
     start();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     const click = (sel) => document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     return click;
@@ -701,12 +739,12 @@ describe('the issues and PRs panel', () => {
     expect(document.activeElement).toBe($('forge-title'));
     expect([...$('forge-panel').querySelectorAll('button, select, input, a[href]')].every((el) => el.tabIndex >= 0)).toBe(true);
     await settle(40);
-    expect($('map-announcer').textContent).toBe('2 pull requests shown');
+    expect($('map-announcer').textContent).toBe('3 specs shown');
     key($('forge-title'), 'Escape');
     expect(document.activeElement).toBe(btn);
     expect($('forge-panel').inert).toBe(true);
     await settle(40);
-    expect($('map-announcer').textContent).toBe('Issues and pull requests closed');
+    expect($('map-announcer').textContent).toBe('Work closed');
   });
 });
 
@@ -744,7 +782,7 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
   /** Every state the tab has, in the order a visitor reaches them: each is audited by a test of its own (in each theme) after the steps before it */
   const WALK = [
     ['the list', FORGE, async () => {
-      openForge();
+      openForge({ tab: 'pulls' });
       await settle();
       click(document.querySelector('[data-forge-kind="threads"]'));
       await settle();
@@ -814,7 +852,7 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
   it('is by keyboard: the tab, the rows, Clear, New idea and the node buttons are buttons in the tab order; the fields are labelled; the thread says it is read-only', async () => {
     stub();
     start();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     const tab = document.querySelector('[data-forge-kind="threads"]');
     expect(tab.tagName).toBe('BUTTON');

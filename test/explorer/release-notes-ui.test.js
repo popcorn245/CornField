@@ -80,9 +80,9 @@ function mount() {
 /** The panel open on the Release notes tab, the draft loaded */
 async function openNotes(server) {
   expect(mount()).toBe(true);
-  openForge();
+  openForge({ tab: 'pulls' });
   await settle();
-  click(document.querySelector('[data-forge-kind="notes"]'));
+  click(document.querySelector('[data-action="open-notes"]'));
   await settle();
   expect(server.urls().at(-1)).toBe('/api/forge/release-notes');
 }
@@ -91,22 +91,25 @@ beforeEach(() => { localStorage.clear(); history.replaceState(null, '', '/'); })
 afterEach(() => { closeForge({ restoreFocus: false }); closeDrawer(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('the Release notes tab', () => {
-  it('drafts the notes when it is chosen: the Markdown to read, a line about it, the tags to start from, the filters gone', async () => {
+  it('drafts the notes when "Release notes …" is chosen on the PRs list: the Markdown to read, a line about it, the tags to start from, the filters gone', async () => {
     const server = fakeServer();
     expect(mount()).toBe(true);
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
-    const tab = document.querySelector('[data-forge-kind="notes"]');
-    expect(tab.textContent).toBe('Release notes');
-    expect(tab.getAttribute('aria-pressed')).toBe('false');
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100']); // nothing is asked of the notes until the tab is chosen
-    click(tab);
+    expect(document.querySelector('[data-forge-kind="notes"]')).toBe(null); // not a tab any more
+    const open = $('notes-open');
+    expect(open.textContent).toBe('Release notes …');
+    expect(open.hidden).toBe(false);
+    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100']); // nothing is asked of the notes until it is chosen
+    click(open);
     await settle();
     expect(server.urls().at(-1)).toBe('/api/forge/release-notes');
-    expect(tab.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-forge-kind="pulls"]').getAttribute('aria-pressed')).toBe('true'); // still the PRs tab, one level down
     expect($('forge-notes').hidden).toBe(false);
     expect($('forge-filters').hidden).toBe(true);
+    expect($('forge-filter-chip').hidden).toBe(true);
     expect($('forge-list').hidden).toBe(true);
+    expect(document.activeElement).toBe($('notes-title'));
     expect($('notes-preview').value).toBe(MARKDOWN);
     expect($('notes-preview').readOnly).toBe(true);
     expect($('forge-status').textContent).toBe('2 pull requests merged since v0.2.0 (2026-10-12), in 2 groups.');
@@ -116,23 +119,25 @@ describe('the Release notes tab', () => {
     expect(server.posts()).toEqual([]);
   });
 
-  it('opens on the notes tab straight away if that is where it was left, and goes back to the lists without losing them', async () => {
+  it('goes back to the PRs list with its back control, the focus on the button that opened the notes, and keeps the draft', async () => {
     const server = fakeServer();
     await openNotes(server);
-    click(document.querySelector('[data-forge-kind="pulls"]'));
+    const back = document.querySelector('[data-action="close-notes"]');
+    expect(back.textContent).toBe('All pull requests');
+    click(back);
     await settle();
     expect($('forge-notes').hidden).toBe(true);
     expect($('forge-list').hidden).toBe(false);
-    expect($('forge-filters').hidden).toBe(false);
+    expect(document.activeElement).toBe($('notes-open'));
     const asked = server.calls.length;
-    click(document.querySelector('[data-forge-kind="notes"]'));
+    click($('notes-open'));
     await settle();
     expect(server.calls).toHaveLength(asked); // the draft is kept
     expect($('notes-preview').value).toBe(MARKDOWN);
     closeForge();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
-    expect($('forge-notes').hidden).toBe(false);
+    expect($('forge-notes').hidden).toBe(false); // where it was left
     expect(server.calls).toHaveLength(asked);
   });
 

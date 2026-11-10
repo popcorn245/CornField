@@ -104,8 +104,8 @@ function mount(clock = () => NOW, extra = {}) {
   resetForgePanelForTests(clock);
   return initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, ...extra }, { clock });
 }
-const openIssues = async () => { openForge(); await settle(); click(q('[data-forge-kind="issues"]')); await settle(); };
-const openAgents = async () => { openForge(); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
+const openIssues = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="issues"]')); await settle(); };
+const openAgents = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
 const audit = async () => {
   const r = await axe.run({ include: [document.documentElement] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false }, region: { enabled: false } } });
   return r.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`));

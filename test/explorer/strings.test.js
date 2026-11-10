@@ -92,7 +92,8 @@ describe('the static markup', () => {
     expect($('node-search').getAttribute('placeholder')).toBe('«searchPlaceholder»');
     expect(document.querySelector('[data-view="diff"]').textContent).toBe('«diff»');
     expect(document.querySelector('[data-forge-kind="pulls"]').textContent).toBe('«tabPulls»');
-    expect(document.querySelector('[data-forge-kind="work"]').textContent).toBe('«tabAgents»');
+    expect(document.querySelector('[data-forge-kind="specs"]').textContent).toBe('«tabSpecs»');
+    expect(document.querySelector('[data-forge-kind="work"]').textContent).toBe('«tabRuns»');
     expect($('idea-open').textContent).toBe('«newIdea» …');
     expect($('loading-state').textContent).toBe('«loading»');
     expect($('error-state').querySelector('strong').textContent).toBe('«errorTitle»');
@@ -102,7 +103,7 @@ describe('the static markup', () => {
   it('one key changes only its own element', () => {
     applyBranding(document, { title: 'x', links: [], signIn: false, strings: { tabIssues: 'Tickets' } });
     expect(document.querySelector('[data-forge-kind="issues"]').textContent).toBe('Tickets');
-    expect(document.querySelector('[data-forge-kind="pulls"]').textContent).toBe('Pull requests');
+    expect(document.querySelector('[data-forge-kind="pulls"]').textContent).toBe('PRs');
   });
 
   it('is text: HTML in a value shows as characters and makes no element', () => {

@@ -102,13 +102,13 @@ function mount() {
 }
 
 const openIssues = async () => {
-  openForge();
+  openForge({ tab: 'pulls' });
   await settle();
   click(q('[data-forge-kind="issues"]'));
   await settle();
 };
 const openSpec = async () => {
-  openForge();
+  openForge({ tab: 'pulls' });
   await settle();
   click(q('[data-forge-pr="40"]'));
   await settle();

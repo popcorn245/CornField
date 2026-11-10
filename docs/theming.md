@@ -410,7 +410,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
 | `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
 | `preset-dataflow`, `preset-house` | the View switch (Map, Flow, House): the Flow and House buttons |
-| `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list |
+| `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
 | `forge-button`, `tokens-button` | the Work toggle, the Review tokens entry of the account menu |
 | `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
 | `live-chip`, `live-menu` | the live layer's chip and its dropdown |
@@ -436,7 +436,8 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | Hook | What it is |
 |---|---|
 | `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
-| `forge-panel` | the Issues & PRs panel, with the agent runs |
+| `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
+| `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar` | the open proposal's bar |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
@@ -456,7 +457,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | Hook | What it is |
 |---|---|
 | `tabs`, `tab` | a row of tabs, one tab |
-| `row` | one entry of a list: a pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu; a change in the open proposal; a scenario; a mockup; a review token |
+| `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
 | `badge` | a badge: the node panel's kind, a cloud kind or role, the "Agent" mark |
@@ -477,6 +478,8 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 - **A value is plain text**: one line, at most 80 characters, not empty. HTML is not an error, it is shown as the characters you wrote (`<b>` stays `<b>`): a value reaches the page through `textContent` and attributes only, never as markup.
 - **The server sends only the overridden keys**, in `strings` of `/cornfield/config.json`. The key list is one table, `STRINGS` in `core/strings.js`; the config check, the browser and this page all read it, and a test fails when this table and `STRINGS` differ.
 - **Accessible names follow the words.** A control's name is its visible label: when you override a key, the visible text and the control's `aria-label` carry the same words. Where a name adds a fixed target, only the label part changes: with `stop: 'Halt'`, the button reads "Halt" and a screen reader says "Halt run 7". So a screen reader says what the screen shows. A longer word has to fit its button.
+
+**The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
 Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
@@ -500,12 +503,12 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `sendBackWithNote` | Send back with this note |
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
-| `tabPulls` | Pull requests |
+| `tabSpecs` | Specs |
+| `tabPulls` | PRs |
 | `tabIssues` | Issues |
 | `tabThreads` | Threads |
+| `tabRuns` | Runs |
 | `tabDeploys` | Deploys |
-| `tabAgents` | Agents |
-| `tabNotes` | Release notes |
 | `newIdea` | New idea |
 | `landIt` | Land it |
 | `startAgent` | Start an agent |

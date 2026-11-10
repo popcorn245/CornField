@@ -406,7 +406,7 @@ export function mergeBlock(detail) {
   if (!checks.length) return 'It has no checks, so nothing says it works.';
   const words = { queued: 'is waiting to run', running: 'is still running', failure: 'failed', cancelled: 'was cancelled' };
   const not = checks.filter((c) => !GREEN.includes(c.state));
-  if (not.length) return `Not every check is green: ${not.map((c) => `${c.name} ${words[c.state] || c.state}`).join('; ')}.`;
+  if (not.length) return `Can't land yet: ${not.map((c) => `${c.name} ${words[c.state] || c.state}`).join(', ')}.`;
   if (detail.stale) return 'This is an older answer from the forge: refresh before landing it.';
   return null;
 }

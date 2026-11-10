@@ -114,7 +114,7 @@ function mount({ forge = { type: 'github', url: 'https://github.com', repo: 'own
   return initForgePanel({ forge, signIn, ...(threads === undefined ? {} : { threads }) }, { clock: () => NOW });
 }
 const openThreads = async () => {
-  openForge();
+  openForge({ tab: 'pulls' });
   await settle();
   click(q('[data-forge-kind="threads"]'));
   await settle();
@@ -196,7 +196,7 @@ describe('the Threads tab', () => {
     mount({ threads: false });
     expect(q('[data-forge-kind="threads"]').hidden).toBe(true);
     expect(state.threadIndex).toBe(null);
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     selectNode(MAP.nodes[2]);
     await settle();
@@ -320,7 +320,8 @@ describe('a thread is read here and answered on the forge', () => {
     click(q('[data-action="clear-forge-thread"]'));
     expect(state.forgeLit).toBe(null);
     expect($('forge-detail').hidden).toBe(true);
-    expect(document.activeElement).toBe($('forge-title'));
+    expect($('forge-list').hidden).toBe(false); // the list is back
+    expect(document.activeElement).toBe(q('[data-forge-thread="41"]')); // on the row that was opened
     expect(await said()).toBe('Thread 41 cleared');
     click(q('[data-forge-thread="41"]'));
     await settle();
@@ -618,7 +619,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
   it('never loses a draft: a typed title stays, typed text stays under the mention, and the mention is added once', async () => {
     fakeServer();
     mount();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     click(q('[data-forge-kind="threads"]'));
     await settle();
@@ -648,7 +649,7 @@ describe('Start a thread about this (a node\'s panel)', () => {
   it('an empty title takes the node\'s label; a draft with only spaces is no draft', async () => {
     fakeServer();
     mount();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     click(q('[data-forge-kind="threads"]'));
     await settle();
@@ -684,7 +685,7 @@ describe('New idea', () => {
   it('is a button on the Threads tab only, and opens a form that says what it will do', async () => {
     fakeServer();
     mount();
-    openForge();
+    openForge({ tab: 'pulls' });
     await settle();
     expect($('forge-idea').hidden).toBe(true);
     click(q('[data-forge-kind="threads"]'));
@@ -698,6 +699,27 @@ describe('New idea', () => {
     expect(document.activeElement).toBe($('idea-title'));
     expect($('idea-words').textContent).toBe('This opens an issue labelled "idea" on GitHub, as you. The conversation lives there; cornfield keeps no copy of it.');
     click(q('[data-forge-kind="issues"]'));
+    expect($('forge-idea').hidden).toBe(true);
+  });
+
+  it('is at the foot of Specs too, unless threads are off; an idea opened there is shown on the Threads tab', async () => {
+    const server = fakeServer({ posts: { '/api/forge/threads': { status: 201, body: { ok: true, action: 'idea', created: true, number: 41, issue: { number: 41, title: 'Rework sign-in', url: URL_OF(41) } } } } });
+    mount();
+    openForge();
+    await settle();
+    expect(q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-idea').hidden).toBe(false);
+    click($('idea-open'));
+    type('idea-title', 'Rework sign-in');
+    click($('idea-send'));
+    await settle();
+    expect(server.posts()).toHaveLength(1);
+    expect(q('[data-forge-kind="threads"]').getAttribute('aria-pressed')).toBe('true');
+    expect($('forge-detail').hidden).toBe(false);
+    expect($('forge-detail').textContent).toContain('Rework sign-in');
+    mount({ threads: false });
+    openForge();
+    await settle();
     expect($('forge-idea').hidden).toBe(true);
   });
 

@@ -76,7 +76,7 @@ It prints the counts (`4 added · 1 changed · 0 removed · 3 scenarios`), then 
 On the map:
 
 ```sh
-npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the account menu at the right of the header
+npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the account menu (with a forge and sign-in: the Specs tab of the Work panel)
 ```
 
 or open one straight away at `http://127.0.0.1:3350/?proposal=0002-checkout`. A draft in a worktree shows in the list with the worktree's name. A worktree starts as a copy of the checkout, so a worktree file with the same contents as the checkout's file of the same name (line endings ignored) is not a draft and is not listed.
