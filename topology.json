@@ -1404,7 +1404,7 @@
       "label": "forge-panel.js",
       "type": "core",
       "file": "explorer/forge-panel.js",
-      "summary": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t…",
+      "summary": "The Work panel (CF-07, CF-42, spec 0001 section 4; it began as the issues and PRs panel): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
@@ -6338,5 +6338,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T18:58:52.818Z"
+  "updatedAt": "2026-11-10T19:04:32.092Z"
 }
