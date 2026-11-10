@@ -26,7 +26,7 @@
     <!-- The page's one heading, for a screen reader's list of headings (plugins.js puts the config's title in it) -->
     <h1 id="cf-heading" class="hx-sr-only">cornfield: the map</h1>
     <div class="hx-header-left" data-corn="header-left">
-      <button type="button" id="cf-brand" class="hx-brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
+      <button type="button" id="cf-brand" class="hx-brand" data-corn="brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
         <span id="cf-mark" class="hx-live-dot"></span>
         <span id="cf-title" class="hx-title gradient-text">cornfield</span>
       </button>
@@ -165,7 +165,7 @@
       </button>
 
       <!-- The named themes of the config (`theme.names`): filled and shown by explorer/theme-names.js; hidden when there are none -->
-      <select id="theme-name-select" class="hx-forge-select" style="width:auto;max-width:9rem" aria-label="Theme" title="Theme" hidden data-corn="theme-picker"></select>
+      <select id="theme-name-select" class="hx-forge-select" style="width:auto;max-width:9rem" aria-label="Theme" title="Theme" data-corn="theme-picker" hidden></select>
 
       <!-- The config's links (cornfield.config.js `links`), filled by explorer/plugins.js -->
       <span id="cf-links" class="hx-links" data-corn="links"></span>

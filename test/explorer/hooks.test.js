@@ -22,12 +22,6 @@ import { runsHtml } from '../../explorer/runs-view.js';
 import { mockupsSectionHtml } from '../../explorer/mockups-model.js';
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
 
-/**
- * Hooks the brand assets (CF-35, #128) put on the page. They are documented now; the markup comes with that change, so
- * they may be absent from the source until it lands. Once it has, empty this set: they are then checked like the rest.
- */
-const FROM_BRAND_ASSETS = new Set(['brand', 'brand-logo', 'brand-wordmark', 'powered-by']);
-
 const docs = fs.readFileSync(path.join(CORNFIELD, 'docs', 'theming.md'), 'utf8');
 /** The first-column values (in backticks) of the tables in a section of the docs, from its heading to the next heading of its level or higher */
 function tableValues(heading) {
@@ -53,7 +47,9 @@ const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).
 const source = SOURCES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 /** Every literal value written as `data-corn="x"` or `dataset.corn = 'x'` (the attribute, in markup and in script) */
 const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);
-const used = [...new Set([...literal('attr', /\bdata-corn="([^"$]+)"/g), ...literal('js', /\.dataset\.corn = '([^']+)'/g)])];
+// explorer/plugins.js sets the brand images' hook from the image's kind: setAttribute('data-corn', `brand-${kind}`), kind 'logo' or 'wordmark'
+const brandImages = /setAttribute\('data-corn', `brand-\$\{kind\}`\)/.test(source) && /brandImage\(doc, [^)]*'logo'/.test(source) && /brandImage\(doc, [^)]*'wordmark'/.test(source) ? ['brand-logo', 'brand-wordmark'] : [];
+const used = [...new Set([...literal('attr', /\bdata-corn="([^"$]+)"/g), ...literal('js', /\.dataset\.corn = '([^']+)'/g), ...literal('set', /setAttribute\('data-corn', '([^']+)'\)/g), ...brandImages])];
 const usedKinds = [...new Set(literal('kind', /\bdata-corn-kind="([^"$]+)"/g))];
 const usedStates = [...new Set([...literal('attr', /\bdata-corn-state="([^"$]+)"/g), ...literal('js', /\.dataset\.cornState = '([^']+)'/g)])];
 
@@ -71,12 +67,8 @@ describe('the documented list', () => {
   });
 
   it('has every hook in index.html or the explorer source', () => {
-    const missing = hooks.filter((h) => !used.includes(h) && !FROM_BRAND_ASSETS.has(h));
+    const missing = hooks.filter((h) => !used.includes(h));
     expect(missing, `documented but in no markup: ${missing.join(', ')}`).toEqual([]);
-  });
-
-  it('documents the brand hooks the brand assets add', () => {
-    for (const h of FROM_BRAND_ASSETS) expect(hooks, h).toContain(h);
   });
 });
 

@@ -141,7 +141,7 @@ describe('the panel', () => {
 
   it('shows the badges, the plan, the breaks line and each when\'s group in order', () => {
     expect(html).toContain('hx-cloud-badges');
-    expect(html).toMatch(/Cloud<\/span><span class="hx-cloud-badge">runtime<\/span><span class="hx-cloud-badge">account/);
+    expect(html).toMatch(/Cloud<\/span><span class="hx-cloud-badge"[^>]*>runtime<\/span><span class="hx-cloud-badge"[^>]*>account/);
     expect(html).toContain('hx-cloud-plan--free');
     expect(html).toContain('If it\'s down:');
     expect(html).toContain('Now: names stop resolving.');
@@ -153,7 +153,7 @@ describe('the panel', () => {
   });
 
   it('marks a call the visitor\'s browser makes', () => {
-    expect(html).toMatch(/join\.example\.test<\/span>[^<]*<span class="hx-cloud-browser">\(browser\)<\/span>/);
+    expect(html).toMatch(/join\.example\.test<\/span>[^<]*<span class="hx-cloud-browser"[^>]*>\(browser\)<\/span>/);
     expect(html.match(/\(browser\)/g)).toHaveLength(1);
   });
 
@@ -176,7 +176,7 @@ describe('the panel', () => {
     const hub = node('ext-docker-hub', 'external', { label: 'Docker Hub', kind: 'cloud', roles: ['software'], plan: { tier: 'free' }, breaks: 'At the next deploy.' });
     const calls = many.map((c) => ({ from: c.id, to: hub.id, kind: 'calls', label: 'image', when: 'deploy' }));
     const out = cloudPanelHtml(hub, [hub, ...many], calls);
-    expect(out).toContain(`<details class="hx-cloud-fold"><summary>${FOLD_AT + 3} containers</summary>`);
+    expect(out).toContain(`<details class="hx-cloud-fold" data-corn="cloud-fold"><summary>${FOLD_AT + 3} containers</summary>`);
     expect(out).toContain('c00');
     const short = cloudPanelHtml(hub, [hub, ...many.slice(0, FOLD_AT)], calls.slice(0, FOLD_AT));
     expect(short).not.toContain('<details');

@@ -205,7 +205,7 @@ The tokens above change what the explorer looks like; the hooks let a stylesheet
 - A panel is open when it is not `inert` (`[data-corn="node-panel"]:not([inert])`); a hidden one is `[hidden]`.
 - The markup is made in `explorer/index.html` and, for lists, rows and panels filled by script, in the explorer's modules. Both carry the same hooks.
 
-`brand`, `brand-logo`, `brand-wordmark` and `powered-by` are put on the page by the brand config ([docs/config.md](config.md)); the others are in the page and the modules as shipped.
+`brand-logo`, `brand-wordmark` and `powered-by` are made by the brand config ([docs/config.md](config.md#brand)), and are there only when the config names them.
 
 ### Button kinds: `data-corn-kind`
 
