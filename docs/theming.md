@@ -22,6 +22,10 @@ export default {
 
 A named theme (`theme.names`) is the same kind of file. Scoped to `:root[data-theme-name="night"]`, it outranks cornfield's dark `:root` block and ties with its light ones, and wins those as it loads later; to give it its own light values, scope them to `:root[data-theme-name="night"][data-theme="light"]`.
 
+## A logo, a favicon and an app name
+
+Images and the app's name are not tokens: they are the config's `brand` key, `{ logo, wordmark, favicon, appName, color, background }`, with images from the repo served at `/cornfield/brand/<key>.<ext>` and never inlined. The logo and wordmark sit in the header's brand button as `img[data-corn="brand-logo"]` and `img[data-corn="brand-wordmark"]`, so a theme can size them; `color` and `background` are the tab's `theme-color` and the web app manifest's colours. See [docs/config.md, Brand](config.md#brand).
+
 ## A complete brand stylesheet
 
 A square-cornered, retro look: no radius anywhere, hard offset shadows, thick borders, its own fonts, a red accent, in both themes. Saved as `tools/cornfield/theme.css` (with its two fonts in `tools/cornfield/fonts/`) and named by `theme: { css: './tools/cornfield/theme.css' }`, every panel, button, menu and dialog takes it. [test/explorer/tokens.test.js](../test/explorer/tokens.test.js) checks that every name in it is a token and that the light blocks match.
