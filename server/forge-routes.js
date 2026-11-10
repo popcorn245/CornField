@@ -10,6 +10,7 @@
  * shared by every visitor and no cache-less repeats.
  *
  *   GET /api/forge/issues?state=open|closed|all&labels=a,b&limit=100   issues, newest first
+ *   GET /api/forge/issues/<n>                                          one issue, whatever its state (a deep link to a closed one, explorer/deep-link.js)
  *   GET /api/forge/pulls?state=open|closed|all&limit=100               pull requests, newest first
  *   GET /api/forge/pulls/<n>                                           one pull request with its files and the checks on its head
  *                                                                      (each check says whether cornfield can re-run it: `canRerun`)
@@ -179,6 +180,11 @@ function routeOf(reqPath, url, config, where, hooks = null) {
         };
       },
     };
+  }
+  const issue = /^\/api\/forge\/issues\/([1-9]\d{0,8})$/.exec(reqPath);
+  if (issue) {
+    const n = Number(issue[1]);
+    return { key: `issues/${n}`, load: async (forge) => ({ issue: await forge.issue(n) }) };
   }
   const one = /^\/api\/forge\/pulls\/([1-9]\d{0,8})$/.exec(reqPath);
   if (one) {
