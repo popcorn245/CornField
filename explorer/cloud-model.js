@@ -95,12 +95,12 @@ export function cloudUsedBy(node, nodes, edges) {
 /** More users of one kind than this, in one group, fold into a count ("42 containers") with the list behind it */
 export const FOLD_AT = 8;
 
-const sec = (title, body) => `<div class="hx-sec"><strong class="hx-strong">${title}</strong>${body}</div>`;
-const row = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
-const name = (label) => `<span class="hx-name">${esc(label)}</span>`;
+const sec = (title, body) => `<div class="hx-sec" data-corn="section"><strong class="hx-strong" data-corn="section-title">${title}</strong>${body}</div>`;
+const row = (color, arrow, body) => `<div class="hx-line" data-corn="line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
+const name = (label) => `<span class="hx-name" data-corn="name">${esc(label)}</span>`;
 
 function userRow(item, color) {
-  const browser = item.browser ? ' <span class="hx-cloud-browser">(browser)</span>' : '';
+  const browser = item.browser ? ' <span class="hx-cloud-browser" data-corn="cloud-browser">(browser)</span>' : '';
   return row(color, '←', `${name(item.label)}${browser}${item.via ? `<span class="hx-faint"> · ${esc(item.via)}</span>` : ''}`);
 }
 
@@ -108,15 +108,15 @@ function groupHtml(group) {
   const lists = group.types.map((t) => {
     const rows = t.items.map((i) => userRow(i, group.color)).join('');
     if (t.items.length <= FOLD_AT) return rows;
-    return `<details class="hx-cloud-fold"><summary>${t.items.length} ${esc(nounOf(t.type, t.items.length))}</summary>${rows}</details>`;
+    return `<details class="hx-cloud-fold" data-corn="cloud-fold"><summary>${t.items.length} ${esc(nounOf(t.type, t.items.length))}</summary>${rows}</details>`;
   }).join('');
-  return `<div class="hx-cloud-when hx-cloud-when--${group.when}">`
-    + `<div class="hx-cloud-when-head"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${group.when}"></span>`
-    + `<span class="hx-glyph" style="--glyph:${group.color}">${esc(group.title)}</span><span class="hx-count">${group.count}</span></div>${lists}</div>`;
+  return `<div class="hx-cloud-when hx-cloud-when--${group.when}" data-corn="cloud-when" data-corn-state="${group.when}">`
+    + `<div class="hx-cloud-when-head" data-corn="cloud-when-head"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${group.when}"></span>`
+    + `<span class="hx-glyph" style="--glyph:${group.color}">${esc(group.title)}</span><span class="hx-count" data-corn="count">${group.count}</span></div>${lists}</div>`;
 }
 
 /** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node */
-const playButton = (node) => `<div class="hx-sec"><button type="button" class="hx-btn hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">▶ Play: ${esc(String(node.label || node.id))} is down</button></div>`;
+const playButton = (node) => `<div class="hx-sec" data-corn="section"><button type="button" class="hx-btn hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}" data-corn="outage-play">▶ Play: ${esc(String(node.label || node.id))} is down</button></div>`;
 
 /**
  * The node panel's section for a cloud node (kind `cloud`) or the public web (kind `web`): badges and plan,
@@ -128,11 +128,11 @@ export function cloudPanelHtml(node, nodes, edges) {
   const label = (id) => String((byId.get(id) || { label: id }).label || id);
   const [kind, ...roles] = cloudBadges(node);
   const tier = node.kind === 'web' ? null : (node.plan && TIER_WORDS[node.plan.tier] ? node.plan.tier : 'unknown');
-  const badges = `<div class="hx-cloud-badges"><span class="hx-cloud-badge hx-cloud-badge--${node.kind === 'web' ? 'web' : 'kind'}">${esc(kind)}</span>`
-    + roles.map((r) => `<span class="hx-cloud-badge">${esc(r)}</span>`).join('')
-    + (tier ? `<span class="hx-cloud-plan hx-cloud-plan--${tier}">${esc(TIER_WORDS[tier])}</span>` : '')
+  const badges = `<div class="hx-cloud-badges" data-corn="badges"><span class="hx-cloud-badge hx-cloud-badge--${node.kind === 'web' ? 'web' : 'kind'}" data-corn="badge">${esc(kind)}</span>`
+    + roles.map((r) => `<span class="hx-cloud-badge" data-corn="badge">${esc(r)}</span>`).join('')
+    + (tier ? `<span class="hx-cloud-plan hx-cloud-plan--${tier}" data-corn="plan-badge" data-corn-state="${tier}">${esc(TIER_WORDS[tier])}</span>` : '')
     + '</div>'
-    + (tier && node.plan && node.plan.note ? `<div class="hx-faint hx-cloud-plan-note">${esc(node.plan.note)}</div>` : '');
+    + (tier && node.plan && node.plan.note ? `<div class="hx-faint hx-cloud-plan-note" data-corn="plan-note">${esc(node.plan.note)}</div>` : '');
 
   const groups = cloudUsedBy(node, nodes, edges);
   const usedBy = groups.length ? groups.map(groupHtml).join('') : '<div class="hx-faint">Nothing on the map uses it.</div>';
@@ -141,8 +141,8 @@ export function cloudPanelHtml(node, nodes, edges) {
     .map((e) => row(WHEN_STYLES[whenOf(e)].color, '→', `${name(label(e.to))}${e.label ? `<span class="hx-faint"> · ${esc(e.label)}</span>` : ''}`));
   const pushes = edges.filter((e) => e.kind === 'delivers' && e.from === node.id).map((e) => row('#94a3b8', '→', name(label(e.to))));
 
-  return `<div class="hx-cloud">${badges}`
-    + sec('If it\'s down:', `<div class="hx-cloud-breaks">${esc(node.breaks || 'Not described yet.')}</div>`)
+  return `<div class="hx-cloud" data-corn="cloud">${badges}`
+    + sec('If it\'s down:', `<div class="hx-cloud-breaks" data-corn="cloud-breaks">${esc(node.breaks || 'Not described yet.')}</div>`)
     + sec('Used by:', usedBy)
     + (node.kind === 'web' ? '' : playButton(node)) // the public web is never down as a whole (spec D3)
     + (relies.length ? sec('Relies on:', relies.join('')) : '')

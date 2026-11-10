@@ -126,9 +126,9 @@ function themeHead(theme) {
     const u = fontUrl(f);
     if (u) out.push(`<link rel="stylesheet" href="${escapeHtml(u.href)}" referrerpolicy="no-referrer" />`);
   }
-  if (theme.css) out.push('<link rel="stylesheet" href="/cornfield/theme.css" data-cf-theme="css" />');
+  if (theme.css) out.push('<link rel="stylesheet" href="/cornfield/theme.css" data-corn-theme="css" />');
   const { names, fallback } = themeNamesOf(theme);
-  if (names.length) out.push(`<link rel="stylesheet" id="cf-theme-name-css"${fallback ? ` href="/cornfield/theme/${fallback}.css"` : ''} data-cf-theme="name" />`);
+  if (names.length) out.push(`<link rel="stylesheet" id="cf-theme-name-css"${fallback ? ` href="/cornfield/theme/${fallback}.css"` : ''} data-corn-theme="name" />`);
   return out.join('\n  ');
 }
 

@@ -180,21 +180,22 @@ function showBar(speed) {
   if (!stage) return;
   bar = document.createElement('div');
   bar.className = 'hx-player glass';
+  bar.dataset.corn = 'scenario-player';
   bar.setAttribute('role', 'region');
   bar.setAttribute('aria-label', 'Scenario player');
   bar.innerHTML = `
-    <div class="hx-player-head">
-      <span class="hx-player-title"></span>
-      <select class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
-      <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario">✕</button>
+    <div class="hx-player-head" data-corn="player-head">
+      <span class="hx-player-title" data-corn="player-title"></span>
+      <select class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step" data-corn="player-speed">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
+      <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn="close-button" data-corn-kind="icon">✕</button>
     </div>
-    <p class="hx-player-text" aria-live="polite"><span class="hx-player-count"></span> · <span class="hx-player-step"></span></p>
-    <div class="hx-player-controls">
-      <button type="button" class="hx-btn" data-action="scenario-prev">◀ Previous</button>
-      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle"></button>
-      <button type="button" class="hx-btn" data-action="scenario-next">Next ▶</button>
+    <p class="hx-player-text" aria-live="polite" data-corn="player-text"><span class="hx-player-count" data-corn="player-count"></span> · <span class="hx-player-step" data-corn="player-step"></span></p>
+    <div class="hx-player-controls" data-corn="player-controls">
+      <button type="button" class="hx-btn" data-action="scenario-prev" data-corn="scenario-step-button">◀ Previous</button>
+      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-corn="scenario-toggle" data-corn-kind="primary"></button>
+      <button type="button" class="hx-btn" data-action="scenario-next" data-corn="scenario-step-button">Next ▶</button>
     </div>
-    <div class="hx-player-track" aria-hidden="true"><span class="hx-player-fill"></span></div>`;
+    <div class="hx-player-track" aria-hidden="true" data-corn="player-track"><span class="hx-player-fill" data-corn="player-fill"></span></div>`;
   bar.addEventListener('click', (e) => {
     const button = e.target.closest('[data-action]');
     if (button) act(button.dataset.action);
@@ -318,6 +319,7 @@ export function refreshList() {
   if (list) list.remove();
   list = document.createElement('details');
   list.className = 'hx-scenarios glass';
+  list.dataset.corn = 'scenario-list';
   list.dataset.key = key;
   const summary = document.createElement('summary');
   summary.textContent = `Scenarios · ${scenarios.length}`;
@@ -326,6 +328,7 @@ export function refreshList() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'hx-scenarios-item';
+    button.dataset.corn = 'scenario-item';
     button.dataset.scenario = s.id;
     const steps = (s.steps || []).length;
     button.textContent = `${s.title} · ${steps} ${steps === 1 ? 'step' : 'steps'}`;

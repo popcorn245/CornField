@@ -125,22 +125,26 @@ function mount() {
   if (!stage || (els && els.stage === stage && stage.contains(els.under))) return;
   const under = document.createElement('div');
   under.className = 'hx-house-under';
+  under.dataset.corn = 'house-under';
   under.setAttribute('aria-hidden', 'true');
   under.inert = true;
   under.hidden = true;
   const map = document.createElement(hook && hook.element ? hook.element : 'div');
   map.className = 'hx-house-plan';
+  map.dataset.corn = 'house-plan';
   under.appendChild(map);
   stage.insertBefore(under, stage.firstChild);
 
   const over = document.createElement('div');
   over.className = 'hx-house-over';
+  over.dataset.corn = 'house-over';
   over.hidden = true;
 
   const bar = document.createElement('div');
   bar.className = 'hx-house-bar';
+  bar.dataset.corn = 'house-bar';
   bar.hidden = true;
-  bar.innerHTML = '<div class="hx-house-floors glass" role="group" aria-label="Floor"></div><div class="hx-house-people" role="group" aria-label="People"></div>';
+  bar.innerHTML = '<div class="hx-house-floors glass" role="group" aria-label="Floor" data-corn="house-floors"></div><div class="hx-house-people" role="group" aria-label="People" data-corn="house-people"></div>';
   stage.appendChild(over);
   stage.appendChild(bar);
   els = { stage, under, map, over, bar, floors: bar.firstElementChild, people: bar.lastElementChild };
@@ -238,10 +242,10 @@ function paintBar() {
   const fKey = floors.map((f) => `${f.id}:${f.name}`).join('|') + `#${c.floor}#${c.planSource}#${edit || ''}`;
   if (els.floors.dataset.key !== fKey) {
     els.floors.dataset.key = fKey;
-    els.floors.innerHTML = floors.map((f) => `<button type="button" class="hx-house-chip" data-house="floor" data-floor="${escAttr(f.id)}" aria-pressed="${f.id === c.floor}">${escAttr(f.name)}</button>`).join('')
-      + (c.planSource === 'default' ? '<span class="hx-house-tag" title="The live layer is unavailable: this is the default plan">Default plan</span>' : '')
-      + (c.planSource === 'none' ? '<span class="hx-house-tag">No plan</span>' : '')
-      + (edit ? `<a class="hx-house-chip hx-house-edit" href="${escAttr(edit)}" target="_blank" rel="noopener" title="Move and resize the rooms where the plan is kept (opens in a new tab)">Edit layout</a>` : '');
+    els.floors.innerHTML = floors.map((f) => `<button type="button" class="hx-house-chip" data-house="floor" data-floor="${escAttr(f.id)}" aria-pressed="${f.id === c.floor}" data-corn="house-chip">${escAttr(f.name)}</button>`).join('')
+      + (c.planSource === 'default' ? '<span class="hx-house-tag" title="The live layer is unavailable: this is the default plan" data-corn="house-tag">Default plan</span>' : '')
+      + (c.planSource === 'none' ? '<span class="hx-house-tag" data-corn="house-tag">No plan</span>' : '')
+      + (edit ? `<a class="hx-house-chip hx-house-edit" href="${escAttr(edit)}" target="_blank" rel="noopener" title="Move and resize the rooms where the plan is kept (opens in a new tab)" data-corn="house-chip">Edit layout</a>` : '');
   }
   const chips = c.phone ? personaChips(state.nodes) : [];
   const pKey = c.phone ? chips.map((p) => `${p.id}:${p.text}`).join('|') + `#${c.software}#${c.cloud}` : '';
@@ -249,9 +253,9 @@ function paintBar() {
     els.people.dataset.key = pKey;
     els.people.hidden = !c.phone;
     els.people.innerHTML = c.phone
-      ? chips.map((p) => `<button type="button" class="hx-house-chip hx-house-chip--person" data-house="person" data-id="${escAttr(p.id)}">${escAttr(p.text)}</button>`).join('')
-        + `<button type="button" class="hx-house-chip hx-house-chip--software" data-house="software" aria-pressed="${!!c.software}">Software</button>`
-        + `<button type="button" class="hx-house-chip hx-house-chip--cloud" data-house="cloud" aria-pressed="${!!c.cloud}">Cloud</button>`
+      ? chips.map((p) => `<button type="button" class="hx-house-chip hx-house-chip--person" data-house="person" data-id="${escAttr(p.id)}" data-corn="house-chip">${escAttr(p.text)}</button>`).join('')
+        + `<button type="button" class="hx-house-chip hx-house-chip--software" data-house="software" aria-pressed="${!!c.software}" data-corn="house-chip">Software</button>`
+        + `<button type="button" class="hx-house-chip hx-house-chip--cloud" data-house="cloud" aria-pressed="${!!c.cloud}" data-corn="house-chip">Cloud</button>`
       : '';
   }
 }
@@ -265,7 +269,7 @@ function paintMore() {
     els.over.innerHTML = more.map((m) => {
       const room = nodeById(m.room);
       const name = room ? room.label : m.room;
-      return `<button type="button" class="hx-house-more" data-house="more" data-room="${escAttr(m.room)}" aria-label="${escAttr(`${m.count} more in the ${name}: open the room`)}">+${m.count}</button>`;
+      return `<button type="button" class="hx-house-more" data-house="more" data-room="${escAttr(m.room)}" aria-label="${escAttr(`${m.count} more in the ${name}: open the room`)}" data-corn="house-more">+${m.count}</button>`;
     }).join('');
   }
 }

@@ -444,7 +444,7 @@ export function createLiveRunner({ source, groups, wanted, visible = () => true,
 export function liveDetailsHtml(node, live, esc) {
   if (!node) return '';
   const answer = live && live.answer;
-  const sec = (title, body) => `<div class="hx-sec hx-live-sec"><strong class="hx-strong">${title}</strong>${body}</div>`;
+  const sec = (title, body) => `<div class="hx-sec hx-live-sec" data-corn="section"><strong class="hx-strong" data-corn="section-title">${title}</strong>${body}</div>`;
   const when = answer ? `<div class="hx-faint">Live · ${esc(clockOf(answer.at))}</div>` : '';
 
   if (node.type === 'persona') {
@@ -464,16 +464,16 @@ export function liveDetailsHtml(node, live, esc) {
       return sec('Inventory:', `<div>No inventory item has ${key}</div>${when}`);
     }
     const item = hw.item || {};
-    const photo = item.image ? `<img class="hx-live-photo" data-live-photo="${esc(item.image)}" alt="Photo of ${esc(item.name || node.label)}" hidden />` : '';
-    const room = item.room_id ? `<div>Room: <button type="button" class="hx-linkbtn" data-action="select-node" data-id="live-room-${esc(item.room_id)}">${esc(hw.roomName || item.room_id)}</button></div>` : '<div class="hx-faint">Its item has no room</div>';
+    const photo = item.image ? `<img class="hx-live-photo" data-live-photo="${esc(item.image)}" alt="Photo of ${esc(item.name || node.label)}" hidden data-corn="live-photo" />` : '';
+    const room = item.room_id ? `<div>Room: <button type="button" class="hx-linkbtn" data-action="select-node" data-id="live-room-${esc(item.room_id)}" data-corn="link-button">${esc(hw.roomName || item.room_id)}</button></div>` : '<div class="hx-faint">Its item has no room</div>';
     const contents = hw.contents || [];
     const total = hw.contents_total ?? contents.length;
     const rows = contents.map((c) => `<li style="padding-left:${Math.max(0, (c.depth || 1) - 1) * 14}px">${esc(c.name)}${c.quantity && c.quantity !== 1 ? ` <span class="hx-faint">× ${esc(String(c.quantity))}</span>` : ''}</li>`).join('');
     const more = total > contents.length ? `<div class="hx-faint">and ${total - contents.length} more</div>` : '';
     const sets = (hw.sets || []).map((s) => `<li>${esc(s.name)}${s.kind ? ` <span class="hx-faint">${esc(s.kind)}</span>` : ''}</li>`).join('');
-    return sec('Inventory item:', `<div class="hx-name">${esc(item.name || '')}</div>${photo}${room}${when}`)
-      + sec(`Inside it (${total}):`, contents.length ? `<ul class="hx-live-list">${rows}</ul>${more}` : '<div class="hx-faint">Nothing recorded inside it</div>')
-      + sec('Sets:', sets ? `<ul class="hx-live-list">${sets}</ul>` : '<div class="hx-faint">In no set</div>');
+    return sec('Inventory item:', `<div class="hx-name" data-corn="name">${esc(item.name || '')}</div>${photo}${room}${when}`)
+      + sec(`Inside it (${total}):`, contents.length ? `<ul class="hx-live-list" data-corn="live-list">${rows}</ul>${more}` : '<div class="hx-faint">Nothing recorded inside it</div>')
+      + sec('Sets:', sets ? `<ul class="hx-live-list" data-corn="live-list">${sets}</ul>` : '<div class="hx-faint">In no set</div>');
   }
 
   if (node.live) {

@@ -21,11 +21,11 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------
 //  Small HTML pieces shared by the sections below
 // ---------------------------------------------------------------------------
-const code = (s) => `<code class="hx-code">${escHtml(s)}</code>`;
-const nm = (id) => `<span class="hx-name">${escHtml(nameOf(id))}</span>`;
-const line = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
-const section = (title, rows) => (rows.length ? `<div class="hx-sec"><strong class="hx-strong">${title}</strong>${rows.join('')}</div>` : '');
-const varList = (vars) => `<div class="hx-chips">${vars.map((v) => `<code class="hx-var">${escHtml(v)}</code>`).join('')}</div>`;
+const code = (s) => `<code class="hx-code" data-corn="code">${escHtml(s)}</code>`;
+const nm = (id) => `<span class="hx-name" data-corn="name">${escHtml(nameOf(id))}</span>`;
+const line = (color, arrow, body) => `<div class="hx-line" data-corn="line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
+const section = (title, rows) => (rows.length ? `<div class="hx-sec" data-corn="section"><strong class="hx-strong" data-corn="section-title">${title}</strong>${rows.join('')}</div>` : '');
+const varList = (vars) => `<div class="hx-chips" data-corn="vars">${vars.map((v) => `<code class="hx-var" data-corn="var">${escHtml(v)}</code>`).join('')}</div>`;
 const edgesOf = (kind, side, id) => state.edges.filter((e) => e.kind === kind && e[side] === id);
 
 /** Table <-> page data: which keys a page's render reads, which forms write, what ROM re-bakes */
@@ -40,7 +40,7 @@ function dataSummary(node) {
 
   if (node.type === 'app') {
     const served = node.deployed
-      ? line('#93c5fd', '⇢', `<a class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer">${escHtml(node.url)}</a> → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
+      ? line('#93c5fd', '⇢', `<a class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer" data-corn="link">${escHtml(node.url)}</a> → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
       : line('#f87171', '✕', 'Not deployed by any stack in this repo');
     const runsOn = state.edges.filter((e) => e.kind === 'runs-on' && e.from === node.id)
       .map((e) => line(FLOW_STYLES['runs-on'].color, '⇢', `${nm(e.to)}${(e.mappings || []).map((m) => `<div class="hx-faint">${code(m.host)} → ${code(m.upstream)}${m.service ? ` = ${code(m.service)}` : ''}</div>`).join('')}`));
@@ -61,8 +61,8 @@ function dataSummary(node) {
   }
   if (node.type === 'stack') {
     const served = state.edges.filter((e) => e.kind === 'runs-on' && e.to === node.id);
-    return section('Domains served (Caddyfile → service):', served.flatMap((e) => (e.mappings || []).map((m) => line(FLOW_STYLES['runs-on'].color, '←', `<span class="hx-name">${escHtml(m.host)}</span> → ${code(m.upstream)}${m.service ? ` = ${code(m.service)}` : ''}`))))
-      + section(`${(node.services || []).length} service(s):`, (node.services || []).map((s) => line('#a8a29e', '▣', `<span class="hx-name">${escHtml(s.name)}</span>${s.image ? ` <span class="hx-faint">${escHtml(s.image)}</span>` : ''}${s.ports.length ? `<div>${s.ports.map(code).join(' ')}</div>` : ''}${s.volumes.length ? `<div class="hx-faint">${s.volumes.map(escHtml).join('<br>')}</div>` : ''}`)))
+    return section('Domains served (Caddyfile → service):', served.flatMap((e) => (e.mappings || []).map((m) => line(FLOW_STYLES['runs-on'].color, '←', `<span class="hx-name" data-corn="name">${escHtml(m.host)}</span> → ${code(m.upstream)}${m.service ? ` = ${code(m.service)}` : ''}`))))
+      + section(`${(node.services || []).length} service(s):`, (node.services || []).map((s) => line('#a8a29e', '▣', `<span class="hx-name" data-corn="name">${escHtml(s.name)}</span>${s.image ? ` <span class="hx-faint">${escHtml(s.image)}</span>` : ''}${s.ports.length ? `<div>${s.ports.map(code).join(' ')}</div>` : ''}${s.volumes.length ? `<div class="hx-faint">${s.volumes.map(escHtml).join('<br>')}</div>` : ''}`)))
       + section('Compose file:', [line('#93c5fd', '📄', code(node.file))]);
   }
   if (node.type === 'table') {
@@ -135,9 +135,9 @@ function threadsSection(node) {
   if (!index) return '';
   const threads = index.for(node.id);
   // "Start a thread about this" shows whenever threads are on and a maintainer is signed in (the panel only sets `start` then)
-  const start = index.start ? `<div class="hx-line"><button type="button" class="hx-btn" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned">Start a thread about this</button></div>` : '';
+  const start = index.start ? `<div class="hx-line" data-corn="line"><button type="button" class="hx-btn" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned" data-corn="button">Start a thread about this</button></div>` : '';
   if (!threads || !threads.length) return start;
-  const rows = threads.map((t) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:#fbbf24">◆</span><span><button type="button" class="hx-btn hx-thread-open" data-thread-open="${t.number}" aria-label="Open thread #${t.number}, ${escHtml(t.title)}, in the issues and pull requests panel">#${t.number} ${escHtml(t.title)}</button> <span class="hx-faint">${t.kind === 'proposal' ? 'proposal' : 'idea'}</span></span></div>`);
+  const rows = threads.map((t) => `<div class="hx-line" data-corn="line"><span class="hx-glyph" style="--glyph:#fbbf24">◆</span><span><button type="button" class="hx-btn hx-thread-open" data-thread-open="${t.number}" aria-label="Open thread #${t.number}, ${escHtml(t.title)}, in the issues and pull requests panel" data-corn="button">#${t.number} ${escHtml(t.title)}</button> <span class="hx-faint">${t.kind === 'proposal' ? 'proposal' : 'idea'}</span></span></div>`);
   return section(`Mentioned in ${threads.length} ${threads.length === 1 ? 'thread' : 'threads'}:`, rows) + start;
 }
 
@@ -173,18 +173,18 @@ export async function selectNode(node) {
   if (token !== selectToken) return;
 
   propsList.innerHTML = `
-    <div class="hx-prop">
-      <div class="hx-prop-head">
+    <div class="hx-prop" data-corn="prop">
+      <div class="hx-prop-head" data-corn="prop-head">
         <span class="hx-accent hx-bold">Node Degree</span>
         <span class="hx-good hx-bold">${node.degree || 0} edges</span>
       </div>
       <div class="hx-faint">Radius: ${node.r}px (${node.scaleDelta > 0 ? '+' : ''}${(node.scaleDelta || 0).toFixed(1)}px subtle degree sizing)</div>
     </div>`;
   metaList.innerHTML = `
-    <div><strong class="hx-strong">ID:</strong> ${escHtml(node.id)}</div>
-    <div><strong class="hx-strong">Category:</strong> ${escHtml(node.type)}</div>
-    <div><strong class="hx-strong">Connected Edges:</strong> <span class="hx-accent hx-bold">${node.degree || 0}</span></div>
-    ${node.file ? `<div><strong class="hx-strong">File:</strong> <code class="hx-code">${escHtml(node.file)}</code></div>` : ''}
+    <div><strong class="hx-strong" data-corn="section-title">ID:</strong> ${escHtml(node.id)}</div>
+    <div><strong class="hx-strong" data-corn="section-title">Category:</strong> ${escHtml(node.type)}</div>
+    <div><strong class="hx-strong" data-corn="section-title">Connected Edges:</strong> <span class="hx-accent hx-bold">${node.degree || 0}</span></div>
+    ${node.file ? `<div><strong class="hx-strong" data-corn="section-title">File:</strong> <code class="hx-code" data-corn="code">${escHtml(node.file)}</code></div>` : ''}
     ${flowSummary(node)}
     ${dataSummary(node)}`;
   if (node.url && /^https?:\/\//.test(node.url)) {

@@ -55,7 +55,7 @@ function paint() {
   else {
     list.innerHTML = ui.tokens.map((t) => {
       const line = tokenLine(t, now());
-      return `<li class="hx-tokens-item" data-state="${line.state}"><span class="hx-tokens-label">${escHtml(line.label)}</span> <span class="hx-tokens-meta hx-faint">${escHtml(line.status)} · ${escHtml(line.used)}</span> ${line.canRevoke ? `<button type="button" class="hx-btn hx-btn--quiet" data-revoke="${escHtml(String(line.id))}" aria-label="Revoke ${escHtml(line.label)}"${ui.busy ? ' disabled' : ''}>Revoke</button>` : ''}</li>`;
+      return `<li class="hx-tokens-item" data-state="${line.state}" data-corn="token-row" data-corn-state="${line.state}"><span class="hx-tokens-label" data-corn="token-label">${escHtml(line.label)}</span> <span class="hx-tokens-meta hx-faint" data-corn="token-meta">${escHtml(line.status)} · ${escHtml(line.used)}</span> ${line.canRevoke ? `<button type="button" class="hx-btn hx-btn--quiet" data-revoke="${escHtml(String(line.id))}" aria-label="Revoke ${escHtml(line.label)}"${ui.busy ? ' disabled' : ''} data-corn="button" data-corn-kind="danger">Revoke</button>` : ''}</li>`;
     }).join('');
   }
   const intro = $('tokens-intro');
@@ -64,6 +64,7 @@ function paint() {
   msg.hidden = !ui.message;
   msg.textContent = ui.message ? ui.message.text : '';
   msg.classList.toggle('hx-forge-msg--bad', !!ui.message && !ui.message.ok);
+  if (ui.message && !ui.message.ok) msg.dataset.cornState = 'bad'; else delete msg.dataset.cornState;
   $('tokens-make').disabled = ui.busy;
 }
 

@@ -225,7 +225,7 @@ function setMessage(text, isError = false) {
 
 /** The problems a proposal has, as the bar lists them (at most `max`, then "and N more") */
 export function problemsHtml(errors, max = 8) {
-  const shown = errors.slice(0, max).map((e) => `<li>${e.path ? `<code class="hx-code">${escHtml(e.path)}</code> ` : ''}${escHtml(e.message)}</li>`);
+  const shown = errors.slice(0, max).map((e) => `<li>${e.path ? `<code class="hx-code" data-corn="code">${escHtml(e.path)}</code> ` : ''}${escHtml(e.message)}</li>`);
   if (errors.length > max) shown.push(`<li class="hx-faint">and ${errors.length - max} more</li>`);
   return shown.join('');
 }
@@ -282,10 +282,10 @@ function renderChanges() {
   const rows = [];
   for (const mark of [...MARKS, 'edit']) {
     for (const n of state.nodes.filter((x) => x.mark === mark)) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}" data-corn="change-row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark" data-corn-state="${mark}"></span><span class="hx-change-what" data-corn="change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name" data-corn="name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
     }
     for (const e of state.edges.filter((x) => x.mark === mark && said.has(edgeKey(x)))) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}" data-corn="change-row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark" data-corn-state="${mark}"></span><span class="hx-change-what" data-corn="change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name" data-corn="name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
     }
   }
   list.innerHTML = rows.join('') || '<p class="hx-faint">This proposal changes nothing on the map.</p>';
@@ -346,17 +346,17 @@ function where(entry) {
 /** One row of the picker */
 export function proposalRowHtml(entry, current) {
   const mine = current && current.slug === entry.slug && current.source === entry.source;
-  const head = `<span class="hx-proposal-title">${escHtml(entry.title || entry.slug)}</span>`;
-  const meta = [`<span class="hx-proposal-where">${escHtml(where(entry))}</span>`];
+  const head = `<span class="hx-proposal-title" data-corn="proposal-item-title">${escHtml(entry.title || entry.slug)}</span>`;
+  const meta = [`<span class="hx-proposal-where" data-corn="proposal-item-where">${escHtml(where(entry))}</span>`];
   if (entry.spec) meta.push(`<span>spec ${escHtml(entry.spec)}</span>`);
   if (entry.error) {
-    return `<div class="hx-proposal-item is-broken">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
+    return `<div class="hx-proposal-item is-broken" data-corn="proposal-item" data-corn-state="broken">${head}<span class="hx-proposal-sum hx-error-text" data-corn="proposal-item-summary">${escHtml(entry.error)}</span><span class="hx-proposal-meta" data-corn="proposal-item-meta">${meta.join('')}</span></div>`;
   }
   if (entry.counts) meta.push(`<span>${escHtml(chipText(entry.counts))}</span>`);
   const reviewed = reviewWords(entry.review, Date.now()); // "Approved 3 minutes ago", from the listing
-  if (reviewed) meta.push(`<span class="hx-proposal-reviewed">${escHtml(reviewed)}</span>`);
+  if (reviewed) meta.push(`<span class="hx-proposal-reviewed" data-corn="proposal-item-reviewed">${escHtml(reviewed)}</span>`);
   if (entry.errors) meta.push(`<span class="hx-warn">${escHtml(plural(entry.errors, 'problem'))}</span>`);
-  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
+  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}"${mine ? ' data-corn-state="current"' : ''} data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" data-corn="proposal-item">${head}${entry.summary ? `<span class="hx-proposal-sum" data-corn="proposal-item-summary">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta" data-corn="proposal-item-meta">${meta.join('')}</span></button>`;
 }
 
 function renderMenu(loading = false) {
@@ -364,12 +364,12 @@ function renderMenu(loading = false) {
   if (!menu) return;
   const current = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
   let body;
-  if (loading && !listing) body = '<p class="hx-faint hx-proposal-empty">Looking for proposals …</p>';
-  else if (listingProblem) body = `<p class="hx-error-text hx-proposal-empty">The list could not be loaded: ${escHtml(listingProblem)}</p>`;
-  else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
-  else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
-  const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
-  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>Proposals</span></div>${forge}${body}`;
+  if (loading && !listing) body = '<p class="hx-faint hx-proposal-empty" data-corn="empty">Looking for proposals …</p>';
+  else if (listingProblem) body = `<p class="hx-error-text hx-proposal-empty" data-corn="empty">The list could not be loaded: ${escHtml(listingProblem)}</p>`;
+  else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty" data-corn="empty">No proposals</p>';
+  else body = `<div class="hx-proposal-list" role="list" data-corn="proposal-list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
+  const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty" data-corn="empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
+  menu.innerHTML = `<div class="hx-menu-title hx-menu-head" data-corn="menu-title"><span>Proposals</span></div>${forge}${body}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,15 +405,15 @@ export function markedEdgeAt(x, y, tolerance) {
 export function showEdgePanel(edge) {
   closeDrawer(); // clears a node selection and any panel still loading
   state.selectedEdge = edge;
-  const row = (label, value) => (value ? `<div class="hx-prop"><div class="hx-prop-head"><span class="hx-accent hx-bold">${escHtml(label)}</span><span>${escHtml(value)}</span></div></div>` : '');
+  const row = (label, value) => (value ? `<div class="hx-prop" data-corn="prop"><div class="hx-prop-head" data-corn="prop-head"><span class="hx-accent hx-bold">${escHtml(label)}</span><span>${escHtml(value)}</span></div></div>` : '');
 
   $('drawer-title').textContent = `${nameOf(edge.from)} → ${nameOf(edge.to)}`;
   $('drawer-badge').textContent = 'EDGE';
   $('drawer-description').textContent = edge.label || '';
   $('drawer-props-list').innerHTML = row('Kind', kindOf(edge)) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
   $('drawer-meta-list').innerHTML = `${proposalPanelHtml(edge)}
-    <div><strong class="hx-strong">From:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div>
-    <div><strong class="hx-strong">To:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div>`;
+    <div><strong class="hx-strong" data-corn="section-title">From:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}" data-corn="link-button">${escHtml(nameOf(edge.from))}</button></div>
+    <div><strong class="hx-strong" data-corn="section-title">To:</strong> <button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}" data-corn="link-button">${escHtml(nameOf(edge.to))}</button></div>`;
   const open = $('drawer-open-btn');
   open.removeAttribute('href');
   open.textContent = 'A link between two nodes';

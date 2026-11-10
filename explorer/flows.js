@@ -134,10 +134,10 @@ export function renderFlowLegend() {
   const { activeLayers } = state;
   if (activeLayers.flow === false && activeLayers.table === false) { el.innerHTML = ''; el.hidden = true; return; }
   el.hidden = false;
-  const row = (swatch, text) => `<div class="hx-legend-row"><span class="hx-legend-swatch">${swatch}</span><span>${text}</span></div>`;
+  const row = (swatch, text) => `<div class="hx-legend-row" data-corn="legend-row"><span class="hx-legend-swatch">${swatch}</span><span>${text}</span></div>`;
   el.innerHTML = `
-    <div class="hx-menu-section">
-      <div class="hx-menu-title">
+    <div class="hx-menu-section" data-corn="menu-section">
+      <div class="hx-menu-title" data-corn="menu-title">
         <span>Data Flow</span>
       </div>
       ${Object.values(FLOW_STYLES).map((s) => row(`<span class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
@@ -149,10 +149,10 @@ export function renderFlowLegend() {
 export function flowSummary(node) {
   const flows = state.edges.filter((e) => e.kind === 'flow' && (e.from === node.id || e.to === node.id));
   if (flows.length === 0) return '';
-  return `<div class="hx-sec"><strong class="hx-strong">Data flows:</strong>
+  return `<div class="hx-sec" data-corn="section"><strong class="hx-strong" data-corn="section-title">Data flows:</strong>
     ${flows.map((e) => {
       const out = e.from === node.id;
       const s = FLOW_STYLES[e.flow] || FLOW_STYLES.sync;
-      return `<div class="hx-line"><span class="hx-glyph" style="--glyph:${s.color}">${out ? '→' : '←'}</span><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`;
+      return `<div class="hx-line" data-corn="line"><span class="hx-glyph" style="--glyph:${s.color}">${out ? '→' : '←'}</span><span><span class="hx-name" data-corn="name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`;
     }).join('')}</div>`;
 }

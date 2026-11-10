@@ -122,6 +122,7 @@ export function openMockup(index, opener = null) {
   returnTo = opener;
   dialog = document.createElement('div');
   dialog.className = 'hx-mockup-dialog';
+  dialog.dataset.corn = 'mockup-dialog';
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
   dialog.setAttribute('aria-labelledby', 'mockup-title');
@@ -129,25 +130,32 @@ export function openMockup(index, opener = null) {
   dialog.tabIndex = -1;
   const head = document.createElement('div');
   head.className = 'hx-mockup-head';
+  head.dataset.corn = 'mockup-head';
   const title = document.createElement('h2');
   title.id = 'mockup-title';
   title.className = 'hx-mockup-title';
+  title.dataset.corn = 'mockup-title';
   title.textContent = item.title;
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'hx-btn hx-mockup-close';
+  close.dataset.corn = 'mockup-close';
   close.dataset.mockupClose = '';
   close.textContent = 'Close';
   head.append(title, close);
   const status = document.createElement('p');
   status.id = 'mockup-state';
   status.className = `hx-mockup-state hx-mockup-state--${item.state}`;
+  status.dataset.corn = 'state-pill';
+  status.dataset.cornState = item.state;
   status.textContent = stateWords(item.state);
   const stage = document.createElement('div');
   stage.className = 'hx-mockup-stage';
+  stage.dataset.corn = 'mockup-stage';
   if (item.type === 'page') {
     const frame = document.createElement('iframe');
     frame.className = 'hx-mockup-frame';
+    frame.dataset.corn = 'mockup-frame';
     frame.setAttribute('sandbox', ''); // no allow-scripts, no allow-same-origin: the page is inert and cut off from cornfield
     frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.setAttribute('title', item.title);
@@ -156,6 +164,7 @@ export function openMockup(index, opener = null) {
   } else {
     const img = document.createElement('img'); // SVG too: an image never runs script
     img.className = 'hx-mockup-img';
+    img.dataset.corn = 'mockup-image';
     img.setAttribute('alt', item.title);
     img.setAttribute('referrerpolicy', 'no-referrer');
     img.setAttribute('src', item.url);

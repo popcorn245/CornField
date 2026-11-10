@@ -399,8 +399,8 @@ export function createFloorRenderer({ plan = SAMPLE_PLAN, editUrl } = {}) {
     render(p, floorId) {
       const vb = (p && p.viewBox) || FLOOR_VIEWBOX;
       const rooms = ((p && p.rooms) || []).filter((r) => r.floor_id === floorId && [r.x, r.y, r.w, r.h].every((v) => typeof v === 'number'));
-      const drawn = rooms.map((r) => `<g class="hx-plain-room" data-room="${esc(r.id)}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="6"></rect><text x="${r.x + 10}" y="${r.y + 22}">${esc(r.name)}</text></g>`).join('');
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vb.width} ${vb.height}" class="hx-plain-floor" data-floor="${esc(floorId)}">${drawn}</svg>`;
+      const drawn = rooms.map((r) => `<g class="hx-plain-room" data-room="${esc(r.id)}" data-corn="plain-room"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="6"></rect><text x="${r.x + 10}" y="${r.y + 22}">${esc(r.name)}</text></g>`).join('');
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vb.width} ${vb.height}" class="hx-plain-floor" data-floor="${esc(floorId)}" data-corn="plain-floor">${drawn}</svg>`;
     },
     defaultPlan() {
       const src = plan || SAMPLE_PLAN;
