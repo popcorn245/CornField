@@ -47,6 +47,13 @@ describe('configProblems', () => {
     for (const r of ['../x', 'o/..', './n', 'o/.', '.../n', 'o/n/x', 'o', '']) expect(repo(r), r).toEqual(['forge.repo is "owner/name".']);
   });
 
+  it('refuses http for a GitHub forge off loopback, where a token would travel in the clear, and keeps it for a local Forgejo', () => {
+    expect(configProblems({ forge: { type: 'github', repo: 'o/n', url: 'http://github.example.test' } })).toEqual(['forge.url for GitHub is https (http only for localhost): the token would otherwise travel in the clear.']);
+    expect(configProblems({ forge: { type: 'github', repo: 'o/n', url: 'http://127.0.0.1:4010' } })).toEqual([]);
+    expect(configProblems({ forge: { type: 'github', repo: 'o/n', url: 'https://github.example.test:8443' } })).toEqual([]);
+    expect(configProblems({ forge: { type: 'forgejo', repo: 'o/n', url: 'http://forgejo.local:3000' } })).toEqual([]);
+  });
+
   it('takes a forge\'s base branch for specs: a plain branch name, nothing that could be a path out or an option', () => {
     const forge = (baseBranch) => ({ forge: { type: 'github', repo: 'o/n', baseBranch } });
     for (const b of [undefined, 'main', 'release/1.x', 'v1.0_rc']) expect(configProblems(forge(b)), b).toEqual([]);

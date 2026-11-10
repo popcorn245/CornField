@@ -253,6 +253,8 @@ export function configProblems(c) {
     else {
       if (!FORGE_TYPES.includes(c.forge.type)) out.push(`forge.type is one of ${FORGE_TYPES.join(', ')}.`);
       if (c.forge.url !== undefined && !isForgeOrigin(c.forge.url)) out.push('forge.url is the forge\'s origin, like https://github.com.');
+      // GitHub and GitHub Enterprise only speak https; a token over http would travel in the clear
+      else if (c.forge.url !== undefined && c.forge.type === 'github' && !/^https:/i.test(String(c.forge.url)) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\/?$/i.test(String(c.forge.url))) out.push('forge.url for GitHub is https (http only for localhost): the token would otherwise travel in the clear.');
       const repoParts = String(c.forge.repo || '').split('/');
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || '')) || repoParts.some((p) => /^\.+$/.test(p))) out.push('forge.repo is "owner/name".');
       if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);
