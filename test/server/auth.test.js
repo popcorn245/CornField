@@ -18,7 +18,7 @@ import { DatabaseSync } from 'node:sqlite';
 // @ts-expect-error plain JS module, no declarations
 import { createCornfieldServer, listen } from '../../server/server.js';
 // @ts-expect-error plain JS module, no declarations
-import { signInSettings, oauthEndpoints, parseCookies, sealToken, openToken, RECHECK_MS, SESSION_MS, STATE_MS } from '../../server/auth.js';
+import { signInSettings, safeReturn, oauthEndpoints, parseCookies, sealToken, openToken, RECHECK_MS, SESSION_MS, STATE_MS } from '../../server/auth.js';
 // @ts-expect-error plain JS module, no declarations
 import { assertBind } from '../../server/bind.js';
 // @ts-expect-error plain JS module, no declarations
@@ -150,6 +150,34 @@ describe('sign-in with GitHub, and the guard', () => {
     db.close();
     return row;
   };
+
+  /** Starts a sign-in with a `return`, comes back from the forge, answers where the callback sends the browser */
+  async function returnedTo(returnParam) {
+    const started = await get(`/auth/start${returnParam === undefined ? '' : `?return=${encodeURIComponent(returnParam)}`}`);
+    const to = new URL(started.headers.location);
+    const cookie = setCookies(started)['cornfield-oauth'].split(';')[0];
+    const back = await get(`/auth/callback?code=c-maint&state=${to.searchParams.get('state')}`, { cookie });
+    expect(back.status, back.body).toBe(303);
+    return back.headers.location;
+  }
+
+  it('keeps the query of a deep link through the sign-in, and only follows a same-origin relative path', async () => {
+    const page = await get('/?run=run-7&x=1', { accept: 'text/html' });
+    expect(page.status).toBe(401);
+    expect(page.body).toContain('href="/auth/start?return=%2F%3Frun%3Drun-7%26x%3D1"');
+    expect(await returnedTo('/?run=run-7&x=1')).toBe('/?run=run-7&x=1');
+    expect(await returnedTo('/?proposal=a-b&start=1')).toBe('/?proposal=a-b&start=1');
+    for (const bad of ['https://evil.example/', '//evil.example/x', '/\\evil.example', '\\\\evil.example', 'javascript:alert(1)', '/a\nb', '/auth/start', 'evil', '']) {
+      expect(await returnedTo(bad), bad).toBe('/');
+    }
+    expect(await returnedTo(undefined)).toBe('/');
+  });
+
+  it('safeReturn refuses what is not a relative path of this origin', () => {
+    expect(safeReturn('/?issue=4')).toBe('/?issue=4');
+    expect(safeReturn('/x/y?a=b')).toBe('/x/y?a=b');
+    for (const bad of ['https://a.test', '//a.test', '/\\a.test', '/auth/sign-in', null, undefined, 5, 'x', '/' + 'a'.repeat(2100)]) expect(safeReturn(bad)).toBeNull();
+  });
 
   /** Signs in with a code, the way a browser does; answers the session cookie (`name=value`) */
   async function signIn(code) {

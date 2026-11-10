@@ -1616,7 +1616,7 @@ async function answerRun(runId, action) {
 export const isForgeOpen = () => ui.open;
 
 /** Opens the panel with the focus on its title; the first time, loads the pull requests */
-export function openForge() {
+export function openForge({ load = true } = {}) {
   const panel = $('forge-panel');
   if (!panel || panel.hidden) return;
   ui.open = true;
@@ -1627,8 +1627,78 @@ export function openForge() {
   const title = $('forge-title');
   title.focus();
   announce('Issues and pull requests');
+  if (!load) return; // a deep link loads the list it wants itself (openTab)
   if (ui.kind === 'notes') { if (!ui.notes.data && !ui.notes.loading) loadNotes(); else paint(); return; }
   if (!current()) { paintFilters(); loadList(); } else paint();
+}
+
+// ---------------------------------------------------------------------------
+//  Deep links (explorer/deep-link.js): a run, an issue, a proposal's Start dialog
+// ---------------------------------------------------------------------------
+
+/** Shows `tab` in the panel, opened (and, on a phone, expanded), with its list read; resolves when the list is in */
+async function openTab(tab) {
+  ui.kind = tab;
+  ui.filters = defaultFilters(tab); // a filter left from before must not hide what the link names
+  ui.actNote = null;
+  paintFilters();
+  if (!ui.open) openForge({ load: false });
+  if (isPhone()) expandSheet('forge');
+  if (current()) paint(); else await loadList();
+}
+
+/** What a link names is not there: a line in the panel, said through the live region */
+function linkMissing(words) {
+  ui.actNote = { ok: false, text: words };
+  paint();
+  announce(words);
+  return false;
+}
+
+/** Moves the focus to `el` (made focusable if it is a row) and brings it into view */
+function bringIntoView(el) {
+  if (!el) return;
+  if (!el.matches('button, a, input, select, textarea')) el.setAttribute('tabindex', '-1');
+  el.focus();
+  if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+}
+
+/** `?run=<runId>`: the Agents tab with that run lit and in view. A run that is not there is said, never a blank panel. */
+export async function openRunLink(id) {
+  if (!ui.config) return false;
+  await openTab('work');
+  if (!(ui.runs && ui.runs.data)) await loadRuns(false, { say: false });
+  let run = runById(id);
+  // A run asked for a moment ago may not be in what was read before: ask once more, past the cache
+  if (!run && ui.runs && ui.runs.data) { await loadRuns(true, { say: false }); run = runById(id); }
+  if (!run) return linkMissing(ui.runs && ui.runs.data ? `There is no run ${id}.` : (ui.runs && ui.runs.error) || 'The runs could not be read.');
+  if (ui.runSel !== id) selectRun(id);
+  paint();
+  bringIntoView($('forge-runs-list').querySelector(`[data-run="${id}"]`));
+  announce(`Run ${id}, in the Runs view`);
+  return true;
+}
+
+/** `?issue=<n>`: the Issues tab with that issue's Start an agent button in view and focused, ready to press */
+export async function openIssueLink(n) {
+  if (!ui.config) return false;
+  await openTab('issues');
+  const list = current();
+  if (!list) return linkMissing(ui.error || 'The issues could not be read.');
+  const item = list.items.find((i) => i.number === n);
+  if (!item) return linkMissing(`Issue ${n} is not in the list of open issues.`);
+  paint();
+  const start = $('forge-list').querySelector(`[data-forge-agent="issue:${n}"]`);
+  bringIntoView(start);
+  announce(`Issue ${n}: ${item.title}. Start an agent is ready`);
+  return true;
+}
+
+/** `?proposal=<slug>&start=1`: the Start dialog on that proposal (the proposal itself is opened by proposal.js) */
+export async function openProposalStart(slug) {
+  if (!ui.config || !agentEl()) return false;
+  await openAgent(`proposal:${slug}`, '#forge-title');
+  return !!ui.agent;
 }
 
 /** Closes the panel. What a selected pull request lit stays lit (the button says which); Clear lets go of it. */
