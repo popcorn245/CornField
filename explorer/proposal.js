@@ -26,7 +26,7 @@ import { edgePoint, looksFor } from './scene.js';
 import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
 import {
-  PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, parseProposalQuery, proposalPanelHtml, touchedIds,
+  PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds,
 } from './proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
@@ -257,7 +257,7 @@ export function renderBar() {
   bar.hidden = !open;
   const legend = $('proposal-legend');
   if (legend) legend.hidden = !open;
-  if (!open) { collapseSheet('proposal'); if (hooks.bar) hooks.bar(false); return; }
+  if (!open) { closeMore(); toggleMode(false); collapseSheet('proposal'); if (hooks.bar) hooks.bar(false); return; }
 
   bar.classList.remove('is-error');
   $('proposal-message').hidden = true;
@@ -266,12 +266,15 @@ export function renderBar() {
   $('proposal-title').textContent = (p && typeof p.title === 'string' && p.title) || state.proposalSlug || 'Proposal';
   const summary = $('proposal-summary');
   summary.textContent = (p && typeof p.summary === 'string' && p.summary) || '';
-  summary.hidden = !summary.textContent;
+  const title = $('proposal-title');
+  title.title = summary.textContent; // the toolbar stays one row: the summary is the title's tooltip, and shows above the list of changes
+  summary.hidden = !summary.textContent || $('proposal-changes').hidden;
 
   const counts = summarize(p);
   const chip = $('proposal-chip');
-  chip.textContent = chipText(counts);
-  chip.title = counts.scenarios ? `${plural(counts.scenarios, 'scenario')}. Click for the list of changes.` : 'Click for the list of changes.';
+  chip.innerHTML = barCounts(counts).map((c) => `${c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" aria-hidden="true"></span>` : ''}${escHtml(c.text)}`).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
+  chip.title = 'Click for the list of changes.';
+  $('proposal-mode').textContent = t(state.proposalView);
 
   for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
     const on = btn.dataset.view === state.proposalView;
@@ -312,6 +315,7 @@ function toggleChanges() {
   const list = $('proposal-changes');
   if (!list) return;
   list.hidden = !list.hidden;
+  $('proposal-summary').hidden = list.hidden || !$('proposal-summary').textContent;
   $('proposal-chip').setAttribute('aria-expanded', String(!list.hidden));
 }
 
@@ -327,6 +331,57 @@ function focusChange(kind, key) {
   state.camera.y = state.height / 2 - at.y * state.camera.zoom;
   if (kind === 'edge') showEdgePanel(item);
   else selectNode(item);
+}
+
+// ---------------------------------------------------------------------------
+//  The ⋯ menu (a menu button) and the phone's Before / Diff / After switcher
+// ---------------------------------------------------------------------------
+
+const moreItems = () => [...document.querySelectorAll('#proposal-more-menu [role="menuitem"]')];
+
+function moreOpen() {
+  const menu = $('proposal-more-menu');
+  return !!menu && !menu.hidden;
+}
+
+/** Closes the ⋯ menu; `refocus` puts focus back on its button (Escape, or a choice made) */
+function closeMore(refocus = false) {
+  const menu = $('proposal-more-menu');
+  const btn = $('proposal-more');
+  if (menu) menu.hidden = true;
+  if (btn) { btn.setAttribute('aria-expanded', 'false'); if (refocus) btn.focus(); }
+}
+
+function openMore(which = 'first') {
+  const menu = $('proposal-more-menu');
+  if (!menu) return;
+  menu.hidden = false;
+  $('proposal-more').setAttribute('aria-expanded', 'true');
+  const items = moreItems();
+  (which === 'last' ? items[items.length - 1] : items[0])?.focus();
+}
+
+/** On a phone the mode button shows the compare switcher under the counts; from 768px the switcher is always there */
+function toggleMode(force) {
+  const bar = $('proposal-bar');
+  const on = typeof force === 'boolean' ? force : bar.dataset.modeOpen !== 'true';
+  bar.dataset.modeOpen = String(on);
+  $('proposal-mode').setAttribute('aria-expanded', String(on));
+}
+
+function onMoreKey(e) {
+  const btn = $('proposal-more');
+  if (e.target === btn && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openMore(e.key === 'ArrowUp' ? 'last' : 'first'); return; }
+  if (!moreOpen()) return;
+  if (e.key === 'Escape') { e.preventDefault(); closeMore(true); return; }
+  if (e.key === 'Tab') { closeMore(); return; }
+  const items = moreItems();
+  const at = items.indexOf(document.activeElement);
+  if (at < 0) return;
+  const next = { ArrowDown: (at + 1) % items.length, ArrowUp: (at - 1 + items.length) % items.length, Home: 0, End: items.length - 1 }[e.key];
+  if (next === undefined) return;
+  e.preventDefault();
+  items[next].focus();
 }
 
 // ---------------------------------------------------------------------------
@@ -467,7 +522,9 @@ const ACTIONS = {
   'toggle-proposals-menu': () => toggleMenu(),
   'open-proposal': (el) => openProposal(el.dataset.slug, el.dataset.source || null),
   'close-proposal': () => closeProposal(),
-  'proposal-view': (el) => setProposalView(el.dataset.view),
+  'proposal-view': (el) => { setProposalView(el.dataset.view); toggleMode(false); },
+  'toggle-proposal-mode': () => toggleMode(),
+  'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),
   'toggle-proposal-changes': () => toggleChanges(),
   'proposal-focus': (el) => focusChange(el.dataset.kind, el.dataset.key),
 };
@@ -476,6 +533,8 @@ function onClick(e) {
   const target = e.target.closest ? e.target.closest('[data-action]') : null;
   const action = target && ACTIONS[target.dataset.action];
   if (action) action(target);
+  // A choice in the ⋯ menu closes it back onto its button (Close may stop at the what-if confirm); a click anywhere else just closes it
+  if (moreOpen() && !(target && target.dataset.action === 'toggle-proposal-more')) closeMore(!!(target && target.closest('#proposal-more-menu')));
   // Any click outside the picker closes it
   const wrap = $('proposal-wrap');
   if (menuOpen() && wrap && !wrap.contains(e.target)) closeMenu();
@@ -483,6 +542,7 @@ function onClick(e) {
 
 function onKey(e) {
   if (e.key === 'Escape' && menuOpen()) closeMenu();
+  onMoreKey(e);
 }
 
 /** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */

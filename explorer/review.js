@@ -1,8 +1,10 @@
 /**
  * @module explorer/review
  *
- * Approving a proposal and sending it back: the two buttons and the note under the proposal bar, and what a
- * click does. "Approve" (a note is optional) and "Send back" (a note is needed) both put the maintainer's what-if
+ * Approving a proposal and sending it back: the two buttons on the proposal toolbar (index.html), the note that opens
+ * under it, and what a click does. "Approve" takes no note. "Send back" opens the note field (focus moves to it; Cancel
+ * closes it and gives focus back to Send back); the button then reads "Send back with this note" and a note is needed.
+ * Both put the maintainer's what-if
  * edits (`getEdits()`, whatif.js) in the review, which the server posts as a comment on the spec PR, as the
  * signed-in maintainer (`PUT /proposals/<slug>/review`, server/proposals.js, server/reviews.js). The agent drafting
  * the spec reads it (`cornfield review <slug>`) and folds the edits into the proposal. Only a proposal of a spec PR
@@ -22,6 +24,7 @@
  */
 
 import { state } from './state.js';
+import { expandSheet, isPhone } from './sheets.js';
 import { hooks } from './proposal.js';
 import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
@@ -38,6 +41,7 @@ const ui = {
   reviewable: false, // whether it is on a spec PR
   review: null, // { verdict, at } | null: the last review of it
   busy: false,
+  noting: false, // the note field is open (Send back was pressed)
   message: '', // an inline refusal or failure
   hint: '', // what happens to the edits
 };
@@ -52,8 +56,10 @@ const slugOf = () => state.proposalSlug || null;
 const keyOf = () => (state.proposal && slugOf() ? `${state.proposalSource || ''}/${slugOf()}` : null);
 const reviewUrl = () => `/proposals/${encodeURIComponent(slugOf())}/review${state.proposalSource ? `?source=${encodeURIComponent(state.proposalSource)}` : ''}`;
 const q = (sel) => (root ? root.querySelector(sel) : null);
+/** The toolbar's own buttons: Send back and Approve (index.html) */
+const button = (verdict) => document.querySelector(`#proposal-bar [data-review="${verdict}"]`);
 
-/** The note box, the two buttons, and the lines under them; added to the bar once */
+/** The status line, the note field and the lines under them; added to the toolbar once, just before Send back and Approve, so Tab goes from the note to Cancel and then to "Send back with this note" (on a phone it sits under the counts, above the two buttons; from 768px CSS gives it a row under the toolbar) */
 function mount() {
   const body = $('proposal-body');
   if (!body) return null;
@@ -62,14 +68,14 @@ function mount() {
     root.id = 'review';
     root.className = 'hx-review';
     root.dataset.corn = 'review-bar';
-    root.setAttribute('aria-label', `${t('approve')} or ${t('sendBack')}`);
     root.innerHTML = `
-      <label class="hx-review-label" for="review-note"></label>
-      <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
-      <div class="hx-review-row">
-        <button type="button" class="hx-btn hx-btn--approve" data-review="approved" title="Sign this proposal off" data-corn-kind="approve"></button>
-        <button type="button" class="hx-btn" data-review="notes" title="Send it back to the drafting agent with the note and your edits"></button>
-        <span class="hx-review-status" data-review-status role="status"></span>
+      <p class="hx-review-status" data-review-status role="status" hidden></p>
+      <div class="hx-review-form" id="review-form" data-review-form hidden>
+        <label class="hx-review-label" for="review-note"></label>
+        <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
+        <div class="hx-review-row">
+          <button type="button" class="hx-btn hx-btn--quiet" data-review-cancel data-corn-kind="quiet">Cancel</button>
+        </div>
       </div>
       <p class="hx-review-msg" data-review-msg role="alert" hidden></p>
       <p class="hx-review-line" data-review-hint role="status" hidden></p>
@@ -77,11 +83,12 @@ function mount() {
     // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
     q('.hx-review-label').textContent = t('reviewNoteLabel');
     q('#review-note').setAttribute('placeholder', t('reviewNotePlaceholder'));
-    q('[data-review="approved"]').textContent = t('approve');
-    q('[data-review="notes"]').textContent = t('sendBack');
-    body.appendChild(root);
-    root.addEventListener('click', onClick);
+    const actions = body.querySelector('.hx-proposal-actions');
+    if (actions) actions.before(root); else body.prepend(root);
+    const bar = $('proposal-bar');
+    (bar || root).addEventListener('click', onClick);
     root.addEventListener('input', () => { if (ui.message) { ui.message = ''; paint(); } });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.noting) { e.stopPropagation(); closeNote(); } });
   }
   return root;
 }
@@ -92,13 +99,42 @@ function paint() {
   const status = q('[data-review-status]');
   status.textContent = reviewWords(ui.review, now());
   status.hidden = !status.textContent;
-  for (const btn of root.querySelectorAll('[data-review]')) btn.disabled = ui.busy || !ui.reviewable;
+  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) btn.disabled = ui.busy || !ui.reviewable;
+  const approve = button('approved');
+  if (approve) approve.textContent = t('approve');
+  const sendBack = button('notes');
+  if (sendBack) {
+    sendBack.textContent = ui.noting ? t('sendBackWithNote') : t('sendBack');
+    sendBack.setAttribute('aria-expanded', String(ui.noting));
+    sendBack.setAttribute('aria-controls', 'review-form');
+  }
+  q('[data-review-form]').hidden = !ui.noting;
+  q('[data-review-cancel]').disabled = ui.busy;
   q('#review-note').disabled = !ui.reviewable;
   for (const [sel, text] of [['[data-review-msg]', ui.message], ['[data-review-hint]', ui.reviewable ? ui.hint : ui.key ? NOT_ON_A_PR : '']]) {
     const el = q(sel);
     el.hidden = !text;
     el.textContent = text;
   }
+}
+
+/** Send back was pressed: the note field opens and takes focus (on a phone the sheet opens to hold it) */
+function openNote() {
+  ui.noting = true;
+  ui.message = '';
+  paint();
+  if (isPhone()) expandSheet('proposal');
+  q('#review-note').focus();
+}
+
+/** Cancel: the field closes, what was typed goes, and focus goes back to Send back */
+function closeNote() {
+  ui.noting = false;
+  ui.message = '';
+  q('#review-note').value = '';
+  paint();
+  const sendBack = button('notes');
+  if (sendBack) sendBack.focus();
 }
 
 /** hooks.bar: the bar was drawn. Mount, and when it is another proposal than the one shown, start again for it. */
@@ -111,6 +147,7 @@ function onBar(open) {
   ui.reviewable = !!key && isReviewable(state.proposalSource);
   ui.review = null;
   ui.busy = false;
+  ui.noting = false;
   ui.message = ui.hint = '';
   const note = q('#review-note');
   if (note) note.value = '';
@@ -131,8 +168,12 @@ async function loadReview(key) {
 }
 
 function onClick(e) {
-  const btn = e.target.closest ? e.target.closest('[data-review]') : null;
-  if (btn && !ui.busy) sendReview(btn.dataset.review);
+  if (ui.busy || !e.target.closest) return;
+  if (e.target.closest('[data-review-cancel]')) { closeNote(); return; }
+  const btn = e.target.closest('[data-review]');
+  if (!btn || btn.disabled) return;
+  if (btn.dataset.review === 'notes' && !ui.noting) openNote(); // the first press opens the field, the second sends
+  else sendReview(btn.dataset.review);
 }
 
 /**
@@ -143,13 +184,15 @@ function onClick(e) {
 export async function sendReview(verdict) {
   if (!state.proposal || !slugOf() || !mount() || !ui.reviewable) return false;
   const noteEl = q('#review-note');
-  const note = noteEl.value;
+  const note = verdict === 'notes' ? noteEl.value : ''; // an approval takes no note
   ui.hint = '';
   if (verdict === 'notes') {
     const problem = sendBackProblem(note);
     if (problem) {
       ui.message = problem;
+      ui.noting = true; // the refusal is about the note: show it
       paint();
+      if (isPhone()) expandSheet('proposal');
       noteEl.focus();
       return false;
     }
@@ -177,7 +220,10 @@ export async function sendReview(verdict) {
   ui.review = { verdict: saved.verdict, at: saved.at };
   ui.hint = editsHint(verdict, body.edits.length);
   noteEl.value = '';
+  const wasNoting = ui.noting;
+  ui.noting = false;
   paint();
+  if (wasNoting && verdict === 'notes') { const sendBack = button('notes'); if (sendBack) sendBack.focus(); }
   refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;
@@ -208,5 +254,5 @@ export function resetReviewForTests(clock = () => Date.now()) {
   wired = false;
   root = null;
   now = clock;
-  Object.assign(ui, { key: null, reviewable: false, review: null, busy: false, message: '', hint: '' });
+  Object.assign(ui, { key: null, reviewable: false, review: null, busy: false, noting: false, message: '', hint: '' });
 }

@@ -144,18 +144,18 @@ describe('the generated markup', () => {
   });
 
   it('the review bar reads the words, as text', () => {
-    setStrings({ approve: 'Ship it', sendBack: 'Not yet', reviewNoteLabel: 'Tell the bot', reviewNotePlaceholder: '<b>why?</b>' });
+    setStrings({ approve: 'Ship it', sendBack: 'Not yet', sendBackWithNote: 'Not yet, because', reviewNoteLabel: 'Tell the bot', reviewNotePlaceholder: '<b>why?</b>' });
     vi.stubGlobal('fetch', async () => ({ ok: false, status: 404 }));
     state.proposal = { title: 'p' };
     state.proposalSlug = 's';
     state.proposalSource = 'pull/3';
     initReview();
     const root = $('review');
-    expect(root.querySelector('[data-review="approved"]').textContent).toBe('Ship it');
-    expect(root.querySelector('[data-review="notes"]').textContent).toBe('Not yet');
+    const bar = $('proposal-bar');
+    expect(bar.querySelector('[data-review="approved"]').textContent).toBe('Ship it');
+    expect(bar.querySelector('[data-review="notes"]').textContent).toBe('Not yet');
     expect(root.querySelector('label').textContent).toBe('Tell the bot');
     expect($('review-note').getAttribute('placeholder')).toBe('<b>why?</b>');
-    expect(root.getAttribute('aria-label')).toBe('Ship it or Not yet');
     state.proposal = null;
   });
 });

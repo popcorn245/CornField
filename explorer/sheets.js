@@ -165,7 +165,7 @@ function peekClick(id, e) {
   if (!isPhone() || model.isExpanded(id)) return;
   const target = e.target;
   if (target.closest && target.closest('.hx-sheet-handle')) return; // the handle's own listener
-  if (target.closest && target.closest('select, input, textarea')) return; // the speed menu works from the peek
+  if (target.closest && target.closest('select, input, textarea, [data-peek-ok]')) return; // the speed menu, and the proposal's Send back, Approve and mode switcher, work from the peek
   const action = target.closest && target.closest('[data-action]');
   if (action && /close/.test(action.dataset.action)) return;
   e.preventDefault();
