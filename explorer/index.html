@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="/explorer/tokens.css" />
   <link rel="stylesheet" href="/explorer/explorer.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
+  <!-- The config's brand (server/server.js puts it here): the favicon, the web app manifest and the tab colour -->
+  <!--@brand-->
   <!-- The config's theme (server/server.js puts it here, so it comes after cornfield's own CSS): font stylesheets, the repo's theme.css, a named theme -->
   <!--@theme-->
   <!-- Light or dark on <html data-theme>, and the named theme on <html data-theme-name>, before the first paint (theme-boot.js; theme.js
@@ -24,8 +26,8 @@
     <!-- The page's one heading, for a screen reader's list of headings (plugins.js puts the config's title in it) -->
     <h1 id="cf-heading" class="hx-sr-only">cornfield: the map</h1>
     <div class="hx-header-left" data-corn="header-left">
-      <button type="button" class="hx-brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
-        <span class="hx-live-dot"></span>
+      <button type="button" id="cf-brand" class="hx-brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
+        <span id="cf-mark" class="hx-live-dot"></span>
         <span id="cf-title" class="hx-title gradient-text">cornfield</span>
       </button>
 
