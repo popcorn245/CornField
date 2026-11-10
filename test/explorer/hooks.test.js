@@ -130,8 +130,12 @@ describe('the mounted page', () => {
     expect(hook('preset-house')).toBe(document.getElementById('preset-house-btn'));
     expect(hook('proposals-button')).toBe(document.getElementById('proposal-btn'));
     expect(hook('forge-button')).toBe(document.getElementById('forge-btn'));
-    expect(hook('theme-toggle')).toBe(document.getElementById('theme-toggle-btn'));
+    expect(hook('theme-toggle').getAttribute('aria-labelledby')).toBe('theme-label');
     expect(hook('links')).toBe(document.getElementById('cf-links'));
+    expect(hook('account-button')).toBe(document.getElementById('account-btn'));
+    expect(hook('account-menu')).toBe(document.getElementById('account-menu'));
+    expect(hook('account-menu').contains(hook('proposals-button'))).toBe(true);
+    expect(hook('zoom')).toBeNull(); // the zoom buttons are gone (CF-41)
   });
 
   it('has each panel', () => {

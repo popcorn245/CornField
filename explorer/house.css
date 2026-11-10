@@ -49,16 +49,12 @@
 .hx-house-more { position: absolute; left: 0; top: 0; min-width: 34px; height: 24px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-added); border-radius: var(--corn-radius-pill); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-added-text); font-weight: 700; font-size: var(--corn-text-sm); line-height: 1; font-family: inherit; cursor: pointer; pointer-events: auto; }
 .hx-house-more:hover, .hx-house-more:focus-visible { background: var(--corn-added-text); color: var(--corn-ground); outline: none; }
 
-/* The House button joins the toolbar: up to a wide screen the live chip's line is cut shorter (the whole line is in its
-   menu and its title), and on a narrow phone the toolbar tightens, so the toolbar still fits on one line */
+/* Up to a wide screen the live chip's line is cut shorter (the whole line is in its menu and its title), so the header still fits on one line */
 @media (min-width: 768px) and (max-width: 1439px) { .hx-live-chip-text { max-width: 140px; } }
-@media (max-width: 420px) {
-  .hx-header .hx-header-left, .hx-header .hx-header-right { gap: var(--corn-space-1); }
-  .hx-header .hx-btn { padding-left: var(--corn-space-2); padding-right: var(--corn-space-2); }
-}
 
 @media (max-width: 767px) {
-  .hx-house-bar { top: 8px; left: 8px; right: 8px; }
+  /* Under the Layers chip, the live chip and Fit, which sit on the map's top edge on a phone (explorer.css) */
+  .hx-house-bar { top: calc(var(--corn-space-4) * 2 + 44px); left: 8px; right: 8px; }
   .hx-house-chip { min-height: 32px; padding: var(--corn-space-1) var(--corn-space-4); }
   .hx-house-people { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 }

@@ -14,10 +14,10 @@
 export const STRINGS = Object.freeze({
   // The header
   layers: 'Layers',
-  dataFlow: 'Data flow',
+  dataFlow: 'Flow',
   house: 'House',
   proposals: 'Proposals',
-  issuesAndPrs: 'Issues & PRs',
+  issuesAndPrs: 'Work',
   searchPlaceholder: 'Search...',
   signOut: 'Sign out',
   poweredBy: 'powered by cornfield',

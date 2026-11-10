@@ -11,7 +11,7 @@ import path from 'node:path';
 import { EXPLORER, loadSample } from '../helpers.js';
 import { fakeGl, fakeCanvas, callsOf, recordingCtx } from './fake-gl.js';
 import {
-  LIGHT_GROUND, DARK_GROUND, LINE_GAIN, MIN_CONTRAST, lightColor, lightenScene, nextChoice, parseColor, resolveTheme, themeChoiceFrom, themed, themeWords, toHsl,
+  LIGHT_GROUND, DARK_GROUND, LINE_GAIN, MIN_CONTRAST, lightColor, lightenScene, parseColor, resolveTheme, themeChoiceFrom, themed, toHsl,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/theme-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -69,12 +69,6 @@ describe('which theme', () => {
     expect(themeChoiceFrom('?renderer=canvas2d', 'dark')).toEqual({ choice: 'dark', fromAddress: false });
     expect(themeChoiceFrom('?theme=purple', 'nope')).toEqual({ choice: 'system', fromAddress: false });
     expect(themeChoiceFrom('', null)).toEqual({ choice: 'system', fromAddress: false });
-  });
-
-  it('steps system, light, dark, system on the toggle, and says what it is in words', () => {
-    expect([nextChoice('system'), nextChoice('light'), nextChoice('dark')]).toEqual(['light', 'dark', 'system']);
-    expect(themeWords('system', 'dark')).toBe('Theme: follows the system (dark now)');
-    expect(themeWords('light', 'light')).toBe('Theme: light');
   });
 });
 
@@ -320,8 +314,8 @@ describe('tokens.css: the light tokens', () => {
   // light text on a deep fill, as it did before the tokens; on the dark ground they are bright, and it reads dark on bright.
   // A light hue too pale for that (the diff's added and edit) is mixed toward the text colour first.
   const SOLID_FILLS = [
-    '.hx-btn--active', '.hx-btn--preset.hx-btn--active', '.hx-seg-btn[aria-pressed="true"]', '.hx-forge-tab[aria-pressed="true"]',
-    '.hx-btn--forge[aria-expanded="true"]', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
+    '.hx-btn--active', '.hx-view-btn[aria-pressed="true"]', '.hx-account-seg-btn[aria-pressed="true"]', '.hx-seg-btn[aria-pressed="true"]', '.hx-forge-tab[aria-pressed="true"]',
+    '.hx-work[aria-expanded="true"]', '.hx-avatar', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
     '.hx-whatif .hx-btn--active', '.hx-house-chip[aria-pressed="true"]', '.hx-house-more:hover',
   ];
   it.each(SOLID_FILLS)('gives the text on the solid fill %s at least 4.5:1 in both themes', (selector) => {

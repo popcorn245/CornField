@@ -423,17 +423,17 @@ describe('the two spots that were under AA', () => {
   const state = (mode) => resolveProps([tokens], { mode });
   const solid = (p, token, on) => over(resolveColor(p, token), on);
 
-  it('keeps opacity off the text of an off layer toggle row and of the dimmed Layers button', () => {
-    for (const sel of ['.hx-toggle-row.is-off', '.hx-btn--dim', '.hx-toggle-row.is-off .hx-toggle-name', '.hx-toggle-row.is-off .hx-count', '.hx-toggle-row.is-off .hx-tick']) {
+  it('keeps opacity off the text of an off layer toggle row and of the dimmed Layers chip', () => {
+    for (const sel of ['.hx-toggle-row.is-off', '.hx-layers-chip--dim', '.hx-toggle-row.is-off .hx-toggle-name', '.hx-toggle-row.is-off .hx-count', '.hx-toggle-row.is-off .hx-tick']) {
       expect(ruleFor(sel).opacity, sel).toBeUndefined();
     }
     // the dimmed look is the colour, and the dot
     expect(ruleFor('.hx-toggle-row.is-off').color).toBe('var(--corn-text-3)');
-    expect(ruleFor('.hx-btn--dim').color).toBe('var(--corn-text-3)');
+    expect(ruleFor('.hx-layers-chip--dim').color).toBe('var(--corn-text-3)');
     expect(ruleFor('.hx-toggle-row.is-off .hx-dot').opacity).toBeDefined();
   });
 
-  it('reads at least 4.5:1 for the off row\'s text on its fill and for the dimmed button, in both themes', () => {
+  it('reads at least 4.5:1 for the off row\'s text on its fill and for the dimmed Layers chip, in both themes', () => {
     for (const mode of ['light', 'dark']) {
       const p = state(mode);
       const ground = solid(p, '--corn-ground', [0, 0, 0, 1]);
@@ -443,7 +443,8 @@ describe('the two spots that were under AA', () => {
       const text3 = resolveColor(p, '--corn-text-3');
       expect(contrast(toHex(text3), toHex(off)), `${mode}: off row`).toBeGreaterThanOrEqual(4.5);
       const surface2 = solid(p, '--corn-surface-2', ground);
-      expect(contrast(toHex(text3), toHex(surface2)), `${mode}: dimmed button`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(toHex(text3), toHex(surface2)), `${mode}: dimmed chip`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(toHex(text3), toHex(panel)), `${mode}: dimmed chip on a phone's map`).toBeGreaterThanOrEqual(4.5);
       // its hover reads --corn-text-2 on --corn-surface-2 (and the base button's hover, surface-3, in .hx-btn:hover)
       expect(contrast(toHex(resolveColor(p, '--corn-text-2')), toHex(solid(p, '--corn-surface-3', ground)))).toBeGreaterThanOrEqual(4.5);
     }

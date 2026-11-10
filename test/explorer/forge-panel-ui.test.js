@@ -348,7 +348,7 @@ describe('a pull request lights the map', () => {
     expect(sceneNode('core-meals')).toMatchObject({ alpha: 1, halo: 'match' });
     expect(sceneNode('root').alpha).toBeLessThan(0.5);
     expect($('forge-btn-lit').textContent).toBe('#12');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Issues and pull requests, pull request 12 selected');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, pull request 12 selected');
     expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed.');
   });
 
@@ -961,7 +961,7 @@ describe('deploys light the map', () => {
     expect(q('.hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
     expect(qa('[data-forge-node]').map((b) => b.textContent)).toEqual(['web', 'app', 'db']);
     expect($('forge-btn-lit').textContent).toBe('deploy');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Issues and pull requests, a deploy selected');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, a deploy selected');
     expect(await said()).toBe('Deploy Deploy web of main, succeeded: 3 nodes restarted and lit. Turned on the Infra and Containers layers.');
   });
 
@@ -1243,6 +1243,14 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     click(q('#forge-detail .hx-forge-back'));
     expect([$('forge-list').hidden, $('forge-detail').hidden, $('notes-open').hidden]).toEqual([false, true, false]);
     expect(document.activeElement).toBe(q('[data-forge-pr="12"]'));
+  });
+
+  it('hides the account menu\'s Proposals entry, which Specs replaces; without the panel the entry stays', async () => {
+    fakeServer();
+    expect(mount({ forge: null })).toBe(false);
+    expect($('proposal-wrap').hidden).toBe(false);
+    mount();
+    expect($('proposal-wrap').hidden).toBe(true);
   });
 
   it('opens on the tab it is asked for, and the toggles of the header (data-action toggle-forge) open and close it', async () => {

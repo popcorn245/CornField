@@ -1397,7 +1397,7 @@ function paintButton() {
     tag.hidden = !lit;
     tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
   }
-  btn.setAttribute('aria-label', ui.runSel ? 'Issues and pull requests, a run lit on the map' : ui.thread !== null ? `Issues and pull requests, thread ${ui.thread} selected` : ui.deployItem ? 'Issues and pull requests, a deploy selected' : lit ? `Issues and pull requests, pull request ${ui.selected} selected` : 'Issues and pull requests');
+  btn.setAttribute('aria-label', `${t('issuesAndPrs')}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2216,6 +2216,9 @@ export function initForgePanel(config, opts = {}) {
   if (opts.clock) now = opts.clock;
   for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
   panel.hidden = false;
+  // The Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without the panel (no forge, or no sign-in)
+  const proposalsEntry = $('proposal-wrap');
+  if (proposalsEntry) proposalsEntry.hidden = true;
   // `threads: false` in the config turns the tab off; a server that does not say has threads
   const threadsOn = config.threads !== false;
   const tab = panel.querySelector('[data-forge-kind="threads"]');

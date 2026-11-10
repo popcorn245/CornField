@@ -76,7 +76,7 @@ It prints the counts (`4 added · 1 changed · 0 removed · 3 scenarios`), then 
 On the map:
 
 ```sh
-npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the header
+npx cornfield serve        # http://127.0.0.1:3350, then Proposals in the account menu (with a forge and sign-in: the Specs tab of the Work panel)
 ```
 
 or open one straight away at `http://127.0.0.1:3350/?proposal=0002-checkout`. A draft in a worktree shows in the list with the worktree's name. A worktree starts as a copy of the checkout, so a worktree file with the same contents as the checkout's file of the same name (line endings ignored) is not a draft and is not listed.
@@ -114,7 +114,7 @@ With a `forge` and [sign-in](sign-in.md) configured, the list also holds the pro
 
 **Mockups are untrusted.** A branch can put anything in an HTML or SVG file, so cornfield never lets one run script against its own page. Every mockup is served at `/proposals/<slug>/mockups/<n>` (by its position in the list, never by a path in the request; behind the sign-in and the Host check like every route) with the type its extension names, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: sandbox; default-src 'none'; …` (no script, no network, an opaque origin, even if the address is opened on its own), and only cornfield's own page may frame it. The explorer shows pictures and SVG in an `<img>`, and HTML in an `<iframe sandbox>` with no `allow-` keyword at all. A file is at most 5 MB, and a link that leads out of the proposals folder is not followed. Do not put a secret in a mockup: it is read by everyone who can open the proposal.
 
-**Review from a script or a chat: the review API.** The buttons are not the only way in. A maintainer makes a **review token** in the dashboard (**Review tokens** in the header: a label, optionally a number of days, then **Make a token**; the token is shown once, so copy it then) and a script, a chat bot or a reaction handler sends the same Approve or Send back with it:
+**Review from a script or a chat: the review API.** The buttons are not the only way in. A maintainer makes a **review token** in the dashboard (**Review tokens** in the account menu: a label, optionally a number of days, then **Make a token**; the token is shown once, so copy it then) and a script, a chat bot or a reaction handler sends the same Approve or Send back with it:
 
 ```sh
 curl -X POST https://cornfield.example.org/api/reviews \

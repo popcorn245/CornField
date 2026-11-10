@@ -21,24 +21,32 @@
   <script src="/explorer/theme-boot.js"></script>
 </head>
 <body>
-  <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->
+  <!-- Top bar, left to right: brand, the View switch (Map, Flow, House, Fit), the Layers chip, the live chip, search, Work, and the one account menu -->
   <header class="hx-header" data-corn="header">
     <!-- The page's one heading, for a screen reader's list of headings (plugins.js puts the config's title in it) -->
     <h1 id="cf-heading" class="hx-sr-only">cornfield: the map</h1>
     <div class="hx-header-left">
+      <!-- The brand: its logo and wordmark (plugins.js puts the config's in their place); a click resets the view -->
       <button type="button" id="cf-brand" class="hx-brand" data-corn="brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
-        <span id="cf-mark" class="hx-live-dot"></span>
-        <span id="cf-title" class="hx-title gradient-text">cornfield</span>
+        <svg id="cf-mark" class="hx-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><rect class="hx-mark-bg" x="3" y="3" width="18" height="18" rx="5" /><circle class="hx-mark-fg" cx="9" cy="10" r="2" /><circle class="hx-mark-fg" cx="15" cy="14" r="2" /><path class="hx-mark-line" d="M9 10l6 4" /></svg>
+        <span id="cf-title" class="hx-title">cornfield</span>
       </button>
 
-      <div class="hx-menu-wrap">
-        <button type="button" id="legend-toggle-btn" class="hx-btn" data-action="toggle-layers-menu" aria-label="Layers" data-corn-string-aria-label="layers" aria-expanded="false" aria-controls="legend-dropdown" title="Toggle Architecture Layers" data-corn="layers-button">
-          <span class="hx-dots" aria-hidden="true">
-            <span style="background:#6366f1"></span><span style="background:#06b6d4"></span><span style="background:#38bdf8"></span><span style="background:#10b981"></span><span style="background:#a855f7"></span><span style="background:#ec4899"></span><span style="background:#fb923c"></span>
-          </span>
-          <span class="hx-only-wide" data-corn-string="layers">Layers</span>
-          <span class="hx-faint" aria-hidden="true">▾</span>
+      <!-- The View switch: one of the three is on (aria-pressed); Fit is the small button at its end -->
+      <div class="hx-view" role="group" aria-label="View">
+        <button type="button" id="preset-map-btn" class="hx-view-btn" data-action="preset-map" aria-pressed="true" title="The map: every node, in its place">Map</button>
+        <!-- The data-flow preset: browser -> servers -> API -> tables -> services -> outside, animated -->
+        <button type="button" id="preset-dataflow-btn" class="hx-view-btn" data-action="preset-dataflow" aria-pressed="false" data-corn-string="dataFlow" title="Show only how data moves: browser, app servers, API, tables, services, outside systems" data-corn="preset-dataflow">Flow</button>
+        <!-- The House preset (explorer/house.js, spec 0029): the floor plan with its devices, machines and people, the software around it -->
+        <button type="button" id="preset-house-btn" class="hx-view-btn" data-action="preset-house" aria-pressed="false" data-corn-string="house" title="Show the house: each floor's rooms with their devices and machines, the people beside it, the software around it" data-corn="preset-house">House</button>
+        <button type="button" id="fit-btn" class="hx-view-fit" data-action="fit" title="Fit to the screen" aria-label="Fit to the screen" data-corn-kind="icon">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" /></svg>
         </button>
+      </div>
+
+      <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left -->
+      <div class="hx-menu-wrap hx-layers">
+        <button type="button" id="legend-toggle-btn" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" aria-controls="legend-dropdown" data-corn="layers-button"><span data-corn-string="layers">Layers</span><span id="layers-count" class="hx-layers-count"></span></button>
 
         <!-- Interactive section toggles and the legend -->
         <div id="legend-dropdown" class="hx-menu glass" hidden data-corn="layers-menu">
@@ -88,41 +96,6 @@
         </div>
       </div>
 
-      <!-- The data-flow preset: browser -> servers -> API -> tables -> services -> outside, animated -->
-      <button type="button" id="preset-dataflow-btn" class="hx-btn hx-btn--preset" data-action="preset-dataflow" aria-pressed="false" aria-label="Data flow" data-corn-string-aria-label="dataFlow" title="Show only how data moves: browser, app servers, API, tables, services, outside systems" data-corn="preset-dataflow">
-        <span aria-hidden="true">⇄</span>
-        <span class="hx-only-wide" data-corn-string="dataFlow">Data flow</span>
-      </button>
-
-      <!-- The House preset (explorer/house.js, spec 0029): the floor plan with its devices, machines and people, the software around it -->
-      <button type="button" id="preset-house-btn" class="hx-btn hx-btn--preset" data-action="preset-house" aria-pressed="false" aria-label="House" data-corn-string-aria-label="house" title="Show the house: each floor's rooms with their devices and machines, the people beside it, the software around it" data-corn="preset-house">
-        <span aria-hidden="true">⌂</span>
-        <span class="hx-only-wide" data-corn-string="house">House</span>
-      </button>
-
-      <!-- Proposals: what a change would add, change and remove, drawn on the map (proposal.js) -->
-      <div id="proposal-wrap" class="hx-menu-wrap">
-        <button type="button" id="proposal-btn" class="hx-btn hx-btn--proposal" data-action="toggle-proposals-menu" aria-haspopup="true" aria-expanded="false" aria-label="Proposals" data-corn-string-aria-label="proposals" title="Open a proposal: what a change would add, change and remove" data-corn="proposals-button">
-          <span aria-hidden="true">✎</span>
-          <span class="hx-only-wide" data-corn-string="proposals">Proposals</span>
-          <span class="hx-faint">▾</span>
-        </button>
-        <div id="proposal-menu" class="hx-menu hx-menu--proposals glass" hidden data-corn="proposals-menu"></div>
-      </div>
-
-      <!-- Issues and pull requests (explorer/forge-panel.js): shown only when the config names a forge -->
-      <button type="button" id="forge-btn" class="hx-btn hx-btn--forge" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Issues and pull requests" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
-        <span aria-hidden="true">⎇</span>
-        <span class="hx-only-wide" data-corn-string="issuesAndPrs">Issues &amp; PRs</span>
-        <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
-      </button>
-
-      <!-- Review tokens (explorer/review-tokens.js): shown only when somebody is signed in to a forge -->
-      <button type="button" id="tokens-btn" class="hx-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="tokens-dialog" aria-label="Review tokens" title="Review tokens: let a script or a chat bot approve or send back a proposal as you" hidden data-corn="tokens-button">
-        <span aria-hidden="true">⚿</span>
-        <span class="hx-only-wide">Review tokens</span>
-      </button>
-
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
       <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
         <button type="button" id="live-chip" class="hx-btn hx-live-chip" aria-haspopup="true" aria-expanded="false" aria-label="Live layer" data-corn="live-chip">
@@ -134,41 +107,65 @@
     </div>
 
     <div class="hx-header-right">
-      <button type="button" id="mobile-search-toggle" class="hx-btn hx-btn--icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">⌕</button>
-
-      <div class="hx-search hx-only-desktop" role="search" data-corn="search">
-        <input type="text" id="node-search" class="hx-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" data-corn="search-input" />
-      </div>
-
-      <button type="button" id="freeform-toggle-btn" class="hx-btn" data-action="toggle-freeform" title="Toggle between Orbit parent clustering and freeform node dragging" data-corn="layout-toggle">
-        <span id="freeform-toggle-icon" aria-hidden="true">🔒</span>
-        <span class="hx-only-wide" id="freeform-toggle-label">Orbit</span>
+      <!-- Search: a field with its key hint on a desktop; an icon that opens the search bar on a phone -->
+      <button type="button" id="mobile-search-toggle" class="hx-hdr-icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">
+        <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
       </button>
 
-      <button type="button" id="reset-positions-btn" class="hx-btn hx-btn--quiet" data-action="reset-positions" title="Reset custom dragged positions back to orbit" hidden data-corn-kind="quiet">Reset Layout</button>
-
-      <div class="hx-zoom hx-only-desktop" data-corn="zoom">
-        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In" aria-label="Zoom in" data-corn-kind="icon">+</button>
-        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out" aria-label="Zoom out" data-corn-kind="icon">−</button>
-        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View" aria-label="Reset the view" data-corn-kind="icon">⟲</button>
-        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit to the screen" data-corn-kind="icon">⛶</button>
+      <div class="hx-search" role="search" data-corn="search">
+        <svg class="hx-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
+        <input type="text" id="node-search" class="hx-search-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" aria-keyshortcuts="/" data-corn="search-input" />
+        <kbd class="hx-kbd" aria-hidden="true">/</kbd>
       </div>
 
-      <!-- Light, dark or the system's (theme.js): steps through them; its label says which is on -->
-      <button type="button" id="theme-toggle-btn" class="hx-btn hx-btn--icon" data-action="cycle-theme" aria-label="Theme: follows the system. Change theme" title="Theme: follows the system" data-corn="theme-toggle" data-corn-kind="icon">
-        <svg class="hx-theme-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
-          <!-- system: half a disc; light: a sun; dark: a moon (theme.js shows the one for the choice) -->
-          <g data-icon="system"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" /></g>
-          <g data-icon="light" hidden><circle cx="8" cy="8" r="3" fill="currentColor" /><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></g>
-          <g data-icon="dark" hidden><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" fill="currentColor" /></g>
-        </svg>
+      <!-- The Work toggle (explorer/forge-panel.js): opens the Work panel; shown only when the config names a forge -->
+      <button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
+        <span data-corn-string="issuesAndPrs">Work</span>
+        <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
       </button>
 
-      <!-- The named themes of the config (`theme.names`): filled and shown by explorer/theme-names.js; hidden when there are none -->
-      <select id="theme-name-select" class="hx-forge-select" style="width:auto;max-width:9rem" aria-label="Theme" title="Theme" data-corn="theme-picker" hidden></select>
+      <!-- The one account menu (explorer/account-menu.js): who, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it -->
+      <div class="hx-menu-wrap hx-account">
+        <button type="button" id="account-btn" class="hx-account-btn" aria-expanded="false" aria-controls="account-menu" aria-label="Account menu" data-corn="account-button">
+          <span id="account-initial" class="hx-avatar" aria-hidden="true"></span>
+          <svg class="hx-account-caret" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6l4 4 4-4" /></svg>
+        </button>
 
-      <!-- The config's links (cornfield.config.js `links`), filled by explorer/plugins.js -->
-      <span id="cf-links" class="hx-links" data-corn="links"></span>
+        <div id="account-menu" class="hx-menu hx-account-menu glass" hidden data-corn="account-menu">
+          <p id="account-who" class="hx-account-who" hidden></p>
+
+          <div class="hx-account-row">
+            <span id="theme-label" class="hx-account-label">Theme</span>
+            <!-- System, Dark or Light (theme.js keeps aria-pressed) -->
+            <div class="hx-account-seg" role="group" aria-labelledby="theme-label" data-corn="theme-toggle">
+              <button type="button" class="hx-account-seg-btn" data-action="set-theme" data-choice="system" aria-pressed="true">System</button>
+              <button type="button" class="hx-account-seg-btn" data-action="set-theme" data-choice="dark" aria-pressed="false">Dark</button>
+              <button type="button" class="hx-account-seg-btn" data-action="set-theme" data-choice="light" aria-pressed="false">Light</button>
+            </div>
+          </div>
+          <!-- The named themes of the config (`theme.names`): filled and shown by explorer/theme-names.js; hidden when there are none -->
+          <select id="theme-name-select" class="hx-account-select" aria-label="Named theme" title="Named theme" data-corn="theme-picker" hidden></select>
+
+          <button type="button" id="freeform-toggle-btn" class="hx-account-item" role="switch" aria-checked="false" data-action="toggle-freeform" title="Drag nodes anywhere, instead of the orbit that clusters them by parent" data-corn="layout-toggle">
+            <span>Freeform layout</span>
+            <span class="hx-switch" aria-hidden="true"></span>
+          </button>
+          <button type="button" id="reset-positions-btn" class="hx-account-item hx-account-item--sub" data-action="reset-positions" title="Put the dragged nodes back in their orbit" hidden data-corn-kind="quiet">Reset positions</button>
+
+          <!-- Review tokens (explorer/review-tokens.js): shown only when somebody is signed in to a forge -->
+          <button type="button" id="tokens-btn" class="hx-account-item" aria-haspopup="dialog" aria-expanded="false" aria-controls="tokens-dialog" title="Review tokens: let a script or a chat bot approve or send back a proposal as you" hidden data-corn="tokens-button">Review tokens</button>
+
+          <!-- Proposals: what a change would add, change and remove, drawn on the map (proposal.js). Only without the Work panel (no forge, or no sign-in): with it, its Specs tab lists them and forge-panel.js hides this -->
+          <div id="proposal-wrap">
+            <button type="button" id="proposal-btn" class="hx-account-item" data-action="toggle-proposals-menu" aria-haspopup="true" aria-expanded="false" title="Open a proposal: what a change would add, change and remove" data-corn="proposals-button"><span data-corn-string="proposals">Proposals</span><span class="hx-faint" aria-hidden="true">▾</span></button>
+            <div id="proposal-menu" class="hx-menu hx-menu--proposals" hidden data-corn="proposals-menu"></div>
+          </div>
+
+          <!-- The config's links (cornfield.config.js `links`), the forge and Docs, then Sign out: filled by explorer/plugins.js -->
+          <div id="cf-links" class="hx-links" data-corn="links"></div>
+          <p id="cf-powered" class="hx-account-foot" data-corn="powered-by"></p>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -350,13 +347,6 @@
         <button type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>
       </div>
     </aside>
-    </div>
-
-    <!-- Mobile zoom and fit, within thumb reach -->
-    <div class="hx-mobile-zoom glass hx-only-mobile" data-corn="zoom">
-      <button type="button" class="hx-zoom-btn" data-action="zoom-in" aria-label="Zoom In" data-corn-kind="icon">+</button>
-      <button type="button" class="hx-zoom-btn" data-action="zoom-out" aria-label="Zoom Out" data-corn-kind="icon">−</button>
-      <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit View" data-corn-kind="icon">⛶</button>
     </div>
 
     <div class="hx-hint glass" data-corn="hint">

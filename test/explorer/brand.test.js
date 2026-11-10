@@ -27,7 +27,7 @@ describe('applyBranding with a brand', () => {
     const logo = b.querySelector('img[data-corn="brand-logo"]');
     expect(logo.getAttribute('src')).toBe('/cornfield/brand/logo.svg');
     expect(logo.getAttribute('alt')).toBe('');
-    expect(b.querySelector('.hx-live-dot')).toBeNull();
+    expect(b.querySelector('.hx-mark')).toBeNull();
     expect(document.getElementById('cf-title').textContent).toBe('Acme home');
   });
 
@@ -48,35 +48,38 @@ describe('applyBranding with a brand', () => {
     expect(document.getElementById('cf-title').textContent).toBe('Acme home');
     expect(document.getElementById('cf-heading').textContent).toBe('Acme: the map');
     expect(button().getAttribute('aria-label')).toBe('Acme: reset the view');
-    expect(button().querySelector('.hx-live-dot')).not.toBeNull();
+    expect(button().querySelector('.hx-mark')).not.toBeNull();
   });
 
-  it('keeps "powered by cornfield" in the links area, with Sign out after it', () => {
-    applyBranding(document, { title: 'Acme home', links: [{ label: 'Repo', href: 'https://forge.example.test/acme' }], signIn: { login: 'maint' }, brand: BRAND });
+  it('keeps "powered by cornfield" as the footer line of the account menu, with its version, and Sign out in the links', () => {
+    applyBranding(document, { title: 'Acme home', version: '1.2.3', links: [{ label: 'Repo', href: 'https://forge.example.test/acme' }], signIn: { login: 'maint' }, brand: BRAND });
     const links = document.getElementById('cf-links');
-    const powered = links.querySelector('a[data-corn="powered-by"]');
-    expect(powered.textContent).toBe('powered by cornfield');
+    const powered = document.querySelector('#account-menu [data-corn="powered-by"] a');
+    expect(powered.textContent).toBe('powered by cornfield 1.2.3');
     expect(powered.getAttribute('href')).toBe('https://github.com/popcorn245/CornField#readme');
     expect(powered.getAttribute('rel')).toBe('noreferrer');
     expect(links.querySelector('.cf-sign-out')).not.toBeNull();
     expect(links.querySelector('a[href="https://forge.example.test/acme"]')).not.toBeNull();
-    expect(links.innerHTML.indexOf('powered by')).toBeLessThan(links.innerHTML.indexOf('cf-sign-out'));
+    expect(document.getElementById('account-menu').lastElementChild.dataset.corn).toBe('powered-by'); // the footer is the last line
   });
 
   it('puts in no image that is not the server\'s URL as given, and no markup from the name', () => {
     applyBranding(document, { title: 'x', links: [], signIn: false, brand: { ...BRAND, appName: '<img src=x onerror=alert(1)>', poweredBy: 'javascript:alert(1)' } });
     expect(document.getElementById('cf-links').innerHTML).toBe('');
+    expect(document.querySelector('[data-corn="powered-by"] a')).toBeNull(); // a link that is not https is not made
     expect(document.querySelectorAll('img[onerror]')).toHaveLength(0);
     expect(document.getElementById('cf-heading').textContent).toBe('<img src=x onerror=alert(1)>: the map');
   });
 });
 
 describe('applyBranding without a brand', () => {
-  it('leaves the mark, the name and the links as they were, and adds no "powered by"', () => {
+  it('leaves the mark, the name and the links as they were, and the footer is plain text, with no link', () => {
     applyBranding(document, { title: 'Acme home', links: [], signIn: false, brand: null });
     expect(button().getAttribute('aria-label')).toBe('cornfield: reset the view');
-    expect(button().querySelector('.hx-live-dot')).not.toBeNull();
+    expect(button().querySelector('.hx-mark')).not.toBeNull();
     expect(button().querySelector('img')).toBeNull();
     expect(document.getElementById('cf-links').innerHTML).toBe('');
+    expect(document.querySelector('[data-corn="powered-by"]').textContent).toBe('powered by cornfield');
+    expect(document.querySelector('[data-corn="powered-by"] a')).toBeNull();
   });
 });

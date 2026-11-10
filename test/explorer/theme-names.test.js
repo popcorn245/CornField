@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * Named themes on the page (docs/config.md#theme): theme-boot.js puts data-theme-name on <html> before the first paint, from
- * the viewer's pick in localStorage or else the config's default; the picker in the header switches it, and the pick is
+ * the viewer's pick in localStorage or else the config's default; the picker in the account menu switches it, and the pick is
  * remembered. The page still renders if storage is unavailable.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -37,10 +37,10 @@ beforeEach(() => {
 });
 
 describe('the header', () => {
-  it('has a small <select> next to the theme toggle, hidden until the config has names, with an existing class', () => {
+  it('has a <select> under the theme segment in the account menu, hidden until the config has names', () => {
     const html = explorerPage();
-    expect(html).toMatch(/<select id="theme-name-select" class="hx-forge-select"[^>]* hidden><\/select>/);
-    expect(html.indexOf('id="theme-name-select"')).toBeGreaterThan(html.indexOf('id="theme-toggle-btn"'));
+    expect(html).toMatch(/<select id="theme-name-select" class="hx-account-select"[^>]* hidden><\/select>/);
+    expect(html.indexOf('id="theme-name-select"')).toBeGreaterThan(html.indexOf('data-corn="theme-toggle"'));
     expect(html.indexOf('id="theme-name-select"')).toBeLessThan(html.indexOf('id="cf-links"'));
   });
 });

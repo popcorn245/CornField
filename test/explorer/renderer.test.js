@@ -236,7 +236,7 @@ describe('render.js', () => {
   });
 
   it('keeps every export other modules import', () => {
-    for (const name of ['render', 'resize', 'zoomBy', 'fitGraphToViewport', 'fitPadding', 'screenToWorld', 'isNodeVisible', 'getActiveSubgraph', 'ensureFlowLoop']) {
+    for (const name of ['render', 'resize', 'fitGraphToViewport', 'fitPadding', 'screenToWorld', 'isNodeVisible', 'getActiveSubgraph', 'ensureFlowLoop']) {
       expect(typeof (render       )[name], name).toBe('function');
     }
   });
@@ -256,7 +256,7 @@ describe('render.js', () => {
     const scene = render.getScene();
     for (let frame = 0; frame < 30; frame++) {
       state.camera.x += 5;
-      render.zoomBy(1.01);
+      state.camera.zoom *= 1.01;
       render.renderNow(); // a camera frame, and a packet frame: performance.now() moves between calls
     }
     render.fitGraphToViewport(40);

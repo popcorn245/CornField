@@ -56,7 +56,7 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 | `--corn-added-text`, the current proposal's border | `--corn-added` 12%, `--corn-surface-1` |
 | `--corn-ok`, a layer's tick; `--corn-ok`, `--corn-edit-text`, `--corn-bad`, `--corn-warn`, `--corn-text-3`, a run or PR state pill's border (its text colour) | `--corn-surface-2`, `--corn-surface-3` |
 
-The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the app name in the header (`--corn-brand-gradient` clipped to text: a logo or brand name has no contrast requirement, WCAG 1.4.3); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
+The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
 
 **What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
 
@@ -207,7 +207,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-accent-text` | the accent as text, an icon or a line (lighter than the fill on dark) (light) |
 | `--corn-accent-soft` | a tinted background of the accent |
 | `--corn-focus` | the focus ring's colour (light) |
-| `--corn-brand-gradient` | the wordmark's gradient (light) |
+| `--corn-brand-gradient` | a brand gradient a theme may use; cornfield's own header no longer draws it (since CF-41 the title is `--corn-text`) (light) |
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
 | `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft` | the same, as a tinted background |
@@ -382,7 +382,7 @@ Buttons have no `data-corn` of their own (unless they are a region's button, suc
 | `quiet` | a low-key button: Close, Refresh, Cancel, Sign out |
 | `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
 | `approve` | a button that commits: Approve, Land it, Open the build issue |
-| `icon` | a button that is only a symbol: ✕, zoom, theme |
+| `icon` | a button that is only a symbol: ✕, Fit |
 
 ### States: `data-corn-state`
 
@@ -406,16 +406,19 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | Hook | What it is |
 |---|---|
 | `header` | the top bar |
-| `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the small "powered by cornfield" link |
-| `links`, `link`, `sign-out` | the config's links at the right, one link, the Sign out form |
-| `layers-button`, `layers-menu` | the Layers button and its dropdown (layer rows and legends) |
-| `preset-dataflow`, `preset-house` | the view switch: the Data flow and House buttons |
-| `proposals-button`, `proposals-menu` | the Proposals button and its dropdown |
-| `forge-button`, `tokens-button` | the Issues & PRs button, the Review tokens button |
+| `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the "powered by cornfield" footer line of the account menu |
+| `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
+| `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
+| `preset-dataflow`, `preset-house` | the View switch (Map, Flow, House): the Flow and House buttons |
+| `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
+| `forge-button`, `tokens-button` | the Work toggle, the Review tokens entry of the account menu |
+| `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
 | `live-chip`, `live-menu` | the live layer's chip and its dropdown |
 | `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
-| `layout-toggle`, `zoom` | the Orbit / Freeform button; a zoom group (desktop, and the phone's) |
-| `theme-toggle`, `theme-picker` | the light / dark / system button, the named-theme menu |
+| `layout-toggle` | the Freeform layout switch in the account menu |
+| `theme-toggle`, `theme-picker` | the System / Dark / Light segment, the named-theme menu (both in the account menu) |
+
+The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, the wheel and `+` / `-` still zoom; Fit is in the View switch), `account-button` and `account-menu` are new, and `layout-toggle`, `theme-toggle`, `theme-picker`, `tokens-button`, `proposals-button`, `links`, `link`, `sign-out` and `powered-by` moved into the account menu. The `strings` keys are the same; `dataFlow` now reads "Flow" and `issuesAndPrs` "Work" by default, and `signOut` and `poweredBy` are drawn inside the menu.
 
 ### The map stage and its layers
 
@@ -454,7 +457,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | Hook | What it is |
 |---|---|
 | `tabs`, `tab` | a row of tabs, one tab |
-| `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu; a change in the open proposal; a scenario; a mockup; a review token |
+| `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
 | `badge` | a badge: the node panel's kind, a cloud kind or role, the "Agent" mark |
@@ -476,7 +479,7 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 - **The server sends only the overridden keys**, in `strings` of `/cornfield/config.json`. The key list is one table, `STRINGS` in `core/strings.js`; the config check, the browser and this page all read it, and a test fails when this table and `STRINGS` differ.
 - **Accessible names follow the words.** A control's name is its visible label: when you override a key, the visible text and the control's `aria-label` carry the same words. Where a name adds a fixed target, only the label part changes: with `stop: 'Halt'`, the button reads "Halt" and a screen reader says "Halt run 7". So a screen reader says what the screen shows. A longer word has to fit its button.
 
-**The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`.
+**The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
 Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
@@ -484,10 +487,10 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | Key | Default |
 |---|---|
 | `layers` | Layers |
-| `dataFlow` | Data flow |
+| `dataFlow` | Flow |
 | `house` | House |
 | `proposals` | Proposals |
-| `issuesAndPrs` | Issues & PRs |
+| `issuesAndPrs` | Work |
 | `searchPlaceholder` | Search... |
 | `signOut` | Sign out |
 | `poweredBy` | powered by cornfield |
