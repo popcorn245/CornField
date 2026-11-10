@@ -14,7 +14,7 @@ import path from 'node:path';
 import { createCornfieldServer } from '../../server/server.js';
 // @ts-expect-error plain JS modules, no declarations
 import { loadConfig } from '../../core/config.js';
-import { SAMPLE } from '../helpers.js';
+import { EXPLORER, SAMPLE } from '../helpers.js';
 
 const GOOGLE = 'https://fonts.googleapis.com/css2?family=Nunito&family=Pixelify+Sans&display=swap';
 
@@ -99,7 +99,8 @@ describe('a theme in the config', () => {
     const boot = head.indexOf('<script src="/explorer/theme-boot.js"></script>');
     expect(boot).toBeGreaterThan(0);
     const links = [...head.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/g)];
-    expect(links.length).toBe(5); // explorer.css, house.css, the font, theme.css, the named theme
+    const own = (fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8').match(/<link rel="stylesheet"/g) || []).length;
+    expect(links.length).toBe(own + 3); // cornfield's own (explorer.css, house.css…), then the font, theme.css and the named theme
     for (const l of links) expect(l.index, l[0]).toBeLessThan(boot);
     // nothing but whitespace between it and </head>, and the body after: no element is drawn before it runs
     expect(head.slice(boot).replace('<script src="/explorer/theme-boot.js"></script>', '').trim()).toBe('');
