@@ -102,15 +102,22 @@ function cspOf(importMap, theme) {
   ].join('; ');
 }
 
-/** `<html>` with the named themes on it, for theme-boot.js to read before the first paint (names are plain: core/theme.js THEME_NAME) */
-function themeHtmlTag(theme) {
+/** The config's theme names that may reach the page: plain ones only (core/theme.js THEME_NAME), and the default when it is one of them */
+function themeNamesOf(theme) {
   const names = Object.keys(theme.names || {}).filter((n) => THEME_NAME.test(n));
-  return names.length ? `<html lang="en" data-theme-names="${names.join(' ')}"${theme.default && names.includes(theme.default) ? ` data-theme-default="${theme.default}"` : ''}>` : '<html lang="en">';
+  return { names, fallback: theme.default && names.includes(theme.default) ? theme.default : null };
+}
+
+/** `<html>` with the named themes on it, for theme-boot.js to read before the first paint */
+function themeHtmlTag(theme) {
+  const { names, fallback } = themeNamesOf(theme);
+  return names.length ? `<html lang="en" data-theme-names="${names.join(' ')}"${fallback ? ` data-theme-default="${fallback}"` : ''}>` : '<html lang="en">';
 }
 
 /**
  * The links that go after cornfield's own stylesheets, in this order: the allow-listed font stylesheets, the repo's theme.css, and the
- * default named theme (theme-boot.js, run again after it, points that link at the viewer's choice). Always links, never inlined CSS.
+ * default named theme. explorer/index.html includes theme-boot.js once, after these, so it points that link at the viewer's choice
+ * before the first paint. Always links, never inlined CSS.
  */
 function themeHead(theme) {
   const out = [];
@@ -119,11 +126,8 @@ function themeHead(theme) {
     if (u) out.push(`<link rel="stylesheet" href="${escapeHtml(u.href)}" referrerpolicy="no-referrer" />`);
   }
   if (theme.css) out.push('<link rel="stylesheet" href="/cornfield/theme.css" data-cf-theme="css" />');
-  const names = Object.keys(theme.names || {});
-  if (names.length) {
-    out.push(`<link rel="stylesheet" id="cf-theme-name-css" href="${theme.default && names.includes(theme.default) ? `/cornfield/theme/${theme.default}.css` : ''}" data-cf-theme="name" />`);
-    out.push('<script src="/explorer/theme-boot.js"></script>');
-  }
+  const { names, fallback } = themeNamesOf(theme);
+  if (names.length) out.push(`<link rel="stylesheet" id="cf-theme-name-css"${fallback ? ` href="/cornfield/theme/${fallback}.css"` : ''} data-cf-theme="name" />`);
   return out.join('\n  ');
 }
 
@@ -283,8 +287,8 @@ export function createCornfieldServer(config, opts = {}) {
   const page = () => {
     const html = fs.readFileSync(path.join(EXPLORER_DIR, 'index.html'), 'utf8')
       .replace('<!--@importmap-->', importMap ? `<script type="importmap">${importMap}</script>` : '')
-      .replace('<html lang="en">', themeHtmlTag(theme))
-      .replace('<!--@theme-->', themeHead(theme))
+      .replace('<html lang="en">', () => themeHtmlTag(theme))
+      .replace('<!--@theme-->', () => themeHead(theme)) // a function, so a `$` in a font URL is not a replacement pattern
       .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(config.title)} · cornfield</title>`);
     return html;
   };

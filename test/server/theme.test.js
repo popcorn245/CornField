@@ -41,7 +41,7 @@ async function serve(theme, files = {}) {
   fs.cpSync(SAMPLE, root, { recursive: true });
   for (const [name, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), text); }
   fs.writeFileSync(path.join(root, 'secret.css'), 'a{} /* not in the config */');
-  fs.writeFileSync(path.join(root, 'cornfield.config.js'), fs.readFileSync(path.join(SAMPLE, 'cornfield.config.js'), 'utf8').replace("worktrees: '.worktrees',", `worktrees: '.worktrees',\n  theme: ${JSON.stringify(theme)},`));
+  fs.writeFileSync(path.join(root, 'cornfield.config.js'), fs.readFileSync(path.join(SAMPLE, 'cornfield.config.js'), 'utf8').replace("worktrees: '.worktrees',", () => `worktrees: '.worktrees',\n  theme: ${JSON.stringify(theme)},`));
   const config = await loadConfig(root, { env: { CORNFIELD_DATA: data } });
   const server = createCornfieldServer(config, { env: {} });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
@@ -86,12 +86,48 @@ describe('a theme in the config', () => {
     expect(at(`href="${GOOGLE.replace(/&/g, '&amp;')}"`)).toBeGreaterThan(at('/explorer/house.css'));
     expect(at('href="/cornfield/theme.css"')).toBeGreaterThan(at('fonts.googleapis.com'));
     expect(at('id="cf-theme-name-css" href="/cornfield/theme/night.css"')).toBeGreaterThan(at('href="/cornfield/theme.css"'));
-    // …and the second boot script comes after that link, so it can point it at the viewer's pick
-    expect(html.lastIndexOf('/explorer/theme-boot.js')).toBeGreaterThan(at('id="cf-theme-name-css"'));
     expect(html).toContain('<html lang="en" data-theme-names="day night" data-theme-default="night">');
     // never inlined
     expect(html).not.toContain('--cf-bg');
     expect(html).not.toContain('--cf-accent');
+  });
+
+  it('includes theme-boot.js once, as a classic script after every stylesheet link in the head: so it runs before the first paint, and the named link exists', async () => {
+    const html = (await ask(s.port, '/')).body;
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(html.split('/explorer/theme-boot.js').length - 1).toBe(1);
+    const boot = head.indexOf('<script src="/explorer/theme-boot.js"></script>');
+    expect(boot).toBeGreaterThan(0);
+    const links = [...head.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/g)];
+    expect(links.length).toBe(5); // explorer.css, house.css, the font, theme.css, the named theme
+    for (const l of links) expect(l.index, l[0]).toBeLessThan(boot);
+    // nothing but whitespace between it and </head>, and the body after: no element is drawn before it runs
+    expect(head.slice(boot).replace('<script src="/explorer/theme-boot.js"></script>', '').trim()).toBe('');
+    expect(html.indexOf('<body')).toBeGreaterThan(boot);
+    // a classic script: not a module, not deferred, not async
+    expect(head.slice(boot, boot + 60)).not.toMatch(/type="module"|\bdefer\b|\basync\b/);
+  });
+
+  it('has no named link without names, and no empty href without a default', async () => {
+    const plain = await serve({ css: 'tools/t.css' }, { 'tools/t.css': 'a{}' });
+    const nodefault = await serve({ names: { a: 'tools/a.css' } }, { 'tools/a.css': 'a{}' });
+    try {
+      expect((await ask(plain.port, '/')).body).not.toContain('cf-theme-name-css');
+      const html = (await ask(nodefault.port, '/')).body;
+      expect(html).toContain('<link rel="stylesheet" id="cf-theme-name-css" data-cf-theme="name" />');
+      expect(html).toContain('<html lang="en" data-theme-names="a">');
+    } finally { await plain.close(); await nodefault.close(); }
+  });
+
+  it('keeps a $ in a font URL as written (not a replacement pattern)', async () => {
+    const font = 'https://fonts.googleapis.com/css2?family=A$&b=$$c$1';
+    const t = await serve({ fonts: [font] });
+    try {
+      const html = (await ask(t.port, '/')).body;
+      expect(html).toContain('family=A$&amp;b=$$c$1"');
+      expect(html).not.toContain('<!--@theme-->');
+      expect(html.split('<head>').length).toBe(2);
+    } finally { await t.close(); }
   });
 
   it('lists exactly the font hosts in style-src and font-src, and widens nothing else', async () => {

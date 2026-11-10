@@ -70,6 +70,19 @@ describe('theme-boot.js, before the first paint', () => {
     }
   });
 
+  it('never puts a name that is not plain on the attribute or in the URL, even if <html> lists one', () => {
+    pageFor({ names: ['day', '../x', 'a"b', 'X'], fallback: '../x' });
+    for (const stored of ['../x', 'a"b', 'X']) {
+      window.localStorage.setItem(THEME_NAME_STORAGE_KEY, stored);
+      boot();
+      expect(root().getAttribute('data-theme-name'), stored).toBeNull();
+      expect(link().getAttribute('href'), stored).toBeNull();
+    }
+    window.localStorage.setItem(THEME_NAME_STORAGE_KEY, 'day');
+    boot();
+    expect(link().getAttribute('href')).toBe('/cornfield/theme/day.css');
+  });
+
   it('sets nothing without names, and no name without a default or a pick', () => {
     root().removeAttribute('data-theme-names');
     boot();

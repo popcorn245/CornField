@@ -8,12 +8,14 @@
   <!--@importmap-->
 
   <!-- The explorer's own stylesheet and modules (explorer/): no build step, no CDN -->
-  <!-- Light or dark on <html data-theme> before the first paint (theme-boot.js; theme.js keeps it after) -->
-  <script src="/explorer/theme-boot.js"></script>
   <link rel="stylesheet" href="/explorer/explorer.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
   <!-- The config's theme (server/server.js puts it here, so it comes after cornfield's own CSS): font stylesheets, the repo's theme.css, a named theme -->
   <!--@theme-->
+  <!-- Light or dark on <html data-theme>, and the named theme on <html data-theme-name>, before the first paint (theme-boot.js; theme.js
+       keeps it after). A classic script in the head, after every stylesheet link: it runs before the body is parsed, so before anything is
+       drawn, and the named theme's <link> above already exists when it runs. Keep it the last thing in the head. -->
+  <script src="/explorer/theme-boot.js"></script>
 </head>
 <body>
   <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->

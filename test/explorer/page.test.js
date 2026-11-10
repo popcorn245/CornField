@@ -23,9 +23,12 @@ describe('the page', () => {
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
 
   it('loads explorer/main.js as its one module, and its stylesheets, from this origin', () => {
-    // theme-boot.js is the one classic script, in the head: it puts the theme on <html> before the first paint (MAP-01)
+    // theme-boot.js is the one classic script, the last thing in the head (after every stylesheet and the theme's place): it puts
+    // the theme on <html> before the first paint (MAP-01), and the named theme's link exists when it runs (docs/config.md#theme)
     expect(scripts.map(([, attrs]) => attrs.trim())).toEqual(['src="/explorer/theme-boot.js"', 'type="module" src="/explorer/main.js"']);
-    expect(html.indexOf('/explorer/theme-boot.js')).toBeLessThan(html.indexOf('/explorer/explorer.css'));
+    expect(html.indexOf('/explorer/theme-boot.js')).toBeGreaterThan(html.lastIndexOf('<link rel="stylesheet"', html.indexOf('</head>')));
+    expect(html.indexOf('/explorer/theme-boot.js')).toBeGreaterThan(html.indexOf('<!--@theme-->'));
+    expect(html.indexOf('/explorer/theme-boot.js')).toBeLessThan(html.indexOf('</head>'));
     expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/explorer\.css" \/>/);
     expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/house\.css" \/>/);
     expect(html).toContain('<!--@importmap-->');
