@@ -46,7 +46,7 @@ export default {
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
 | `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's account menu (the forge and Docs are there too) |
-| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the header, an icon per node kind on the map, and a contrast check. [Theme](#theme) |
+| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the account menu, an icon per node kind on the map, and a contrast check. [Theme](#theme) |
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
 | `strings` | `{ approve?, sendBack?, … }`: the repo's own words for about forty visible labels, plain text, one line. [Strings](#strings) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
@@ -290,7 +290,7 @@ Every key is optional. An unknown key is refused.
 | Key | What it is |
 |---|---|
 | `logo` | one `.svg` or `.png` file inside the repo, written relative to it. It takes the place of the brand mark (the small logo square) in the header's brand button. |
-| `wordmark` | the same kind of file. It takes the place of the title text (the repo's `title`) beside the logo. On a narrow phone the title text is hidden, and so is the wordmark; the logo stays. |
+| `wordmark` | the same kind of file. It takes the place of the title text (the repo's `title`) beside the logo. On a phone the title text is hidden but the wordmark stays, beside the logo. |
 | `favicon` | the same kind of file, put in the page as `<link rel="icon">`. |
 | `appName` | the name of the app, up to 64 characters on one line. It replaces "cornfield" wherever cornfield names itself: the tab title (`<title>` is `<repo title> · <appName>`), the page's heading ("Acme: the map"), the name the brand button announces ("Acme: reset the view") and the manifest's `name`. It does not replace the repo's `title`, which stays the header's text unless a `wordmark` is set. |
 | `color`, `background` | hex colours, `#rgb` or `#rrggbb`. They are the manifest's `theme_color` and `background_color`, and `color` is also the tab's `<meta name="theme-color">`. Anything else (a name, `rgb()`, `#rrggbbaa`) is refused. |

@@ -162,11 +162,13 @@ function onSearchKey(e) {
 /** Whether the key went to something that takes typing */
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
-/** `/` goes to the search box, or opens the phone's search bar where the box is not shown */
+/** `/` goes to the search box, or to the phone's search bar where the box is not shown (opening the bar if it is shut) */
 function goToSearch() {
   const input = $('node-search');
   const shown = input && input.closest('.hx-search') && window.getComputedStyle(input.closest('.hx-search')).display !== 'none';
   if (shown) { input.focus(); input.select(); return; }
+  const bar = $('mobile-search-bar');
+  if (bar && !bar.hidden) { $('mobile-node-search').focus(); return; }
   const open = $('mobile-search-toggle');
   if (open) open.click();
 }

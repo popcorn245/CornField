@@ -66,6 +66,11 @@ describe('the header, left to right', () => {
     expect($('node-search').getAttribute('aria-keyshortcuts')).toBe('/');
     expect($('cf-brand').dataset.action).toBe('reset-view');
   });
+
+  it('names the Work toggle by what it says (label in name)', () => {
+    const btn = $('forge-btn');
+    expect(btn.getAttribute('aria-label').startsWith(btn.textContent.trim())).toBe(true);
+  });
 });
 
 describe('what the header lost', () => {
@@ -113,8 +118,20 @@ describe('the account menu', () => {
     applyBranding(document, { title: 'x', links: [{ label: 'Wiki', href: 'https://wiki.example.test/' }], forge: { type: 'forgejo', url: 'https://forge.example.test/', repo: 'o/n' }, docs: 'https://docs.example.test/', signIn: { login: 'm' } });
     const rows = [...$('cf-links').children].map((e) => e.textContent.trim());
     expect(rows).toEqual(['Wiki', 'Forgejo', 'Docs', 'Sign out']);
+    expect([...$('cf-links').querySelectorAll('a')].every((a) => a.target === '_blank' && a.rel === 'noreferrer')).toBe(true); // noreferrer implies noopener
     expect($('cf-links').querySelector('a[href="https://forge.example.test/o/n"]')).not.toBeNull();
     applyBranding(document, { title: 'x', links: [{ label: 'Code', href: 'https://forge.example.test/o/n/src' }], forge: { type: 'forgejo', url: 'https://forge.example.test', repo: 'o/n' }, signIn: false });
     expect([...$('cf-links').children].map((e) => e.textContent.trim())).toEqual(['Code']);
+    applyBranding(document, { title: 'x', links: [], forge: { type: 'github', url: 'https://github.com', repo: 'o/n' }, signIn: false });
+    expect($('cf-links').textContent.trim()).toBe('GitHub');
+  });
+
+  it('puts only http(s) and same-origin links in the menu, never javascript:, and escapes who is signed in', () => {
+    const links = [{ label: 'Bad', href: 'javascript:alert(1)' }, { label: 'Data', href: 'data:text/html,x' }, { label: 'Ok', href: 'http://ok.example.test/' }, { label: 'Here', href: '/x' }];
+    applyBranding(document, { title: 'x', links, forge: { type: 'forgejo', url: 'javascript:alert(1)//', repo: 'o/n' }, docs: 'javascript:alert(1)', signIn: { login: '<img src=x onerror=alert(1)>"' } });
+    expect([...$('cf-links').querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['http://ok.example.test/', '/x']);
+    expect(document.querySelector('#account-menu img')).toBeNull();
+    expect($('account-who').textContent).toBe('<img src=x onerror=alert(1)>" · maintainer');
+    expect(document.querySelector('[data-corn="sign-out"] button').title).toBe('Signed in as <img src=x onerror=alert(1)>"');
   });
 });

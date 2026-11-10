@@ -56,7 +56,7 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 | `--corn-added-text`, the current proposal's border | `--corn-added` 12%, `--corn-surface-1` |
 | `--corn-ok`, a layer's tick; `--corn-ok`, `--corn-edit-text`, `--corn-bad`, `--corn-warn`, `--corn-text-3`, a run or PR state pill's border (its text colour) | `--corn-surface-2`, `--corn-surface-3` |
 
-The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the app name in the header (`--corn-brand-gradient` clipped to text: a logo or brand name has no contrast requirement, WCAG 1.4.3); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
+The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
 
 **What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
 
@@ -207,7 +207,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-accent-text` | the accent as text, an icon or a line (lighter than the fill on dark) (light) |
 | `--corn-accent-soft` | a tinted background of the accent |
 | `--corn-focus` | the focus ring's colour (light) |
-| `--corn-brand-gradient` | the wordmark's gradient (light) |
+| `--corn-brand-gradient` | a brand gradient a theme may use; cornfield's own header no longer draws it (since CF-41 the title is `--corn-text`) (light) |
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
 | `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft` | the same, as a tinted background |

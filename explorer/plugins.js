@@ -78,6 +78,8 @@ function paintFooter(doc, config) {
   foot.innerHTML = home ? `<a href="${escHtml(home)}" target="_blank" rel="noreferrer">${escHtml(words)}</a>` : escHtml(words);
 }
 
+const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
+
 /** The link rows of the account menu: the config's links, the forge (unless a link already leads there), and cornfield's docs */
 function linkRows(config) {
   const rows = (Array.isArray(config.links) ? config.links : [])
@@ -86,7 +88,7 @@ function linkRows(config) {
   const forge = config.forge;
   if (forge && typeof forge.url === 'string' && /^https:\/\//.test(forge.url) && typeof forge.repo === 'string') {
     const href = `${forge.url.replace(/\/+$/, '')}/${forge.repo}`;
-    if (!rows.some((r) => r.href === href || String(r.href).startsWith(`${href}/`))) rows.push({ label: forge.type ? forge.type[0].toUpperCase() + forge.type.slice(1) : 'Forge', href });
+    if (!rows.some((r) => r.href === href || String(r.href).startsWith(`${href}/`))) rows.push({ label: FORGE_NAMES[forge.type] || 'Forge', href });
   }
   if (typeof config.docs === 'string' && /^https:\/\//.test(config.docs)) rows.push({ label: 'Docs', href: config.docs });
   return rows.map((r) => `<a class="hx-account-item" href="${escHtml(r.href)}" target="_blank" rel="noreferrer" data-corn="link"><span>${escHtml(r.label)}</span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h7v7M13 3L7 9" /></svg></a>`).join('');

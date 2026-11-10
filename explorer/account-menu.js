@@ -2,8 +2,8 @@
  * @module explorer/account-menu
  *
  * The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens,
- * Proposals, the links, Sign out, and what powers it. A menu button: `aria-expanded` says whether it is open, Escape closes it and
- * the focus goes back to the button, and so does a click or a focus outside it. What fills it is in plugins.js (the person, the links,
+ * Proposals, the links, Sign out, and what powers it. A disclosure: `aria-expanded` says whether it is open, Escape closes it with
+ * the focus back on the button, and a click outside it or a Tab out of it closes it too. What fills it is in plugins.js (the person, the links,
  * the footer), theme.js (the Theme segment), main.js (Freeform), proposal.js (the list of proposals) and review-tokens.js.
  */
 

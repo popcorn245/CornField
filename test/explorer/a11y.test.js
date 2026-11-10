@@ -978,6 +978,34 @@ describe('the map by keyboard', () => {
     expect(key($('node-search'), '/').defaultPrevented).toBe(false);
   });
 
+  it('/ does nothing while a dialog is open, and on a phone opens the search bar, or goes into it when it is open', () => {
+    mount();
+    const canvas = $('graph-canvas');
+    $('tokens-dialog').hidden = false;
+    expect(key(canvas, '/').defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe($('node-search'));
+    $('tokens-dialog').hidden = true;
+    document.querySelector('[data-corn="search"]').style.display = 'none'; // a phone: no search box in the header
+    let opened = 0;
+    $('mobile-search-toggle').addEventListener('click', () => { opened++; $('mobile-search-bar').hidden = false; });
+    key(canvas, '/');
+    expect(opened).toBe(1);
+    key(canvas, '/'); // the bar is open: the key goes into it, and does not shut it
+    expect(opened).toBe(1);
+    expect(document.activeElement).toBe($('mobile-node-search'));
+  });
+
+  it('a Tab out of the account menu closes it', () => {
+    mount();
+    $('account-btn').click();
+    $('freeform-toggle-btn').focus();
+    $('freeform-toggle-btn').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: $('theme-name-select') }));
+    expect($('account-menu').hidden).toBe(false); // still inside
+    $('freeform-toggle-btn').dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: $('graph-canvas') }));
+    expect($('account-menu').hidden).toBe(true);
+    expect($('account-btn').getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('Escape closes the Layers menu and puts the focus back on its button', () => {
     mount();
     renderLayerToggles();

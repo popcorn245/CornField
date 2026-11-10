@@ -42,13 +42,6 @@ h1, h2, h3, p { margin: 0; }
   -webkit-backdrop-filter: blur(var(--corn-blur));
   border-bottom: var(--corn-border) solid var(--corn-line);
 }
-.gradient-text {
-  background: var(--corn-brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  display: inline-block;
-}
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -78,9 +71,11 @@ h1, h2, h3, p { margin: 0; }
 /* ==== the header (CF-41) ===============================================================================================
    Left to right: the brand, the View switch (Map, Flow, House, Fit), the Layers chip, the live chip; at the right the search,
    the Work toggle and the one account menu (account-menu.js). Everything reads the --corn-* tokens. From 768px it is a desktop
-   header; below it is a phone's: Map, Flow, House, a search icon and the account initial, with the Layers chip and Fit
-   floating on the map (the header's backdrop-filter makes it their containing block, so they are placed from its corner). */
+   header; below it is a phone's: Map, Flow, House, a search icon and the account initial, with the Layers chip, the live chip
+   and Fit floating on the map (placed from the header's corner). The header has no backdrop-filter of its own: it sits above
+   the map, not over it, and one would keep its menus' .glass blur from working (they would show the map through). */
 .hx-header {
+  position: relative;
   flex: none;
   height: 56px;
   display: flex;
@@ -90,8 +85,6 @@ h1, h2, h3, p { margin: 0; }
   padding: 0 var(--corn-space-4);
   z-index: 20;
   background: var(--corn-surface-1);
-  backdrop-filter: blur(var(--corn-blur));
-  -webkit-backdrop-filter: blur(var(--corn-blur));
   border-bottom: var(--corn-border) solid var(--corn-line);
 }
 .hx-header-left, .hx-header-right { display: flex; align-items: center; gap: var(--corn-space-3); min-width: 0; }
@@ -189,20 +182,28 @@ h1, h2, h3, p { margin: 0; }
 /* Not for a desktop: the brand keeps its logo and shows its wordmark; with no wordmark the logo stands alone (the button keeps its name) */
 @media (max-width: 767px) {
   .hx-title:not(:has([data-corn="brand-wordmark"])) { display: none; }
+  .hx-header { padding: 0 var(--corn-space-3); }
+  /* Too narrow for the row (320px, or a repo's longer words): the left scrolls sideways rather than run under the right.
+     The padding keeps the focus rings inside the scrolled box; what sits on the map is placed from the header, so it is not clipped */
+  .hx-header-left { gap: var(--corn-space-1); margin-inline: calc(var(--corn-space-1) * -1); padding: var(--corn-space-1); overflow-x: auto; scrollbar-width: none; }
+  .hx-header-left::-webkit-scrollbar { display: none; }
+  .hx-header-right { gap: var(--corn-space-1); }
   .hx-view { padding: 0; }
-  .hx-view-btn { height: 44px; padding: 0 var(--corn-space-3); }
+  .hx-view-btn { min-width: 44px; height: 44px; padding: 0 var(--corn-space-2); }
   .hx-view-fit { position: absolute; top: calc(100% + var(--corn-space-4)); right: var(--corn-space-4); width: 44px; height: 44px; margin: 0; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); box-shadow: var(--corn-shadow); }
   .hx-header .hx-layers { position: absolute; top: calc(100% + var(--corn-space-4)); left: var(--corn-space-4); }
   .hx-layers-chip { height: 44px; padding: 0 var(--corn-space-5); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
   .hx-layers .hx-menu { width: min(288px, calc(100vw - 24px)); }
-  .hx-work { height: 44px; min-width: 44px; justify-content: center; }
+  /* The live chip sits on the map too, left of Fit */
+  .hx-header .hx-live { position: absolute; top: calc(100% + var(--corn-space-4)); right: calc(var(--corn-space-4) + var(--corn-space-3) + 44px); }
+  .hx-work { height: 44px; min-width: 44px; justify-content: center; padding: 0 var(--corn-space-3); }
   .hx-forge-lit { display: none; }
   .hx-account-btn { width: 44px; height: 44px; justify-content: center; padding: 0; border: 0; background: none; }
   .hx-account-caret { display: none; }
   .hx-avatar { width: 28px; height: 28px; }
   .hx-menu.hx-account-menu { width: min(300px, calc(100vw - 24px)); }
   .hx-account-item, .hx-account-row { min-height: 44px; }
-  .hx-account-seg-btn { height: 40px; padding: 0 var(--corn-space-4); }
+  .hx-account-seg-btn { height: 44px; padding: 0 var(--corn-space-4); }
   .hx-account-select { height: 44px; }
   .hx-stage .hx-hint { top: 68px; }
 }
@@ -225,8 +226,6 @@ h1, h2, h3, p { margin: 0; }
 .hx-btn:hover { background: var(--corn-surface-3); color: var(--corn-text); }
 .hx-btn:focus-visible, .hx-toggle-row:focus-visible, .hx-textbtn:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }
 .hx-btn--active, .hx-btn--active:hover { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
-.hx-btn--dim { color: var(--corn-text-3); border-color: var(--corn-line-soft); }   /* dimmed by its colours, not by opacity: opacity would take the text below AA */
-.hx-btn--dim:hover { color: var(--corn-text-2); }
 .hx-btn--quiet { font-weight: 500; color: var(--corn-text-3); }
 .hx-btn--rom { width: 100%; justify-content: center; margin-top: var(--corn-space-1); padding: var(--corn-space-2); background: color-mix(in srgb, var(--corn-hue-fuchsia) 20%, transparent); border-color: color-mix(in srgb, var(--corn-hue-fuchsia) 40%, transparent); color: color-mix(in srgb, var(--corn-hue-fuchsia) 60%, var(--corn-text)); font-weight: 700; }
 .hx-btn--rom:hover { background: color-mix(in srgb, var(--corn-hue-fuchsia) 30%, transparent); }
@@ -583,8 +582,6 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-sheet-handle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: -2px; border-radius: var(--corn-radius); }
   .hx-backdrop { display: none; }
   .hx-stage[data-sheet-open="drawer"] .hx-backdrop:not([hidden]) { display: block; }
-  /* The zoom buttons ride above the sheets */
-  .hx-mobile-zoom { bottom: calc(16px + var(--hx-covered, 0px)); }
 
   /* The proposal bar */
   .hx-proposal-bar { max-height: 50dvh; overflow-y: auto; padding: 0 var(--corn-space-4) var(--corn-space-3); }
@@ -637,11 +634,11 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-live-help code { font-family: var(--corn-mono); font-size: var(--corn-text-2xs); color: var(--corn-text-2); overflow-wrap: anywhere; }
 .hx-live-second { font-size: var(--corn-text-xs); }
 .hx-live-buttons { display: inline-flex; gap: var(--corn-space-2); }
-@media (max-width: 639px) {
-  .hx-menu--live { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; max-width: none; }
+/* On a phone the chip is its dot on the map (its line is in the menu), and the menu spans the screen under it */
+@media (max-width: 767px) {
+  .hx-live-chip { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
+  .hx-menu--live { position: fixed; top: calc(56px + var(--corn-space-4) + 44px); left: 12px; right: 12px; width: auto; max-width: none; }
 }
-/* On a phone the chip is its dot (its line is in the menu), and the header keeps one row */
-@media (max-width: 767px) { .hx-live-chip { width: 44px; height: 44px; padding: 0; justify-content: center; } }
 
 /* ── Checked scenarios (PHY-10, check.js): the step's state on the player bar and the phone's sheet ──
    The pill sits in the head, so the phone's peek shows it; the line and the As row are the expanded part. */
