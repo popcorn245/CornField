@@ -55,6 +55,14 @@ describe('t', () => {
     setStrings(['approve']);
     expect(t('approve')).toBe('Approve');
   });
+
+  it('takes no prototype key, as JSON (the config as the browser gets it) can hold one', () => {
+    setStrings(JSON.parse('{"__proto__": {"approve": "x"}, "constructor": "y", "hasOwnProperty": "z", "stop": "Halt"}'));
+    expect(t('approve')).toBe('Approve');
+    expect(t('stop')).toBe('Halt');
+    expect(t('constructor')).toBe('constructor');
+    expect(Object.prototype).not.toHaveProperty('approve');
+  });
 });
 
 describe('the static markup', () => {
@@ -64,12 +72,16 @@ describe('the static markup', () => {
     expect(document.body.innerHTML).toBe(before);
   });
 
-  it('every marked element names a key of the table, and every key is marked, built or used in code', () => {
+  it('every marked element names a key of the table and holds only its default text', () => {
     const marked = [...document.querySelectorAll('[data-corn-string],[data-corn-string-aria-label],[data-corn-string-placeholder]')]
       .flatMap((el) => [el.getAttribute('data-corn-string'), el.getAttribute('data-corn-string-aria-label'), el.getAttribute('data-corn-string-placeholder')]).filter(Boolean);
     for (const k of marked) expect(Object.keys(STRINGS), k).toContain(k);
     // The text of a marked element is the default, so the page reads right before (and without) the config
-    for (const el of document.querySelectorAll('[data-corn-string]')) expect(el.textContent.trim().replace(/\s+/g, ' ').replace('&', '&'), el.outerHTML).toBe(STRINGS[el.getAttribute('data-corn-string')]);
+    // and its text only: applyStrings sets textContent, which would wipe an icon or any other child element
+    for (const el of document.querySelectorAll('[data-corn-string]')) {
+      expect(el.textContent.trim().replace(/\s+/g, ' '), el.outerHTML).toBe(STRINGS[el.getAttribute('data-corn-string')]);
+      expect(el.children.length, el.outerHTML).toBe(0);
+    }
   });
 
   it('is replaced where it is marked: text, aria-label and placeholder', () => {
@@ -85,7 +97,6 @@ describe('the static markup', () => {
     expect($('idea-open').textContent).toBe('«newIdea» …');
     expect($('loading-state').textContent).toBe('«loading»');
     expect($('error-state').querySelector('strong').textContent).toBe('«errorTitle»');
-    expect($('instruction-badge-text').textContent).toBe('«hintInspect»');
     expect($('agent-start-title').textContent).toBe('«startAgent»');
   });
 
@@ -187,12 +198,14 @@ describe('accessible names follow the visible label', () => {
 });
 
 describe('the code only asks for keys the table has', () => {
-  it('every t(\'key\') in the explorer is a key', () => {
+  it('every t(\'key\') in the explorer is a key, and every key is asked for or marked in the page', () => {
     const files = fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js'));
     const asked = new Set();
     for (const f of files) for (const m of fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bt\('([A-Za-z]+)'\)/g)) asked.add(m[1]);
     expect(asked.size).toBeGreaterThan(10);
     for (const k of asked) expect(Object.keys(STRINGS), k).toContain(k);
+    for (const m of page.matchAll(/data-corn-string(?:-aria-label|-placeholder)?="([A-Za-z]+)"/g)) asked.add(m[1]);
+    for (const k of Object.keys(STRINGS)) expect(asked.has(k), `${k} is in the table but nothing shows it`).toBe(true);
   });
 });
 

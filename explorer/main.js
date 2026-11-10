@@ -207,7 +207,7 @@ $('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.v
 resize();
 syncViewUi();
 // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-const configReady = loadClientConfig().then((config) => { applyBranding(document, config); applyMapTheme(document, config.theme); return config; }); // the brand, then the theme's icons for the map
+const configReady = loadClientConfig().then((config) => { applyBranding(document, config); applyMapTheme(document, config.theme); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
 loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

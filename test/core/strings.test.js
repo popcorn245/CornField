@@ -88,6 +88,11 @@ describe('what the browser is sent', () => {
     expect(clientStrings(undefined)).toEqual({});
     expect(clientStrings({ approve: 'Ship it', nope: 'x', sendBack: 4, stop: 'a\nb' })).toEqual({ approve: 'Ship it' });
     expect(stringsProblems(undefined)).toEqual([]);
+    const proto = JSON.parse('{"__proto__": "x", "constructor": "y", "approve": "Ship it"}');
+    expect(stringsProblems(proto).join('\n')).toMatch(/unknown key "__proto__"[\s\S]*unknown key "constructor"/);
+    const sent = clientStrings(proto);
+    expect(sent).toEqual({ approve: 'Ship it' });
+    expect(Object.getPrototypeOf(sent)).toBe(Object.prototype);
   });
 
   it('comes in /cornfield/config.json as `strings`', () => {
