@@ -6,10 +6,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { loadSample, sampleRegistry } from '../helpers.js';
+import { CAP } from '../../explorer/capped.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  WHEN_STYLES, whenOf, whenDash, externalLayer, planLabel, cloudBadges, cloudUsedBy, cloudPanelHtml, FOLD_AT,
+  WHEN_STYLES, whenOf, whenDash, externalLayer, planLabel, cloudUsedBy, cloudPanelHtml,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/cloud-model.js';
 
@@ -81,12 +82,7 @@ describe('the layer of an outside node', () => {
   });
 });
 
-describe('the badges and the plan', () => {
-  it('says the kind and the roles', () => {
-    expect(cloudBadges(cloudflare)).toEqual(['Cloud', 'runtime', 'account']);
-    expect(cloudBadges(node('ext-public-web', 'external', { kind: 'web' }))).toEqual(['Public web', 'not cloud']);
-  });
-
+describe('the plan', () => {
   it('says the plan in words, with its note', () => {
     expect(planLabel({ tier: 'free' })).toBe('Free');
     expect(planLabel({ tier: 'paid' })).toBe('Paid');
@@ -138,55 +134,70 @@ describe('Used by', () => {
 
 describe('the panel', () => {
   const html = cloudPanelHtml(cloudflare, nodes, edges);
+  const text = (h) => h.replace(/<[^>]+>/g, '').replace(/&#39;/g, "'");
+  const facts = [...html.matchAll(/<div class="hx-fact" data-corn="section"><div class="hx-fact-k">(.*?)<\/div><div class="hx-fact-v">(.*?)<\/div><\/div>(?=<div class="hx-fact"|<button|$)/g)].map((m) => [text(m[1]), text(m[2])]);
+  const keys = facts.map(([k]) => k);
 
-  it('shows the badges, the plan, the breaks line and each when\'s group in order', () => {
-    expect(html).toContain('hx-cloud-badges');
-    expect(html).toMatch(/Cloud<\/span><span class="hx-cloud-badge"[^>]*>runtime<\/span><span class="hx-cloud-badge"[^>]*>account/);
-    expect(html).toContain('hx-cloud-plan--free');
-    expect(html).toContain('If it\'s down:');
-    expect(html).toContain('Now: names stop resolving.');
-    const at = (s        ) => html.indexOf(s);
-    expect(at('Breaks now')).toBeGreaterThan(at('If it\'s down:'));
-    expect(at('Breaks at the next deploy')).toBeGreaterThan(at('Breaks now'));
-    expect(at('Breaks at the next certificate renewal')).toBeGreaterThan(at('Breaks at the next deploy'));
-    expect(html).toContain('hx-cloud-when--renew');
+  it('is the node panel\'s key/value facts: the plan, the roles, the breaks line, then each when\'s users in order', () => {
+    expect(keys).toEqual(['Plan', 'Roles', 'If it\'s down', 'Breaks now', 'Breaks on deploy', 'Breaks on renewal', 'Relies on']);
+    expect(Object.fromEntries(facts)).toMatchObject({ Plan: 'Free', Roles: 'runtime, account', 'If it\'s down': 'Now: names stop resolving. At the next renewal: no certificate.' });
+    expect(html.match(/class="hx-fact" data-corn="section"/g)).toHaveLength(facts.length);
   });
 
-  it('marks a call the visitor\'s browser makes', () => {
-    expect(html).toMatch(/join\.example\.test<\/span>[^<]*<span class="hx-cloud-browser"[^>]*>\(browser\)<\/span>/);
+  it('has none of the old chrome: headings, badges, glyphs, counts, swatches, coloured styles', () => {
+    for (const gone of ['hx-sec"', '<strong', 'hx-cloud-badge', 'hx-cloud-plan', 'hx-glyph', 'hx-count', 'hx-swatch', 'style=', 'hx-cloud-when', '<details', 'If it\'s down:']) expect(html, gone).not.toContain(gone);
+  });
+
+  it('shows the plan\'s note with the plan', () => {
+    const hub = node('ext-hub', 'external', { kind: 'cloud', plan: { tier: 'free', note: 'Anonymous pulls' }, breaks: 'x' });
+    expect(cloudPanelHtml(hub, [hub], [])).toContain('Free · Anonymous pulls');
+    const bare = node('ext-bare', 'external', { kind: 'cloud', breaks: 'x' });
+    expect(cloudPanelHtml(bare, [bare], [])).toContain('Plan unknown');
+  });
+
+  it('marks a call the visitor\'s browser makes, and says what a user is when a group mixes kinds', () => {
+    expect(html).toMatch(/join\.example\.test<\/span> <span class="hx-cloud-browser"[^>]*>\(browser\)<\/span>/);
     expect(html.match(/\(browser\)/g)).toHaveLength(1);
+    expect(Object.fromEntries(facts)['Breaks now']).toContain('machine');
   });
 
   it('says what the node itself relies on', () => {
-    expect(html).toContain('Relies on:');
-    expect(html).toContain('Domain registrar');
+    expect(Object.fromEntries(facts)['Relies on']).toContain('Domain registrar');
   });
 
-  it('says so when nothing uses it, and has no plan line for the public web', () => {
+  it('puts a quiet Play button under the facts for a cloud node, and none for the public web', () => {
+    expect(html).toMatch(/<button type="button" class="hx-btn hx-btn--quiet[^"]*" data-action="play-outage" data-id="ext-cloudflare">Play: Cloudflare is down<\/button>$/);
+    const web = node('ext-public-web', 'external', { kind: 'web', breaks: 'One site down.' });
+    expect(cloudPanelHtml(web, [web], [])).not.toContain('play-outage');
+  });
+
+  it('says so when nothing uses it, and has no plan or roles for the public web', () => {
     const relay = node('ext-email-relay', 'external', { kind: 'cloud', roles: ['account'], plan: { tier: 'off', note: 'None today' }, breaks: 'Nothing today.' });
     const quiet = cloudPanelHtml(relay, [relay], []);
     expect(quiet).toContain('Nothing on the map uses it');
-    expect(quiet).toContain('hx-cloud-plan--off');
+    expect(quiet).toContain('Off · None today');
     const web = node('ext-public-web', 'external', { kind: 'web', breaks: 'One site down.' });
-    expect(cloudPanelHtml(web, [web], [])).not.toContain('hx-cloud-plan');
+    const out = cloudPanelHtml(web, [web], []);
+    expect(out).not.toContain('Plan');
+    expect(out).not.toContain('Roles');
   });
 
-  it('folds a long list into a count, with the list behind it', () => {
-    const many = Array.from({ length: FOLD_AT + 3 }, (_, i) => node(`container-c${String(i).padStart(2, '0')}`, 'container', { label: `c${String(i).padStart(2, '0')}` }));
+  it('folds a long list with "and n more", through capped.js', () => {
+    const many = Array.from({ length: CAP + 4 }, (_, i) => node(`container-c${String(i).padStart(2, '0')}`, 'container', { label: `c${String(i).padStart(2, '0')}` }));
     const hub = node('ext-docker-hub', 'external', { label: 'Docker Hub', kind: 'cloud', roles: ['software'], plan: { tier: 'free' }, breaks: 'At the next deploy.' });
     const calls = many.map((c) => ({ from: c.id, to: hub.id, kind: 'calls', label: 'image', when: 'deploy' }));
     const out = cloudPanelHtml(hub, [hub, ...many], calls);
-    expect(out).toContain(`<details class="hx-cloud-fold"><summary>${FOLD_AT + 3} containers</summary>`);
+    expect(out).toContain('data-more=');
+    expect(out).toContain('and 4 more');
     expect(out).toContain('c00');
-    const short = cloudPanelHtml(hub, [hub, ...many.slice(0, FOLD_AT)], calls.slice(0, FOLD_AT));
-    expect(short).not.toContain('<details');
+    const short = cloudPanelHtml(hub, [hub, ...many.slice(0, CAP)], calls.slice(0, CAP));
+    expect(short).not.toContain('data-more');
   });
 
   it('escapes what it shows', () => {
-    const odd = node('ext-odd', 'external', { kind: 'cloud', roles: ['runtime'], plan: { tier: 'free', note: '<b>' }, breaks: '<script>' });
+    const odd = node('ext-odd', 'external', { kind: 'cloud', roles: ['<i>'], plan: { tier: 'free', note: '<b>' }, breaks: '<script>' });
     const out = cloudPanelHtml(odd, [odd], []);
-    expect(out).not.toContain('<script>');
-    expect(out).not.toContain('<b>');
+    for (const raw of ['<script>', '<b>', '<i>']) expect(out).not.toContain(raw);
   });
 });
 
@@ -197,7 +208,7 @@ describe('on a real map (the sample repo)', () => {
     expect(clouds.length).toBeGreaterThan(10);
     for (const n of clouds) {
       const out = cloudPanelHtml(n, topology.nodes, topology.edges);
-      expect(out, n.id).toContain('If it\'s down:');
+      expect(out, n.id).toContain('hx-fact-k">If it&#39;s down<');
     }
   });
 

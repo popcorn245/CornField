@@ -8,14 +8,15 @@
  *    (`legend`), in the panel (`title`, `color`). The one place these live: scene.js, the legend, the panel and
  *    the House view's Cloud band (CLOUD-08) all read them here; the outage colours (CLOUD-07) are `color`.
  *  - `externalLayer(node)`: the Layers key of an `external` node, `cloud` or `web` (the public web, spec D3).
- *  - `cloudBadges`, `planLabel`, `cloudUsedBy`: what the node panel shows of a cloud node, as data.
- *  - `cloudPanelHtml(node, nodes, edges)`: that panel section as HTML (panels.js puts it in the drawer).
+ *  - `planLabel`, `cloudUsedBy`: what the node panel shows of a cloud node, as data.
+ *  - `cloudPanelHtml(node, nodes, edges)`: the node panel's facts for it, as HTML (panels.js puts them under the head).
  *
  * Nothing here reads an env var name, a token or a registry `match` list: a cloud node does not carry them, and
  * the panel shows only the node's own fields and the labels of the edges into it (the registry's words).
  */
 
 import { escapeHtml as esc } from '../core/text.js';
+import { capped } from './capped.js';
 
 /**
  * When an outage bites, in order of how soon. `dash` is the scene edge's dash (world units, like a proposal
@@ -42,12 +43,6 @@ const TIER_WORDS = { free: 'Free', paid: 'Paid', unknown: 'Plan unknown', off: '
 export function planLabel(plan) {
   if (!plan || !TIER_WORDS[plan.tier]) return '';
   return plan.note ? `${TIER_WORDS[plan.tier]} · ${plan.note}` : TIER_WORDS[plan.tier];
-}
-
-/** The kind and the roles, as the panel's badges: ['Cloud', 'runtime', 'account'], or ['Public web', 'not cloud'] */
-export function cloudBadges(node) {
-  if (node.kind === 'web') return ['Public web', 'not cloud'];
-  return ['Cloud', ...(node.roles || [])];
 }
 
 /** What a user of a cloud service is called, one and many (`nounOf(type, n)`: the outage scenario's words too) */
@@ -92,60 +87,48 @@ export function cloudUsedBy(node, nodes, edges) {
   return out;
 }
 
-/** More users of one kind than this, in one group, fold into a count ("42 containers") with the list behind it */
-export const FOLD_AT = 8;
+/** The fact names for the groups of users, short enough for the panel's key column (the long words are WHEN_STYLES `title`) */
+const WHEN_KEYS = { run: 'Breaks now', deploy: 'Breaks on deploy', renew: 'Breaks on renewal' };
 
-const sec = (title, body) => `<div class="hx-sec" data-corn="section"><strong class="hx-strong">${title}</strong>${body}</div>`;
-const row = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
+const fact = (key, rows) => (rows.length ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${esc(key)}</div><div class="hx-fact-v">${capped(rows)}</div></div>` : '');
+const line = (body) => `<div class="hx-line">${body}</div>`;
 const name = (label) => `<span class="hx-name">${esc(label)}</span>`;
 
-function userRow(item, color) {
+/** One user of the node: its name, (browser) when the visitor's browser makes the call, the edge's labels, and what it is when the group mixes kinds */
+function userRow(item, mixed) {
   const browser = item.browser ? ' <span class="hx-cloud-browser">(browser)</span>' : '';
-  return row(color, '←', `${name(item.label)}${browser}${item.via ? `<span class="hx-faint"> · ${esc(item.via)}</span>` : ''}`);
+  const bits = [mixed ? nounOf(item.type, 1) : '', item.via].filter(Boolean);
+  return line(`<span>${name(item.label)}${browser}${bits.length ? `<span class="hx-faint"> · ${esc(bits.join(' · '))}</span>` : ''}</span>`);
 }
 
-function groupHtml(group) {
-  const lists = group.types.map((t) => {
-    const rows = t.items.map((i) => userRow(i, group.color)).join('');
-    if (t.items.length <= FOLD_AT) return rows;
-    return `<details class="hx-cloud-fold"><summary>${t.items.length} ${esc(nounOf(t.type, t.items.length))}</summary>${rows}</details>`;
-  }).join('');
-  return `<div class="hx-cloud-when hx-cloud-when--${group.when}">`
-    + `<div class="hx-cloud-when-head"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${group.when}"></span>`
-    + `<span class="hx-glyph" style="--glyph:${group.color}">${esc(group.title)}</span><span class="hx-count">${group.count}</span></div>${lists}</div>`;
-}
-
-/** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node */
-const playButton = (node) => `<div class="hx-sec" data-corn="section"><button type="button" class="hx-btn hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">▶ Play: ${esc(String(node.label || node.id))} is down</button></div>`;
+/** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node. A quiet button under the facts. */
+const playButton = (node) => `<button type="button" class="hx-btn hx-btn--quiet hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">Play: ${esc(String(node.label || node.id))} is down</button>`;
 
 /**
- * The node panel's section for a cloud node (kind `cloud`) or the public web (kind `web`): badges and plan,
- * "If it's down", Used by grouped by when, the Play button (a cloud node only), what it relies on itself (calls to other cloud nodes) and the
- * webhooks it sends. The caller adds the doc link.
+ * The node panel's facts for a cloud node (kind `cloud`) or the public web (kind `web`), in the node panel's key/value
+ * rows (the type and the name are the panel's head): Plan, Roles, If it's down, who uses it by when its outage bites
+ * (one fact per `when` that has any, long lists folded by capped.js), what it relies on itself (calls to other cloud
+ * nodes), the webhooks it sends, then a quiet Play button (a cloud node only). The caller adds the File line.
  */
 export function cloudPanelHtml(node, nodes, edges) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const label = (id) => String((byId.get(id) || { label: id }).label || id);
-  const [kind, ...roles] = cloudBadges(node);
-  const tier = node.kind === 'web' ? null : (node.plan && TIER_WORDS[node.plan.tier] ? node.plan.tier : 'unknown');
-  const badges = `<div class="hx-cloud-badges"><span class="hx-cloud-badge hx-cloud-badge--${node.kind === 'web' ? 'web' : 'kind'}" data-corn="badge">${esc(kind)}</span>`
-    + roles.map((r) => `<span class="hx-cloud-badge" data-corn="badge">${esc(r)}</span>`).join('')
-    + (tier ? `<span class="hx-cloud-plan hx-cloud-plan--${tier}">${esc(TIER_WORDS[tier])}</span>` : '')
-    + '</div>'
-    + (tier && node.plan && node.plan.note ? `<div class="hx-faint hx-cloud-plan-note">${esc(node.plan.note)}</div>` : '');
-
-  const groups = cloudUsedBy(node, nodes, edges);
-  const usedBy = groups.length ? groups.map(groupHtml).join('') : '<div class="hx-faint">Nothing on the map uses it.</div>';
+  const web = node.kind === 'web'; // the public web: no plan, no roles, no Play
+  const roles = web ? [] : node.roles || [];
+  const used = cloudUsedBy(node, nodes, edges).map((g) => {
+    const mixed = g.types.length > 1;
+    return fact(WHEN_KEYS[g.when], g.types.flatMap((t) => t.items.map((i) => userRow(i, mixed))));
+  }).join('') || fact('Used by', [line('<span class="hx-faint">Nothing on the map uses it.</span>')]);
 
   const relies = edges.filter((e) => e.kind === 'calls' && e.from === node.id && (byId.get(e.to) || {}).type === 'external')
-    .map((e) => row(WHEN_STYLES[whenOf(e)].color, '→', `${name(label(e.to))}${e.label ? `<span class="hx-faint"> · ${esc(e.label)}</span>` : ''}`));
-  const pushes = edges.filter((e) => e.kind === 'delivers' && e.from === node.id).map((e) => row('#94a3b8', '→', name(label(e.to))));
+    .map((e) => line(`<span>${name(label(e.to))}${e.label ? `<span class="hx-faint"> · ${esc(e.label)}</span>` : ''}</span>`));
+  const pushes = edges.filter((e) => e.kind === 'delivers' && e.from === node.id).map((e) => line(name(label(e.to))));
 
-  return `<div class="hx-cloud">${badges}`
-    + sec('If it\'s down:', `<div class="hx-cloud-breaks">${esc(node.breaks || 'Not described yet.')}</div>`)
-    + sec('Used by:', usedBy)
-    + (node.kind === 'web' ? '' : playButton(node)) // the public web is never down as a whole (spec D3)
-    + (relies.length ? sec('Relies on:', relies.join('')) : '')
-    + (pushes.length ? sec('Pushes to (webhook):', pushes.join('')) : '')
-    + '</div>';
+  return (web ? '' : fact('Plan', [line(esc(planLabel(node.plan) || TIER_WORDS.unknown))]))
+    + fact('Roles', roles.length ? [line(esc(roles.join(', ')))] : [])
+    + fact('If it\'s down', [line(esc(node.breaks || 'Not described yet.'))])
+    + used
+    + fact('Relies on', relies)
+    + fact('Pushes to', pushes)
+    + (web ? '' : playButton(node)); // the public web is never down as a whole (spec D3)
 }

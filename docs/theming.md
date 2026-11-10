@@ -42,7 +42,7 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 |---|---|
 | `--corn-text`, `--corn-text-2`, `--corn-text-3`, `--corn-accent-text`, `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-added-text`, `--corn-edit-text` | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
 | `--corn-text-on-accent` | `--corn-accent`, `--corn-accent-hover` |
-| `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
+| `--corn-ok`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
 | `--corn-ground` (the text on a solid fill) | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-hue-orange`, `--corn-hue-lime`, `--corn-added-text`, `--corn-edit-text` |
 | `--corn-hue-fuchsia` (ROM, a milestone, a link button), `--corn-hue-pink` (a variable) | `--corn-ground`, `--corn-surface-1` (and fuchsia on `--corn-surface-2`) |
 | `--corn-hue-orange` (the data-flow button) | `--corn-surface-2` |
@@ -210,7 +210,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-brand-gradient` | a brand gradient a theme may use; cornfield's own header no longer draws it (since CF-41 the title is `--corn-text`) (light) |
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
-| `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft` | the same, as a tinted background |
+| `--corn-ok-soft` | the same for ok, as a tinted background |
 | **Diff** (shared with the map) | |
 | `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the light values are [theme-model.js](../explorer/theme-model.js) `lightColor` of the dark ones, so the legend matches the map (light) |
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
@@ -250,6 +250,8 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-space-6` | 24px |
 
 Where the stylesheets once had a one-off tint, they mix a token: `color-mix(in srgb, var(--corn-added) 14%, transparent)`. Where they had many near-identical values, they now share the nearest step: the radii 8 and 12px became `--corn-radius-sm` and `--corn-radius`; the font sizes 9 and 10.5px became `--corn-text-2xs`, 16px became `--corn-text-lg`; a 10px padding is `--corn-space-3` (8px), 14px and 18px are `--corn-space-4` and `-5`, a 2px gap is `calc(var(--corn-space-1) / 2)`; a 3px accent bar is `--corn-border-strong`. Lengths that are not one of these (a width, a height, a position) stay in the stylesheets.
+
+**Three tokens are gone** (CF-46): `--corn-warn-soft`, `--corn-bad-soft` and `--corn-info-soft`. Only the cloud panel's old plan pills and kind badge read them, and the panel now shows its plan and roles as plain facts. A theme that still sets them breaks nothing, since an unused custom property does nothing; delete them. `--corn-ok-soft` stays.
 
 ## The map
 
@@ -460,7 +462,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
-| `badge` | a badge: the node panel's kind, a cloud kind or role, the "Agent" mark |
+| `badge` | a badge: the node panel's kind (type · host), the "Agent" mark |
 | `state-pill` | a state word (`data-corn-state`) |
 | `field` | a labelled form field, its control inside |
 | `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |

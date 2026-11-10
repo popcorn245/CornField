@@ -246,12 +246,25 @@ describe('adding a node', () => {
 });
 
 describe('removing a node', () => {
-  beforeEach(() => open());
+  beforeEach(() => { open(); click($('proposal-edit')); }); // the node panel's tools are behind Edit
   const pick = (id        ) => selectNode(state.nodes.find((n     ) => n.id === id));
 
-  it('puts "Remove in this proposal" in the node panel', async () => {
+  it('shows "Try a change" in the node panel only while Edit is on', async () => {
+    click($('proposal-edit'));
+    await pick('page-keep');
+    expect(q('#whatif-drawer').hidden).toBe(true);
+    click($('proposal-edit'));
+    expect(q('#whatif-drawer').hidden).toBe(false);
+    expect(q('#whatif-drawer .hx-sec-title').textContent).toBe('Try a change');
+    click($('proposal-edit'));
+    expect(q('#whatif-drawer').hidden).toBe(true);
+  });
+
+  it('puts "Remove in this proposal" in the node panel, as a quiet button', async () => {
     await pick('page-keep');
     expect(q('#whatif-drawer').hidden).toBe(false);
+    expect(q('#whatif-drawer [data-whatif="remove-node"]').classList.contains('hx-btn--quiet')).toBe(true);
+    expect(q('#whatif-drawer [data-whatif="remove-node"]').classList.contains('hx-textact')).toBe(false); // a button with its border, not a text link
     expect(q('#whatif-drawer [data-whatif="remove-node"]').textContent).toBe('Remove in this proposal');
     expect(q('#whatif-drawer summary').textContent).toBe('Its edges (1)');
   });
@@ -278,6 +291,15 @@ describe('removing a node', () => {
     click(q('#whatif-drawer [data-whatif="bring-back"]'));
     expect(markOf('page-keep')).toBe('none');
     expect(getEdits()).toEqual([]);
+  });
+
+  it('keeps the keyboard in the box: Remove hands the focus to Bring it back, and back again', async () => {
+    await pick('page-keep');
+    q('#whatif-drawer [data-whatif="remove-node"]').focus();
+    click(q('#whatif-drawer [data-whatif="remove-node"]'));
+    expect(document.activeElement).toBe(q('#whatif-drawer [data-whatif="bring-back"]'));
+    click(q('#whatif-drawer [data-whatif="bring-back"]'));
+    expect(document.activeElement).toBe(q('#whatif-drawer [data-whatif="remove-node"]'));
   });
 
   it('a node the proposal added is dropped, with what hangs on it and the steps that point at it', async () => {
@@ -314,7 +336,7 @@ describe('removing a node', () => {
 });
 
 describe('the edge panel', () => {
-  beforeEach(() => open());
+  beforeEach(() => { open(); click($('proposal-edit')); }); // the node panel's tools are behind Edit
 
   it('removes an edge the proposal added: it is gone', () => {
     const edge = state.edges.find((e     ) => e.from === 'page-meals' && e.kind === 'writes');
@@ -517,7 +539,7 @@ describe('undo and redo', () => {
 });
 
 describe('your edits', () => {
-  beforeEach(() => open());
+  beforeEach(() => { open(); click($('proposal-edit')); }); // the node panel's tools are behind Edit
 
   it('lists one row per edit, in plain words, each with a remove', () => {
     addNodeVia({ label: '/one', parent: 'app-a' });
@@ -598,7 +620,7 @@ describe('problems', () => {
 });
 
 describe('steps', () => {
-  beforeEach(() => open());
+  beforeEach(() => { open(); click($('proposal-edit')); }); // the node panel's tools are behind Edit
   const stepRows = () => qa('.hx-whatif-step');
   const texts = () => stepRows().map((r) => (r.querySelector('[data-step-text]')                    ).value);
 
@@ -888,6 +910,7 @@ describe('for the review step', () => {
 describe('the views', () => {
   it('Before hides what you added, After hides what you removed, and Diff draws both in violet', async () => {
     open();
+    click($('proposal-edit'));
     addNodeVia({ label: '/shopping', parent: 'app-a' });
     await selectNode(state.nodes.find((n     ) => n.id === 'page-keep'));
     click(q('#whatif-drawer [data-whatif="remove-node"]'));

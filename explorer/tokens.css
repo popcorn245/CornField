@@ -50,9 +50,6 @@
   --corn-bad: #fca5a5;
   --corn-info: #7dd3fc;
   --corn-ok-soft: color-mix(in srgb, var(--corn-ok) 15%, transparent);
-  --corn-warn-soft: color-mix(in srgb, var(--corn-warn) 14%, transparent);
-  --corn-bad-soft: color-mix(in srgb, var(--corn-bad) 12%, transparent);
-  --corn-info-soft: color-mix(in srgb, var(--corn-info) 15%, transparent);
 
   /* Diff: what a proposal adds, changes, removes and edits (the map draws the same four) */
   --corn-added: #2dd4bf;

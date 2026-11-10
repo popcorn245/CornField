@@ -66,7 +66,7 @@ h1, h2, h3, p { margin: 0; }
 .hx-chips { display: flex; flex-wrap: wrap; gap: var(--corn-space-1); padding-top: var(--corn-space-1); }
 .hx-pt { padding-top: var(--corn-space-3); }
 /* Headings and titles take the display family (the same as the body unless a brand sets it) */
-.hx-title, .hx-drawer-title, .hx-block-title, .hx-menu-title, .hx-confirm-title, .hx-mockup-title { font-family: var(--corn-font-display); }
+.hx-title, .hx-drawer-title, .hx-menu-title, .hx-confirm-title, .hx-mockup-title { font-family: var(--corn-font-display); }
 
 /* ==== the header (CF-41) ===============================================================================================
    Left to right: the brand, the View switch (Map, Flow, House, Fit), the Layers chip, the live chip; at the right the search,
@@ -350,7 +350,6 @@ h1, h2, h3, p { margin: 0; }
 .hx-lead { font-size: var(--corn-text-base); line-height: 1.5; color: var(--corn-text-2); }
 
 .hx-block { display: flex; flex-direction: column; gap: var(--corn-space-3); }
-.hx-block-title { font-size: var(--corn-text-sm); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-2); }
 .hx-meta { display: flex; flex-direction: column; gap: var(--corn-space-5); font-size: var(--corn-text-md); color: var(--corn-text-2); overflow-wrap: anywhere; }
 .hx-meta > :empty { display: none; } /* no live data, no threads: no gap where they would be */
 
@@ -506,8 +505,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-whatif-target { font-size: var(--corn-text-xs); }
 .hx-whatif-addstep { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); margin-top: var(--corn-space-3); }
 .hx-whatif-addstep .hx-whatif-field { flex: 1 1 220px; }
-.hx-whatif-drawer .hx-btn { margin-top: var(--corn-space-1); }
-.hx-whatif-edges { margin-top: var(--corn-space-3); color: var(--corn-text-2); }
+.hx-whatif-edges { color: var(--corn-text-2); }
 .hx-whatif-edges summary { cursor: pointer; }
 .hx-whatif-edges .hx-whatif-list { margin-top: var(--corn-space-2); max-height: 200px; overflow: auto; }
 #graph-canvas.is-drawing-edge { touch-action: none; }
@@ -701,24 +699,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-swatch-when--deploy { color: var(--corn-changed); background: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 8px); }
 .hx-swatch-when--renew { color: var(--corn-edit); background: repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 5px); }
 .hx-swatch-when--plain { color: var(--corn-text-2); } /* the legend: the map draws every call in the calls colour, so only the pattern is the key */
-.hx-cloud-badges { display: flex; flex-wrap: wrap; gap: var(--corn-space-1); padding-top: var(--corn-space-2); }
-.hx-cloud-badge, .hx-cloud-plan { padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid color-mix(in srgb, var(--corn-text-3) 35%, transparent); background: color-mix(in srgb, var(--corn-text-3) 12%, transparent); color: var(--corn-text-2); font-family: var(--corn-font); font-size: var(--corn-text-2xs); font-weight: 600; }
-.hx-cloud-badge--kind { border-color: color-mix(in srgb, var(--corn-info) 45%, transparent); background: var(--corn-info-soft); color: var(--corn-info); }
-.hx-cloud-badge--web { border-color: color-mix(in srgb, var(--corn-text-2) 45%, transparent); background: color-mix(in srgb, var(--corn-text-2) 12%, transparent); color: var(--corn-text-2); }
-.hx-cloud-plan { margin-left: auto; }
-.hx-cloud-plan--free { border-color: color-mix(in srgb, var(--corn-ok) 45%, transparent); background: var(--corn-ok-soft); color: var(--corn-ok); }
-.hx-cloud-plan--paid { border-color: color-mix(in srgb, var(--corn-warn) 50%, transparent); background: var(--corn-warn-soft); color: var(--corn-warn); }
-.hx-cloud-plan--unknown { border-style: dashed; color: var(--corn-text-3); }
-.hx-cloud-plan--off { border-color: color-mix(in srgb, var(--corn-bad) 45%, transparent); background: var(--corn-bad-soft); color: var(--corn-bad); }
-.hx-cloud-plan-note { padding-top: calc(var(--corn-space-1) / 2); text-align: right; font-size: var(--corn-text-2xs); }
-.hx-cloud-breaks { padding: var(--corn-space-1) 0 calc(var(--corn-space-1) / 2); color: var(--corn-text-2); font-family: var(--corn-font); line-height: 1.5; }
-.hx-cloud-when { padding-top: var(--corn-space-1); }
-.hx-cloud-when-head { display: flex; align-items: center; gap: var(--corn-space-2); padding: calc(var(--corn-space-1) / 2) 0; font-weight: 600; }
-.hx-cloud-when-head .hx-swatch-when { flex: none; }
-.hx-cloud-fold > summary { cursor: pointer; padding: calc(var(--corn-space-1) / 2) 0 calc(var(--corn-space-1) / 2) var(--corn-space-5); color: var(--corn-text-2); }
-.hx-cloud-fold[open] > summary { color: var(--corn-text-2); }
-.hx-cloud-browser { color: var(--corn-info); font-size: var(--corn-text-2xs); }
-.hx-cloud-play { width: 100%; justify-content: center; } /* the cloud panel's "Play: X is down" (spec 0031 section 8) */
+.hx-cloud-browser { color: var(--corn-text-3); font-size: var(--corn-text-sm); }
 
 /* ---- a panel glyph (MAP-01) ----------------------------------------------------------------------
    A panel glyph's colour comes from script (the flow or kind it stands for, --glyph): mixed with the text colour by
@@ -1008,11 +989,16 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
   /* a phone: the sheet's actions are full width at the foot, each a 44px target */
   .hx-drawer-foot { flex-direction: column; }
   .hx-drawer-foot .hx-open, .hx-foot-btn { min-height: 44px; }
-  .hx-drawer .hx-row, .hx-drawer .hx-mockup-open, .hx-textact { min-height: 44px; }
+  .hx-drawer .hx-row, .hx-drawer .hx-mockup-open, .hx-textact, .hx-drawer .hx-whatif-drawer .hx-btn, .hx-drawer .hx-whatif-drawer select, .hx-drawer .hx-whatif-edges summary, .hx-cloud-play { min-height: 44px; }
   .hx-drawer .hx-close { width: 44px; height: 44px; }
 }
-.hx-drawer .hx-whatif-drawer { font-size: var(--corn-text-md); color: var(--corn-text-2); }
+.hx-drawer .hx-whatif-drawer { align-items: flex-start; gap: var(--corn-space-2); font-size: var(--corn-text-md); color: var(--corn-text-2); }
+.hx-whatif-drawer:focus { outline: none; } /* it only holds the focus between two paints */
+.hx-drawer .hx-whatif-edgeto { display: flex; align-items: center; gap: var(--corn-space-2); align-self: stretch; }
+.hx-drawer .hx-whatif-edgeto .hx-whatif-field { flex: 1; min-width: 0; }
 .hx-drawer .hx-whatif-drawer select { max-width: 100%; }
+.hx-drawer .hx-whatif-edges { align-self: stretch; }
+.hx-cloud-play { align-self: flex-start; } /* the cloud panel's "Play: X is down", a quiet button under the facts (spec 0031 section 8) */
 .hx-drawer-foot .hx-btn--quiet { border-color: transparent; background: none; text-decoration: none; }
 .hx-more { display: contents; }
 .hx-more[hidden] { display: none; }

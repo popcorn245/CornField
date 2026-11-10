@@ -1083,8 +1083,11 @@ describe('a what-if edge without a drag', () => {
     expect(await openProposal('0013-meals', 'checkout')).toBe(true);
     await selectNode(state.nodes.find((n) => n.id === 'page-a'));
     await settle();
+    expect(document.querySelector('[data-edge-to]')).toBe(null); // behind the toolbar's Edit
+    $('proposal-edit').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const pick = document.querySelector('[data-edge-to]');
     expect(pick).not.toBe(null);
+    expect(pick.closest('.hx-whatif-edgeto').querySelector('[data-whatif="edge-to"]')).not.toBe(null); // the select and Draw on one row
     expect([...pick.options].map((o) => o.value)).not.toContain('page-a');
     pick.value = 'table-t';
     document.querySelector('[data-whatif="edge-to"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));

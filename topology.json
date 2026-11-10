@@ -6414,7 +6414,13 @@
       "to": "core-explorer-file-url",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-cloud-model",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T21:37:43.288Z"
+  "updatedAt": "2026-11-10T22:00:49.574Z"
 }
