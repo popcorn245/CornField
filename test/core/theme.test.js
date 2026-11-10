@@ -22,7 +22,7 @@ const theme = (t) => configProblems({ theme: t });
 
 describe('configProblems: theme', () => {
   it('is in the defaults, and accepts the whole key', () => {
-    expect(DEFAULTS.theme).toEqual({ css: null, fonts: [], fontHosts: [], names: {}, default: null });
+    expect(DEFAULTS.theme).toEqual({ css: null, fonts: [], fontHosts: [], names: {}, default: null, contrast: 'error' });
     expect(theme(undefined)).toEqual([]);
     expect(theme({})).toEqual([]);
     expect(theme({ css: './tools/theme.css', fonts: [GOOGLE], names: { day: './a.css', 'night-2': 'b/c.css' }, default: 'day' })).toEqual([]);
@@ -30,7 +30,7 @@ describe('configProblems: theme', () => {
   });
 
   it('refuses a key it does not know, and anything that is not an object', () => {
-    expect(theme({ script: './x.js' })).toEqual(['theme.script: the keys are css, fonts, fontHosts, names, default.']);
+    expect(theme({ script: './x.js' })).toEqual(['theme.script: the keys are css, fonts, fontHosts, names, default, contrast.']);
     for (const t of [null, 'x.css', ['a.css'], 3]) expect(theme(t)[0], String(t)).toMatch(/^"theme" is \{/);
   });
 

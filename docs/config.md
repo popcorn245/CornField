@@ -46,7 +46,7 @@ export default {
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
 | `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's header |
-| `theme` | `{ css?, fonts?, fontHosts?, names?, default? }`: a repo's own look, CSS only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, and named themes with a picker in the header. [Theme](#theme) |
+| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, contrast? }`: a repo's own look, CSS only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, and named themes with a picker in the header. [Theme](#theme) |
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
@@ -215,6 +215,7 @@ theme: {
   fontHosts: [],                                             // only for a fonts host that is not a known pair (below)
   names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' },
   default: 'day',                                            // must be one of `names`
+  contrast: 'error',                                         // 'warn' makes a failing contrast pair a warning
 }
 ```
 
@@ -224,6 +225,7 @@ theme: {
 | `fonts` | an allow-list (at most 8) of `https:` stylesheet URLs, such as a Google Fonts `css2?family=…` link. Each is added to the page as a `<link rel="stylesheet">` and to the CSP. Any other scheme (`http:`, `data:`, `javascript:`), a URL with credentials, an IP address or a wildcard is refused. |
 | `fontHosts` | the hosts the font *files* come from, for a `fonts` host that is not a known pair. At most 8 plain host names, like `files.example.org`. Only allowed with `fonts`. |
 | `names` | named themes: `{ name: './path.css' }`, at most 12. A name is lower-case letters, digits and hyphens (at most 32 characters). Each file is served at `/cornfield/theme/<name>.css`. |
+| `contrast` | `'error'` (the default) or `'warn'`: what `validate` does with a theme pair under WCAG AA (4.5:1 text, 3:1 UI), in light or dark, for the standard theme and for each named theme (with no theme, for cornfield's own tokens). `'error'` fails `validate`; `'warn'` reports the same lines as warnings. See [the contrast check](theming.md#the-contrast-check). |
 | `default` | the name in force until a viewer picks another. One of `names`. Without it, no named theme is on until a viewer picks one, and the picker offers "Standard" (cornfield without a named theme). |
 
 **What the CSP gets.** `style-src` gains the origin of each `fonts` URL and `font-src` gains the same origins plus the font file hosts, and nothing else is widened (`default-src`, `script-src`, `connect-src` and `img-src` stay as they were). The file hosts are known for two stylesheet hosts: `fonts.googleapis.com` (files from `fonts.gstatic.com`) and `fonts.bunny.net` (files from the same host). For any other host in `fonts`, the config is refused until `fontHosts` lists where its font files come from. A font file that a stylesheet in `fonts` names from a host the policy does not list is blocked by the browser.
@@ -254,6 +256,7 @@ body { background-image: url(/cornfield/theme/assets/img/bricks.png); image-rend
 - it is at most **256 KB**;
 - it is CSS: no NUL bytes, no HTML, balanced braces;
 - it keeps out of script: no `expression(`, `javascript:`, `vbscript:`, `behavior:` or `-moz-binding` (CSS escapes and comments inside the word do not hide it, nor a comment marker inside a string), and no `@import` except of an `https:` URL that is listed in `theme.fonts` (an `@import` of a bare string, with a comment before its `url(`, or with nothing after it is refused too);
+- its contrast: the `--corn-*` pairs of the theme, in light and dark, for the standard theme and for each named one, are at least WCAG AA (`contrast` above; [the pairs](theming.md#the-contrast-check));
 - every `url()` (and `src()`) leads, read relative to where the file is served, to an image or font beside the theme that the server would serve (above), or is a `data:` image (`data:image/png`, `gif`, `webp`, `avif` or `svg+xml`). A URL on another host is refused: the CSP would block it anyway.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails, for a file over the cap, and for any path the config does not name. Nothing else of the repo is reachable through these routes.

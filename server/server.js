@@ -78,7 +78,7 @@ import { createTriggers } from './triggers.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
 /** The pure core modules the explorer imports (no Node built-ins, no files): the only ones of core/ served */
-export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js'];
+export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js'];
 /** cornfield's own browser sources, by request path */
 const BROWSER_PLUGINS = new Map(Object.values(BUILTIN_SOURCES).map((p) => [p, path.join(CORNFIELD_DIR, p)]));
 const PKG = JSON.parse(fs.readFileSync(path.join(CORNFIELD_DIR, 'package.json'), 'utf8'));

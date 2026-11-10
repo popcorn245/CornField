@@ -32,14 +32,14 @@
   /* Text */
   --corn-text: #f8fafc;
   --corn-text-2: #cbd5e1;
-  --corn-text-3: #94a3b8;
+  --corn-text-3: #9aa9bc;
   --corn-text-on-accent: #fff;
   --corn-mockup-ground: #fff;
 
   /* Accent */
   --corn-accent: #4f46e5;
-  --corn-accent-hover: #6366f1;
-  --corn-accent-text: #818cf8;
+  --corn-accent-hover: #6265f1;
+  --corn-accent-text: #98a1fa;
   --corn-accent-soft: color-mix(in srgb, var(--corn-accent-hover) 20%, transparent);
   --corn-focus: #818cf8;
   --corn-brand-gradient: linear-gradient(135deg, #4299e1 0%, #818cf8 50%, #e53e3e 100%);
@@ -68,6 +68,9 @@
   --corn-hue-fuchsia: #e879f9;
   --corn-hue-pink: #f472b6;
   --corn-hue-lime: #a3e635;
+  /* The orange as text on its own tint (the data-flow note in the Layers menu): the tint is the hue at 12% */
+  --corn-hue-orange-text: var(--corn-hue-orange);
+  --corn-hue-orange-soft: color-mix(in srgb, var(--corn-hue-orange) 12%, transparent);
 
   /* Type */
   --corn-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -135,10 +138,10 @@
     --corn-focus: #4f46e5;
     --corn-brand-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #dc2626 100%);
 
-    --corn-ok: #047857;
+    --corn-ok: #046f51;
     --corn-warn: #854d0e;
     --corn-bad: #b91c1c;
-    --corn-info: #0369a1;
+    --corn-info: #03679e;
 
     --corn-added: #209a8b;
     --corn-changed: #b28103;
@@ -148,7 +151,8 @@
     --corn-hue-orange: #c2410c;
     --corn-hue-fuchsia: #a21caf;
     --corn-hue-pink: #be185d;
-    --corn-hue-lime: #4d7c0f;
+    --corn-hue-lime: #4c7b0f;
+    --corn-hue-orange-text: #9a3412;
 
     --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
     --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 55%, transparent);
@@ -183,10 +187,10 @@
   --corn-focus: #4f46e5;
   --corn-brand-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 50%, #dc2626 100%);
 
-  --corn-ok: #047857;
+  --corn-ok: #046f51;
   --corn-warn: #854d0e;
   --corn-bad: #b91c1c;
-  --corn-info: #0369a1;
+  --corn-info: #03679e;
 
   --corn-added: #209a8b;
   --corn-changed: #b28103;
@@ -196,7 +200,8 @@
   --corn-hue-orange: #c2410c;
   --corn-hue-fuchsia: #a21caf;
   --corn-hue-pink: #be185d;
-  --corn-hue-lime: #4d7c0f;
+  --corn-hue-lime: #4c7b0f;
+  --corn-hue-orange-text: #9a3412;
 
   --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
   --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 55%, transparent);

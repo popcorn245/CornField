@@ -8,7 +8,7 @@
  *  - `validateRepo(...)`: everything, against the repo. The schema, the paths the map cites, drift from
  *    the code (every deriver run again, `planSync` must change nothing), what the derivers themselves
  *    report, the personas file, the cloud file against the map's cloud nodes, every proposal file, and
- *    each deriver's own `validate`.
+ *    each deriver's own `validate`, and the theme's contrast (core/contrast.js: WCAG AA on the `--corn-*` pairs, light and dark).
  */
 
 import fs from 'node:fs';
@@ -23,6 +23,7 @@ import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
+import { checkThemeContrast } from './contrast.js';
 import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
 import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeUrlTarget } from './theme.js';
 
@@ -276,6 +277,9 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   errors.push(...validatePersonasFile(config.root, config.personas.roles));
   errors.push(...validateThemeFiles(config));
   errors.push(...validateBrandFiles(config));
+  const contrast = checkThemeContrast(config);
+  errors.push(...contrast.errors);
+  warnings.push(...contrast.warnings);
   errors.push(...validateCloudNodes(topology, config.root));
   errors.push(...validateProposalFiles(topology, path.join(config.root, config.proposals), config.root));
   const io = repoReader(config.root);

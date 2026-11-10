@@ -11,6 +11,7 @@
  *     fontHosts: [],                                                // the hosts of the font FILES, when a fonts host is not a known pair
  *     names: { day: './tools/cornfield/day.css' },                  // named themes: data-theme-name on <html>, a picker in the header
  *     default: 'day',                                               // the name used until a viewer picks one
+ *     contrast: 'error',                                            // 'warn' turns a failing contrast pair in `validate` into a warning
  *   }
  *
  * A theme is CSS only: never script, never inlined into the page.
@@ -19,7 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default']);
+export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'contrast']);
 /** The largest a theme file may be, in bytes */
 export const MAX_THEME_BYTES = 256 * 1024;
 export const MAX_THEME_NAMES = 12;
@@ -59,7 +60,7 @@ export function fontUrl(v) {
  */
 export function themeProblems(t) {
   if (t === undefined) return [];
-  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default? }.'];
+  if (!isObject(t)) return ['"theme" is { css?, fonts?, fontHosts?, names?, default?, contrast? }.'];
   const out = [];
   for (const k of Object.keys(t)) if (!THEME_KEYS.includes(k)) out.push(`theme.${k}: the keys are ${THEME_KEYS.join(', ')}.`);
   if (t.css !== undefined && t.css !== null && !cssPathInRepo(t.css)) out.push('theme.css is one stylesheet (a .css file) inside the repo, written relative to it, like "./tools/cornfield/theme.css".');
@@ -94,6 +95,7 @@ export function themeProblems(t) {
       }
     }
   }
+  if (t.contrast !== undefined && t.contrast !== 'error' && t.contrast !== 'warn') out.push('theme.contrast is "error" (a pair below WCAG AA fails validate; the default) or "warn" (it is a warning).');
   if (t.default !== undefined && t.default !== null) {
     if (!isText(t.default)) out.push('theme.default is the name of one of theme.names.');
     else if (!names.includes(t.default)) out.push(`theme.default "${t.default}" is not one of theme.names (${names.join(', ') || 'none are listed'}).`);
@@ -146,7 +148,7 @@ const FORBIDDEN = [
  * @param {string} text
  * @param {string} gap
  */
-function withoutComments(text, gap) {
+export function withoutComments(text, gap) {
   let out = '';
   let quote = null;
   for (let i = 0; i < text.length; i++) {
