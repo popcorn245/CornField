@@ -169,7 +169,7 @@ function paintChip() {
     row.innerHTML = `
       <span class="hx-live-buttons">
         <button type="button" class="hx-btn" data-live="refresh"${loading ? ' disabled' : ''}>Refresh</button>
-        ${has ? '<button type="button" class="hx-btn" data-live="token-forget">Forget token</button>' : ''}
+        ${has ? '<button type="button" class="hx-btn" data-live="token-forget" data-corn-kind="danger">Forget token</button>' : ''}
       </span>
       <span class="hx-faint">${escHtml(source && source.name ? source.name : '')}</span>`;
   }

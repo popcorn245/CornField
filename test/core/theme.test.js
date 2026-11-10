@@ -131,7 +131,7 @@ describe('theme.icons and theme.pixelated: the config', () => {
 
 describe('cssProblems', () => {
   it('accepts plain CSS, with comments, strings and the allow-listed @import', () => {
-    const css = `/* javascript: in a comment is fine */\n@import url("${GOOGLE}");\n:root { --cf-accent: #e53e3e; }\n[data-cf="panel"]::before { content: "{ not a brace }"; }\n@media (prefers-color-scheme: dark) { :root { --cf-bg: #111; } }`;
+    const css = `/* javascript: in a comment is fine */\n@import url("${GOOGLE}");\n:root { --cf-accent: #e53e3e; }\n[data-corn="panel"]::before { content: "{ not a brace }"; }\n@media (prefers-color-scheme: dark) { :root { --cf-bg: #111; } }`;
     expect(cssProblems(css, { fonts: [GOOGLE] })).toEqual([]);
     expect(cssProblems('', {})).toEqual([]);
   });

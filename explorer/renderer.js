@@ -41,6 +41,7 @@ export function rendererPreference(search) {
 function addStandIn(canvas) {
   const standIn = canvas.ownerDocument.createElement('canvas');
   standIn.className = 'hx-overlay';
+  standIn.setAttribute('data-corn', 'map-overlay');
   standIn.setAttribute('aria-hidden', 'true');
   canvas.after(standIn);
   return standIn;

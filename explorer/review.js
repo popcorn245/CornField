@@ -60,12 +60,13 @@ function mount() {
     root = document.createElement('div');
     root.id = 'review';
     root.className = 'hx-review';
+    root.dataset.corn = 'review-bar';
     root.setAttribute('aria-label', 'Approve or send back');
     root.innerHTML = `
       <label class="hx-review-label" for="review-note">Note for the drafting agent</label>
       <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000" placeholder="What should change? Needed to send it back, optional to approve."></textarea>
       <div class="hx-review-row">
-        <button type="button" class="hx-btn hx-btn--approve" data-review="approved" title="Sign this proposal off">Approve</button>
+        <button type="button" class="hx-btn hx-btn--approve" data-review="approved" title="Sign this proposal off" data-corn-kind="approve">Approve</button>
         <button type="button" class="hx-btn" data-review="notes" title="Send it back to the drafting agent with the note and your edits">Send back</button>
         <span class="hx-review-status" data-review-status role="status"></span>
       </div>

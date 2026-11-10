@@ -13,6 +13,7 @@
 
 import { state, escHtml } from './state.js';
 import { mockupsOf } from '../core/proposal.js';
+import { cornStateAttr } from './corn-state.js';
 
 const STATE_WORDS = {
   approved: 'Reviewed',
@@ -55,11 +56,11 @@ export function mockupsFor(proposal, slug, source, nodeId, states = {}) {
  */
 export function mockupsSectionHtml(items) {
   if (!items.length) return '';
-  const rows = items.map((m) => `<li class="hx-mockup-item">
+  const rows = items.map((m) => `<li class="hx-mockup-item" data-corn="row">
       <button type="button" class="hx-btn hx-mockup-open" data-mockup="${m.index}" aria-haspopup="dialog">${escHtml(m.title)}<span class="hx-sr-only"> (${m.type === 'page' ? 'page' : 'image'}, opens in a window)</span></button>
-      <span class="hx-mockup-state hx-mockup-state--${escHtml(m.state)}">${escHtml(stateWords(m.state))}</span>
+      <span class="hx-mockup-state hx-mockup-state--${escHtml(m.state)}" data-corn="state-pill"${cornStateAttr(m.state)}>${escHtml(stateWords(m.state))}</span>
     </li>`).join('');
-  return `<div class="hx-sec hx-mockups" data-mockups>
+  return `<div class="hx-sec hx-mockups" data-mockups data-corn="section">
     <strong class="hx-strong" id="hx-mockups-h">${items.length === 1 ? 'Mockup' : 'Mockups'}</strong>
     <ul class="hx-mockup-list" aria-labelledby="hx-mockups-h">${rows}</ul>
   </div>`;

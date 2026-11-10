@@ -115,7 +115,7 @@ describe('a theme in the config', () => {
     try {
       expect((await ask(plain.port, '/')).body).not.toContain('cf-theme-name-css');
       const html = (await ask(nodefault.port, '/')).body;
-      expect(html).toContain('<link rel="stylesheet" id="cf-theme-name-css" data-cf-theme="name" />');
+      expect(html).toContain('<link rel="stylesheet" id="cf-theme-name-css" data-corn-theme="name" />');
       expect(html).toContain('<html lang="en" data-theme-names="a">');
     } finally { await plain.close(); await nodefault.close(); }
   });

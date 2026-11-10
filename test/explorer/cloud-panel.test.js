@@ -141,7 +141,7 @@ describe('the panel', () => {
 
   it('shows the badges, the plan, the breaks line and each when\'s group in order', () => {
     expect(html).toContain('hx-cloud-badges');
-    expect(html).toMatch(/Cloud<\/span><span class="hx-cloud-badge">runtime<\/span><span class="hx-cloud-badge">account/);
+    expect(html).toMatch(/Cloud<\/span><span class="hx-cloud-badge"[^>]*>runtime<\/span><span class="hx-cloud-badge"[^>]*>account/);
     expect(html).toContain('hx-cloud-plan--free');
     expect(html).toContain('If it\'s down:');
     expect(html).toContain('Now: names stop resolving.');
@@ -153,7 +153,7 @@ describe('the panel', () => {
   });
 
   it('marks a call the visitor\'s browser makes', () => {
-    expect(html).toMatch(/join\.example\.test<\/span>[^<]*<span class="hx-cloud-browser">\(browser\)<\/span>/);
+    expect(html).toMatch(/join\.example\.test<\/span>[^<]*<span class="hx-cloud-browser"[^>]*>\(browser\)<\/span>/);
     expect(html.match(/\(browser\)/g)).toHaveLength(1);
   });
 

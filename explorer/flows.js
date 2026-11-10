@@ -149,7 +149,7 @@ export function renderFlowLegend() {
 export function flowSummary(node) {
   const flows = state.edges.filter((e) => e.kind === 'flow' && (e.from === node.id || e.to === node.id));
   if (flows.length === 0) return '';
-  return `<div class="hx-sec"><strong class="hx-strong">Data flows:</strong>
+  return `<div class="hx-sec" data-corn="section"><strong class="hx-strong">Data flows:</strong>
     ${flows.map((e) => {
       const out = e.from === node.id;
       const s = FLOW_STYLES[e.flow] || FLOW_STYLES.sync;
