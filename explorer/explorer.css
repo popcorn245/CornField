@@ -690,6 +690,9 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-forge-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--corn-space-2) var(--corn-space-3); }
 .hx-forge-field { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); min-width: 0; font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-3); }
 .hx-forge-field--text { grid-column: 1 / -1; }
+/* The Start dialog's four limits: two a row, under their legend */
+.hx-forge-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--corn-space-2) var(--corn-space-3); margin: 0; padding: 0; border: 0; }
+.hx-forge-limits > legend { padding: 0 0 var(--corn-space-1); }
 .hx-forge-select, .hx-forge-input { width: 100%; min-width: 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
 .hx-forge-input::placeholder { color: var(--corn-text-3); }
 .hx-forge-input:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }

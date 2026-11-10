@@ -274,10 +274,44 @@ ${body}
 
 const signOutForm = '<form method="post" action="/auth/sign-out"><button class="button quiet" type="submit">Sign out</button></form>';
 
-/** The sign-in page */
-export const signInPage = (title, forgeName) => pageHtml(title, `Sign in to ${title}`, `
+/** The longest way back a sign-in keeps (as it comes out, percent-encoded): it rides in the state cookie, which stays small */
+const RETURN_MAX = 1024;
+/** What a way back may not hold: a control character or a backslash (browsers read `\\` as `/`) */
+const RETURN_BAD = /[\u0000-\u001f\u007f\\]/;
+/** A path the browser takes as this origin's: one `/`, then not a second `/` or a `\\` (`//x` is another host) */
+const isOwnPath = (p) => p[0] === '/' && p[1] !== '/' && p[1] !== '\\' && !RETURN_BAD.test(p);
+
+/**
+ * Where a sign-in may send the person back to: a same-origin relative path (with its query), or null. An absolute URL
+ * (`https://elsewhere`), a protocol-relative one (`//elsewhere`), a backslash trick (`/\\elsewhere`), a control character
+ * and the sign-in routes themselves are refused, so the return is never an open redirect. The path is checked again as
+ * the URL parser leaves it: it resolves dot segments, so `/.//elsewhere` and `/%2e//elsewhere` come out as `//elsewhere`.
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function safeReturn(raw) {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > RETURN_MAX || !isOwnPath(raw)) return null;
+  let parsed;
+  try { parsed = new URL(raw, 'http://cornfield.invalid'); } catch { return null; }
+  if (parsed.origin !== 'http://cornfield.invalid') return null;
+  const back = `${parsed.pathname}${parsed.search}`;
+  if (back.length > RETURN_MAX || !isOwnPath(back)) return null;
+  let path;
+  try { path = decodeURIComponent(parsed.pathname); } catch { return null; }
+  if (/^\/auth(\/|$)/i.test(path)) return null;
+  return back;
+}
+
+/** The sign-in start, with the way back (checked by safeReturn) when there is one */
+const startHref = (returnTo) => {
+  const back = safeReturn(returnTo);
+  return `/auth/start${back && back !== '/' ? `?return=${encodeURIComponent(back)}` : ''}`;
+};
+
+/** The sign-in page; `returnTo` (checked by safeReturn) is where the sign-in ends, so a link followed signed out is followed after */
+export const signInPage = (title, forgeName, returnTo = null) => pageHtml(title, `Sign in to ${title}`, `
 <p>This is the dev dashboard. Sign in with ${escapeHtml(forgeName)} to see it; it is open to the repo's maintainers.</p>
-<a class="button" href="/auth/start">Sign in with ${escapeHtml(forgeName)}</a>`);
+<a class="button" href="${escapeHtml(startHref(returnTo))}">Sign in with ${escapeHtml(forgeName)}</a>`);
 
 /** The one page a signed-in non-maintainer sees */
 export const askMaintainerPage = (title, login, repo) => pageHtml(title, 'This is the dev dashboard', `
@@ -285,10 +319,10 @@ export const askMaintainerPage = (title, login, repo) => pageHtml(title, 'This i
 <p>Made a maintainer since? Sign out and sign in again.</p>
 ${signOutForm}`);
 
-/** A sign-in that did not work, and the way to try again */
-const failedPage = (title, words) => pageHtml(title, 'Sign-in did not work', `
+/** A sign-in that did not work, and the way to try again (to the same place) */
+const failedPage = (title, words, returnTo = null) => pageHtml(title, 'Sign-in did not work', `
 <p>${escapeHtml(words)}</p>
-<a class="button" href="/auth/start">Try again</a>`);
+<a class="button" href="${escapeHtml(startHref(returnTo))}">Try again</a>`);
 
 /** The forge could not be asked about a session's permission */
 const uncheckedPage = (title, words) => pageHtml(title, 'Your access could not be checked', `
@@ -386,6 +420,13 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     res.writeHead(303, { Location: location, 'Cache-Control': 'no-store', ...(cookies.length ? { 'Set-Cookie': cookies } : {}) });
     res.end();
   };
+  /** Where a sign-in ends: the checked way back as an absolute URL on the public origin, or `/` */
+  const landAt = (back) => {
+    const path = safeReturn(back);
+    if (!path) return '/';
+    const to = new URL(path, publicUrl);
+    return to.origin === publicUrl.origin ? to.href : '/';
+  };
   const clearSession = cookie(SESSION_COOKIE, '', { maxAge: 0, secure });
   const clearState = cookie(STATE_COOKIE, '', { maxAge: 0, secure });
 
@@ -481,11 +522,13 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
 
   // --- the routes under /auth/ ---
 
-  function start(res) {
+  function start(res, url) {
     const state = random();
     const verifier = random();
     const expires = now() + STATE_MS;
-    const payload = `${state}.${verifier}.${expires}`;
+    // The way back is signed with the state: a 5th part, base64url (no dots), empty for none
+    const back = safeReturn(url.searchParams.get('return'));
+    const payload = `${state}.${verifier}.${expires}.${back ? b64url(Buffer.from(back)) : ''}`;
     const q = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', state, code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256' });
     if (endpoints.scope) q.set('scope', endpoints.scope);
     redirect(res, `${endpoints.authorize}?${q}`, [cookie(STATE_COOKIE, `${payload}.${macOf(keys.mac, `state:${payload}`)}`, { maxAge: STATE_MS / 1000, secure })]);
@@ -495,12 +538,14 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   function checkState(req, url) {
     const raw = parseCookies(req.headers.cookie)[STATE_COOKIE];
     const parts = raw ? raw.split('.') : [];
-    if (parts.length !== 4) return { error: 'The sign-in was started in another browser, or too long ago.' };
-    const [state, verifier, expires, mac] = parts;
-    if (!sameText(mac, macOf(keys.mac, `state:${state}.${verifier}.${expires}`))) return { error: 'The sign-in was started in another browser, or too long ago.' };
+    // A sign-in started before the way back was signed with it (4 parts) is not followed: it is started again
+    if (parts.length === 4) return { error: 'The sign-in was started before cornfield was updated. Start it again.' };
+    if (parts.length !== 5) return { error: 'The sign-in was started in another browser, or too long ago.' };
+    const [state, verifier, expires, back, mac] = parts;
+    if (!sameText(mac, macOf(keys.mac, `state:${state}.${verifier}.${expires}.${back}`))) return { error: 'The sign-in was started in another browser, or too long ago.' };
     if (!(Number(expires) > now())) return { error: 'The sign-in took too long.' };
     if (!sameText(state, url.searchParams.get('state') || '')) return { error: 'The sign-in came back with an answer to another request.' };
-    return { verifier };
+    return { verifier, returnTo: safeReturn(back ? Buffer.from(back, 'base64url').toString('utf8') : '') };
   }
 
   /**
@@ -678,8 +723,9 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   async function callback(req, res, url) {
     // The state cookie is cleared only by an answer to the sign-in it belongs to: a link from anywhere else
     // (`/auth/callback?error=x`) cannot cancel one in progress
-    const fail = (words, clear = true) => send(res, 400, failedPage(title, words), clear ? { 'Set-Cookie': clearState } : {});
     const checked = checkState(req, url);
+    // Try again goes back to the same place: the way back is known only from a state cookie that checked out
+    const fail = (words, clear = true) => send(res, 400, failedPage(title, words, checked.returnTo), clear ? { 'Set-Cookie': clearState } : {});
     if (checked.error) return fail(checked.error, false);
     if (url.searchParams.get('error')) return fail(url.searchParams.get('error') === 'access_denied' ? `The sign-in was cancelled on ${forgeName}.` : `${forgeName} did not sign you in.`);
     const code = url.searchParams.get('code');
@@ -711,7 +757,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       // Signed in, and not a maintainer: whatever API tokens they made while they were one stop working now
       await demoted(String(user.id), user.login, permission);
     }
-    redirect(res, '/', [cookie(SESSION_COOKIE, value, { maxAge: sessionMs / 1000, secure }), clearState]);
+    redirect(res, landAt(checked.returnTo), [cookie(SESSION_COOKIE, value, { maxAge: sessionMs / 1000, secure }), clearState]);
   }
 
   async function authRoute(req, res, reqPath, url) {
@@ -724,10 +770,11 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     }
     if (reqPath === '/auth/sign-in') {
       const { session } = await currentSession(req);
-      if (session?.admin) return redirect(res, '/');
-      return send(res, 200, req.method === 'HEAD' ? '' : signInPage(title, forgeName));
+      const back = safeReturn(url.searchParams.get('return'));
+      if (session?.admin) return redirect(res, landAt(back));
+      return send(res, 200, req.method === 'HEAD' ? '' : signInPage(title, forgeName, back));
     }
-    if (reqPath === '/auth/start') return start(res);
+    if (reqPath === '/auth/start') return start(res, url);
     if (reqPath === '/auth/callback') return callback(req, res, url);
     if (reqPath === '/auth/me') {
       const { session } = await currentSession(req);
@@ -762,7 +809,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const { session, unchecked } = await currentSession(req);
       if (!session) {
         req.resume();
-        answer(req, res, reqPath, 401, signInPage(title, forgeName), 'Sign in first.');
+        answer(req, res, reqPath, 401, signInPage(title, forgeName, `${url.pathname}${url.search}`), 'Sign in first.');
         return { done: true };
       }
       if (unchecked) {

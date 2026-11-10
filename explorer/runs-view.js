@@ -9,7 +9,7 @@
  */
 
 import { relativeTime } from './review-model.js';
-import { runTone, aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
+import { runTone, canRetry, aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 
 
 /**
@@ -49,10 +49,24 @@ function linksHtml(ctx, run) {
   ].filter(Boolean).join(' · ');
 }
 
-function timelineHtml(ctx, run) {
+/** A run id that is another run of the list is a button that takes you to it; otherwise it is plain text */
+function runLink(ctx, runId, all) {
+  const there = (all || []).some((r) => r.runId === runId);
+  return there ? `<button type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(runId)}" aria-label="Go to run ${ctx.esc(runId)}">${ctx.esc(runId)}</button>` : ctx.esc(runId);
+}
+
+/** Which run this one starts again, and which start it again */
+function retryHtml(ctx, run, all) {
+  const again = Array.isArray(run.retriedBy) ? run.retriedBy : [];
+  if (!run.retryOf && !again.length) return '';
+  return `<p class="hx-forge-meta">${run.retryOf ? `Starts again on ${runLink(ctx, run.retryOf, all)}` : ''}${run.retryOf && again.length ? ' · ' : ''}${again.length ? `Started again as ${again.map((id) => runLink(ctx, id, all)).join(', ')}` : ''}</p>`;
+}
+
+function timelineHtml(ctx, run, all) {
   const items = (run.timeline || []).map((e) => {
     const w = timelineWords(e);
-    return `<li><time datetime="${ctx.esc(e.at)}" title="${ctx.esc(e.at)}">${ctx.esc(relativeTime(e.at, ctx.now) || e.at)}</time>${ctx.esc(w.what)}${w.note ? `<span class="hx-run-note">${ctx.esc(w.note)}</span>` : ''}</li>`;
+    const goto = (e.kind === 'retry-of' || e.kind === 'retried-by') && e.ref && (all || []).some((r) => r.runId === e.ref) ? ` <button type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(e.ref)}" aria-label="Go to run ${ctx.esc(e.ref)}">Go to it</button>` : '';
+    return `<li><time datetime="${ctx.esc(e.at)}" title="${ctx.esc(e.at)}">${ctx.esc(relativeTime(e.at, ctx.now) || e.at)}</time>${ctx.esc(w.what)}${goto}${w.note ? `<span class="hx-run-note">${ctx.esc(w.note)}</span>` : ''}</li>`;
   });
   return `<ol class="hx-run-timeline" id="run-tl-${ctx.esc(run.runId)}" aria-label="Timeline of ${ctx.esc(run.runId)}, oldest first">${items.join('')}</ol>`;
 }
@@ -88,25 +102,27 @@ export function runHtml(ctx, run, all) {
   const why = statusWhy(run);
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
+  const retry = canRetry(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="Start again on run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Start again</button>` : '';
   const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Stop</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);
   const count = (run.timeline || []).length;
   const links = linksHtml(ctx, run);
-  return `<li class="hx-run hx-forge-file" data-run="${ctx.esc(run.runId)}">
+  return `<li class="hx-run hx-forge-file" data-run="${ctx.esc(run.runId)}" tabindex="-1">
     <div class="hx-run-head"><span class="hx-forge-state hx-forge-state--${tone}">${ctx.esc(statusWords(run))}</span> <span class="hx-name">${ctx.esc(run.kind)} on ${ctx.esc(aboutWords(run.refs))}</span>${run.profile ? ` <span class="hx-faint">profile ${ctx.esc(run.profile)}</span>` : ''}</div>
     ${collision ? `<p class="hx-run-collide"><span aria-hidden="true">⚠</span> ${ctx.esc(collision)}</p>` : ''}
     <p class="hx-forge-meta">${ctx.esc(runMeta(run, ctx.now))}</p>${why ? `<p class="hx-forge-why hx-faint">${ctx.esc(why)}</p>` : ''}${note}
     <dl class="hx-run-limits" aria-label="Limits and what the runner reported">${limits.length ? limits.map((r) => `<dt>${ctx.esc(r.name)}</dt><dd>limit: ${ctx.esc(r.limit)}; reported: ${ctx.esc(r.reported)}</dd>`).join('') : '<dt>Limits</dt><dd>none asked, nothing reported</dd>'}</dl>
     <p class="hx-forge-meta">${ctx.esc(checksWords(run))}</p>
     <p class="hx-forge-meta">${names.length ? `Changing ${run.nodesFrom === 'files' ? '' : 'or expected to change '}${ctx.esc(names.join(', '))}` : 'No node on the map yet.'}</p>
+    ${retryHtml(ctx, run, all)}
     ${links ? `<p class="hx-forge-meta">${links}</p>` : ''}
     ${answering ? answerHtml(ctx, run) : ''}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
-    <div class="hx-run-actions">${stop}
+    <div class="hx-run-actions">${stop}${retry}
       <button type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="Light the nodes of ${ctx.esc(run.runId)} on the map"${(run.nodes || []).length ? '' : ' disabled'}>${lit ? 'Lit on the map' : 'Light on the map'}</button>
       <button type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>
-    ${open ? timelineHtml(ctx, run) : ''}</li>`;
+    ${open ? timelineHtml(ctx, run, all) : ''}</li>`;
 }
 
 /**

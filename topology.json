@@ -1870,6 +1870,36 @@
       "desc": "The text of a run's **status comment** (issue #104, docs/agents.md#a-thread-for-every-run): the one comment cornfield keeps in the thread a run is about and edits in place as the run moves. (server/run-thread.js)"
     },
     {
+      "id": "core-explorer-deep-link",
+      "label": "deep-link.js",
+      "type": "core",
+      "file": "explorer/deep-link.js",
+      "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent … (explorer/deep-link.js)"
+    },
+    {
+      "id": "core-core-theme",
+      "label": "theme.js",
+      "type": "core",
+      "file": "core/theme.js",
+      "summary": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep. (core/theme.js)"
+    },
+    {
+      "id": "core-explorer-theme-names",
+      "label": "theme-names.js",
+      "type": "core",
+      "file": "explorer/theme-names.js",
+      "summary": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load. (explorer/theme-names.js)"
+    },
+    {
       "id": "page-doc-docs-theming",
       "type": "page",
       "label": "/docs/theming",
@@ -5915,6 +5945,78 @@
       "dashed": true
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-deep-link"
+    },
+    {
+      "from": "core-explorer-deep-link",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-deep-link",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-deep-link",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-deep-link",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-deep-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-theme"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-theme-names"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-plugins",
+      "to": "core-explorer-theme-names",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme-names",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-theming"
     },
@@ -5924,5 +6026,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T07:48:27.521Z"
+  "updatedAt": "2026-11-10T08:21:14.980Z"
 }

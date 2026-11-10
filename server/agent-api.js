@@ -3,11 +3,12 @@
  *
  * The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js).
  *
- *   POST /api/agent-requests             { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }, with `Authorization: Bearer cf_at_…`
+ *   POST /api/agent-requests             { kind, refs, profile?, brief?, branch?, limits?, nodes?, retryOf?, force? }, with `Authorization: Bearer cf_at_…`
  *   GET  /api/agent-requests             the queue, for a runner token: server/runner-api.js (and the pull transport's claim and report routes)
  *   GET  /api/agent-tokens               the signed-in maintainer's agent tokens (and POST, and /<id>/revoke: server/review-api.js)
  *   GET  /api/agent-runs[?follow=1]      the runs, newest first, with the cap and how many are open; `follow=1` looks at the forge first
  *   GET  /api/agent-runs/<runId>         one run
+ *   GET  /api/agent-runs/<runId>/brief   its whole brief, for Start again (the run shows the first 2000 characters): the signed-in maintainer's only
  *   POST /api/agent-runs                 the dashboard's Start an agent: the same body as the API
  *   POST /api/agent-runs/<runId>/stop    { note? } asks the runner to stop
  *   POST /api/agent-runs/<runId>/answer  { action: 'continue' | 'stop' | 'reply', text? } answers a run that reported `waiting`
@@ -157,11 +158,12 @@ export async function serveAgentCall(req, res, ctx) {
  * @returns {Promise<boolean>} whether the path was one of these
  */
 export async function serveRunRoutes(req, res, reqPath, ctx) {
-  const m = /^\/api\/agent-runs(?:\/(run-[0-9A-Za-z]{26}))?(\/stop|\/answer)?$/.exec(reqPath);
+  const m = /^\/api\/agent-runs(?:\/(run-[0-9A-Za-z]{26}))?(\/stop|\/answer|\/brief)?$/.exec(reqPath);
   if (!m || (m[2] && !m[1])) return false;
   const { auth, runs, session } = ctx;
   const runId = m[1] ?? null;
-  const allow = m[2] ? 'POST' : runId ? 'GET, HEAD' : 'GET, HEAD, POST';
+  const reading = m[2] === '/brief';
+  const allow = reading ? 'GET, HEAD' : m[2] ? 'POST' : runId ? 'GET, HEAD' : 'GET, HEAD, POST';
   if (!allow.split(', ').includes(req.method || '')) {
     req.resume();
     send(res, 405, { ok: false, error: 'Method not allowed.', code: 'invalid' }, { Allow: allow });
@@ -175,6 +177,12 @@ export async function serveRunRoutes(req, res, reqPath, ctx) {
 
   if (req.method === 'GET' || req.method === 'HEAD') {
     req.resume();
+    if (reading) {
+      // A session's only (the guard reads cookies, never a token), and a run of this repo's only
+      const brief = await runs.brief(/** @type {string} */ (runId));
+      send(res, brief !== null ? 200 : 404, brief !== null ? { ok: true, runId, brief } : { ok: false, error: 'cornfield has no such run.', code: 'not-found' });
+      return true;
+    }
     if (runId) {
       const run = isRunId(runId) ? await runs.get(runId) : null;
       send(res, run ? 200 : 404, run ? { ok: true, run } : { ok: false, error: 'cornfield has no such run.', code: 'not-found' });

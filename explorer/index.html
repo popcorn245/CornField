@@ -8,11 +8,15 @@
   <!--@importmap-->
 
   <!-- The explorer's own stylesheet and modules (explorer/): no build step, no CDN -->
-  <!-- Light or dark on <html data-theme> before the first paint (theme-boot.js; theme.js keeps it after) -->
-  <script src="/explorer/theme-boot.js"></script>
   <link rel="stylesheet" href="/explorer/tokens.css" />
   <link rel="stylesheet" href="/explorer/explorer.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
+  <!-- The config's theme (server/server.js puts it here, so it comes after cornfield's own CSS): font stylesheets, the repo's theme.css, a named theme -->
+  <!--@theme-->
+  <!-- Light or dark on <html data-theme>, and the named theme on <html data-theme-name>, before the first paint (theme-boot.js; theme.js
+       keeps it after). A classic script in the head, after every stylesheet link: it runs before the body is parsed, so before anything is
+       drawn, and the named theme's <link> above already exists when it runs. Keep it the last thing in the head. -->
+  <script src="/explorer/theme-boot.js"></script>
 </head>
 <body>
   <!-- Top bar: layers, data-flow preset, search, layout mode, zoom, links -->
@@ -157,6 +161,9 @@
           <g data-icon="dark" hidden><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z" fill="currentColor" /></g>
         </svg>
       </button>
+
+      <!-- The named themes of the config (`theme.names`): filled and shown by explorer/theme-names.js; hidden when there are none -->
+      <select id="theme-name-select" class="hx-forge-select" style="width:auto;max-width:9rem" aria-label="Theme" title="Theme" hidden></select>
 
       <!-- The config's links (cornfield.config.js `links`), filled by explorer/plugins.js -->
       <span id="cf-links" class="hx-links"></span>
@@ -366,10 +373,16 @@
       <h2 id="agent-start-title" class="hx-confirm-title">Start an agent</h2>
       <p id="agent-start-about" class="hx-forge-meta"></p>
       <p id="agent-start-runner" class="hx-forge-meta" hidden></p>
+      <p id="agent-retry-note" class="hx-forge-meta" hidden></p>
       <form id="agent-start-form" class="hx-forge-confirm" novalidate>
       <label class="hx-forge-field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
       <label id="agent-profile-field" class="hx-forge-field" hidden>Profile<select id="agent-profile" class="hx-forge-select"></select></label>
-      <p id="agent-limits" class="hx-forge-meta" hidden></p>
+      <fieldset id="agent-limits-edit" class="hx-forge-field hx-forge-limits"><legend>Limits, hints for the runner (one left blank takes the config's, if any)</legend>
+        <label class="hx-forge-field">Minutes<input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field">Turns<input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
+        <label class="hx-forge-field">Cost<input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field">Tokens<input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
+      </fieldset>
       <label class="hx-forge-field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
       <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
       <p id="agent-start-words" class="hx-confirm-note"></p>

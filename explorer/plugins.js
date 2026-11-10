@@ -15,6 +15,7 @@
  */
 
 import { escHtml } from './state.js';
+import { initThemePicker } from './theme-names.js';
 
 /** What the live layer shows when the repo names no live source */
 export const NO_SOURCE = Object.freeze({
@@ -43,6 +44,7 @@ export function applyBranding(doc, config) {
   if (title && config.title) title.textContent = config.title;
   const heading = doc.getElementById('cf-heading');
   if (heading && config.title) heading.textContent = `${config.title}: the map`;
+  initThemePicker(doc, config.theme);
   const links = doc.getElementById('cf-links');
   if (!links) return;
   const html = Array.isArray(config.links) ? config.links

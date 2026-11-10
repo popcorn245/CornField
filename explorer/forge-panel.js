@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -79,7 +79,7 @@ import {
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
   listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
-  threadsUrl, threadUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
+  threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -122,7 +122,8 @@ const ui = {
   runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
   runTimelines: new Set(), // the runs whose timeline is open
   runReplies: new Map(), // the reply typed so far for each waiting run, so a repaint (the runs are looked at again) keeps it
-  agent: null, // { opener, refs, posting } while the Start an agent dialog is open
+  agent: null, // { opener, refs, posting, retryOf, filled } while the Start an agent dialog is open
+  retrying: false, // a Start again reading its run's whole brief, so a second click does nothing
 };
 
 /** The Release notes view: the draft loaded for a tag, and where the confirm step is */
@@ -1052,6 +1053,7 @@ function findAgain(el) {
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
   if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
+  if (el.dataset.forgeRetry) return `[data-forge-retry="${el.dataset.forgeRetry}"]`;
   if (el.dataset.runReply) return `[data-run-reply="${el.dataset.runReply}"]`;
   if (el.dataset.runAnswer) return `[data-run-answer="${el.dataset.runAnswer}"][data-run-id="${el.dataset.runId}"]`;
   if (el.dataset.runSelect) return `[data-run-select="${el.dataset.runSelect}"]`;
@@ -1451,25 +1453,37 @@ function keepFocusInAgent(e) {
   if (ui.agent && el && !el.contains(e.target)) $('agent-kind').focus();
 }
 
-/** Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field */
-async function openAgent(ref, opener) {
+/**
+ * Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field. The limit fields hold what the request
+ * starts from (the config's, for the profile). With `again` (a run that failed or was stopped) it is **Start again**: the same kind, refs,
+ * profile, brief and limits filled in, all editable, and the request will carry `retryOf`. `brief` is that run's whole brief when the list's was cut
+ */
+async function openAgent(ref, opener, again = null, brief = null) {
   if (!agentEl() || ui.agent) return;
   const at = ref.indexOf(':');
   const type = ref.slice(0, at);
   const value = ref.slice(at + 1);
-  const refs = type === 'proposal' ? { proposal: value } : { issue: Number(value) };
-  ui.agent = { opener, refs, posting: false };
+  const refs = again ? retryRefs(again) : type === 'proposal' ? { proposal: value } : { issue: Number(value) };
+  ui.agent = { opener, refs, posting: false, retryOf: again ? again.runId : null };
   // The profiles the config lists come with the runs: asked for if the Agents tab has not been opened yet
   if (!ui.runs) { await loadRuns(false); if (ui.kind === 'work') paint(); }
   if (!ui.agent) return;
   const profiles = (ui.runs && ui.runs.data && ui.runs.data.profiles) || [];
   $('agent-start-about').textContent = `About ${aboutWords(refs)}`;
   paintRunner('agent-start-runner', ui.runs && ui.runs.data);
-  $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
-  $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
-  $('agent-profile-field').hidden = !profiles.length;
-  paintLimits();
-  $('agent-brief').value = '';
+  const kind = again ? again.kind : 'code';
+  // The old run's profile stays on offer even if the config no longer lists it: the server then says so, in its words
+  const shown = again && again.profile && !profiles.includes(again.profile) ? [...profiles, again.profile] : profiles;
+  $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === kind)).join('');
+  $('agent-profile').innerHTML = option('', 'No profile', !(again && again.profile)) + shown.map((p) => option(p, p, !!again && p === again.profile)).join('');
+  $('agent-profile-field').hidden = !shown.length;
+  $('agent-profile').value = again && again.profile ? again.profile : ''; // as well as `selected`, which not every DOM honours
+  $('agent-start-title').textContent = again ? 'Start again' : 'Start an agent';
+  const note = $('agent-retry-note');
+  note.hidden = !again;
+  note.textContent = again ? retryWords(again) : '';
+  fillLimits(again ? again.limits || {} : limitDefaultsNow());
+  $('agent-brief').value = brief ?? (again && typeof again.brief === 'string' ? again.brief : '');
   $('agent-force').checked = false;
   $('agent-force-field').hidden = true;
   $('agent-start-msg').hidden = true;
@@ -1482,16 +1496,54 @@ async function openAgent(ref, opener) {
   document.addEventListener('focusin', keepFocusInAgent);
   agentEl().hidden = false;
   $('agent-kind').focus();
-  announce(`Start an agent on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+  announce(`${again ? 'Start again' : 'Start an agent'} on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
 }
 
-/** The limits the request will carry for the chosen profile, read-only under the select; the server fills them in */
-function paintLimits() {
-  const el = $('agent-limits');
-  if (!el) return;
-  const words = limitsWords(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
-  el.hidden = !words;
-  el.textContent = words;
+/** "Start again" on a run that failed or was stopped. A brief the list shows cut is read whole first: the dialog never starts from part of one */
+async function startAgain(runId) {
+  const run = ui.runs && ui.runs.data ? ui.runs.data.runs.find((r) => r.runId === runId) : null;
+  if (!run || !canRetry(run) || ui.agent || ui.retrying) return;
+  let brief = null;
+  if (run.briefCut) {
+    ui.retrying = true;
+    const res = await request(briefUrl(runId), false);
+    ui.retrying = false;
+    if (!res.ok || typeof res.body.brief !== 'string') {
+      ui.runNote = { text: `The brief of ${runId} could not be read, so Start again did not open: ${errorWords(res.status, res.body)}`, ok: false };
+      paint();
+      announce(ui.runNote.text);
+      return;
+    }
+    brief = res.body.brief;
+  }
+  const about = run.refs.proposal != null ? `proposal:${run.refs.proposal}` : `issue:${run.refs.issue ?? run.refs.thread}`;
+  openAgent(about, `[data-forge-retry="${runId}"]`, run, brief);
+}
+
+/** Takes the person to another run of the list: the row scrolls into view and has the focus */
+function goToRun(runId) {
+  bringIntoView([...document.querySelectorAll('#forge-runs-list [data-run]')].find((r) => r.dataset.run === runId));
+}
+
+/** The limits the config gives a request under the chosen profile */
+const limitDefaultsNow = () => defaultLimits(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
+/** What the four limit fields hold, as text */
+const limitFields = () => Object.fromEntries(LIMIT_KEYS.map((k) => [k, $(`agent-limit-${k}`).value]));
+
+/** Fills the four limit fields (blank where `limits` has none) and remembers what was filled */
+function fillLimits(limits) {
+  for (const k of LIMIT_KEYS) {
+    const field = $(`agent-limit-${k}`);
+    field.value = limits && limits[k] != null ? String(limits[k]) : '';
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+  if (ui.agent) ui.agent.filled = JSON.stringify(limitFields());
+}
+
+/** Another profile: its limits fill the fields, unless the person has typed in them */
+function onAgentProfile() {
+  if (ui.agent && ui.agent.filled === JSON.stringify(limitFields())) fillLimits(limitDefaultsNow());
 }
 
 /** Closes the dialog; the focus goes back to the button that opened it unless told not to */
@@ -1517,8 +1569,30 @@ async function submitAgent(e) {
   go.setAttribute('aria-busy', 'true');
   go.textContent = 'Asking …';
   $('agent-start-msg').hidden = true;
+  const again = ui.agent.retryOf;
+  const fields = limitFields();
+  const limits = limitsFromFields(fields);
+  // Each field that is not a number above zero is marked, and the first has the focus; the message says why
+  const wrong = LIMIT_KEYS.filter((k) => limitsFromFields({ [k]: fields[k] }) === null);
+  for (const k of LIMIT_KEYS) {
+    const field = $(`agent-limit-${k}`);
+    if (wrong.includes(k)) { field.setAttribute('aria-invalid', 'true'); field.setAttribute('aria-describedby', 'agent-start-msg'); } else { field.removeAttribute('aria-invalid'); field.removeAttribute('aria-describedby'); }
+  }
+  if (limits === null) {
+    ui.agent.posting = false;
+    go.disabled = false;
+    go.removeAttribute('aria-busy');
+    go.textContent = 'Ask the runner';
+    const bad = $('agent-start-msg');
+    bad.textContent = `A limit is a number above zero, or blank for the config's (${wrong.join(', ')}).`;
+    bad.hidden = false;
+    $(`agent-limit-${wrong[0]}`).focus();
+    announce(bad.textContent);
+    return;
+  }
   const res = await post(RUNS_URL, startBody({
     kind: $('agent-kind').value, profile: $('agent-profile-field').hidden ? '' : $('agent-profile').value, brief: $('agent-brief').value, refs: ui.agent.refs, force: $('agent-force').checked,
+    limits, ...(again ? { retryOf: again } : {}),
   }));
   if (!ui.agent) return;
   ui.agent.posting = false;
@@ -1616,7 +1690,7 @@ async function answerRun(runId, action) {
 export const isForgeOpen = () => ui.open;
 
 /** Opens the panel with the focus on its title; the first time, loads the pull requests */
-export function openForge() {
+export function openForge({ load = true } = {}) {
   const panel = $('forge-panel');
   if (!panel || panel.hidden) return;
   ui.open = true;
@@ -1627,8 +1701,91 @@ export function openForge() {
   const title = $('forge-title');
   title.focus();
   announce('Issues and pull requests');
+  if (!load) return; // a deep link loads the list it wants itself (openTab)
   if (ui.kind === 'notes') { if (!ui.notes.data && !ui.notes.loading) loadNotes(); else paint(); return; }
   if (!current()) { paintFilters(); loadList(); } else paint();
+}
+
+// ---------------------------------------------------------------------------
+//  Deep links (explorer/deep-link.js): a run, an issue, a proposal's Start dialog
+// ---------------------------------------------------------------------------
+
+/** Shows `tab` in the panel, opened (and, on a phone, expanded), with its list read; resolves when the list is in */
+async function openTab(tab) {
+  ui.kind = tab;
+  ui.filters = defaultFilters(tab); // a filter left from before must not hide what the link names
+  ui.actNote = null;
+  paintFilters();
+  if (!ui.open) openForge({ load: false });
+  if (isPhone()) expandSheet('forge');
+  if (current()) paint(); else await loadList();
+}
+
+/** What a link names is not there: a line in the panel, said through the live region */
+function linkMissing(words) {
+  ui.actNote = { ok: false, text: words };
+  paint();
+  announce(words);
+  return false;
+}
+
+/** Moves the focus to `el` (made focusable if it is a row) and brings it into view */
+function bringIntoView(el) {
+  if (!el) return;
+  if (!el.matches('button, a, input, select, textarea')) el.setAttribute('tabindex', '-1');
+  el.focus();
+  if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+}
+
+/** `?run=<runId>`: the Agents tab with that run lit and in view. A run that is not there is said, never a blank panel. */
+export async function openRunLink(id) {
+  if (!ui.config) return false;
+  await openTab('work');
+  if (!(ui.runs && ui.runs.data)) await loadRuns(false, { say: false });
+  let run = runById(id);
+  // A run asked for a moment ago may not be in what was read before: ask once more, past the cache
+  if (!run && ui.runs && ui.runs.data) { await loadRuns(true, { say: false }); run = runById(id); }
+  if (!run) return linkMissing(ui.runs && ui.runs.data ? `There is no run ${id}.` : (ui.runs && ui.runs.error) || 'The runs could not be read.');
+  if (ui.runSel !== id) selectRun(id);
+  paint();
+  bringIntoView($('forge-runs-list').querySelector(`[data-run="${id}"]`));
+  announce(`Run ${id}, in the Runs view`);
+  return true;
+}
+
+/** `?issue=<n>`: the Issues tab with that issue's Start an agent button in view and focused, ready to press */
+export async function openIssueLink(n) {
+  if (!ui.config) return false;
+  await openTab('issues');
+  const list = current();
+  if (!list) return linkMissing(ui.error || 'The issues could not be read.');
+  const item = list.items.find((i) => i.number === n);
+  if (!item) return issueNotListed(n);
+  paint();
+  const start = $('forge-list').querySelector(`[data-forge-agent="issue:${n}"]`);
+  bringIntoView(start);
+  announce(`Issue ${n}: ${item.title}. Start an agent is ready`);
+  return true;
+}
+
+/** An issue the open list does not hold: asked for once, directly, so a closed one is called closed and a missing one missing */
+async function issueNotListed(n) {
+  const res = await request(issueUrl(n));
+  if (res.ok && res.body.issue) {
+    const { issue } = res.body;
+    ui.actNote = { ok: false, text: issue.state === 'closed' ? `Issue ${n} is closed: ${issue.title}` : `Issue ${n} is open, but not in the list shown here: ${issue.title}`, url: issue.url };
+    paint();
+    announce(ui.actNote.text);
+    return false;
+  }
+  return linkMissing(res.status === 404 ? `There is no issue ${n}.` : errorWords(res.status, res.body));
+}
+
+/** `?proposal=<slug>&start=1`: the Start dialog on that proposal (the proposal itself is opened by proposal.js) */
+export async function openProposalStart(slug) {
+  if (!ui.config || !agentEl()) return false;
+  await openAgent(`proposal:${slug}`, '#forge-title');
+  return !!ui.agent;
 }
 
 /** Closes the panel. What a selected pull request lit stays lit (the button says which); Clear lets go of it. */
@@ -1740,6 +1897,10 @@ function onClick(e) {
   if (agent) { openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
   const stop = t.closest('[data-forge-stop]');
   if (stop) { stopRun(stop.dataset.forgeStop); return; }
+  const retry = t.closest('[data-forge-retry]');
+  if (retry) { startAgain(retry.dataset.forgeRetry); return; }
+  const goto = t.closest('[data-run-goto]');
+  if (goto) { goToRun(goto.dataset.runGoto); return; }
   const answer = t.closest('[data-run-answer]');
   if (answer) { answerRun(answer.dataset.runId, answer.dataset.runAnswer); return; }
   const pick = t.closest('[data-run-select]');
@@ -1873,7 +2034,7 @@ export function initForgePanel(config, opts = {}) {
       agent.addEventListener('click', onAgentClick);
       agent.addEventListener('keydown', onAgentKey);
       agent.querySelector('form').addEventListener('submit', submitAgent);
-      $('agent-profile').addEventListener('change', paintLimits);
+      $('agent-profile').addEventListener('change', onAgentProfile);
     }
     const confirm = confirmEl();
     if (confirm) {
@@ -1915,5 +2076,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
 }

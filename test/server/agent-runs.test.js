@@ -1082,3 +1082,124 @@ describe('what the runners reported, added up (CF-27)', () => {
     expect((await t.runs.list()).totals).toEqual({ all: null, byProposal: [], byDay: [] });
   });
 });
+
+describe('starting again (retryOf)', () => {
+  /** Asks, then has the runner report `state`, and looks (so cornfield knows) */
+  async function over(t, state, extra = {}) {
+    const first = await ask(t, code(extra));
+    expect(first.ok, JSON.stringify(first)).toBe(true);
+    t.wait(60_000);
+    t.say(extra.refs?.issue ?? 12, 'runner-bot', formatRunComment(first.request.runId, { state, ...(state === 'failed' ? { note: 'unknown profile' } : {}) }));
+    await t.runs.follow(t.as('maintainer-one'));
+    t.wait(10_000);
+    return first.request.runId;
+  }
+
+  it('carries retryOf in the request and its block, and links the two runs both ways, in the timeline too', async () => {
+    const t = setup({ config: { profiles: ['claude'] } });
+    const old = await over(t, 'failed', { profile: 'claude', limits: { minutes: 20 } });
+    expect(await t.runs.get(old)).toMatchObject({ status: 'failed', retryOf: null, retriedBy: [], briefCut: false });
+    const again = await ask(t, code({ profile: 'claude', limits: { minutes: 20 }, retryOf: old }));
+    expect(again.ok, JSON.stringify(again)).toBe(true);
+    expect(again.request).toMatchObject({ retryOf: old, kind: 'code', refs: { issue: 12 }, profile: 'claude', brief: 'Add the meals page.', limits: { minutes: 20 } });
+    const comment = t.world.comments.get(12).at(-1);
+    expect(readRunBlocks(comment.body).blocks[0].value.retryOf).toBe(old);
+    expect(again.run).toMatchObject({ retryOf: old, status: 'requested' });
+    expect(again.run.timeline.map((e) => [e.kind, e.ref])).toEqual([['requested', 'claude'], ['retry-of', old]]);
+    const before = await t.runs.get(old);
+    expect(before.retriedBy).toEqual([again.request.runId]);
+    expect(before.timeline.at(-1)).toMatchObject({ kind: 'retried-by', ref: again.request.runId });
+    const listed = (await t.runs.list()).runs;
+    expect(listed.find((r) => r.runId === old).retriedBy).toEqual([again.request.runId]);
+    expect(listed.find((r) => r.runId === again.request.runId).retryOf).toBe(old);
+    expect(t.rows().filter((r) => r.action === 'agent-request').at(-1).request.retryOf).toBe(old);
+  });
+
+  it('takes a stopped run too, and its whole brief is read apart when the list shows it cut', async () => {
+    const t = setup();
+    const long = `${'x'.repeat(2400)} the end`;
+    const old = await over(t, 'stopped', { brief: long });
+    expect(await t.runs.get(old)).toMatchObject({ status: 'stopped', briefCut: true });
+    expect((await t.runs.get(old)).brief).toHaveLength(2000);
+    expect(await t.runs.brief(old)).toBe(long);
+    expect((await ask(t, code({ brief: long, retryOf: old }))).ok).toBe(true);
+  });
+
+  it('reads a brief of this repo only: another repo\'s run, an unknown id and a non-id are null', async () => {
+    const t = setup();
+    const old = await over(t, 'failed', { brief: 'Mine.' });
+    expect(await t.runs.brief(old)).toBe('Mine.');
+    // the same store, another repo's run: as if it were not there
+    const theirs = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF7';
+    const row = { ...t.db.prepare('SELECT * FROM runs WHERE run_id = ?').get(old), run_id: theirs, repo: 'other/repo', request: JSON.stringify({ brief: 'Theirs.', retryOf: old }) };
+    t.db.prepare(`INSERT INTO runs (${Object.keys(row).join(', ')}) VALUES (${Object.keys(row).map(() => '?').join(', ')})`).run(...Object.values(row));
+    expect(await t.runs.brief(theirs)).toBeNull();
+    expect(await t.runs.get(theirs)).toBeNull();
+    // nor does another repo's run that names this one show as starting it again
+    expect((await t.runs.get(old)).retriedBy).toEqual([]);
+    expect(await ask(t, code({ retryOf: theirs }))).toMatchObject({ ok: false, status: 404, code: 'not-found' });
+    expect(await t.runs.brief(RUN)).toBeNull();
+    expect(await t.runs.brief('run-1')).toBeNull();
+    expect(await t.runs.brief(undefined)).toBeNull();
+  });
+
+  it('checks retryOf before the cap and the one-open-run rule, so a bad one is said as such', async () => {
+    const t = setup({ config: { maxOpen: 1 } });
+    const done = await over(t, 'done');
+    const open = await ask(t, code({ refs: { issue: 13 } }));
+    expect(open.ok).toBe(true);
+    t.wait(10_000);
+    expect(await ask(t, code({ retryOf: RUN }))).toMatchObject({ status: 404, code: 'not-found' });
+    t.wait(10_000);
+    expect(await ask(t, code({ refs: { issue: 13 }, retryOf: open.request.runId }))).toMatchObject({ status: 409, code: 'retry-open' });
+    t.wait(10_000);
+    expect(await ask(t, code({ retryOf: done }))).toMatchObject({ status: 409, code: 'retry-not-over' });
+    t.wait(10_000);
+    expect(await ask(t, code())).toMatchObject({ status: 409, code: 'cap-reached' });
+  });
+
+  it('refuses a retryOf that is not a run id, is the run itself, or names an unknown run', async () => {
+    const t = setup();
+    expect(await ask(t, code({ retryOf: 'run-1' }))).toMatchObject({ ok: false, status: 400, code: 'invalid' });
+    t.wait(10_000);
+    expect(await ask(t, code({ retryOf: 7 }))).toMatchObject({ ok: false, status: 400, code: 'invalid' });
+    t.wait(10_000);
+    const unknown = await ask(t, code({ retryOf: RUN }));
+    expect(unknown).toMatchObject({ ok: false, status: 404, code: 'not-found' });
+    expect(unknown.error).toMatch(/not a run of owner\/name/);
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM runs').get().n).toBe(0);
+    expect(t.world.comments.size).toBe(0);
+  });
+
+  it('refuses a run that is still open, and one that ended another way, with the reason', async () => {
+    const t = setup();
+    const open = await ask(t, code({ refs: { issue: 13 } }));
+    t.wait(10_000);
+    const stillOpen = await ask(t, code({ retryOf: open.request.runId }));
+    expect(stillOpen).toMatchObject({ ok: false, status: 409, code: 'retry-open' });
+    expect(stillOpen.error).toMatch(/still open \(requested\)/);
+    t.wait(10_000);
+    const done = await over(t, 'done', { refs: { issue: 14 } });
+    const notOver = await ask(t, code({ retryOf: done }));
+    expect(notOver).toMatchObject({ ok: false, status: 409, code: 'retry-not-over' });
+    expect(notOver.error).toMatch(/ended as done/);
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM runs').get().n).toBe(2);
+  });
+
+  it('is a request like any other: the one-open-run rule and the cap apply, and force lifts only the first', async () => {
+    const t = setup();
+    const old = await over(t, 'failed');
+    const first = await ask(t, code({ retryOf: old }));
+    expect(first.ok).toBe(true);
+    t.wait(10_000);
+    // the first retry is open on issue 12 now
+    const second = await ask(t, code({ retryOf: old }));
+    expect(second).toMatchObject({ ok: false, status: 409, code: 'run-open' });
+    t.wait(10_000);
+    expect((await ask(t, code({ retryOf: old, force: true }))).ok).toBe(true);
+    t.wait(10_000);
+    expect((await ask(t, code({ refs: { issue: 13 } }))).ok).toBe(true); // the third open run
+    t.wait(10_000);
+    expect(await ask(t, code({ retryOf: old, force: true }))).toMatchObject({ ok: false, status: 409, code: 'cap-reached' });
+  });
+});
