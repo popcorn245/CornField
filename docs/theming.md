@@ -350,6 +350,67 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `field` | a labelled form field, its control inside |
 | `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |
 
+## Words
+
+A brand can speak in its own voice: `strings` in `cornfield.config.js` is a flat map that overrides the visible labels, so the menus say what the brand says.
+
+```js
+strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
+```
+
+- **A missing key keeps the default.** Say only the words you want to change.
+- **An unknown key is refused**, by `cornfield validate` and when the config loads, with the key named and the known ones listed.
+- **A value is plain text**: one line, at most 80 characters, not empty. HTML is not an error, it is shown as the characters you wrote (`<b>` stays `<b>`): a value reaches the page through `textContent` and attributes only, never as markup.
+- **The server sends only the overridden keys**, in `strings` of `/cornfield/config.json`. The key list is one table, `STRINGS` in `core/strings.js`; the config check, the browser and this page all read it, and a test fails when this table and `STRINGS` differ.
+- **Accessible names follow the words.** A control's name is its visible label: when you override a key, the visible text and the control's `aria-label` carry the same words. Where a name adds a fixed target, only the label part changes: with `stop: 'Halt'`, the button reads "Halt" and a screen reader says "Halt run 7". So a screen reader says what the screen shows. A longer word has to fit its button.
+
+Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
+
+<!-- strings:start -->
+| Key | Default |
+|---|---|
+| `layers` | Layers |
+| `dataFlow` | Data flow |
+| `house` | House |
+| `proposals` | Proposals |
+| `issuesAndPrs` | Issues & PRs |
+| `searchPlaceholder` | Search... |
+| `signOut` | Sign out |
+| `poweredBy` | powered by cornfield |
+| `before` | Before |
+| `diff` | Diff |
+| `after` | After |
+| `closeProposal` | Close |
+| `approve` | Approve |
+| `sendBack` | Send back |
+| `reviewNoteLabel` | Note for the drafting agent |
+| `reviewNotePlaceholder` | What should change? Needed to send it back, optional to approve. |
+| `tabPulls` | Pull requests |
+| `tabIssues` | Issues |
+| `tabThreads` | Threads |
+| `tabDeploys` | Deploys |
+| `tabAgents` | Agents |
+| `tabNotes` | Release notes |
+| `newIdea` | New idea |
+| `landIt` | Land it |
+| `startAgent` | Start an agent |
+| `askRunner` | Ask the runner |
+| `startAgain` | Start again |
+| `stop` | Stop |
+| `continueRun` | Continue |
+| `reply` | Reply |
+| `propsTitle` | Properties & Attributes |
+| `detailsTitle` | Details |
+| `openRoute` | Open Live Route |
+| `copySpec` | Copy Spec |
+| `hintInspect` | Tap node to inspect live spec |
+| `hintDrag` | Drag nodes to move • Double-tap to inspect |
+| `hintDataFlow` | Data flow: browser → servers → API → tables → services → outside |
+| `loading` | Loading topology.json … |
+| `errorTitle` | The map could not be loaded |
+| `retry` | Retry |
+<!-- strings:end -->
+
 ## The old `--hx-*` names
 
 `tokens.css` keeps the old names as aliases for one release, so `scene.js`, `proposal.js` (which writes `--hx-mark-*` on `:root` for the map's own ground) and any plugin CSS keep working: `--hx-indigo: var(--corn-accent-text)`, `--hx-line: var(--corn-line)`, `--hx-mark-added: var(--corn-added)`, and so on. **The aliases go in the next minor release.** Write `--corn-*` in new CSS.

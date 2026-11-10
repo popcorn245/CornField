@@ -82,6 +82,7 @@ import {
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 import { cornStateAttr } from './corn-state.js';
+import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
@@ -883,7 +884,7 @@ function itemHtml(item, before = '', after = '') {
     ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${item.number}" aria-label="Start a spec for issue ${item.number}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
     : '';
   const agent = item.state === 'open'
-    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${item.number}" aria-label="Start an agent on issue ${item.number}">Start an agent …</button>`
+    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${item.number}" aria-label="${escHtml(t('startAgent'))} on issue ${item.number}">${escHtml(t('startAgent'))} …</button>`
     : '';
   return link
     ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer" data-corn="row">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a>${spec}${agent}</li>`
@@ -906,7 +907,7 @@ function groupsHtml(groups) {
   return groups.map((g, i) => {
     const link = g.issue && safeUrl(g.issue.url) ? ` <a class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
     const startRef = g.kind === 'issue' && g.issue && g.issue.state === 'open' ? `issue:${g.number}` : g.kind === 'proposal' ? `proposal:${g.slug}` : null;
-    const start = startRef ? ` <button type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="Start an agent on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">Start an agent …</button>` : '';
+    const start = startRef ? ` <button type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="${escHtml(t('startAgent'))} on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">${escHtml(t('startAgent'))} …</button>` : '';
     return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3>${start}<p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
   }).join('');
 }
@@ -1012,7 +1013,7 @@ function detailHtml() {
   const block = mergeBlock(ui.detail);
   const act = block
     ? `<p class="hx-forge-why hx-faint">${pull.state === 'merged' ? '' : 'Cannot be landed from here. '}${escHtml(block)}</p>`
-    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">Land it …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
+    : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${pull.number}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button><p class="hx-forge-why hx-faint">Opens a confirm step that shows what will land. Never forced, never deployed.</p>`;
   // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
   const waiting = ui.landing && pull.state === 'open'
     ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, now()))}</p><button type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
@@ -1034,7 +1035,7 @@ function detailHtml() {
     <h4 class="hx-forge-sub">Checks: ${escHtml(checksWords(checks))}</h4>
     ${checks.length ? `<ul class="hx-forge-checks">${checkRows}</ul>` : ''}
     ${build}
-    <h4 class="hx-forge-subact">Land it</h4>
+    <h4 class="hx-forge-subact">${escHtml(t('landIt'))}</h4>
     ${note}
     ${waiting}
     ${act}
@@ -1322,7 +1323,7 @@ function showConfirm(what, goLabel, state) {
 /** Opens the confirm step for landing the selected pull request: what will land, exactly */
 function openConfirm(opener) {
   if (!confirmEl() || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
-  showConfirm(confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod), 'Land it', { opener, kind: 'merge' });
+  showConfirm(confirmMerge(ui.detail, forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod), t('landIt'), { opener, kind: 'merge' });
 }
 
 /** What a pipeline step came to, on the panel (with a link to what it made) and through the live region */
@@ -1483,7 +1484,7 @@ async function openAgent(ref, opener, again = null, brief = null) {
   $('agent-profile').innerHTML = option('', 'No profile', !(again && again.profile)) + shown.map((p) => option(p, p, !!again && p === again.profile)).join('');
   $('agent-profile-field').hidden = !shown.length;
   $('agent-profile').value = again && again.profile ? again.profile : ''; // as well as `selected`, which not every DOM honours
-  $('agent-start-title').textContent = again ? 'Start again' : 'Start an agent';
+  $('agent-start-title').textContent = again ? t('startAgain') : t('startAgent');
   const note = $('agent-retry-note');
   note.hidden = !again;
   note.textContent = again ? retryWords(again) : '';
@@ -1497,11 +1498,11 @@ async function openAgent(ref, opener, again = null, brief = null) {
   const go = $('agent-start-go');
   go.disabled = false;
   go.removeAttribute('aria-busy');
-  go.textContent = 'Ask the runner';
+  go.textContent = t('askRunner');
   document.addEventListener('focusin', keepFocusInAgent);
   agentEl().hidden = false;
   $('agent-kind').focus();
-  announce(`${again ? 'Start again' : 'Start an agent'} on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+  announce(`${again ? t('startAgain') : t('startAgent')} on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
 }
 
 /** "Start again" on a run that failed or was stopped. A brief the list shows cut is read whole first: the dialog never starts from part of one */
@@ -1587,7 +1588,7 @@ async function submitAgent(e) {
     ui.agent.posting = false;
     go.disabled = false;
     go.removeAttribute('aria-busy');
-    go.textContent = 'Ask the runner';
+    go.textContent = t('askRunner');
     const bad = $('agent-start-msg');
     bad.textContent = `A limit is a number above zero, or blank for the config's (${wrong.join(', ')}).`;
     bad.hidden = false;
@@ -1612,7 +1613,7 @@ async function submitAgent(e) {
   }
   go.disabled = false;
   go.removeAttribute('aria-busy');
-  go.textContent = 'Ask the runner';
+  go.textContent = t('askRunner');
   const msg = $('agent-start-msg');
   msg.textContent = text;
   msg.hidden = false;

@@ -26,6 +26,7 @@ import { hooks } from './proposal.js';
 import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
 import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
+import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -61,18 +62,23 @@ function mount() {
     root.id = 'review';
     root.className = 'hx-review';
     root.dataset.corn = 'review-bar';
-    root.setAttribute('aria-label', 'Approve or send back');
+    root.setAttribute('aria-label', `${t('approve')} or ${t('sendBack')}`);
     root.innerHTML = `
-      <label class="hx-review-label" for="review-note">Note for the drafting agent</label>
-      <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000" placeholder="What should change? Needed to send it back, optional to approve."></textarea>
+      <label class="hx-review-label" for="review-note"></label>
+      <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
       <div class="hx-review-row">
-        <button type="button" class="hx-btn hx-btn--approve" data-review="approved" title="Sign this proposal off" data-corn-kind="approve">Approve</button>
-        <button type="button" class="hx-btn" data-review="notes" title="Send it back to the drafting agent with the note and your edits">Send back</button>
+        <button type="button" class="hx-btn hx-btn--approve" data-review="approved" title="Sign this proposal off" data-corn-kind="approve"></button>
+        <button type="button" class="hx-btn" data-review="notes" title="Send it back to the drafting agent with the note and your edits"></button>
         <span class="hx-review-status" data-review-status role="status"></span>
       </div>
       <p class="hx-review-msg" data-review-msg role="alert" hidden></p>
       <p class="hx-review-line" data-review-hint role="status" hidden></p>
 `;
+    // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
+    q('.hx-review-label').textContent = t('reviewNoteLabel');
+    q('#review-note').setAttribute('placeholder', t('reviewNotePlaceholder'));
+    q('[data-review="approved"]').textContent = t('approve');
+    q('[data-review="notes"]').textContent = t('sendBack');
     body.appendChild(root);
     root.addEventListener('click', onClick);
     root.addEventListener('input', () => { if (ui.message) { ui.message = ''; paint(); } });

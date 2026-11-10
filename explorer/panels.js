@@ -15,6 +15,7 @@ import { nodeMockupsHtml } from './mockups-model.js';
 import { collapseSheet } from './sheets.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
+import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -189,7 +190,7 @@ export async function selectNode(node) {
     ${dataSummary(node)}`;
   if (node.url && /^https?:\/\//.test(node.url)) {
     openBtn.href = node.url;
-    openBtn.textContent = 'Open Live Route ↗';
+    openBtn.textContent = `${t('openRoute')} ↗`;
   } else {
     openBtn.removeAttribute('href');
     openBtn.textContent = 'Internal Workspace Node';
@@ -238,5 +239,5 @@ export async function copySpec(button) {
   } catch {
     button.textContent = 'Copy blocked';
   }
-  setTimeout(() => { button.textContent = 'Copy Spec'; }, 1500);
+  setTimeout(() => { button.textContent = t('copySpec'); }, 1500);
 }
