@@ -36,6 +36,8 @@ export const state = {
 
   camera: { x: 0, y: 0, zoom: 1 },
   selectedNode: null,
+  /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
+  forge: null,
   searchQuery: '',
 
   isFreeform: false,

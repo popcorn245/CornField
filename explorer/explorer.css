@@ -1012,7 +1012,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 }
 .hx-drawer .hx-whatif-drawer { font-size: var(--corn-text-md); color: var(--corn-text-2); }
 .hx-drawer .hx-whatif-drawer select { max-width: 100%; }
-.hx-drawer-foot .hx-btn--quiet { border-color: transparent; background: none; }
+.hx-drawer-foot .hx-btn--quiet { border-color: transparent; background: none; text-decoration: none; }
 .hx-more { display: contents; }
 .hx-more[hidden] { display: none; }
 .hx-more-btn { display: block; margin-top: var(--corn-space-1); min-height: 0; padding: 0; font-size: var(--corn-text-sm); }

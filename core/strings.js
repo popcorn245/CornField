@@ -48,6 +48,7 @@ export const STRINGS = Object.freeze({
   continueRun: 'Continue',
   reply: 'Reply',
   // The node panel
+  openFile: 'Open file',
   openRoute: 'Open route',
   startRun: 'Start a run',
   copySpec: 'Copy Spec',
