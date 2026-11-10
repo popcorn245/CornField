@@ -718,7 +718,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await settle();
     expect(q('[data-forge-merge]')).toBe(null);
     expect(q('.hx-forge-cta .hx-btn--approve').disabled).toBe(true); // Land it, there and off, with its one line of why under it
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. Not every check is green: vitest test/server/auth.test.js failed; lint failed; build is still running.');
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running.");
   });
 
   it('a draft says it is a draft', async () => {
@@ -726,7 +726,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     mount();
     await select(14);
     expect(q('[data-forge-merge]')).toBe(null);
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('Cannot be landed from here. It is a draft: mark it ready on the forge first.');
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('It is a draft: mark it ready on the forge first.');
   });
 
   it('Land it opens a confirm dialog that shows exactly what will land, announced, with the focus on Cancel', async () => {

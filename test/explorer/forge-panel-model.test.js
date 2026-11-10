@@ -233,7 +233,7 @@ describe('actions: why not, what is confirmed, what is said', () => {
     expect(mergeBlock({ ...detail(), pull: pull(12, { draft: true }) })).toBe('It is a draft: mark it ready on the forge first.');
     expect(mergeBlock(detail({}, []))).toBe('It has no checks, so nothing says it works.');
     expect(mergeBlock(detail({}, [check('failure', { name: 'lint' }), check('running', { name: 'test' }), check('queued', { name: 'build' }), check('cancelled', { name: 'e2e' })])))
-      .toBe('Not every check is green: lint failed; test is still running; build is waiting to run; e2e was cancelled.');
+      .toBe("Can't land yet: lint failed, test is still running, build is waiting to run, e2e was cancelled.");
     expect(mergeBlock(detail({ stale: 'GitHub could not be reached.' }))).toBe('This is an older answer from the forge: refresh before landing it.');
   });
 

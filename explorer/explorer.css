@@ -714,14 +714,14 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: var(--hx-forge-w); border-left: 0; transform: translateX(-100%); box-shadow: var(--corn-shadow-lg); }
   .hx-forge.forge-open { transform: translateX(0); }
   /* The proposal bar and the player make room for it: 12px past its edge, and the node panel's 480px (+24) when that is open too */
-  .hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px); width: min(720px, calc(100% - var(--hx-forge-w) - 36px)); }
-  .hx-stage:has(.forge-open):has(.drawer-open) .hx-proposal-bar { width: min(720px, calc(100% - var(--hx-forge-w) - 540px)); }
+  .hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px); width: min(960px, calc(100% - var(--hx-forge-w) - 36px)); }
+  .hx-stage:has(.forge-open):has(.drawer-open) .hx-proposal-bar { width: min(960px, calc(100% - var(--hx-forge-w) - 540px)); }
 }
 @media (max-width: 767px) {
   .hx-forge:not(.forge-open) { display: none; }
   .hx-forge { max-height: 60dvh; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-body { flex: none; padding: 0 var(--corn-space-5) var(--corn-space-3); gap: var(--corn-space-1); overflow: hidden; }
-  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-head):not(#forge-status) { display: none; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-head):not(#forge-bar), .hx-forge[data-sheet-state="peek"] #forge-filter-chip { display: none; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-head { padding-bottom: 0; border-bottom: 0; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-head .hx-btn { display: none; }
 }
@@ -730,11 +730,25 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-forge-head { display: flex; align-items: center; gap: var(--corn-space-3); padding-bottom: var(--corn-space-3); border-bottom: var(--corn-border) solid var(--corn-surface-2); }
 .hx-forge-head .hx-drawer-title { flex: 1; min-width: 0; }
 .hx-forge-status, .hx-forge-rate { font-size: var(--corn-text-xs); line-height: 1.5; }
-.hx-forge-controls { display: flex; flex-direction: column; gap: var(--corn-space-3); }
-.hx-forge-tabs { display: inline-flex; align-self: flex-start; padding: calc(var(--corn-space-1) / 2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); }
-.hx-forge-tab { padding: var(--corn-space-1) var(--corn-space-4); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-forge-controls { display: flex; flex-direction: column; gap: var(--corn-space-3); padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); } /* the Filter chip's box */
+/* The tabs, in the order of the loop: underlined here, pills that scroll sideways on a phone (below) */
+.hx-forge-tabs { display: flex; gap: calc(var(--corn-space-1) / 2); margin: 0 calc(var(--corn-space-4) * -1); padding: 0 var(--corn-space-4); border-bottom: var(--corn-border) solid var(--corn-line); overflow-x: auto; scrollbar-width: none; }
+.hx-forge-tabs::-webkit-scrollbar { display: none; }
+.hx-forge-tab { flex: none; display: inline-flex; align-items: baseline; gap: var(--corn-space-1); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-3); border: 0; border-bottom: var(--corn-border-strong) solid transparent; background: none; white-space: nowrap; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 500; }
 .hx-forge-tab:hover { color: var(--corn-text); }
-.hx-forge-tab[aria-pressed="true"] { background: var(--corn-accent); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
+.hx-forge-tab[aria-pressed="true"] { border-bottom-color: var(--corn-accent); color: var(--corn-text); font-weight: 600; }
+.hx-forge-tab:focus-visible, .hx-forge-chip:focus-visible, .hx-forge-back:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: -2px; }
+.hx-forge-count { color: var(--corn-text-3); font-size: var(--corn-text-xs); font-weight: 500; }
+.hx-forge-count[hidden] { display: none; }
+/* The status line and the Filter chip; the focus is put on the title (a heading, tabindex -1) when the panel opens, so it shows no ring */
+.hx-forge-body > * { flex-shrink: 0; } /* a tall detail scrolls the body; it must not squash the tabs */
+.hx-forge .hx-drawer-title:focus-visible, .hx-forge-notes-title:focus-visible { outline: none; }
+.hx-forge-bar { display: flex; align-items: center; gap: var(--corn-space-3); min-height: 28px; }
+.hx-forge-bar .hx-forge-status { flex: 1; min-width: 0; }
+.hx-forge-chip { flex: none; display: inline-flex; align-items: center; gap: var(--corn-space-1); min-height: 24px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-forge-chip:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-forge-chip[aria-expanded="true"], .hx-forge-chip.is-on { border-color: var(--corn-accent); color: var(--corn-text); }
+.hx-forge-bar[hidden], .hx-forge-chip[hidden], .hx-forge-controls[hidden], .hx-forge-foot[hidden], .hx-forge-detail[hidden], .hx-forge-notes[hidden] { display: none; }
 .hx-forge-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--corn-space-2) var(--corn-space-3); }
 .hx-forge-field { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); min-width: 0; font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-3); }
 .hx-forge-field--text { grid-column: 1 / -1; }
@@ -767,10 +781,11 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-forge-state--draft, .hx-forge-state--running, .hx-forge-state--queued { color: var(--corn-warn); }
 .hx-forge-state--neutral, .hx-forge-state--skipped, .hx-forge-state--cancelled { color: var(--corn-text-3); }
 
-.hx-forge-detail { display: flex; flex-direction: column; gap: var(--corn-space-2); padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-accent-text); border-radius: var(--corn-radius); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); }
-.hx-forge-detail-head { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); }
-.hx-forge-detail-title { min-width: 0; font-size: var(--corn-text-md); font-weight: 700; color: var(--corn-text); overflow-wrap: anywhere; }
-.hx-forge-sub, .hx-forge-subact, .hx-forge-runs-title, .hx-forge-confirm-title { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-2); }
+.hx-forge-detail { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-forge-detail-title, .hx-forge-notes-title { margin: 0; min-width: 0; font-size: var(--corn-text-lg); font-weight: 700; letter-spacing: -0.01em; color: var(--corn-text); overflow-wrap: anywhere; }
+/* A section's label, in sentence case */
+.hx-forge-sub, .hx-forge-subact, .hx-forge-runs-title { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-3); }
+.hx-forge-confirm-title { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-2); }
 .hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); }
 .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
 .hx-forge-lights { flex-basis: 100%; font-size: var(--corn-text-xs); line-height: 1.5; }
@@ -779,7 +794,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-forge-fstatus { flex: none; min-width: var(--hx-forge-status-w); color: var(--corn-text-3); font-size: var(--corn-text-xs); }
 .hx-forge-del { color: var(--corn-bad); }
 .hx-forge-act { align-self: flex-start; min-height: 24px; padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); }
-.hx-forge-detail > .hx-forge-act { padding: var(--corn-space-2) var(--corn-space-4); }
 .hx-forge-why { margin: 0; font-size: var(--corn-text-xs); line-height: 1.5; }
 .hx-forge-step { display: flex; flex-direction: column; gap: var(--corn-space-1); }
 .hx-forge-startspec { flex: none; align-self: center; }
@@ -830,6 +844,35 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-forge-confirm { padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-added-text); border-radius: var(--corn-radius); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); line-height: 1.5; }
 .hx-forge-runs { display: flex; flex-direction: column; gap: var(--corn-space-2); margin: var(--corn-space-1) 0 var(--corn-space-3); }
 .hx-forge-runs[hidden] { display: none; }
+/* A Specs row: title and state on one line, a line of what it is, the facts */
+.hx-forge-line { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-forge-line .hx-forge-title { flex: 1; min-width: 0; }
+.hx-forge-sum { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-forge-facts { display: flex; flex-wrap: wrap; gap: 0 var(--corn-space-3); }
+.hx-forge-add { color: var(--corn-added-text); }
+.hx-forge-chg { color: var(--corn-warn); }
+/* A selection replaces the list, with a back control named by the list; Land it is the one primary action */
+.hx-forge-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; margin-left: calc(var(--corn-space-2) * -1); padding: 0 var(--corn-space-3) 0 var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-forge-back:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-forge-dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); }
+.hx-forge-cta { display: flex; flex-wrap: wrap; gap: var(--corn-space-3); }
+.hx-forge-cta .hx-btn { min-height: 32px; justify-content: center; }
+.hx-forge-cta .hx-btn--approve { flex: 1; }
+.hx-forge-cta .hx-btn[disabled] { background: var(--corn-surface-3); border-color: var(--corn-line); color: var(--corn-text-3); box-shadow: none; cursor: default; }
+.hx-forge-open { text-decoration: none; color: var(--corn-text-2); }
+.hx-forge-runline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); padding: var(--corn-space-2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); }
+/* The foot of a list: Release notes … on PRs, New idea on Specs and Threads */
+.hx-forge-foot { display: flex; flex-direction: column; gap: var(--corn-space-3); margin-top: auto; padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-forge-foot > .hx-btn { align-self: flex-start; }
+/* A phone: the tabs are pills, and everything a thumb has to hit is 44px */
+@media (max-width: 767px) {
+  .hx-forge-tabs { gap: var(--corn-space-2); padding-bottom: var(--corn-space-3); border-bottom: 0; }
+  .hx-forge-tab { align-items: center; min-height: 44px; padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); }
+  .hx-forge-tab[aria-pressed="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+  .hx-forge-tab[aria-pressed="true"] .hx-forge-count { color: inherit; }
+  .hx-forge .hx-btn, .hx-forge .hx-close, .hx-forge-chip, .hx-forge-back, .hx-forge-node, .hx-forge-toggle, .hx-forge-select, .hx-forge-input, .hx-forge-check .hx-link, .hx-forge-out { min-height: 44px; min-width: 44px; }
+  .hx-forge .hx-close { display: inline-flex; align-items: center; justify-content: center; }
+}
 
 /* Threads (forge-panel.js, docs/threads.md): messages as written, read-only; a node's "Mentioned in" opens one */
 .hx-thread-msgs { display: flex; flex-direction: column; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
@@ -886,71 +929,3 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* theme.pixelated (docs/config.md#theme): small pixel-art images are sampled without smoothing, in the page as on the map (map-style.js) */
 :root[data-pixelated] img { image-rendering: pixelated; }
 
-/* ---- the Work panel (forge-panel.js, CF-42) ------------------------------------------------------------------------
-   The issues and PRs panel as the Work panel: tabs in the order of the loop (underlined on desktop, pills that scroll sideways on a
-   phone), a status line with one Filter chip, and a selection that REPLACES the list, with a back control. These rules come last on
-   purpose: they restyle the panel's earlier ones (the tab group, the detail box) and add the new parts. Tokens only. */
-.hx-forge-tabs { display: flex; align-self: stretch; gap: calc(var(--corn-space-1) / 2); margin: 0 calc(var(--corn-space-4) * -1); padding: 0 var(--corn-space-4); border: 0; border-bottom: var(--corn-border) solid var(--corn-line); border-radius: 0; background: none; overflow-x: auto; scrollbar-width: none; }
-.hx-forge-tabs::-webkit-scrollbar { display: none; }
-.hx-forge-tab { flex: none; display: inline-flex; align-items: baseline; gap: var(--corn-space-1); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-3); border-bottom: var(--corn-border-strong) solid transparent; border-radius: 0; white-space: nowrap; color: var(--corn-text-2); }
-.hx-forge-tab[aria-pressed="true"] { background: none; box-shadow: none; border-bottom-color: var(--corn-accent); color: var(--corn-text); font-weight: 600; }
-.hx-forge-body > * { flex-shrink: 0; } /* a tall detail scrolls the body; it must not squash the tabs */
-.hx-forge-tab:focus-visible, .hx-forge-chip:focus-visible, .hx-forge-back:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: -2px; }
-.hx-forge-count { color: var(--corn-text-3); font-size: var(--corn-text-xs); font-weight: 500; }
-.hx-forge-count[hidden] { display: none; }
-
-.hx-forge-bar { display: flex; align-items: center; gap: var(--corn-space-3); min-height: 28px; }
-.hx-forge-bar[hidden] { display: none; }
-.hx-forge-bar .hx-forge-status { flex: 1; min-width: 0; margin: 0; }
-.hx-forge-chip { flex: none; display: inline-flex; align-items: center; gap: var(--corn-space-1); min-height: 24px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
-.hx-forge-chip:hover { background: var(--corn-surface-3); color: var(--corn-text); }
-.hx-forge-chip[aria-expanded="true"], .hx-forge-chip.is-on { border-color: var(--corn-accent); color: var(--corn-text); }
-.hx-forge-chip[hidden] { display: none; }
-#forge-filter-box { padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); }
-#forge-filter-box[hidden], .hx-forge-foot[hidden], .hx-forge-detail[hidden], .hx-forge-notes[hidden] { display: none; }
-.hx-forge-controls { gap: var(--corn-space-3); }
-
-/* A row: title and state on one line, a line of what it is, the facts */
-.hx-forge-line { display: flex; align-items: center; gap: var(--corn-space-3); }
-.hx-forge-line .hx-forge-title { flex: 1; min-width: 0; }
-.hx-forge-sum { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
-.hx-forge-facts { display: flex; flex-wrap: wrap; gap: 0 var(--corn-space-3); }
-.hx-forge-add { color: var(--corn-added-text); }
-.hx-forge-chg { color: var(--corn-warn); }
-.hx-forge-facts .hx-forge-del { color: var(--corn-bad); }
-.hx-forge-state--neutral { color: var(--corn-text-3); }
-.hx-forge-spec { cursor: pointer; }
-div.hx-forge-spec { cursor: default; }
-
-/* A selection replaces the list: no box, no second column */
-.hx-forge-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; margin-left: calc(var(--corn-space-2) * -1); padding: 0 var(--corn-space-3) 0 var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
-.hx-forge-back:hover { background: var(--corn-surface-3); color: var(--corn-text); }
-.hx-forge-detail { gap: var(--corn-space-3); padding: 0; border: 0; border-radius: 0; background: none; }
-.hx-forge-detail-title, .hx-forge-notes-title { margin: 0; font-size: var(--corn-text-lg); font-weight: 700; letter-spacing: -0.01em; }
-.hx-forge-dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); margin: 0; }
-.hx-forge-cta { display: flex; flex-wrap: wrap; gap: var(--corn-space-3); }
-.hx-forge-cta .hx-btn { min-height: 32px; justify-content: center; }
-.hx-forge-cta .hx-btn--approve { flex: 1; }
-.hx-forge-cta .hx-btn[disabled] { background: var(--corn-surface-3); border-color: var(--corn-line); color: var(--corn-text-3); box-shadow: none; cursor: default; }
-.hx-forge-open { text-decoration: none; color: var(--corn-text-2); }
-.hx-forge-runline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); }
-
-/* The foot of a list: Release notes … on PRs, New idea on Specs */
-.hx-forge-foot { display: flex; flex-direction: column; gap: var(--corn-space-3); margin-top: auto; padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
-.hx-forge-foot > .hx-btn { align-self: flex-start; }
-
-/* A phone: pills that scroll sideways, and a 44px target for everything a thumb has to hit */
-@media (max-width: 767px) {
-  .hx-forge-tabs { gap: var(--corn-space-2); padding-block: 0 var(--corn-space-3); border-bottom: 0; }
-  .hx-forge-tab { align-items: center; min-height: 44px; padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); }
-  .hx-forge-tab[aria-pressed="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
-  .hx-forge-tab[aria-pressed="true"] .hx-forge-count { color: inherit; }
-  .hx-forge-chip, .hx-forge-back, .hx-forge-head .hx-btn, .hx-forge-head .hx-close, .hx-forge-foot .hx-btn, .hx-forge-cta .hx-btn, .hx-forge-act, .hx-forge-node, .hx-forge-toggle { min-height: 44px; min-width: 44px; }
-  .hx-forge-head .hx-close { display: inline-flex; align-items: center; justify-content: center; }
-  .hx-forge-toggle { align-items: center; }
-  .hx-forge-check .hx-link, .hx-forge-out { min-height: 44px; }
-  .hx-forge-out { width: 44px; }
-  /* Peeking: the handle, the title and the status line */
-  .hx-forge[data-sheet-state="peek"] .hx-forge-tabs, .hx-forge[data-sheet-state="peek"] #forge-filter-chip { display: none; }
-  .hx-forge[data-sheet-state="peek"] .hx-forge-body > #forge-bar { display: flex; }
-}
