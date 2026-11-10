@@ -1868,6 +1868,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The text of a run's **status comment** (issue #104, docs/agents.md#a-thread-for-every-run): the one comment cornfield keeps in the thread a run is about and edits in place as the run moves. (server/run-thread.js)"
+    },
+    {
+      "id": "page-doc-docs-theming",
+      "type": "page",
+      "label": "/docs/theming",
+      "file": "docs/theming.md",
+      "summary": "Theming: the --corn-* tokens",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Theming: the --corn-* tokens (docs/theming.md)."
     }
   ],
   "edges": [
@@ -5903,7 +5913,16 @@
       "from": "page-doc-docs-threads",
       "to": "page-doc-docs-agents",
       "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-theming"
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "core-explorer-theme-model",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-06T10:01:14.591Z"
+  "updatedAt": "2026-11-10T07:48:27.521Z"
 }

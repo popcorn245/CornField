@@ -255,36 +255,45 @@ describe('the looks a renderer draws itself', () => {
 // ---------------------------------------------------------------------------
 //  The stylesheet
 // ---------------------------------------------------------------------------
-describe('explorer.css: the light tokens', () => {
-  const cssText = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+describe('tokens.css: the light tokens', () => {
+  const cssText = fs.readFileSync(path.join(EXPLORER, 'tokens.css'), 'utf8');
   const block = (selector) => {
     const at = cssText.indexOf(`${selector} {`);
-    return cssText.slice(at, cssText.indexOf('}', at));
+    return cssText.slice(at, cssText.indexOf('\n}', at));
   };
-  const tokens = (text) => new Map([...text.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const tokens = (text) => new Map([...text.matchAll(/(--corn-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].replace(/\s+/g, ' ').trim()]));
   const dark = tokens(block(':root'));
   const light = tokens(block(':root[data-theme="light"]'));
+  const lightByMedia = tokens(block('  :root:not([data-theme="dark"])').replace(/^\s*:root:not\(\[data-theme="dark"\]\) \{/, ''));
 
-  it('sets a light value for every colour token of the dark theme', () => {
-    const colourTokens = [...dark.keys()].filter((k) => /^(--hx-|--surface|--border|--glass-shadow|--bg-gradient|--gradient)/.test(k) && !/font|blur/.test(k));
-    for (const k of colourTokens) expect(light.has(k), k).toBe(true);
+  it('sets a light value for every colour token that differs on the light ground', () => {
+    for (const k of ['--corn-ground', '--corn-surface-1', '--corn-surface-2', '--corn-surface-3', '--corn-line', '--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-added', '--corn-changed', '--corn-removed', '--corn-edit']) {
+      expect(light.has(k), k).toBe(true);
+    }
+  });
+
+  it('gives the light system-setting block the same values as the light attribute block', () => {
+    expect([...lightByMedia]).toEqual([...light]);
   });
 
   it('gives the text tokens at least 4.5:1 on the light ground', () => {
-    for (const k of ['--hx-text', '--hx-ink', '--hx-text-1', '--hx-text-2', '--hx-slate-300', '--hx-slate-400', '--hx-indigo', '--hx-emerald', '--hx-amber', '--hx-sky', '--hx-pink', '--hx-fuchsia', '--hx-red', '--hx-code', '--hx-orange-text', '--hx-teal-text', '--hx-violet-text', '--hx-green-text', '--hx-lime-text']) {
+    for (const k of ['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-hue-orange', '--corn-hue-fuchsia', '--corn-hue-pink', '--corn-hue-lime']) {
       expect(contrast(light.get(k), LIGHT_GROUND), `${k} ${light.get(k)}`).toBeGreaterThanOrEqual(4.5);
       expect(contrast(light.get(k), '#ffffff'), k).toBeGreaterThanOrEqual(4.5);
     }
-    expect(light.get('--hx-bg')).toBe(LIGHT_GROUND);
+    expect(light.get('--corn-ground')).toBe(LIGHT_GROUND);
   });
 
   it('keeps each accent\'s hue from dark to light', () => {
-    for (const k of ['--hx-indigo', '--hx-emerald', '--hx-amber', '--hx-sky', '--hx-pink', '--hx-fuchsia', '--hx-red', '--hx-orange-text', '--hx-teal-text', '--hx-violet-text', '--hx-green-text']) {
+    for (const k of ['--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-info', '--corn-hue-pink', '--corn-hue-fuchsia', '--corn-bad', '--corn-edit']) {
       expect(hueGap(dark.get(k), light.get(k)), k).toBeLessThan(16);
     }
   });
 
-  it('draws the legend swatches in the colour the light map draws', () => {
-    for (const [when, s] of Object.entries(WHEN_STYLES)) expect(cssText).toContain(`.hx-swatch-when--${when} { color: ${lightColor(s.color)}; }`);
+  it('draws the diff tokens in the colour the light map draws', () => {
+    for (const [k, c] of [['added', '#2dd4bf'], ['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
+      expect(dark.get(`--corn-${k}`)).toBe(c);
+      expect(light.get(`--corn-${k}`)).toBe(lightColor(c));
+    }
   });
 });
