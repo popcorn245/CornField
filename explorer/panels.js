@@ -57,7 +57,7 @@ function dataSummary(node) {
 
   if (node.type === 'app') {
     const served = node.deployed
-      ? line(`<a class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer">${escHtml(node.url)}</a> → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
+      ? line(`${/^https?:\/\//.test(node.url) ? `<a class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer">${escHtml(node.url)}</a>` : code(node.url)} → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
       : line('Not deployed by any stack in this repo');
     const runsOn = state.edges.filter((e) => e.kind === 'runs-on' && e.from === node.id)
       .map((e) => line(`${nm(e.to)}${(e.mappings || []).map((m) => `<div class="hx-faint">${code(m.host)} → ${code(m.upstream)}${m.service ? ` = ${code(m.service)}` : ''}</div>`).join('')}`));
@@ -156,12 +156,12 @@ function threadsSection(node) {
   if (!threads || !threads.length) return start;
   const rows = threads.map((th) => {
     const count = Number(th.comments) || 0;
-    return `<li><button type="button" class="hx-row hx-thread-open" data-thread-open="${th.number}" data-corn="row" aria-label="Open thread #${th.number}, ${escHtml(th.title)}, ${count} ${count === 1 ? 'comment' : 'comments'}, in the issues and pull requests panel"><span class="hx-row-title">${escHtml(th.title)}</span><span class="hx-row-meta">#${th.number} · ${count}</span></button></li>`;
+    return `<li><button type="button" class="hx-row hx-thread-open" data-thread-open="${escHtml(th.number)}" data-corn="row" aria-label="Open thread #${escHtml(th.number)}, ${escHtml(th.title)}, ${count} ${count === 1 ? 'comment' : 'comments'}, in the issues and pull requests panel"><span class="hx-row-title">${escHtml(th.title)}</span><span class="hx-row-meta">#${escHtml(th.number)} · ${count}</span></button></li>`;
   });
   return `<div class="hx-sec-block" data-corn="section"><h3 class="hx-sec-title">Threads</h3><ul class="hx-rows">${rows.join('')}</ul>${start}</div>`;
 }
 
-/** Draws "Mentioned in" again in the open panel (the list was just read, or the map changed); nothing else in the panel moves */
+/** Draws "Threads" again in the open panel (the list was just read, or the map changed); nothing else in the panel moves */
 export function repaintThreads() {
   const box = $('drawer-threads');
   if (!box || !state.selectedNode) return;
@@ -272,7 +272,7 @@ export async function selectNode(node) {
 
 /** Start a run: the Start dialog of the Work panel, on the proposal that is open */
 export function startRun() {
-  if (state.proposalSlug) openProposalStart(state.proposalSlug);
+  if (state.proposalSlug) openProposalStart(state.proposalSlug, '#drawer-run-btn');
 }
 
 export function closeDrawer() {

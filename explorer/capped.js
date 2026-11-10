@@ -17,7 +17,7 @@ export function capped(items) {
   if (items.length <= CAP + 1) return items.join(''); // "and 1 more" saves nothing
   const id = `hx-more-${++counter}`;
   const rest = items.length - CAP;
-  return `${items.slice(0, CAP).join('')}<span class="hx-more" id="${id}" hidden>${items.slice(CAP).join('')}</span><button type="button" class="hx-btn hx-btn--quiet hx-textact hx-more-btn" data-more="${id}" data-rest="${rest}" aria-expanded="false" aria-controls="${id}">and ${rest} more</button>`;
+  return `${items.slice(0, CAP).join('')}<div class="hx-more" id="${id}" hidden>${items.slice(CAP).join('')}</div><button type="button" class="hx-btn hx-btn--quiet hx-textact hx-more-btn" data-more="${id}" data-rest="${rest}" aria-expanded="false" aria-controls="${id}">and ${rest} more</button>`;
 }
 
 /** Opens or folds the list a "more" button belongs to; true when the click was one */

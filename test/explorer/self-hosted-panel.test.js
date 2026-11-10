@@ -81,3 +81,20 @@ describe('a self-hosted container\'s panel', () => {
     expect(document.getElementById('drawer-meta-list') .textContent).not.toContain('Role');
   });
 });
+
+describe('an address from the map is a link only when it is http(s) (#138)', () => {
+  it('links an https address, and shows any other scheme as text, with no Open button', async () => {
+    mount();
+    const app = state.nodes.find((n     ) => n.id === 'app-api');
+    Object.assign(app, { deployed: true, url: 'https://api.example.test', upstreams: ['api:3000'] });
+    await selectNode(app);
+    expect(document.querySelector('#drawer-meta-list a.hx-link').getAttribute('href')).toBe('https://api.example.test');
+    expect(document.getElementById('drawer-open-btn').hidden).toBe(false);
+    expect(document.getElementById('drawer-host').textContent).toBe(' · api.example.test');
+    Object.assign(app, { url: 'javascript:alert(1)' });
+    await selectNode(app);
+    expect(document.querySelector('#drawer-meta-list a')).toBeNull();
+    expect(document.getElementById('drawer-meta-list').textContent).toContain('javascript:alert(1)');
+    expect(document.getElementById('drawer-open-btn').hidden).toBe(true);
+  });
+});

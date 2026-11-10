@@ -28,7 +28,7 @@ import { render, resize, zoomBy, fitGraphToViewport, fitPadding, isNodeVisible, 
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
 import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from './layers.js';
-import { closeDrawer, copySpec, selectNode } from './panels.js';
+import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { loadTopology, setView, syncViewUi } from './view.js';

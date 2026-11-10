@@ -1561,7 +1561,7 @@ function closeAgent({ restoreFocus = true } = {}) {
   el.hidden = true;
   document.removeEventListener('focusin', keepFocusInAgent);
   if (!restoreFocus) return;
-  const back = $('forge-panel').querySelector(opener) || $('forge-title');
+  const back = document.querySelector(opener) || $('forge-title'); // the node panel's Start a run is an opener too
   if (back && !back.disabled) back.focus();
 }
 
@@ -1791,9 +1791,9 @@ async function issueNotListed(n) {
 export const canStartAgent = () => !!(ui.config && ui.config.agents && agentEl());
 
 /** `?proposal=<slug>&start=1`: the Start dialog on that proposal (the proposal itself is opened by proposal.js) */
-export async function openProposalStart(slug) {
+export async function openProposalStart(slug, opener = '#forge-title') {
   if (!ui.config || !agentEl()) return false;
-  await openAgent(`proposal:${slug}`, '#forge-title');
+  await openAgent(`proposal:${slug}`, opener);
   return !!ui.agent;
 }
 
