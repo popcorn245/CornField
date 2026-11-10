@@ -23,6 +23,7 @@ import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
+import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
 import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeUrlTarget } from './theme.js';
 
 /** How a page is produced today, and whether it is baked to a file */
@@ -62,6 +63,23 @@ export function validateThemeFiles(config) {
         if ('problem' in found) errors.push(`${where} url(${ref.slice(0, 80)}): ${found.problem}`);
       }
     }
+  }
+  return errors;
+}
+
+/**
+ * The config's brand images (docs/config.md#brand): each one exists, is a plain file inside the repo (a link out of it is refused),
+ * has an allowed extension (.svg, .png) and first bytes that match it, and is at most MAX_BRAND_BYTES (core/brand.js `brandAssetFile`).
+ * @param {{ root: string, brand?: object }} config
+ * @returns {string[]}
+ */
+export function validateBrandFiles(config) {
+  const errors = [];
+  for (const key of BRAND_IMAGE_KEYS) {
+    const rel = config.brand && config.brand[key];
+    if (typeof rel !== 'string') continue;
+    const found = brandAssetFile(config.root, rel);
+    if ('problem' in found) errors.push(`brand.${key} (${rel}) ${found.problem}`);
   }
   return errors;
 }
@@ -257,6 +275,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   }
   errors.push(...validatePersonasFile(config.root, config.personas.roles));
   errors.push(...validateThemeFiles(config));
+  errors.push(...validateBrandFiles(config));
   errors.push(...validateCloudNodes(topology, config.root));
   errors.push(...validateProposalFiles(topology, path.join(config.root, config.proposals), config.root));
   const io = repoReader(config.root);

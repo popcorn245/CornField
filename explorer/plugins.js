@@ -37,13 +37,52 @@ export async function loadClientConfig(fetcher = (...a) => globalThis.fetch(...a
   }
 }
 
-/** Puts the repo's title and links in the header, and Sign out when the server says who is signed in */
+/** An <img> for a brand image (the server's same-origin URL): decorative, the button it sits in carries the name; `alt` only shows if it fails to load */
+function brandImage(doc, src, kind, alt = '') {
+  const img = doc.createElement('img');
+  img.setAttribute('src', src);
+  img.setAttribute('alt', alt);
+  img.setAttribute('data-cf', `brand-${kind}`);
+  img.setAttribute('style', `height:${kind === 'logo' ? 22 : 18}px;width:auto;max-width:${kind === 'logo' ? 48 : 160}px;display:block`);
+  return img;
+}
+
+/**
+ * The repo's brand in the header (docs/config.md#brand): the logo takes the brand mark's place and the wordmark the title text, inside
+ * the same button, so its accessible name stays (it names the app: `appName`, else it is as it was); `appName` is the name shown.
+ */
+function applyBrand(doc, brand, title) {
+  const name = brand.appName || title;
+  const button = doc.getElementById('cf-brand');
+  if (button && brand.appName) button.setAttribute('aria-label', `${brand.appName}: reset the view`);
+  const text = doc.getElementById('cf-title');
+  if (text && name) text.textContent = name;
+  if (brand.logo && typeof doc.createElement === 'function') {
+    const mark = doc.getElementById('cf-mark');
+    if (mark) mark.replaceWith(brandImage(doc, brand.logo, 'logo'));
+  }
+  if (brand.wordmark && text && typeof doc.createElement === 'function') {
+    text.textContent = '';
+    text.appendChild(brandImage(doc, brand.wordmark, 'wordmark', name || ''));
+  }
+  const heading = doc.getElementById('cf-heading');
+  if (heading && brand.appName) heading.textContent = `${brand.appName}: the map`;
+}
+
+/** The small "powered by cornfield" link that stays in the header when a repo brands cornfield */
+function poweredBy(brand) {
+  if (!brand || typeof brand.poweredBy !== 'string' || !/^https:\/\//.test(brand.poweredBy)) return '';
+  return `<a class="hx-btn hx-btn--quiet" data-cf="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">powered by cornfield</a>`;
+}
+
+/** Puts the repo's title, brand and links in the header, and Sign out when the server says who is signed in */
 export function applyBranding(doc, config) {
   if (!config || !doc) return;
   const title = doc.getElementById('cf-title');
   if (title && config.title) title.textContent = config.title;
   const heading = doc.getElementById('cf-heading');
   if (heading && config.title) heading.textContent = `${config.title}: the map`;
+  if (config.brand) applyBrand(doc, config.brand, config.title);
   initThemePicker(doc, config.theme);
   const links = doc.getElementById('cf-links');
   if (!links) return;
@@ -56,7 +95,8 @@ export function applyBranding(doc, config) {
   const signOut = config.signIn && typeof config.signIn.login === 'string'
     ? `<form class="cf-sign-out" method="post" action="/auth/sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">Sign out</span></button></form>`
     : '';
-  if (html || signOut) links.innerHTML = html + signOut;
+  const powered = poweredBy(config.brand);
+  if (html || powered || signOut) links.innerHTML = html + powered + signOut;
 }
 
 /**
