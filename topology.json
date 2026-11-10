@@ -1998,6 +1998,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it. (explorer/account-menu.js)"
+    },
+    {
+      "id": "core-explorer-file-url",
+      "label": "file-url.js",
+      "type": "core",
+      "file": "explorer/file-url.js",
+      "summary": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
     }
   ],
   "edges": [
@@ -6396,11 +6406,21 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-file-url"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-file-url",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "core-explorer-cloud-model",
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T21:43:10.868Z"
+  "updatedAt": "2026-11-10T22:00:49.574Z"
 }

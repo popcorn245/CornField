@@ -493,6 +493,7 @@ export function showEdgePanel(edge) {
       <div class="hx-fact"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div></div>
     </div>${proposalPanelHtml(edge)}`;
   $('drawer-open-btn').hidden = true;
+  $('drawer-file-btn').hidden = true;
   $('drawer-run-btn').hidden = true;
   $('spec-drawer').classList.add('drawer-open');
   $('drawer-backdrop').hidden = false;

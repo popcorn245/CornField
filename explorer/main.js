@@ -215,6 +215,7 @@ loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional
   const config = await configReady;
+  state.forge = config.forge || null;
   const { liveSource, floorRenderer, checker } = await loadSources(config);
   const forgeOn = initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
   initReviewTokens(config); // review tokens for the review API: only for somebody signed in (review-tokens.js)

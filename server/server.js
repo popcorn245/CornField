@@ -269,7 +269,7 @@ export function clientConfig(config, signIn = false) {
     brand: clientBrand(config.brand, PKG.homepage),
     // Only the labels the config overrides, as text (core/strings.js); the defaults are in the browser
     strings: clientStrings(config.strings),
-    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.approveLands ? { approveLands: true } : {}) } : null,
+    forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.forge.baseBranch ? { baseBranch: config.forge.baseBranch } : {}), ...(config.approveLands ? { approveLands: true } : {}) } : null,
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },
     sources: browserSources(config),
