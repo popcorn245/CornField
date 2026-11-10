@@ -11,9 +11,11 @@ import path from 'node:path';
 import { EXPLORER, loadSample } from '../helpers.js';
 import { fakeGl, fakeCanvas, callsOf, recordingCtx } from './fake-gl.js';
 import {
-  LIGHT_GROUND, DARK_GROUND, LINE_GAIN, MIN_CONTRAST, contrast, lightColor, lightenScene, nextChoice, parseColor, resolveTheme, themeChoiceFrom, themed, themeWords, toHsl,
+  LIGHT_GROUND, DARK_GROUND, LINE_GAIN, MIN_CONTRAST, lightColor, lightenScene, nextChoice, parseColor, resolveTheme, themeChoiceFrom, themed, themeWords, toHsl,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/theme-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { contrast } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
 import { CORE_COLOR, HALO, LABEL_OUTLINE, MARK, buildScene, looksFor } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations

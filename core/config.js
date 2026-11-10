@@ -26,7 +26,7 @@
  *     hookPoll: { specs: '5m' },              // how often cornfield looks for ready specs and thread activity on its own, for the spec.ready and thread.* hooks; false turns it off (docs/config.md#hook-poll)
  *     threads: { label: 'idea' },             // an idea is an issue with this label, its thread the issue's comments; false turns threads off (docs/threads.md)
  *     links: [],                              // [{ label, href }] shown in the explorer's header
- *     theme: {},                              // { css, fonts, fontHosts, names, default }: a repo's own look, CSS only (docs/config.md#theme)
+ *     theme: {},                              // { css, fonts, fontHosts, names, default, contrast }: a repo's own look, CSS only (docs/config.md#theme)
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
  *     dataDir: null,                          // where cornfield keeps its own state (reviews; the SQLite file in v1)
@@ -166,7 +166,7 @@ export const DEFAULTS = Object.freeze({
   hookPoll: { specs: '5m' },
   threads: { label: 'idea' },
   links: [],
-  theme: { css: null, fonts: [], fontHosts: [], names: {}, default: null },
+  theme: { css: null, fonts: [], fontHosts: [], names: {}, default: null, contrast: 'error' },
   proxy: {},
   importMap: {},
   dataDir: null,

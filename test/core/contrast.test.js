@@ -1,0 +1,393 @@
+/**
+ * @vitest-environment node
+ *
+ * The contrast check of `cornfield validate` (docs/theming.md#the-contrast-check): core/color.js reads a colour in any of its syntaxes,
+ * core/contrast.js resolves a theme's custom properties (selectors, media, var() chains) and measures the `--corn-*` pairs in light and dark.
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+// @ts-expect-error plain JS modules, no declarations
+import { contrast, mixColors, over, parseColor, readColor, toHex } from '../../core/color.js';
+// @ts-expect-error plain JS modules, no declarations
+import { TOKENS_FILE, checkSheets, checkThemeContrast, contrastPairs, contrastProblems, describeFinding, matchRoot, parseRules, resolveColor, resolveProps, substitute } from '../../core/contrast.js';
+// @ts-expect-error plain JS modules, no declarations
+import { DEFAULTS } from '../../core/config.js';
+import { CORNFIELD, EXPLORER, SAMPLE } from '../helpers.js';
+
+const tokens = fs.readFileSync(TOKENS_FILE, 'utf8');
+const rounded = (c) => readColor(c).map((v, i) => (i < 3 ? Math.round(v) : Math.round(v * 1000) / 1000));
+const props = (css, state = { mode: 'dark' }) => resolveProps([css], state);
+
+describe('colours: every syntax', () => {
+  it('reads hex in 3, 4, 6 and 8 digits', () => {
+    expect(readColor('#fff')).toEqual([255, 255, 255, 1]);
+    expect(readColor('#818CF8')).toEqual([129, 140, 248, 1]);
+    expect(rounded('#f008')).toEqual([255, 0, 0, 0.533]);
+    expect(rounded('#ff000080')).toEqual([255, 0, 0, 0.502]);
+  });
+
+  it('reads rgb() and rgba(), with commas or spaces, with / alpha and with percentages', () => {
+    expect(readColor('rgb(10, 20, 30)')).toEqual([10, 20, 30, 1]);
+    expect(readColor('rgba(10, 20, 30, 0.5)')).toEqual([10, 20, 30, 0.5]);
+    expect(readColor('rgb(10 20 30 / 25%)')).toEqual([10, 20, 30, 0.25]);
+    expect(readColor('rgb(100% 0% 50%)')).toEqual([255, 0, 127.5, 1]);
+    expect(readColor('RGB(300, -4, 0)')).toEqual([255, 0, 0, 1]);
+  });
+
+  it('reads hsl() and hsla()', () => {
+    expect(rounded('hsl(0, 100%, 50%)')).toEqual([255, 0, 0, 1]);
+    expect(rounded('hsl(120deg 100% 25%)')).toEqual([0, 128, 0, 1]);
+    expect(rounded('hsla(240, 100%, 50%, 0.4)')).toEqual([0, 0, 255, 0.4]);
+    expect(rounded('hsl(-120 100% 50%)')).toEqual([0, 0, 255, 1]);
+    expect(rounded('hsl(0 0% 100% / 50%)')).toEqual([255, 255, 255, 0.5]);
+  });
+
+  it('reads transparent and the basic names', () => {
+    expect(readColor('transparent')).toEqual([0, 0, 0, 0]);
+    expect(readColor('White')).toEqual([255, 255, 255, 1]);
+    expect(readColor('black')).toEqual([0, 0, 0, 1]);
+  });
+
+  it('reads color-mix(in srgb, …): percentages either side, none, nested, and with transparent', () => {
+    expect(rounded('color-mix(in srgb, #000 25%, #fff)')).toEqual([191, 191, 191, 1]);
+    expect(rounded('color-mix(in srgb, #000, #fff)')).toEqual([128, 128, 128, 1]);
+    expect(rounded('color-mix(in srgb, #000, #fff 25%)')).toEqual([64, 64, 64, 1]);
+    expect(rounded('color-mix(in srgb, 25% #000, #fff)')).toEqual([191, 191, 191, 1]);
+    // transparent is premultiplied: the colour keeps its channels, only its alpha is the share
+    expect(rounded('color-mix(in srgb, #4f46e5 20%, transparent)')).toEqual([79, 70, 229, 0.2]);
+    expect(rounded('color-mix(in srgb, color-mix(in srgb, #000 50%, #fff) 50%, rgb(255 0 0))')).toEqual([191, 64, 64, 1]);
+    // shares that add to less than 100% scale the alpha
+    expect(rounded('color-mix(in srgb, #000 20%, #fff 20%)')).toEqual([128, 128, 128, 0.4]);
+  });
+
+  it('does not read what it cannot: another colour space, calc(), currentcolor, auto, junk', () => {
+    for (const c of ['oklch(60% 0.2 30)', 'color-mix(in oklab, #000, #fff)', 'rgb(calc(1 + 2) 0 0)', 'currentcolor', 'auto', 'none', '', 'rgb(1, 2)', 'hsl(0, 100, 50)', 'color-mix(in srgb, #000 120%, #fff)', 'linear-gradient(red, blue)']) {
+      expect(readColor(c), c).toBeNull();
+    }
+    expect(parseColor('oklch(60% 0.2 30)')).toEqual([0, 0, 0, 0]);
+  });
+
+  it('composites over an opaque colour and measures WCAG contrast', () => {
+    expect(over([255, 255, 255, 0.5], [0, 0, 0, 1])).toEqual([128, 128, 128, 1]);
+    expect(toHex([255, 128, 0])).toBe('#ff8000');
+    expect(contrast('#000', '#fff')).toBeCloseTo(21, 5);
+    expect(contrast('#767676', '#fff')).toBeGreaterThan(4.5);
+    expect(contrast('#777777', '#fff')).toBeLessThan(4.5);
+    expect(mixColors([0, 0, 0, 1], 1, [255, 255, 255, 1], 1)).toEqual([127.5, 127.5, 127.5, 1]);
+  });
+});
+
+describe('var() chains, fallbacks and cycles', () => {
+  const p = (decls) => new Map(Object.entries(decls));
+
+  it('follows a chain', () => {
+    expect(substitute('var(--a)', p({ '--a': 'var(--b)', '--b': 'var(--c)', '--c': '#123456' }))).toBe('#123456');
+  });
+
+  it('uses the fallback when a variable is unset, nested fallbacks too, and a fallback with commas', () => {
+    expect(substitute('var(--x, #fff)', p({}))).toBe('#fff');
+    expect(substitute('var(--x, var(--y, #000))', p({}))).toBe('#000');
+    expect(substitute('var(--x, rgb(1, 2, 3))', p({}))).toBe('rgb(1, 2, 3)');
+    expect(substitute('var(--x, var(--y))', p({ '--y': 'red' }))).toBe('red');
+  });
+
+  it('is invalid with no fallback, and a variable inside a longer value is replaced in place', () => {
+    expect(substitute('var(--gone)', p({}))).toBeNull();
+    expect(substitute('color-mix(in srgb, var(--a) 40%, var(--b))', p({ '--a': '#000', '--b': '#fff' }))).toBe('color-mix(in srgb, #000 40%, #fff)');
+    expect(substitute('somevar(--a) var(--a)', p({ '--a': 'x' }))).toBe('somevar(--a) x');
+  });
+
+  it('treats a cycle as unset, so its fallback is used, and otherwise leaves nothing', () => {
+    const cyc = p({ '--a': 'var(--b)', '--b': 'var(--a)', '--self': 'var(--self)' });
+    expect(substitute('var(--a)', cyc)).toBeNull();
+    expect(substitute('var(--a, #abc)', cyc)).toBe('#abc');
+    expect(substitute('var(--self, red)', cyc)).toBe('red');
+    expect(resolveColor(cyc, '--a')).toEqual({ problem: expect.stringMatching(/--a leads to a var\(\) with no value/) });
+  });
+
+  it('says why a token is not a colour, and never throws on odd input', () => {
+    const q = p({ '--auto': 'auto', '--ok': '#fff', '--calc': 'calc(1px + 2px)' });
+    expect(resolveColor(q, '--auto')).toEqual({ problem: expect.stringMatching(/"auto", which is not a colour cornfield reads/) });
+    expect(resolveColor(q, '--nope')).toEqual({ problem: '--nope is not set' });
+    expect(resolveColor(q, '--ok')).toEqual([255, 255, 255, 1]);
+    expect(resolveColor(q, 'color-mix(in srgb, var(--ok) 50%, #000)')).toEqual([127.5, 127.5, 127.5, 1]);
+    for (const v of ['var(', 'var(--a', 'var()', 'var(,)', 'var(--a,', ')))']) expect(() => resolveColor(q, v), v).not.toThrow();
+  });
+});
+
+describe('which rules apply', () => {
+  const sheet = `
+    :root { --c: dark; --only-root: 1; }
+    @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --c: light-media; } }
+    :root[data-theme="light"] { --c: light-attr; }
+    :root[data-theme-name="night"] { --n: night; }
+    :root[data-theme-name="night"][data-theme="light"] { --n: night-light; }
+    @font-face { font-family: X; --nope: 1; }
+    .panel { --class: 1; }
+    :root .panel { --desc: 1; }
+    @media (min-width: 600px) { :root { --wide: 1; } }
+    @media (prefers-color-scheme: dark) { :root { --scheme-dark: 1; } }
+  `;
+
+  it('applies the dark block in dark and both light blocks in light', () => {
+    expect(props(sheet, { mode: 'dark' }).get('--c')).toBe('dark');
+    expect(props(sheet, { mode: 'light' }).get('--c')).toBe('light-attr');
+  });
+
+  it('applies a named theme only when its name is on, and a more specific one over a less', () => {
+    expect(props(sheet, { mode: 'dark' }).has('--n')).toBe(false);
+    expect(props(sheet, { mode: 'dark', name: 'night' }).get('--n')).toBe('night');
+    expect(props(sheet, { mode: 'light', name: 'night' }).get('--n')).toBe('night-light');
+    expect(props(sheet, { mode: 'dark', name: 'day' }).has('--n')).toBe(false);
+  });
+
+  it('ignores what is not the root\'s: classes, descendants, other at-rules and other media', () => {
+    const p = props(sheet, { mode: 'dark' });
+    for (const k of ['--nope', '--class', '--desc', '--wide']) expect(p.has(k), k).toBe(false);
+    expect(p.get('--scheme-dark')).toBe('1');
+    expect(props(sheet, { mode: 'light' }).has('--scheme-dark')).toBe(false);
+  });
+
+  it('lets a later rule win a tie, a more specific one win over a later one, and !important win over both', () => {
+    expect(props(':root{--a:1} :root{--a:2}').get('--a')).toBe('2');
+    expect(props(':root[data-theme="dark"]{--a:1} :root{--a:2}').get('--a')).toBe('1');
+    expect(props(':root[data-theme="dark"]{--a:1} :root{--a:2 !important}').get('--a')).toBe('2');
+    expect(props('html{--a:1} :root{--a:2}').get('--a')).toBe('2');
+  });
+
+  it('reads selector lists, comments, strings with braces and declarations around nested blocks', () => {
+    expect(props('/* :root{--a:x} */ html, :root[data-theme="dark"] { --a: 1; --s: "a;b}"; }').get('--a')).toBe('1');
+    expect(props(':root { --a: 1; .nested { --b: 2 } --c: 3 }').get('--c')).toBe('3');
+    expect(props('@import url(x.css); :root { --a: 1 }').get('--a')).toBe('1');
+    // an unclosed block runs to the end of the file, as in a browser; an unknown media query never applies
+    expect(props('@media (min-resolution: 2dppx) { :root { --x: 1 } ').has('--x')).toBe(false);
+    expect(parseRules('@media (a) { :root { --x: 1 } ')).toHaveLength(1);
+  });
+
+  it('matches the compounds cornfield documents', () => {
+    const attrs = { 'data-theme': 'light', 'data-theme-name': 'x' };
+    expect(matchRoot(':root', attrs)).toBeGreaterThan(0);
+    expect(matchRoot(':root:not([data-theme="dark"])', attrs)).toBeGreaterThan(matchRoot(':root', attrs));
+    expect(matchRoot(':root:not([data-theme="light"])', attrs)).toBeNull();
+    expect(matchRoot('[data-theme-name=x]', attrs)).not.toBeNull();
+    expect(matchRoot('[data-theme-name="y"]', attrs)).toBeNull();
+    expect(matchRoot('body', attrs)).toBeNull();
+    expect(matchRoot(':root > body', attrs)).toBeNull();
+    expect(matchRoot(':root:hover', attrs)).toBeNull();
+  });
+});
+
+describe('the default tokens', () => {
+  const themes = [{ theme: 'standard', sheets: [tokens] }];
+
+  it('resolve every pair, in light and dark, and every one passes', () => {
+    const all = checkSheets(themes);
+    expect(all.length).toBe(contrastPairs().length * 2);
+    const { fails, unresolved } = contrastProblems(themes);
+    expect(fails.map(describeFinding)).toEqual([]);
+    expect(unresolved.map(describeFinding)).toEqual([]);
+  });
+
+  it('are measured against the ground the translucent surfaces sit on', () => {
+    const f = checkSheets(themes).find((x) => x.mode === 'dark' && x.fg === '--corn-text' && x.bg === '--corn-surface-1');
+    // rgba(26, 34, 52, 0.72) over #090d16
+    expect(f.bgValue).toBe(toHex(over(parseColor('rgba(26, 34, 52, 0.72)'), parseColor('#090d16'))));
+    expect(f.ratio).toBeGreaterThan(10);
+  });
+});
+
+describe('a brand theme that fails', () => {
+  // dark: text-3 nearly the surface; light: the accent-text washed out; both: white text on a pale accent
+  const BRAND = `
+    :root { --corn-text-3: #4a5266; --corn-accent: #a5b4fc; --corn-accent-hover: #c7d2fe; }
+    :root[data-theme="light"] { --corn-accent-text: #a5b4fc; --corn-ground: #fffaf0; }
+  `;
+  const { fails } = contrastProblems([{ theme: 'standard', sheets: [tokens, BRAND] }]);
+  const line = (mode, fg, bg) => fails.find((f) => f.mode === mode && f.fg === fg && f.bg === bg);
+
+  it('is reported in both modes, with the two tokens, the colours and the ratio', () => {
+    const dark = line('dark', '--corn-text-3', '--corn-ground');
+    expect(dark).toBeTruthy();
+    expect(dark.ratio).toBeLessThan(4.5);
+    expect(describeFinding(dark)).toMatch(/^standard theme \(dark\): --corn-text-3 \(#4a5266\) on --corn-ground \(#090d16\) is \d\.\d\d:1, below 4\.5:1/);
+    const light = line('light', '--corn-accent-text', '--corn-ground');
+    expect(light).toBeTruthy();
+    expect(describeFinding(light)).toMatch(/^standard theme \(light\): --corn-accent-text \(#a5b4fc\) on --corn-ground \(#fffaf0\) is \d\.\d\d:1/);
+    expect(fails.some((f) => f.mode === 'light' && f.fg === '--corn-text-on-accent' && f.bg === '--corn-accent')).toBe(true);
+    expect(fails.some((f) => f.mode === 'dark' && f.fg === '--corn-text-on-accent' && f.bg === '--corn-accent')).toBe(true);
+  });
+
+  it('reads the ratio the way WCAG does', () => {
+    const f = line('dark', '--corn-text-3', '--corn-ground');
+    expect(f.ratio).toBeCloseTo(contrast('#4a5266', '#090d16'), 6);
+    expect(f.min).toBe(4.5);
+  });
+
+  it('does not report what the brand leaves alone', () => {
+    expect(fails.some((f) => f.fg === '--corn-text' && f.mode === 'dark')).toBe(false);
+  });
+
+  it('holds the focus ring to 3:1', () => {
+    const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-focus:#1c2333}'] }]);
+    const f = r.fails.find((x) => x.fg === '--corn-focus' && x.mode === 'dark' && x.bg === '--corn-ground');
+    expect(f.min).toBe(3);
+    expect(describeFinding(f)).toMatch(/below 3:1 \(the UI minimum\)/);
+  });
+
+  it('reports a token it cannot work out as unresolved, not as a failure; an unknown token is ignored', () => {
+    const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-text-2: oklch(70% 0.1 200); --corn-map-fill: auto; --corn-map-x: var(--corn-map-fill)}'] }]);
+    expect(r.fails).toEqual([]);
+    expect(r.unresolved.length).toBeGreaterThan(0);
+    expect(r.unresolved.every((f) => f.fg === '--corn-text-2')).toBe(true);
+    expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: .*oklch/);
+  });
+});
+
+describe('named themes', () => {
+  const NIGHT = ':root[data-theme-name="night"] { --corn-text: #3a3a4a; }';
+  const result = contrastProblems([
+    { theme: 'standard', sheets: [tokens] },
+    { theme: 'night', name: 'night', sheets: [tokens, NIGHT] },
+    { theme: 'day', name: 'day', sheets: [tokens, NIGHT] }, // a name the scoped block does not match
+  ]);
+
+  it('are checked on their own: the failure is the named theme\'s, not the standard theme\'s', () => {
+    expect(result.fails.length).toBeGreaterThan(0);
+    expect(new Set(result.fails.map((f) => f.theme))).toEqual(new Set(['night']));
+    // the dark text fails on the dark ground; in light the theme\'s own light value (:root[data-theme="light"]) wins on specificity ties by order
+    expect(result.fails.some((f) => f.mode === 'dark' && f.fg === '--corn-text')).toBe(true);
+    expect(describeFinding(result.fails[0])).toMatch(/^named theme "night" \(/);
+  });
+});
+
+describe('the docs\' example brand stylesheet', () => {
+  const docs = fs.readFileSync(path.join(CORNFIELD, 'docs/theming.md'), 'utf8');
+  const brand = [...docs.matchAll(/```css\n([\s\S]*?)```/g)].map((m) => m[1]).find((b) => b.startsWith('/* brand.css'));
+
+  it('passes, in light and dark', () => {
+    expect(brand).toBeTruthy();
+    const themes = [{ theme: 'standard', sheets: [tokens, brand] }];
+    expect(contrastProblems(themes).fails.map(describeFinding)).toEqual([]);
+    expect(contrastProblems(themes).unresolved.map(describeFinding)).toEqual([]);
+  });
+});
+
+describe('the two spots that were under AA', () => {
+  const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+  const ruleFor = (selector) => {
+    const out = {};
+    for (const rule of parseRulesOf(css)) if (rule.selector.split(',').map((s) => s.trim()).includes(selector)) Object.assign(out, rule.decls);
+    return out;
+  };
+  /** Ordinary rules (not only custom properties) of a stylesheet */
+  function parseRulesOf(text) {
+    const out = [];
+    for (const [, sel, body] of text.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+      out.push({ selector: sel.trim(), decls: Object.fromEntries([...body.matchAll(/([\w-]+)\s*:\s*([^;]+)/g)].map((m) => [m[1], m[2].trim()])) });
+    }
+    return out;
+  }
+  const state = (mode) => resolveProps([tokens], { mode });
+  const solid = (p, token, on) => over(resolveColor(p, token), on);
+
+  it('keeps opacity off the text of an off layer toggle row and of the dimmed Layers button', () => {
+    for (const sel of ['.hx-toggle-row.is-off', '.hx-btn--dim', '.hx-toggle-row.is-off .hx-toggle-name', '.hx-toggle-row.is-off .hx-count', '.hx-toggle-row.is-off .hx-tick']) {
+      expect(ruleFor(sel).opacity, sel).toBeUndefined();
+    }
+    // the dimmed look is the colour, and the dot
+    expect(ruleFor('.hx-toggle-row.is-off').color).toBe('var(--corn-text-3)');
+    expect(ruleFor('.hx-btn--dim').color).toBe('var(--corn-text-3)');
+    expect(ruleFor('.hx-toggle-row.is-off .hx-dot').opacity).toBeDefined();
+  });
+
+  it('reads at least 4.5:1 for the off row\'s text on its fill and for the dimmed button, in both themes', () => {
+    for (const mode of ['light', 'dark']) {
+      const p = state(mode);
+      const ground = solid(p, '--corn-ground', [0, 0, 0, 1]);
+      const panel = solid(p, '--corn-surface-1', ground);
+      // the off row: the ground at 40% over the menu panel
+      const off = over(mixColors(resolveColor(p, '--corn-ground'), 0.4, [0, 0, 0, 0], 0.6), panel);
+      const text3 = resolveColor(p, '--corn-text-3');
+      expect(contrast(toHex(text3), toHex(off)), `${mode}: off row`).toBeGreaterThanOrEqual(4.5);
+      const surface2 = solid(p, '--corn-surface-2', ground);
+      expect(contrast(toHex(text3), toHex(surface2)), `${mode}: dimmed button`).toBeGreaterThanOrEqual(4.5);
+      // its hover reads --corn-text-2 on --corn-surface-2 (and the base button's hover, surface-3, in .hx-btn:hover)
+      expect(contrast(toHex(resolveColor(p, '--corn-text-2')), toHex(solid(p, '--corn-surface-3', ground)))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('gives the data-flow note a text token and a tint token that pass in both themes', () => {
+    const note = ruleFor('.hx-note');
+    expect(note.color).toBe('var(--corn-hue-orange-text)');
+    expect(note.background).toBe('var(--corn-hue-orange-soft)');
+    for (const mode of ['light', 'dark']) {
+      const p = state(mode);
+      const ground = solid(p, '--corn-ground', [0, 0, 0, 1]);
+      for (const base of [ground, solid(p, '--corn-surface-1', ground)]) {
+        const tint = over(resolveColor(p, '--corn-hue-orange-soft'), base);
+        const text = over(resolveColor(p, '--corn-hue-orange-text'), tint);
+        expect(contrast(toHex(text), toHex(tint)), `${mode}: note`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // it is in the checked list, so a brand's own orange is held to it too
+    expect(contrastPairs().some((x) => x.fg === '--corn-hue-orange-text' && x.bg === '--corn-hue-orange-soft')).toBe(true);
+  });
+});
+
+describe('cornfield validate: the contrast check', () => {
+  let root;
+  const CLI = path.join(CORNFIELD, 'cli', 'cornfield.js');
+  const validate = () => spawnSync(process.execPath, [CLI, 'validate', '--repo', root], { encoding: 'utf8', timeout: 60_000 });
+  const withTheme = (t) => {
+    const base = fs.readFileSync(path.join(SAMPLE, 'cornfield.config.js'), 'utf8');
+    fs.writeFileSync(path.join(root, 'cornfield.config.js'), base.replace('worktrees: \'.worktrees\',', `worktrees: '.worktrees',\n  theme: ${JSON.stringify(t)},`));
+  };
+  const GOOD = ':root { --corn-radius: 0; }';
+  const BAD = ':root { --corn-text-3: #3b4358; }';
+  const NIGHT_BAD = ':root[data-theme-name="night"] { --corn-text-2: #3b4358; }';
+  beforeAll(() => { root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-contrast-')); fs.cpSync(SAMPLE, root, { recursive: true }); });
+  afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('passes a good theme, and a repo with none', () => {
+    fs.writeFileSync(path.join(root, 'theme.css'), GOOD);
+    withTheme({ css: './theme.css' });
+    expect(validate().status).toBe(0);
+  });
+
+  it('fails a theme under AA, naming the mode, the tokens and the ratio', () => {
+    fs.writeFileSync(path.join(root, 'theme.css'), BAD);
+    withTheme({ css: './theme.css' });
+    const r = validate();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/theme contrast: standard theme \(dark\): --corn-text-3 \(#3b4358\) on --corn-ground \(#090d16\) is \d\.\d\d:1, below 4\.5:1/);
+  });
+
+  it('downgrades to warnings with theme.contrast: "warn"', () => {
+    withTheme({ css: './theme.css', contrast: 'warn' });
+    const r = validate();
+    expect(r.status).toBe(0);
+    expect(r.stderr).toMatch(/warning: theme contrast: standard theme \(dark\): --corn-text-3/);
+    withTheme({ css: './theme.css', contrast: 'error' });
+    expect(validate().status).toBe(1);
+  });
+
+  it('checks each named theme separately and names it', () => {
+    fs.writeFileSync(path.join(root, 'theme.css'), GOOD);
+    fs.writeFileSync(path.join(root, 'night.css'), NIGHT_BAD);
+    fs.writeFileSync(path.join(root, 'day.css'), GOOD);
+    withTheme({ css: './theme.css', names: { night: './night.css', day: './day.css' }, default: 'day' });
+    const r = validate();
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/named theme "night" \((light|dark)\): --corn-text-2 /);
+    expect(r.stderr).not.toMatch(/named theme "day"/);
+    expect(r.stderr).not.toMatch(/standard theme/);
+  });
+
+  it('is skipped for a repo with no theme, and does not run on a theme file that is missing', () => {
+    expect(checkThemeContrast({ root, theme: { ...DEFAULTS.theme } })).toEqual({ errors: [], warnings: [] });
+    expect(checkThemeContrast({ root, theme: { ...DEFAULTS.theme, css: './gone.css' } })).toEqual({ errors: [], warnings: [] });
+  });
+});

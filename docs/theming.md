@@ -7,7 +7,7 @@ Every colour, font, font size, radius, border and outline width, shadow and spac
 - **Load it after cornfield's stylesheets**, with `theme` in `cornfield.config.js` (below).
 - **Set tokens on `:root`.** A token that is made from another one (`--corn-font-display` is `var(--corn-font)`, the `*-soft` tints mix their colour) is worked out on `:root`, so a value set on `body` or a panel does not reach it.
 - **Use cornfield's three selectors.** Dark values, and everything both themes share, are on `:root`. Light values are under both `@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { … } }` (the system setting, before any script runs) and `:root[data-theme="light"] { … }` (the viewer's choice, which `theme-boot.js` puts on `<html>`). Those two are more specific than `:root`, so a token cornfield sets for light has to be set in your light blocks too, or cornfield's light value wins on the light ground. Repeat the same selectors in your file; as it loads later, yours win.
-- **Keep text readable.** Text on `--corn-accent` is `--corn-text-on-accent`; the solid fills of a status or a hue (a pressed data-flow button, a pressed House chip, a sandbox chip) put `--corn-ground` on the hue. [#122](https://github.com/popcorn245/CornField/issues/122) will check a theme's pairs in `validate`; until then, check them against WCAG AA (4.5:1).
+- **Keep text readable.** Text on `--corn-accent` is `--corn-text-on-accent`; the solid fills of a status or a hue (a pressed data-flow button, a pressed House chip, a sandbox chip) put `--corn-ground` on the hue. `cornfield validate` checks the pairs below against WCAG AA, in light and dark ([The contrast check](#the-contrast-check)).
 
 ## Applying a theme
 
@@ -21,6 +21,33 @@ export default {
 ```
 
 A named theme (`theme.names`) is the same kind of file. Scoped to `:root[data-theme-name="night"]`, it outranks cornfield's dark `:root` block and ties with its light ones, and wins those as it loads later; to give it its own light values, scope them to `:root[data-theme-name="night"][data-theme="light"]`.
+
+## The contrast check
+
+`cornfield validate` resolves the `--corn-*` pairs below for **light and dark**, after your theme is applied over [explorer/tokens.css](../explorer/tokens.css), and fails when a pair is under WCAG AA. It checks the standard theme (`tokens.css` and `theme.css`) and, separately, each `theme.names` entry (`tokens.css`, `theme.css`, then that file, with `data-theme-name` set). Each line names the theme, the mode, the two tokens, their resolved colours and the ratio:
+
+```
+named theme "night" (dark): --corn-text-3 (#7a7f99) on --corn-surface-2 (#1e1b2e) is 3.97:1, below 4.5:1 (AA for text).
+```
+
+**The pairs.** Translucent colours (the surfaces, the `*-soft` tints) are composited over the ground they sit on first.
+
+| Text (4.5:1) | On |
+|---|---|
+| `--corn-text`, `--corn-text-2`, `--corn-text-3`, `--corn-accent-text`, `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-added-text`, `--corn-edit-text` | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
+| `--corn-text-on-accent` | `--corn-accent`, `--corn-accent-hover` |
+| `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
+| `--corn-ground` (the text on a solid fill) | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-hue-orange`, `--corn-hue-lime`, `--corn-added-text`, `--corn-edit-text` |
+
+| UI (3:1) | On |
+|---|---|
+| `--corn-focus`, the focus ring | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
+
+The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text; the focus ring is the UI pair. `--corn-line` is not checked: it is the quiet divider and border, and every control it outlines is named by its own text or fill. A brand that wants a visible border should set it to a colour that passes 3:1 and check it in its own review.
+
+**How a theme is read.** A small resolver reads the stylesheets as text (no browser): custom properties in `:root`, `html`, `[data-theme="…"]` and `[data-theme-name="…"]` rules (with `:not()`), at the top level and inside `@media (prefers-color-scheme: light|dark)`. The cascade is the browser's: `!important`, then specificity, then source order. It follows `var(--x, fallback)` chains (a cycle counts as unset, so the fallback is used) and reads colours written as `#rgb`, `#rrggbb` (with alpha), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax), `transparent`, the basic colour names and `color-mix(in srgb, A p%, B)`. A token it cannot work out (unset, a cycle, `oklch()`, `calc()`, `auto`) is reported as a **warning**, not an error: the pair was not checked. Tokens it does not know, like a `--corn-map-*` token, are ignored unless a pair above uses them.
+
+**When it fails.** `validate` exits non-zero. To keep the report but not fail on it, set [`theme.contrast: 'warn'`](config.md#theme); the lines then appear as warnings.
 
 ## A complete brand stylesheet
 
@@ -61,7 +88,7 @@ A square-cornered, retro look: no radius anywhere, hard offset shadows, thick bo
   --corn-shadow-lg: 6px 6px 0 #000;
   --corn-shadow-color: #000;
   --corn-glow: 0px;
-  --corn-accent-text: #f87171;
+  --corn-accent-text: #f87a7a;
   --corn-focus: #fca5a5;
   --corn-text-3: #b8b2cc;
   --corn-brand-gradient: linear-gradient(90deg, #f87171, #fbbf24);
@@ -156,6 +183,8 @@ What it does not reach yet: the map itself (the nodes, edges and labels on the c
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
 | **Category hues** (never status) | |
 | `--corn-hue-orange`, `--corn-hue-fuchsia`, `--corn-hue-pink`, `--corn-hue-lime` | the data-flow preset, ROM, variables, the House view (light) |
+| `--corn-hue-orange-text` | the orange as text on its own tint (the data-flow note in the Layers menu): the hue itself on dark, a deeper one on the light ground (light) |
+| `--corn-hue-orange-soft` | that tint: the orange hue at 12% |
 | `--corn-house-line`, `--corn-house-room` | the House plan's outline and each room's (light) |
 | `--corn-glyph-mix` | how much of a panel glyph's own colour is kept; the rest is `--corn-text` (light) |
 | **Type** | |

@@ -1908,6 +1908,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Theming: the --corn-* tokens (docs/theming.md)."
+    },
+    {
+      "id": "core-core-color",
+      "label": "color.js",
+      "type": "core",
+      "file": "core/color.js",
+      "summary": "Colour arithmetic with no dependencies and no Node built-ins, so the explorer (served from core/, see server/server.js BROWSER_CORE), `cornfield validate` (core/contrast.js) and the tests all share…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Colour arithmetic with no dependencies and no Node built-ins, so the explorer (served from core/, see server/server.js BROWSER_CORE), `cornfield validate` (core/contrast.js) and the tests all share… (core/color.js)"
+    },
+    {
+      "id": "core-core-contrast",
+      "label": "contrast.js",
+      "type": "core",
+      "file": "core/contrast.js",
+      "summary": "The theme's contrast check, for `cornfield validate` (docs/theming.md#the-contrast-check).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The theme's contrast check, for `cornfield validate` (docs/theming.md#the-contrast-check). (core/contrast.js)"
     }
   ],
   "edges": [
@@ -6029,7 +6049,44 @@
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-config",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-color"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-contrast"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-contrast",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme-model",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-theming",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T08:25:25.675Z"
+  "updatedAt": "2026-11-10T08:41:06.588Z"
 }
