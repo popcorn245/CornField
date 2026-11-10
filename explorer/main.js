@@ -47,6 +47,7 @@ import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
 import { cycleTheme, initTheme } from './theme.js';
+import { applyMapTheme, onMapStyleChange, watchMapStyle } from './map-style.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -186,6 +187,8 @@ async function runPageBench(frames, zoomFactor, sync) {
 //  Start
 // ---------------------------------------------------------------------------
 initTheme(); // light or dark, before the first scene is built (theme.js)
+watchMapStyle(document); // the map reads --corn-map-* from the theme, and again when it changes (map-style.js)
+onMapStyleChange(() => render());
 state.canvas = $('graph-canvas');
 state.labelCanvas = $('label-canvas');
 // A 2d context that only measures text (layout.js labelWidth): the map canvas may be WebGL, and a
@@ -204,7 +207,7 @@ $('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.v
 resize();
 syncViewUi();
 // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-const configReady = loadClientConfig().then((config) => { applyBranding(document, config); return config; });
+const configReady = loadClientConfig().then((config) => { applyBranding(document, config); applyMapTheme(document, config.theme); return config; }); // the brand, then the theme's icons for the map
 loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

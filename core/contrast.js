@@ -379,6 +379,7 @@ export const PAINTED_TEXT = Object.freeze([
   ['--corn-text-2', tint('--corn-text-3', 10), 'a check'],
   ['--corn-text-2', tint('--corn-text-2', 12), 'a web badge'],
   ['--corn-text-2', '--corn-line-soft', 'a text button, hovered'],
+  ['--corn-map-collision', GROUND, 'a collision tag on the map'],
 ]);
 /**
  * The parts of the interface a person needs to see to use it (WCAG 1.4.11), at 3:1: `[fg, bg, what]`. The focus indicators, and the

@@ -533,3 +533,30 @@ void main() {
   outColor = acc;
 }
 `;
+
+// ---------------------------------------------------------------------------
+//  Icons: one textured square per node that has the theme's icon for its kind (theme.icons), drawn over the nodes
+// ---------------------------------------------------------------------------
+export const ICON_VERT = `${HEAD}${TO_CLIP}
+layout(location = 0) in vec2 a_corner;
+layout(location = 1) in vec4 a_geom;    // x, y, side (world), alpha
+out vec2 v_uv;
+flat out float v_alpha;
+void main() {
+  vec2 centre = u_cam.xy + a_geom.xy * u_cam.z;
+  vec2 pos = centre + a_corner * (a_geom.z * 0.5 * u_cam.z);
+  v_uv = vec2(a_corner.x * 0.5 + 0.5, 0.5 - a_corner.y * 0.5);
+  v_alpha = a_geom.w;
+  gl_Position = toClip(pos);
+}
+`;
+
+export const ICON_FRAG = `${HEAD}
+uniform sampler2D u_tex;
+in vec2 v_uv;
+flat in float v_alpha;
+out vec4 outColor;
+void main() {
+  outColor = texture(u_tex, v_uv) * v_alpha; // the texture is uploaded premultiplied
+}
+`;

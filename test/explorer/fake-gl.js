@@ -22,7 +22,7 @@ export function fakeGl(opts                = {}) {
       if (/^[A-Z][A-Z0-9_]*$/.test(key)) return key;
       return (...args       ) => {
         log.push([key, ...args]);
-        if (/^create(Shader|Program|Buffer|VertexArray)$/.test(key)) return { id: ++next, made: key };
+        if (/^create(Shader|Program|Buffer|VertexArray|Texture)$/.test(key)) return { id: ++next, made: key };
         if (key === 'getUniformLocation') return { uniform: args[1] };
         if (key === 'getShaderParameter') return !opts.failCompile;
         if (key === 'getProgramParameter') return !opts.failLink;

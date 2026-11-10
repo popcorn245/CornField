@@ -24,6 +24,7 @@ import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
 import { edgePoint, looksFor } from './scene.js';
 import { onThemeChange } from './theme.js';
+import { looksWith, onMapStyleChange } from './map-style.js';
 import {
   PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, parseProposalQuery, proposalPanelHtml, touchedIds,
 } from './proposal-model.js';
@@ -471,10 +472,11 @@ function onKey(e) {
 /** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
 function setMarkColours(theme) {
   const root = document.documentElement.style;
-  const { mark: looks } = looksFor(theme);
+  const { mark: looks } = looksWith(looksFor(theme)); // the theme's --corn-map-added|changed|removed|edit, when it sets them
   for (const mark of Object.keys(looks)) root.setProperty(`--hx-mark-${mark}`, looks[mark].color);
 }
 let stopMarkColours = null;
+let stopMarkStyle = null;
 
 /**
  * Starts the overlay: the mark colours the legend and the panel use, the buttons, picking an
@@ -485,6 +487,7 @@ let stopMarkColours = null;
 export async function initProposals() {
   setMarkColours(state.theme);
   if (!stopMarkColours) stopMarkColours = onThemeChange(setMarkColours);
+  if (!stopMarkStyle) stopMarkStyle = onMapStyleChange(() => setMarkColours(state.theme)); // a theme stylesheet that finishes loading later
 
   // Once, however many times this runs
   document.removeEventListener('click', onClick);

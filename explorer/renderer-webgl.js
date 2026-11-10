@@ -25,8 +25,9 @@
  */
 
 import { ARROW, CORE_RATIO, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
+import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import {
-  CURVE_SEGMENTS, EDGE_FRAG, GRID_FRAG, GRID_VERT, LANE_FRAG, LANE_VERT, NODE_FRAG, NODE_VERT, PACKET_FRAG, PACKET_VERT,
+  CURVE_SEGMENTS, EDGE_FRAG, GRID_FRAG, GRID_VERT, ICON_FRAG, ICON_VERT, LANE_FRAG, LANE_VERT, NODE_FRAG, NODE_VERT, PACKET_FRAG, PACKET_VERT,
   RING_FRAG, RING_VERT, TIP_FRAG, TIP_VERT, edgeVert,
 } from './shaders.js';
 
@@ -45,6 +46,8 @@ export const GRID_STRIDE = 8;
 
 /** Floats per edge: x1, y1, x2, y2 | control x, y, width, glow blur | rgba | glow rgb, glow strength | dash on, off | marked (0 or 1) */
 export const EDGE_STRIDE = 19;
+/** Floats per icon: x, y, side, alpha */
+export const ICON_STRIDE = 4;
 /** Floats per tip: x, y, direction x, y | rgba | kind (TIP_CODE) */
 export const TIP_STRIDE = 9;
 /** Floats per packet: x1, y1, x2, y2 | control x, y, speed, phase | rgba | glow rgb, glow strength | radius, glow blur */
@@ -174,12 +177,54 @@ export function packEdges(scene) {
 export const packScene = (scene) => ({ ...packDecor(scene), nodes: packNodes(scene), ...packEdges(scene) });
 
 /**
+ * The outlines the theme gives nodes (--corn-map-stroke), as rows of the rings pass (the same shader, drawn over the nodes): a ring
+ * just inside the circle's edge, in the node's alpha. Empty for a scene whose nodes have none.
+ * @param {import('./scene.js').Scene} scene a scene through `styledScene`
+ */
+export function packStrokes(scene) {
+  const rows = [];
+  scene.nodes.forEach((n) => {
+    if (!n.stroke) return;
+    const [r, g, b, a] = rgba(n.stroke.color);
+    rows.push([n.x, n.y, Math.max(0, n.r - n.stroke.width / 2), n.stroke.width, r, g, b, a * n.alpha, 0, 0]);
+  });
+  const data = new Float32Array(rows.length * RING_STRIDE);
+  rows.forEach((row, i) => data.set(row, i * RING_STRIDE));
+  return { data, count: rows.length, stride: RING_STRIDE };
+}
+
+/**
+ * The icons of the nodes that have one, grouped by kind (one texture, one draw each), in scene order within a kind.
+ * @param {import('./scene.js').Scene} scene a scene through `styledScene`
+ * @param {(kind: string) => boolean} has whether the kind's image has loaded
+ * @returns {{data: Float32Array, count: number, stride: number, groups: {kind: string, first: number, count: number}[]}}
+ */
+export function packIcons(scene, has) {
+  const byKind = new Map();
+  scene.nodes.forEach((n) => {
+    if (!n.icon || !has(n.icon)) return;
+    if (!byKind.has(n.icon)) byKind.set(n.icon, []);
+    byKind.get(n.icon).push([n.x, n.y, n.r * ICON_RATIO, n.alpha]);
+  });
+  const groups = [];
+  const rows = [];
+  for (const [kind, list] of byKind) {
+    groups.push({ kind, first: rows.length, count: list.length });
+    rows.push(...list);
+  }
+  const data = new Float32Array(rows.length * ICON_STRIDE);
+  rows.forEach((row, i) => data.set(row, i * ICON_STRIDE));
+  return { data, count: rows.length, stride: ICON_STRIDE, groups };
+}
+
+/**
  * The looks of scene.js (halo, mark, core) as flat float arrays for uniforms, indexed by the codes
  * above, so the shaders hold no colour of their own and cannot drift from the Canvas 2D renderer.
- * `theme` picks `looksFor(theme)`: the renderer sets them again when a scene's theme differs from the last.
+ * `theme` picks `looksFor(theme)`: the renderer sets them again when a scene's theme differs from the last. `style` (map-style.js)
+ * puts the theme's colours for the halos and the diff marks over them.
  */
-export function styleTables(theme = 'dark') {
-  const { halo: HALO, mark: MARK, core: CORE_COLOR } = looksFor(theme);
+export function styleTables(theme = 'dark', style = null) {
+  const { halo: HALO, mark: MARK, core: CORE_COLOR } = style ? looksWith(looksFor(theme), style) : looksFor(theme);
   const haloFill = new Float32Array(16);
   const haloRing = new Float32Array(16);
   const haloGeom = new Float32Array(16);
@@ -287,52 +332,69 @@ function link(gl, vertSource, fragSource, label) {
 }
 
 /** Sets the one-time uniforms of every pass that has them, for `theme`'s looks */
-function setConstants(gl, gpu, theme) {
-  const tables = styleTables(theme);
+/** What of a style the constants depend on: 0 for the plain one, else its version */
+const styleKey = (style) => (!style || style.plain ? 0 : style.version);
+
+function setConstants(gl, gpu, theme, style = null) {
+  const tables = styleTables(theme, style);
   gpu.passes.forEach((pass) => {
     if (!pass.spec.constants) return;
     gl.useProgram(pass.program);
     CONSTANTS[pass.spec.constants](gl, pass.at, tables);
   });
   gpu.theme = theme;
+  gpu.styleKey = styleKey(style);
 }
 
+/** One pass's program, vertex array and buffer (a unit quad per instance, unless the spec has `verts`) */
+function makePass(gl, spec, corners) {
+  const program = link(gl, spec.vert, spec.frag, spec.name);
+  const vao = gl.createVertexArray();
+  const buffer = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  if (!spec.verts) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribDivisor(0, 0);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  spec.attribs.forEach(([location, size, offset]) => {
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(location, size, gl.FLOAT, false, spec.stride * 4, offset * 4);
+    gl.vertexAttribDivisor(location, 1);
+  });
+  gl.bindVertexArray(null);
+
+  const at = (name) => gl.getUniformLocation(program, name);
+  return { spec, program, vao, buffer, at, count: 0, uniforms: { viewport: at('u_viewport'), cam: at('u_cam'), dpr: at('u_dpr'), time: spec.time ? at('u_time') : null } };
+}
+
+/**
+ * The passes only a theme asks for, built the first time one is needed so a map with no theme costs nothing: the node outlines (the rings
+ * shader, drawn over the nodes) and the icons (a textured square per node), after the nodes, in this order.
+ */
+export const EXTRA_PASSES = {
+  strokes: { name: 'strokes', vert: RING_VERT, frag: RING_FRAG, stride: RING_STRIDE, attribs: [[1, 4, 0], [2, 4, 4], [3, 2, 8]] },
+  icons: { name: 'icons', vert: ICON_VERT, frag: ICON_FRAG, stride: ICON_STRIDE, attribs: [[1, 4, 0]] },
+};
+
 /** Programs, vertex arrays and buffers for every pass, on this context, with `theme`'s looks. Throws when a shader fails. */
-function buildGpu(gl, theme = 'dark') {
+function buildGpu(gl, theme = 'dark', style = null) {
   const corners = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, corners);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
-  const passes = PASSES.map((spec) => {
-    const program = link(gl, spec.vert, spec.frag, spec.name);
-    const vao = gl.createVertexArray();
-    const buffer = gl.createBuffer();
-    gl.bindVertexArray(vao);
-    if (!spec.verts) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, corners);
-      gl.enableVertexAttribArray(0);
-      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-      gl.vertexAttribDivisor(0, 0);
-    }
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    spec.attribs.forEach(([location, size, offset]) => {
-      gl.enableVertexAttribArray(location);
-      gl.vertexAttribPointer(location, size, gl.FLOAT, false, spec.stride * 4, offset * 4);
-      gl.vertexAttribDivisor(location, 1);
-    });
-    gl.bindVertexArray(null);
-
-    const at = (name) => gl.getUniformLocation(program, name);
-    return { spec, program, vao, buffer, at, count: 0, uniforms: { viewport: at('u_viewport'), cam: at('u_cam'), dpr: at('u_dpr'), time: spec.time ? at('u_time') : null } };
-  });
-  const gpu = { corners, passes, theme };
-  setConstants(gl, gpu, theme);
+  const passes = PASSES.map((spec) => makePass(gl, spec, corners));
+  const gpu = { corners, passes, theme, styleKey: 0, extras: { strokes: null, icons: null }, textures: new Map(), iconStore: null };
+  setConstants(gl, gpu, theme, style);
   return gpu;
 }
 
 function destroyGpu(gl, gpu) {
   gl.deleteBuffer(gpu.corners);
-  gpu.passes.forEach((p) => {
+  gpu.textures.forEach(({ texture }) => gl.deleteTexture(texture));
+  [...gpu.passes, ...Object.values(gpu.extras).filter(Boolean)].forEach((p) => {
     gl.deleteProgram(p.program);
     gl.deleteVertexArray(p.vao);
     gl.deleteBuffer(p.buffer);
@@ -345,7 +407,8 @@ function destroyGpu(gl, gpu) {
 
 /**
  * @param {HTMLCanvasElement} canvas the canvas to draw on (it must not have given a 2d context)
- * @param {{gl?: WebGL2RenderingContext}} [opts] `gl`: a context already taken from the canvas
+ * @param {{gl?: WebGL2RenderingContext, mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `gl`: a context already taken from the canvas.
+ *   `mapStyle`: where the theme's map tokens and icons come from (default: the page's, map-style.js `getMapStyle`)
  * @returns {import('./scene.js').Renderer & {stats: {uploads: number, draws: number}}}
  * @throws {Error} when there is no WebGL2 context or a shader fails to compile or link
  */
@@ -353,6 +416,7 @@ export function createWebglRenderer(canvas, opts = {}) {
   const gl = opts.gl || canvas.getContext('webgl2', CONTEXT_ATTRS);
   if (!gl) throw new Error('WebGL2 is not available');
 
+  const styleOf = opts.mapStyle || getMapStyle;
   const stats = { uploads: 0, draws: 0 };
   let gpu = buildGpu(gl);
   let lost = false;
@@ -363,6 +427,12 @@ export function createWebglRenderer(canvas, opts = {}) {
   let packedVersion;
   let lastArgs = null;
 
+  /** A pass only a theme asks for (EXTRA_PASSES), built the first time it is wanted */
+  function extra(name) {
+    if (!gpu.extras[name]) gpu.extras[name] = makePass(gl, EXTRA_PASSES[name], gpu.corners);
+    return gpu.extras[name];
+  }
+
   /** Copies the packed arrays into the GPU buffers (only when the scene changed, or after a restore) */
   function upload() {
     gpu.passes.forEach((pass) => {
@@ -372,20 +442,63 @@ export function createWebglRenderer(canvas, opts = {}) {
       gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
       gl.bufferData(gl.ARRAY_BUFFER, rows.data, gl.DYNAMIC_DRAW);
     });
+    for (const name of Object.keys(EXTRA_PASSES)) {
+      const rows = packed[name];
+      if (!rows.count && !gpu.extras[name]) continue;
+      const pass = extra(name);
+      pass.count = rows.count;
+      if (!rows.count) continue;
+      gl.bindBuffer(gl.ARRAY_BUFFER, pass.buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, rows.data, gl.DYNAMIC_DRAW);
+    }
     stats.uploads++;
   }
 
-  function draw(scene, camera, timeMs) {
-    lastArgs = [scene, camera, timeMs];
+  /** Nearest-neighbour sampling when the theme is pixelated (theme.pixelated), else smooth with mipmaps */
+  function sample(texture, pixelated) {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, pixelated ? gl.NEAREST : gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, pixelated ? gl.NEAREST : gl.LINEAR);
+  }
+
+  /** The texture of a kind's icon: made when the image is first drawn, sampled as the style says */
+  function textureOf(kind, image, pixelated) {
+    let entry = gpu.textures.get(kind);
+    if (!entry || entry.image !== image) {
+      if (entry) gl.deleteTexture(entry.texture);
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true); // the context blends premultiplied
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      entry = { image, texture, pixelated: null };
+      gpu.textures.set(kind, entry);
+    }
+    if (entry.pixelated !== pixelated) { sample(entry.texture, pixelated); entry.pixelated = pixelated; }
+    return entry.texture;
+  }
+
+  function draw(drawn, camera, timeMs) {
+    lastArgs = [drawn, camera, timeMs];
     if (lost || !gpu || !width || !height) return;
+    const style = styleOf();
+    const scene = styledScene(drawn, style); // the map in the theme's colours, outlines and icons (map-style.js); the scene itself when nothing is set
+    if (gpu.iconStore !== style.icons) { // a new set of icons (or none): the old ones' textures go now, not when the renderer does
+      gpu.textures.forEach(({ texture }) => gl.deleteTexture(texture));
+      gpu.textures.clear();
+      gpu.iconStore = style.icons;
+    }
     if (scene !== packedScene || scene.version !== packedVersion) {
-      packed = packScene(scene);
+      packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => !!(style.icons && style.icons.get(kind))) };
       packedScene = scene;
       packedVersion = scene.version;
       upload();
     }
     const theme = scene.theme || 'dark';
-    if (gpu.theme !== theme) setConstants(gl, gpu, theme); // the halos, mark rings and core of the other ground
+    if (gpu.theme !== theme || gpu.styleKey !== styleKey(style)) setConstants(gl, gpu, theme, style); // the halos, mark rings and core of the other ground, in the theme's colours
 
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0);
@@ -403,6 +516,37 @@ export function createWebglRenderer(canvas, opts = {}) {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, pass.spec.verts || 4, pass.count);
       stats.draws++;
     });
+
+    // Over the nodes, only when the theme gave some an outline or an icon
+    const strokes = gpu.extras.strokes;
+    if (strokes && strokes.count) {
+      gl.useProgram(strokes.program);
+      gl.uniform2f(strokes.uniforms.viewport, width, height);
+      gl.uniform3f(strokes.uniforms.cam, camera.x, camera.y, camera.zoom);
+      gl.uniform1f(strokes.uniforms.dpr, canvas.width / width);
+      gl.bindVertexArray(strokes.vao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, strokes.count);
+      stats.draws++;
+    }
+    const icons = gpu.extras.icons;
+    if (icons && icons.count) {
+      gl.useProgram(icons.program);
+      gl.uniform2f(icons.uniforms.viewport, width, height);
+      gl.uniform3f(icons.uniforms.cam, camera.x, camera.y, camera.zoom);
+      gl.uniform1f(icons.uniforms.dpr, canvas.width / width);
+      gl.uniform1i(icons.at('u_tex'), 0);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindVertexArray(icons.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, icons.buffer);
+      for (const group of packed.icons.groups) {
+        const image = style.icons && style.icons.get(group.kind);
+        if (!image) continue;
+        gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated));
+        gl.vertexAttribPointer(1, 4, gl.FLOAT, false, ICON_STRIDE * 4, group.first * ICON_STRIDE * 4); // this kind's rows
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, group.count);
+        stats.draws++;
+      }
+    }
     gl.bindVertexArray(null);
   }
 
@@ -413,7 +557,7 @@ export function createWebglRenderer(canvas, opts = {}) {
   };
   const onRestored = () => {
     try {
-      gpu = buildGpu(gl, lastArgs ? lastArgs[0].theme || 'dark' : 'dark');
+      gpu = buildGpu(gl, lastArgs ? lastArgs[0].theme || 'dark' : 'dark', styleOf());
       lost = false;
       if (packed) upload();
       if (lastArgs) draw(...lastArgs);

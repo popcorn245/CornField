@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { configProblems, loadConfig, DEFAULTS } from '../../core/config.js';
 // @ts-expect-error plain JS modules, no declarations
-import { MAX_THEME_BYTES, MAX_THEME_ASSET_BYTES, cssProblems, cssUrls, fontOrigins, clientTheme, themeAssetDir, themeAssetPath, themeUrlTarget } from '../../core/theme.js';
+import { MAX_THEME_BYTES, MAX_THEME_ASSET_BYTES, ICON_KINDS, cssProblems, cssUrls, fontOrigins, clientTheme, iconUrls, themeAssetDir, themeAssetPath, themeIconAsset, themeUrlTarget } from '../../core/theme.js';
 // @ts-expect-error plain JS modules, no declarations
 import { validateThemeFiles } from '../../core/validate.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
@@ -22,7 +22,7 @@ const theme = (t) => configProblems({ theme: t });
 
 describe('configProblems: theme', () => {
   it('is in the defaults, and accepts the whole key', () => {
-    expect(DEFAULTS.theme).toEqual({ css: null, fonts: [], fontHosts: [], names: {}, default: null, contrast: 'error' });
+    expect(DEFAULTS.theme).toEqual({ css: null, fonts: [], fontHosts: [], names: {}, default: null, icons: {}, pixelated: false, contrast: 'error' });
     expect(theme(undefined)).toEqual([]);
     expect(theme({})).toEqual([]);
     expect(theme({ css: './tools/theme.css', fonts: [GOOGLE], names: { day: './a.css', 'night-2': 'b/c.css' }, default: 'day' })).toEqual([]);
@@ -30,7 +30,7 @@ describe('configProblems: theme', () => {
   });
 
   it('refuses a key it does not know, and anything that is not an object', () => {
-    expect(theme({ script: './x.js' })).toEqual(['theme.script: the keys are css, fonts, fontHosts, names, default, contrast.']);
+    expect(theme({ script: './x.js' })).toEqual(['theme.script: the keys are css, fonts, fontHosts, names, default, icons, pixelated, contrast.']);
     for (const t of [null, 'x.css', ['a.css'], 3]) expect(theme(t)[0], String(t)).toMatch(/^"theme" is \{/);
   });
 
@@ -80,6 +80,52 @@ describe('fontOrigins and clientTheme', () => {
   it('tells the browser the names and the default, never a path', () => {
     expect(clientTheme({ css: './secret/theme.css', names: { a: './x/a.css', b: './x/b.css' }, default: 'a' })).toEqual({ names: ['a', 'b'], default: 'a' });
     expect(clientTheme({ css: './theme.css', names: {} })).toBeNull();
+  });
+});
+
+describe('theme.icons and theme.pixelated: the config', () => {
+  const T = { css: './tools/cf/theme.css' };
+
+  it('accepts an icon per node kind, an .svg or .png inside the theme folder, and a boolean pixelated', () => {
+    expect(theme({ ...T, icons: { app: './tools/cf/icons/app.svg', page: 'tools/cf/page.png', table: './tools/cf/a/b/t.PNG' }, pixelated: true })).toEqual([]);
+    expect(theme({ ...T, icons: {}, pixelated: false })).toEqual([]);
+    expect(ICON_KINDS).toEqual(expect.arrayContaining(['root', 'app', 'page', 'table', 'external', 'room']));
+  });
+
+  it('refuses a kind that is not a node kind, and a shape that is not a map', () => {
+    expect(theme({ ...T, icons: { widget: './tools/cf/w.svg' } })[0]).toMatch(/^theme\.icons "widget": not a node kind \(root, app,/);
+    for (const i of [['./a.svg'], 'a.svg', 3, null]) expect(theme({ ...T, icons: i })[0], String(i)).toBe('theme.icons is { "<node kind>": "./path.svg" }.');
+    for (const p of [1, 'yes', null]) expect(theme({ ...T, pixelated: p }), String(p)).toEqual(['theme.pixelated is true or false.']);
+  });
+
+  it('refuses a path that is not an .svg or .png, is absolute, leaves the repo, or is outside the theme folder', () => {
+    const bad = (rel) => theme({ ...T, icons: { app: rel } }).join('\n');
+    for (const rel of ['/etc/a.svg', 'C:/a.svg', '../a.svg', './tools/cf/../../a.svg', 'tools\\cf\\a.svg', '', 5, null]) expect(bad(rel), String(rel)).toMatch(/theme\.icons\.app is an \.svg or \.png file inside the repo/);
+    expect(bad('./tools/cf/a.gif')).toMatch(/theme\.icons\.app \(\.\/tools\/cf\/a\.gif\) is not an \.svg or \.png file/);
+    expect(bad('./tools/cf/script.js')).toMatch(/is not an \.svg or \.png file/);
+    expect(bad('./other/a.svg')).toMatch(/is outside the theme folder tools\/cf/);
+    expect(bad('./tools/cf/.hidden/a.svg')).toMatch(/has a name that cannot be served/);
+    expect(bad('./tools/cf/sp ace.svg')).toMatch(/has a name that cannot be served/);
+  });
+
+  it('wants a theme folder: there is none to serve from when the theme files are at the top of the repo, or there are none', () => {
+    expect(theme({ css: './theme.css', icons: { app: './a.svg' } }).join('\n')).toMatch(/icons are served beside the theme files/);
+    expect(theme({ icons: { app: './tools/cf/a.svg' } }).join('\n')).toMatch(/icons are served beside the theme files/);
+    expect(theme({ names: { day: './tools/cf/day.css' }, icons: { app: './tools/cf/a.svg' } })).toEqual([]);
+  });
+
+  it('works out the served path of an icon: under the asset route, relative to the theme folder', () => {
+    expect(themeIconAsset({ css: './tools/cf/theme.css' }, './tools/cf/icons/app.svg')).toEqual({ asset: 'icons/app.svg' });
+    expect(iconUrls({ css: './tools/cf/theme.css', icons: { app: './tools/cf/i/app.svg', nope: './tools/cf/n.svg', page: './elsewhere/p.png' } })).toEqual({ app: '/cornfield/theme/assets/i/app.svg' });
+    expect(iconUrls(undefined)).toEqual({});
+  });
+
+  it('tells the browser the served paths and the flag, and stays null for a theme with nothing the browser needs', () => {
+    const t = { css: './tools/cf/theme.css', icons: { app: './tools/cf/app.svg' }, pixelated: true };
+    expect(clientTheme(t)).toEqual({ names: [], default: null, icons: { app: '/cornfield/theme/assets/app.svg' }, pixelated: true });
+    expect(clientTheme({ css: './tools/cf/theme.css', pixelated: true })).toEqual({ names: [], default: null, pixelated: true });
+    expect(clientTheme({ css: './tools/cf/theme.css', icons: {}, pixelated: false })).toBeNull();
+    expect(JSON.stringify(clientTheme(t))).not.toContain('tools/cf/app');
   });
 });
 
@@ -274,6 +320,60 @@ describe('validateThemeFiles: url() and the assets beside a theme', () => {
   });
 });
 
+describe('validateThemeFiles: theme.icons', () => {
+  const made = [];
+  afterAll(() => { for (const r of made) fs.rmSync(r, { recursive: true, force: true }); });
+  const PNG = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.from('0000000d49484452', 'hex')]);
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16"/></svg>';
+  const repo = (files, t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-theme-icons-'));
+    made.push(root);
+    for (const [name, data] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), data); }
+    return { root, theme: { ...DEFAULTS.theme, css: 'tools/cf/theme.css', ...t } };
+  };
+  const base = { 'tools/cf/theme.css': ':root{}' };
+
+  it('passes an svg and a png in the theme folder', () => {
+    expect(validateThemeFiles(repo({ ...base, 'tools/cf/icons/app.svg': SVG, 'tools/cf/icons/page.png': PNG }, { icons: { app: './tools/cf/icons/app.svg', page: './tools/cf/icons/page.png' }, pixelated: true }))).toEqual([]);
+  });
+
+  it('fails a missing icon, naming the kind and the file', () => {
+    const errors = validateThemeFiles(repo(base, { icons: { app: './tools/cf/icons/app.svg' } }));
+    expect(errors).toEqual(['theme.icons.app (./tools/cf/icons/app.svg) tools/cf/icons/app.svg does not exist.']);
+  });
+
+  it('fails a file that is not the image its name says, one with script, one too big, and a folder', () => {
+    const errors = validateThemeFiles(repo({
+      ...base,
+      'tools/cf/a.svg': '<html></html>', 'tools/cf/b.svg': '<svg onload="x()"/>', 'tools/cf/c.svg': '<svg><script>x()</script></svg>', 'tools/cf/d.png': 'GIF89a',
+      'tools/cf/big.png': Buffer.concat([PNG, Buffer.alloc(MAX_THEME_ASSET_BYTES)]), 'tools/cf/dir.svg/x.txt': 'x',
+    }, { icons: { app: './tools/cf/a.svg', page: './tools/cf/b.svg', table: './tools/cf/c.svg', pkg: './tools/cf/d.png', tool: './tools/cf/big.png', atom: './tools/cf/dir.svg' } }));
+    const text = errors.join('\n');
+    expect(text).toMatch(/theme\.icons\.app .* is not an SVG image/);
+    expect(text).toMatch(/theme\.icons\.page .* holds script/);
+    expect(text).toMatch(/theme\.icons\.table .* holds script/);
+    expect(text).toMatch(/theme\.icons\.pkg .* is not a PNG image/);
+    expect(text).toMatch(/theme\.icons\.tool .* an asset beside a theme is at most 1 MB/);
+    expect(text).toMatch(/theme\.icons\.atom .* is not a file/);
+    expect(errors).toHaveLength(6);
+  });
+
+  it('fails an icon whose link leads out of the theme folder', () => {
+    const r = repo({ ...base }, { icons: { app: './tools/cf/out.svg' } });
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-icon-out-'));
+    made.push(outside);
+    fs.writeFileSync(path.join(outside, 'x.svg'), SVG);
+    fs.symlinkSync(path.join(outside, 'x.svg'), path.join(r.root, 'tools/cf/out.svg'));
+    expect(validateThemeFiles(r).join('\n')).toMatch(/theme\.icons\.app .* leads out of the theme folder/);
+  });
+
+  it('fails an icon outside the theme folder or with no theme folder, without reading the disk', () => {
+    expect(validateThemeFiles(repo({ ...base, 'elsewhere/a.svg': SVG }, { icons: { app: './elsewhere/a.svg' } })).join('\n')).toMatch(/is outside the theme folder tools\/cf/);
+    const top = repo({ 'theme.css': ':root{}', 'a.svg': SVG }, { css: 'theme.css', icons: { app: './a.svg' } });
+    expect(validateThemeFiles(top).join('\n')).toMatch(/icons are served beside the theme files/);
+  });
+});
+
 describe('cornfield validate, on a copy of the sample repo', () => {
   let root;
   const CLI = path.join(CORNFIELD, 'cli', 'cornfield.js');
@@ -299,6 +399,17 @@ describe('cornfield validate, on a copy of the sample repo', () => {
     expect(validate().stderr).toMatch(/uses behavior:/);
     fs.writeFileSync(path.join(root, 'theme.css'), `a{}${' '.repeat(MAX_THEME_BYTES)}`);
     expect(validate().stderr).toMatch(/at most 256 KB/);
+  });
+
+  it('fails on a missing icon and passes once it is there', () => {
+    fs.mkdirSync(path.join(root, 'tools/cf'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'tools/cf/theme.css'), ':root { --corn-map-node-app: #123456; }');
+    withTheme({ css: './tools/cf/theme.css', icons: { app: './tools/cf/app.svg' }, pixelated: true });
+    const missing = validate();
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toMatch(/theme\.icons\.app \(\.\/tools\/cf\/app\.svg\) tools\/cf\/app\.svg does not exist/);
+    fs.writeFileSync(path.join(root, 'tools/cf/app.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>');
+    expect(validate().status).toBe(0);
   });
 
   it('refuses a bad theme key when the config loads', async () => {

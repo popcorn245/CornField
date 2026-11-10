@@ -804,10 +804,10 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-run-overlay.is-static .hx-run-ring { animation: none; transform: none; opacity: 1; border-width: calc(var(--corn-border-strong) + var(--corn-border)); }
 @media (prefers-reduced-motion: reduce) { .hx-run-ring { animation: none !important; transform: none; opacity: 1; border-width: calc(var(--corn-border-strong) + var(--corn-border)); } }
 /* Collision: dashed, a sign and words; the same ring whether or not colour is seen */
-.hx-run-mark--collision .hx-run-ring { border: calc(var(--corn-border-strong) + var(--corn-border)) dashed var(--corn-warn); animation: none; }
-.hx-run-tag { position: absolute; left: 0; top: calc(var(--r) + 4px); transform: translateX(-50%); white-space: nowrap; padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-warn); font-size: var(--corn-text-xs); font-weight: 700; }
+.hx-run-mark--collision .hx-run-ring { border: calc(var(--corn-border-strong) + var(--corn-border)) dashed var(--corn-map-collision); animation: none; }
+.hx-run-tag { position: absolute; left: 0; top: calc(var(--r) + 4px); transform: translateX(-50%); white-space: nowrap; padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-map-collision); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-map-collision); font-size: var(--corn-text-xs); font-weight: 700; }
 .hx-run-swatch { display: inline-block; width: 14px; height: 14px; flex: none; box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-added); }
-.hx-run-swatch--collision { border: var(--corn-border-strong) dashed var(--corn-warn); }
+.hx-run-swatch--collision { border: var(--corn-border-strong) dashed var(--corn-map-collision); }
 
 /* The Runs view (forge-panel.js, runs-view.js): each run, its limits beside what was reported, its timeline; the compare puts profiles side by side */
 .hx-runs-list { display: flex; flex-direction: column; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
@@ -835,3 +835,6 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
   .hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }
   .hx-stage:has(.drawer-open) .hx-run-columns { grid-template-columns: 1fr; }
 }
+
+/* theme.pixelated (docs/config.md#theme): small pixel-art images are sampled without smoothing, in the page as on the map (map-style.js) */
+:root[data-pixelated] img { image-rendering: pixelated; }

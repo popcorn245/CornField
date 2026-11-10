@@ -36,6 +36,7 @@
  */
 
 import { EDGE_LABEL_SIZE, FONT_EDGE, FONT_NODE, labelAt, looksFor } from './scene.js';
+import { getMapStyle, styledScene } from './map-style.js';
 
 /** At most this many node labels at a time (lane text and selection edge labels are extra) */
 export const MAX_LABELS = 400;
@@ -68,7 +69,7 @@ const TIER_REST = 3;
 export function chooseLabels(scene, camera, viewport, opts = {}) {
   const { max = MAX_LABELS, margin = CULL_MARGIN, measure = null } = opts;
   const out = [];
-  const outline = looksFor(scene.theme).labelOutline; // the ground's own colour, under the text
+  const outline = scene.labelOutline || looksFor(scene.theme).labelOutline; // the ground's own colour (or the theme's --corn-map-label-halo), under the text
 
   // Always there: the data-flow lanes' titles, notes and arrows ...
   for (const lane of scene.decor.lanes) {
@@ -168,13 +169,16 @@ function coverWithNodes(ctx, nodes) {
 /**
  * A transparent 2D canvas that draws the chosen labels over the map
  * @param {HTMLCanvasElement} canvas
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`);
+ *   a node's label colour is the theme's `--corn-map-label`, and the outline under every label its `--corn-map-label-halo`, when it sets them
  * @returns {{draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
  *   `draw` returns whether it painted: false when the camera, the scene and the size were unchanged
  */
-export function createLabelLayer(canvas) {
+export function createLabelLayer(canvas, opts = {}) {
+  const styleOf = opts.mapStyle || getMapStyle;
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0, dpr = 1;
-  let lastScene = null, lastVersion, lastX, lastY, lastZoom;
+  let lastScene = null, lastVersion, lastX, lastY, lastZoom, lastStyle;
   let dirty = true;
   let destroyed = false;
 
@@ -202,11 +206,14 @@ export function createLabelLayer(canvas) {
       dirty = true;
     },
 
-    draw(scene, camera) {
+    draw(drawn, camera) {
       if (destroyed) return false;
-      if (!dirty && scene === lastScene && scene.version === lastVersion && camera.x === lastX && camera.y === lastY && camera.zoom === lastZoom) return false;
-      lastScene = scene; lastVersion = scene.version; lastX = camera.x; lastY = camera.y; lastZoom = camera.zoom;
+      const style = styleOf();
+      const styleKey = style.plain ? 0 : style.version;
+      if (!dirty && drawn === lastScene && drawn.version === lastVersion && camera.x === lastX && camera.y === lastY && camera.zoom === lastZoom && styleKey === lastStyle) return false;
+      lastScene = drawn; lastVersion = drawn.version; lastX = camera.x; lastY = camera.y; lastZoom = camera.zoom; lastStyle = styleKey;
       dirty = false;
+      const scene = styledScene(drawn, style); // the label colours of the theme (map-style.js)
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);

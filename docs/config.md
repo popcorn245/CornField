@@ -46,7 +46,7 @@ export default {
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
 | `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's header |
-| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, contrast? }`: a repo's own look, CSS only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, and named themes with a picker in the header. [Theme](#theme) |
+| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the header, an icon per node kind on the map, and a contrast check. [Theme](#theme) |
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
@@ -215,6 +215,8 @@ theme: {
   fontHosts: [],                                             // only for a fonts host that is not a known pair (below)
   names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' },
   default: 'day',                                            // must be one of `names`
+  icons: { app: './tools/cornfield/icons/app.svg', page: './tools/cornfield/icons/page.png' }, // an icon per node kind, drawn inside the node on the map
+  pixelated: true,                                           // draw small icons crisp (nearest-neighbour), not smoothed
   contrast: 'error',                                         // 'warn' makes a failing contrast pair a warning
 }
 ```
@@ -227,6 +229,8 @@ theme: {
 | `names` | named themes: `{ name: './path.css' }`, at most 12. A name is lower-case letters, digits and hyphens (at most 32 characters). Each file is served at `/cornfield/theme/<name>.css`. |
 | `contrast` | `'error'` (the default) or `'warn'`: what `validate` does with a theme pair under WCAG AA (4.5:1 text, 3:1 UI), in light or dark, for the standard theme and for each named theme (with no theme, for cornfield's own tokens). `'error'` fails `validate`; `'warn'` reports the same lines as warnings. See [the contrast check](theming.md#the-contrast-check). |
 | `default` | the name in force until a viewer picks another. One of `names`. Without it, no named theme is on until a viewer picks one, and the picker offers "Standard" (cornfield without a named theme). |
+| `icons` | an icon per node kind: `{ '<kind>': './path.svg' }`, where the kind is a node type (`root`, `app`, `page`, `pkg`, `core`, `token`, `atom`, `molecule`, `tool`, `store`, `table`, `rom`, `service`, `external`, `stack`, `machine`, `container`, `persona`, `device`, `floor`, `room`) and the file is an `.svg` or `.png` inside the repo **and inside the theme's folder** (below). It is drawn inside the node's circle on the map, in both renderers. |
+| `pixelated` | `true` draws the icons without smoothing (nearest-neighbour: WebGL `NEAREST`, Canvas 2D `imageSmoothingEnabled = false`), so small pixel art stays crisp when the map is zoomed. It also sets `image-rendering: pixelated` on every `<img>` in the page (`<html data-pixelated>`). Default `false`. |
 
 **What the CSP gets.** `style-src` gains the origin of each `fonts` URL and `font-src` gains the same origins plus the font file hosts, and nothing else is widened (`default-src`, `script-src`, `connect-src` and `img-src` stay as they were). The file hosts are known for two stylesheet hosts: `fonts.googleapis.com` (files from `fonts.gstatic.com`) and `fonts.bunny.net` (files from the same host). For any other host in `fonts`, the config is refused until `fontHosts` lists where its font files come from. A font file that a stylesheet in `fonts` names from a host the policy does not list is blocked by the browser.
 
@@ -234,7 +238,7 @@ theme: {
 
 **Named themes.** With `names`, the server puts `data-theme-names` and `data-theme-default` on `<html>`, and `explorer/theme-boot.js`, a classic script that is the last thing in the page's `<head>` (after every stylesheet link, so before the body is parsed and before anything is drawn), sets `data-theme-name` on `<html>` before the first paint: the viewer's pick from `localStorage` (`cornfield:theme-name`) when it is still one of `names`, else `default`. It also points the named theme's `<link>` at that file, so a stylesheet scoped to `:root[data-theme-name="night"]` or a whole file per name both work. A small `<select>` in the header, next to the light/dark toggle, switches it and remembers the pick. If storage is blocked, the page still renders and the pick holds for that visit. `data-theme-name` is independent of the light/dark `data-theme`.
 
-The order of stylesheets is: cornfield's own, the `fonts` links, `css`, then the current named theme. `/cornfield/config.json` carries `theme: { names, default }` for the picker, never a file path.
+The order of stylesheets is: cornfield's own, the `fonts` links, `css`, then the current named theme. `/cornfield/config.json` carries `theme: { names, default, icons?, pixelated? }` for the picker and the map, never a file path (`icons` holds the served `/cornfield/theme/assets/…` paths).
 
 **Images and fonts beside a theme.** A theme may use its own images (pixel-art backgrounds, border images) and self-hosted fonts. The server serves the files in the theme's folder (the folder that holds the `css` and `names` files; when they sit in different folders, the deepest folder that holds them all) at `/cornfield/theme/assets/<path under that folder>`:
 
@@ -258,6 +262,10 @@ body { background-image: url(/cornfield/theme/assets/img/bricks.png); image-rend
 - it keeps out of script: no `expression(`, `javascript:`, `vbscript:`, `behavior:` or `-moz-binding` (CSS escapes and comments inside the word do not hide it, nor a comment marker inside a string), and no `@import` except of an `https:` URL that is listed in `theme.fonts` (an `@import` of a bare string, with a comment before its `url(`, or with nothing after it is refused too);
 - its contrast: the `--corn-*` pairs of the theme, in light and dark, for the standard theme and for each named one, are at least WCAG AA (`contrast` above; [the pairs](theming.md#the-contrast-check));
 - every `url()` (and `src()`) leads, read relative to where the file is served, to an image or font beside the theme that the server would serve (above), or is a `data:` image (`data:image/png`, `gif`, `webp`, `avif` or `svg+xml`). A URL on another host is refused: the CSP would block it anyway.
+
+**Map icons.** `icons` is served by the same route as the images beside a theme: an icon at `tools/cornfield/icons/app.svg` is fetched from `/cornfield/theme/assets/icons/app.svg`, so it must sit in the theme's folder (the folder of the `css` and `names` files) and follow the same rules (plain names, at most 1 MB, nothing served when the theme files are at the top of the repo). The browser is told only the served path of each, in `/cornfield/config.json`'s `theme.icons`. An icon is an image and nothing else: give an SVG a `width` and a `height` (it is drawn as an image, so it cannot run script or load anything). The map draws it as a square inside the node, over the node's colour; a kind with no icon, an icon that is still loading and one that fails to load all draw as a plain node, so a missing file never breaks the map. The map's colours come from `--corn-map-*` tokens in the theme's stylesheet: [docs/theming.md, The map](theming.md#the-map).
+
+**What `cornfield validate` checks** in `icons` and `pixelated`: `pixelated` is true or false; each key is a node kind; each icon is an `.svg` or `.png` path inside the repo and inside the theme folder, that exists as a plain file there (a link out of it is refused), is at most 1 MB, and is what its extension says (a PNG with the PNG signature; an SVG with an `<svg>` element and no `<script>`, `on…=` handler or `javascript:`). `configProblems` reports the shape (a kind that is not a node type, a path outside the theme folder), `validate` the files.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails, for a file over the cap, and for any path the config does not name. Nothing else of the repo is reachable through these routes.
 

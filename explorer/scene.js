@@ -44,7 +44,8 @@
  *
  * @typedef {object} SceneNode One visible node, in draw order (later is on top)
  * @property {string} id           topology id
- * @property {string} type         topology type (`app`, `page`, `table`, ...)
+ * @property {string} type         topology type (`app`, `page`, `table`, ...): the node's kind for the map tokens (map-style.js)
+ * @property {string} group        the node's layer in the Layers menu (`app`, `cloud`, `web`, `house`, ...): the node's group for the map tokens
  * @property {number} x            world centre
  * @property {number} y
  * @property {number} r            world radius of the filled circle
@@ -135,7 +136,9 @@
  * @typedef {object} Scene
  * @property {SceneNode[]} nodes
  * @property {SceneEdge[]} edges
+ * @property {{nodes: Set<string>, edges: Set<string>}} painted  the ids of the nodes and the keys of the edges a painter (an outage, a check's verdict, a pull request) gave a colour of its own: map-style.js leaves those alone
  * @property {SceneDecor} decor
+ * @property {{node: {color: string, width: number}, edge: {color: string, width: number}}} [labelOutline]  the outline under the labels when the theme sets one (map-style.js, `--corn-map-label-halo`); else `looksFor(theme).labelOutline`
  * @property {boolean} preset      the data-flow view: every node is labelled and the label boost differs (see `labelAt`)
  * @property {'dark'|'light'} theme  the ground it is drawn for (`state.theme`, theme.js): every colour in it already suits it; `looksFor(theme)` has the rest
  * @property {number} version      the `state.sceneVersion` it was built from
@@ -537,6 +540,9 @@ function buildEdges(state, subgraph, reduceMotion) {
 // ---------------------------------------------------------------------------
 //  Nodes
 // ---------------------------------------------------------------------------
+/** A node's group: its layer in the Layers menu (layers.js), one per kind but for the rooms and floors (House) and the outside nodes (Cloud, or the Public web) */
+const groupOf = (node) => (node.type === 'floor' || node.type === 'room' ? 'house' : node.type === 'external' ? externalLayer(node) : node.type);
+
 function buildNodes(state, subgraph) {
   const { nodes, selectedNode, searchQuery } = state;
   const query = searchQuery.toLowerCase();
@@ -562,7 +568,7 @@ function buildNodes(state, subgraph) {
     const big = shown.type === 'root' || shown.type === 'app';
 
     out.push({
-      id: node.id, type: shown.type,
+      id: node.id, type: shown.type, group: groupOf(shown),
       x: node.x, y: node.y, r: shown.r, color: shown.color,
       alpha,
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,
@@ -694,15 +700,20 @@ export function buildScene(state, opts = {}) {
     nodes: buildNodes(state, subgraph),
     edges: buildEdges(state, subgraph, !!opts.reduceMotion),
     decor: { grid: { size: 48, color: 'rgba(255, 255, 255, 0.035)', width: 0.5, margin: 200 }, rings, lanes },
+    painted: { nodes: new Set(), edges: new Set() },
     preset,
     theme: 'dark',
     version: state.sceneVersion || 0,
   };
   if (state.view === 'house') decorateHouseScene(scene, state); // its bands and tray as lanes, rooms unlabelled (house-model.js)
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
+  const colours = { nodes: scene.nodes.map((n) => n.color), edges: scene.edges.map((e) => e.color) };
   if (state.scenario) paintOutage(scene, outageFor(state.scenario, state.nodes, state.edges)); // CLOUD-07: red, amber, violet by when the outage bites
   if (state.scenario) paintVerdict(scene, state.scenario); // PHY-10: red, green or amber by the step's permission check
   if (state.forgeLit) paintForge(scene, state.forgeLit); // CF-07: the selected pull request's nodes, the rest faded
+  // The nodes and edges a painter above gave a colour: the map's own styling (map-style.js) leaves them to it
+  scene.nodes.forEach((n, i) => { if (colours.nodes.length === scene.nodes.length && n.color !== colours.nodes[i]) scene.painted.nodes.add(n.id); });
+  scene.edges.forEach((e, i) => { if (colours.edges.length === scene.edges.length && e.color !== colours.edges[i]) scene.painted.edges.add(e.key); });
   if (state.theme === 'light') lightenScene(scene); // MAP-01: last, so what every painter above set is themed with the rest (theme-model.js)
   return scene;
 }
