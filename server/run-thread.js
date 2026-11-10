@@ -24,7 +24,7 @@
  * by the id it kept (`run_mirrors`), never by the marker: the marker is not trusted as an address.
  */
 
-import { defuse, ZW } from '../core/defuse.js';
+import { defuse, inert, quoteInert, ZW } from '../core/defuse.js';
 
 /** The marker on the first line (an HTML comment, which the forge does not show). It does not contain the contract's tag, `cornfield-run` */
 export const MIRROR_TAG = 'cornfield:run-status';
@@ -40,19 +40,16 @@ const STATUS_WORDS = {
 /** The state of a run as a word, the one the dashboard shows */
 export const statusWord = (status) => STATUS_WORDS[status] ?? String(status);
 
-/** Markdown that could make a link, an image or HTML of someone else's words, made plain: `<` as an entity, `[` escaped (so `[[` is no node either) */
-const inert = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\[/g, '\\[');
-
 /** Text for someone else's eyes: mentions, references and links broken, no link, image or HTML made of it, and made one line */
-const plain = (s) => inert(defuse(String(s ?? '').replace(/\s+/g, ' ').trim())).replace(/`/g, "'");
+const plain = (s) => inert(defuse(String(s ?? '').replace(/\s+/g, ' ').trim()));
 
 /** A run's note, quoted line by line and cut short */
 function quote(note) {
   const text = String(note ?? '').trim();
   if (!text) return '';
   const cut = text.length > NOTE_SHOWN ? `${text.slice(0, NOTE_SHOWN)} …` : text;
-  // Every line end Markdown (and readRunBlocks) knows is a line end here, so no line of the note escapes its `> `; no fence opens inside the quote
-  return inert(defuse(cut)).replace(/`/g, "'").replace(/~(?=~)/g, `~${ZW}`).split(/\r\n?|\n/).map((l) => (l.trim() ? `> ${l}` : '>')).join('\n');
+  // Cut before it is made inert, so the cut never lands inside an escape (core/defuse.js)
+  return quoteInert(cut);
 }
 
 /** An address the forge gave, safe to put in a link; null for anything else */
