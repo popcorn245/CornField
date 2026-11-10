@@ -197,23 +197,24 @@ Where the stylesheets once had a one-off tint, they mix a token: `color-mix(in s
 The map canvas is drawn from tokens too. Its renderers (WebGL, and the Canvas 2D one it falls back to) and its label layer read the `--corn-map-*` custom properties below from the page's computed style when the page loads and again whenever the theme changes (`data-theme`, `data-theme-name`, a theme stylesheet finishing loading, or `prefers-color-scheme` flipping), then draw again. Both draw the same, so a token set once styles both.
 
 - **`auto` is the default, and it is today's map.** A node is drawn in its own colour from the topology (deepened for the light ground, as it always was); every line, halo and mark keeps the colour it had. A theme that sets nothing changes nothing.
-- **A colour replaces it, as written.** Both themes read the same token, so a theme sets the light ground's colour too, under `:root[data-theme="light"]` (or `@media (prefers-color-scheme: light)`). Anything that is not a colour is read as `auto`.
-- **A kind beats its group.** A node's *kind* is its type (`app`, `table`, ...). Its *group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`.
-- **An outline is off until you set one.** `--corn-map-node-<kind>-stroke` (or the group's) draws a ring just inside the node's edge, `--corn-map-stroke-width` thick. A label colour keeps the label's own fade: a node the focus dims stays dim.
+- **A colour replaces it, as written.** Both themes read the same token, so a theme sets the light ground's colour too, under `:root[data-theme="light"]` (or `@media (prefers-color-scheme: light)`).
+- **A kind beats its group.** A node's *kind* is its type (`app`, `table`, ...). Its *group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`. Only the fill goes by kind and group; the outline and the label are one colour for the whole map.
+- **An outline is off until you set one.** `--corn-map-stroke` draws a ring just inside every node's edge, `--corn-map-stroke-width` thick. `--corn-map-label` keeps the label's own fade: a node the focus dims stays dim.
 - **Colours that mean something stay.** A node or an edge an outage, a permission check or a selected pull request colours (red, amber, green) keeps that colour; the map tokens style what is otherwise drawn in the node's or the line's own colour.
+- **Anything that is not a colour is `auto`.** A value is read as the browser reads a colour (`#e53e3e`, `rgb()`, `hsl()`, a name, `color-mix()`, `oklch()`), so a typo, a length or an empty value leaves that part of the map as it was rather than breaking it.
 - **Icons.** `theme.icons` in the config (docs/config.md#theme) draws an image per node kind inside the node; `theme.pixelated` draws small ones crisp.
 
 Dark and light, with a brand's own map (here each `--corn-map-*` is set in the light blocks too, because its colours are for a dark ground):
 
 ```css
-/* map.css: kinds, a group, the diff and the focus in a brand's colours */
+/* map.css: kinds, a group, the outline, the diff and the focus in a brand's colours */
 :root {
   --corn-map-node-app: #e53e3e;
   --corn-map-node-page: #4299e1;
-  --corn-map-node-page-stroke: #1a365d;
-  --corn-map-stroke-width: 2px;
   --corn-map-group-cloud: #a0aec0;
-  --corn-map-group-cloud-label: #e2e8f0;
+  --corn-map-stroke: #1a202c;
+  --corn-map-stroke-width: 2px;
+  --corn-map-label: #fefcbf;
   --corn-map-edge-flow: #ecc94b;
   --corn-map-added: #48bb78;
   --corn-map-removed: #f56565;
@@ -223,9 +224,9 @@ Dark and light, with a brand's own map (here each `--corn-map-*` is set in the l
 :root[data-theme="light"] {
   --corn-map-node-app: #c53030;
   --corn-map-node-page: #2b6cb0;
-  --corn-map-node-page-stroke: #1a365d;
   --corn-map-group-cloud: #4a5568;
-  --corn-map-group-cloud-label: #1a202c;
+  --corn-map-stroke: #1a202c;
+  --corn-map-label: #1a202c;
   --corn-map-edge-flow: #975a16;
   --corn-map-added: #276749;
   --corn-map-removed: #9b2c2c;
@@ -234,10 +235,15 @@ Dark and light, with a brand's own map (here each `--corn-map-*` is set in the l
 }
 ```
 
+There are 62 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kinds, the outline (colour and width), the label (colour and halo), and 8 states.
+
 | Token | What it is |
 |---|---|
-| **State** | |
-| `--corn-map-stroke-width` | the width of a node's outline, in the map's own pixels (`1.5px` by default; it only matters once a `-stroke` token is set) |
+| **Outline, label and state** | |
+| `--corn-map-stroke` | the outline of every node: a ring just inside its edge, at the node's own fade. `auto`: no outline, as the map has always been |
+| `--corn-map-stroke-width` | the width of that outline, in the map's own pixels (`1.5px` by default; it only matters once `--corn-map-stroke` is set; `0` turns it off) |
+| `--corn-map-label` | the colour of a node's label (its fade outside the focus is kept). `auto`: near-white on the dark ground, near-black on the light one |
+| `--corn-map-label-halo` | the outline drawn under every label on the map (a node's, an edge's) so it reads over the lines, used as written (give it an alpha to soften it). `auto`: the ground's own colour, slightly translucent |
 | `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed`, `--corn-map-edit` | the diff on the map: a proposal's ring on a node and its line on an edge, and a what-if edit's. The legend and the panel's dots follow them. `auto`: `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit` as the map has always drawn them |
 | `--corn-map-selected`, `--corn-map-match` | the halo of the selected node, and of a node a search finds (its disc is the same colour, translucent) |
 | `--corn-map-lit` | the straight links the focus lights: the selection's own lines, and the step of a walk (a data-flow edge keeps its flow's colour: `--corn-map-edge-flow`) |
@@ -254,47 +260,47 @@ Dark and light, with a brand's own map (here each `--corn-map-*` is set in the l
 | `--corn-map-edge-runs-on` | code running on a stack or a machine |
 | `--corn-map-edge-uses` | a use of a design token |
 | `--corn-map-edge-extends` | a token group extending another |
-| **Nodes by kind** (fill, outline, label) | |
-| `--corn-map-node-root`, `--corn-map-node-root-stroke`, `--corn-map-node-root-label` | a `root` node's fill, outline and label |
-| `--corn-map-node-app`, `--corn-map-node-app-stroke`, `--corn-map-node-app-label` | a `app` node's fill, outline and label |
-| `--corn-map-node-page`, `--corn-map-node-page-stroke`, `--corn-map-node-page-label` | a `page` node's fill, outline and label |
-| `--corn-map-node-pkg`, `--corn-map-node-pkg-stroke`, `--corn-map-node-pkg-label` | a `pkg` node's fill, outline and label |
-| `--corn-map-node-core`, `--corn-map-node-core-stroke`, `--corn-map-node-core-label` | a `core` node's fill, outline and label |
-| `--corn-map-node-token`, `--corn-map-node-token-stroke`, `--corn-map-node-token-label` | a `token` node's fill, outline and label |
-| `--corn-map-node-atom`, `--corn-map-node-atom-stroke`, `--corn-map-node-atom-label` | a `atom` node's fill, outline and label |
-| `--corn-map-node-molecule`, `--corn-map-node-molecule-stroke`, `--corn-map-node-molecule-label` | a `molecule` node's fill, outline and label |
-| `--corn-map-node-tool`, `--corn-map-node-tool-stroke`, `--corn-map-node-tool-label` | a `tool` node's fill, outline and label |
-| `--corn-map-node-store`, `--corn-map-node-store-stroke`, `--corn-map-node-store-label` | a `store` node's fill, outline and label |
-| `--corn-map-node-table`, `--corn-map-node-table-stroke`, `--corn-map-node-table-label` | a `table` node's fill, outline and label |
-| `--corn-map-node-rom`, `--corn-map-node-rom-stroke`, `--corn-map-node-rom-label` | a `rom` node's fill, outline and label |
-| `--corn-map-node-service`, `--corn-map-node-service-stroke`, `--corn-map-node-service-label` | a `service` node's fill, outline and label |
-| `--corn-map-node-external`, `--corn-map-node-external-stroke`, `--corn-map-node-external-label` | a `external` node's fill, outline and label |
-| `--corn-map-node-stack`, `--corn-map-node-stack-stroke`, `--corn-map-node-stack-label` | a `stack` node's fill, outline and label |
-| `--corn-map-node-machine`, `--corn-map-node-machine-stroke`, `--corn-map-node-machine-label` | a `machine` node's fill, outline and label |
-| `--corn-map-node-container`, `--corn-map-node-container-stroke`, `--corn-map-node-container-label` | a `container` node's fill, outline and label |
-| `--corn-map-node-persona`, `--corn-map-node-persona-stroke`, `--corn-map-node-persona-label` | a `persona` node's fill, outline and label |
-| `--corn-map-node-device`, `--corn-map-node-device-stroke`, `--corn-map-node-device-label` | a `device` node's fill, outline and label |
-| `--corn-map-node-floor`, `--corn-map-node-floor-stroke`, `--corn-map-node-floor-label` | a `floor` node's fill, outline and label |
-| `--corn-map-node-room`, `--corn-map-node-room-stroke`, `--corn-map-node-room-label` | a `room` node's fill, outline and label |
-| **Nodes by group** (fill, outline, label) | |
-| `--corn-map-group-app`, `--corn-map-group-app-stroke`, `--corn-map-group-app-label` | the fill, outline and label of every node in the `app` group |
-| `--corn-map-group-pkg`, `--corn-map-group-pkg-stroke`, `--corn-map-group-pkg-label` | the fill, outline and label of every node in the `pkg` group |
-| `--corn-map-group-page`, `--corn-map-group-page-stroke`, `--corn-map-group-page-label` | the fill, outline and label of every node in the `page` group |
-| `--corn-map-group-atom`, `--corn-map-group-atom-stroke`, `--corn-map-group-atom-label` | the fill, outline and label of every node in the `atom` group |
-| `--corn-map-group-molecule`, `--corn-map-group-molecule-stroke`, `--corn-map-group-molecule-label` | the fill, outline and label of every node in the `molecule` group |
-| `--corn-map-group-token`, `--corn-map-group-token-stroke`, `--corn-map-group-token-label` | the fill, outline and label of every node in the `token` group |
-| `--corn-map-group-tool`, `--corn-map-group-tool-stroke`, `--corn-map-group-tool-label` | the fill, outline and label of every node in the `tool` group |
-| `--corn-map-group-table`, `--corn-map-group-table-stroke`, `--corn-map-group-table-label` | the fill, outline and label of every node in the `table` group |
-| `--corn-map-group-rom`, `--corn-map-group-rom-stroke`, `--corn-map-group-rom-label` | the fill, outline and label of every node in the `rom` group |
-| `--corn-map-group-service`, `--corn-map-group-service-stroke`, `--corn-map-group-service-label` | the fill, outline and label of every node in the `service` group |
-| `--corn-map-group-cloud`, `--corn-map-group-cloud-stroke`, `--corn-map-group-cloud-label` | the fill, outline and label of every node in the `cloud` group |
-| `--corn-map-group-web`, `--corn-map-group-web-stroke`, `--corn-map-group-web-label` | the fill, outline and label of every node in the `web` group |
-| `--corn-map-group-stack`, `--corn-map-group-stack-stroke`, `--corn-map-group-stack-label` | the fill, outline and label of every node in the `stack` group |
-| `--corn-map-group-machine`, `--corn-map-group-machine-stroke`, `--corn-map-group-machine-label` | the fill, outline and label of every node in the `machine` group |
-| `--corn-map-group-container`, `--corn-map-group-container-stroke`, `--corn-map-group-container-label` | the fill, outline and label of every node in the `container` group |
-| `--corn-map-group-device`, `--corn-map-group-device-stroke`, `--corn-map-group-device-label` | the fill, outline and label of every node in the `device` group |
-| `--corn-map-group-house`, `--corn-map-group-house-stroke`, `--corn-map-group-house-label` | the fill, outline and label of every node in the `house` group |
-| `--corn-map-group-persona`, `--corn-map-group-persona-stroke`, `--corn-map-group-persona-label` | the fill, outline and label of every node in the `persona` group |
+| **Node fill by kind** | |
+| `--corn-map-node-root` | the fill of a `root` node |
+| `--corn-map-node-app` | the fill of an `app` node |
+| `--corn-map-node-page` | the fill of a `page` node |
+| `--corn-map-node-pkg` | the fill of a `pkg` node |
+| `--corn-map-node-core` | the fill of a `core` node |
+| `--corn-map-node-token` | the fill of a `token` node |
+| `--corn-map-node-atom` | the fill of an `atom` node |
+| `--corn-map-node-molecule` | the fill of a `molecule` node |
+| `--corn-map-node-tool` | the fill of a `tool` node |
+| `--corn-map-node-store` | the fill of a `store` node |
+| `--corn-map-node-table` | the fill of a `table` node |
+| `--corn-map-node-rom` | the fill of a `rom` node |
+| `--corn-map-node-service` | the fill of a `service` node |
+| `--corn-map-node-external` | the fill of an `external` node |
+| `--corn-map-node-stack` | the fill of a `stack` node |
+| `--corn-map-node-machine` | the fill of a `machine` node |
+| `--corn-map-node-container` | the fill of a `container` node |
+| `--corn-map-node-persona` | the fill of a `persona` node |
+| `--corn-map-node-device` | the fill of a `device` node |
+| `--corn-map-node-floor` | the fill of a `floor` node |
+| `--corn-map-node-room` | the fill of a `room` node |
+| **Node fill by group** | |
+| `--corn-map-group-app` | the fill of every node in the `app` group |
+| `--corn-map-group-pkg` | the fill of every node in the `pkg` group |
+| `--corn-map-group-page` | the fill of every node in the `page` group |
+| `--corn-map-group-atom` | the fill of every node in the `atom` group |
+| `--corn-map-group-molecule` | the fill of every node in the `molecule` group |
+| `--corn-map-group-token` | the fill of every node in the `token` group |
+| `--corn-map-group-tool` | the fill of every node in the `tool` group |
+| `--corn-map-group-table` | the fill of every node in the `table` group |
+| `--corn-map-group-rom` | the fill of every node in the `rom` group |
+| `--corn-map-group-service` | the fill of every node in the `service` group |
+| `--corn-map-group-cloud` | the fill of every node in the `cloud` group |
+| `--corn-map-group-web` | the fill of every node in the `web` group |
+| `--corn-map-group-stack` | the fill of every node in the `stack` group |
+| `--corn-map-group-machine` | the fill of every node in the `machine` group |
+| `--corn-map-group-container` | the fill of every node in the `container` group |
+| `--corn-map-group-device` | the fill of every node in the `device` group |
+| `--corn-map-group-house` | the fill of every node in the `house` group |
+| `--corn-map-group-persona` | the fill of every node in the `persona` group |
 
 ## The old `--hx-*` names
 

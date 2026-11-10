@@ -15,7 +15,7 @@ import { lightColor } from '../../explorer/theme-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createCanvas2dRenderer } from '../../explorer/renderer-canvas2d.js';
 // @ts-expect-error plain JS modules, no declarations
-import { createWebglRenderer, packNodes, packIcons, packStrokes, styleTables, EXTRA_PASSES, NODE_STRIDE, ICON_STRIDE } from '../../explorer/renderer-webgl.js';
+import { createWebglRenderer, packNodes, packIcons, packStrokes, styleTables, EXTRA_PASSES, NODE_STRIDE, ICON_STRIDE, RING_STRIDE } from '../../explorer/renderer-webgl.js';
 // @ts-expect-error plain JS modules, no declarations
 import { chooseLabels, createLabelLayer } from '../../explorer/labels.js';
 
@@ -51,10 +51,14 @@ function styleOf(values = {}, extra = {}) {
 const reader = (table) => (name) => table[name] ?? '';
 
 describe('the tokens', () => {
-  it('lists a fill, an outline and a label token for every node kind and every group, and a token per edge kind and state', () => {
+  it('lists a fill token for every node kind and every group, one outline and one label, and a token per edge kind and state', () => {
     expect(M.MAP_KINDS).toEqual(expect.arrayContaining(['root', 'app', 'page', 'table', 'external', 'room', 'persona']));
-    expect(M.nodeTokens('page')).toEqual(['--corn-map-node-page', '--corn-map-node-page-stroke', '--corn-map-node-page-label']);
-    expect(M.groupTokens('cloud')).toEqual(['--corn-map-group-cloud', '--corn-map-group-cloud-stroke', '--corn-map-group-cloud-label']);
+    expect(M.nodeToken('page')).toBe('--corn-map-node-page');
+    expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
+    expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
+    expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8);
+    expect(M.mapTokenNames()).toHaveLength(62);
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -69,7 +73,7 @@ describe('the tokens', () => {
   });
 
   it('reads auto, nothing and a non-colour as no override, and a colour as it is written', () => {
-    for (const v of ['auto', ' AUTO ', '', '   ', undefined, 'not-a-colour', '12px']) expect(M.cssColor(v), String(v)).toBeNull();
+    for (const v of ['auto', ' AUTO ', '', '   ', undefined, 'not-a-colour', '12px', 'rgb(1.2.3, 0, 0)', 'rgb(300, 0, 0)', 'rgba(1, 2, 3, 5)', '#12345']) expect(M.cssColor(v), String(v)).toBeNull(); // no browser to read them here: none is passed on as written
     expect(M.cssColor('#e53e3e')).toBe('#e53e3e');
     expect(M.cssColor(' rgb(1, 2, 3) ')).toBe('rgb(1, 2, 3)');
     expect(M.cssColor('rgba(1, 2, 3, 0.5)')).toBe('rgba(1, 2, 3, 0.5)');
@@ -98,13 +102,13 @@ describe('styledScene', () => {
     expect(M.looksWith(looksFor('dark'), styleOf())).toBe(looksFor('dark'));
   });
 
-  it('colours a kind\'s fill, outline and label, and nothing else', () => {
+  it('colours a kind\'s fill, and nothing else', () => {
     const scene = dark();
-    const out = M.styledScene(scene, styleOf({ '--corn-map-node-page': '#e53e3e', '--corn-map-node-page-stroke': '#000000', '--corn-map-node-page-label': '#ffeeaa' }));
+    const out = M.styledScene(scene, styleOf({ '--corn-map-node-page': '#e53e3e' }));
     const page = byId(out, 'page');
     expect(page.color).toBe('#e53e3e');
-    expect(page.labelColor).toBe('#ffeeaa');
-    expect(page.stroke).toEqual({ color: '#000000', width: M.DEFAULT_STROKE_WIDTH });
+    expect(page.labelColor).toBe(byId(scene, 'page').labelColor);
+    expect(page.stroke).toBeUndefined();
     expect(byId(out, 'app')).toBe(byId(scene, 'app'));
     expect(out.edges).toEqual(scene.edges);
     expect(scene.nodes.find((n) => n.id === 'page').color).toBe('#336699'); // the scene is not touched
@@ -134,7 +138,7 @@ describe('styledScene', () => {
     const scene = buildScene(mk({ selectedNode: nodes[1] }));
     const dim = scene.nodes.find((n) => !n.connected);
     expect(dim.labelColor).toBe('rgba(255, 255, 255, 0.3)');
-    const out = M.styledScene(scene, styleOf({ [M.nodeTokens(dim.type)[2]]: '#00ff00' }));
+    const out = M.styledScene(scene, styleOf({ '--corn-map-label': '#00ff00' }));
     expect(byId(out, dim.id).labelColor).toBe('rgba(0, 255, 0, 0.3)');
     expect(byId(out, dim.id).alpha).toBe(dim.alpha);
   });
@@ -143,9 +147,8 @@ describe('styledScene', () => {
     const scene = dark();
     scene.nodes.find((n) => n.id === 'page').color = '#f87171';
     scene.painted = { nodes: new Set(['page']), edges: new Set([scene.edges[0].key]) };
-    const out = M.styledScene(scene, styleOf({ '--corn-map-node-page': '#00ff00', '--corn-map-node-page-label': '#00ff00', '--corn-map-edge-ownership': '#00ff00', '--corn-map-node-page-stroke': '#0000ff' }));
+    const out = M.styledScene(scene, styleOf({ '--corn-map-node-page': '#00ff00', '--corn-map-edge-ownership': '#00ff00', '--corn-map-stroke': '#0000ff' }));
     expect(byId(out, 'page').color).toBe('#f87171');
-    expect(byId(out, 'page').labelColor).toBe('#f8fafc');
     expect(byId(out, 'page').stroke).toBeTruthy(); // an outline is not a state colour
     expect(out.edges[0]).toBe(scene.edges[0]);
     expect(out.edges[1].color).toBe('rgba(0, 255, 0, 0.16)');
@@ -158,7 +161,7 @@ describe('styledScene', () => {
   });
 
   it('draws no outline when the width is 0, and uses the width token otherwise', () => {
-    const t = { '--corn-map-node-page-stroke': '#000000' };
+    const t = { '--corn-map-stroke': '#000000' };
     expect(byId(M.styledScene(dark(), styleOf(t, { strokeWidth: 0 })), 'page').stroke).toBeUndefined();
     expect(byId(M.styledScene(dark(), styleOf(t, { strokeWidth: 4 })), 'page').stroke).toEqual({ color: '#000000', width: 4 });
   });
@@ -354,14 +357,14 @@ describe('the Canvas 2D renderer', () => {
     expect(base).toEqual(expect.arrayContaining([HALO.selected.ring, MARK.added.color, HALO.match.ring]));
   });
 
-  it('draws a node\'s outline just inside its edge, in the token\'s colour and width', () => {
-    const style = styleOf({ '--corn-map-node-page-stroke': '#101010' }, { strokeWidth: 3 });
+  it('draws every node\'s outline just inside its edge, in the token\'s colour and width', () => {
+    const style = styleOf({ '--corn-map-stroke': '#101010' }, { strokeWidth: 3 });
     const log = draw(dark(), style);
-    const at = log.findIndex((c) => c[0] === 'set:strokeStyle' && c[1] === '#101010');
-    expect(at).toBeGreaterThan(0);
+    const ats = log.map((c, i) => (c[0] === 'set:strokeStyle' && c[1] === '#101010' ? i : -1)).filter((i) => i >= 0);
+    expect(ats).toHaveLength(dark().nodes.length);
     const page = byId(dark(), 'page');
-    expect(log.slice(at - 3, at).some((c) => c[0] === 'arc' && c[1] === page.x && c[3] === page.r - 1.5)).toBe(true);
-    expect(log[at + 1]).toEqual(['set:lineWidth', 3]);
+    expect(ats.some((at) => log.slice(at - 3, at).some((c) => c[0] === 'arc' && c[1] === page.x && c[3] === page.r - 1.5))).toBe(true);
+    for (const at of ats) expect(log[at + 1]).toEqual(['set:lineWidth', 3]);
     expect(strokes(draw(dark(), styleOf()))).not.toContain('#101010');
   });
 
@@ -449,27 +452,30 @@ describe('the WebGL renderer', () => {
     expect(Array.from(callsOf(gl, 'uniform4fv').filter((c) => c[1].uniform === 'u_haloRing').pop()[2].slice(4, 7))).toEqual([0, 1, 0]);
   });
 
-  it('packs an outline as a ring row inside the node\'s edge, at its alpha', () => {
+  it('packs an outline for every node as a ring row inside the node\'s edge, at its alpha', () => {
     const scene = buildScene(mk({ selectedNode: nodes[1] }));
-    const out = M.styledScene(scene, styleOf({ '--corn-map-node-page-stroke': '#0000ff' }, { strokeWidth: 4 }));
+    const out = M.styledScene(scene, styleOf({ '--corn-map-stroke': '#0000ff' }, { strokeWidth: 4 }));
     const p = packStrokes(out);
-    expect(p.count).toBe(1);
-    const page = byId(out, 'page');
-    expect(Array.from(p.data.slice(0, 4))).toEqual([page.x, page.y, page.r - 2, 4]);
-    expect(p.data[7]).toBeCloseTo(page.alpha, 6);
+    expect(p.count).toBe(out.nodes.length);
+    const i = out.nodes.findIndex((n) => n.id === 'page');
+    const page = out.nodes[i];
+    expect(Array.from(p.data.slice(i * RING_STRIDE, i * RING_STRIDE + 4))).toEqual([page.x, page.y, page.r - 2, 4]);
+    expect(p.data[i * RING_STRIDE + 7]).toBeCloseTo(page.alpha, 6);
+    const dim = out.nodes.findIndex((n) => !n.connected);
+    expect(p.data[dim * RING_STRIDE + 7]).toBeCloseTo(out.nodes[dim].alpha, 6);
     expect(packStrokes(scene).count).toBe(0);
   });
 
   it('draws the outlines and the icons after the nodes, one call each, building those programs only then', () => {
     const image = { naturalWidth: 8 };
     const icons = { get: (k) => (k === 'page' || k === 'app' ? image : null), anyReady: () => true };
-    const { gl, r } = make(styleOf({ '--corn-map-node-page-stroke': '#0000ff' }, { icons }));
+    const { gl, r } = make(styleOf({ '--corn-map-stroke': '#0000ff' }, { icons }));
     r.draw(dark(), camera, 0);
     expect(callsOf(gl, 'createProgram')).toHaveLength(10);
     const draws = callsOf(gl, 'drawArraysInstanced').map((c) => c.slice(1));
     const tail = draws.slice(-4);
     expect(tail[0]).toEqual(['TRIANGLE_STRIP', 0, 4, 7]); // the nodes
-    expect(tail[1]).toEqual(['TRIANGLE_STRIP', 0, 4, 1]); // the page's outline
+    expect(tail[1]).toEqual(['TRIANGLE_STRIP', 0, 4, 7]); // every node's outline
     expect(tail.slice(2)).toEqual([['TRIANGLE_STRIP', 0, 4, 1], ['TRIANGLE_STRIP', 0, 4, 1]]); // one icon draw per kind
     expect(callsOf(gl, 'createTexture')).toHaveLength(2);
     expect(callsOf(gl, 'texImage2D').every((c) => c[6] === image)).toBe(true);
@@ -512,6 +518,22 @@ describe('the WebGL renderer', () => {
     expect(callsOf(gl, 'texParameteri').filter((c) => c[2] === 'TEXTURE_MIN_FILTER').pop()[3]).toBe('NEAREST');
   });
 
+  it('deletes every icon texture when the icons are replaced or dropped, so none outlives its store', () => {
+    const first = { get: (k) => (k === 'page' || k === 'app' ? {} : null), anyReady: () => true };
+    const { gl, r, holder } = make(styleOf({}, { icons: first }));
+    r.draw(dark(), camera, 0);
+    const made = callsOf(gl, 'createTexture').map((c) => c.length);
+    expect(made).toHaveLength(2);
+    const second = { get: (k) => (k === 'page' ? {} : null), anyReady: () => true };
+    holder.style = styleOf({}, { icons: second });
+    r.draw(dark(), camera, 16);
+    expect(callsOf(gl, 'deleteTexture')).toHaveLength(2); // the app's too, though no new icon replaces it
+    expect(callsOf(gl, 'createTexture')).toHaveLength(3);
+    holder.style = styleOf();
+    r.draw(dark(), camera, 32);
+    expect(callsOf(gl, 'deleteTexture')).toHaveLength(3);
+  });
+
   it('draws without an icon for a kind that has none, and recovers its textures after the context is restored', () => {
     const icons = { get: (k) => (k === 'page' ? {} : null), anyReady: () => true };
     const canvas = fakeCanvas({ webgl2: fakeGl() });
@@ -539,15 +561,26 @@ function measuringCtx() {
 describe('the label layer', () => {
   it('draws a node\'s label in the token\'s colour', () => {
     const ctx = measuringCtx();
-    const layer = createLabelLayer({ width: 0, height: 0, getContext: () => ctx }, { mapStyle: () => styleOf({ '--corn-map-node-app-label': '#ffeeaa' }) });
+    const layer = createLabelLayer({ width: 0, height: 0, getContext: () => ctx }, { mapStyle: () => styleOf({ '--corn-map-label': '#ffeeaa' }) });
     layer.resize(800, 600, 1);
     ctx.log.length = 0;
     expect(layer.draw(buildScene(mk()), { x: 0, y: 0, zoom: 1 })).toBe(true);
     const fillsOf = ctx.log.filter((c) => c[0] === 'set:fillStyle').map((c) => c[1]);
     expect(fillsOf).toContain('#ffeeaa');
-    const labels = chooseLabels(M.styledScene(buildScene(mk()), styleOf({ '--corn-map-node-app-label': '#ffeeaa' })), { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 });
+    const labels = chooseLabels(M.styledScene(buildScene(mk()), styleOf({ '--corn-map-label': '#ffeeaa' })), { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 });
     expect(labels.find((l) => l.id === 'app').color).toBe('#ffeeaa');
-    expect(labels.find((l) => l.id === 'page').color).toBe('#f8fafc');
+    expect(labels.find((l) => l.id === 'page').color).toBe('#ffeeaa'); // one label colour for the whole map
+  });
+
+  it('draws the outline under every label in --corn-map-label-halo, at the widths it had, and the ground\'s own at auto', () => {
+    const view = [{ x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 }];
+    const plain = chooseLabels(buildScene(mk()), ...view).find((l) => l.kind === 'node').outline;
+    expect(plain).toEqual(looksFor('dark').labelOutline.node);
+    const out = M.styledScene(buildScene(mk()), styleOf({ '--corn-map-label-halo': 'rgba(0, 0, 0, 0.5)' }));
+    expect(out.labelOutline).toEqual({ node: { color: 'rgba(0, 0, 0, 0.5)', width: looksFor('dark').labelOutline.node.width }, edge: { color: 'rgba(0, 0, 0, 0.5)', width: looksFor('dark').labelOutline.edge.width } });
+    expect(chooseLabels(out, ...view).find((l) => l.kind === 'node').outline.color).toBe('rgba(0, 0, 0, 0.5)');
+    const lightOut = M.styledScene(light(), styleOf({ '--corn-map-label-halo': '#000000' }));
+    expect(lightOut.labelOutline.node.width).toBe(looksFor('light').labelOutline.node.width);
   });
 
   it('draws again when the style changes, and not when nothing did', () => {
@@ -559,7 +592,7 @@ describe('the label layer', () => {
     const cam = { x: 0, y: 0, zoom: 1 };
     expect(layer.draw(scene, cam)).toBe(true);
     expect(layer.draw(scene, cam)).toBe(false);
-    style = styleOf({ '--corn-map-node-app-label': '#ffeeaa' }, {});
+    style = styleOf({ '--corn-map-label': '#ffeeaa' }, {});
     expect(layer.draw(scene, cam)).toBe(true);
     expect(layer.draw(scene, cam)).toBe(false);
   });

@@ -6134,7 +6134,13 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-theming",
       "dashed": true
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T08:54:08.968Z"
+  "updatedAt": "2026-11-10T08:59:59.422Z"
 }

@@ -69,7 +69,7 @@ const TIER_REST = 3;
 export function chooseLabels(scene, camera, viewport, opts = {}) {
   const { max = MAX_LABELS, margin = CULL_MARGIN, measure = null } = opts;
   const out = [];
-  const outline = looksFor(scene.theme).labelOutline; // the ground's own colour, under the text
+  const outline = scene.labelOutline || looksFor(scene.theme).labelOutline; // the ground's own colour (or the theme's --corn-map-label-halo), under the text
 
   // Always there: the data-flow lanes' titles, notes and arrows ...
   for (const lane of scene.decor.lanes) {
@@ -170,7 +170,7 @@ function coverWithNodes(ctx, nodes) {
  * A transparent 2D canvas that draws the chosen labels over the map
  * @param {HTMLCanvasElement} canvas
  * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`);
- *   a node's label colour is the theme's `--corn-map-node-<kind>-label` when it sets one
+ *   a node's label colour is the theme's `--corn-map-label`, and the outline under every label its `--corn-map-label-halo`, when it sets them
  * @returns {{draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
  *   `draw` returns whether it painted: false when the camera, the scene and the size were unchanged
  */

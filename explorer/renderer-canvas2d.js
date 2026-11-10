@@ -154,7 +154,7 @@ function drawNode(ctx, node, zoom, looks, style) {
   ctx.fillStyle = looks.core;
   ctx.fill();
 
-  // The theme's outline (--corn-map-node-*-stroke), just inside the edge of the circle
+  // The theme's outline (--corn-map-stroke), just inside the edge of the circle
   if (node.stroke) {
     circle(ctx, node.x, node.y, Math.max(0, node.r - node.stroke.width / 2));
     ctx.strokeStyle = node.stroke.color;

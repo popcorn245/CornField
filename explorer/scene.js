@@ -138,6 +138,7 @@
  * @property {SceneEdge[]} edges
  * @property {{nodes: Set<string>, edges: Set<string>}} painted  the ids of the nodes and the keys of the edges a painter (an outage, a check's verdict, a pull request) gave a colour of its own: map-style.js leaves those alone
  * @property {SceneDecor} decor
+ * @property {{node: {color: string, width: number}, edge: {color: string, width: number}}} [labelOutline]  the outline under the labels when the theme sets one (map-style.js, `--corn-map-label-halo`); else `looksFor(theme).labelOutline`
  * @property {boolean} preset      the data-flow view: every node is labelled and the label boost differs (see `labelAt`)
  * @property {'dark'|'light'} theme  the ground it is drawn for (`state.theme`, theme.js): every colour in it already suits it; `looksFor(theme)` has the rest
  * @property {number} version      the `state.sceneVersion` it was built from

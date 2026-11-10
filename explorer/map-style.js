@@ -4,10 +4,11 @@
  * The map's styling from the theme (docs/theming.md, "The map"). The map canvas reads its colours from `--corn-map-*` custom
  * properties (tokens.css) on load and again whenever the theme changes, then draws again:
  *
- *   --corn-map-node-<kind>[-stroke|-label]    a node kind's fill, outline and label colour      (kind: a node type, `app`, `page`, `table` ...)
- *   --corn-map-group-<group>[-stroke|-label]  the same by group, the node's layer in the Layers menu (`cloud`, `web`, `house`, `app` ...)
+ *   --corn-map-node-<kind>                    a node kind's fill                     (kind: a node type, `app`, `page`, `table` ...)
+ *   --corn-map-group-<group>                  the same by group, the node's layer in the Layers menu (`cloud`, `web`, `house`, `app` ...)
+ *   --corn-map-stroke, --corn-map-stroke-width  every node's outline: its colour (none at `auto`) and its width, in world px
+ *   --corn-map-label, --corn-map-label-halo   a node label's colour, and the outline under every label that keeps it readable over the lines
  *   --corn-map-edge-<kind>                    an edge kind's colour (`ownership`, `usage`, `flow`, `reads`, `writes`, `calls` ...)
- *   --corn-map-stroke-width                   the width of a node's outline, in world px
  *   --corn-map-added|changed|removed|edit     the diff: a proposal's marks on nodes and edges
  *   --corn-map-selected|match                 the halo of the selected node, and of a search hit
  *   --corn-map-lit                            the lines of the focus: the links the selection (or a walk's step) lights
@@ -30,6 +31,7 @@
 
 import { NODE_THEMES } from '../core/schema.js';
 import { parseColor } from './theme-model.js';
+import { looksFor } from './scene.js';
 
 /** The node kinds (topology types) and the groups (layers a node can belong to) the tokens exist for */
 export const MAP_KINDS = Object.freeze(Object.keys(NODE_THEMES));
@@ -39,7 +41,10 @@ export const MAP_EDGE_KINDS = Object.freeze(['ownership', 'usage', 'flow', 'read
 /** The diff marks, and the other states the map colours */
 export const MAP_MARKS = Object.freeze(['added', 'changed', 'removed', 'edit']);
 export const MAP_STATES = Object.freeze(['selected', 'match', 'lit']);
+export const STROKE_TOKEN = '--corn-map-stroke';
 export const STROKE_WIDTH_TOKEN = '--corn-map-stroke-width';
+export const LABEL_TOKEN = '--corn-map-label';
+export const LABEL_HALO_TOKEN = '--corn-map-label-halo';
 export const COLLISION_TOKEN = '--corn-map-collision';
 /** The width of an outline when the token is not a length (px, world units) */
 export const DEFAULT_STROKE_WIDTH = 1.5;
@@ -48,15 +53,18 @@ export const ICON_RATIO = 1.2;
 /** Where the server serves the images beside a theme (core/theme.js THEME_ASSET_PREFIX); an icon is fetched from nowhere else */
 export const ICON_URL_PREFIX = '/cornfield/theme/assets/';
 
-export const nodeTokens = (kind) => [`--corn-map-node-${kind}`, `--corn-map-node-${kind}-stroke`, `--corn-map-node-${kind}-label`];
-export const groupTokens = (group) => [`--corn-map-group-${group}`, `--corn-map-group-${group}-stroke`, `--corn-map-group-${group}-label`];
+export const nodeToken = (kind) => `--corn-map-node-${kind}`;
+export const groupToken = (group) => `--corn-map-group-${group}`;
 export const edgeToken = (kind) => `--corn-map-edge-${kind}`;
 export const stateToken = (name) => `--corn-map-${name}`;
 
 /** The colour tokens script reads: all of them but the width and the collision mark (which CSS reads) */
 export const MAP_COLOR_TOKENS = Object.freeze([
-  ...MAP_KINDS.flatMap(nodeTokens),
-  ...MAP_GROUPS.flatMap(groupTokens),
+  ...MAP_KINDS.map(nodeToken),
+  ...MAP_GROUPS.map(groupToken),
+  STROKE_TOKEN,
+  LABEL_TOKEN,
+  LABEL_HALO_TOKEN,
   ...MAP_EDGE_KINDS.map(edgeToken),
   ...MAP_MARKS.map(stateToken),
   ...MAP_STATES.map(stateToken),
@@ -75,7 +83,7 @@ const normalised = new Map();
 function probeContext() {
   if (probe !== undefined) return probe;
   probe = null;
-  try { if (typeof document !== 'undefined') probe = document.createElement('canvas').getContext('2d') || null; } catch { probe = null; }
+  try { if (typeof document !== 'undefined') probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true }) || null; } catch { probe = null; }
   return probe;
 }
 
@@ -87,21 +95,49 @@ function probeContext() {
 export function cssColor(value) {
   const s = typeof value === 'string' ? value.trim() : '';
   if (!s || s.toLowerCase() === 'auto') return null;
-  if (parseColor(s)[3] > 0) return s;
+  if (inRange(s)) return s;
   if (/^transparent$/i.test(s)) return 'rgba(0, 0, 0, 0)';
   if (normalised.has(s)) return normalised.get(s);
   let out = null;
-  const ctx = probeContext();
+  const ctx = isColor(s) && !/currentcolor/i.test(s) ? probeContext() : null; // a canvas has no current colour: it would read as black
   if (ctx) {
     try {
-      ctx.fillStyle = '#010203';
-      ctx.fillStyle = s;
-      const got = String(ctx.fillStyle);
-      out = got === '#010203' && s.toLowerCase().replace(/\s/g, '') !== '#010203' ? null : got;
+      // The browser's own reading: a value it refuses leaves fillStyle as it was, so two different starting colours tell a refusal
+      // from a colour that happens to equal the first one
+      const read = (from) => { ctx.fillStyle = from; ctx.fillStyle = s; return String(ctx.fillStyle); };
+      const a = read('#010203');
+      const got = a !== '#010203' ? a : read('#040506') !== '#040506' ? a : null;
+      // A colour the browser keeps in another space (`oklch()`, `color(display-p3 ...)`) is read back as the sRGB pixel it paints
+      out = got === null ? null : parseable(got) ? got : pixelOf(ctx, s);
     } catch { out = null; }
   }
   normalised.set(s, out);
   return out;
+}
+
+/** Whether CSS itself reads `s` as a colour (a canvas is more lenient: it takes `rgb(1.2.3, 0, 0)`); true where the page cannot say */
+function isColor(s) {
+  try { return typeof CSS === 'undefined' || typeof CSS.supports !== 'function' || CSS.supports('color', s); } catch { return false; }
+}
+
+/** `#rgb`, `#rrggbb`, `rgb()` or `rgba()` with every channel in range: what both renderers read as written */
+function inRange(s) {
+  if (!parseable(s)) return false;
+  const [r, g, b, a] = parseColor(s);
+  return [r, g, b].every((c) => Number.isFinite(c) && c >= 0 && c <= 255) && Number.isFinite(a) && a > 0 && a <= 1;
+}
+/** The forms parseColor (theme-model.js) reads; anything else is normalised by the browser first */
+const COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$|^rgba?\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*(?:,\s*[\d.]+\s*)?\)$/i;
+const parseable = (s) => COLOR_RE.test(s.trim());
+
+/** The sRGB pixel `css` paints, as `rgba()` (or null when the context cannot be read) */
+function pixelOf(ctx, css) {
+  if (!ctx.getImageData || !ctx.fillRect) return null;
+  ctx.clearRect(0, 0, 1, 1);
+  ctx.fillStyle = css;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+  return rgbaText(r, g, b, a / 255);
 }
 
 const rgbaText = (r, g, b, a) => `rgba(${r}, ${g}, ${b}, ${+a.toFixed(3)})`;
@@ -321,14 +357,11 @@ function styleEdge(e, values, painted) {
 
 function compute(scene, style) {
   const { values } = style;
+  const label = values[LABEL_TOKEN];
+  const stroke = values[STROKE_TOKEN];
   const painted = scene.painted || { nodes: new Set(), edges: new Set() };
   const nodes = scene.nodes.map((n) => {
-    const own = painted.nodes.has(n.id) ? null : true;
-    const [kFill, kStroke, kLabel] = nodeTokens(n.type);
-    const [gFill, gStroke, gLabel] = groupTokens(n.group || n.type);
-    const fill = own && firstOf(values, [kFill, gFill]);
-    const label = own && firstOf(values, [kLabel, gLabel]);
-    const stroke = firstOf(values, [kStroke, gStroke]);
+    const fill = !painted.nodes.has(n.id) && firstOf(values, [nodeToken(n.type), groupToken(n.group || n.type)]);
     const icon = style.icons && style.icons.get(n.type) ? n.type : null;
     if (!fill && !label && !stroke && !icon) return n;
     const out = { ...n };
@@ -338,7 +371,13 @@ function compute(scene, style) {
     if (icon) out.icon = icon;
     return out;
   });
-  return { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, values, painted.edges)) };
+  const out = { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, values, painted.edges)) };
+  const halo = values[LABEL_HALO_TOKEN];
+  if (halo) { // the outline under the labels, at the widths it has (labels.js reads `scene.labelOutline` before the ground's own)
+    const { node, edge } = looksFor(scene.theme).labelOutline;
+    out.labelOutline = { node: { ...node, color: halo }, edge: { ...edge, color: halo } };
+  }
+  return out;
 }
 
 const sceneMemo = new WeakMap();

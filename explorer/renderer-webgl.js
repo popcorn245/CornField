@@ -177,7 +177,7 @@ export function packEdges(scene) {
 export const packScene = (scene) => ({ ...packDecor(scene), nodes: packNodes(scene), ...packEdges(scene) });
 
 /**
- * The outlines the theme gives nodes (--corn-map-node-*-stroke), as rows of the rings pass (the same shader, drawn over the nodes): a ring
+ * The outlines the theme gives nodes (--corn-map-stroke), as rows of the rings pass (the same shader, drawn over the nodes): a ring
  * just inside the circle's edge, in the node's alpha. Empty for a scene whose nodes have none.
  * @param {import('./scene.js').Scene} scene a scene through `styledScene`
  */
@@ -386,7 +386,7 @@ function buildGpu(gl, theme = 'dark', style = null) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
   const passes = PASSES.map((spec) => makePass(gl, spec, corners));
-  const gpu = { corners, passes, theme, styleKey: 0, extras: { strokes: null, icons: null }, textures: new Map() };
+  const gpu = { corners, passes, theme, styleKey: 0, extras: { strokes: null, icons: null }, textures: new Map(), iconStore: null };
   setConstants(gl, gpu, theme, style);
   return gpu;
 }
@@ -486,6 +486,11 @@ export function createWebglRenderer(canvas, opts = {}) {
     if (lost || !gpu || !width || !height) return;
     const style = styleOf();
     const scene = styledScene(drawn, style); // the map in the theme's colours, outlines and icons (map-style.js); the scene itself when nothing is set
+    if (gpu.iconStore !== style.icons) { // a new set of icons (or none): the old ones' textures go now, not when the renderer does
+      gpu.textures.forEach(({ texture }) => gl.deleteTexture(texture));
+      gpu.textures.clear();
+      gpu.iconStore = style.icons;
+    }
     if (scene !== packedScene || scene.version !== packedVersion) {
       packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => !!(style.icons && style.icons.get(kind))) };
       packedScene = scene;
