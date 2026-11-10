@@ -25,7 +25,7 @@
   <header class="hx-header" data-corn="header">
     <!-- The page's one heading, for a screen reader's list of headings (plugins.js puts the config's title in it) -->
     <h1 id="cf-heading" class="hx-sr-only">cornfield: the map</h1>
-    <div class="hx-header-left" data-corn="header-left">
+    <div class="hx-header-left">
       <button type="button" id="cf-brand" class="hx-brand" data-corn="brand" data-action="reset-view" title="Reset View" aria-label="cornfield: reset the view">
         <span id="cf-mark" class="hx-live-dot"></span>
         <span id="cf-title" class="hx-title gradient-text">cornfield</span>
@@ -42,45 +42,45 @@
 
         <!-- Interactive section toggles and the legend -->
         <div id="legend-dropdown" class="hx-menu glass" hidden data-corn="layers-menu">
-          <div class="hx-menu-title hx-menu-head" data-corn="menu-title">
+          <div class="hx-menu-title hx-menu-head">
             <span>Section Toggles</span>
             <span class="hx-menu-links">
-              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="text-button" data-corn-kind="quiet">All</button>
+              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn-kind="quiet">All</button>
               <span class="hx-faint">•</span>
-              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn="text-button" data-corn-kind="quiet">None</button>
+              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn-kind="quiet">None</button>
             </span>
           </div>
-          <p id="layers-preset-note" class="hx-note" hidden data-corn="note">The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
-          <div id="layer-toggles-container" class="hx-toggles" data-corn="layer-toggles"></div>
-          <div id="flow-legend" hidden data-corn="legend"></div>
-          <div id="cloud-legend" class="hx-menu-section" hidden data-corn="legend"></div>
+          <p id="layers-preset-note" class="hx-note" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
+          <div id="layer-toggles-container" class="hx-toggles"></div>
+          <div id="flow-legend" hidden></div>
+          <div id="cloud-legend" class="hx-menu-section" hidden></div>
 
           <!-- What the marks of agent runs mean, while there are runs on the map (runs-map.js) -->
-          <div id="runs-legend" class="hx-menu-section" hidden data-corn="legend">
-            <div class="hx-menu-title" data-corn="menu-title"><span>Agent runs</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-run-swatch hx-run-swatch--flight" aria-hidden="true"></span><span>In flight: a pulsing ring (still under reduced motion)</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-run-swatch hx-run-swatch--collision" aria-hidden="true"></span><span>Collision: dashed ring, ⚠ and the words, where two open runs change one node</span></div>
+          <div id="runs-legend" class="hx-menu-section" hidden>
+            <div class="hx-menu-title"><span>Agent runs</span></div>
+            <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--flight" aria-hidden="true"></span><span>In flight: a pulsing ring (still under reduced motion)</span></div>
+            <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--collision" aria-hidden="true"></span><span>Collision: dashed ring, ⚠ and the words, where two open runs change one node</span></div>
           </div>
 
           <!-- What a proposal's marks mean, while one is open (proposal.js) -->
-          <div id="proposal-legend" class="hx-menu-section" hidden data-corn="legend">
-            <div class="hx-menu-title" data-corn="menu-title"><span>Proposal marks</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-mark-dot hx-mark-dot--added" data-corn="mark" data-corn-state="added"></span><span>Added: dashed ring</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark" data-corn-state="changed"></span><span>Changed: amber ring</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-mark-dot hx-mark-dot--removed" data-corn="mark" data-corn-state="removed"></span><span>Removed: red, faded, label struck through</span></div>
-            <div class="hx-legend-row" data-corn="legend-row"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark" data-corn-state="edit"></span><span>Your edit: violet</span></div>
+          <div id="proposal-legend" class="hx-menu-section" hidden>
+            <div class="hx-menu-title"><span>Proposal marks</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added"></span><span>Added: dashed ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: amber ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: red, faded, label struck through</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: violet</span></div>
           </div>
 
-          <div class="hx-menu-section" data-corn="menu-section">
-            <div class="hx-menu-title" data-corn="menu-title">
+          <div class="hx-menu-section">
+            <div class="hx-menu-title">
               <span>Connections</span>
               <span class="hx-faint hx-mono">Click node to focus</span>
             </div>
-            <div class="hx-legend-row hx-legend-row--split" data-corn="legend-row">
+            <div class="hx-legend-row hx-legend-row--split">
               <span class="hx-legend-label"><span class="hx-swatch-line hx-swatch-solid"></span>Solid</span>
               <span class="hx-faint hx-mono">Parent-Child / Hub</span>
             </div>
-            <div class="hx-legend-row hx-legend-row--split" data-corn="legend-row">
+            <div class="hx-legend-row hx-legend-row--split">
               <span class="hx-legend-label"><span class="hx-swatch-line hx-swatch-dashed hx-swatch-indigo"></span>Dotted</span>
               <span class="hx-faint hx-mono">Usage &amp; Dependency</span>
             </div>
@@ -101,7 +101,7 @@
       </button>
 
       <!-- Proposals: what a change would add, change and remove, drawn on the map (proposal.js) -->
-      <div id="proposal-wrap" class="hx-menu-wrap" data-corn="proposals">
+      <div id="proposal-wrap" class="hx-menu-wrap">
         <button type="button" id="proposal-btn" class="hx-btn hx-btn--proposal" data-action="toggle-proposals-menu" aria-haspopup="true" aria-expanded="false" aria-label="Proposals" title="Open a proposal: what a change would add, change and remove" data-corn="proposals-button">
           <span aria-hidden="true">✎</span>
           <span class="hx-only-wide">Proposals</span>
@@ -114,7 +114,7 @@
       <button type="button" id="forge-btn" class="hx-btn hx-btn--forge" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Issues and pull requests" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
         <span aria-hidden="true">⎇</span>
         <span class="hx-only-wide">Issues &amp; PRs</span>
-        <span id="forge-btn-lit" class="hx-forge-lit" hidden data-corn="forge-lit"></span>
+        <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
       </button>
 
       <!-- Review tokens (explorer/review-tokens.js): shown only when somebody is signed in to a forge -->
@@ -124,17 +124,17 @@
       </button>
 
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
-      <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden data-corn="live">
+      <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
         <button type="button" id="live-chip" class="hx-btn hx-live-chip" aria-haspopup="true" aria-expanded="false" aria-label="Live layer" data-corn="live-chip">
-          <span class="hx-live-chip-dot" aria-hidden="true" data-corn="live-chip-dot"></span>
-          <span id="live-chip-text" class="hx-only-wide hx-live-chip-text" data-corn="live-chip-text"></span>
+          <span class="hx-live-chip-dot" aria-hidden="true"></span>
+          <span id="live-chip-text" class="hx-only-wide hx-live-chip-text"></span>
         </button>
         <div id="live-menu" class="hx-menu hx-menu--live glass" role="status" hidden data-corn="live-menu"></div>
       </div>
     </div>
 
-    <div class="hx-header-right" data-corn="header-right">
-      <button type="button" id="mobile-search-toggle" class="hx-btn hx-btn--icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn="search-toggle" data-corn-kind="icon">⌕</button>
+    <div class="hx-header-right">
+      <button type="button" id="mobile-search-toggle" class="hx-btn hx-btn--icon hx-only-mobile" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">⌕</button>
 
       <div class="hx-search hx-only-desktop" role="search" data-corn="search">
         <input type="text" id="node-search" class="hx-input" placeholder="Search..." aria-label="Search nodes" data-corn="search-input" />
@@ -145,13 +145,13 @@
         <span class="hx-only-wide" id="freeform-toggle-label">Orbit</span>
       </button>
 
-      <button type="button" id="reset-positions-btn" class="hx-btn hx-btn--quiet" data-action="reset-positions" title="Reset custom dragged positions back to orbit" hidden data-corn="layout-reset" data-corn-kind="quiet">Reset Layout</button>
+      <button type="button" id="reset-positions-btn" class="hx-btn hx-btn--quiet" data-action="reset-positions" title="Reset custom dragged positions back to orbit" hidden data-corn-kind="quiet">Reset Layout</button>
 
       <div class="hx-zoom hx-only-desktop" data-corn="zoom">
-        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In" aria-label="Zoom in" data-corn="zoom-button" data-corn-kind="icon">+</button>
-        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out" aria-label="Zoom out" data-corn="zoom-button" data-corn-kind="icon">−</button>
-        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View" aria-label="Reset the view" data-corn="zoom-button" data-corn-kind="icon">⟲</button>
-        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit to the screen" data-corn="zoom-button" data-corn-kind="icon">⛶</button>
+        <button type="button" class="hx-zoom-btn" data-action="zoom-in" title="Zoom In" aria-label="Zoom in" data-corn-kind="icon">+</button>
+        <button type="button" class="hx-zoom-btn" data-action="zoom-out" title="Zoom Out" aria-label="Zoom out" data-corn-kind="icon">−</button>
+        <button type="button" class="hx-zoom-btn" data-action="reset-view" title="Reset View" aria-label="Reset the view" data-corn-kind="icon">⟲</button>
+        <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit to the screen" data-corn-kind="icon">⛶</button>
       </div>
 
       <!-- Light, dark or the system's (theme.js): steps through them; its label says which is on -->
@@ -175,8 +175,8 @@
   <!-- Mobile search bar -->
   <div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden data-corn="mobile-search">
     <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" data-corn="search-input" />
-    <button type="button" class="hx-textbtn" data-action="clear-search" aria-label="Clear search" data-corn="text-button" data-corn-kind="quiet">✕</button>
-    <button type="button" class="hx-textbtn" data-action="close-mobile-search" data-corn="text-button" data-corn-kind="quiet">Cancel</button>
+    <button type="button" class="hx-textbtn" data-action="clear-search" aria-label="Clear search" data-corn-kind="quiet">✕</button>
+    <button type="button" class="hx-textbtn" data-action="close-mobile-search" data-corn-kind="quiet">Cancel</button>
   </div>
 
   <!-- The map -->
@@ -195,38 +195,38 @@
     <div id="sheet-dock" class="hx-dock" data-corn="dock">
     <!-- The open proposal: counts, Before / Diff / After, problems, close (proposal.js) -->
     <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
-      <p id="proposal-message" class="hx-proposal-message" role="status" hidden data-corn="proposal-message"></p>
+      <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
       <div id="proposal-body">
-        <div class="hx-proposal-head" data-corn="proposal-head">
-          <strong id="proposal-title" class="hx-proposal-name" data-corn="proposal-title"></strong>
-          <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false" data-corn="proposal-chip"></button>
-          <div class="hx-seg" role="group" aria-label="Compare" data-corn="segmented">
-            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="before" aria-pressed="false" data-corn="segment-button">Before</button>
-            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="diff" aria-pressed="true" data-corn="segment-button">Diff</button>
-            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false" data-corn="segment-button">After</button>
+        <div class="hx-proposal-head">
+          <strong id="proposal-title" class="hx-proposal-name"></strong>
+          <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
+          <div class="hx-seg" role="group" aria-label="Compare">
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="before" aria-pressed="false">Before</button>
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="diff" aria-pressed="true">Diff</button>
+            <button type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false">After</button>
           </div>
-          <button type="button" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map" data-corn="button" data-corn-kind="quiet">Close</button>
+          <button type="button" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map" data-corn-kind="quiet">Close</button>
         </div>
-        <p id="proposal-summary" class="hx-proposal-summary" hidden data-corn="proposal-summary"></p>
-        <details id="proposal-errors" class="hx-proposal-errors" hidden data-corn="proposal-errors">
+        <p id="proposal-summary" class="hx-proposal-summary" hidden></p>
+        <details id="proposal-errors" class="hx-proposal-errors" hidden>
           <summary id="proposal-errors-count"></summary>
           <ul id="proposal-errors-list"></ul>
           <p class="hx-faint">The map shows what it can.</p>
         </details>
-        <div id="proposal-changes" class="hx-proposal-changes" hidden data-corn="proposal-changes"></div>
+        <div id="proposal-changes" class="hx-proposal-changes" hidden></div>
       </div>
     </section>
 
     <!-- Issues and pull requests (forge-panel.js): a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge -->
     <aside id="forge-panel" class="hx-forge glass" aria-label="Issues and pull requests" inert hidden data-corn="forge-panel">
-      <div class="hx-forge-body" data-corn="forge-body">
-        <div class="hx-forge-head" data-corn="forge-head">
-          <h2 id="forge-title" class="hx-drawer-title" tabindex="-1" data-corn="forge-title">Issues and pull requests</h2>
-          <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again" data-corn="button" data-corn-kind="quiet">Refresh</button>
-          <button type="button" class="hx-close" data-action="close-forge" aria-label="Close" data-corn="close-button" data-corn-kind="icon">✕</button>
+      <div class="hx-forge-body">
+        <div class="hx-forge-head">
+          <h2 id="forge-title" class="hx-drawer-title" tabindex="-1">Issues and pull requests</h2>
+          <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again" data-corn-kind="quiet">Refresh</button>
+          <button type="button" class="hx-close" data-action="close-forge" aria-label="Close" data-corn-kind="icon">✕</button>
         </div>
-        <p id="forge-status" class="hx-forge-status hx-faint" data-corn="forge-status"></p>
-        <div class="hx-forge-controls" data-corn="forge-controls">
+        <p id="forge-status" class="hx-forge-status hx-faint"></p>
+        <div class="hx-forge-controls">
           <div class="hx-forge-tabs" role="group" aria-label="Show" data-corn="tabs">
             <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true" data-corn="tab">Pull requests</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false" data-corn="tab">Issues</button>
@@ -235,113 +235,113 @@
             <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Work grouped by issue and proposal, agent-made work marked" data-corn="tab">Agents</button>
             <button type="button" class="hx-forge-tab" data-forge-kind="notes" aria-pressed="false" data-corn="tab">Release notes</button>
           </div>
-          <div id="forge-work-filters" class="hx-forge-work-filters" hidden data-corn="filters">
-            <label class="hx-forge-toggle" data-corn="toggle"><input type="checkbox" id="forge-work-agents" /> Agent-made only</label>
-            <label class="hx-forge-toggle" data-corn="toggle"><input type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
+          <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-agents" /> Agent-made only</label>
+            <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
           </div>
-          <div id="forge-filters" class="hx-forge-filters" data-corn="filters">
-            <label class="hx-forge-field" data-corn="field">State<select id="forge-state" class="hx-forge-select" data-corn="select"></select></label>
-            <label class="hx-forge-field" data-corn="field">Label<select id="forge-label" class="hx-forge-select" data-corn="select"></select></label>
-            <label class="hx-forge-field" data-corn="field">Author<select id="forge-author" class="hx-forge-select" data-corn="select"></select></label>
-            <label class="hx-forge-field hx-forge-field--text" data-corn="field">Search<input type="search" id="forge-text" class="hx-forge-input" placeholder="Title, number, label" autocomplete="off" data-corn="input" /></label>
+          <div id="forge-filters" class="hx-forge-filters">
+            <label class="hx-forge-field" data-corn="field">State<select id="forge-state" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field" data-corn="field">Label<select id="forge-label" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field" data-corn="field">Author<select id="forge-author" class="hx-forge-select"></select></label>
+            <label class="hx-forge-field hx-forge-field--text" data-corn="field">Search<input type="search" id="forge-text" class="hx-forge-input" placeholder="Title, number, label" autocomplete="off" /></label>
           </div>
         </div>
         <p id="forge-notice" class="hx-forge-notice" hidden data-corn="notice"></p>
         <p id="forge-act-note" class="hx-forge-notice" hidden data-corn="notice"></p>
         <!-- New idea (forge-panel.js): opens an issue with the threads label as you, on the forge; the thread itself lives there -->
-        <section id="forge-idea" class="hx-forge-notes" aria-label="New idea" hidden data-corn="idea">
-          <div class="hx-forge-actions" data-corn="actions">
-            <button type="button" id="idea-open" class="hx-btn hx-btn--approve" data-action="idea-open" aria-expanded="false" aria-controls="idea-form" data-corn="button" data-corn-kind="approve">New idea …</button>
+        <section id="forge-idea" class="hx-forge-notes" aria-label="New idea" hidden>
+          <div class="hx-forge-actions">
+            <button type="button" id="idea-open" class="hx-btn hx-btn--approve" data-action="idea-open" aria-expanded="false" aria-controls="idea-form" data-corn-kind="approve">New idea …</button>
           </div>
           <p id="idea-message" class="hx-forge-msg" role="status" hidden data-corn="message"></p>
-          <div id="idea-form" class="hx-forge-confirm" role="group" aria-labelledby="idea-form-title" hidden data-corn="form">
-            <h3 id="idea-form-title" class="hx-forge-confirm-title" data-corn="form-title">New idea</h3>
+          <div id="idea-form" class="hx-forge-confirm" role="group" aria-labelledby="idea-form-title" hidden>
+            <h3 id="idea-form-title" class="hx-forge-confirm-title">New idea</h3>
             <p id="idea-words"></p>
-            <label class="hx-forge-field" data-corn="field">Title<input type="text" id="idea-title" class="hx-forge-input" maxlength="256" autocomplete="off" data-corn="input" /></label>
-            <label class="hx-forge-field" data-corn="field">What is the idea?<textarea id="idea-body" class="hx-forge-preview hx-thread-compose" rows="6" maxlength="20000" spellcheck="true" data-corn="textarea"></textarea></label>
-            <div class="hx-forge-actions" data-corn="actions">
-              <button type="button" id="idea-send" class="hx-btn hx-btn--approve" data-action="idea-send" data-corn="button" data-corn-kind="approve">Open the idea</button>
-              <button type="button" class="hx-btn hx-btn--quiet" data-action="idea-cancel" data-corn="button" data-corn-kind="quiet">Cancel</button>
+            <label class="hx-forge-field" data-corn="field">Title<input type="text" id="idea-title" class="hx-forge-input" maxlength="256" autocomplete="off" /></label>
+            <label class="hx-forge-field" data-corn="field">What is the idea?<textarea id="idea-body" class="hx-forge-preview hx-thread-compose" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
+            <div class="hx-forge-actions">
+              <button type="button" id="idea-send" class="hx-btn hx-btn--approve" data-action="idea-send" data-corn-kind="approve">Open the idea</button>
+              <button type="button" class="hx-btn hx-btn--quiet" data-action="idea-cancel" data-corn-kind="quiet">Cancel</button>
             </div>
           </div>
         </section>
         <!-- Release notes (forge-panel.js): the pull requests merged since a tag, grouped by the map; copy them, or have the forge keep them as a draft release -->
-        <section id="forge-notes" class="hx-forge-notes" aria-label="Release notes" hidden data-corn="release-notes">
-          <label class="hx-forge-field" data-corn="field">Since tag<select id="notes-since" class="hx-forge-select" data-corn="select"></select></label>
-          <label class="hx-forge-field" data-corn="field">Draft, in Markdown<textarea id="notes-preview" class="hx-forge-preview" rows="14" readonly spellcheck="false" data-corn="textarea"></textarea></label>
-          <div class="hx-forge-actions" data-corn="actions">
-            <button type="button" id="notes-copy" class="hx-btn" data-action="copy-notes" data-corn="button">Copy</button>
-            <button type="button" id="notes-post" class="hx-btn hx-btn--approve" data-action="post-notes" aria-expanded="false" aria-controls="notes-confirm" data-corn="button" data-corn-kind="approve">Post as draft …</button>
+        <section id="forge-notes" class="hx-forge-notes" aria-label="Release notes" hidden>
+          <label class="hx-forge-field" data-corn="field">Since tag<select id="notes-since" class="hx-forge-select"></select></label>
+          <label class="hx-forge-field" data-corn="field">Draft, in Markdown<textarea id="notes-preview" class="hx-forge-preview" rows="14" readonly spellcheck="false"></textarea></label>
+          <div class="hx-forge-actions">
+            <button type="button" id="notes-copy" class="hx-btn" data-action="copy-notes">Copy</button>
+            <button type="button" id="notes-post" class="hx-btn hx-btn--approve" data-action="post-notes" aria-expanded="false" aria-controls="notes-confirm" data-corn-kind="approve">Post as draft …</button>
           </div>
           <p id="notes-message" class="hx-forge-msg" hidden data-corn="message"></p>
-          <div id="notes-confirm" class="hx-forge-confirm" role="group" aria-labelledby="notes-confirm-title" hidden data-corn="form">
-            <h3 id="notes-confirm-title" class="hx-forge-confirm-title" data-corn="form-title">Post as a draft release</h3>
+          <div id="notes-confirm" class="hx-forge-confirm" role="group" aria-labelledby="notes-confirm-title" hidden>
+            <h3 id="notes-confirm-title" class="hx-forge-confirm-title">Post as a draft release</h3>
             <p id="notes-confirm-words"></p>
-            <label class="hx-forge-field" data-corn="field">Tag for the draft<input type="text" id="notes-tag" class="hx-forge-input" autocomplete="off" spellcheck="false" data-corn="input" /></label>
-            <div class="hx-forge-actions" data-corn="actions">
-              <button type="button" id="notes-confirm-yes" class="hx-btn hx-btn--approve" data-action="confirm-notes" data-corn="button" data-corn-kind="approve">Create the draft</button>
-              <button type="button" class="hx-btn hx-btn--quiet" data-action="cancel-notes" data-corn="button" data-corn-kind="quiet">Cancel</button>
+            <label class="hx-forge-field" data-corn="field">Tag for the draft<input type="text" id="notes-tag" class="hx-forge-input" autocomplete="off" spellcheck="false" /></label>
+            <div class="hx-forge-actions">
+              <button type="button" id="notes-confirm-yes" class="hx-btn hx-btn--approve" data-action="confirm-notes" data-corn-kind="approve">Create the draft</button>
+              <button type="button" class="hx-btn hx-btn--quiet" data-action="cancel-notes" data-corn-kind="quiet">Cancel</button>
             </div>
           </div>
         </section>
         <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Agents tab; each run's state, what it is about, links, and Stop -->
-        <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden data-corn="runs">
-          <h3 id="forge-runs-title" class="hx-forge-runs-title" data-corn="runs-title">Agent runs</h3>
-          <p id="forge-runs-status" class="hx-forge-meta hx-faint" data-corn="meta"></p>
-          <p id="forge-runs-runner" class="hx-forge-meta" hidden data-corn="meta"></p>
+        <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden>
+          <h3 id="forge-runs-title" class="hx-forge-runs-title">Agent runs</h3>
+          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
+          <p id="forge-runs-runner" class="hx-forge-meta" hidden></p>
           <p id="forge-runs-note" class="hx-forge-notice" hidden data-corn="notice"></p>
           <p id="forge-runs-trigger" class="hx-forge-notice" hidden data-corn="notice"></p>
-          <div id="forge-runs-totals" role="group" aria-label="Tokens and cost the runners reported" hidden data-corn="runs-totals"></div>
-          <ul id="forge-runs-hand" class="hx-forge-meta" aria-label="Requests written by hand that started nothing" hidden data-corn="runs-hand"></ul>
-          <ul id="forge-runs-list" class="hx-forge-files" aria-label="Runs" data-corn="runs-list"></ul>
+          <div id="forge-runs-totals" role="group" aria-label="Tokens and cost the runners reported" hidden></div>
+          <ul id="forge-runs-hand" class="hx-forge-meta" aria-label="Requests written by hand that started nothing" hidden></ul>
+          <ul id="forge-runs-list" class="hx-forge-files" aria-label="Runs"></ul>
         </section>
-        <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden data-corn="detail"></section>
-        <ul id="forge-list" class="hx-forge-list" aria-label="Results" data-corn="list"></ul>
-        <p id="forge-rate" class="hx-forge-rate hx-faint" data-corn="rate"></p>
+        <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
+        <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
+        <p id="forge-rate" class="hx-forge-rate hx-faint"></p>
       </div>
     </aside>
 
     <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile -->
     <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert data-corn="node-panel">
-      <div class="hx-drawer-body" data-corn="node-body">
-        <div class="hx-drawer-head" data-corn="node-head">
-          <span class="hx-drawer-title-wrap" data-corn="node-title-wrap">
-            <span id="drawer-badge" class="hx-badge" data-corn="node-badge">ATOM</span>
-            <h2 id="drawer-title" class="hx-drawer-title" data-corn="node-title">&lt;pop-button&gt;</h2>
+      <div class="hx-drawer-body">
+        <div class="hx-drawer-head">
+          <span class="hx-drawer-title-wrap">
+            <span id="drawer-badge" class="hx-badge" data-corn="badge">ATOM</span>
+            <h2 id="drawer-title" class="hx-drawer-title">&lt;pop-button&gt;</h2>
           </span>
-          <button type="button" class="hx-close" data-action="close-drawer" aria-label="Close" data-corn="close-button" data-corn-kind="icon">✕</button>
+          <button type="button" class="hx-close" data-action="close-drawer" aria-label="Close" data-corn-kind="icon">✕</button>
         </div>
 
-        <p id="drawer-description" class="hx-faint hx-lead" data-corn="node-description"></p>
+        <p id="drawer-description" class="hx-faint hx-lead"></p>
 
-        <div class="hx-block" data-corn="node-block">
-          <h3 class="hx-block-title" data-corn="node-block-title">Properties &amp; Attributes</h3>
-          <div id="drawer-props-list" class="hx-props" data-corn="node-props"></div>
+        <div class="hx-block">
+          <h3 class="hx-block-title">Properties &amp; Attributes</h3>
+          <div id="drawer-props-list" class="hx-props"></div>
         </div>
 
-        <div class="hx-block" data-corn="node-block">
-          <h3 class="hx-block-title" data-corn="node-block-title">Details</h3>
-          <div id="drawer-meta-list" class="hx-meta" data-corn="node-meta"></div>
+        <div class="hx-block">
+          <h3 class="hx-block-title">Details</h3>
+          <div id="drawer-meta-list" class="hx-meta"></div>
         </div>
       </div>
 
-      <div class="hx-drawer-foot" data-corn="node-foot">
-        <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer" data-corn="node-open">Open ↗</a>
-        <button type="button" class="hx-btn hx-btn--copy" data-action="copy-spec" data-corn="button">Copy Spec</button>
+      <div class="hx-drawer-foot">
+        <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer">Open ↗</a>
+        <button type="button" class="hx-btn hx-btn--copy" data-action="copy-spec">Copy Spec</button>
       </div>
     </aside>
     </div>
 
     <!-- Mobile zoom and fit, within thumb reach -->
-    <div class="hx-mobile-zoom glass hx-only-mobile" data-corn="mobile-zoom">
-      <button type="button" class="hx-zoom-btn" data-action="zoom-in" aria-label="Zoom In" data-corn="zoom-button" data-corn-kind="icon">+</button>
-      <button type="button" class="hx-zoom-btn" data-action="zoom-out" aria-label="Zoom Out" data-corn="zoom-button" data-corn-kind="icon">−</button>
-      <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit View" data-corn="zoom-button" data-corn-kind="icon">⛶</button>
+    <div class="hx-mobile-zoom glass hx-only-mobile" data-corn="zoom">
+      <button type="button" class="hx-zoom-btn" data-action="zoom-in" aria-label="Zoom In" data-corn-kind="icon">+</button>
+      <button type="button" class="hx-zoom-btn" data-action="zoom-out" aria-label="Zoom Out" data-corn-kind="icon">−</button>
+      <button type="button" class="hx-zoom-btn hx-zoom-btn--accent" data-action="fit" title="Fit to Screen" aria-label="Fit View" data-corn-kind="icon">⛶</button>
     </div>
 
     <div class="hx-hint glass" data-corn="hint">
       <span class="hx-accent" aria-hidden="true">👆</span>
-      <span id="instruction-badge-text" data-corn="hint-text">Tap node to inspect live spec</span>
+      <span id="instruction-badge-text">Tap node to inspect live spec</span>
     </div>
 
     <!-- Loading and error states: a failed load never leaves a blank canvas -->
@@ -350,7 +350,7 @@
       <strong>The map could not be loaded</strong>
       <p id="error-message"></p>
       <p class="hx-faint">The explorer reads /topology.json from the cornfield server (cornfield serve). Run cornfield sync if the repo has no map yet, check that the server is up, then retry.</p>
-      <button type="button" class="hx-btn hx-btn--active" data-action="retry" data-corn="button" data-corn-kind="primary">Retry</button>
+      <button type="button" class="hx-btn hx-btn--active" data-action="retry" data-corn-kind="primary">Retry</button>
     </div>
 
     <div id="drawer-backdrop" class="hx-backdrop" data-action="close-drawer" hidden data-corn="backdrop"></div>
@@ -360,11 +360,11 @@
   <!-- The confirm step of landing a pull request, starting a spec and opening a build issue (forge-panel.js): a modal dialog over a scrim; the focus stays in it while it is open -->
   <div id="forge-confirm" class="hx-confirm-scrim" hidden data-corn="dialog-scrim">
     <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="forge-confirm-title" aria-describedby="forge-confirm-body" data-corn="confirm-dialog">
-      <h2 id="forge-confirm-title" class="hx-confirm-title" data-corn="dialog-title"></h2>
-      <div id="forge-confirm-body" data-corn="dialog-body"></div>
-      <div class="hx-confirm-actions" data-corn="dialog-actions">
-        <button type="button" class="hx-btn" data-action="forge-confirm-cancel" data-corn="button">Cancel</button>
-        <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go" data-corn="button" data-corn-kind="approve">Land it</button>
+      <h2 id="forge-confirm-title" class="hx-confirm-title"></h2>
+      <div id="forge-confirm-body"></div>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-action="forge-confirm-cancel">Cancel</button>
+        <button type="button" class="hx-btn hx-btn--approve" data-action="forge-confirm-go" data-corn-kind="approve">Land it</button>
       </div>
     </div>
   </div>
@@ -372,26 +372,26 @@
   <!-- Start an agent (forge-panel.js): kind, profile, a brief, and a confirm step; a modal dialog over a scrim, the focus stays in it -->
   <div id="agent-start" class="hx-confirm-scrim" hidden data-corn="dialog-scrim">
     <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="agent-start-title" aria-describedby="agent-start-words" data-corn="agent-dialog">
-      <h2 id="agent-start-title" class="hx-confirm-title" data-corn="dialog-title">Start an agent</h2>
-      <p id="agent-start-about" class="hx-forge-meta" data-corn="meta"></p>
-      <p id="agent-start-runner" class="hx-forge-meta" hidden data-corn="meta"></p>
-      <p id="agent-retry-note" class="hx-forge-meta" hidden data-corn="meta"></p>
-      <form id="agent-start-form" class="hx-forge-confirm" novalidate data-corn="form">
-      <label class="hx-forge-field" data-corn="field">Kind of run<select id="agent-kind" class="hx-forge-select" data-corn="select"></select></label>
-      <label id="agent-profile-field" class="hx-forge-field" hidden data-corn="field">Profile<select id="agent-profile" class="hx-forge-select" data-corn="select"></select></label>
-      <fieldset id="agent-limits-edit" class="hx-forge-field hx-forge-limits" data-corn="fieldset"><legend>Limits, hints for the runner (one left blank takes the config's, if any)</legend>
-        <label class="hx-forge-field" data-corn="field">Minutes<input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" inputmode="decimal" data-corn="input" /></label>
-        <label class="hx-forge-field" data-corn="field">Turns<input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" inputmode="numeric" data-corn="input" /></label>
-        <label class="hx-forge-field" data-corn="field">Cost<input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" inputmode="decimal" data-corn="input" /></label>
-        <label class="hx-forge-field" data-corn="field">Tokens<input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" inputmode="numeric" data-corn="input" /></label>
+      <h2 id="agent-start-title" class="hx-confirm-title">Start an agent</h2>
+      <p id="agent-start-about" class="hx-forge-meta"></p>
+      <p id="agent-start-runner" class="hx-forge-meta" hidden></p>
+      <p id="agent-retry-note" class="hx-forge-meta" hidden></p>
+      <form id="agent-start-form" class="hx-forge-confirm" novalidate>
+      <label class="hx-forge-field" data-corn="field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
+      <label id="agent-profile-field" class="hx-forge-field" hidden data-corn="field">Profile<select id="agent-profile" class="hx-forge-select"></select></label>
+      <fieldset id="agent-limits-edit" class="hx-forge-field hx-forge-limits"><legend>Limits, hints for the runner (one left blank takes the config's, if any)</legend>
+        <label class="hx-forge-field" data-corn="field">Minutes<input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field" data-corn="field">Turns<input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
+        <label class="hx-forge-field" data-corn="field">Cost<input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field" data-corn="field">Tokens<input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
       </fieldset>
-      <label class="hx-forge-field" data-corn="field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true" data-corn="textarea"></textarea></label>
-      <label id="agent-force-field" class="hx-forge-toggle" hidden data-corn="toggle"><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
-      <p id="agent-start-words" class="hx-confirm-note" data-corn="dialog-note"></p>
-      <p id="agent-start-msg" class="hx-forge-msg hx-forge-msg--bad" role="alert" hidden data-corn="message" data-corn-state="bad"></p>
-      <div class="hx-confirm-actions" data-corn="dialog-actions">
-        <button type="button" class="hx-btn" data-action="agent-start-cancel" data-corn="button">Cancel</button>
-        <button type="submit" class="hx-btn hx-btn--approve" id="agent-start-go" data-corn="button" data-corn-kind="approve">Ask the runner</button>
+      <label class="hx-forge-field" data-corn="field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
+      <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
+      <p id="agent-start-words" class="hx-confirm-note"></p>
+      <p id="agent-start-msg" class="hx-forge-msg hx-forge-msg--bad" role="alert" hidden data-corn="message" data-corn-state="failure"></p>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-action="agent-start-cancel">Cancel</button>
+        <button type="submit" class="hx-btn hx-btn--approve" id="agent-start-go" data-corn-kind="approve">Ask the runner</button>
       </div>
       </form>
     </div>
@@ -400,26 +400,26 @@
   <!-- Review tokens (review-tokens.js): make one (shown once), list them, revoke; a modal dialog over a scrim, the focus stays in it -->
   <div id="tokens-dialog" class="hx-confirm-scrim" hidden data-corn="dialog-scrim">
     <div class="hx-confirm glass" role="dialog" aria-modal="true" aria-labelledby="tokens-title" aria-describedby="tokens-intro" data-corn="tokens-dialog">
-      <h2 id="tokens-title" class="hx-confirm-title" tabindex="-1" data-corn="dialog-title">Review tokens</h2>
-      <p id="tokens-intro" class="hx-confirm-note" data-corn="dialog-note">A review token lets a script or a chat bot approve or send back a proposal as you (<code class="hx-code" data-corn="code">POST /api/reviews</code>). It works while you are signed in here and still maintain the repo; it expires, and you can revoke it below.</p>
+      <h2 id="tokens-title" class="hx-confirm-title" tabindex="-1">Review tokens</h2>
+      <p id="tokens-intro" class="hx-confirm-note">A review token lets a script or a chat bot approve or send back a proposal as you (<code class="hx-code">POST /api/reviews</code>). It works while you are signed in here and still maintain the repo; it expires, and you can revoke it below.</p>
       <p id="tokens-msg" class="hx-forge-msg" role="status" hidden data-corn="message"></p>
-      <div id="tokens-secret" class="hx-tokens-secret" hidden data-corn="token-secret">
+      <div id="tokens-secret" class="hx-tokens-secret" hidden>
         <label class="hx-forge-field" for="tokens-secret-value" data-corn="field">Your new token (copy it now, it is not shown again)</label>
-        <div class="hx-tokens-row" data-corn="token-secret-row">
-          <input id="tokens-secret-value" class="hx-forge-input hx-mono" type="text" readonly spellcheck="false" autocomplete="off" data-corn="input" />
-          <button type="button" class="hx-btn" data-tokens-copy data-corn="button">Copy</button>
+        <div class="hx-tokens-row">
+          <input id="tokens-secret-value" class="hx-forge-input hx-mono" type="text" readonly spellcheck="false" autocomplete="off" />
+          <button type="button" class="hx-btn" data-tokens-copy>Copy</button>
         </div>
       </div>
-      <ul id="tokens-list" class="hx-tokens-list" aria-label="Your review tokens" data-corn="token-list"></ul>
-      <form id="tokens-form" class="hx-tokens-form" autocomplete="off" data-corn="form">
-        <label class="hx-forge-field" data-corn="field">Kind of token<select id="tokens-scope" class="hx-forge-select" data-corn="select"><option value="review">Review: approve or send back proposals</option><option value="agent">Agent: ask for agent runs (POST /api/agent-requests)</option><option value="runner">Runner: pull, claim and report on runs (GET /api/agent-requests)</option></select></label>
-        <label class="hx-forge-field" data-corn="field">Label<input id="tokens-label" class="hx-forge-input" type="text" maxlength="60" placeholder="chat bot" data-corn="input" /></label>
-        <label class="hx-forge-field" data-corn="field">Days<input id="tokens-days" class="hx-forge-input" type="text" inputmode="numeric" maxlength="2" aria-describedby="tokens-days-hint" data-corn="input" /></label>
+      <ul id="tokens-list" class="hx-tokens-list" aria-label="Your review tokens"></ul>
+      <form id="tokens-form" class="hx-tokens-form" autocomplete="off">
+        <label class="hx-forge-field" data-corn="field">Kind of token<select id="tokens-scope" class="hx-forge-select"><option value="review">Review: approve or send back proposals</option><option value="agent">Agent: ask for agent runs (POST /api/agent-requests)</option><option value="runner">Runner: pull, claim and report on runs (GET /api/agent-requests)</option></select></label>
+        <label class="hx-forge-field" data-corn="field">Label<input id="tokens-label" class="hx-forge-input" type="text" maxlength="60" placeholder="chat bot" /></label>
+        <label class="hx-forge-field" data-corn="field">Days<input id="tokens-days" class="hx-forge-input" type="text" inputmode="numeric" maxlength="2" aria-describedby="tokens-days-hint" /></label>
         <span id="tokens-days-hint" class="hx-sr-only"></span>
-        <button type="submit" id="tokens-make" class="hx-btn hx-btn--approve" data-corn="button" data-corn-kind="approve">Make a token</button>
+        <button type="submit" id="tokens-make" class="hx-btn hx-btn--approve" data-corn-kind="approve">Make a token</button>
       </form>
-      <div class="hx-confirm-actions" data-corn="dialog-actions">
-        <button type="button" class="hx-btn" data-tokens-close data-corn="button">Close</button>
+      <div class="hx-confirm-actions">
+        <button type="button" class="hx-btn" data-tokens-close>Close</button>
       </div>
     </div>
   </div>

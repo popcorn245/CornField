@@ -75,13 +75,13 @@ export function renderLayerToggles() {
     const on = state.activeLayers[layer.key] !== false;
     const color = themed(layer.color, state.theme); // the dot is the colour the map draws on this ground
     return `
-      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}" data-corn="layer-toggle" data-corn-state="${on ? 'on' : 'off'}">
+      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}" data-corn="row">
         <span class="hx-toggle-label">
           <span class="hx-dot" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
-          <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
+          <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">
-          <span class="hx-count" data-corn="count">${counts[layer.key] || 0}</span>
+          <span class="hx-count">${counts[layer.key] || 0}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
       </button>`;
@@ -97,9 +97,9 @@ export function renderCloudLegend() {
   if (state.activeLayers.cloud === false) { el.innerHTML = ''; el.hidden = true; return; }
   el.hidden = false;
   el.innerHTML = `
-    <div class="hx-menu-title" data-corn="menu-title"><span>Cloud: when an outage bites</span></div>
-    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row" data-corn="legend-row"><span class="hx-legend-swatch"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
-    <div class="hx-legend-row" data-corn="legend-row"><span class="hx-legend-swatch"></span><span class="hx-faint"><span class="hx-cloud-browser" data-corn="cloud-browser">(browser)</span> the visitor's browser makes the call, not our server</span></div>`;
+    <div class="hx-menu-title"><span>Cloud: when an outage bites</span></div>
+    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
+    <div class="hx-legend-row"><span class="hx-legend-swatch"></span><span class="hx-faint"><span class="hx-cloud-browser">(browser)</span> the visitor's browser makes the call, not our server</span></div>`;
 }
 
 function changed() {

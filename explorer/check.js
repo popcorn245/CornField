@@ -25,6 +25,7 @@
 import { state, escHtml } from './state.js';
 import { toggleLayer } from './layers.js';
 import { mapIndex, personaLabel, planChecks, runChecks, stepVerdict, verdictWords } from './check-model.js';
+import { cornState } from './corn-state.js';
 
 let checker = null;
 let current = null; // { scenario, as, nodes, plan, answer, controller, onChange }
@@ -128,13 +129,12 @@ function mountControls(bar) {
   const title = bar.querySelector('.hx-player-title');
   const pill = document.createElement('span');
   pill.className = 'hx-player-verdict';
-  pill.dataset.corn = 'player-verdict';
+  pill.dataset.corn = 'state-pill';
   pill.hidden = true;
   if (head && title) title.after(pill); else bar.prepend(pill);
 
   const line = document.createElement('p');
   line.className = 'hx-player-check';
-  line.dataset.corn = 'player-check';
   line.setAttribute('aria-live', 'polite');
   line.hidden = true;
   const text = bar.querySelector('.hx-player-text');
@@ -142,11 +142,10 @@ function mountControls(bar) {
 
   const row = document.createElement('div');
   row.className = 'hx-player-as';
-  row.dataset.corn = 'player-as';
   row.innerHTML = `
-    <label class="hx-player-as-label" data-corn="player-as-label">As <select class="hx-player-speed hx-player-as-menu" data-check="as" aria-label="Act every step as" data-corn="player-as-menu"></select></label>
-    <button type="button" class="hx-btn" data-check="recheck" data-corn="button">Check again</button>
-    <span class="hx-player-as-sum hx-faint" data-corn="player-as-summary"></span>`;
+    <label class="hx-player-as-label">As <select class="hx-player-speed hx-player-as-menu" data-check="as" aria-label="Act every step as"></select></label>
+    <button type="button" class="hx-btn" data-check="recheck">Check again</button>
+    <span class="hx-player-as-sum hx-faint"></span>`;
   const controls = bar.querySelector('.hx-player-controls');
   if (controls) controls.after(row); else bar.appendChild(row);
 
@@ -211,12 +210,11 @@ export function paintChecks(bar, snap) {
   line.hidden = !words;
   if (words) {
     pill.dataset.tone = words.tone;
-    pill.dataset.cornState = words.tone;
+    if (cornState(words.tone)) pill.dataset.cornState = cornState(words.tone); else delete pill.dataset.cornState;
     pill.textContent = words.pill;
     pill.title = words.line;
     line.dataset.tone = words.tone;
-    line.dataset.cornState = words.tone;
-    line.innerHTML = `${escHtml(words.line)}${words.detail ? ` <span class="hx-player-check-detail" data-corn="player-check-detail">${escHtml(words.detail)}</span>` : ''}`;
+    line.innerHTML = `${escHtml(words.line)}${words.detail ? ` <span class="hx-player-check-detail">${escHtml(words.detail)}</span>` : ''}`;
   }
   fillMenu(row.querySelector('[data-check=as]'));
   row.querySelector('[data-check=recheck]').disabled = current.answer.status === 'pending';

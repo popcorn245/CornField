@@ -21,6 +21,10 @@ import { runsHtml } from '../../explorer/runs-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { mockupsSectionHtml } from '../../explorer/mockups-model.js';
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
+// @ts-expect-error plain JS modules, no declarations
+import { applyBranding } from '../../explorer/plugins.js';
+// @ts-expect-error plain JS modules, no declarations
+import { CORN_STATES, cornState } from '../../explorer/corn-state.js';
 
 const docs = fs.readFileSync(path.join(CORNFIELD, 'docs', 'theming.md'), 'utf8');
 /** The first-column values (in backticks) of the tables in a section of the docs, from its heading to the next heading of its level or higher */
@@ -51,14 +55,22 @@ const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);
 const brandImages = /setAttribute\('data-corn', `brand-\$\{kind\}`\)/.test(source) && /brandImage\(doc, [^)]*'logo'/.test(source) && /brandImage\(doc, [^)]*'wordmark'/.test(source) ? ['brand-logo', 'brand-wordmark'] : [];
 const used = [...new Set([...literal('attr', /\bdata-corn="([^"$]+)"/g), ...literal('js', /\.dataset\.corn = '([^']+)'/g), ...literal('set', /setAttribute\('data-corn', '([^']+)'\)/g), ...brandImages])];
 const usedKinds = [...new Set(literal('kind', /\bdata-corn-kind="([^"$]+)"/g))];
+// Most states are worked out by corn-state.js; the rest are written as literals
 const usedStates = [...new Set([...literal('attr', /\bdata-corn-state="([^"$]+)"/g), ...literal('js', /\.dataset\.cornState = '([^']+)'/g)])];
+const usedKindsJs = [...new Set(literal('kind', /\.dataset\.cornKind = '([^']+)'/g))];
 
 describe('the documented list', () => {
-  it('is long enough to be the list, and has no repeats', () => {
-    expect(hooks.length).toBeGreaterThan(100);
+  it('is a short list, the hooks a brand needs, with no repeats', () => {
+    expect(hooks.length).toBeGreaterThanOrEqual(50);
+    expect(hooks.length).toBeLessThanOrEqual(80);
     const all = tableValues('## The hooks');
     expect(all.length).toBe(hooks.length);
     expect(kinds.sort()).toEqual(['approve', 'danger', 'icon', 'primary', 'quiet']);
+  });
+
+  it('documents exactly the states corn-state.js gives, one value per meaning', () => {
+    expect([...states].sort()).toEqual([...CORN_STATES].sort());
+    expect(states.length).toBe(new Set(states).size);
   });
 
   it('says renaming a hook is breaking, and that there is no shadow DOM', () => {
@@ -79,7 +91,7 @@ describe('the markup', () => {
   });
 
   it('has no data-corn-kind or data-corn-state value that the docs do not list', () => {
-    expect(usedKinds.filter((k) => !kinds.includes(k))).toEqual([]);
+    expect([...usedKinds, ...usedKindsJs].filter((k) => !kinds.includes(k))).toEqual([]);
     expect(usedStates.filter((s) => !states.includes(s))).toEqual([]);
   });
 
@@ -126,9 +138,7 @@ describe('the mounted page', () => {
     expect(hook('proposal-bar')).toBe(document.getElementById('proposal-bar'));
     expect(hook('forge-panel')).toBe(document.getElementById('forge-panel'));
     expect(hook('node-panel')).toBe(document.getElementById('spec-drawer'));
-    expect(hook('node-badge')).toBe(document.getElementById('drawer-badge'));
-    expect(hook('runs')).toBe(document.getElementById('forge-runs'));
-    expect(hook('release-notes')).toBe(document.getElementById('forge-notes'));
+    expect(document.getElementById('drawer-badge').getAttribute('data-corn')).toBe('badge');
     expect(hook('mobile-search')).toBe(document.getElementById('mobile-search-bar'));
   });
 
@@ -166,40 +176,58 @@ describe('markup made by script', () => {
   });
   afterEach(() => { clearScenario(); vi.unstubAllGlobals(); });
 
-  it('puts a hook on each layer row, with its state', () => {
+  it('puts a row hook on each layer row; aria-pressed says which are on', () => {
     renderLayerToggles();
-    const rows = [...document.querySelectorAll('#layer-toggles-container [data-corn="layer-toggle"]')];
+    const rows = [...document.querySelectorAll('[data-corn="layers-menu"] [data-corn="row"]')];
     expect(rows.length).toBeGreaterThan(3);
-    for (const r of rows) expect(['on', 'off']).toContain(r.getAttribute('data-corn-state'));
+    for (const r of rows) expect(['true', 'false']).toContain(r.getAttribute('aria-pressed'));
+  });
+
+  it('puts the hooks on the config\'s links and Sign out', () => {
+    applyBranding(document, { links: [{ label: 'Repo', href: 'https://forge.example.test/acme' }], signIn: { login: 'maintainer' } });
+    const links = hook('links');
+    expect(links.querySelector('a[data-corn="link"]').getAttribute('href')).toBe('https://forge.example.test/acme');
+    const out = links.querySelector('[data-corn="sign-out"]');
+    expect(out.tagName).toBe('FORM');
+    expect(out.querySelector('button').getAttribute('data-corn-kind')).toBe('quiet');
   });
 
   it('puts hooks on a proposal card in the Proposals menu', () => {
     const host = document.createElement('div');
     host.innerHTML = proposalRowHtml({ slug: '0001-x', source: 'checkout', title: 'Meals', summary: 'Adds meals', counts: { added: 1, changed: 0, removed: 0 } }, { slug: '0001-x', source: 'checkout' });
-    const card = host.querySelector('[data-corn="proposal-item"]');
+    const card = host.querySelector('[data-corn="row"]');
     expect(card.tagName).toBe('BUTTON');
-    expect(card.getAttribute('data-corn-state')).toBe('current');
-    expect(card.querySelector('[data-corn="proposal-item-title"]').textContent).toBe('Meals');
+    expect(card.getAttribute('data-action')).toBe('open-proposal');
   });
 
-  it('puts hooks on a run card: its state, its head, its buttons with their kinds', () => {
+  it('puts hooks on a run card: its state, its pill with the same state, its buttons with their kinds', () => {
     const ctx = { esc: escHtml, safeUrl: () => false, forgeName: 'Forge', forgeType: 'github', repoUrl: null, now: Date.parse('2026-10-18T12:00:00Z'), nodes: state.nodes, selected: null, timelines: new Set(), replies: new Map(), busy: false };
     const run = { runId: 'r1', kind: 'spec', status: 'working', open: true, refs: { issue: 5 }, requestedAt: '2026-10-18T11:00:00Z', nodes: ['a'], timeline: [], checks: [] };
     const host = document.createElement('ul');
     host.innerHTML = runsHtml(ctx, [run]);
     const card = host.querySelector('[data-corn="run"]');
-    expect(card.getAttribute('data-corn-state')).toBe('working');
-    expect(card.querySelector('[data-corn="run-head"] [data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('running');
+    expect(card.getAttribute('data-corn-state')).toBe('running');
+    expect(card.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('running');
     expect(card.querySelector('[data-forge-stop]').getAttribute('data-corn-kind')).toBe('danger');
-    expect(card.querySelector('[data-corn="run-actions"]')).not.toBeNull();
+    host.innerHTML = runsHtml(ctx, [{ ...run, status: 'failed', open: false }, { ...run, runId: 'r2', status: 'requested' }]);
+    expect([...host.querySelectorAll('[data-corn="run"]')].map((r) => r.getAttribute('data-corn-state')).sort()).toEqual(['failed', 'queued']);
+  });
+
+  it('maps every internal word onto the documented states, and nothing else', () => {
+    const words = ['open', 'merged', 'closed', 'draft', 'requested', 'claimed', 'working', 'waiting', 'quiet', 'done', 'failed', 'stopped', 'stop-requested',
+      'success', 'failure', 'running', 'queued', 'neutral', 'skipped', 'cancelled', 'approved', 'unreviewed', 'changed', 'missing', 'allowed', 'refused', 'mismatch', 'pending', 'ok', 'bad'];
+    for (const w of words) expect(states, w).toContain(cornState(w));
+    expect(cornState('failed')).toBe('failed'); // a run
+    expect(cornState('failure')).toBe('failure'); // a result
+    expect(cornState('unchecked')).toBe('');
+    expect(cornState('<script>')).toBe('');
   });
 
   it('puts hooks on the mockups section of the node panel', () => {
     const host = document.createElement('div');
     host.innerHTML = mockupsSectionHtml([{ index: 0, node: 'a', path: 'x.png', title: 'List', type: 'image', url: '/m/0', state: 'changed' }]);
-    expect(host.querySelector('[data-corn="mockups"]')).not.toBeNull();
-    expect(host.querySelector('[data-corn="mockup-open"]').getAttribute('data-mockup')).toBe('0');
-    expect(host.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('changed');
+    expect(host.querySelector('[data-corn="section"] [data-corn="row"] [data-mockup]').getAttribute('data-mockup')).toBe('0');
+    expect(host.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('waiting');
   });
 
   it('puts hooks on the scenario player', () => {
@@ -207,10 +235,8 @@ describe('markup made by script', () => {
     playScenario({ id: 's', title: 'Saving', stepMs: 1000, steps: [{ node: 'a', text: 'Opens.' }, { node: 'b', text: 'Saves.' }] }, { autoplay: false });
     const bar = hook('scenario-player');
     expect(bar).not.toBeNull();
-    expect(bar.querySelector('[data-corn="player-title"]').textContent).toBe('Saving');
-    expect(bar.querySelector('[data-corn="scenario-toggle"]').getAttribute('data-corn-kind')).toBe('primary');
-    expect(bar.querySelector('[data-corn="close-button"]').getAttribute('data-corn-kind')).toBe('icon');
-    expect(bar.querySelector('[data-corn="player-track"] [data-corn="player-fill"]')).not.toBeNull();
+    expect(bar.querySelector('[data-action="scenario-toggle"]').getAttribute('data-corn-kind')).toBe('primary');
+    expect(bar.querySelector('[data-action="scenario-close"]').getAttribute('data-corn-kind')).toBe('icon');
     expect(bar.querySelector('[data-corn="sheet-handle"]')).not.toBeNull(); // the bottom-sheet handle the player is given
   });
 });

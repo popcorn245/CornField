@@ -844,7 +844,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 export function plainFloorSvg(plan, floorId) {
   const vb = (plan && plan.viewBox) || { width: 800, height: 600 };
   const rooms = ((plan && plan.rooms) || []).filter((r) => r.floor_id === floorId && hasBox(r)).sort((a, b) => b.w * b.h - a.w * a.h);
-  const body = rooms.map((r) => `<g class="hx-plain-room" data-room="${esc(r.id)}" data-corn="plain-room"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="4"/>`
+  const body = rooms.map((r) => `<g class="hx-plain-room" data-room="${esc(r.id)}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="4"/>`
     + (r.w > 48 && r.h > 22 ? `<text x="${r.x + 7}" y="${r.y + 17}">${esc(r.name)}</text>` : '') + '</g>').join('');
-  return `<svg class="hx-plain-floor" viewBox="0 0 ${vb.width} ${vb.height}" data-floor="${esc(floorId)}" data-corn="plain-floor">${body}</svg>`;
+  return `<svg class="hx-plain-floor" viewBox="0 0 ${vb.width} ${vb.height}" data-floor="${esc(floorId)}">${body}</svg>`;
 }
