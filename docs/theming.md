@@ -517,6 +517,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `stop` | Stop |
 | `continueRun` | Continue |
 | `reply` | Reply |
+| `openFile` | Open file |
 | `openRoute` | Open route |
 | `startRun` | Start a run |
 | `copySpec` | Copy Spec |
@@ -528,7 +529,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `retry` | Retry |
 <!-- strings:end -->
 
-The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openRoute` now says "Open route" and is the primary action; `startRun` ("Start a run") is new.
+The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openFile` ("Open file") is the primary action when the node has a file and the config names a forge; `openRoute` ("Open route") is primary when there is no such file and the quiet second action when there is; `startRun` ("Start a run") is new.
 
 ## The old `--hx-*` names
 

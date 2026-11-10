@@ -16,6 +16,7 @@ import { collapseSheet } from './sheets.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
 import { t } from './strings.js';
+import { fileUrl } from './file-url.js';
 import { capped, toggleCapped } from './capped.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
 
@@ -253,15 +254,18 @@ export async function selectNode(node) {
   if (state.threadIndex) state.threadIndex.ensure();
   hydrateLivePhotos($('drawer-live'));
 
-  // The actions: Open (when the node has an address) is the primary one; Start a run, when the open proposal can be handed to an agent
-  if (node.url && /^https?:\/\//.test(node.url)) {
-    openBtn.href = node.url;
-    openBtn.textContent = `${t('openRoute')} ↗`;
-    openBtn.hidden = false;
-  } else {
-    openBtn.removeAttribute('href');
-    openBtn.hidden = true;
-  }
+  // The actions: Open file (the node's file on the forge) is the primary one; with an address too, Open route is the quiet one.
+  // The proposal's head branch is not known here (the proposals list does not carry it): the file is at the default branch.
+  const fileBtn = $('drawer-file-btn');
+  const file = node.file && state.forge ? fileUrl(state.forge, node.file, state.forge.baseBranch) : null;
+  fileBtn.hidden = !file;
+  if (file) fileBtn.href = file; else fileBtn.removeAttribute('href');
+  const route = !!(node.url && /^https?:\/\//.test(node.url));
+  if (route) openBtn.href = node.url; else openBtn.removeAttribute('href');
+  openBtn.hidden = !route;
+  openBtn.className = file ? 'hx-btn hx-btn--quiet hx-foot-btn' : 'hx-open';
+  openBtn.textContent = `${t('openRoute')} ↗`;
+  fileBtn.textContent = `${t('openFile')} ↗`;
   const run = $('drawer-run-btn');
   run.hidden = !(state.proposalSlug && canStartAgent());
 
