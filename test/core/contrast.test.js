@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast, mixColors, over, parseColor, readColor, toHex } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
-import { TOKENS_FILE, checkSheets, checkThemeContrast, contrastPairs, contrastProblems, describeFinding, matchRoot, parseRules, resolveColor, resolveProps, substitute } from '../../core/contrast.js';
+import { TOKENS_FILE, UI_PAIRS, checkSheets, checkThemeContrast, contrastPairs, contrastProblems, describeFinding, matchRoot, parseRules, resolveColor, resolveProps, substitute, themesToCheck } from '../../core/contrast.js';
 // @ts-expect-error plain JS modules, no declarations
 import { DEFAULTS } from '../../core/config.js';
 import { CORNFIELD, EXPLORER, SAMPLE } from '../helpers.js';
@@ -63,6 +63,18 @@ describe('colours: every syntax', () => {
     expect(rounded('color-mix(in srgb, #000 20%, #fff 20%)')).toEqual([128, 128, 128, 0.4]);
   });
 
+  it('mixes premultiplied, as CSS Color 5 does (worked by hand)', () => {
+    // 25% + 25%: normalised to 50/50, alpha scaled by 0.5. Premultiplied: red (127.5, 0, 0, .5), blue (0, 0, 255, 1);
+    // their mean (63.75, 0, 127.5, .75); divided by .75: (85, 0, 170); alpha .75 x .5 = .375
+    expect(rounded('color-mix(in srgb, rgba(255, 0, 0, 0.5) 25%, blue 25%)')).toEqual([85, 0, 170, 0.375]);
+    // a fully transparent colour gives no colour, only its share of alpha: never a grey
+    expect(rounded('color-mix(in srgb, rgb(255 0 0 / 0) 50%, #00f)')).toEqual([0, 0, 255, 0.5]);
+    // 60% + 30%: 2/3 black and 1/3 white, at 90% alpha; shares over 100% are normalised and leave the alpha alone
+    expect(rounded('color-mix(in srgb, #000 60%, #fff 30%)')).toEqual([85, 85, 85, 0.9]);
+    expect(rounded('color-mix(in srgb, #000 90%, #fff 30%)')).toEqual([64, 64, 64, 1]);
+    expect(readColor('color-mix(in srgb, #000 0%, #fff 0%)')).toBeNull();
+  });
+
   it('does not read what it cannot: another colour space, calc(), currentcolor, auto, junk', () => {
     for (const c of ['oklch(60% 0.2 30)', 'color-mix(in oklab, #000, #fff)', 'rgb(calc(1 + 2) 0 0)', 'currentcolor', 'auto', 'none', '', 'rgb(1, 2)', 'hsl(0, 100, 50)', 'color-mix(in srgb, #000 120%, #fff)', 'linear-gradient(red, blue)']) {
       expect(readColor(c), c).toBeNull();
@@ -101,16 +113,44 @@ describe('var() chains, fallbacks and cycles', () => {
   });
 
   it('treats a cycle as unset, so its fallback is used, and otherwise leaves nothing', () => {
-    const cyc = p({ '--a': 'var(--b)', '--b': 'var(--a)', '--self': 'var(--self)' });
+    const cyc = p({ '--a': 'var(--b)', '--b': 'var(--a)', '--self': 'var(--self)', '--t': 'var(--a)' });
     expect(substitute('var(--a)', cyc)).toBeNull();
     expect(substitute('var(--a, #abc)', cyc)).toBe('#abc');
     expect(substitute('var(--self, red)', cyc)).toBe('red');
-    expect(resolveColor(cyc, '--a')).toEqual({ problem: expect.stringMatching(/--a leads to a var\(\) with no value/) });
+    expect(resolveColor(cyc, '--a')).toEqual({ problem: '--a: a var() cycle, --a → --b → --a' });
+    expect(resolveColor(cyc, '--t')).toEqual({ problem: '--t: a var() cycle, --a → --b → --a' });
+  });
+
+  it('names the token that has nothing to give, and why', () => {
+    const q = p({ '--corn-ok-soft': 'color-mix(in srgb, var(--brand-ok) 15%, transparent)', '--corn-text': 'var(--brand-fg)', '--brand-fg': 'oklch(70% 0.1 200)', '--corn-x': 'calc(1px + 2px)', '--corn-y': 'color-mix(in oklab, #000, #fff)' });
+    expect(resolveColor(q, '--corn-ok-soft')).toEqual({ problem: '--corn-ok-soft → --brand-ok is not set' });
+    expect(resolveColor(q, '--corn-text').problem).toMatch(/^--corn-text → --brand-fg is "oklch\(70% 0\.1 200\)": oklch\(\) is not a colour cornfield reads \(it reads hex/);
+    expect(resolveColor(q, '--corn-x').problem).toMatch(/^--corn-x is "calc\(1px \+ 2px\)": calc\(\) is not a colour cornfield reads/);
+    expect(resolveColor(q, '--corn-y').problem).toMatch(/^--corn-y is "color-mix\(in oklab.*": that is a color-mix\(\) cornfield cannot work out \(it mixes in srgb only/);
+  });
+
+  it('never hangs or throws on hostile values: deep fallbacks, deep chains, exponential growth, deep color-mix()', () => {
+    const started = Date.now();
+    const deepFallback = `${'var(--x, '.repeat(200)}#fff${')'.repeat(200)}`;
+    expect(resolveColor(p({}), deepFallback)).toEqual({ problem: expect.stringMatching(/var\(\) is followed more than 32 deep/) });
+    const huge = `${'var(--x, '.repeat(25000)}#fff${')'.repeat(25000)}`;
+    expect(resolveColor(p({ '--t': huge }), '--t')).toEqual({ problem: '--t: a value is longer than 2048 characters' });
+    const chain = p(Object.fromEntries([...Array.from({ length: 5000 }, (_, i) => [`--c${i}`, `var(--c${i + 1})`]), ['--c5000', '#fff']]));
+    expect(resolveColor(chain, '--c0').problem).toMatch(/^--c0: var\(\) is followed more than 32 deep/);
+    // a billion laughs: each level doubles the one below
+    const laughs = p(Object.fromEntries([['--l0', '#fff'], ...Array.from({ length: 30 }, (_, i) => [`--l${i + 1}`, `var(--l${i}) var(--l${i})`])]));
+    expect(resolveColor(laughs, '--l30').problem).toMatch(/^--l30: a value grows past 2048 characters/);
+    const wide = p({ '--w': Array.from({ length: 150 }, () => 'var(--u, #000)').join(' '), '--t': Array.from({ length: 150 }, () => 'var(--w, #000)').join(' ') });
+    expect(() => resolveColor(wide, '--t')).not.toThrow();
+    expect(readColor(`${'color-mix(in srgb, '.repeat(9)}#fff${', #000)'.repeat(9)}`)).toBeNull();
+    expect(readColor(`${'color-mix(in srgb, '.repeat(8)}#fff${', #000)'.repeat(8)}`)).not.toBeNull();
+    expect(readColor(`${'color-mix(in srgb, '.repeat(20000)}#fff${', #000)'.repeat(20000)}`)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 
   it('says why a token is not a colour, and never throws on odd input', () => {
     const q = p({ '--auto': 'auto', '--ok': '#fff', '--calc': 'calc(1px + 2px)' });
-    expect(resolveColor(q, '--auto')).toEqual({ problem: expect.stringMatching(/"auto", which is not a colour cornfield reads/) });
+    expect(resolveColor(q, '--auto')).toEqual({ problem: expect.stringMatching(/^--auto is "auto": that is not a colour cornfield reads/) });
     expect(resolveColor(q, '--nope')).toEqual({ problem: '--nope is not set' });
     expect(resolveColor(q, '--ok')).toEqual([255, 255, 255, 1]);
     expect(resolveColor(q, 'color-mix(in srgb, var(--ok) 50%, #000)')).toEqual([127.5, 127.5, 127.5, 1]);
@@ -178,12 +218,73 @@ describe('which rules apply', () => {
     expect(matchRoot(':root > body', attrs)).toBeNull();
     expect(matchRoot(':root:hover', attrs)).toBeNull();
   });
+
+  it('never throws on a hostile selector: :not() nested deep is not read, a long selector list is fine', () => {
+    const deep = `:root${':not('.repeat(20000)}[x]${')'.repeat(20000)}`;
+    expect(() => props(`${deep} { --a: 1 }`)).not.toThrow();
+    expect(props(`${deep} { --a: 1 }`).has('--a')).toBe(false);
+    // nested within the limit, it is read: not(not(dark)) is dark
+    expect(matchRoot(':root:not(:not([data-theme="dark"]))', { 'data-theme': 'dark' })).not.toBeNull();
+    expect(props(`${':root,'.repeat(40000)}:root { --a: 1 }`).get('--a')).toBe('1');
+  });
+});
+
+describe('a brand theme resolves as a browser would', () => {
+  const on = (brand, state) => resolveProps([tokens, brand], state);
+
+  it('a :root override after tokens.css wins in dark, and loses in light to cornfield\'s more specific light blocks', () => {
+    const brand = ':root { --corn-text: #eeeeee; --corn-radius: 0; }';
+    expect(on(brand, { mode: 'dark' }).get('--corn-text')).toBe('#eeeeee');
+    expect(on(brand, { mode: 'light' }).get('--corn-text')).toBe('#0f172a');
+    // a token cornfield does not set for light is the brand's in both
+    expect(on(brand, { mode: 'light' }).get('--corn-radius')).toBe('0');
+  });
+
+  it('a [data-theme="dark"] block applies in dark only, whatever the system says', () => {
+    const brand = ':root[data-theme="dark"] { --corn-ground: #101010; }';
+    expect(on(brand, { mode: 'dark' }).get('--corn-ground')).toBe('#101010');
+    expect(on(brand, { mode: 'dark', system: 'light' }).get('--corn-ground')).toBe('#101010');
+    expect(on(brand, { mode: 'light' }).get('--corn-ground')).toBe('#f4f6fa');
+  });
+
+  it('@media (prefers-color-scheme: dark) follows the system, not the viewer\'s pick', () => {
+    const brand = '@media (prefers-color-scheme: dark) { :root { --corn-ground: #101010; } }';
+    expect(on(brand, { mode: 'dark' }).get('--corn-ground')).toBe('#101010');
+    // the viewer picked dark on a light system: the media block is off, cornfield's dark :root stands
+    expect(on(brand, { mode: 'dark', system: 'light' }).get('--corn-ground')).toBe('#090d16');
+    // the viewer picked light on a dark system: the block is on, but cornfield's [data-theme="light"] is more specific
+    expect(on(brand, { mode: 'light', system: 'dark' }).get('--corn-ground')).toBe('#f4f6fa');
+  });
+
+  it('a named theme with its own light and dark blocks', () => {
+    const brand = `
+      :root[data-theme-name="night"] { --corn-ground: #000010; }
+      :root[data-theme-name="night"][data-theme="light"] { --corn-ground: #fffff0; }
+      @media (prefers-color-scheme: light) { :root[data-theme-name="night"]:not([data-theme="dark"]) { --corn-ground: #fffff1; } }`;
+    expect(on(brand, { mode: 'dark', name: 'night' }).get('--corn-ground')).toBe('#000010');
+    // light on a light system: both light blocks match at the same specificity (0,3,0 against 0,3,0); the later wins
+    expect(on(brand, { mode: 'light', name: 'night' }).get('--corn-ground')).toBe('#fffff1');
+    expect(on(brand, { mode: 'light', system: 'dark', name: 'night' }).get('--corn-ground')).toBe('#fffff0');
+    expect(on(brand, { mode: 'dark', name: 'day' }).get('--corn-ground')).toBe('#090d16');
+  });
+
+  it('catches a brand that writes light on :root and dark only under the system setting, when a viewer picks dark on a light system', () => {
+    const brand = `
+      :root { --corn-ground: #ffffff; --corn-text: #111111; --corn-surface-1: #ffffff; --corn-surface-2: #ffffff; --corn-surface-3: #ffffff; }
+      @media (prefers-color-scheme: dark) { :root { --corn-ground: #111111; --corn-text: #eeeeee; --corn-surface-1: #111111; --corn-surface-2: #111111; --corn-surface-3: #111111; } }`;
+    const { fails } = contrastProblems([{ theme: 'standard', sheets: [tokens, brand] }]);
+    // dark on a dark system is fine; dark picked on a light system puts cornfield's dark text-2 on the brand's white
+    const f = fails.find((x) => x.mode === 'dark' && x.fg === '--corn-text-2' && x.bg === '--corn-surface-1');
+    expect(f).toMatchObject({ system: 'light', bgValue: '#ffffff' });
+    expect(fails.filter((x) => x.mode === 'dark' && !x.system)).toEqual([]);
+    expect(describeFinding(f)).toMatch(/^standard theme \(dark, on a system set to light\): --corn-text-2 /);
+  });
 });
 
 describe('the default tokens', () => {
   const themes = [{ theme: 'standard', sheets: [tokens] }];
 
-  it('resolve every pair, in light and dark, and every one passes', () => {
+  it('resolve every pair, in light and dark, and every one passes, over the ground and its image', () => {
     const all = checkSheets(themes);
     expect(all.length).toBe(contrastPairs().length * 2);
     const { fails, unresolved } = contrastProblems(themes);
@@ -192,10 +293,34 @@ describe('the default tokens', () => {
   });
 
   it('are measured against the ground the translucent surfaces sit on', () => {
-    const f = checkSheets(themes).find((x) => x.mode === 'dark' && x.fg === '--corn-text' && x.bg === '--corn-surface-1');
+    const flat = ':root, :root[data-theme="light"] { --corn-ground-image: none; }';
+    const f = checkSheets([{ theme: 'standard', sheets: [tokens, flat] }]).find((x) => x.mode === 'dark' && x.fg === '--corn-text' && x.bg === '--corn-surface-1');
     // rgba(26, 34, 52, 0.72) over #090d16
     expect(f.bgValue).toBe(toHex(over(parseColor('rgba(26, 34, 52, 0.72)'), parseColor('#090d16'))));
+    expect(f.groundImage).toBeUndefined();
     expect(f.ratio).toBeGreaterThan(10);
+  });
+
+  it('and over the ground image: a surface over the brightest stop of each glow, in paint order (ground, image, surface, text)', () => {
+    const f = checkSheets(themes).find((x) => x.mode === 'dark' && x.fg === '--corn-text-3' && x.bg === '--corn-surface-3');
+    // the first layer of the dark --corn-ground-image peaks at rgba(66, 153, 225, 0.28)
+    const glow = over(parseColor('rgba(66, 153, 225, 0.28)'), parseColor('#090d16'));
+    expect(f.groundImage).toBe(true);
+    expect(f.bgValue).toBe(toHex(over(parseColor('rgba(51, 65, 85, 0.8)'), glow)));
+    expect(f.ratio).toBeCloseTo(contrast(f.fgValue, f.bgValue), 6);
+    expect(f.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('put a tint inside the panel it is drawn in', () => {
+    const flat = ':root, :root[data-theme="light"] { --corn-ground-image: none; }';
+    const f = checkSheets([{ theme: 'standard', sheets: [tokens, flat] }]).find((x) => x.mode === 'dark' && x.fg === '--corn-ok' && x.bg === '--corn-ok-soft');
+    const panel = over(parseColor('rgba(26, 34, 52, 0.72)'), parseColor('#090d16'));
+    expect(f.bgValue).toBe(toHex(over(readColor('color-mix(in srgb, #34d399 15%, transparent)'), panel)));
+  });
+
+  it('are checked by every validate, with or without a theme', () => {
+    expect(themesToCheck({ root: SAMPLE, theme: { ...DEFAULTS.theme } })).toEqual([{ theme: 'standard', sheets: [tokens] }]);
+    expect(checkThemeContrast({ root: SAMPLE, theme: { ...DEFAULTS.theme } })).toEqual({ errors: [], warnings: [] });
   });
 });
 
@@ -212,17 +337,18 @@ describe('a brand theme that fails', () => {
     const dark = line('dark', '--corn-text-3', '--corn-ground');
     expect(dark).toBeTruthy();
     expect(dark.ratio).toBeLessThan(4.5);
-    expect(describeFinding(dark)).toMatch(/^standard theme \(dark\): --corn-text-3 \(#4a5266\) on --corn-ground \(#090d16\) is \d\.\d\d:1, below 4\.5:1/);
+    expect(describeFinding(dark)).toMatch(/^standard theme \(dark\): --corn-text-3 \(#4a5266\) on --corn-ground over the ground image \(#[0-9a-f]{6}\) is \d\.\d\d:1, below 4\.5:1/);
     const light = line('light', '--corn-accent-text', '--corn-ground');
     expect(light).toBeTruthy();
-    expect(describeFinding(light)).toMatch(/^standard theme \(light\): --corn-accent-text \(#a5b4fc\) on --corn-ground \(#fffaf0\) is \d\.\d\d:1/);
+    expect(describeFinding(light)).toMatch(/^standard theme \(light\): --corn-accent-text \(#a5b4fc\) on --corn-ground( over the ground image)? \(#[0-9a-f]{6}\) is \d\.\d\d:1/);
     expect(fails.some((f) => f.mode === 'light' && f.fg === '--corn-text-on-accent' && f.bg === '--corn-accent')).toBe(true);
     expect(fails.some((f) => f.mode === 'dark' && f.fg === '--corn-text-on-accent' && f.bg === '--corn-accent')).toBe(true);
   });
 
   it('reads the ratio the way WCAG does', () => {
     const f = line('dark', '--corn-text-3', '--corn-ground');
-    expect(f.ratio).toBeCloseTo(contrast('#4a5266', '#090d16'), 6);
+    expect(f.ratio).toBeCloseTo(contrast(f.fgValue, f.bgValue), 6);
+    expect(f.ratio).toBeLessThan(contrast('#4a5266', '#090d16'));
     expect(f.min).toBe(4.5);
   });
 
@@ -230,7 +356,11 @@ describe('a brand theme that fails', () => {
     expect(fails.some((f) => f.fg === '--corn-text' && f.mode === 'dark')).toBe(false);
   });
 
-  it('holds the focus ring to 3:1', () => {
+  it('holds the focus ring, and every border or mark that alone shows a state, to 3:1 (or to 4.5:1 where it is also text)', () => {
+    const pairs = contrastPairs();
+    for (const [fg, bg] of UI_PAIRS) expect(pairs.find((x) => x.fg === fg && x.bg === bg)?.min, `${fg} on ${bg}`).toBeGreaterThanOrEqual(3);
+    // the line is a divider, never the only sign of a state
+    expect(pairs.some((x) => x.fg === '--corn-line' || x.fg === '--corn-line-soft')).toBe(false);
     const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-focus:#1c2333}'] }]);
     const f = r.fails.find((x) => x.fg === '--corn-focus' && x.mode === 'dark' && x.bg === '--corn-ground');
     expect(f.min).toBe(3);
@@ -242,7 +372,7 @@ describe('a brand theme that fails', () => {
     expect(r.fails).toEqual([]);
     expect(r.unresolved.length).toBeGreaterThan(0);
     expect(r.unresolved.every((f) => f.fg === '--corn-text-2')).toBe(true);
-    expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: .*oklch/);
+    expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: --corn-text-2 is "oklch\(70% 0\.1 200\)": oklch\(\) is not a colour cornfield reads/);
   });
 });
 
@@ -337,6 +467,55 @@ describe('the two spots that were under AA', () => {
   });
 });
 
+describe('the pair list matches what explorer.css paints', () => {
+  const pairs = new Set(contrastPairs().map((p) => `${p.fg} | ${p.bg}`));
+  const norm = (v) => { const m = /^var\((--[\w-]+)\)$/.exec(v.trim()); return m ? m[1] : v.trim(); };
+  /** Every rule of explorer.css and house.css, comments dropped, declarations as a map (the last of a property wins) */
+  const rules = ['explorer.css', 'house.css'].flatMap((f) => [...fs.readFileSync(path.join(EXPLORER, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, sel, body]) => ({ sel: sel.trim().replace(/\s+/g, ' '), decl: Object.fromEntries([...body.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)].map((m) => [m[1], m[2].trim()])) })));
+  // Rules whose colour is not text on the background of the same rule, and why each is still held
+  const ELSEWHERE = {
+    '.hx-chip': 'its fills are the modifiers below it: --corn-text-on-accent on --corn-accent, --corn-ground on the status fills',
+    '.hx-chip--danger, .hx-chip--success, .hx-chip--warning': 'the status fills, in SOLID_FILLS',
+    '.hx-swatch-when': 'a legend swatch: the colour is its fill (currentColor), not text',
+    '.hx-swatch-when--run': 'a legend swatch',
+    '.hx-swatch-when--deploy': 'a legend swatch',
+    '.hx-swatch-when--renew': 'a legend swatch',
+    '.hx-house-plan .floor-map__label, .hx-house-plan .hx-plain-room text': 'a room\'s name, on the room\'s own lime tint (listed)',
+  };
+
+  it('holds every text colour explorer.css sets with a background to that background, and every other one to the ground and a surface', () => {
+    const holes = [];
+    for (const { sel, decl } of rules) {
+      const fg = decl.color ?? (/label|text\b/.test(sel) ? decl.fill : undefined);
+      if (!fg || /^(inherit|transparent|currentColor)$/i.test(fg) || fg.includes('--glyph') || ELSEWHERE[sel]) continue;
+      const F = norm(fg);
+      let bg = decl['background-color'] ?? decl.background;
+      if (bg === undefined || /^(none|transparent)$/i.test(bg)) {
+        // text on whatever it sits in: the ground, the panel or a control
+        if (!['--corn-ground', '--corn-surface-1', '--corn-surface-2'].some((b) => pairs.has(`${F} | ${b}`))) holes.push(`${sel}: ${F}`);
+        continue;
+      }
+      // the ground mixed toward transparent lies between the ground and the panel beneath, both held
+      if (/^color-mix\(in srgb, var\(--corn-ground\) \d+%, transparent\)/.test(bg)) bg = 'var(--corn-ground)';
+      if (!pairs.has(`${F} | ${norm(bg)}`)) holes.push(`${sel}: ${F} on ${norm(bg)}`);
+    }
+    expect(holes).toEqual([]);
+  });
+
+  it('draws every focus indicator in a colour held to the UI minimum', () => {
+    const ui = new Set(UI_PAIRS.map(([fg]) => fg));
+    for (const { sel, decl } of rules.filter((r) => /:focus/.test(r.sel))) {
+      for (const prop of ['outline', 'outline-color', 'border-color']) {
+        const v = decl[prop];
+        if (!v || /^none$/.test(v)) continue;
+        const token = /var\((--corn-(?!focus-width)[\w-]+)\)\s*$/.exec(v)?.[1];
+        expect(token && ui.has(token), `${sel} { ${prop}: ${v} }`).toBe(true);
+      }
+    }
+  });
+});
+
 describe('cornfield validate: the contrast check', () => {
   let root;
   const CLI = path.join(CORNFIELD, 'cli', 'cornfield.js');
@@ -362,7 +541,7 @@ describe('cornfield validate: the contrast check', () => {
     withTheme({ css: './theme.css' });
     const r = validate();
     expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/theme contrast: standard theme \(dark\): --corn-text-3 \(#3b4358\) on --corn-ground \(#090d16\) is \d\.\d\d:1, below 4\.5:1/);
+    expect(r.stderr).toMatch(/theme contrast: standard theme \(dark\): --corn-text-3 \(#3b4358\) on --corn-ground over the ground image \(#[0-9a-f]{6}\) is \d\.\d\d:1, below 4\.5:1/);
   });
 
   it('downgrades to warnings with theme.contrast: "warn"', () => {
@@ -386,8 +565,15 @@ describe('cornfield validate: the contrast check', () => {
     expect(r.stderr).not.toMatch(/standard theme/);
   });
 
-  it('is skipped for a repo with no theme, and does not run on a theme file that is missing', () => {
-    expect(checkThemeContrast({ root, theme: { ...DEFAULTS.theme } })).toEqual({ errors: [], warnings: [] });
+  it('checks cornfield\'s own tokens for a repo with no theme, and does not read a theme file validate refuses', () => {
+    expect(themesToCheck({ root, theme: { ...DEFAULTS.theme } })).toHaveLength(1);
     expect(checkThemeContrast({ root, theme: { ...DEFAULTS.theme, css: './gone.css' } })).toEqual({ errors: [], warnings: [] });
+    // over the size cap, or not CSS: validateThemeFiles reports it, and the contrast check leaves it alone
+    fs.writeFileSync(path.join(root, 'big.css'), `:root { --corn-text: #000; }\n/* ${'x'.repeat(300 * 1024)} */`);
+    expect(themesToCheck({ root, theme: { ...DEFAULTS.theme, css: './big.css' } })).toBeNull();
+    fs.writeFileSync(path.join(root, 'html.css'), '<script>alert(1)</script> :root { --corn-text: #000; }');
+    expect(themesToCheck({ root, theme: { ...DEFAULTS.theme, css: './html.css' } })).toBeNull();
+    fs.writeFileSync(path.join(root, 'night.css'), ':root{--corn-text:#000}' + ' '.repeat(300 * 1024));
+    expect(themesToCheck({ root, theme: { ...DEFAULTS.theme, names: { night: './night.css' } } })).toHaveLength(1);
   });
 });

@@ -15,7 +15,7 @@
  *
  * Read: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()` / `rgba()` and `hsl()` / `hsla()` (comma or space syntax, an optional `/ alpha`,
  * percentages), `transparent`, the basic colour names, and `color-mix(in srgb, A p%, B [p%])` (of any of these, nested). Anything else
- * (`oklch()`, `var()`, `calc()`, `currentcolor`, `auto`) is not read.
+ * (`oklch()`, `var()`, `calc()`, `currentcolor`, `auto`) is not read, nor a `color-mix()` nested more than MAX_MIX_DEPTH deep, nor text over MAX_COLOR_CHARS.
  */
 
 const NAMED = Object.freeze({
@@ -23,6 +23,11 @@ const NAMED = Object.freeze({
   magenta: '#ff00ff', fuchsia: '#ff00ff', gray: '#808080', grey: '#808080', silver: '#c0c0c0', maroon: '#800000', olive: '#808000',
   green: '#008000', purple: '#800080', teal: '#008080', navy: '#000080', orange: '#ffa500',
 });
+
+/** How deep `color-mix()` may nest: deeper is not read (a hostile stylesheet cannot make the parser crawl or overflow the stack) */
+export const MAX_MIX_DEPTH = 8;
+/** The longest text read as a colour; longer is not a colour this file reads */
+export const MAX_COLOR_CHARS = 4096;
 
 const NUM = '[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?';
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -73,11 +78,11 @@ function fnParts(args) {
 }
 
 /** @returns {number[] | null} */
-function readOne(css) {
+function readOne(css, depth = 0) {
   const s = String(css).trim();
   const lower = s.toLowerCase();
   if (lower === 'transparent') return [0, 0, 0, 0];
-  if (NAMED[lower]) return readOne(NAMED[lower]);
+  if (NAMED[lower]) return readOne(NAMED[lower], depth);
   let m = /^#([0-9a-f]{3,4})$/.exec(lower);
   if (m) {
     const c = [...m[1]].map((h) => parseInt(h + h, 16));
@@ -107,7 +112,7 @@ function readOne(css) {
     if (!h || sat === null || lig === null || a === null) return null;
     return [...hslToRgb(((Number(h[1]) % 360) + 360) % 360, clamp(sat, 0, 1), clamp(lig, 0, 1)), a];
   }
-  const mix = callArgs(lower, 'color-mix');
+  const mix = depth < MAX_MIX_DEPTH ? callArgs(lower, 'color-mix') : null;
   if (mix !== null) {
     const parts = splitTop(mix, ',').map((t) => t.trim());
     if (parts.length !== 3 || !/^in\s+srgb$/.test(parts[0])) return null;
@@ -115,7 +120,7 @@ function readOne(css) {
       const before = /^(\d*\.?\d+)%\s+(.+)$/.exec(t);
       const after = /^(.+?)\s+(\d*\.?\d+)%$/.exec(t);
       const [col, pct] = before ? [before[2], before[1]] : after ? [after[1], after[2]] : [t, null];
-      const c = readOne(col);
+      const c = readOne(col, depth + 1);
       return c && { c, p: pct === null ? null : Number(pct) / 100 };
     };
     const a = side(parts[1]);
@@ -131,6 +136,7 @@ function readOne(css) {
 
 /** A CSS colour as `[r, g, b, a]`, or null when it is not one this file reads */
 export function readColor(css) {
+  if (String(css).length > MAX_COLOR_CHARS) return null;
   try { return readOne(css); } catch { return null; }
 }
 

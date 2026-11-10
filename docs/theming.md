@@ -28,13 +28,15 @@ Images and the app's name are not tokens: they are the config's `brand` key, `{ 
 
 ## The contrast check
 
-`cornfield validate` resolves the `--corn-*` pairs below for **light and dark**, after your theme is applied over [explorer/tokens.css](../explorer/tokens.css), and fails when a pair is under WCAG AA. It checks the standard theme (`tokens.css` and `theme.css`) and, separately, each `theme.names` entry (`tokens.css`, `theme.css`, then that file, with `data-theme-name` set). Each line names the theme, the mode, the two tokens, their resolved colours and the ratio:
+`cornfield validate` resolves the `--corn-*` pairs below for **light and dark**, after your theme is applied over [explorer/tokens.css](../explorer/tokens.css), and fails when a pair is under WCAG AA. It always runs: with no theme it checks cornfield's own tokens, so a change to the defaults cannot slip under AA either. It checks the standard theme (`tokens.css` and `theme.css`) and, separately, each `theme.names` entry (`tokens.css`, `theme.css`, then that file, with `data-theme-name` set). Each line names the theme, the mode, the two tokens, their resolved colours and the ratio:
 
 ```
-named theme "night" (dark): --corn-text-3 (#7a7f99) on --corn-surface-2 (#1e1b2e) is 3.97:1, below 4.5:1 (AA for text).
+named theme "night" (dark): --corn-text-3 (#6b7089) on --corn-surface-2 (#1e1b2e) is 3.43:1, below 4.5:1 (AA for text).
+standard theme (light): --corn-ok (#2f855a) on --corn-ok-soft over the ground image (#dbe9e5) is 3.63:1, below 4.5:1 (AA for text).
+standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --corn-surface-1 (#ffffff) is 1.48:1, below 4.5:1 (AA for text).
 ```
 
-**The pairs.** Translucent colours (the surfaces, the `*-soft` tints) are composited over the ground they sit on first.
+**The pairs.** Each is what [explorer/explorer.css](../explorer/explorer.css) paints; [test/core/contrast.test.js](../test/core/contrast.test.js) fails when explorer.css sets a text colour on a background the list does not hold.
 
 | Text (4.5:1) | On |
 |---|---|
@@ -42,14 +44,41 @@ named theme "night" (dark): --corn-text-3 (#7a7f99) on --corn-surface-2 (#1e1b2e
 | `--corn-text-on-accent` | `--corn-accent`, `--corn-accent-hover` |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-accent-text`, `--corn-hue-orange-text` | their tint: `--corn-ok-soft`, `--corn-warn-soft`, `--corn-bad-soft`, `--corn-info-soft`, `--corn-accent-soft`, `--corn-hue-orange-soft` |
 | `--corn-ground` (the text on a solid fill) | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info`, `--corn-hue-orange`, `--corn-hue-lime`, `--corn-added-text`, `--corn-edit-text` |
+| `--corn-hue-fuchsia` (ROM, a milestone, a link button), `--corn-hue-pink` (a variable) | `--corn-ground`, `--corn-surface-1` (and fuchsia on `--corn-surface-2`) |
+| `--corn-hue-orange` (the data-flow button) | `--corn-surface-2` |
+| the tints explorer.css mixes itself: a hue at 6–30% over the panel | `--corn-hue-lime` on lime 6% (a room on the House plan); `--corn-accent-text`, `--corn-hue-pink`, `--corn-edit-text` on their own 10% (the header links); the orange and fuchsia buttons' text (the hue 60% with `--corn-text`) on their 15% and 20%; `--corn-added-text` on `--corn-added` 12%, 14% and 20% and `--corn-text` on 12% (the current proposal, the proposals and approve buttons); `--corn-text` on `--corn-edit` 30%; `--corn-bad` on `--corn-removed` 10%, 12% and 16%, `--corn-text-2` on 10%; `--corn-warn` on `--corn-changed` 16%; `--corn-text-2` on `--corn-text-3` 10% and 12%, on `--corn-text-2` 12% and on `--corn-line-soft`; `--corn-text-3` on `--corn-text-3` 12% |
 
 | UI (3:1) | On |
 |---|---|
-| `--corn-focus`, the focus ring | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
+| `--corn-focus`, the focus ring (and the search and token fields' focused border) | `--corn-ground`, `--corn-surface-1`, `--corn-surface-2`, `--corn-surface-3` |
+| `--corn-edit-text`, a What-if field's focus ring; `--corn-added-text`, the review note's focus ring | `--corn-ground`, `--corn-surface-1` |
+| `--corn-accent-text`, the selected row's border and a pressed button's border | `--corn-surface-3`, `--corn-surface-1`, `--corn-ground` |
+| `--corn-added-text`, the current proposal's border | `--corn-added` 12%, `--corn-surface-1` |
+| `--corn-ok`, a layer's tick; `--corn-ok`, `--corn-edit-text`, `--corn-bad`, `--corn-warn`, `--corn-text-3`, a run or PR state pill's border (its text colour) | `--corn-surface-2`, `--corn-surface-3` |
 
-The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text; the focus ring is the UI pair. `--corn-line` is not checked: it is the quiet divider and border, and every control it outlines is named by its own text or fill. A brand that wants a visible border should set it to a colour that passes 3:1 and check it in its own review.
+The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the app name in the header (`--corn-brand-gradient` clipped to text: a logo or brand name has no contrast requirement, WCAG 1.4.3); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
 
-**How a theme is read.** A small resolver reads the stylesheets as text (no browser): custom properties in `:root`, `html`, `[data-theme="…"]` and `[data-theme-name="…"]` rules (with `:not()`), at the top level and inside `@media (prefers-color-scheme: light|dark)`. The cascade is the browser's: `!important`, then specificity, then source order. It follows `var(--x, fallback)` chains (a cycle counts as unset, so the fallback is used) and reads colours written as `#rgb`, `#rrggbb` (with alpha), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax), `transparent`, the basic colour names and `color-mix(in srgb, A p%, B)`. A token it cannot work out (unset, a cycle, `oklch()`, `calc()`, `auto`) is reported as a **warning**, not an error: the pair was not checked. Tokens it does not know, like a `--corn-map-*` token, are ignored unless a pair above uses them.
+**What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
+
+- a **surface** sits on the ground, and on the ground under each layer of `--corn-ground-image` at its most opaque colour stop (the centre of a radial glow): the worse of the two counts, and its line says "over the ground image";
+- a **tint** (a `*-soft` token, or a tint explorer.css mixes) sits in a panel: over `--corn-surface-1` over the ground (and the image);
+- a **text colour** with alpha is composited over its background.
+
+An image in `--corn-ground-image` (`url()`) cannot be read and adds nothing; keep text-bearing panels opaque enough over it.
+
+**Light and dark, and the system setting.** `theme-boot.js` always puts the viewer's light or dark on `<html data-theme>`, and a viewer can pick light on a dark system or dark on a light one. So each mode is resolved twice, with `prefers-color-scheme` the same and the other way, and the worse counts; a line from the second says "on a system set to …". This catches a theme that writes its light values on `:root` and its dark ones only in `@media (prefers-color-scheme: dark)`: a viewer who picks dark on a light system gets the light values on cornfield's dark ground.
+
+**How a theme is read.** A small resolver reads the stylesheets as text (no browser): custom properties in `:root`, `html`, `[data-theme="…"]` and `[data-theme-name="…"]` rules (with `:not()`), at the top level and inside `@media (prefers-color-scheme: light|dark)`. The cascade is the browser's: `!important`, then specificity, then source order. It follows `var(--x, fallback)` chains (a property that is unset or in a cycle has nothing to give, so the fallback is used) and reads colours written as `#rgb`, `#rrggbb` (with alpha), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax), `transparent`, the basic colour names and `color-mix(in srgb, A p%, B)` (premultiplied, as the browser mixes; shares under 100% lower the alpha). Tokens it does not know, like a `--corn-map-*` token, are ignored unless a pair above uses them.
+
+**A token it cannot work out** is a **warning**, not an error: the pair was not checked. The line names the token and why:
+
+```
+standard theme (dark): --corn-text on --corn-ground could not be checked: --corn-text → --brand-fg is "oklch(70% 0.1 200)": oklch() is not a colour cornfield reads (it reads hex, rgb(), hsl(), color-mix(in srgb, …), transparent and the basic colour names).
+standard theme (light): --corn-ok on --corn-ok-soft could not be checked: --corn-ok-soft → --brand-ok is not set.
+standard theme (dark): --corn-text on --corn-ground could not be checked: --corn-text: a var() cycle, --a → --b → --a.
+```
+
+It never hangs on a hostile file: a theme file over 256 KB or not CSS is not read (`validate` already fails it), a `var()` is followed at most 32 deep and a value may grow to 2,048 characters as its `var()`s are replaced (2,000 replacements at most for one token), `color-mix()` nests at most 8 deep and `:not()` 4 deep; past a limit the token is a warning that says which limit.
 
 **When it fails.** `validate` exits non-zero. To keep the report but not fail on it, set [`theme.contrast: 'warn'`](config.md#theme); the lines then appear as warnings.
 

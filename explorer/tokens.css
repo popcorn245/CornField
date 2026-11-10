@@ -32,14 +32,14 @@
   /* Text */
   --corn-text: #f8fafc;
   --corn-text-2: #cbd5e1;
-  --corn-text-3: #94a3b8;
+  --corn-text-3: #9aa9bc;
   --corn-text-on-accent: #fff;
   --corn-mockup-ground: #fff;
 
   /* Accent */
   --corn-accent: #4f46e5;
   --corn-accent-hover: #6265f1;
-  --corn-accent-text: #8c96f9;
+  --corn-accent-text: #98a1fa;
   --corn-accent-soft: color-mix(in srgb, var(--corn-accent-hover) 20%, transparent);
   --corn-focus: #818cf8;
   --corn-brand-gradient: linear-gradient(135deg, #4299e1 0%, #818cf8 50%, #e53e3e 100%);
@@ -151,7 +151,7 @@
     --corn-hue-orange: #c2410c;
     --corn-hue-fuchsia: #a21caf;
     --corn-hue-pink: #be185d;
-    --corn-hue-lime: #4d7c0f;
+    --corn-hue-lime: #4c7b0f;
     --corn-hue-orange-text: #9a3412;
 
     --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
@@ -200,7 +200,7 @@
   --corn-hue-orange: #c2410c;
   --corn-hue-fuchsia: #a21caf;
   --corn-hue-pink: #be185d;
-  --corn-hue-lime: #4d7c0f;
+  --corn-hue-lime: #4c7b0f;
   --corn-hue-orange-text: #9a3412;
 
   --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 30%, transparent);
