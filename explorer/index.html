@@ -217,24 +217,27 @@
       </div>
     </section>
 
-    <!-- Issues and pull requests (forge-panel.js): a slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge -->
-    <aside id="forge-panel" class="hx-forge glass" aria-label="Issues and pull requests" inert hidden data-corn="forge-panel">
-      <div class="hx-forge-body">
+    <!-- The Work panel (forge-panel.js): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop. A slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) -->
+    <aside id="forge-panel" class="hx-forge glass" aria-label="Work" inert hidden data-corn="work-panel">
+      <div class="hx-forge-body" data-corn="forge-panel">
         <div class="hx-forge-head">
-          <h2 id="forge-title" class="hx-drawer-title" tabindex="-1">Issues and pull requests</h2>
+          <h2 id="forge-title" class="hx-drawer-title" tabindex="-1">Work</h2>
           <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again" data-corn-kind="quiet">Refresh</button>
           <button type="button" class="hx-close" data-action="close-forge" aria-label="Close" data-corn-kind="icon">✕</button>
         </div>
-        <p id="forge-status" class="hx-forge-status hx-faint"></p>
-        <div class="hx-forge-controls">
-          <div class="hx-forge-tabs" role="group" aria-label="Show" data-corn="tabs">
-            <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="true" data-corn="tab" data-corn-string="tabPulls">Pull requests</button>
-            <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false" data-corn="tab" data-corn-string="tabIssues">Issues</button>
-            <button type="button" class="hx-forge-tab" data-forge-kind="threads" aria-pressed="false" title="Ideas and spec conversations, with the nodes they mention" data-corn="tab" data-corn-string="tabThreads">Threads</button>
-            <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false" data-corn="tab" data-corn-string="tabDeploys">Deploys</button>
-            <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Work grouped by issue and proposal, agent-made work marked" data-corn="tab" data-corn-string="tabAgents">Agents</button>
-            <button type="button" class="hx-forge-tab" data-forge-kind="notes" aria-pressed="false" data-corn="tab" data-corn-string="tabNotes">Release notes</button>
-          </div>
+        <div class="hx-forge-tabs" role="group" aria-label="Show" data-corn="tabs">
+          <button type="button" class="hx-forge-tab" data-forge-kind="specs" aria-pressed="true" title="The proposals: what a change would add, change and remove" data-corn="tab"><span data-corn-string="tabSpecs">Specs</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="false" title="Pull requests" data-corn="tab"><span data-corn-string="tabPulls">PRs</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false" data-corn="tab"><span data-corn-string="tabIssues">Issues</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="threads" aria-pressed="false" title="Ideas and spec conversations, with the nodes they mention" data-corn="tab"><span data-corn-string="tabThreads">Threads</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Agent runs, and the work grouped by issue and proposal with agent-made work marked" data-corn="tab"><span data-corn-string="tabRuns">Runs</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false" data-corn="tab"><span data-corn-string="tabDeploys">Deploys</span><span class="hx-forge-count" hidden></span></button>
+        </div>
+        <div id="forge-bar" class="hx-forge-bar">
+          <p id="forge-status" class="hx-forge-status hx-faint"></p>
+          <button type="button" id="forge-filter-chip" class="hx-forge-chip" data-action="toggle-filters" aria-expanded="false" aria-controls="forge-filter-box" hidden>Filter<span class="hx-forge-count" hidden></span></button>
+        </div>
+        <div id="forge-filter-box" class="hx-forge-controls" hidden>
           <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
             <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-agents" /> Agent-made only</label>
             <label class="hx-forge-toggle"><input type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
@@ -248,25 +251,10 @@
         </div>
         <p id="forge-notice" class="hx-forge-notice" hidden data-corn="notice"></p>
         <p id="forge-act-note" class="hx-forge-notice" hidden data-corn="notice"></p>
-        <!-- New idea (forge-panel.js): opens an issue with the threads label as you, on the forge; the thread itself lives there -->
-        <section id="forge-idea" class="hx-forge-notes" aria-label="New idea" data-corn-string-aria-label="newIdea" hidden>
-          <div class="hx-forge-actions">
-            <button type="button" id="idea-open" class="hx-btn hx-btn--approve" data-action="idea-open" aria-expanded="false" aria-controls="idea-form" data-corn-kind="approve"><span data-corn-string="newIdea">New idea</span> …</button>
-          </div>
-          <p id="idea-message" class="hx-forge-msg" role="status" hidden data-corn="message"></p>
-          <div id="idea-form" class="hx-forge-confirm" role="group" aria-labelledby="idea-form-title" hidden>
-            <h3 id="idea-form-title" class="hx-forge-confirm-title" data-corn-string="newIdea">New idea</h3>
-            <p id="idea-words"></p>
-            <label class="hx-forge-field" data-corn="field">Title<input type="text" id="idea-title" class="hx-forge-input" maxlength="256" autocomplete="off" /></label>
-            <label class="hx-forge-field" data-corn="field">What is the idea?<textarea id="idea-body" class="hx-forge-preview hx-thread-compose" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
-            <div class="hx-forge-actions">
-              <button type="button" id="idea-send" class="hx-btn hx-btn--approve" data-action="idea-send" data-corn-kind="approve">Open the idea</button>
-              <button type="button" class="hx-btn hx-btn--quiet" data-action="idea-cancel" data-corn-kind="quiet">Cancel</button>
-            </div>
-          </div>
-        </section>
-        <!-- Release notes (forge-panel.js): the pull requests merged since a tag, grouped by the map; copy them, or have the forge keep them as a draft release -->
+        <!-- Release notes (forge-panel.js), reached from the PRs list: the pull requests merged since a tag, grouped by the map; copy them, or have the forge keep them as a draft release -->
         <section id="forge-notes" class="hx-forge-notes" aria-label="Release notes" hidden>
+          <button type="button" class="hx-forge-back" data-action="close-notes"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">All pull requests</span></button>
+          <h3 id="notes-title" class="hx-forge-notes-title" tabindex="-1">Release notes</h3>
           <label class="hx-forge-field" data-corn="field">Since tag<select id="notes-since" class="hx-forge-select"></select></label>
           <label class="hx-forge-field" data-corn="field">Draft, in Markdown<textarea id="notes-preview" class="hx-forge-preview" rows="14" readonly spellcheck="false"></textarea></label>
           <div class="hx-forge-actions">
@@ -284,7 +272,7 @@
             </div>
           </div>
         </section>
-        <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Agents tab; each run's state, what it is about, links, and Stop -->
+        <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Runs tab; each run's state, what it is about, links, and Stop -->
         <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden>
           <h3 id="forge-runs-title" class="hx-forge-runs-title">Agent runs</h3>
           <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
@@ -297,6 +285,27 @@
         </section>
         <section id="forge-detail" class="hx-forge-detail" aria-label="Selected pull request" hidden></section>
         <ul id="forge-list" class="hx-forge-list" aria-label="Results"></ul>
+        <!-- The foot of the list: Release notes… on the PRs list, New idea on Specs (and Threads) -->
+        <div id="forge-foot" class="hx-forge-foot">
+          <button type="button" id="notes-open" class="hx-btn" data-action="open-notes" hidden>Release notes …</button>
+          <!-- New idea (forge-panel.js): opens an issue with the threads label as you, on the forge; the thread itself lives there -->
+          <section id="forge-idea" class="hx-forge-notes" aria-label="New idea" data-corn-string-aria-label="newIdea" hidden>
+            <div class="hx-forge-actions">
+              <button type="button" id="idea-open" class="hx-btn hx-btn--approve" data-action="idea-open" aria-expanded="false" aria-controls="idea-form" data-corn-kind="approve"><span data-corn-string="newIdea">New idea</span> …</button>
+            </div>
+            <p id="idea-message" class="hx-forge-msg" role="status" hidden data-corn="message"></p>
+            <div id="idea-form" class="hx-forge-confirm" role="group" aria-labelledby="idea-form-title" hidden>
+              <h3 id="idea-form-title" class="hx-forge-confirm-title" data-corn-string="newIdea">New idea</h3>
+              <p id="idea-words"></p>
+              <label class="hx-forge-field" data-corn="field">Title<input type="text" id="idea-title" class="hx-forge-input" maxlength="256" autocomplete="off" /></label>
+              <label class="hx-forge-field" data-corn="field">What is the idea?<textarea id="idea-body" class="hx-forge-preview hx-thread-compose" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
+              <div class="hx-forge-actions">
+                <button type="button" id="idea-send" class="hx-btn hx-btn--approve" data-action="idea-send" data-corn-kind="approve">Open the idea</button>
+                <button type="button" class="hx-btn hx-btn--quiet" data-action="idea-cancel" data-corn-kind="quiet">Cancel</button>
+              </div>
+            </div>
+          </section>
+        </div>
         <p id="forge-rate" class="hx-forge-rate hx-faint"></p>
       </div>
     </aside>

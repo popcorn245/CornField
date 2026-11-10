@@ -136,7 +136,9 @@ describe('the mounted page', () => {
 
   it('has each panel', () => {
     expect(hook('proposal-bar')).toBe(document.getElementById('proposal-bar'));
-    expect(hook('forge-panel')).toBe(document.getElementById('forge-panel'));
+    expect(hook('work-panel')).toBe(document.getElementById('forge-panel'));
+    // `forge-panel` is the old name of the hook, kept for one release (docs/theming.md): it is on the panel's inner box
+    expect(hook('forge-panel')).toBe(document.getElementById('forge-panel').firstElementChild);
     expect(hook('node-panel')).toBe(document.getElementById('spec-drawer'));
     expect(document.getElementById('drawer-badge').getAttribute('data-corn')).toBe('badge');
     expect(hook('mobile-search')).toBe(document.getElementById('mobile-search-bar'));
@@ -144,7 +146,7 @@ describe('the mounted page', () => {
 
   it('has the tabs of the issues panel, one hook each', () => {
     const tabs = [...document.querySelectorAll('#forge-panel [data-corn="tab"]')];
-    expect(tabs.map((t) => t.getAttribute('data-forge-kind'))).toEqual(['pulls', 'issues', 'threads', 'deploys', 'work', 'notes']);
+    expect(tabs.map((t) => t.getAttribute('data-forge-kind'))).toEqual(['specs', 'pulls', 'issues', 'threads', 'work', 'deploys']);
     expect(hook('tabs').contains(tabs[0])).toBe(true);
   });
 

@@ -30,13 +30,13 @@ export const STRINGS = Object.freeze({
   sendBack: 'Send back',
   reviewNoteLabel: 'Note for the drafting agent',
   reviewNotePlaceholder: 'What should change? Needed to send it back, optional to approve.',
-  // The issues and pull requests panel
-  tabPulls: 'Pull requests',
+  // The Work panel: its tabs run in the order of the loop
+  tabSpecs: 'Specs',
+  tabPulls: 'PRs',
   tabIssues: 'Issues',
   tabThreads: 'Threads',
+  tabRuns: 'Runs',
   tabDeploys: 'Deploys',
-  tabAgents: 'Agents',
-  tabNotes: 'Release notes',
   newIdea: 'New idea',
   landIt: 'Land it',
   // Agent runs

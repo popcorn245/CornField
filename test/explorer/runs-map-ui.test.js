@@ -50,7 +50,7 @@ const qa = (sel) => [...document.querySelectorAll(sel)];
 const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0)); };
 const said = async () => { await new Promise((r) => setTimeout(r, 50)); return $('map-announcer').textContent; };
-const openAgents = async () => { openForge(); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
+const openAgents = async () => { openForge({ tab: 'pulls' }); await settle(); click(q('[data-forge-kind="work"]')); await settle(); };
 const run = (id, extra = {}) => ({
   runId: `run-01JC8Z3Q5M7VXK2RT9N4B6HD${id}`, kind: 'code', profile: 'claude', refs: { issue: 7 }, status: 'working', open: true, requestedBy: 'maintainer-one',
   requestedAt: '2026-11-05T11:00:00Z', via: 'dashboard', comment: { id: '9', url: 'https://git.example.test/owner/name/issues/7#issuecomment-9' },

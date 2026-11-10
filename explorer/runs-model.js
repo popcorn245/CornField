@@ -59,6 +59,21 @@ export function runOnThread(runs, number) {
   return [...mine.filter((r) => r.open === true).sort(newest), ...mine.filter((r) => r.open !== true).sort(newest)][0];
 }
 
+/** The run that made a pull request (the one whose pull request it is), an open one before a finished one, then the newest; null when none did */
+export function runOnPull(runs, number) {
+  if (!Array.isArray(runs)) return null;
+  const mine = runs.filter((r) => r.pull && r.pull.number === number);
+  const newest = (a, b) => Date.parse(b.requestedAt || 0) - Date.parse(a.requestedAt || 0);
+  return [...mine.filter((r) => r.open === true).sort(newest), ...mine.filter((r) => r.open !== true).sort(newest)][0] || null;
+}
+
+/** A pull request's run in one line: who is running it, its state, how long ago it was asked for, and the cost the runner reported ("bucket-bot · Working · asked 12 min ago · cost 0.84") */
+export function pullRunWords(run, nowMs) {
+  const who = (run.report && run.report.by) || (run.pull && run.pull.by) || run.requestedBy;
+  const when = relativeTime(run.requestedAt, nowMs);
+  return [who, statusWords(run), when && `asked ${when}`, run.report && run.report.cost != null && `cost ${run.report.cost}`].filter(Boolean).join(' · ');
+}
+
 /** What a thread's row says of its run, in a few words: "Run: Working" (more than one run on it: "Run: Working (+1)") */
 export function threadRunWords(runs, number) {
   const run = runOnThread(runs, number);
