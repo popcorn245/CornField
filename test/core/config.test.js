@@ -37,8 +37,11 @@ describe('configProblems', () => {
 
   it('takes a forge\'s url as an origin only, and its repo as owner/name with no dot segments', () => {
     const url = (u) => configProblems({ forge: { type: 'forgejo', repo: 'o/n', url: u } });
-    for (const u of ['https://github.com', 'https://git.example.test/', 'http://forgejo.local:3000', 'https://[::1]:8443']) expect(url(u), u).toEqual([]);
-    for (const u of ['https://github.com@evil.test', 'https://user:pw@git.example.test', 'https://evil.test\\@github.com', 'https://git.example.test/?x=1', 'https://git.example.test#a', 'https://git.example.test/sub', 'javascript:alert(1)', 'https://-bad.test', 'https://git.example.test:99999x']) expect(url(u), u).toEqual(["forge.url is the forge's origin, like https://github.com."]);
+    for (const u of ['https://github.com', 'https://git.example.test/', 'http://forgejo.local:3000', 'https://[::1]:8443', 'http://localhost:3000', 'http://localhost:3000/', 'https://127.0.0.1:8443', 'https://GHE.Corp.Example:8443/', 'https://xn--gthub-zsa.com', 'https://github.com:443', 'https://[2001:db8::1]']) expect(url(u), u).toEqual([]);
+    for (const u of ['https://github.com@evil.test', 'https://user:pw@git.example.test', 'https://evil.test\\@github.com', 'https://git.example.test/?x=1', 'https://git.example.test#a', 'https://git.example.test/sub', 'javascript:alert(1)', 'https://-bad.test', 'https://git.example.test:99999x',
+      // the URL parser would read these as another host, or not at all; and anything but a string
+      'https://2130706433', 'https://0x7f.1', 'https://127.1', 'https://0177.0.0.1', 'https://[:::]', 'https://[1.2.3.4]', 'https://git.example.test:99999',
+      'https://git.example.test.', 'https://gíthub.com', 'https://git%2eexample.test', 'https://github.com\n', 'https://github.com\r\nX', ' https://github.com', 'HTTPS://github.com', 'https://[fe80::1%25eth0]', new URL('https://github.com'), ['https://github.com']]) expect(url(u), String(u)).toEqual(["forge.url is the forge's origin, like https://github.com."]);
     const repo = (r) => configProblems({ forge: { type: 'github', repo: r } });
     for (const r of ['o/n', 'my-org/my.repo', 'o_1/n-2']) expect(repo(r), r).toEqual([]);
     for (const r of ['../x', 'o/..', './n', 'o/.', '.../n', 'o/n/x', 'o', '']) expect(repo(r), r).toEqual(['forge.repo is "owner/name".']);

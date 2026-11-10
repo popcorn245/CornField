@@ -64,7 +64,7 @@ On GitHub Enterprise Server the steps are the same on your instance; set the con
 2. **Application name:** cornfield. **Redirect URIs:** the public URL with `/auth/callback`.
 3. Keep **Confidential client** on, and create it. Put the client id and the secret in `CORNFIELD_FORGEJO_CLIENT_ID` and `CORNFIELD_FORGEJO_CLIENT_SECRET`.
 
-Set the config's `forge.url` to the instance, like `https://forgejo.example.org` (with its path, when it is served under one).
+Set the config's `forge.url` to the instance's origin, like `https://forgejo.example.org` or `http://localhost:3000` ([config](config.md)). An instance served under a path (`https://example.org/forgejo`) is not one the config takes yet.
 
 ## What it keeps
 

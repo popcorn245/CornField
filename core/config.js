@@ -190,6 +190,20 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 /** A path inside the repo: relative, forward slashes, no `..` segment */
 const inRepo = (p) => isText(p) && !path.isAbsolute(p) && !p.split(/[\\/]/).includes('..');
+/** A forge's origin: http(s), a host name or a bracketed IPv6 address, and a port; no user name, path, query, fragment or backslash */
+const FORGE_ORIGIN = /^https?:\/\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?\/?$/;
+/**
+ * Whether `url` is a forge's origin, and one the URL parser keeps as written: a host it would rewrite to another
+ * (`https://2130706433` and `https://0x7f.1` are 127.0.0.1), an IPv6 address it cannot read, or a port past 65535 is not one
+ */
+const isForgeOrigin = (url) => {
+  const m = typeof url === 'string' ? FORGE_ORIGIN.exec(url) : null;
+  if (!m) return false;
+  try {
+    const u = new URL(url);
+    return m[1].startsWith('[') || u.hostname === m[1].toLowerCase();
+  } catch { return false; }
+};
 
 /**
  * What is wrong with a config object (as the file exports it, before defaults).
@@ -238,8 +252,7 @@ export function configProblems(c) {
     if (!isObject(c.forge)) out.push('"forge" is { type, url, repo }.');
     else {
       if (!FORGE_TYPES.includes(c.forge.type)) out.push(`forge.type is one of ${FORGE_TYPES.join(', ')}.`);
-      // An origin only: a host name, or a bracketed IPv6 address, and a port. No user name, query, fragment or backslash
-      if (c.forge.url !== undefined && !/^https?:\/\/(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?\/?$/.test(String(c.forge.url))) out.push('forge.url is the forge\'s origin, like https://github.com.');
+      if (c.forge.url !== undefined && !isForgeOrigin(c.forge.url)) out.push('forge.url is the forge\'s origin, like https://github.com.');
       const repoParts = String(c.forge.repo || '').split('/');
       if (!/^[\w.-]+\/[\w.-]+$/.test(String(c.forge.repo || '')) || repoParts.some((p) => /^\.+$/.test(p))) out.push('forge.repo is "owner/name".');
       if (c.forge.mergeMethod !== undefined && !MERGE_METHODS.includes(c.forge.mergeMethod)) out.push(`forge.mergeMethod is one of ${MERGE_METHODS.join(', ')}.`);

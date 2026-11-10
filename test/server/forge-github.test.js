@@ -278,6 +278,13 @@ describe('createForge', () => {
     expect(() => createForge(null)).toThrow('No forge is configured');
     expect(() => createForge({ type: 'gitlab', repo: 'o/n' })).toThrow('no adapter for the forge type "gitlab"');
     expect(() => createForge({ type: 'github', repo: 'nope' })).toThrow('forge.repo is "owner/name".');
+    for (const r of ['../x', 'o/..', './n', 'o/.', '.../n']) expect(() => createForge({ type: 'github', repo: r }), r).toThrow('forge.repo is "owner/name".');
+    for (const r of ['o/n', 'o/.github', '.o/n.', 'o/..n']) expect(() => createForge({ type: 'github', repo: r }), r).not.toThrow();
+  });
+
+  it('asks no permission on a repo made only of dots, which would walk out of repos/ in the API\'s path', async () => {
+    const forge = createForge({ type: 'github', repo: 'o/n' }, { fetch: () => { throw new Error('no request'); } });
+    for (const r of ['../x', 'o/..']) await expect(forge.permission(r, 'someone'), r).rejects.toThrow('A repo is "owner/name".');
   });
 });
 
