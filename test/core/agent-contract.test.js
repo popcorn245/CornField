@@ -571,6 +571,7 @@ const GOOD = [
   request({ limits: { minutes: 0.1, turns: 1, cost: 1e-6 } }), request({ limits: { tokens: 1 } }), request({ limits: { minutes: 30, tokens: Number.MAX_SAFE_INTEGER } }), request({ refs: { issue: 2147483647 } }), request({ brief: 'x'.repeat(c.MAX_BRIEF_CHARS) }),
   request({ brief: 'Rotate the token handling in server/auth.js' }), request({ requestedBy: 'x'.repeat(40) }),
   request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'build.opened', by: 'maintainer-one', ref: 'issue:12' } }), request({ trigger: { event: 'thread.message', by: 'maintainer-one', ref: 'comment:9001' } }),
+  request({ retryOf: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG' }),
   ...c.REPORT_STATES.map((state) => ({ state })),
   { state: 'working', note: 'n', url: 'https://ci.example.com/run/1?page=2', tokens: 0, cost: 0 }, { state: 'done', cost: 1.25, tokens: 99 },
   { state: 'stop-requested' }, { state: 'stop-requested', note: 'wrong branch' },
@@ -590,6 +591,7 @@ const BAD = [
   request({ trigger: { event: 'run.finished', by: 'maintainer-one', ref: 'pull:40' } }), request({ trigger: { event: 'spec.ready', by: 'maintainer-one', ref: 'pull:40' } }),
   request({ trigger: { event: 'spec.approved', by: 'a b', ref: 'pull:40' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:x' } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'run:40' } }),
   request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', extra: 1 } }), request({ trigger: { event: 'spec.approved', by: 'maintainer-one', ref: 'pull:40', token: 'x' } }),
+  request({ retryOf: 'run-1' }), request({ retryOf: 7 }), request({ retryOf: '' }), request({ retryOf: 'RUN-01JC8Z3Q5M7VXK2RT9N4B6HDEG' }), request({ retryOf: null }),
   request({ requestedBy: '' }), request({ requestedBy: 'a b' }), request({ requestedBy: 'x'.repeat(41) }), request({ requestedAt: '2026-11-05' }), request({ requestedAt: '2026-11-05T09:30:00+01:00' }),
   ...['token', 'githubToken', 'api_key', 'apiKey', 'secret', 'password', 'credentials', 'authorization', 'cookie', 'private_key'].map((k) => request({ [k]: 'x' })),
   ...['ghp_' + 'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8', 'AKIA' + 'IOSFODNN7EXAMPLE', '-----BEGIN ' + 'PRIVATE KEY-----', 'https://user:' + 'hunter2@example.com/x'].flatMap((s) => [request({ brief: `use ${s}` }), { state: 'done', note: s }]),
@@ -619,6 +621,7 @@ describe('the JSON Schema', () => {
     expect(req.properties.nodes.maxItems).toBe(c.MAX_NODES);
     expect(req.properties.nodes.items.maxLength).toBe(c.MAX_NODE_CHARS);
     expect(req.properties.branch.maxLength).toBe(c.MAX_BRANCH_CHARS);
+    expect(req.properties.retryOf.$ref).toBe('#/$defs/runId');
     expect(req.properties.requestedBy.pattern).toBe(c.LOGIN_SOURCE);
     expect(req.properties.requestedAt.pattern).toBe(c.ISO_SOURCE);
     expect(req.properties.trigger.properties.event.enum).toEqual(c.TRIGGER_EVENTS);
@@ -642,7 +645,7 @@ describe('the JSON Schema', () => {
     expect(SCHEMA.$defs.request.properties.refs.additionalProperties).toBe(false);
     expect(SCHEMA.$defs.request.properties.limits.additionalProperties).toBe(false);
     // The request lists exactly the keys the validator allows
-    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'runId', 'trigger', 'version']);
+    expect(Object.keys(req.properties).sort()).toEqual(['branch', 'brief', 'kind', 'limits', 'nodes', 'profile', 'refs', 'requestedAt', 'requestedBy', 'retryOf', 'runId', 'trigger', 'version']);
     expect(Object.keys(req.properties.refs.properties)).toEqual(['issue', 'proposal', 'pull', 'thread']);
     // What the spec's table does not mark optional is required
     expect(req.required).toEqual(['version', 'runId', 'kind', 'refs', 'brief', 'requestedBy', 'requestedAt']);

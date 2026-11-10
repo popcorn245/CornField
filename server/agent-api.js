@@ -3,7 +3,7 @@
  *
  * The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js).
  *
- *   POST /api/agent-requests             { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }, with `Authorization: Bearer cf_at_…`
+ *   POST /api/agent-requests             { kind, refs, profile?, brief?, branch?, limits?, nodes?, retryOf?, force? }, with `Authorization: Bearer cf_at_…`
  *   GET  /api/agent-requests             the queue, for a runner token: server/runner-api.js (and the pull transport's claim and report routes)
  *   GET  /api/agent-tokens               the signed-in maintainer's agent tokens (and POST, and /<id>/revoke: server/review-api.js)
  *   GET  /api/agent-runs[?follow=1]      the runs, newest first, with the cap and how many are open; `follow=1` looks at the forge first

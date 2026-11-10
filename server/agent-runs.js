@@ -179,7 +179,7 @@ export const NUDGE_FRESH_MS = 10 * 60_000;
 export const MAX_HAND_JUDGED = 50;
 /** The runs that are over once the runner has said so */
 /** The keys of a request as the API and the button send it: the contract's fields, less what cornfield writes, plus `force` */
-export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'force']);
+export const REQUEST_BODY_KEYS = Object.freeze(['kind', 'profile', 'refs', 'branch', 'brief', 'limits', 'nodes', 'requestedBy', 'retryOf', 'force']);
 
 /** The states in which a run is over for good unless the runner says more */
 export const FINISHED = Object.freeze(['done', 'failed', 'stopped', 'merged', 'closed']);
@@ -260,14 +260,15 @@ function answerOf(row) {
 export function publicRun(row, nowMs, quietMs, extra = {}) {
   const { status, open } = statusOf(row, nowMs, quietMs);
   let limits = null;
-  try { limits = JSON.parse(row.request).limits ?? null; } catch { limits = null; }
+  let retryOf = null;
+  try { const asked = JSON.parse(row.request); limits = asked.limits ?? null; retryOf = typeof asked.retryOf === 'string' ? asked.retryOf : null; } catch { limits = null; }
   return {
     runId: row.run_id, kind: row.kind, profile: row.profile,
     refs: { ...(row.issue != null ? { issue: row.issue } : {}), ...(row.proposal != null ? { proposal: row.proposal } : {}), ...(row.thread != null ? { thread: row.thread } : {}) },
     status, open, requestedBy: row.requested_by, requestedAt: row.requested_at, via: row.via, byHand: row.via === 'hand', transport: row.transport, target: row.target,
     claimedAt: row.claimed_at,
     comment: row.comment_id ? { id: row.comment_id, url: row.comment_url } : null,
-    limits,
+    limits, retryOf,
     report: row.reported_at ? { state: row.state, at: row.reported_at, by: byFromText(row.reported_by), note: row.note, url: row.url, tokens: row.tokens, cost: row.cost } : null,
     stopRequested: row.stop_requested_at ? { at: row.stop_requested_at, by: row.stop_requested_by } : null,
     answer: answerOf(row),
@@ -283,10 +284,13 @@ export function publicRun(row, nowMs, quietMs, extra = {}) {
  * @param {{ at: string, kind: string, actor: string | null, ref: string | null, note: string | null, url: string | null }[]} events
  * @param {{ status: string }} now `statusOf`'s answer
  * @param {number} quietMs
+ * @param {{ retryOf?: string | null, retriedBy?: { runId: string, at: string }[] }} [links] the run this one starts again, and the runs that start it again
  */
-export function timelineOf(row, events, now, quietMs) {
+export function timelineOf(row, events, now, quietMs, links = {}) {
   const out = [{ at: row.requested_at, kind: 'requested', actor: row.requested_by, ref: row.profile, note: null, url: row.comment_url }];
-  out.push(...events.map((e) => ({ ...e, actor: byFromText(e.actor) })));
+  if (links.retryOf) out.push({ at: row.requested_at, kind: 'retry-of', actor: null, ref: links.retryOf, note: null, url: null });
+  const later = (links.retriedBy ?? []).map((r) => ({ at: r.at, kind: 'retried-by', actor: null, ref: r.runId, note: null, url: null }));
+  out.push(...[...events.map((e) => ({ ...e, actor: byFromText(e.actor) })), ...later].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)));
   if (now.status === 'quiet') out.push({ at: iso(Date.parse(row.last_activity) + quietMs), kind: 'quiet', actor: null, ref: null, note: null, url: null });
   return out;
 }
@@ -427,6 +431,12 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       const ask = db.prepare('SELECT at, kind, actor, ref, note, url FROM run_events WHERE run_id = ? ORDER BY at, rowid LIMIT ?');
       for (const r of rows) events.set(r.run_id, ask.all(r.run_id, TIMELINE_LIMIT));
     }
+    // The runs that start these again: found by the id their request names
+    const retried = new Map();
+    if (rows.length) {
+      const again = /** @type {{ run_id: string, requested_at: string, again: string }[]} */ (db.prepare(`SELECT run_id, requested_at, json_extract(request, '$.retryOf') AS again FROM runs WHERE repo = ? AND ${POSTED} AND json_extract(request, '$.retryOf') IN (${rows.map(() => '?').join(',')}) ORDER BY requested_at, run_id`).all(repo, ...rows.map((r) => r.run_id)));
+      for (const a of again) retried.set(a.again, [...(retried.get(a.again) ?? []), { runId: a.run_id, at: a.requested_at }]);
+    }
     const mirrors = new Map(rows.length ? /** @type {{ run_id: string, comment_url: string | null, gone: number }[]} */ (db.prepare(`SELECT run_id, comment_url, gone FROM run_mirrors WHERE run_id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.run_id))).map((m) => [m.run_id, m]) : []);
     return new Map(rows.map((r) => {
       const mine = nodesOf.get(r.run_id);
@@ -435,8 +445,11 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         ? open.filter((o) => o.run_id !== r.run_id && nodesOf.get(o.run_id).nodes.some((id) => mine.nodes.includes(id))).map((o) => o.run_id)
         : [];
       let brief = '';
-      try { brief = String(JSON.parse(r.request).brief ?? '').slice(0, BRIEF_SHOWN); } catch { brief = ''; }
-      return [r.run_id, { brief, nodes: mine.nodes, nodesFrom: mine.from, collidesWith, timeline: timelineOf(r, events.get(r.run_id) ?? [], statusOf(r, at, quietMs), quietMs),
+      let briefCut = false;
+      let retryOf = null;
+      try { const asked = JSON.parse(r.request); const whole = String(asked.brief ?? ''); brief = whole.slice(0, BRIEF_SHOWN); briefCut = whole.length > BRIEF_SHOWN; retryOf = typeof asked.retryOf === 'string' ? asked.retryOf : null; } catch { brief = ''; }
+      const retriedBy = retried.get(r.run_id) ?? [];
+      return [r.run_id, { brief, briefCut, retriedBy: retriedBy.map((x) => x.runId), nodes: mine.nodes, nodesFrom: mine.from, collidesWith, timeline: timelineOf(r, events.get(r.run_id) ?? [], statusOf(r, at, quietMs), quietMs, { retryOf, retriedBy }),
         thread: { number: r.target, mirror: kept && kept.comment_url && kept.gone === 0 ? { url: kept.comment_url } : null } }];
     }));
   }
@@ -562,6 +575,16 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     }
   }
 
+  /** A request that starts again names a run of this repo that is over without having done its work: `failed` or `stopped`. Throws a `Refused` otherwise */
+  function retryProblem(db, runId) {
+    const row = /** @type {RunRow | undefined} */ (db.prepare(`SELECT * FROM runs WHERE run_id = ? AND repo = ? AND ${POSTED}`).get(runId, repo));
+    if (!row) throw new Refused(404, `"retryOf" names ${runId}, which is not a run of ${repo}.`, 'not-found');
+    const { status, open } = statusOf(row, now(), quietMs);
+    if (open) throw new Refused(409, `"retryOf" names ${runId}, which is still open (${status}). Only a run that failed or was stopped is started again; stop it first, or wait.`, 'retry-open');
+    if (status !== 'failed' && status !== 'stopped') throw new Refused(409, `"retryOf" names ${runId}, which ${status === 'quiet' ? 'went quiet' : `ended as ${status}`}. Only a run that failed or was stopped is started again.`, 'retry-not-over');
+    return row;
+  }
+
   /** What a request's audit row says: the shape of what was asked and never its words (a brief may be long, and may be anything) */
   function askedOf(body, via) {
     const out = /** @type {Record<string, unknown>} */ ({});
@@ -579,6 +602,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
       out.refs = refs;
     }
     if (typeof body.brief === 'string') out.briefChars = body.brief.length;
+    if (typeof body.retryOf === 'string' && isRunId(body.retryOf)) out.retryOf = body.retryOf;
     if (body.force === true) out.force = true;
     if (transport !== 'forge') out.transport = transport;
     if (via) Object.assign(out, { via: 'api', token: via.token });
@@ -604,7 +628,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     let runId = null;
     try {
       if (problem) throw new Refused(problem.status, problem.message, 'invalid');
-      if (!isObject(body)) throw new Refused(400, `A request is a JSON object: { kind, refs, profile?, brief?, branch?, limits?, nodes?, force? }.`, 'invalid');
+      if (!isObject(body)) throw new Refused(400, `A request is a JSON object: { kind, refs, profile?, brief?, branch?, limits?, nodes?, retryOf?, force? }.`, 'invalid');
       const { force, requestedBy, trigger: forged, ...fields } = body;
       // What caused a request is cornfield's to write, from a trigger's own call; a caller cannot say it was a trigger
       if (forged !== undefined) throw new Refused(400, '"trigger" is written by cornfield for an automatic request; leave it out.', 'invalid');
@@ -691,6 +715,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         }
       }
       const db = await auth.store();
+      if (made.retryOf !== undefined) retryProblem(db, made.retryOf);
       reserve(db, made, { target: number, who, via, force: force === true, trigger: Boolean(made.trigger), derived });
       // What was read is what the map marks for this run until it pushes: kept, so the overlay has it now and the poll need not read it again
       if (derived) db.prepare('INSERT OR REPLACE INTO run_reads (run_id, source, sha, data, at) VALUES (?, ?, ?, ?, ?)').run(made.runId, 'mentions', '', JSON.stringify(derived), iso(now()));

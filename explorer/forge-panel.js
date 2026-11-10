@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, canRetry, retryRefs, retryWords, limitsFromFields, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -1052,6 +1052,7 @@ function findAgain(el) {
   if (el.dataset.forgeRerun) return `[data-forge-rerun="${el.dataset.forgeRerun}"]`;
   if (el.dataset.forgeAgent) return `[data-forge-agent="${el.dataset.forgeAgent}"]`;
   if (el.dataset.forgeStop) return `[data-forge-stop="${el.dataset.forgeStop}"]`;
+  if (el.dataset.forgeRetry) return `[data-forge-retry="${el.dataset.forgeRetry}"]`;
   if (el.dataset.runReply) return `[data-run-reply="${el.dataset.runReply}"]`;
   if (el.dataset.runAnswer) return `[data-run-answer="${el.dataset.runAnswer}"][data-run-id="${el.dataset.runId}"]`;
   if (el.dataset.runSelect) return `[data-run-select="${el.dataset.runSelect}"]`;
@@ -1451,25 +1452,39 @@ function keepFocusInAgent(e) {
   if (ui.agent && el && !el.contains(e.target)) $('agent-kind').focus();
 }
 
-/** Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field */
-async function openAgent(ref, opener) {
+/**
+ * Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field. With `again` (a run that failed or was
+ * stopped) it is **Start again**: the same kind, refs, profile, brief and limits filled in, all editable, and the request will carry `retryOf`.
+ */
+async function openAgent(ref, opener, again = null) {
   if (!agentEl() || ui.agent) return;
   const at = ref.indexOf(':');
   const type = ref.slice(0, at);
   const value = ref.slice(at + 1);
-  const refs = type === 'proposal' ? { proposal: value } : { issue: Number(value) };
-  ui.agent = { opener, refs, posting: false };
+  const refs = again ? retryRefs(again) : type === 'proposal' ? { proposal: value } : { issue: Number(value) };
+  ui.agent = { opener, refs, posting: false, retryOf: again ? again.runId : null };
   // The profiles the config lists come with the runs: asked for if the Agents tab has not been opened yet
   if (!ui.runs) { await loadRuns(false); if (ui.kind === 'work') paint(); }
   if (!ui.agent) return;
   const profiles = (ui.runs && ui.runs.data && ui.runs.data.profiles) || [];
   $('agent-start-about').textContent = `About ${aboutWords(refs)}`;
   paintRunner('agent-start-runner', ui.runs && ui.runs.data);
-  $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === 'code')).join('');
-  $('agent-profile').innerHTML = option('', 'No profile', true) + profiles.map((p) => option(p, p, false)).join('');
-  $('agent-profile-field').hidden = !profiles.length;
+  const kind = again ? again.kind : 'code';
+  // The old run's profile stays on offer even if the config no longer lists it: the server then says so, in its words
+  const shown = again && again.profile && !profiles.includes(again.profile) ? [...profiles, again.profile] : profiles;
+  $('agent-kind').innerHTML = KINDS.map(([v, l]) => option(v, l, v === kind)).join('');
+  $('agent-profile').innerHTML = option('', 'No profile', !(again && again.profile)) + shown.map((p) => option(p, p, !!again && p === again.profile)).join('');
+  $('agent-profile-field').hidden = !shown.length;
+  $('agent-profile').value = again && again.profile ? again.profile : ''; // as well as `selected`, which not every DOM honours
+  $('agent-start-title').textContent = again ? 'Start again' : 'Start an agent';
+  const note = $('agent-retry-note');
+  note.hidden = !again;
+  note.textContent = again ? retryWords(again) : '';
+  const edit = $('agent-limits-edit');
+  edit.hidden = !again;
+  for (const k of ['minutes', 'turns', 'cost', 'tokens']) $(`agent-limit-${k}`).value = again && again.limits && again.limits[k] != null ? String(again.limits[k]) : '';
   paintLimits();
-  $('agent-brief').value = '';
+  $('agent-brief').value = again && typeof again.brief === 'string' ? again.brief : '';
   $('agent-force').checked = false;
   $('agent-force-field').hidden = true;
   $('agent-start-msg').hidden = true;
@@ -1482,13 +1497,30 @@ async function openAgent(ref, opener) {
   document.addEventListener('focusin', keepFocusInAgent);
   agentEl().hidden = false;
   $('agent-kind').focus();
-  announce(`Start an agent on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+  announce(`${again ? 'Start again' : 'Start an agent'} on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
+}
+
+/** "Start again" on a run that failed or was stopped */
+function startAgain(runId) {
+  const run = ui.runs && ui.runs.data ? ui.runs.data.runs.find((r) => r.runId === runId) : null;
+  if (!run || !canRetry(run)) return;
+  const about = run.refs.proposal != null ? `proposal:${run.refs.proposal}` : `issue:${run.refs.issue ?? run.refs.thread}`;
+  openAgent(about, `[data-forge-retry="${runId}"]`, run);
+}
+
+/** Takes the person to another run of the list: the row scrolls into view and has the focus */
+function goToRun(runId) {
+  const row = [...document.querySelectorAll('#forge-runs-list [data-run]')].find((r) => r.dataset.run === runId);
+  if (!row) return;
+  if (row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  row.focus();
 }
 
 /** The limits the request will carry for the chosen profile, read-only under the select; the server fills them in */
 function paintLimits() {
   const el = $('agent-limits');
   if (!el) return;
+  if (ui.agent && ui.agent.retryOf) { el.hidden = true; return; } // the fields below hold the limits
   const words = limitsWords(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
   el.hidden = !words;
   el.textContent = words;
@@ -1517,8 +1549,22 @@ async function submitAgent(e) {
   go.setAttribute('aria-busy', 'true');
   go.textContent = 'Asking …';
   $('agent-start-msg').hidden = true;
+  const again = ui.agent.retryOf;
+  const limits = again ? limitsFromFields({ minutes: $('agent-limit-minutes').value, turns: $('agent-limit-turns').value, cost: $('agent-limit-cost').value, tokens: $('agent-limit-tokens').value }) : undefined;
+  if (limits === null) {
+    ui.agent.posting = false;
+    go.disabled = false;
+    go.removeAttribute('aria-busy');
+    go.textContent = 'Ask the runner';
+    const bad = $('agent-start-msg');
+    bad.textContent = 'A limit is a number above zero (or leave it blank).';
+    bad.hidden = false;
+    announce(bad.textContent);
+    return;
+  }
   const res = await post(RUNS_URL, startBody({
     kind: $('agent-kind').value, profile: $('agent-profile-field').hidden ? '' : $('agent-profile').value, brief: $('agent-brief').value, refs: ui.agent.refs, force: $('agent-force').checked,
+    ...(again ? { limits, retryOf: again } : {}),
   }));
   if (!ui.agent) return;
   ui.agent.posting = false;
@@ -1740,6 +1786,10 @@ function onClick(e) {
   if (agent) { openAgent(agent.dataset.forgeAgent, `[data-forge-agent="${agent.dataset.forgeAgent}"]`); return; }
   const stop = t.closest('[data-forge-stop]');
   if (stop) { stopRun(stop.dataset.forgeStop); return; }
+  const retry = t.closest('[data-forge-retry]');
+  if (retry) { startAgain(retry.dataset.forgeRetry); return; }
+  const goto = t.closest('[data-run-goto]');
+  if (goto) { goToRun(goto.dataset.runGoto); return; }
   const answer = t.closest('[data-run-answer]');
   if (answer) { answerRun(answer.dataset.runId, answer.dataset.runAnswer); return; }
   const pick = t.closest('[data-run-select]');

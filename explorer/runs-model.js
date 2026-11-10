@@ -202,11 +202,14 @@ export function runnerWords(presence, nowMs) {
 
 /**
  * The body of a start. Only what the person chose; the server writes the run id, the time and who asked, and checks the rest.
- * @param {{ kind: string, profile?: string, brief?: string, refs: object, force?: boolean }} input
+ * @param {{ kind: string, profile?: string, brief?: string, refs: object, force?: boolean, limits?: object, retryOf?: string }} input `limits` and
+ *   `retryOf` only come with Start again
  */
-export function startBody({ kind, profile, brief, refs, force }) {
+export function startBody({ kind, profile, brief, refs, force, limits, retryOf }) {
   const out = { kind, refs, brief: (brief || '').trim() };
   if (profile) out.profile = profile;
+  if (limits && Object.keys(limits).length) out.limits = limits;
+  if (retryOf) out.retryOf = retryOf;
   if (force) out.force = true;
   return out;
 }
@@ -225,6 +228,34 @@ export function limitsWords(limits, profile) {
   const own = profile && !names.includes(profile) && limits[profile] && typeof limits[profile] === 'object' ? limits[profile] : {};
   const said = LIMIT_WORDS.map(([k, say]) => { const n = own[k] ?? limits[k]; return typeof n === 'number' ? say(n) : ''; }).filter(Boolean);
   return said.length ? `Limits it will carry (hints for the runner): ${said.join(', ')}.` : 'It will carry no limits.';
+}
+
+/** Start again is offered on a run that failed (a runner's refusal is a `failed` report too) or was stopped, and on nothing else */
+export const canRetry = (run) => run.status === 'failed' || run.status === 'stopped';
+
+/** The refs a run is started again on: the subject it had (the spec pull request of a proposal is found again by the server) */
+export function retryRefs(run) {
+  const refs = {};
+  for (const k of ['issue', 'thread', 'proposal']) if (run.refs && run.refs[k] != null) refs[k] = run.refs[k];
+  return refs;
+}
+
+/** The four limits as the dialog's fields hold them (text), to the object a request carries: blanks are left out, and `null` when a field is not a number above zero */
+export function limitsFromFields(fields) {
+  const out = {};
+  for (const k of ['minutes', 'turns', 'cost', 'tokens']) {
+    const text = String(fields[k] ?? '').trim();
+    if (text === '') continue;
+    const n = Number(text);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    out[k] = n;
+  }
+  return out;
+}
+
+/** The line under the dialog's title when it starts a run again */
+export function retryWords(run) {
+  return `Starts again on ${run.runId}${run.briefCut ? '. Its brief was longer than 2000 characters and is shown cut: check it' : ''}.`;
 }
 
 /** What a start came to, in words */
@@ -324,6 +355,8 @@ export function timelineWords(entry) {
   const by = who ? ` by ${who}` : '';
   switch (entry.kind) {
     case 'requested': return { what: `Requested${by}${entry.ref ? ` under the profile ${entry.ref}` : ''}`, note: '' };
+    case 'retry-of': return { what: `Starts again on ${entry.ref || 'an earlier run'}`, note: '' };
+    case 'retried-by': return { what: `Started again as ${entry.ref || 'a new run'}`, note: '' };
     case 'claimed': return { what: `Claimed${by}`, note: entry.note || '' };
     case 'report': return { what: `Reported ${entry.ref || 'in'}${by}`, note: entry.note || '' };
     // When cornfield saw it, not when it was pushed: the forge does not say

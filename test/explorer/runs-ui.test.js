@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, limitsWords, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, canRetry, retryRefs, retryWords, limitsFromFields, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, limitsWords, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -633,5 +633,180 @@ describe('whether a runner is online (issue #99)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+const FAILED = { ...RUN, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF1', status: 'failed', open: false, kind: 'summary', profile: 'local-qwen', refs: { issue: 7 }, brief: 'Summarise <b>this</b>.', limits: { minutes: 30, cost: 2.5 }, pull: null, checks: null, report: { state: 'failed', at: '2026-11-05T11:30:00Z', by: 'runner-bot', note: 'unknown profile', url: null, tokens: null, cost: null }, retryOf: null, retriedBy: [] };
+const STOPPED = { ...FAILED, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF2', status: 'stopped', kind: 'code', profile: null, refs: { proposal: '0040-meals' }, brief: 'x'.repeat(2000), briefCut: true, limits: null };
+const DONE = { ...FAILED, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF3', status: 'done', refs: { issue: 5 } };
+
+describe('Start again', () => {
+  it('words it: only failed and stopped runs can, with their own refs, limits as numbers, and a note that says a cut brief', () => {
+    document.body.innerHTML = body;
+    expect([FAILED, STOPPED, DONE, RUN, QUIET, WAITING].map(canRetry)).toEqual([true, true, false, false, false, false]);
+    expect(retryRefs({ refs: { issue: 7, thread: 8, pull: 3 } })).toEqual({ issue: 7, thread: 8 });
+    expect(retryWords(FAILED)).toBe(`Starts again on ${FAILED.runId}.`);
+    expect(retryWords(STOPPED)).toMatch(/longer than 2000 characters and is shown cut/);
+    expect(limitsFromFields({ minutes: '30', turns: '', cost: ' 2.5 ', tokens: '' })).toEqual({ minutes: 30, cost: 2.5 });
+    expect(limitsFromFields({ minutes: '0' })).toBeNull();
+    expect(limitsFromFields({ turns: 'x' })).toBeNull();
+    expect(startBody({ kind: 'code', refs: { issue: 1 }, brief: '', limits: {}, retryOf: 'run-1' })).toEqual({ kind: 'code', refs: { issue: 1 }, brief: '', retryOf: 'run-1' });
+    expect(timelineWords({ kind: 'retry-of', ref: 'run-A' }).what).toBe('Starts again on run-A');
+    expect(timelineWords({ kind: 'retried-by', ref: 'run-B' }).what).toBe('Started again as run-B');
+  });
+
+  it('is a button on failed and stopped runs only', async () => {
+    fakeServer({ runs: [FAILED, STOPPED, DONE, RUN, QUIET, WAITING] });
+    mount();
+    await openAgents();
+    expect(qa('[data-forge-retry]').map((b) => b.dataset.forgeRetry).sort()).toEqual([FAILED.runId, STOPPED.runId]);
+    expect(q(`[data-forge-retry="${FAILED.runId}"]`).textContent).toBe('Start again');
+  });
+
+  it('opens the Start dialog prefilled with the kind, profile, brief and limits, all editable, and posts retryOf', async () => {
+    const server = fakeServer({ runs: [FAILED, STOPPED] });
+    mount();
+    await openAgents();
+    click(q(`[data-forge-retry="${FAILED.runId}"]`));
+    await settle();
+    expect($('agent-start').hidden).toBe(false);
+    expect($('agent-start-title').textContent).toBe('Start again');
+    expect($('agent-start-about').textContent).toBe('About issue #7');
+    expect($('agent-retry-note').hidden).toBe(false);
+    expect($('agent-retry-note').textContent).toBe(`Starts again on ${FAILED.runId}.`);
+    expect($('agent-kind').value).toBe('summary');
+    expect($('agent-profile').value).toBe('local-qwen');
+    expect($('agent-brief').value).toBe('Summarise <b>this</b>.');
+    expect($('agent-limits-edit').hidden).toBe(false);
+    expect([$('agent-limit-minutes').value, $('agent-limit-turns').value, $('agent-limit-cost').value, $('agent-limit-tokens').value]).toEqual(['30', '', '2.5', '']);
+    // editable
+    $('agent-brief').value = 'Summarise it differently.';
+    $('agent-limit-minutes').value = '45';
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    const post = server.posts().find((c) => new URL(c.url, 'http://x').pathname === '/api/agent-runs');
+    expect(JSON.parse(post.init.body)).toEqual({ kind: 'summary', profile: 'local-qwen', refs: { issue: 7 }, brief: 'Summarise it differently.', limits: { minutes: 45, cost: 2.5 }, retryOf: FAILED.runId });
+    expect($('agent-start').hidden).toBe(true);
+    expect(document.activeElement).toBe(q(`[data-forge-retry="${FAILED.runId}"]`));
+  });
+
+  it('prefills a proposal run, says a cut brief, and a plain Start an agent afterwards is clean again', async () => {
+    const server = fakeServer({ runs: [STOPPED], profiles: ['claude'] });
+    mount();
+    await openAgents();
+    click(q(`[data-forge-retry="${STOPPED.runId}"]`));
+    await settle();
+    expect($('agent-start-about').textContent).toBe('About proposal 0040-meals');
+    expect($('agent-kind').value).toBe('code');
+    expect($('agent-profile').value).toBe('');
+    expect($('agent-retry-note').textContent).toMatch(/shown cut/);
+    click(q('[data-action="agent-start-cancel"]'));
+    await settle();
+    click(q('[data-forge-agent="proposal:0040-meals"]'));
+    await settle();
+    expect($('agent-start-title').textContent).toBe('Start an agent');
+    expect($('agent-retry-note').hidden).toBe(true);
+    expect($('agent-limits-edit').hidden).toBe(true);
+    expect($('agent-brief').value).toBe('');
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect(JSON.parse(server.posts().at(-1).init.body)).not.toHaveProperty('retryOf');
+  });
+
+  it('keeps an old profile the config no longer lists, so the server says so', async () => {
+    const server = fakeServer({ runs: [FAILED], profiles: ['claude'], start: { status: 400, body: { ok: false, code: 'invalid', error: '"profile" "local-qwen" is not one of the configured profiles (claude).' } } });
+    mount();
+    await openAgents();
+    click(q(`[data-forge-retry="${FAILED.runId}"]`));
+    await settle();
+    expect($('agent-profile').value).toBe('local-qwen');
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect($('agent-start-msg').textContent).toMatch(/not one of the configured profiles/);
+    expect(server.posts()).toHaveLength(1);
+  });
+
+  it('says the cap, the open-run and the bad-retryOf refusals in the server\'s words and offers force only for run-open', async () => {
+    for (const [code, error, force] of [['cap-reached', 'owner/name already has 3 open runs.', true], ['run-open', 'issue #7 already has an open run.', false], ['retry-open', '"retryOf" names run-X, which is still open (working).', true], ['not-found', '"retryOf" names run-X, which is not a run of owner/name.', true]]) {
+      fakeServer({ runs: [FAILED], start: { status: 409, body: { ok: false, code, error } } });
+      mount();
+      await openAgents();
+      click(q(`[data-forge-retry="${FAILED.runId}"]`));
+      await settle();
+      q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await settle();
+      expect($('agent-start-msg').textContent).toBe(error);
+      expect($('agent-force-field').hidden).toBe(force);
+      expect($('agent-start').hidden).toBe(false);
+      closeForge({ restoreFocus: false });
+    }
+  });
+
+  it('does not post a limit that is not a number above zero', async () => {
+    const server = fakeServer({ runs: [FAILED] });
+    mount();
+    await openAgents();
+    click(q(`[data-forge-retry="${FAILED.runId}"]`));
+    await settle();
+    $('agent-limit-turns').value = '0';
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect($('agent-start-msg').textContent).toMatch(/number above zero/);
+    expect(server.posts()).toHaveLength(0);
+  });
+});
+
+describe('the Runs view links a run to the one it retries', () => {
+  const OLD = { ...FAILED, retriedBy: ['run-01JC8Z3Q5M7VXK2RT9N4B6HDF9'], timeline: [{ at: '2026-11-05T11:00:00Z', kind: 'requested', actor: 'maintainer-one', ref: null, note: null, url: null }, { at: '2026-11-05T11:50:00Z', kind: 'retried-by', actor: null, ref: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF9', note: null, url: null }] };
+  const NEW = { ...RUN, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF9', retryOf: FAILED.runId, retriedBy: [], timeline: [{ at: '2026-11-05T11:50:00Z', kind: 'requested', actor: 'maintainer-one', ref: null, note: null, url: null }, { at: '2026-11-05T11:50:00Z', kind: 'retry-of', actor: null, ref: FAILED.runId, note: null, url: null }] };
+
+  it('shows both ways, with a button that goes to the other run, and in the timeline', async () => {
+    fakeServer({ runs: [NEW, OLD] });
+    mount();
+    await openAgents();
+    const newRow = q(`[data-run="${NEW.runId}"]`);
+    const oldRow = q(`[data-run="${OLD.runId}"]`);
+    expect(newRow.textContent).toContain(`Starts again on ${FAILED.runId}`);
+    expect(oldRow.textContent).toContain(`Started again as ${NEW.runId}`);
+    click(newRow.querySelector('[data-run-goto]'));
+    expect(document.activeElement).toBe(oldRow);
+    click(oldRow.querySelector('[data-run-goto]'));
+    expect(document.activeElement).toBe(newRow);
+    click(newRow.querySelector('[data-run-timeline]'));
+    await settle();
+    const tl = q(`#run-tl-${NEW.runId}`);
+    expect(tl.textContent).toContain(`Starts again on ${FAILED.runId}`);
+    expect(tl.querySelector(`[data-run-goto="${FAILED.runId}"]`)).not.toBeNull();
+  });
+
+  it('names a run that is not in the list as text, with no button', async () => {
+    fakeServer({ runs: [NEW] });
+    mount();
+    await openAgents();
+    expect(q(`[data-run="${NEW.runId}"]`).textContent).toContain(`Starts again on ${FAILED.runId}`);
+    expect(q('[data-run-goto]')).toBeNull();
+  });
+});
+
+describe.each(['dark', 'light'])('accessibility, %s theme, Start again', (theme) => {
+  it('passes axe with Start again listed, the dialog open and prefilled, a refusal showing, and the links', async () => {
+    document.documentElement.dataset.theme = theme;
+    const NEW = { ...RUN, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF9', refs: { issue: 11 }, retryOf: FAILED.runId, retriedBy: [], timeline: [{ at: '2026-11-05T11:50:00Z', kind: 'retry-of', actor: null, ref: FAILED.runId, note: null, url: null }] };
+    fakeServer({ runs: [NEW, { ...FAILED, retriedBy: [NEW.runId] }, STOPPED], start: { status: 409, body: { ok: false, code: 'cap-reached', error: 'owner/name already has 3 open runs.' } } });
+    mount();
+    document.documentElement.dataset.theme = theme;
+    await openAgents();
+    click(q(`[data-run="${NEW.runId}"] [data-run-timeline]`));
+    await settle();
+    expect(await audit()).toEqual([]);
+    click(q(`[data-forge-retry="${FAILED.runId}"]`));
+    await settle();
+    expect($('agent-limits-edit').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect($('agent-start-msg').hidden).toBe(false);
+    expect(await audit()).toEqual([]);
+    delete document.documentElement.dataset.theme;
   });
 });

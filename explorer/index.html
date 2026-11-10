@@ -365,10 +365,17 @@
       <h2 id="agent-start-title" class="hx-confirm-title">Start an agent</h2>
       <p id="agent-start-about" class="hx-forge-meta"></p>
       <p id="agent-start-runner" class="hx-forge-meta" hidden></p>
+      <p id="agent-retry-note" class="hx-forge-meta" hidden></p>
       <form id="agent-start-form" class="hx-forge-confirm" novalidate>
       <label class="hx-forge-field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
       <label id="agent-profile-field" class="hx-forge-field" hidden>Profile<select id="agent-profile" class="hx-forge-select"></select></label>
       <p id="agent-limits" class="hx-forge-meta" hidden></p>
+      <fieldset id="agent-limits-edit" class="hx-forge-field" hidden><legend>Limits (hints for the runner; blank for none)</legend>
+        <label>Minutes <input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" /></label>
+        <label>Turns <input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" /></label>
+        <label>Cost <input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" /></label>
+        <label>Tokens <input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" /></label>
+      </fieldset>
       <label class="hx-forge-field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
       <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
       <p id="agent-start-words" class="hx-confirm-note"></p>
