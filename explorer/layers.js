@@ -75,7 +75,7 @@ export function renderLayerToggles() {
     const on = state.activeLayers[layer.key] !== false;
     const color = themed(layer.color, state.theme); // the dot is the colour the map draws on this ground
     return `
-      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}">
+      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}" data-corn="row">
         <span class="hx-toggle-label">
           <span class="hx-dot" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
           <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}

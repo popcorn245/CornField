@@ -125,20 +125,24 @@ function mount() {
   if (!stage || (els && els.stage === stage && stage.contains(els.under))) return;
   const under = document.createElement('div');
   under.className = 'hx-house-under';
+  under.dataset.corn = 'house-under';
   under.setAttribute('aria-hidden', 'true');
   under.inert = true;
   under.hidden = true;
   const map = document.createElement(hook && hook.element ? hook.element : 'div');
   map.className = 'hx-house-plan';
+  map.dataset.corn = 'house-plan';
   under.appendChild(map);
   stage.insertBefore(under, stage.firstChild);
 
   const over = document.createElement('div');
   over.className = 'hx-house-over';
+  over.dataset.corn = 'house-over';
   over.hidden = true;
 
   const bar = document.createElement('div');
   bar.className = 'hx-house-bar';
+  bar.dataset.corn = 'house-bar';
   bar.hidden = true;
   bar.innerHTML = '<div class="hx-house-floors glass" role="group" aria-label="Floor"></div><div class="hx-house-people" role="group" aria-label="People"></div>';
   stage.appendChild(over);

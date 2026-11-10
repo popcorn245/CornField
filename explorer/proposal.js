@@ -282,10 +282,10 @@ function renderChanges() {
   const rows = [];
   for (const mark of [...MARKS, 'edit']) {
     for (const n of state.nodes.filter((x) => x.mark === mark)) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
     }
     for (const e of state.edges.filter((x) => x.mark === mark && said.has(edgeKey(x)))) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
     }
   }
   list.innerHTML = rows.join('') || '<p class="hx-faint">This proposal changes nothing on the map.</p>';
@@ -350,13 +350,13 @@ export function proposalRowHtml(entry, current) {
   const meta = [`<span class="hx-proposal-where">${escHtml(where(entry))}</span>`];
   if (entry.spec) meta.push(`<span>spec ${escHtml(entry.spec)}</span>`);
   if (entry.error) {
-    return `<div class="hx-proposal-item is-broken">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
+    return `<div class="hx-proposal-item is-broken" data-corn="row">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
   }
   if (entry.counts) meta.push(`<span>${escHtml(chipText(entry.counts))}</span>`);
   const reviewed = reviewWords(entry.review, Date.now()); // "Approved 3 minutes ago", from the listing
   if (reviewed) meta.push(`<span class="hx-proposal-reviewed">${escHtml(reviewed)}</span>`);
   if (entry.errors) meta.push(`<span class="hx-warn">${escHtml(plural(entry.errors, 'problem'))}</span>`);
-  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
+  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" data-corn="row">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
 }
 
 function renderMenu(loading = false) {

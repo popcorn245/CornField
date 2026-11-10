@@ -444,7 +444,7 @@ export function createLiveRunner({ source, groups, wanted, visible = () => true,
 export function liveDetailsHtml(node, live, esc) {
   if (!node) return '';
   const answer = live && live.answer;
-  const sec = (title, body) => `<div class="hx-sec hx-live-sec"><strong class="hx-strong">${title}</strong>${body}</div>`;
+  const sec = (title, body) => `<div class="hx-sec hx-live-sec" data-corn="section"><strong class="hx-strong">${title}</strong>${body}</div>`;
   const when = answer ? `<div class="hx-faint">Live · ${esc(clockOf(answer.at))}</div>` : '';
 
   if (node.type === 'persona') {

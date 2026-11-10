@@ -227,6 +227,7 @@ function mount() {
     root = document.createElement('div');
     root.id = 'whatif';
     root.className = 'hx-whatif';
+    root.dataset.corn = 'whatif';
     root.setAttribute('aria-label', 'Try a change');
     root.innerHTML = `
       <div class="hx-whatif-row" role="toolbar" aria-label="Try a change">
@@ -238,8 +239,8 @@ function mount() {
         <button type="button" class="hx-btn" data-whatif="steps" aria-expanded="false" title="Add, reword, reorder or delete the steps of a scenario">Steps</button>
       </div>
       <p class="hx-whatif-hint" data-hint hidden>Drag from one node to another. Escape cancels.</p>
-      <p class="hx-whatif-msg" data-msg="toolbar" role="status" hidden></p>
-      <p class="hx-whatif-notice" data-notice role="status" hidden></p>
+      <p class="hx-whatif-msg" data-msg="toolbar" role="status" hidden data-corn="message"></p>
+      <p class="hx-whatif-notice" data-notice role="status" hidden data-corn="notice"></p>
       <div class="hx-whatif-panel" data-panel="confirm" hidden></div>
       <div class="hx-whatif-panel" data-panel="form" hidden></div>
       <div class="hx-whatif-panel" data-panel="edits" hidden></div>
@@ -316,7 +317,7 @@ function paintConfirm() {
     <div class="hx-whatif-actions">
       <button type="button" class="hx-btn hx-btn--active" data-whatif="close-keep">Close and keep my edits</button>
       <button type="button" class="hx-btn" data-whatif="close-discard">Close and throw them away</button>
-      <button type="button" class="hx-btn hx-btn--quiet" data-whatif="close-cancel">Keep editing</button>
+      <button type="button" class="hx-btn hx-btn--quiet" data-whatif="close-cancel" data-corn-kind="quiet">Keep editing</button>
     </div>`;
 }
 
@@ -350,16 +351,16 @@ function paintForm() {
     box.innerHTML = `
       <form class="hx-whatif-form" data-form="node" autocomplete="off">
         <strong class="hx-strong">Add a node</strong>
-        <label class="hx-whatif-field">Type <select name="nodeType">${typeOptions('page')}</select></label>
-        <label class="hx-whatif-field">Label <input name="label" class="hx-whatif-input" placeholder="/meals" required></label>
-        <label class="hx-whatif-field">Parent <select name="parent">${options.join('')}</select></label>
+        <label class="hx-whatif-field" data-corn="field">Type <select name="nodeType">${typeOptions('page')}</select></label>
+        <label class="hx-whatif-field" data-corn="field">Label <input name="label" class="hx-whatif-input" placeholder="/meals" required></label>
+        <label class="hx-whatif-field" data-corn="field">Parent <select name="parent">${options.join('')}</select></label>
         <p class="hx-faint hx-whatif-help">Click a node on the map to make it the parent. A page label starts with a slash, like /meals.</p>
-        <label class="hx-whatif-field">Description <input name="desc" class="hx-whatif-input" placeholder="Optional"></label>
+        <label class="hx-whatif-field" data-corn="field">Description <input name="desc" class="hx-whatif-input" placeholder="Optional"></label>
         <div class="hx-whatif-actions">
           <button type="submit" class="hx-btn hx-btn--active">Add node</button>
-          <button type="button" class="hx-btn hx-btn--quiet" data-whatif="cancel-form">Cancel</button>
+          <button type="button" class="hx-btn hx-btn--quiet" data-whatif="cancel-form" data-corn-kind="quiet">Cancel</button>
         </div>
-        <p class="hx-whatif-msg" data-msg="form" role="alert" hidden></p>
+        <p class="hx-whatif-msg" data-msg="form" role="alert" hidden data-corn="message"></p>
       </form>`;
     box.querySelector('[name="nodeType"]').value = 'page';
     box.querySelector('[name="parent"]').value = parent;
@@ -372,14 +373,14 @@ function paintForm() {
       <form class="hx-whatif-form" data-form="edge" autocomplete="off">
         <strong class="hx-strong">Draw an edge</strong>
         <p class="hx-whatif-pair"><span class="hx-name">${escHtml(nameOf(form.from))}</span> → <span class="hx-name">${escHtml(nameOf(form.to))}</span></p>
-        <label class="hx-whatif-field">Kind <select name="kind">${M.EDGE_CHOICES.map((c) => `<option value="${escHtml(c.value)}"${c.value === suggested ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('')}</select></label>
-        <label class="hx-whatif-field" data-flow-field hidden>Flow <select name="flow">${M.FLOW_KINDS.map((f) => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}</select></label>
-        <label class="hx-whatif-field">Label <input name="label" class="hx-whatif-input" placeholder="Optional"></label>
+        <label class="hx-whatif-field" data-corn="field">Kind <select name="kind">${M.EDGE_CHOICES.map((c) => `<option value="${escHtml(c.value)}"${c.value === suggested ? ' selected' : ''}>${escHtml(c.label)}</option>`).join('')}</select></label>
+        <label class="hx-whatif-field" data-flow-field hidden data-corn="field">Flow <select name="flow">${M.FLOW_KINDS.map((f) => `<option value="${escHtml(f)}">${escHtml(f)}</option>`).join('')}</select></label>
+        <label class="hx-whatif-field" data-corn="field">Label <input name="label" class="hx-whatif-input" placeholder="Optional"></label>
         <div class="hx-whatif-actions">
           <button type="submit" class="hx-btn hx-btn--active">Add edge</button>
-          <button type="button" class="hx-btn hx-btn--quiet" data-whatif="cancel-form">Cancel</button>
+          <button type="button" class="hx-btn hx-btn--quiet" data-whatif="cancel-form" data-corn-kind="quiet">Cancel</button>
         </div>
-        <p class="hx-whatif-msg" data-msg="form" role="alert" hidden></p>
+        <p class="hx-whatif-msg" data-msg="form" role="alert" hidden data-corn="message"></p>
       </form>`;
     box.querySelector('[name="kind"]').value = suggested;
     syncFlowField();
@@ -439,7 +440,7 @@ function paintEdits() {
   };
   const rows = state.whatIf.edits.map((edit, i) => `<li class="hx-whatif-edit"><span class="hx-mark-dot hx-mark-dot--edit"></span><span class="hx-whatif-edit-text">${escHtml(M.describeEdit(edit, words))}</span><button type="button" class="hx-textbtn" data-whatif="remove-edit" data-index="${i}" aria-label="Remove this edit: ${escHtml(M.describeEdit(edit, words))}">Remove</button></li>`);
   box.innerHTML = rows.length
-    ? `<ol class="hx-whatif-list">${rows.join('')}</ol><p class="hx-whatif-msg" data-msg="edits" role="status" hidden></p>`
+    ? `<ol class="hx-whatif-list">${rows.join('')}</ol><p class="hx-whatif-msg" data-msg="edits" role="status" hidden data-corn="message"></p>`
     : '<p class="hx-faint">No edits yet. Add a node, draw an edge or change a step, and it appears here.</p>';
   paintMessages();
 }
@@ -474,17 +475,17 @@ function paintSteps() {
   box.innerHTML = `
     <div class="hx-whatif-form">
       <div class="hx-whatif-actions">
-        <label class="hx-whatif-field">Scenario <select data-scenario-select>${scenarios.map((s) => `<option value="${escHtml(s.id)}"${s.id === ui.scenarioId ? ' selected' : ''}>${escHtml(s.title)}</option>`).join('')}<option value="${NEW}"${ui.scenarioId === NEW ? ' selected' : ''}>New scenario…</option></select></label>
+        <label class="hx-whatif-field" data-corn="field">Scenario <select data-scenario-select>${scenarios.map((s) => `<option value="${escHtml(s.id)}"${s.id === ui.scenarioId ? ' selected' : ''}>${escHtml(s.title)}</option>`).join('')}<option value="${NEW}"${ui.scenarioId === NEW ? ' selected' : ''}>New scenario…</option></select></label>
         ${scenario ? '<button type="button" class="hx-btn" data-whatif="play-scenario">Play</button>' : ''}
       </div>
       ${rows.length ? `<ol class="hx-whatif-list hx-whatif-steps">${rows.join('')}</ol>` : '<p class="hx-faint">No steps yet.</p>'}
       <form class="hx-whatif-addstep" data-form="step" autocomplete="off">
-        ${ui.scenarioId === NEW ? `<label class="hx-whatif-field">Title <input name="title" class="hx-whatif-input" placeholder="Add a meal" value="${escHtml(ui.titleDraft)}"></label>` : ''}
-        <label class="hx-whatif-field">New step <input name="text" class="hx-whatif-input" placeholder="What happens here?" value="${escHtml(ui.stepDraft)}"></label>
+        ${ui.scenarioId === NEW ? `<label class="hx-whatif-field" data-corn="field">Title <input name="title" class="hx-whatif-input" placeholder="Add a meal" value="${escHtml(ui.titleDraft)}"></label>` : ''}
+        <label class="hx-whatif-field" data-corn="field">New step <input name="text" class="hx-whatif-input" placeholder="What happens here?" value="${escHtml(ui.stepDraft)}"></label>
         <button type="submit" class="hx-btn hx-btn--active" data-step-add>Add step</button>
         <span class="hx-faint hx-whatif-pointing" data-step-target></span>
       </form>
-      <p class="hx-whatif-msg" data-msg="steps" role="alert" hidden></p>
+      <p class="hx-whatif-msg" data-msg="steps" role="alert" hidden data-corn="message"></p>
     </div>`;
   paintStepTarget();
   paintMessages();
@@ -543,7 +544,7 @@ function edgeToHtml(n) {
     .slice(0, EDGE_TO_MAX);
   if (!others.length) return '';
   return `<div class="hx-whatif-addstep hx-whatif-edgeto">
-      <label class="hx-whatif-field">Edge to <select data-edge-to>${others.map((o) => `<option value="${escHtml(o.id)}">${escHtml(o.label)} (${escHtml(o.type)})</option>`).join('')}</select></label>
+      <label class="hx-whatif-field" data-corn="field">Edge to <select data-edge-to>${others.map((o) => `<option value="${escHtml(o.id)}">${escHtml(o.label)} (${escHtml(o.type)})</option>`).join('')}</select></label>
       <button type="button" class="hx-btn" data-whatif="edge-to" data-from="${escHtml(n.id)}" title="Draw an edge from this node to the one picked, without dragging">Draw an edge</button>
     </div>`;
 }
@@ -555,7 +556,7 @@ function paintDrawer() {
   box.hidden = !open;
   if (!open) { box.innerHTML = ''; return; }
 
-  const message = '<p class="hx-whatif-msg" data-msg="drawer" role="alert" hidden></p>';
+  const message = '<p class="hx-whatif-msg" data-msg="drawer" role="alert" hidden data-corn="message"></p>';
   const title = '<h3 class="hx-block-title">Try a change</h3>';
   if (state.selectedEdge) {
     const e = state.selectedEdge;
