@@ -110,6 +110,77 @@
   --corn-glyph-mix: 100%;
 
   color-scheme: dark;
+
+  /* The map (docs/theming.md, "The map"). explorer/map-style.js reads these from the computed style on load and on every theme change.
+     `auto` keeps what the map draws with no theme: the node's own colour from the topology (deepened on the light ground), and every
+     other colour as scene.js has it. A colour replaces it, as written, in both themes: set it again under :root[data-theme="light"] in a theme file
+     for the light ground. A kind's fill wins over its group's. */
+  --corn-map-stroke: auto;
+  --corn-map-stroke-width: 1.5px;
+  --corn-map-label: auto;
+  --corn-map-label-halo: auto;
+  --corn-map-collision: var(--corn-warn);
+  /* Diff, selection and focus */
+  --corn-map-added: auto;
+  --corn-map-changed: auto;
+  --corn-map-removed: auto;
+  --corn-map-edit: auto;
+  --corn-map-selected: auto;
+  --corn-map-match: auto;
+  --corn-map-lit: auto;
+  /* Edges by kind */
+  --corn-map-edge-ownership: auto;
+  --corn-map-edge-usage: auto;
+  --corn-map-edge-flow: auto;
+  --corn-map-edge-reads: auto;
+  --corn-map-edge-writes: auto;
+  --corn-map-edge-calls: auto;
+  --corn-map-edge-triggers: auto;
+  --corn-map-edge-delivers: auto;
+  --corn-map-edge-runs-on: auto;
+  --corn-map-edge-uses: auto;
+  --corn-map-edge-extends: auto;
+  /* Node fill by kind */
+  --corn-map-node-root: auto;
+  --corn-map-node-app: auto;
+  --corn-map-node-page: auto;
+  --corn-map-node-pkg: auto;
+  --corn-map-node-core: auto;
+  --corn-map-node-token: auto;
+  --corn-map-node-atom: auto;
+  --corn-map-node-molecule: auto;
+  --corn-map-node-tool: auto;
+  --corn-map-node-store: auto;
+  --corn-map-node-table: auto;
+  --corn-map-node-rom: auto;
+  --corn-map-node-service: auto;
+  --corn-map-node-external: auto;
+  --corn-map-node-stack: auto;
+  --corn-map-node-machine: auto;
+  --corn-map-node-container: auto;
+  --corn-map-node-persona: auto;
+  --corn-map-node-device: auto;
+  --corn-map-node-floor: auto;
+  --corn-map-node-room: auto;
+  /* Node fill by group */
+  --corn-map-group-app: auto;
+  --corn-map-group-pkg: auto;
+  --corn-map-group-page: auto;
+  --corn-map-group-atom: auto;
+  --corn-map-group-molecule: auto;
+  --corn-map-group-token: auto;
+  --corn-map-group-tool: auto;
+  --corn-map-group-table: auto;
+  --corn-map-group-rom: auto;
+  --corn-map-group-service: auto;
+  --corn-map-group-cloud: auto;
+  --corn-map-group-web: auto;
+  --corn-map-group-stack: auto;
+  --corn-map-group-machine: auto;
+  --corn-map-group-container: auto;
+  --corn-map-group-device: auto;
+  --corn-map-group-house: auto;
+  --corn-map-group-persona: auto;
 }
 
 /* Light: the same names, for the light ground */

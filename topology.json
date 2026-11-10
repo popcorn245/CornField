@@ -1950,6 +1950,16 @@
       "desc": "The theme's contrast check, for `cornfield validate` (docs/theming.md#the-contrast-check). (core/contrast.js)"
     },
     {
+      "id": "core-explorer-map-style",
+      "label": "map-style.js",
+      "type": "core",
+      "file": "explorer/map-style.js",
+      "summary": "The map's styling from the theme (docs/theming.md, \"The map\").",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map's styling from the theme (docs/theming.md, \"The map\"). (explorer/map-style.js)"
+    },
+    {
       "id": "core-core-strings",
       "label": "strings.js",
       "type": "core",
@@ -6184,6 +6194,70 @@
       "dashed": true
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-map-style"
+    },
+    {
+      "from": "core-core-theme",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-labels",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-strings"
     },
@@ -6252,5 +6326,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T09:25:43.337Z"
+  "updatedAt": "2026-11-10T09:29:24.819Z"
 }

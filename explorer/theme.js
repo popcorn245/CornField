@@ -10,13 +10,15 @@
  *   - the theme in force is `<html data-theme="light|dark">`: explorer.css swaps its tokens on it,
  *     theme-boot.js sets it before the first paint (so a light page never flashes dark), and this module
  *     keeps it right afterwards;
- *   - the map: `state.theme`, then `touchScene()`, so the next scene is built for the new ground (scene.js);
+ *   - the map: `state.theme`, then `touchScene()`, so the next scene is built for the new ground (scene.js), and the map's
+ *     `--corn-map-*` tokens are read again for it (map-style.js; it also watches `data-theme-name` and `prefers-color-scheme` itself);
  *   - whatever else draws in colour from script listens with `onThemeChange` (the Layers menu's dots, the
  *     legend's mark colours).
  */
 
 import { state, touchScene } from './state.js';
 import { render } from './render.js';
+import { refreshMapStyle } from './map-style.js';
 import { THEME_STORAGE_KEY, nextChoice, resolveTheme, themeChoiceFrom, themeWords } from './theme-model.js';
 
 const QUERY = '(prefers-color-scheme: light)';
@@ -63,6 +65,7 @@ function apply() {
   const root = document.documentElement;
   root.dataset.theme = theme;
   syncButton(theme);
+  refreshMapStyle(); // the map's tokens (--corn-map-*) differ by theme: read them for this one (map-style.js)
   if (state.theme === theme) return;
   state.theme = theme;
   touchScene();

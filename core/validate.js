@@ -25,7 +25,7 @@ import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
 import { checkThemeContrast } from './contrast.js';
 import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
-import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeUrlTarget } from './theme.js';
+import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeIconFileProblems, themeUrlTarget } from './theme.js';
 
 /** How a page is produced today, and whether it is baked to a file */
 export const RENDER_NOW = ['build', 'request', 'build+request', 'rom'];
@@ -36,7 +36,8 @@ const ONLY_REMOVES_HINT = '(A proposal that adds nothing cannot show it has been
 /**
  * The config's theme files (docs/config.md#theme): each one exists, is a plain file inside the repo (a link out of it is refused),
  * is at most MAX_THEME_BYTES, is CSS that keeps out of script (core/theme.js `cssProblems`), and every url() in it is a data: image
- * or an image or font the server serves beside the theme (core/theme.js `themeUrlTarget`, `themeAssetFile`).
+ * or an image or font the server serves beside the theme (core/theme.js `themeUrlTarget`, `themeAssetFile`), and every node icon
+ * (`theme.icons`) is an .svg or .png file there (`themeIconFileProblems`).
  * @param {{ root: string, theme?: object }} config
  * @returns {string[]}
  */
@@ -65,6 +66,7 @@ export function validateThemeFiles(config) {
       }
     }
   }
+  errors.push(...themeIconFileProblems(config)); // theme.icons: each file is there, served, and an image
   return errors;
 }
 

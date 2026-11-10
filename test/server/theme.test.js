@@ -257,3 +257,36 @@ describe('assets beside a theme: /cornfield/theme/assets/<path>', () => {
     } finally { await t.close(); }
   });
 });
+
+describe('theme.icons and theme.pixelated on the server', () => {
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>';
+  let s;
+  beforeAll(async () => {
+    s = await serve(
+      { css: './tools/cf/theme.css', icons: { app: './tools/cf/icons/app.svg', page: './tools/cf/icons/page.png' }, pixelated: true },
+      { 'tools/cf/theme.css': ':root{}', 'tools/cf/icons/app.svg': SVG, 'tools/cf/icons/page.png': PNG },
+    );
+  });
+  afterAll(() => s.close());
+
+  it('tells the browser the served path of each icon and the flag, never a repo path', async () => {
+    const res = await ask(s.port, '/cornfield/config.json');
+    const config = JSON.parse(res.body);
+    expect(config.theme).toEqual({ names: [], default: null, icons: { app: '/cornfield/theme/assets/icons/app.svg', page: '/cornfield/theme/assets/icons/page.png' }, pixelated: true });
+    expect(res.body).not.toContain('tools/cf');
+  });
+
+  it('serves each icon from the route that serves the images beside the theme', async () => {
+    const png = await ask(s.port, '/cornfield/theme/assets/icons/page.png');
+    expect([png.status, png.headers['content-type']]).toEqual([200, 'image/png']);
+    const svg = await ask(s.port, '/cornfield/theme/assets/icons/app.svg');
+    expect([svg.status, svg.headers['content-type']]).toEqual([200, 'image/svg+xml']);
+    expect(svg.headers['content-security-policy']).toBe("default-src 'none'; style-src 'unsafe-inline'");
+  });
+
+  it('widens nothing in the page policy: icons are same-origin images', async () => {
+    const page = await ask(s.port, '/');
+    expect(directive(page.headers['content-security-policy'], 'img-src')).toBe("img-src 'self' data: blob:");
+  });
+});
