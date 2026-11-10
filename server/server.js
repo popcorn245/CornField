@@ -19,6 +19,8 @@
  *   GET  /cornfield/theme.css, /cornfield/theme/<name>.css
  *                                       the stylesheets the config's `theme` names (css, names): those files only, as text/css
  *   GET  /cornfield/theme/assets/<path> an image or font beside the theme files (png, svg, webp, gif, avif, woff2, woff; 1 MB each)
+ *   GET  /cornfield/brand/<key>.<ext>   a brand image the config's `brand` names (logo, wordmark, favicon; svg or png, 512 KB each): those files only
+ *   GET  /manifest.webmanifest          the web app manifest: the repo's title, or built from `brand` when the config sets one
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
  *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
@@ -53,6 +55,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel, runnerQuietAfterMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
+import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, clientBrand, colorOf, manifestOf } from '../core/brand.js';
 import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, fontOrigins, fontUrl, themeAssetFile, themeAssetPath } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -184,6 +187,57 @@ function sendThemeAsset(req, res, config, reqPath) {
   }
 }
 
+/** The brand images the config names, by the path they are served at: `Map<'/cornfield/brand/<key>.<ext>', rel>` */
+function brandFilesOf(config) {
+  return new Map(brandImages(config.brand).map((i) => [i.url, i.rel]));
+}
+
+/**
+ * The `<head>` lines of a brand: the favicon, the manifest (always, so any cornfield installs as an app; fetched with the sign-in
+ * cookie, since the page is behind it) and the tab colour
+ */
+function brandHead(brand) {
+  const out = [];
+  const favicon = brandImages(brand).find((i) => i.key === 'favicon');
+  if (favicon) out.push(`<link rel="icon" href="${escapeHtml(favicon.url)}" type="${favicon.type}" />`);
+  out.push(`<link rel="manifest" href="${MANIFEST_PATH}" crossorigin="use-credentials" />`);
+  const color = colorOf(brand && brand.color);
+  if (color) out.push(`<meta name="theme-color" content="${escapeHtml(color)}" />`);
+  return out.join('\n  ');
+}
+
+/** The page's title: the repo's, then the app's name (cornfield, unless the brand names the app) */
+function titleOf(config) {
+  const app = appNameOf(config.brand);
+  return app && app === config.title ? app : `${config.title} · ${app || 'cornfield'}`;
+}
+
+/**
+ * Serves one brand image: only a file the config names (`brand.logo`, `wordmark`, `favicon`), a plain svg or png file whose real path
+ * is inside the repo, whose bytes match its extension, at most 512 KB (core/brand.js `brandAssetFile`, the check `cornfield validate`
+ * makes). nosniff always; an SVG gets a policy of its own and is never inlined into the page.
+ */
+function sendBrand(req, res, config, rel, reqPath) {
+  try {
+    const found = brandAssetFile(config.root, rel);
+    if ('problem' in found) return notFound(res, reqPath);
+    res.writeHead(200, {
+      'Content-Type': found.type, 'Content-Length': found.body.length, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff',
+      ...(found.type === 'image/svg+xml' ? { 'Content-Security-Policy': BRAND_SVG_CSP } : {}),
+    });
+    return res.end(req.method === 'HEAD' ? undefined : found.body);
+  } catch {
+    return notFound(res, reqPath);
+  }
+}
+
+/** The web app manifest (core/brand.js `manifestOf`), as application/manifest+json: served with or without a brand */
+function sendManifest(req, res, config) {
+  const body = JSON.stringify(manifestOf(config.brand, config.title, (rel) => brandAssetFile(config.root, rel)));
+  res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+  return res.end(req.method === 'HEAD' ? undefined : body);
+}
+
 /** The browser modules the config names from the repo: each one's folder may be served (its .js files only) */
 function repoModuleDirs(config) {
   const dirs = [];
@@ -208,6 +262,8 @@ export function clientConfig(config, signIn = false) {
     links: config.links || [],
     // The theme's names and default, never a file's path (docs/config.md#theme)
     theme: clientTheme(config.theme),
+    // The brand's image URLs and name, never a file's path (docs/config.md#brand)
+    brand: clientBrand(config.brand, PKG.homepage),
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.approveLands ? { approveLands: true } : {}) } : null,
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },
@@ -258,6 +314,7 @@ export function createCornfieldServer(config, opts = {}) {
   const theme = config.theme || {};
   const csp = cspOf(importMap, theme);
   const themeFile = themeFilesOf(config);
+  const brandFile = brandFilesOf(config);
   const repoModules = repoModuleDirs(config);
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost };
@@ -312,7 +369,8 @@ export function createCornfieldServer(config, opts = {}) {
       .replace('<!--@importmap-->', importMap ? `<script type="importmap">${importMap}</script>` : '')
       .replace('<html lang="en">', () => themeHtmlTag(theme))
       .replace('<!--@theme-->', () => themeHead(theme)) // a function, so a `$` in a font URL is not a replacement pattern
-      .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(config.title)} · cornfield</title>`);
+      .replace('<!--@brand-->', () => brandHead(config.brand))
+      .replace(/<title>[^<]*<\/title>/, () => `<title>${escapeHtml(titleOf(config))}</title>`); // a function: a `$` in a name is not a pattern
     return html;
   };
 
@@ -407,6 +465,8 @@ export function createCornfieldServer(config, opts = {}) {
     }
     if (themeFile.has(reqPath)) return sendTheme(req, res, config, themeFile.get(reqPath), reqPath);
     if (reqPath.startsWith(THEME_ASSET_PREFIX)) return sendThemeAsset(req, res, config, reqPath);
+    if (brandFile.has(reqPath)) return sendBrand(req, res, config, brandFile.get(reqPath), reqPath);
+    if (reqPath === MANIFEST_PATH) return sendManifest(req, res, config);
     if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config, signedIn));
     if (reqPath === '/topology.json') {
       const file = inside(root, config.topology);

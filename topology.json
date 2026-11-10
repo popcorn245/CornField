@@ -1910,6 +1910,16 @@
       "desc": "Theming: the --corn-* tokens (docs/theming.md)."
     },
     {
+      "id": "core-core-brand",
+      "label": "brand.js",
+      "type": "core",
+      "file": "core/brand.js",
+      "summary": "The `brand` key of cornfield.config.js (docs/config.md#brand), and the rules a brand asset must keep.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The `brand` key of cornfield.config.js (docs/config.md#brand), and the rules a brand asset must keep. (core/brand.js)"
+    },
+    {
       "id": "core-core-color",
       "label": "color.js",
       "type": "core",
@@ -6052,6 +6062,28 @@
     },
     {
       "from": "pkg-core",
+      "to": "core-core-brand"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-core",
       "to": "core-core-color"
     },
     {
@@ -6088,5 +6120,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T08:41:06.588Z"
+  "updatedAt": "2026-11-10T08:43:04.342Z"
 }
