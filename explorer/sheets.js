@@ -108,6 +108,7 @@ export function registerSheet(id, el) {
     handle = document.createElement('button');
     handle.type = 'button';
     handle.className = 'hx-sheet-handle';
+    handle.dataset.corn = 'sheet-handle';
     handle.innerHTML = '<span></span>';
     el.prepend(handle);
   }

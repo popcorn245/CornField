@@ -10,6 +10,7 @@
 
 import { relativeTime } from './review-model.js';
 import { runTone, canRetry, aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
+import { cornStateAttr } from './corn-state.js';
 
 
 /**
@@ -84,8 +85,8 @@ function answerHtml(ctx, run) {
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
   return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" role="group" aria-label="Answer run ${id}">
       <button type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="Continue run ${id}"${off}>Continue</button>
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="Stop run ${id}"${off}>Stop</button></div>
-    <label class="hx-forge-field">Reply to run ${id}<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="Stop run ${id}"${off} data-corn-kind="danger">Stop</button></div>
+    <label class="hx-forge-field" data-corn="field">Reply to run ${id}<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
     <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="Send reply to run ${id}"${off}>Reply</button></div>`;
 }
 
@@ -103,14 +104,14 @@ export function runHtml(ctx, run, all) {
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
   const retry = canRetry(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="Start again on run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Start again</button>` : '';
-  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Stop</button>` : '';
+  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''} data-corn-kind="danger">Stop</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);
   const count = (run.timeline || []).length;
   const links = linksHtml(ctx, run);
-  return `<li class="hx-run hx-forge-file" data-run="${ctx.esc(run.runId)}" tabindex="-1">
-    <div class="hx-run-head"><span class="hx-forge-state hx-forge-state--${tone}">${ctx.esc(statusWords(run))}</span> <span class="hx-name">${ctx.esc(run.kind)} on ${ctx.esc(aboutWords(run.refs))}</span>${run.profile ? ` <span class="hx-faint">profile ${ctx.esc(run.profile)}</span>` : ''}</div>
+  return `<li class="hx-run hx-forge-file" data-run="${ctx.esc(run.runId)}" tabindex="-1" data-corn="run"${cornStateAttr(run.status)}>
+    <div class="hx-run-head"><span class="hx-forge-state hx-forge-state--${tone}" data-corn="state-pill"${cornStateAttr(run.status)}>${ctx.esc(statusWords(run))}</span> <span class="hx-name">${ctx.esc(run.kind)} on ${ctx.esc(aboutWords(run.refs))}</span>${run.profile ? ` <span class="hx-faint">profile ${ctx.esc(run.profile)}</span>` : ''}</div>
     ${collision ? `<p class="hx-run-collide"><span aria-hidden="true">⚠</span> ${ctx.esc(collision)}</p>` : ''}
     <p class="hx-forge-meta">${ctx.esc(runMeta(run, ctx.now))}</p>${why ? `<p class="hx-forge-why hx-faint">${ctx.esc(why)}</p>` : ''}${note}
     <dl class="hx-run-limits" aria-label="Limits and what the runner reported">${limits.length ? limits.map((r) => `<dt>${ctx.esc(r.name)}</dt><dd>limit: ${ctx.esc(r.limit)}; reported: ${ctx.esc(r.reported)}</dd>`).join('') : '<dt>Limits</dt><dd>none asked, nothing reported</dd>'}</dl>

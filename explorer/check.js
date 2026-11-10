@@ -25,6 +25,7 @@
 import { state, escHtml } from './state.js';
 import { toggleLayer } from './layers.js';
 import { mapIndex, personaLabel, planChecks, runChecks, stepVerdict, verdictWords } from './check-model.js';
+import { cornState } from './corn-state.js';
 
 let checker = null;
 let current = null; // { scenario, as, nodes, plan, answer, controller, onChange }
@@ -128,6 +129,7 @@ function mountControls(bar) {
   const title = bar.querySelector('.hx-player-title');
   const pill = document.createElement('span');
   pill.className = 'hx-player-verdict';
+  pill.dataset.corn = 'state-pill';
   pill.hidden = true;
   if (head && title) title.after(pill); else bar.prepend(pill);
 
@@ -208,6 +210,7 @@ export function paintChecks(bar, snap) {
   line.hidden = !words;
   if (words) {
     pill.dataset.tone = words.tone;
+    if (cornState(words.tone)) pill.dataset.cornState = cornState(words.tone); else delete pill.dataset.cornState;
     pill.textContent = words.pill;
     pill.title = words.line;
     line.dataset.tone = words.tone;

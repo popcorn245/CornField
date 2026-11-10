@@ -108,6 +108,7 @@ export function syncRunOverlay(scene, camera) {
       el.className = `hx-run-mark hx-run-mark--${kind}`;
       el.dataset.node = node.id;
       el.dataset.kind = kind;
+      el.dataset.corn = 'run-mark';
       el.innerHTML = `<span class="hx-run-ring"></span>${kind === 'collision' ? `<span class="hx-run-tag"><span class="hx-run-sign">⚠</span> ${collisionTag(runs.length)}</span>` : ''}`;
       layer.append(el);
       marks.set(key, el);

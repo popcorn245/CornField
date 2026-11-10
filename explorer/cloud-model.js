@@ -95,7 +95,7 @@ export function cloudUsedBy(node, nodes, edges) {
 /** More users of one kind than this, in one group, fold into a count ("42 containers") with the list behind it */
 export const FOLD_AT = 8;
 
-const sec = (title, body) => `<div class="hx-sec"><strong class="hx-strong">${title}</strong>${body}</div>`;
+const sec = (title, body) => `<div class="hx-sec" data-corn="section"><strong class="hx-strong">${title}</strong>${body}</div>`;
 const row = (color, arrow, body) => `<div class="hx-line"><span class="hx-glyph" style="--glyph:${color}">${arrow}</span><span>${body}</span></div>`;
 const name = (label) => `<span class="hx-name">${esc(label)}</span>`;
 
@@ -116,7 +116,7 @@ function groupHtml(group) {
 }
 
 /** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node */
-const playButton = (node) => `<div class="hx-sec"><button type="button" class="hx-btn hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">▶ Play: ${esc(String(node.label || node.id))} is down</button></div>`;
+const playButton = (node) => `<div class="hx-sec" data-corn="section"><button type="button" class="hx-btn hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">▶ Play: ${esc(String(node.label || node.id))} is down</button></div>`;
 
 /**
  * The node panel's section for a cloud node (kind `cloud`) or the public web (kind `web`): badges and plan,
@@ -128,8 +128,8 @@ export function cloudPanelHtml(node, nodes, edges) {
   const label = (id) => String((byId.get(id) || { label: id }).label || id);
   const [kind, ...roles] = cloudBadges(node);
   const tier = node.kind === 'web' ? null : (node.plan && TIER_WORDS[node.plan.tier] ? node.plan.tier : 'unknown');
-  const badges = `<div class="hx-cloud-badges"><span class="hx-cloud-badge hx-cloud-badge--${node.kind === 'web' ? 'web' : 'kind'}">${esc(kind)}</span>`
-    + roles.map((r) => `<span class="hx-cloud-badge">${esc(r)}</span>`).join('')
+  const badges = `<div class="hx-cloud-badges"><span class="hx-cloud-badge hx-cloud-badge--${node.kind === 'web' ? 'web' : 'kind'}" data-corn="badge">${esc(kind)}</span>`
+    + roles.map((r) => `<span class="hx-cloud-badge" data-corn="badge">${esc(r)}</span>`).join('')
     + (tier ? `<span class="hx-cloud-plan hx-cloud-plan--${tier}">${esc(TIER_WORDS[tier])}</span>` : '')
     + '</div>'
     + (tier && node.plan && node.plan.note ? `<div class="hx-faint hx-cloud-plan-note">${esc(node.plan.note)}</div>` : '');

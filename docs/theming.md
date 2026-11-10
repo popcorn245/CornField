@@ -192,6 +192,106 @@ What it does not reach yet: the map itself (the nodes, edges and labels on the c
 
 Where the stylesheets once had a one-off tint, they mix a token: `color-mix(in srgb, var(--corn-added) 14%, transparent)`. Where they had many near-identical values, they now share the nearest step: the radii 8 and 12px became `--corn-radius-sm` and `--corn-radius`; the font sizes 9 and 10.5px became `--corn-text-2xs`, 16px became `--corn-text-lg`; a 10px padding is `--corn-space-3` (8px), 14px and 18px are `--corn-space-4` and `-5`, a 2px gap is `calc(var(--corn-space-1) / 2)`; a 3px accent bar is `--corn-border-strong`. Lengths that are not one of these (a width, a height, a position) stay in the stylesheets.
 
+## Styling hooks: `data-corn`
+
+The tokens above change what the explorer looks like; the hooks let a stylesheet single out a part of it. The regions, the repeated components and the dialogs carry a `data-corn="…"` attribute, so a theme selects `[data-corn="node-panel"]` instead of the internal `hx-*` class names, which are not public and change freely.
+
+- **Public API, kept short on purpose.** The names below are documented, and **renaming or removing one is a breaking change**: it is listed under "Breaking" in the release notes (the `breaking` label). Adding one is not. The parts inside a region (a title, a label, a line of meta) have no hook: reach them from their region (`[data-corn="node-panel"] h2`), or change them with the tokens. [test/explorer/hooks.test.js](../test/explorer/hooks.test.js) fails when this list and the markup disagree, in either direction.
+- **Values** are short kebab-case nouns. One element has one `data-corn` value; a component used in many places (`row`, `field`, `badge`) has the same value everywhere, so scope it by its region: `[data-corn="layers-menu"] [data-corn="row"]`.
+- **Two companions:** `data-corn-kind` (a button's kind) and `data-corn-state` (a state). Their values are listed below and are public in the same way.
+- **No shadow DOM.** The explorer uses none, so a stylesheet reaches everything with an ordinary selector and there are no `::part()` names.
+- **CSS only.** Hooks are for selectors, never for script: a plugin or a theme must not read them to change behaviour.
+- **What is on is in ARIA.** A tab, a layer row or a view button that is on has `aria-pressed="true"`; an open menu's button has `aria-expanded="true"`; a panel is open when it is not `inert` (`[data-corn="node-panel"]:not([inert])`), and a hidden one is `[hidden]`.
+
+### Button kinds: `data-corn-kind`
+
+Buttons have no `data-corn` of their own (unless they are a region's button, such as `layers-button`): `[data-corn-kind]` selects every button that has a kind, wherever it is, and a button with no kind is the plain one.
+
+| Value | What it is |
+|---|---|
+| `primary` | the accent-filled action: Retry, Play |
+| `quiet` | a low-key button: Close, Refresh, Cancel, Sign out |
+| `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
+| `approve` | a button that commits: Approve, Land it, Open the build issue |
+| `icon` | a button that is only a symbol: ✕, zoom, theme |
+
+### States: `data-corn-state`
+
+One small set, whatever word the forge, the runner or the model uses underneath; each meaning has one value. A `state-pill` always says the state of what it describes, so a run's pill and its card agree. A theme should expect only these.
+
+| Value | What it means | Where |
+|---|---|---|
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill` |
+| `queued`, `running`, `waiting` | not started yet; under way; waiting on a person (or gone quiet) | `run`, `state-pill` |
+| `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped; a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
+| `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
+
+A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` is only ever a run; `failure` is only ever a result.
+
+## The hooks
+
+`brand-logo`, `brand-wordmark` and `powered-by` are made by the brand config ([docs/config.md](config.md#brand)); `link` and `sign-out`, by the config's `links` and `signIn`. They are there only when the config names them.
+
+### The header
+
+| Hook | What it is |
+|---|---|
+| `header` | the top bar |
+| `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the small "powered by cornfield" link |
+| `links`, `link`, `sign-out` | the config's links at the right, one link, the Sign out form |
+| `layers-button`, `layers-menu` | the Layers button and its dropdown (layer rows and legends) |
+| `preset-dataflow`, `preset-house` | the view switch: the Data flow and House buttons |
+| `proposals-button`, `proposals-menu` | the Proposals button and its dropdown |
+| `forge-button`, `tokens-button` | the Issues & PRs button, the Review tokens button |
+| `live-chip`, `live-menu` | the live layer's chip and its dropdown |
+| `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
+| `layout-toggle`, `zoom` | the Orbit / Freeform button; a zoom group (desktop, and the phone's) |
+| `theme-toggle`, `theme-picker` | the light / dark / system button, the named-theme menu |
+
+### The map stage and its layers
+
+| Hook | What it is |
+|---|---|
+| `stage` | the area the map and the panels sit in |
+| `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
+| `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
+| `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
+| `dock`, `sheet-handle`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle, the scrim behind the node panel on a phone |
+| `hint`, `loading`, `error` | the hint at the map's corner, the loading line, the load-error box |
+
+### Panels and sheets
+
+| Hook | What it is |
+|---|---|
+| `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
+| `forge-panel` | the Issues & PRs panel, with the agent runs |
+| `proposal-bar` | the open proposal's bar |
+| `review-bar`, `whatif` | in the proposal bar: the review part (note, Approve, Send back), the what-if editor |
+| `scenario-player` | the scenario player |
+
+### Dialogs
+
+| Hook | What it is |
+|---|---|
+| `dialog-scrim` | the scrim behind a dialog |
+| `confirm-dialog`, `agent-dialog`, `tokens-dialog` | the confirm dialog (land a pull request, start a spec, open a build issue), Start an agent, Review tokens |
+| `mockup-dialog` | the mockup window |
+
+Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of them.
+
+### Components
+
+| Hook | What it is |
+|---|---|
+| `tabs`, `tab` | a row of tabs, one tab |
+| `row` | one entry of a list: a pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu; a change in the open proposal; a scenario; a mockup; a review token |
+| `run` | an agent run's card (`data-corn-state`) |
+| `section` | a section of the node panel |
+| `badge` | a badge: the node panel's kind, a cloud kind or role, the "Agent" mark |
+| `state-pill` | a state word (`data-corn-state`) |
+| `field` | a labelled form field, its control inside |
+| `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |
+
 ## The old `--hx-*` names
 
 `tokens.css` keeps the old names as aliases for one release, so `scene.js`, `proposal.js` (which writes `--hx-mark-*` on `:root` for the map's own ground) and any plugin CSS keep working: `--hx-indigo: var(--corn-accent-text)`, `--hx-line: var(--corn-line)`, `--hx-mark-added: var(--corn-added)`, and so on. **The aliases go in the next minor release.** Write `--corn-*` in new CSS.

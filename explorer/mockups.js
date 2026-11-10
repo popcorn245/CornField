@@ -23,6 +23,7 @@ import { state } from './state.js';
 import { hooks } from './proposal.js';
 import { mockupsOf } from '../core/proposal.js';
 import { mockupsFor, mockupsSectionHtml, stateWords } from './mockups-model.js';
+import { cornState } from './corn-state.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -122,6 +123,7 @@ export function openMockup(index, opener = null) {
   returnTo = opener;
   dialog = document.createElement('div');
   dialog.className = 'hx-mockup-dialog';
+  dialog.dataset.corn = 'mockup-dialog';
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
   dialog.setAttribute('aria-labelledby', 'mockup-title');
@@ -142,6 +144,8 @@ export function openMockup(index, opener = null) {
   const status = document.createElement('p');
   status.id = 'mockup-state';
   status.className = `hx-mockup-state hx-mockup-state--${item.state}`;
+  status.dataset.corn = 'state-pill';
+  if (cornState(item.state)) status.dataset.cornState = cornState(item.state);
   status.textContent = stateWords(item.state);
   const stage = document.createElement('div');
   stage.className = 'hx-mockup-stage';

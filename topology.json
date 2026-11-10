@@ -1918,6 +1918,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The `brand` key of cornfield.config.js (docs/config.md#brand), and the rules a brand asset must keep. (core/brand.js)"
+    },
+    {
+      "id": "core-explorer-corn-state",
+      "label": "corn-state.js",
+      "type": "core",
+      "file": "explorer/corn-state.js",
+      "summary": "The public `data-corn-state` values (docs/theming.md, \"States\"): a small fixed set a theme can rely on, whatever word the forge, the runner or the model uses.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The public `data-corn-state` values (docs/theming.md, \"States\"): a small fixed set a theme can rely on, whatever word the forge, the runner or the model uses. (explorer/corn-state.js)"
     }
   ],
   "edges": [
@@ -6061,7 +6071,41 @@
       "to": "core-core-brand",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-corn-state"
+    },
+    {
+      "from": "core-explorer-check",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T08:34:24.131Z"
+  "updatedAt": "2026-11-10T08:59:05.120Z"
 }
