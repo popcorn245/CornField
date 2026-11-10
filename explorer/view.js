@@ -15,6 +15,7 @@ import { clearScenario } from './scenario-ui.js';
 import { measureParams } from './bench.js';
 import { mergeLive, placeLiveNodes } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
+import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -166,5 +167,5 @@ export function syncViewUi() {
   const note = $('layers-preset-note');
   if (note) note.hidden = !preset;
   const badge = $('instruction-badge-text');
-  if (badge) badge.textContent = preset ? 'Data flow: browser → servers → API → tables → services → outside' : (state.isFreeform ? 'Drag nodes to move • Double-tap to inspect' : 'Tap node to inspect live spec');
+  if (badge) badge.textContent = preset ? t('hintDataFlow') : (state.isFreeform ? t('hintDrag') : t('hintInspect'));
 }

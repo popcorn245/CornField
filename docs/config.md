@@ -48,6 +48,7 @@ export default {
 | `links` | extra links in the explorer's header |
 | `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the header, an icon per node kind on the map, and a contrast check. [Theme](#theme) |
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
+| `strings` | `{ approve?, sendBack?, … }`: the repo's own words for about forty visible labels, plain text, one line. [Strings](#strings) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
 | `dataDir` | cornfield's own state: `cornfield.db`, its SQLite file (private to its owner: it holds sessions). Default: `~/.cornfield/<repo folder>`, never inside the checkout |
@@ -307,6 +308,10 @@ Every key is optional. An unknown key is refused.
 - it is at most **512 KB**.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails.
+
+## Strings
+
+`strings` overrides the visible labels, so the menus speak in the repo's voice: `strings: { approve: 'Ship it', sendBack: 'Not yet' }`. A missing key keeps its default, an unknown key is refused (by `cornfield validate` and when the config loads, naming the key and listing the known ones), and a value is plain text on one line of at most 80 characters, never HTML. The keys, their defaults and the rule for accessible names are in [Theming: Words](theming.md#words).
 
 ## Sources
 

@@ -16,6 +16,7 @@
 
 import { escHtml } from './state.js';
 import { initThemePicker } from './theme-names.js';
+import { setStrings, applyStrings, t } from './strings.js';
 
 /** What the live layer shows when the repo names no live source */
 export const NO_SOURCE = Object.freeze({
@@ -71,12 +72,15 @@ function applyBrand(doc, brand, title) {
 /** The small "powered by cornfield" link that stays in the header when a repo brands cornfield */
 function poweredBy(brand) {
   if (!brand || typeof brand.poweredBy !== 'string' || !/^https:\/\//.test(brand.poweredBy)) return '';
-  return `<a class="hx-btn hx-btn--quiet" data-corn="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">powered by cornfield</a>`;
+  return `<a class="hx-btn hx-btn--quiet" data-corn="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">${escHtml(t('poweredBy'))}</a>`;
 }
 
 /** Puts the repo's title, brand and links in the header, and Sign out when the server says who is signed in */
 export function applyBranding(doc, config) {
   if (!config || !doc) return;
+  // The repo's words (core/strings.js) first: what is built below reads them, and the static markup is filled now
+  setStrings(config.strings);
+  applyStrings(doc);
   const title = doc.getElementById('cf-title');
   if (title && config.title) title.textContent = config.title;
   const heading = doc.getElementById('cf-heading');
@@ -92,7 +96,7 @@ export function applyBranding(doc, config) {
   // A plain form: signing out is a same-origin POST (server/auth.js), no script needed. On a narrow phone only its icon
   // shows (explorer.css); the words stay in the button for a screen reader
   const signOut = config.signIn && typeof config.signIn.login === 'string'
-    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out" data-corn="sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}" data-corn-kind="quiet"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">Sign out</span></button></form>`
+    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out" data-corn="sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}" data-corn-kind="quiet"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">${escHtml(t('signOut'))}</span></button></form>`
     : '';
   const powered = poweredBy(config.brand);
   if (html || powered || signOut) links.innerHTML = html + powered + signOut;

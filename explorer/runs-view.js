@@ -11,6 +11,7 @@
 import { relativeTime } from './review-model.js';
 import { runTone, canRetry, aboutWords, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 import { cornStateAttr } from './corn-state.js';
+import { t } from './strings.js';
 
 
 /**
@@ -84,10 +85,10 @@ function answerHtml(ctx, run) {
   const off = ctx.busy ? ' disabled' : '';
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
   return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" role="group" aria-label="Answer run ${id}">
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="Continue run ${id}"${off}>Continue</button>
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="Stop run ${id}"${off} data-corn-kind="danger">Stop</button></div>
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(t('continueRun'))} run ${id}"${off}>${ctx.esc(t('continueRun'))}</button>
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="${ctx.esc(t('stop'))} run ${id}"${off} data-corn-kind="danger">${ctx.esc(t('stop'))}</button></div>
     <label class="hx-forge-field" data-corn="field">Reply to run ${id}<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
-    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="Send reply to run ${id}"${off}>Reply</button></div>`;
+    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(t('reply'))} to run ${id}"${off}>${ctx.esc(t('reply'))}</button></div>`;
 }
 
 /** The totals as plain lines (see `totalsLines`), escaped; '' when there are none */
@@ -103,8 +104,8 @@ export function runHtml(ctx, run, all) {
   const why = statusWhy(run);
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
-  const retry = canRetry(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="Start again on run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>Start again</button>` : '';
-  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="Stop run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''} data-corn-kind="danger">Stop</button>` : '';
+  const retry = canRetry(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('startAgain'))} on run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''}>${ctx.esc(t('startAgain'))}</button>` : '';
+  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('stop'))} run ${ctx.esc(run.runId)}"${ctx.busy ? ' disabled' : ''} data-corn-kind="danger">${ctx.esc(t('stop'))}</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);

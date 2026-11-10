@@ -31,6 +31,7 @@ import {
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
 import { collapseSheet } from './sheets.js';
+import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -370,7 +371,7 @@ function renderMenu(loading = false) {
   else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
   else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
   const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
-  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>Proposals</span></div>${forge}${body}`;
+  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>${escHtml(t('proposals'))}</span></div>${forge}${body}`;
 }
 
 // ---------------------------------------------------------------------------

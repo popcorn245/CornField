@@ -1958,6 +1958,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map's styling from the theme (docs/theming.md, \"The map\"). (explorer/map-style.js)"
+    },
+    {
+      "id": "core-core-strings",
+      "label": "strings.js",
+      "type": "core",
+      "file": "core/strings.js",
+      "summary": "The words a repo may say in its own voice (`strings` in cornfield.config.js, docs/theming.md \"Words\").",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The words a repo may say in its own voice (`strings` in cornfield.config.js, docs/theming.md \"Words\"). (core/strings.js)"
+    },
+    {
+      "id": "core-explorer-strings",
+      "label": "strings.js",
+      "type": "core",
+      "file": "explorer/strings.js",
+      "summary": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries). (explorer/strings.js)"
     }
   ],
   "edges": [
@@ -6236,7 +6256,75 @@
       "to": "core-explorer-map-style",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-strings"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-strings"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-plugins",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-strings",
+      "to": "core-core-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-strings",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T09:12:36.024Z"
+  "updatedAt": "2026-11-10T09:29:24.819Z"
 }
