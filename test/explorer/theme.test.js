@@ -290,6 +290,69 @@ describe('tokens.css: the light tokens', () => {
     }
   });
 
+  /** A token's colour in a theme: var() and `color-mix(in srgb, a p%, b)` worked out from the token values */
+  const resolve = (value, theme) => {
+    const v = value.trim();
+    let m = /^var\((--[\w-]+)\)$/.exec(v);
+    if (m) return resolve((theme.get(m[1]) ?? (() => { throw new Error(`no token ${m[1]}`); })()), theme);
+    m = /^color-mix\(in srgb,\s*(.+?)\s+(\d+)%,\s*(.+)\)$/.exec(v);
+    if (m) {
+      const a = parseColor(resolve(m[1], theme)); const b = parseColor(resolve(m[3], theme)); const p = Number(m[2]) / 100;
+      return `rgb(${[0, 1, 2].map((i) => Math.round(a[i] * p + b[i] * (1 - p))).join(', ')})`;
+    }
+    return v;
+  };
+  const themes = { dark, light: new Map([...dark, ...light]) };
+  const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')).join('\n');
+  /** The declarations of the rule whose selector list holds `selector` (the last such rule wins, as in the cascade) */
+  const ruleFor = (selector) => {
+    const out = {};
+    for (const [, sel, body] of sheets.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!sel.split(',').map((x) => x.trim()).includes(selector)) continue;
+      for (const [, k, val] of body.matchAll(/([\w-]+)\s*:\s*([^;]+)/g)) out[k] = val.trim();
+    }
+    return out;
+  };
+
+  // The solid fills: text on a filled hue. On the light ground the hue tokens are deep, so the ground's colour reads as
+  // light text on a deep fill, as it did before the tokens; on the dark ground they are bright, and it reads dark on bright.
+  // A light hue too pale for that (the diff's added and edit) is mixed toward the text colour first.
+  const SOLID_FILLS = [
+    '.hx-btn--active', '.hx-btn--preset.hx-btn--active', '.hx-seg-btn[aria-pressed="true"]', '.hx-forge-tab[aria-pressed="true"]',
+    '.hx-btn--forge[aria-expanded="true"]', '.hx-open', '.hx-chip--primary', '.hx-chip--danger', '.hx-chip--success', '.hx-chip--warning',
+    '.hx-whatif .hx-btn--active', '.hx-house-chip[aria-pressed="true"]', '.hx-house-more:hover',
+  ];
+  it.each(SOLID_FILLS)('gives the text on the solid fill %s at least 4.5:1 in both themes', (selector) => {
+    const rule = ruleFor(selector);
+    const fill = rule.background ?? rule['background-color'];
+    const text = rule.color ?? ruleFor('.hx-chip').color; // a sandbox chip without its own colour takes .hx-chip's
+    expect(fill, `${selector} background`).toBeTruthy();
+    expect(text, `${selector} color`).toBeTruthy();
+    for (const [name, theme] of Object.entries(themes)) {
+      const [t, f] = [resolve(text, theme), resolve(fill, theme)];
+      expect(contrast(t, f), `${selector} in ${name}: ${t} on ${f}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // Every text colour the stylesheets set, on the page's ground, in both themes. The swatches are marks, not text (a
+  // line or a dot drawn in currentColor), and the solid fills put their own text on their own fill (above).
+  it('gives every text colour in the stylesheets at least 4.5:1 on the ground, in both themes', () => {
+    const low = [];
+    for (const [, sel, body] of sheets.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (/swatch|hx-mark-dot|hx-glyph|\.hx-chip\b/.test(sel)) continue; // .hx-glyph: a colour from script, mixed by --corn-glyph-mix
+      for (const [, val] of body.matchAll(/(?<![\w-])color\s*:\s*([^;]+)/g)) {
+        if (!/^(var|color-mix)\(/.test(val.trim()) || /transparent/.test(val)) continue;
+        const background = /background(-color)?\s*:\s*([^;]+)/.exec(body)?.[2]?.trim();
+        if (background && !/transparent|none/.test(background)) continue; // its own fill: a solid fill or a tint, checked above
+        for (const [name, theme] of Object.entries(themes)) {
+          const ratio = contrast(resolve(val, theme), resolve('var(--corn-ground)', theme));
+          if (ratio < 4.5) low.push(`${sel.trim()} { color: ${val.trim()} } in ${name}: ${ratio.toFixed(2)}`);
+        }
+      }
+    }
+    expect(low).toEqual([]);
+  });
+
   it('draws the diff tokens in the colour the light map draws', () => {
     for (const [k, c] of [['added', '#2dd4bf'], ['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
       expect(dark.get(`--corn-${k}`)).toBe(c);

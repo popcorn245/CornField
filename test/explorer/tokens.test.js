@@ -2,7 +2,7 @@
  * @vitest-environment node
  *
  * The design tokens (docs/theming.md). explorer/tokens.css is the one place a colour, a font, a size, a
- * radius, a border width or a shadow is written down; every other stylesheet in explorer/ reads a
+ * radius, a border or outline width, a shadow or a spacing is written down; every other stylesheet in explorer/ reads a
  * `--corn-*` custom property. This fails the build on any literal left outside tokens.css, and checks that
  * tokens.css defines every token the docs list, in the dark theme (:root) and in both light blocks.
  */
@@ -10,11 +10,11 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EXPLORER, CORNFIELD } from '../helpers.js';
+// @ts-expect-error plain JS modules, no declarations
+import { contrast } from '../../explorer/theme-model.js';
 
 const NAMED = 'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgrey darkgreen darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray grey green greenyellow honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgrey lightgreen lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'.split(' ');
 const NAMED_RE = new RegExp(`(?<![\\w-])(${NAMED.join('|')})(?![\\w-])`, 'i');
-const COLOUR_PROPS = /^(color|background|background-color|background-image|border|border-(top|right|bottom|left)(-color)?|border-color|outline|outline-color|fill|stroke|box-shadow|text-shadow|text-decoration|text-decoration-color|caret-color|accent-color|column-rule|--[\w-]+)$/;
-
 /** Every `property: value` of a stylesheet's declarations, with comments and `url(data:...)` taken out */
 export function declarations(css) {
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\(\s*(["']?)data:[\s\S]*?\1\s*\)/gi, 'url()');
@@ -33,21 +33,35 @@ function topLevel(value) {
   return parts;
 }
 
+/** A length written as a number: `12px`, `1.5REM`, `-4px` (any case, any unit); 0 alone is not one */
+const LENGTH = /(?<![\w.#-])-?(\d*\.)?\d+(px|r?em|pt|pc|cm|mm|in|q|ch|ex|ic|lh|rlh|[dsl]?v(w|h|i|b|min|max)|cq(w|h|i|b|min|max))(?![\w-])/i;
+const SPACING_PROPS = /^(padding|margin)(-(top|right|bottom|left|block|inline)(-(start|end))?)?$|^(gap|row-gap|column-gap|grid-gap|grid-row-gap|grid-column-gap)$/;
+const BORDER_WIDTH_PROPS = /^border(-(top|right|bottom|left|block|inline)(-(start|end))?)?(-width)?$|^outline(-width)?$|^column-rule(-width)?$/;
+
+/** The value with the parts that may hold a number taken out: a token, `env()`, and `calc()` over tokens */
+function withoutTokens(value) {
+  let v = value.replace(/env\([^()]*\)/gi, ' ');
+  v = v.replace(/var\(\s*--[\w-]+\s*\)/g, ' '); // a var() with no fallback is what we want
+  return v;
+}
+
 /** The literals in one declaration: what the contract forbids outside tokens.css */
-export function literalsIn(prop, value) {
-  const bare = value.replace(/var\(\s*--[\w-]+\s*\)/g, ' '); // a var() with no fallback is what we want
+export function literalsIn(prop, rawValue) {
+  const value = rawValue.replace(/\s*!\s*important\s*$/i, '').trim(); // !important hides nothing
+  const bare = withoutTokens(value);
   const found = [];
-  if (COLOUR_PROPS.test(prop)) {
-    if (/#[0-9a-f]{3,8}\b/i.test(bare)) found.push('hex colour');
-    if (/\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/i.test(bare)) found.push('colour function');
-    if (NAMED_RE.test(bare.replace(/\b(currentColor|transparent|inherit)\b/gi, ' ').replace(/color-mix\(in [\w ]+,/gi, ' '))) found.push('named colour');
-  }
-  if (prop === 'font-family' && !/^(inherit|var\(--corn-(font|mono)\))$/.test(value)) found.push('font-family');
-  if (prop === 'font' && !/^(inherit|var\(--corn-text-[\w]+\)\/[\d.]+ var\(--corn-(font|mono)\))$/.test(value)) found.push('font shorthand');
-  if (prop === 'font-size' && /\d(px|pt|rem|em)\b/.test(bare)) found.push('font-size length');
-  if (prop === 'border-radius' && /\d(px|rem|em)\b/.test(bare)) found.push('border-radius length');
+  // Colours, in any property (a custom property, a vendor-prefixed one, a gradient, an SVG fill)
+  if (/#[0-9a-f]{3,8}(?![\w-])/i.test(bare)) found.push('hex colour');
+  if (/(?<![\w-])(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|device-cmyk)\s*\(/i.test(bare)) found.push('colour function');
+  if (NAMED_RE.test(bare.replace(/\b(currentColor|transparent|inherit)\b/gi, ' ').replace(/color-mix\(\s*in [\w ]+,/gi, ' '))) found.push('named colour');
+  if (/^--corn-/.test(prop)) found.push('a token defined outside tokens.css');
+  if (prop === 'font-family' && !/^(inherit|var\(--corn-(font|font-display|mono)\))$/.test(value)) found.push('font-family');
+  if (prop === 'font' && !/^(inherit|var\(--corn-text-[\w]+\)\/[\d.]+ var\(--corn-(font|font-display|mono)\))$/.test(value)) found.push('font shorthand');
+  if (prop === 'font-size' && !/^(inherit|var\(--corn-text-[\w]+\))$/.test(value)) found.push('font-size not a token');
+  if (/^border(-(top|bottom)-(left|right)|-(start|end)-(start|end))?-radius$/.test(prop) && LENGTH.test(bare)) found.push('border-radius length');
   if (prop === 'box-shadow' && value !== 'none' && value !== 'inherit' && topLevel(value).some((s) => !s.includes('var(--corn-'))) found.push('box-shadow without tokens');
-  if (/^border(-top|-right|-bottom|-left)?$/.test(prop) && /(^|\s)1px\b/.test(bare)) found.push('1px border width');
+  if (BORDER_WIDTH_PROPS.test(prop) && (LENGTH.test(bare) || /(?<![\w-])(thin|medium|thick)(?![\w-])/i.test(bare))) found.push('border or outline width');
+  if (SPACING_PROPS.test(prop) && LENGTH.test(bare)) found.push('spacing length');
   return found;
 }
 
@@ -68,6 +82,14 @@ describe('no literal outside tokens.css', () => {
     });
   }
 
+  // A light-only rule outside tokens.css would fight a brand that redefines the tokens: the theme is tokens.css's business
+  for (const file of files) {
+    it(`${file} names no theme`, () => {
+      const css = fs.readFileSync(path.join(EXPLORER, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      expect(css).not.toMatch(/data-theme|prefers-color-scheme/);
+    });
+  }
+
   it('catches the literals it is meant to catch', () => {
     const caught = (p, v) => literalsIn(p, v).length > 0;
     expect(caught('color', '#fff')).toBe(true);
@@ -78,6 +100,43 @@ describe('no literal outside tokens.css', () => {
     expect(caught('border-radius', '8px')).toBe(true);
     expect(caught('box-shadow', '0 1px 2px var(--x)')).toBe(true);
     expect(caught('border', '1px solid var(--corn-line)')).toBe(true);
+    // the ways round it: !important, upper case, a space before the bracket, the old functions, a capital name
+    expect(caught('color', '#FFF !important')).toBe(true);
+    expect(caught('color', 'var(--corn-text) !important')).toBe(false);
+    expect(caught('background', '#ABCDEF')).toBe(true);
+    expect(caught('background', 'rgb (0, 0, 0)')).toBe(true);
+    expect(caught('background', 'RGBA(0, 0, 0, 0.5)')).toBe(true);
+    expect(caught('color', 'hsla(0, 0%, 0%, 0.5)')).toBe(true);
+    expect(caught('color', 'color(srgb 1 0 0)')).toBe(true);
+    expect(caught('color', 'Red')).toBe(true);
+    expect(caught('border-left-color', 'RED')).toBe(true);
+    expect(caught('-webkit-text-fill-color', '#fff')).toBe(true);
+    expect(caught('--my-local', 'tomato')).toBe(true);
+    expect(caught('--corn-accent', 'var(--corn-ok)')).toBe(true);
+    expect(caught('background', 'linear-gradient(red, var(--corn-ok))')).toBe(true);
+    expect(caught('font-size', '1.2REM')).toBe(true);
+    expect(caught('font-size', 'larger')).toBe(true);
+    expect(caught('border-radius', '4PX')).toBe(true);
+    expect(caught('border-top-left-radius', '4px')).toBe(true);
+    expect(caught('font-family', 'var(--corn-font-display)')).toBe(false);
+    // borders and outlines: widths are tokens
+    expect(caught('border-left-width', '3px')).toBe(true);
+    expect(caught('border', 'thin solid var(--corn-line)')).toBe(true);
+    expect(caught('outline', '2px solid var(--corn-focus)')).toBe(true);
+    expect(caught('outline', 'var(--corn-focus-width) solid var(--corn-focus)')).toBe(false);
+    expect(caught('border-left', 'calc(var(--corn-border-strong) * 2) solid var(--corn-ok)')).toBe(false);
+    expect(caught('outline', 'none')).toBe(false);
+    // spacing: steps of the scale, 0, auto, a percentage, calc() over tokens, env()
+    expect(caught('padding', '4px 10px')).toBe(true);
+    expect(caught('margin-top', '-1px')).toBe(true);
+    expect(caught('gap', '0.5rem')).toBe(true);
+    expect(caught('padding-block', '2px')).toBe(true);
+    expect(caught('padding', 'var(--corn-space-1) var(--corn-space-3)')).toBe(false);
+    expect(caught('margin', '0 auto')).toBe(false);
+    expect(caught('padding-left', '5%')).toBe(false);
+    expect(caught('gap', 'calc(var(--corn-space-1) / 2) var(--corn-space-3)')).toBe(false);
+    expect(caught('padding', 'var(--corn-space-5) var(--corn-space-5) calc(var(--corn-space-5) + env(safe-area-inset-bottom, 0px))')).toBe(false);
+    expect(caught('margin', 'calc(var(--corn-space-1) * -1)')).toBe(false);
     expect(caught('color', 'var(--corn-text)')).toBe(false);
     expect(caught('background', 'color-mix(in srgb, var(--corn-added) 14%, transparent)')).toBe(false);
     expect(caught('border', 'var(--corn-border) solid var(--corn-line)')).toBe(false);
@@ -100,12 +159,12 @@ describe('tokens.css defines the documented tokens', () => {
   const attrStart = tokensCss.indexOf(':root[data-theme="light"] {');
   const mediaBlock = tokensCss.slice(mediaStart, attrStart);
   const attrBlock = tokensCss.slice(attrStart, tokensCss.indexOf('\n}', attrStart));
-  // the same in both themes: a brand colour, a size, a font, a shape
-  const SAME = /^--corn-(accent|accent-hover|accent-soft|text-on-accent|blur|font|mono|text-(2xs|xs|sm|md|base|lg|xl)|leading|radius(-\w+)?|border|space|[\w]+-soft)$/;
+  // the docs mark with "(light)" each token tokens.css sets again for the light ground
+  const lightMarked = new Set(docs.split('\n').filter((l) => l.startsWith('|') && l.split('|')[2]?.includes('(light)')).flatMap((l) => [...l.split('|')[1].matchAll(/`(--corn-[\w-]+)`/g)].map((m) => m[1])));
 
   it('lists about fifty tokens in the docs, all with the --corn- prefix', () => {
     expect(documented.length).toBeGreaterThanOrEqual(40);
-    for (const t of ['--corn-ground', '--corn-surface-1', '--corn-line', '--corn-shadow', '--corn-scrim', '--corn-blur', '--corn-text', '--corn-accent', '--corn-focus', '--corn-ok', '--corn-added', '--corn-font', '--corn-radius-pill', '--corn-map-collision']) expect(documented).toContain(t);
+    for (const t of ['--corn-ground', '--corn-surface-1', '--corn-line', '--corn-shadow', '--corn-shadow-sm', '--corn-shadow-lg', '--corn-glow', '--corn-scrim', '--corn-blur', '--corn-text', '--corn-accent', '--corn-focus', '--corn-focus-width', '--corn-ok', '--corn-added', '--corn-font', '--corn-font-display', '--corn-radius-pill', '--corn-border', '--corn-border-strong', '--corn-space', '--corn-space-1', '--corn-space-6', '--corn-house-line', '--corn-mockup-ground']) expect(documented).toContain(t);
   });
 
   it('defines every documented token in the dark theme, on :root', () => {
@@ -113,11 +172,17 @@ describe('tokens.css defines the documented tokens', () => {
     expect(documented.filter((t) => !have.has(t))).toEqual([]);
   });
 
-  it('defines every documented token that differs by theme in both light blocks', () => {
+  it('defines in both light blocks exactly the tokens the docs mark (light)', () => {
     for (const [what, block] of [['the system light setting', mediaBlock], ['data-theme="light"', attrBlock]]) {
-      const have = names(block);
-      expect(documented.filter((t) => !SAME.test(t) && !have.has(t)), what).toEqual([]);
+      expect([...names(block)].sort(), what).toEqual([...lightMarked].sort());
     }
+  });
+
+  it('documents every token tokens.css defines, and every one is read by a stylesheet', () => {
+    const defined = [...names(darkBlock)];
+    expect(defined.filter((t) => !documented.includes(t))).toEqual([]);
+    const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n') + tokensCss;
+    expect(defined.filter((t) => !sheets.includes(`var(${t})`))).toEqual([]);
   });
 
   it('keeps the two light blocks in step', () => {
@@ -132,5 +197,60 @@ describe('tokens.css defines the documented tokens', () => {
 
   it('keeps the old --hx-* names as aliases of tokens', () => {
     for (const a of ['--hx-indigo', '--hx-bg', '--hx-line', '--hx-mark-added', '--hx-mark-removed', '--hx-well']) expect(tokensCss).toMatch(new RegExp(`${a}:\\s*(var\\(--corn-|color-mix\\()`));
+  });
+});
+
+describe('the brand stylesheet in docs/theming.md', () => {
+  const docs = fs.readFileSync(path.join(CORNFIELD, 'docs/theming.md'), 'utf8');
+  const brand = [...docs.matchAll(/```css\n([\s\S]*?)```/g)].map((m) => m[1]).find((b) => b.startsWith('/* brand.css'));
+  const tokensCss = fs.readFileSync(path.join(EXPLORER, 'tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const known = new Set([...tokensCss.matchAll(/(--corn-[\w-]+)\s*:/g)].map((m) => m[1]));
+  const css = (brand ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const mediaAt = css.indexOf('@media (prefers-color-scheme: light)');
+  const attrAt = css.indexOf(':root[data-theme="light"] {');
+  const map = (text) => new Map([...text.matchAll(/(--corn-[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+  const root = map(css.slice(0, mediaAt));
+  const media = map(css.slice(mediaAt, attrAt));
+  const attr = map(css.slice(attrAt));
+  const lightInTokens = new Set([...tokensCss.slice(tokensCss.indexOf(':root[data-theme="light"] {')).matchAll(/(--corn-[\w-]+)\s*:/g)].map((m) => m[1]));
+
+  it('is there, with cornfield\'s three selectors', () => {
+    expect(brand).toBeTruthy();
+    expect(mediaAt).toBeGreaterThan(0);
+    expect(css).toContain(':root:not([data-theme="dark"]) {');
+    expect(attrAt).toBeGreaterThan(mediaAt);
+  });
+
+  it('sets only tokens that exist, and reads tokens only through var()', () => {
+    for (const t of [...root.keys(), ...media.keys(), ...attr.keys()]) expect(known.has(t), t).toBe(true);
+  });
+
+  it('keeps its two light blocks the same', () => {
+    expect([...media]).toEqual([...attr]);
+  });
+
+  it('sets for the light ground every token it sets that cornfield sets again for light (or cornfield would win there)', () => {
+    expect([...root.keys()].filter((t) => lightInTokens.has(t) && !attr.has(t))).toEqual([]);
+  });
+
+  it('is the look it says: square, a hard shadow, its own fonts, a red accent', () => {
+    for (const r of ['--corn-radius-xs', '--corn-radius-sm', '--corn-radius', '--corn-radius-lg', '--corn-radius-pill']) expect(root.get(r), r).toBe('0');
+    for (const m of [root, attr]) expect(m.get('--corn-shadow')).toMatch(/^\d+px \d+px 0 #[0-9a-f]+$/);
+    expect(root.get('--corn-font-display')).toMatch(/^"Example Pixel"/);
+    expect(root.get('--corn-accent')).toBe('#b91c1c');
+  });
+
+  it('keeps its text readable in both themes (4.5:1)', () => {
+    const lightTokens = map(tokensCss.slice(tokensCss.indexOf(':root[data-theme="light"] {')));
+    const darkTokens = map(tokensCss.slice(0, tokensCss.indexOf('@media (prefers-color-scheme: light)')));
+    const themes = { dark: new Map([...darkTokens, ...root]), light: new Map([...darkTokens, ...lightTokens, ...root, ...attr]) };
+    for (const [name, t] of Object.entries(themes)) {
+      for (const ground of ['--corn-ground', '--corn-surface-1', '--corn-surface-2']) {
+        for (const text of ['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text']) {
+          expect(contrast(t.get(text), t.get(ground)), `${name}: ${text} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      for (const fill of ['--corn-accent', '--corn-accent-hover']) expect(contrast(t.get('--corn-text-on-accent'), t.get(fill)), `${name}: on ${fill}`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
