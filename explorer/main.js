@@ -24,7 +24,7 @@
  */
 
 import { state, nodeById, touchScene } from './state.js';
-import { render, resize, zoomBy, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
+import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
 import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from './layers.js';
@@ -46,7 +46,8 @@ import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
-import { cycleTheme, initTheme } from './theme.js';
+import { initTheme, setThemeChoice } from './theme.js';
+import { initAccountMenu } from './account-menu.js';
 import { applyMapTheme, onMapStyleChange, watchMapStyle } from './map-style.js';
 
 const $ = (id) => document.getElementById(id);
@@ -56,9 +57,7 @@ const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------------------
 function updateFreeformUI() {
   const on = state.isFreeform;
-  $('freeform-toggle-icon').textContent = on ? '🔓' : '🔒';
-  $('freeform-toggle-label').textContent = on ? 'Freeform' : 'Orbit';
-  $('freeform-toggle-btn').classList.toggle('hx-btn--active', on);
+  $('freeform-toggle-btn').setAttribute('aria-checked', String(on));
   $('reset-positions-btn').hidden = !on;
   syncViewUi();
   state.canvas.style.cursor = on ? 'default' : 'grab';
@@ -117,14 +116,16 @@ function toggleMobileSearch(open) {
 const ACTIONS = {
   'reset-view': () => fitGraphToViewport(fitPadding()),
   'fit': () => fitGraphToViewport(fitPadding()),
-  'zoom-in': () => zoomBy(1.25),
-  'zoom-out': () => zoomBy(0.8),
   'toggle-layers-menu': () => toggleLegendMenu(),
   'layers-all': () => toggleAllLayers(true),
   'layers-none': () => toggleAllLayers(false),
   'toggle-layer': (el) => toggleLayer(el.dataset.layer),
   'toggle-freeform': () => toggleFreeformMode(),
   'reset-positions': () => resetFreeformPositions(),
+  'preset-map': () => {
+    closeDrawer();
+    setView('orbit');
+  },
   'preset-dataflow': () => {
     closeDrawer();
     setView(state.view === 'dataflow' ? 'orbit' : 'dataflow');
@@ -137,7 +138,7 @@ const ACTIONS = {
   'select-node': (el) => selectNode(nodeById(el.dataset.id)),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),
-  'cycle-theme': () => cycleTheme(),
+  'set-theme': (el) => setThemeChoice(el.dataset.choice),
 };
 
 document.addEventListener('click', (e) => {
@@ -198,6 +199,7 @@ setRenderer(createRenderer(state.canvas)); // WebGL2, or Canvas 2D when it is mi
 loadFreeformPositions();
 bindCanvasInput();
 initKeyboard(); // the map, the panel, the search and the Layers menu by keyboard (keyboard.js)
+initAccountMenu(); // the one menu at the right of the header (account-menu.js)
 initSheets();
 initScenarioUi();
 window.addEventListener('resize', resize);

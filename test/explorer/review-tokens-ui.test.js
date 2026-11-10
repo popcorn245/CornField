@@ -84,7 +84,7 @@ describe('the dialog', () => {
     expect($('tokens-dialog').querySelector('[role="dialog"]').getAttribute('aria-modal')).toBe('true');
     key($('tokens-dialog'), 'Escape');
     expect($('tokens-dialog').hidden).toBe(true);
-    expect(document.activeElement).toBe($('tokens-btn'));
+    expect(document.activeElement).toBe($('account-btn')); // the button sits in the account menu, shut by now
   });
 
   it('says there are no tokens yet', async () => {

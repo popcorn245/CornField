@@ -157,13 +157,13 @@ export function setView(view) {
 
 export function syncViewUi() {
   const preset = state.view === 'dataflow';
+  // The View switch: the Map button is on for the map itself; Flow and House say theirs (house.js) in aria-pressed too
+  const map = $('preset-map-btn');
+  if (map) map.setAttribute('aria-pressed', String(state.view !== 'dataflow' && state.view !== 'house'));
   const btn = $('preset-dataflow-btn');
-  if (btn) {
-    btn.classList.toggle('hx-btn--active', preset);
-    btn.setAttribute('aria-pressed', String(preset));
-  }
+  if (btn) btn.setAttribute('aria-pressed', String(preset));
   const layersBtn = $('legend-toggle-btn');
-  if (layersBtn) layersBtn.classList.toggle('hx-btn--dim', preset);
+  if (layersBtn) layersBtn.classList.toggle('hx-layers-chip--dim', preset);
   const note = $('layers-preset-note');
   if (note) note.hidden = !preset;
   const badge = $('instruction-badge-text');

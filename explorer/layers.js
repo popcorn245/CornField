@@ -62,7 +62,16 @@ export function closeLegendMenu() {
   setLegendMenu(false);
 }
 
+/** The chip says how many layers are on: " · 13 of 20" */
+function paintCount() {
+  const el = document.getElementById('layers-count');
+  if (!el) return;
+  const on = LAYER_DEFS.filter((l) => state.activeLayers[l.key] !== false).length;
+  el.textContent = ` · ${on} of ${LAYER_DEFS.length}`;
+}
+
 export function renderLayerToggles() {
+  paintCount();
   const container = document.getElementById('layer-toggles-container');
   if (!container) return;
 

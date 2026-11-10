@@ -69,13 +69,30 @@ function applyBrand(doc, brand, title) {
   if (heading && brand.appName) heading.textContent = `${brand.appName}: the map`;
 }
 
-/** The small "powered by cornfield" link that stays in the header when a repo brands cornfield */
-function poweredBy(brand) {
-  if (!brand || typeof brand.poweredBy !== 'string' || !/^https:\/\//.test(brand.poweredBy)) return '';
-  return `<a class="hx-btn hx-btn--quiet" data-corn="powered-by" href="${escHtml(brand.poweredBy)}" target="_blank" rel="noreferrer">${escHtml(t('poweredBy'))}</a>`;
+/** The footer line of the account menu: "powered by cornfield 0.14.0". A link to cornfield when the brand names where it leads */
+function paintFooter(doc, config) {
+  const foot = doc.getElementById('cf-powered');
+  if (!foot) return;
+  const words = [t('poweredBy'), typeof config.version === 'string' ? config.version : ''].filter(Boolean).join(' ');
+  const home = config.brand && typeof config.brand.poweredBy === 'string' && /^https:\/\//.test(config.brand.poweredBy) ? config.brand.poweredBy : '';
+  foot.innerHTML = home ? `<a href="${escHtml(home)}" target="_blank" rel="noreferrer">${escHtml(words)}</a>` : escHtml(words);
 }
 
-/** Puts the repo's title, brand and links in the header, and Sign out when the server says who is signed in */
+/** The link rows of the account menu: the config's links, the forge (unless a link already leads there), and cornfield's docs */
+function linkRows(config) {
+  const rows = (Array.isArray(config.links) ? config.links : [])
+    .filter((l) => l && typeof l.label === 'string' && /^(https?:\/\/|\/)/.test(String(l.href)))
+    .map((l) => ({ label: l.label, href: l.href }));
+  const forge = config.forge;
+  if (forge && typeof forge.url === 'string' && /^https:\/\//.test(forge.url) && typeof forge.repo === 'string') {
+    const href = `${forge.url.replace(/\/+$/, '')}/${forge.repo}`;
+    if (!rows.some((r) => r.href === href || String(r.href).startsWith(`${href}/`))) rows.push({ label: forge.type ? forge.type[0].toUpperCase() + forge.type.slice(1) : 'Forge', href });
+  }
+  if (typeof config.docs === 'string' && /^https:\/\//.test(config.docs)) rows.push({ label: 'Docs', href: config.docs });
+  return rows.map((r) => `<a class="hx-account-item" href="${escHtml(r.href)}" target="_blank" rel="noreferrer" data-corn="link"><span>${escHtml(r.label)}</span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h7v7M13 3L7 9" /></svg></a>`).join('');
+}
+
+/** Puts the repo's title, brand and links in the header, and who is signed in, with Sign out, in the account menu */
 export function applyBranding(doc, config) {
   if (!config || !doc) return;
   // The repo's words (core/strings.js) first: what is built below reads them, and the static markup is filled now
@@ -87,19 +104,30 @@ export function applyBranding(doc, config) {
   if (heading && config.title) heading.textContent = `${config.title}: the map`;
   if (config.brand) applyBrand(doc, config.brand, config.title);
   initThemePicker(doc, config.theme);
+  paintAccount(doc, config);
+}
+
+/** The account button's initial, the line saying who is signed in, the links, Sign out and the footer */
+function paintAccount(doc, config) {
+  const login = config.signIn && typeof config.signIn.login === 'string' ? config.signIn.login : '';
+  const initial = doc.getElementById('account-initial');
+  if (initial) initial.textContent = login ? [...login][0].toUpperCase() : '';
+  const btn = doc.getElementById('account-btn');
+  if (btn) btn.setAttribute('aria-label', login ? `Account menu, signed in as ${login}` : 'Account menu');
+  const who = doc.getElementById('account-who');
+  if (who) {
+    who.hidden = !login;
+    // Only a maintainer gets past the sign-in (server/auth.js), so whoever is here is one
+    who.textContent = login ? `${login} · maintainer` : '';
+  }
+  paintFooter(doc, config);
   const links = doc.getElementById('cf-links');
   if (!links) return;
-  const html = Array.isArray(config.links) ? config.links
-    .filter((l) => l && typeof l.label === 'string' && /^(https?:\/\/|\/)/.test(String(l.href)))
-    .map((l) => `<a class="hx-chip-link hx-chip-link--indigo hx-only-xl" href="${escHtml(l.href)}" target="_blank" rel="noreferrer" data-corn="link"><span class="hx-dot-sm"></span> ${escHtml(l.label)}</a>`)
-    .join('') : '';
-  // A plain form: signing out is a same-origin POST (server/auth.js), no script needed. On a narrow phone only its icon
-  // shows (explorer.css); the words stay in the button for a screen reader
-  const signOut = config.signIn && typeof config.signIn.login === 'string'
-    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out" data-corn="sign-out"><button type="submit" class="hx-btn hx-btn--quiet" title="Signed in as ${escHtml(config.signIn.login)}" data-corn-kind="quiet"><span class="cf-sign-out-icon" aria-hidden="true">⎋</span><span class="cf-sign-out-text">${escHtml(t('signOut'))}</span></button></form>`
+  // A plain form: signing out is a same-origin POST (server/auth.js), no script needed
+  const signOut = login
+    ? `<form class="cf-sign-out" method="post" action="/auth/sign-out" data-corn="sign-out"><button type="submit" class="hx-account-item" title="Signed in as ${escHtml(login)}" data-corn-kind="quiet">${escHtml(t('signOut'))}</button></form>`
     : '';
-  const powered = poweredBy(config.brand);
-  if (html || powered || signOut) links.innerHTML = html + powered + signOut;
+  links.innerHTML = linkRows(config) + signOut;
 }
 
 /**

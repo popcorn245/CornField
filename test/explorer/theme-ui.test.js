@@ -26,9 +26,9 @@ function setAddress(search) {
 
 function pageWithToggle() {
   const html = explorerPage();
-  const btn = html.slice(html.indexOf('<button type="button" id="theme-toggle-btn"'), html.indexOf('</button>', html.indexOf('id="theme-toggle-btn"')) + 9);
-  document.body.innerHTML = btn;
-  return document.getElementById('theme-toggle-btn');
+  const at = html.indexOf('<div class="hx-account-seg"');
+  document.body.innerHTML = html.slice(at, html.indexOf('</div>', at) + 6);
+  return document.querySelector('[data-corn="theme-toggle"]');
 }
 
 beforeEach(() => {
@@ -84,30 +84,30 @@ describe('theme.js', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('the toggle steps system, light, dark, keeps the choice, and its label says which', async () => {
+  it('the System, Dark and Light segment sets the choice, keeps it, and says which is on', async () => {
     const media = fakeMedia(false);
-    const btn = pageWithToggle();
-    const { initTheme, cycleTheme, themeChoice, onThemeChange } = await import('../../explorer/theme.js');
+    const seg = pageWithToggle();
+    const { initTheme, setThemeChoice, themeChoice, onThemeChange } = await import('../../explorer/theme.js');
     const { state } = await import('../../explorer/state.js');
     const heard = [];
     onThemeChange((t) => heard.push(t));
     initTheme();
-    expect(btn.getAttribute('aria-label')).toBe('Theme: follows the system (dark now). Change theme');
-    expect(btn.querySelector('[data-icon="system"]').hasAttribute('hidden')).toBe(false);
+    const on = () => [...seg.querySelectorAll('button')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.choice);
+    expect(on()).toEqual(['system']);
 
-    cycleTheme();
+    setThemeChoice('light');
     expect([themeChoice(), state.theme, window.localStorage.getItem(THEME_STORAGE_KEY)]).toEqual(['light', 'light', 'light']);
-    expect(btn.getAttribute('aria-label')).toBe('Theme: light. Change theme');
-    expect(btn.querySelector('[data-icon="light"]').hasAttribute('hidden')).toBe(false);
-    expect(btn.querySelector('[data-icon="system"]').hasAttribute('hidden')).toBe(true);
+    expect(on()).toEqual(['light']);
 
-    cycleTheme();
+    setThemeChoice('dark');
     expect([themeChoice(), state.theme, window.localStorage.getItem(THEME_STORAGE_KEY)]).toEqual(['dark', 'dark', 'dark']);
     media.flip(true); // a set choice ignores the system
     expect(state.theme).toBe('dark');
+    expect(on()).toEqual(['dark']);
 
-    cycleTheme();
+    setThemeChoice('system');
     expect([themeChoice(), state.theme, window.localStorage.getItem(THEME_STORAGE_KEY)]).toEqual(['system', 'light', null]);
+    expect(on()).toEqual(['system']);
     expect(heard).toEqual(['light', 'dark', 'light']);
   });
 
@@ -140,12 +140,11 @@ describe('theme.js', () => {
 });
 
 describe('the page', () => {
-  it('has the toggle in the header, a button with a label', () => {
-    const btn = pageWithToggle();
-    expect(btn.closest).toBeTruthy();
-    expect(btn.getAttribute('type')).toBe('button');
-    expect(btn.dataset.action).toBe('cycle-theme');
-    expect(btn.getAttribute('aria-label')).toMatch(/^Theme: /);
-    expect(btn.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
+  it('has the three choices in the account menu, each a button that names its choice', () => {
+    const seg = pageWithToggle();
+    expect(seg.getAttribute('role')).toBe('group');
+    const buttons = [...seg.querySelectorAll('button')];
+    expect(buttons.map((b) => b.dataset.choice)).toEqual(['system', 'dark', 'light']);
+    for (const b of buttons) { expect(b.getAttribute('type')).toBe('button'); expect(b.dataset.action).toBe('set-theme'); expect(b.textContent.trim().length).toBeGreaterThan(0); }
   });
 });

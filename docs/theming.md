@@ -381,7 +381,7 @@ Buttons have no `data-corn` of their own (unless they are a region's button, suc
 | `quiet` | a low-key button: Close, Refresh, Cancel, Sign out |
 | `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
 | `approve` | a button that commits: Approve, Land it, Open the build issue |
-| `icon` | a button that is only a symbol: ✕, zoom, theme |
+| `icon` | a button that is only a symbol: ✕, Fit |
 
 ### States: `data-corn-state`
 
@@ -405,16 +405,19 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | Hook | What it is |
 |---|---|
 | `header` | the top bar |
-| `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the small "powered by cornfield" link |
-| `links`, `link`, `sign-out` | the config's links at the right, one link, the Sign out form |
-| `layers-button`, `layers-menu` | the Layers button and its dropdown (layer rows and legends) |
-| `preset-dataflow`, `preset-house` | the view switch: the Data flow and House buttons |
-| `proposals-button`, `proposals-menu` | the Proposals button and its dropdown |
-| `forge-button`, `tokens-button` | the Issues & PRs button, the Review tokens button |
+| `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the "powered by cornfield" footer line of the account menu |
+| `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
+| `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
+| `preset-dataflow`, `preset-house` | the View switch (Map, Flow, House): the Flow and House buttons |
+| `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list |
+| `forge-button`, `tokens-button` | the Work toggle, the Review tokens entry of the account menu |
+| `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
 | `live-chip`, `live-menu` | the live layer's chip and its dropdown |
 | `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
-| `layout-toggle`, `zoom` | the Orbit / Freeform button; a zoom group (desktop, and the phone's) |
-| `theme-toggle`, `theme-picker` | the light / dark / system button, the named-theme menu |
+| `layout-toggle` | the Freeform layout switch in the account menu |
+| `theme-toggle`, `theme-picker` | the System / Dark / Light segment, the named-theme menu (both in the account menu) |
+
+The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, the wheel and `+` / `-` still zoom; Fit is in the View switch), `account-button` and `account-menu` are new, and `layout-toggle`, `theme-toggle`, `theme-picker`, `tokens-button`, `proposals-button`, `links`, `link`, `sign-out` and `powered-by` moved into the account menu. The `strings` keys are the same; `dataFlow` now reads "Flow" and `issuesAndPrs` "Work" by default, and `signOut` and `poweredBy` are drawn inside the menu.
 
 ### The map stage and its layers
 
@@ -480,10 +483,10 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | Key | Default |
 |---|---|
 | `layers` | Layers |
-| `dataFlow` | Data flow |
+| `dataFlow` | Flow |
 | `house` | House |
 | `proposals` | Proposals |
-| `issuesAndPrs` | Issues & PRs |
+| `issuesAndPrs` | Work |
 | `searchPlaceholder` | Search... |
 | `signOut` | Sign out |
 | `poweredBy` | powered by cornfield |

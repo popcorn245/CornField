@@ -86,8 +86,7 @@ describe('the static markup', () => {
 
   it('is replaced where it is marked: text, aria-label and placeholder', () => {
     applyBranding(document, { title: 'x', links: [], signIn: false, strings: ALL });
-    expect($('legend-toggle-btn').getAttribute('aria-label')).toBe('«layers»');
-    expect($('legend-toggle-btn').textContent).toContain('«layers»');
+    expect($('legend-toggle-btn').textContent).toContain('«layers»'); // its name is its text
     expect($('preset-dataflow-btn').textContent).toContain('«dataFlow»');
     expect($('forge-btn').getAttribute('aria-label')).toBe('«issuesAndPrs»');
     expect($('node-search').getAttribute('placeholder')).toBe('«searchPlaceholder»');
@@ -110,7 +109,6 @@ describe('the static markup', () => {
     const evil = '<img src=x onerror=alert(1)>"\'';
     applyBranding(document, { title: 'x', links: [], signIn: false, strings: { layers: evil, searchPlaceholder: evil, signOut: evil, poweredBy: evil }, brand: { poweredBy: 'https://example.test/' } });
     expect($('legend-toggle-btn').querySelector('img')).toBeNull();
-    expect($('legend-toggle-btn').getAttribute('aria-label')).toBe(evil);
     expect($('node-search').getAttribute('placeholder')).toBe(evil);
     expect(document.querySelector('[data-corn="powered-by"]').textContent).toBe(evil);
     expect(document.querySelectorAll('img[onerror]').length).toBe(0);
@@ -118,10 +116,10 @@ describe('the static markup', () => {
 
   it('the built header reads the words: Sign out and powered by', () => {
     applyBranding(document, { title: 'x', links: [], signIn: { login: 'm' }, brand: { poweredBy: 'https://example.test/' }, strings: { signOut: 'Leave', poweredBy: 'made with corn' } });
-    expect(document.querySelector('.cf-sign-out-text').textContent).toBe('Leave');
+    expect(document.querySelector('[data-corn="sign-out"] button').textContent).toBe('Leave');
     expect(document.querySelector('[data-corn="powered-by"]').textContent).toBe('made with corn');
     applyBranding(document, { title: 'x', links: [], signIn: { login: 'm' }, brand: { poweredBy: 'https://example.test/' } });
-    expect(document.querySelector('.cf-sign-out-text').textContent).toBe('Sign out');
+    expect(document.querySelector('[data-corn="sign-out"] button').textContent).toBe('Sign out');
     expect(document.querySelector('[data-corn="powered-by"]').textContent).toBe('powered by cornfield');
   });
 });
@@ -191,7 +189,7 @@ describe('accessible names follow the visible label', () => {
   });
 
   it('with no override the names are the defaults, as before', () => {
-    expect($('legend-toggle-btn').getAttribute('aria-label')).toBe('Layers');
+    expect($('legend-toggle-btn').textContent).toContain('Layers'); // its name is its text
     const html = runsHtml(ctx, [run()], []);
     expect(buttons(html).map((b) => b.getAttribute('aria-label'))).toContain('Stop run r7');
   });

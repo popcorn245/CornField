@@ -1978,6 +1978,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries). (explorer/strings.js)"
+    },
+    {
+      "id": "core-explorer-account-menu",
+      "label": "account-menu.js",
+      "type": "core",
+      "file": "explorer/account-menu.js",
+      "summary": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it. (explorer/account-menu.js)"
     }
   ],
   "edges": [
@@ -6324,7 +6334,17 @@
       "to": "core-core-strings",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-account-menu"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-account-menu",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T09:29:24.819Z"
+  "updatedAt": "2026-11-10T18:48:02.442Z"
 }

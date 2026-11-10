@@ -13,7 +13,8 @@
  *   - Enter in the search box selects the first visible match;
  *   - the panel: Escape inside it closes it and gives the focus back to the map; it is `inert` while closed
  *     (panels.js), so its buttons are never tabbed to off screen;
- *   - the Layers menu says whether it is open (`aria-expanded`), and Escape closes it, back on its button.
+ *   - the Layers menu says whether it is open (`aria-expanded`), and Escape closes it, back on its button;
+ *   - `/` goes to the search (anywhere but in a field): the box on a desktop, the search bar on a phone.
  */
 
 import { state, touchScene } from './state.js';
@@ -158,8 +159,25 @@ function onSearchKey(e) {
   land(hit, order);
 }
 
+/** Whether the key went to something that takes typing */
+const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+
+/** `/` goes to the search box, or opens the phone's search bar where the box is not shown */
+function goToSearch() {
+  const input = $('node-search');
+  const shown = input && input.closest('.hx-search') && window.getComputedStyle(input.closest('.hx-search')).display !== 'none';
+  if (shown) { input.focus(); input.select(); return; }
+  const open = $('mobile-search-toggle');
+  if (open) open.click();
+}
+
 /** Escape with the Layers menu open closes it, and its button has the focus again */
 function onDocumentKey(e) {
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target) && !document.querySelector('[data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog')) {
+    e.preventDefault();
+    goToSearch();
+    return;
+  }
   if (e.key !== 'Escape') return;
   const menu = $('legend-dropdown');
   if (!menu || menu.hidden) return;

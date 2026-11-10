@@ -22,6 +22,10 @@ import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initAccountMenu, resetAccountMenuForTests } from '../../explorer/account-menu.js';
+// @ts-expect-error plain JS modules, no declarations
+import { applyBranding } from '../../explorer/plugins.js';
+// @ts-expect-error plain JS modules, no declarations
 import { readingOrder } from '../../explorer/keyboard-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { toggleLegendMenu, renderLayerToggles } from '../../explorer/layers.js';
@@ -105,6 +109,8 @@ function mount() {
   setMap(MAP.nodes.map((n) => ({ ...n })), MAP.edges);
   resetKeyboardForTests();
   initKeyboard();
+  resetAccountMenuForTests();
+  initAccountMenu();
   return canvas;
 }
 
@@ -117,10 +123,9 @@ describe('axe finds no violation', () => {
     expect(await audit()).toEqual([]);
   });
 
-  it('in the light theme too, the toggle named by what is on (contrast is checked in Chromium, in both themes)', async () => {
+  it('in the light theme too (contrast is checked in Chromium, in both themes)', async () => {
     mount();
     document.documentElement.dataset.theme = 'light';
-    expect($('theme-toggle-btn').getAttribute('aria-label')).toMatch(/^Theme: /);
     expect(await audit()).toEqual([]);
     delete document.documentElement.dataset.theme;
   });
@@ -131,6 +136,19 @@ describe('axe finds no violation', () => {
     toggleLegendMenu();
     expect($('legend-toggle-btn').getAttribute('aria-expanded')).toBe('true');
     expect(await audit(...LAYERS)).toEqual([]);
+  });
+
+  it('with the account menu open, signed in, with a forge, the links and a named theme: a menu button, its parts named', async () => {
+    mount();
+    applyBranding(document, { title: 'Acme', version: '1.2.3', links: [{ label: 'Wiki', href: 'https://wiki.example.test/' }], forge: { type: 'forgejo', url: 'https://forge.example.test', repo: 'o/n' }, docs: 'https://docs.example.test/', signIn: { login: 'maint' }, theme: { names: ['day', 'night'], default: null }, brand: { poweredBy: 'https://example.test/' } });
+    $('tokens-btn').hidden = false;
+    expect($('account-btn').getAttribute('aria-expanded')).toBe('false');
+    $('account-btn').click();
+    expect($('account-btn').getAttribute('aria-expanded')).toBe('true');
+    expect($('account-menu').hidden).toBe(false);
+    expect($('account-who').textContent).toBe('maint · maintainer');
+    expect([...document.querySelectorAll('#cf-links a')].map((a) => a.textContent)).toEqual(['Wiki', 'Forgejo', 'Docs']);
+    expect(await audit('.hx-account')).toEqual([]);
   });
 
   it('with a node\'s panel open; closed, the panel is inert so Tab never reaches it off screen', async () => {
@@ -919,6 +937,45 @@ describe('the map by keyboard', () => {
     key(input, 'Enter');
     await settle(40);
     expect($('map-announcer').textContent).toBe('No node matches nothing like it');
+  });
+
+  it('the account menu is a menu button: Escape closes it with the focus back on the button, and so does a click outside it', () => {
+    mount();
+    $('account-btn').focus();
+    $('account-btn').click();
+    $('freeform-toggle-btn').focus();
+    key($('freeform-toggle-btn'), 'Escape');
+    expect($('account-menu').hidden).toBe(true);
+    expect($('account-btn').getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe($('account-btn'));
+    $('account-btn').click();
+    document.body.click();
+    expect($('account-menu').hidden).toBe(true);
+    $('account-btn').click(); // the button opens it and shuts it
+    $('account-btn').click();
+    expect($('account-menu').hidden).toBe(true);
+  });
+
+  it('Theme, Freeform layout and the Proposals list keep the menu open; a link or Review tokens end it', () => {
+    mount();
+    $('account-btn').click();
+    document.querySelector('[data-action="set-theme"][data-choice="dark"]').click();
+    $('freeform-toggle-btn').click();
+    expect($('account-menu').hidden).toBe(false);
+    const link = document.createElement('a');
+    link.href = 'https://x.example.test/';
+    $('cf-links').append(link);
+    link.click();
+    expect($('account-menu').hidden).toBe(true);
+  });
+
+  it('/ goes to the search from anywhere but a field, and types a slash in one', () => {
+    mount();
+    const canvas = $('graph-canvas');
+    const e = key(canvas, '/');
+    expect(e.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe($('node-search'));
+    expect(key($('node-search'), '/').defaultPrevented).toBe(false);
   });
 
   it('Escape closes the Layers menu and puts the focus back on its button', () => {
