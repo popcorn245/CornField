@@ -23,7 +23,7 @@ import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
-import { MAX_THEME_BYTES, cssProblems, themeFiles } from './theme.js';
+import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeUrlTarget } from './theme.js';
 
 /** How a page is produced today, and whether it is baked to a file */
 export const RENDER_NOW = ['build', 'request', 'build+request', 'rom'];
@@ -33,7 +33,8 @@ const ONLY_REMOVES_HINT = '(A proposal that adds nothing cannot show it has been
 
 /**
  * The config's theme files (docs/config.md#theme): each one exists, is a plain file inside the repo (a link out of it is refused),
- * is at most MAX_THEME_BYTES, and is CSS that keeps out of script (core/theme.js `cssProblems`).
+ * is at most MAX_THEME_BYTES, is CSS that keeps out of script (core/theme.js `cssProblems`), and every url() in it is a data: image
+ * or an image or font the server serves beside the theme (core/theme.js `themeUrlTarget`, `themeAssetFile`).
  * @param {{ root: string, theme?: object }} config
  * @returns {string[]}
  */
@@ -52,6 +53,15 @@ export function validateThemeFiles(config) {
     if (stats.size > MAX_THEME_BYTES) { errors.push(`${where} is ${Math.ceil(stats.size / 1024)} KB; a theme file is at most ${MAX_THEME_BYTES / 1024} KB.`); continue; }
     const text = fs.readFileSync(real, 'utf8');
     for (const p of cssProblems(text, { fonts: config.theme.fonts })) errors.push(`${where} ${p}`);
+    // Every url() leads to an image or font served beside the theme, or is a data: image (docs/config.md#theme)
+    for (const ref of new Set(cssUrls(text))) {
+      const target = themeUrlTarget(ref, themeFileUrl(key));
+      if (target.problem) { errors.push(`${where} ${target.problem}`); continue; }
+      if (target.asset) {
+        const found = themeAssetFile(config.root, config.theme, target.asset);
+        if ('problem' in found) errors.push(`${where} url(${ref.slice(0, 80)}): ${found.problem}`);
+      }
+    }
   }
   return errors;
 }

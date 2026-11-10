@@ -190,3 +190,69 @@ describe('without a theme, and with a theme file that is not safe to send', () =
     } finally { await s.close(); }
   });
 });
+
+describe('assets beside a theme: /cornfield/theme/assets/<path>', () => {
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  let s;
+  let outside;
+  beforeAll(async () => {
+    s = await serve(
+      { css: './tools/cf/theme.css', names: { night: './tools/cf/night.css' } },
+      {
+        'tools/cf/theme.css': 'a { background: url(theme/assets/img/bg.png) }', 'tools/cf/night.css': 'a{}',
+        'tools/cf/img/bg.png': PNG, 'tools/cf/img/edge.svg': '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        'tools/cf/f/p.woff2': 'wOF2', 'tools/cf/f/p.woff': 'wOFF', 'tools/cf/a.webp': 'RIFF', 'tools/cf/a.gif': 'GIF89a', 'tools/cf/a.avif': 'avif',
+        'tools/cf/x.js': 'alert(1)', 'tools/cf/x.html': '<script>alert(1)</script>', 'tools/cf/.hidden.png': PNG, 'tools/cf/.git/x.png': PNG,
+        'tools/cf/big.png': Buffer.alloc(1024 * 1024 + 1), 'tools/other.png': PNG, 'secret.png': PNG,
+      },
+    );
+    outside = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-theme-asset-out-'));
+    made.push(outside);
+    fs.writeFileSync(path.join(outside, 'o.png'), PNG);
+    fs.symlinkSync(path.join(outside, 'o.png'), path.join(s.root, 'tools/cf/out.png'));
+    fs.symlinkSync(outside, path.join(s.root, 'tools/cf/outdir'));
+    fs.symlinkSync(path.join(s.root, 'tools/cf/img/bg.png'), path.join(s.root, 'tools/cf/same.png'));
+  });
+  afterAll(() => s.close());
+
+  it('serves images and fonts under the theme folder, same-origin, by type, with nosniff', async () => {
+    const types = { 'img/bg.png': 'image/png', 'f/p.woff2': 'font/woff2', 'f/p.woff': 'font/woff', 'a.webp': 'image/webp', 'a.gif': 'image/gif', 'a.avif': 'image/avif', 'same.png': 'image/png' };
+    for (const [p, type] of Object.entries(types)) {
+      const res = await ask(s.port, `/cornfield/theme/assets/${p}`);
+      expect(res.status, p).toBe(200);
+      expect(res.headers['content-type'], p).toBe(type);
+      expect(res.headers['x-content-type-options'], p).toBe('nosniff');
+      expect(res.headers['access-control-allow-origin'], p).toBeUndefined();
+    }
+    expect((await ask(s.port, '/cornfield/theme/assets/img/bg.png', 'HEAD')).status).toBe(200);
+  });
+
+  it('serves an SVG as an image that may run and load nothing', async () => {
+    const res = await ask(s.port, '/cornfield/theme/assets/img/edge.svg');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/svg+xml');
+    expect(res.headers['content-security-policy']).toBe("default-src 'none'; style-src 'unsafe-inline'");
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('refuses everything else: traversal however written, other types, dot files, links out, big files, listings', async () => {
+    const paths = [
+      '/cornfield/theme/assets/', '/cornfield/theme/assets/img', '/cornfield/theme/assets/img/', '/cornfield/theme/assets',
+      '/cornfield/theme/assets/..%2F..%2F..%2Fsecret.png', '/cornfield/theme/assets/%2e%2e/%2e%2e/%2e%2e/secret.png', '/cornfield/theme/assets/img/%2E%2E%2F%2E%2E%2F..%2Fother.png',
+      '/cornfield/theme/assets/..%5C..%5Cother.png', '/cornfield/theme/assets/img%5Cbg.png', '/cornfield/theme/assets/%E2%80%A5/other.png', '/cornfield/theme/assets/%EF%BC%8E%EF%BC%8E/other.png',
+      '/cornfield/theme/assets/x.js', '/cornfield/theme/assets/x.html', '/cornfield/theme/assets/theme.css', '/cornfield/theme/assets/.hidden.png', '/cornfield/theme/assets/.git/x.png',
+      '/cornfield/theme/assets/out.png', '/cornfield/theme/assets/outdir/o.png', '/cornfield/theme/assets/big.png', '/cornfield/theme/assets/gone.png',
+      '/cornfield/theme/assets//img/bg.png', '/cornfield/theme/assets/img//bg.png', '/cornfield/theme/assets/IMG/bg.png',
+    ];
+    for (const p of paths) expect((await ask(s.port, p)).status, p).toBe(404);
+    // a NUL byte is refused before any route
+    expect((await ask(s.port, '/cornfield/theme/assets/img/bg.png%00.png')).status).toBe(400);
+  });
+
+  it('serves nothing beside a theme at the top of the repo', async () => {
+    const t = await serve({ css: 'theme.css' }, { 'theme.css': 'a{}', 'bg.png': PNG });
+    try {
+      expect((await ask(t.port, '/cornfield/theme/assets/bg.png')).status).toBe(404);
+    } finally { await t.close(); }
+  });
+});

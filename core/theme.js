@@ -2,7 +2,8 @@
  * @module core/theme
  *
  * The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep.
- * Pure: no files are read here (core/validate.js reads them, server/server.js serves them).
+ * No theme file is read here (core/validate.js reads them, server/server.js serves them); `themeAssetFile` alone looks at the disk,
+ * so the server and `validate` find an asset beside a theme by the same rule.
  *
  *   theme: {
  *     css: './tools/cornfield/theme.css',                          // one repo-local stylesheet, loaded after cornfield's own
@@ -15,6 +16,7 @@
  * A theme is CSS only: never script, never inlined into the page.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 
 export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default']);
@@ -139,6 +141,42 @@ const FORBIDDEN = [
 ];
 
 /**
+ * The text with its comments replaced by `gap`, read as a browser tokenizes CSS: a comment marker inside a string is part of the
+ * string (so `content: "/＊"` cannot hide what follows), an escaped character is never a marker, and an unclosed comment runs to the end.
+ * @param {string} text
+ * @param {string} gap
+ */
+function withoutComments(text, gap) {
+  let out = '';
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\') { out += text.slice(i, i + 2); i++; continue; }
+    if (quote) { if (ch === quote || ch === '\n') quote = null; out += ch; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; out += ch; continue; }
+    if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      out += gap;
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * The ways a stylesheet's text is read for the checks, comments taken out as a browser does and CSS escapes undone: with each comment
+ * as a space, as a browser reads it (`@import/＊＊/url(…)` is still an import), and with comments removed outright, so a word split by
+ * one (`java/＊＊/script:`) is still found. A check that either fails, fails.
+ */
+const readings = (text) => [unescapeCss(withoutComments(text, ' ')), unescapeCss(withoutComments(text, ''))];
+
+/** Every `@import` and what it names: `@import "x"`, `@import url(x)`, and an `@import` with nothing after it ('') */
+const IMPORT = /@import\s*(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s"');]*))/gi;
+
+/**
  * What is wrong with a theme file's text: it must be plain CSS, and keep out of script. An `@import` is refused
  * unless it is an https: URL that is in the config's `theme.fonts`.
  * @param {string} text
@@ -146,28 +184,121 @@ const FORBIDDEN = [
  * @returns {string[]}
  */
 export function cssProblems(text, { fonts = [] } = {}) {
-  const out = [];
   if (typeof text !== 'string' || text.includes('\0')) return ['is not text (it holds a NUL byte), so it is not CSS.'];
-  const stripped = unescapeCss(text.replace(/\/\*[\s\S]*?(?:\*\/|$)/g, ''));
-  if (/<\s*\/?\s*(?:script|style|html|head|body|!doctype)\b/i.test(stripped) || /<!--/.test(stripped)) out.push('looks like HTML, not CSS.');
-  for (const [re, word] of FORBIDDEN) if (re.test(stripped)) out.push(`uses ${word}, which a theme may not (a theme is CSS only, never script).`);
+  const out = new Set();
+  const views = readings(text);
+  if (views.some((v) => /<\s*\/?\s*(?:script|style|html|head|body|!doctype)\b/i.test(v) || /<!--/.test(v))) out.add('looks like HTML, not CSS.');
+  for (const [re, word] of FORBIDDEN) if (views.some((v) => re.test(v))) out.add(`uses ${word}, which a theme may not (a theme is CSS only, never script).`);
   const allowed = new Set(fonts);
-  for (const m of stripped.matchAll(/@import\b\s*(?:url\(\s*)?(?:"([^"]*)"|'([^']*)'|([^\s"');]*))/gi)) {
-    const target = (m[1] ?? m[2] ?? m[3] ?? '').trim();
-    if (!allowed.has(target) || !fontUrl(target)) out.push(`has an @import of "${target.slice(0, 80)}": only an https: URL listed in theme.fonts may be imported.`);
+  for (const v of views) {
+    for (const m of v.matchAll(IMPORT)) {
+      const target = (m[1] ?? m[2] ?? m[3] ?? '').trim();
+      if (!allowed.has(target) || !fontUrl(target)) out.add(`has an @import of "${target.slice(0, 80)}": only an https: URL listed in theme.fonts may be imported.`);
+    }
   }
-  // Braces must balance (outside strings): a quick check that it is a stylesheet and not something else
+  // Braces must balance (outside strings, escapes skipped): a quick check that it is a stylesheet and not something else
+  const plain = withoutComments(text, '');
   let depth = 0;
   let quote = null;
-  for (let i = 0; i < stripped.length; i++) {
-    const ch = stripped[i];
+  for (let i = 0; i < plain.length; i++) {
+    const ch = plain[i];
+    if (ch === '\\') { i++; continue; }
     if (quote) { if (ch === '\n') quote = null; else if (ch === quote) quote = null; continue; }
     if (ch === '"' || ch === "'") quote = ch;
     else if (ch === '{') depth++;
     else if (ch === '}' && --depth < 0) break;
   }
-  if (depth !== 0) out.push('has unbalanced braces, so it is not valid CSS.');
-  return out;
+  if (depth !== 0) out.add('has unbalanced braces, so it is not valid CSS.');
+  return [...out];
+}
+
+// ---------------------------------------------------------------------------
+//  Assets beside a theme: images and fonts a theme's url() names
+// ---------------------------------------------------------------------------
+
+/** Where the files beside a theme are served (server/server.js): `/cornfield/theme/assets/<path under the theme folder>` */
+export const THEME_ASSET_PREFIX = '/cornfield/theme/assets/';
+/** The largest a theme asset may be, in bytes */
+export const MAX_THEME_ASSET_BYTES = 1024 * 1024;
+/** The only files served beside a theme, by lower-case extension: images and fonts, never a page or a script */
+export const THEME_ASSET_TYPES = Object.freeze({
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+});
+/** An SVG is an image here, never a page: if it is opened on its own it may not run or load anything */
+export const THEME_SVG_CSP = "default-src 'none'; style-src 'unsafe-inline'";
+/** A `data:` URL a theme may use in url(): an image */
+const DATA_IMAGE = /^data:image\/(?:png|gif|webp|avif|svg\+xml)[;,]/i;
+const ASSET_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
+
+/** The served path of a theme file, by its key from `themeFiles` */
+export const themeFileUrl = (key) => (key === 'css' ? '/cornfield/theme.css' : `/cornfield/theme/${key.slice('names.'.length)}.css`);
+
+/**
+ * The path under the theme folder that an asset request names (the decoded part after THEME_ASSET_PREFIX), or null when it is not
+ * one that may be served: plain ASCII segments (letters, digits, `.`, `_`, `-`), none empty, none starting with a dot (so no `..`,
+ * no `.git`), no backslash, at most 8 deep, and a THEME_ASSET_TYPES extension.
+ * @param {string} rest
+ * @returns {string | null}
+ */
+export function themeAssetPath(rest) {
+  if (typeof rest !== 'string' || rest.length > 512) return null;
+  const parts = rest.split('/');
+  if (parts.length > 8 || !parts.every((p) => ASSET_SEGMENT.test(p))) return null;
+  return THEME_ASSET_TYPES[path.posix.extname(rest).toLowerCase()] ? parts.join('/') : null;
+}
+
+/**
+ * The repo folder whose images and fonts are served beside the theme (relative, with `/`): the folder of the theme files, or the
+ * deepest one that holds them all when they sit in different folders. null when there are no theme files or that folder is the
+ * repo's top, so a theme at the top of the repo never opens the whole repo's images.
+ * @param {object} theme
+ * @returns {string | null}
+ */
+export function themeAssetDir(theme) {
+  const dirs = themeFiles(theme).map(({ rel }) => path.posix.normalize(String(rel).replace(/\\/g, '/')).split('/').slice(0, -1).filter((p) => p && p !== '.'));
+  if (!dirs.length) return null;
+  const common = [];
+  for (let i = 0; dirs.every((d) => i < d.length && d[i] === dirs[0][i]); i++) common.push(dirs[0][i]);
+  return common.length && !common.includes('..') ? common.join('/') : null;
+}
+
+/**
+ * Every url() (and src()) a stylesheet names, as written, escapes undone, comments and @import rules left out (an @import is
+ * cssProblems's to check).
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function cssUrls(text) {
+  if (typeof text !== 'string') return [];
+  const css = unescapeCss(withoutComments(text, ' ')).replace(/@import\b[^;]*;?/gi, ' ');
+  return [...css.matchAll(/(?<![\w-])(?:url|src)\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)/gi)].map((m) => (m[1] ?? m[2] ?? m[3] ?? '').trim());
+}
+
+/**
+ * Where a url() in a theme file leads, read as the browser reads it: relative to where that file is served (`/cornfield/theme.css`
+ * or `/cornfield/theme/<name>.css`). `{ data: true }` for a data: image, `{ asset }` for a path under THEME_ASSET_PREFIX that may
+ * be served (themeAssetPath), else `{ problem }`.
+ * @param {string} ref what url() holds
+ * @param {string} servedAt the file's served path (themeFileUrl)
+ * @returns {{ data?: true, asset?: string, problem?: string }}
+ */
+export function themeUrlTarget(ref, servedAt) {
+  if (DATA_IMAGE.test(ref)) return { data: true };
+  const why = `url(${ref.slice(0, 80)}) is not an image or font served beside the theme: write it as ${THEME_ASSET_PREFIX}<path> (a png, svg, webp, gif, avif, woff2 or woff file under the theme's folder), or as a data: image.`;
+  if (!ref) return { problem: why };
+  let u;
+  try { u = new URL(ref, `https://cornfield.invalid${servedAt}`); } catch { return { problem: why }; }
+  if (u.origin !== 'https://cornfield.invalid' || !u.pathname.startsWith(THEME_ASSET_PREFIX)) return { problem: why };
+  let rest;
+  try { rest = decodeURIComponent(u.pathname.slice(THEME_ASSET_PREFIX.length)); } catch { return { problem: why }; }
+  const asset = themeAssetPath(rest);
+  return asset ? { asset } : { problem: why };
 }
 
 /** The theme as the browser is told it: names and the default, never a path on this machine */
@@ -175,4 +306,32 @@ export function clientTheme(theme) {
   if (!theme) return null;
   const names = Object.keys(theme.names || {});
   return names.length ? { names, default: theme.default || null } : null;
+}
+
+/**
+ * The file on disk an asset path names (themeAssetPath's result), or why there is none: it must be a plain file under the theme folder
+ * (themeAssetDir) once links are followed (a link that leads out of that folder is refused), at most MAX_THEME_ASSET_BYTES.
+ * @param {string} root the repo
+ * @param {object} theme the config's theme
+ * @param {string} rel the asset path
+ * @returns {{ file: string, size: number, type: string } | { problem: string }}
+ */
+export function themeAssetFile(root, theme, rel) {
+  const dir = themeAssetDir(theme);
+  if (!dir) return { problem: 'no theme folder serves assets (the theme files are at the top of the repo, so nothing beside them is served; put them in a folder).' };
+  const type = THEME_ASSET_TYPES[path.posix.extname(rel).toLowerCase()];
+  if (!type || themeAssetPath(rel) !== rel) return { problem: 'is not an image or font file name that may be served.' };
+  let base;
+  let real;
+  try {
+    const top = fs.realpathSync(root);
+    base = fs.realpathSync(path.join(root, ...dir.split('/')));
+    if (!base.startsWith(top + path.sep)) return { problem: `the theme folder ${dir} leaves the repo.` };
+  } catch { return { problem: `the theme folder ${dir} does not exist.` }; }
+  try { real = fs.realpathSync(path.join(base, ...rel.split('/'))); } catch { return { problem: `${dir}/${rel} does not exist.` }; }
+  if (!real.startsWith(base + path.sep)) return { problem: `${dir}/${rel} leads out of the theme folder (a link).` };
+  const stats = fs.statSync(real);
+  if (!stats.isFile()) return { problem: `${dir}/${rel} is not a file.` };
+  if (stats.size > MAX_THEME_ASSET_BYTES) return { problem: `${dir}/${rel} is ${Math.ceil(stats.size / 1024)} KB; an asset beside a theme is at most ${MAX_THEME_ASSET_BYTES / 1024 / 1024} MB.` };
+  return { file: real, size: stats.size, type };
 }

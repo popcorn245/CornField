@@ -12,7 +12,7 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { configProblems, loadConfig, DEFAULTS } from '../../core/config.js';
 // @ts-expect-error plain JS modules, no declarations
-import { MAX_THEME_BYTES, cssProblems, fontOrigins, clientTheme } from '../../core/theme.js';
+import { MAX_THEME_BYTES, MAX_THEME_ASSET_BYTES, cssProblems, cssUrls, fontOrigins, clientTheme, themeAssetDir, themeAssetPath, themeUrlTarget } from '../../core/theme.js';
 // @ts-expect-error plain JS modules, no declarations
 import { validateThemeFiles } from '../../core/validate.js';
 import { CORNFIELD, SAMPLE } from '../helpers.js';
@@ -69,6 +69,14 @@ describe('fontOrigins and clientTheme', () => {
     expect(fontOrigins(undefined)).toEqual({ style: [], font: [] });
   });
 
+  it('cannot be fed a CSP source with a ; a space, a quote or a wildcard, even from a config that skipped the checks', () => {
+    const bad = { fonts: ['https://a.example;script-src/x.css', 'https://x.example%20y/a.css', 'https://fonts.example.org/a.css;'], fontHosts: ['a.example; script-src *', 'a b.example', "'unsafe-inline'", '*.example.org', 'files.example.org'] };
+    const { style, font } = fontOrigins(bad);
+    expect(style).toEqual(['https://fonts.example.org']);
+    expect(font).toEqual(['https://files.example.org', 'https://fonts.example.org']);
+    for (const o of [...style, ...font]) expect(o).toMatch(/^https:\/\/[a-z0-9.-]+(?::\d+)?$/);
+  });
+
   it('tells the browser the names and the default, never a path', () => {
     expect(clientTheme({ css: './secret/theme.css', names: { a: './x/a.css', b: './x/b.css' }, default: 'a' })).toEqual({ names: ['a', 'b'], default: 'a' });
     expect(clientTheme({ css: './theme.css', names: {} })).toBeNull();
@@ -102,12 +110,70 @@ describe('cssProblems', () => {
     expect(cssProblems(css, {}).length).toBeGreaterThan(0);
   });
 
+  it.each([
+    ['a comment marker in a string hiding what follows', 'a { content: "/*"; } b { width: expression(1); } c { content: "*/"; }'],
+    ['an escape with its space', 'a { width: \\65 xpression(1); }'],
+    ['an escaped letter in javascript:', 'a { background: url(java\\script:alert(1)); }'],
+    ['an escaped at-keyword', '@\\69mport url(http://evil.example/x.css);'],
+    ['@import with a comment for a gap', '@import/**/url(http://evil.example/x.css);'],
+    ['@import hidden behind a string with a comment marker', '@charset "/*"; @import url(http://evil.example/x.css); /* "*/'],
+    ['@import with no url()', '@import "https://evil.example/x.css";'],
+    ['@import with nothing after it', '@import;'],
+  ])('is not dodged by %s', (_label, css) => {
+    expect(cssProblems(css, { fonts: [GOOGLE] }).length, css).toBeGreaterThan(0);
+  });
+
+  it('accepts an allow-listed @import with a comment before its url(), and braces in strings and escapes', () => {
+    expect(cssProblems(`@import /* fonts */ url("${GOOGLE}");\na { content: "\\"}"; } b { content: "\\7b"; }`, { fonts: [GOOGLE] })).toEqual([]);
+  });
+
   it('refuses what is not CSS: HTML, script tags, a NUL byte, unbalanced braces', () => {
     expect(cssProblems('<!doctype html><html></html>', {})[0]).toMatch(/looks like HTML/);
     expect(cssProblems('a{}\n</style><script>alert(1)</script>', {})[0]).toMatch(/looks like HTML/);
     expect(cssProblems('a{}\0', {})[0]).toMatch(/NUL byte/);
     expect(cssProblems('a { color: red;', {})[0]).toMatch(/unbalanced braces/);
     expect(cssProblems('a { color: red; } }', {})[0]).toMatch(/unbalanced braces/);
+  });
+});
+
+describe('assets beside a theme: what a url() may name', () => {
+  it('lists the url() and src() of a stylesheet, leaving out comments and @import', () => {
+    expect(cssUrls(`@import url("${GOOGLE}"); /* url(no.png) */ a { background: url( "a.png" ) } b { background: url(b.svg#x) } @font-face { src: url('/cornfield/theme/assets/f.woff2') format("woff2") } c { content: "x"; mask: src(\\63 .png) }`))
+      .toEqual(['a.png', 'b.svg#x', '/cornfield/theme/assets/f.woff2', 'c.png']);
+  });
+
+  it('reads a relative url() from where the file is served: /cornfield/theme.css or /cornfield/theme/<name>.css', () => {
+    expect(themeUrlTarget('/cornfield/theme/assets/img/bg.png', '/cornfield/theme.css')).toEqual({ asset: 'img/bg.png' });
+    expect(themeUrlTarget('/cornfield/theme/assets/img/bg.png', '/cornfield/theme/night.css')).toEqual({ asset: 'img/bg.png' });
+    expect(themeUrlTarget('theme/assets/img/bg.png', '/cornfield/theme.css')).toEqual({ asset: 'img/bg.png' });
+    expect(themeUrlTarget('assets/img/bg.png', '/cornfield/theme/night.css')).toEqual({ asset: 'img/bg.png' });
+    expect(themeUrlTarget('./assets/f.woff2?v=2', '/cornfield/theme/night.css')).toEqual({ asset: 'f.woff2' });
+    // the same words from the other file land elsewhere, and are refused
+    expect(themeUrlTarget('assets/img/bg.png', '/cornfield/theme.css').problem).toMatch(/write it as \/cornfield\/theme\/assets\/<path>/);
+    expect(themeUrlTarget('theme/assets/img/bg.png', '/cornfield/theme/night.css').problem).toBeTruthy();
+  });
+
+  it('accepts a data: image, and nothing from elsewhere or of another kind', () => {
+    expect(themeUrlTarget('data:image/png;base64,iVBORw0KGgo=', '/cornfield/theme.css')).toEqual({ data: true });
+    expect(themeUrlTarget('data:image/svg+xml,%3Csvg%3E', '/cornfield/theme.css')).toEqual({ data: true });
+    for (const ref of ['', 'data:text/html,<b>', 'https://evil.example/a.png', '//evil.example/a.png', 'http://localhost/cornfield/theme/assets/a.png', '/cornfield/theme.css', '/explorer/explorer.css', 'theme/assets/a.js', 'theme/assets/a.css', 'theme/assets/a.html', 'theme/assets/%2e%2e/%2e%2e/secret.png', 'theme/assets/..%2Fsecret.png', 'theme/assets/a%5Cb.png', 'theme/assets/.git/x.png', 'theme/assets/a%00.png', 'theme/assets/%E2%80%A5/a.png', 'theme/assets/']) {
+      expect(themeUrlTarget(ref, '/cornfield/theme.css').problem, ref).toBeTruthy();
+    }
+  });
+
+  it('serves only plain asset names: no dot segments, backslashes, NUL, other characters or types', () => {
+    expect(themeAssetPath('img/bg.png')).toBe('img/bg.png');
+    expect(themeAssetPath('fonts/Pixel-Sans_2.WOFF2')).toBe('fonts/Pixel-Sans_2.WOFF2');
+    for (const p of ['', '/', '../x.png', 'a/../x.png', './x.png', 'a//x.png', '/x.png', '.x.png', 'a/.git/x.png', 'a\\x.png', 'x.png\0', 'x\u2025.png', 'ｘ.png', 'x.js', 'x.css', 'x.svgz', 'x.html', 'x', 'a/b/c/d/e/f/g/h/i.png']) expect(themeAssetPath(p), p).toBeNull();
+  });
+
+  it('serves from the theme files\' folder, never from the top of the repo', () => {
+    expect(themeAssetDir({ css: './tools/cornfield/theme.css' })).toBe('tools/cornfield');
+    expect(themeAssetDir({ css: './tools/cornfield/theme.css', names: { a: 'tools/cornfield/names/a.css' } })).toBe('tools/cornfield');
+    expect(themeAssetDir({ names: { a: 'tools/x/a.css', b: 'tools/y/b.css' } })).toBe('tools');
+    expect(themeAssetDir({ css: 'theme.css' })).toBeNull();
+    expect(themeAssetDir({ css: 'a/x.css', names: { b: 'b/y.css' } })).toBeNull();
+    expect(themeAssetDir({})).toBeNull();
   });
 });
 
@@ -154,6 +220,57 @@ describe('validateThemeFiles', () => {
     expect(out).toMatch(/theme\.css \(x\.css\) uses expression\(/);
     expect(out).toMatch(/theme\.names\.y \(y\.css\) looks like HTML/);
     expect(out).toMatch(/theme\.names\.z \(z\.css\) has an @import of "https:\/\/evil\.example\/a\.css"/);
+  });
+});
+
+describe('validateThemeFiles: url() and the assets beside a theme', () => {
+  const made = [];
+  afterAll(() => { for (const r of made) fs.rmSync(r, { recursive: true, force: true }); });
+  const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
+  const repo = (files, t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-theme-assets-'));
+    made.push(root);
+    for (const [name, data] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true }); fs.writeFileSync(path.join(root, name), data); }
+    return { root, theme: { ...DEFAULTS.theme, ...t } };
+  };
+
+  it('passes url() that reach an image or font beside the theme, written absolute or relative, and data: images', () => {
+    const r = repo({
+      'tools/cf/theme.css': 'a { background: url(/cornfield/theme/assets/img/bg.png) } b { background: url("theme/assets/img/bg.png") } c { background: url(data:image/png;base64,iVBORw0KGgo=) } @font-face { font-family: P; src: url(theme/assets/f/p.woff2) format("woff2") }',
+      'tools/cf/night.css': 'a { border-image: url(assets/img/edge.svg) 8 }',
+      'tools/cf/img/bg.png': PNG, 'tools/cf/img/edge.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>', 'tools/cf/f/p.woff2': 'wOF2',
+    }, { css: 'tools/cf/theme.css', names: { night: 'tools/cf/night.css' } });
+    expect(validateThemeFiles(r)).toEqual([]);
+  });
+
+  it('refuses a url() from elsewhere, of another type, missing, too big, or a link out of the theme folder', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-asset-out-'));
+    made.push(outside);
+    fs.writeFileSync(path.join(outside, 'o.png'), PNG);
+    const r = repo({
+      'tools/cf/theme.css': [
+        'a { background: url(https://evil.example/a.png) }', 'b { background: url(bg.png) }', 'c { background: url(theme/assets/gone.png) }',
+        'd { background: url(theme/assets/big.png) }', 'e { background: url(theme/assets/out.png) }', 'f { background: url(theme/assets/x.js) }',
+        'g { background: url(data:text/html,hi) }',
+      ].join('\n'),
+      'tools/cf/bg.png': PNG, 'tools/cf/big.png': Buffer.alloc(MAX_THEME_ASSET_BYTES + 1), 'tools/cf/x.js': 'alert(1)',
+    }, { css: 'tools/cf/theme.css' });
+    fs.symlinkSync(path.join(outside, 'o.png'), path.join(r.root, 'tools/cf/out.png'));
+    const out = validateThemeFiles(r);
+    const say = out.join('\n');
+    expect(say).toMatch(/url\(https:\/\/evil\.example\/a\.png\) is not an image or font served beside the theme/);
+    expect(say).toMatch(/url\(bg\.png\) is not an image or font served beside the theme/);
+    expect(say).toMatch(/url\(theme\/assets\/gone\.png\): tools\/cf\/gone\.png does not exist/);
+    expect(say).toMatch(/url\(theme\/assets\/big\.png\): tools\/cf\/big\.png is 1025 KB; an asset beside a theme is at most 1 MB/);
+    expect(say).toMatch(/url\(theme\/assets\/out\.png\): tools\/cf\/out\.png leads out of the theme folder/);
+    expect(say).toMatch(/url\(theme\/assets\/x\.js\) is not an image or font/);
+    expect(say).toMatch(/url\(data:text\/html,hi\) is not an image or font/);
+    expect(out).toHaveLength(7);
+  });
+
+  it('says so when a theme at the top of the repo names an asset', () => {
+    const r = repo({ 'theme.css': 'a { background: url(theme/assets/bg.png) }', 'bg.png': PNG }, { css: 'theme.css' });
+    expect(validateThemeFiles(r)[0]).toMatch(/no theme folder serves assets/);
   });
 });
 

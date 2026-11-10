@@ -227,16 +227,33 @@ theme: {
 
 **What the CSP gets.** `style-src` gains the origin of each `fonts` URL and `font-src` gains the same origins plus the font file hosts, and nothing else is widened (`default-src`, `script-src`, `connect-src` and `img-src` stay as they were). The file hosts are known for two stylesheet hosts: `fonts.googleapis.com` (files from `fonts.gstatic.com`) and `fonts.bunny.net` (files from the same host). For any other host in `fonts`, the config is refused until `fontHosts` lists where its font files come from. A font file that a stylesheet in `fonts` names from a host the policy does not list is blocked by the browser.
 
-**Named themes.** With `names`, the server puts `data-theme-names` and `data-theme-default` on `<html>`, and `explorer/theme-boot.js` sets `data-theme-name` on `<html>` before the first paint: the viewer's pick from `localStorage` (`cornfield:theme-name`) when it is still one of `names`, else `default`. It also points the named theme's `<link>` at that file, so a stylesheet scoped to `:root[data-theme-name="night"]` or a whole file per name both work. A small `<select>` in the header, next to the light/dark toggle, switches it and remembers the pick. If storage is blocked, the page still renders and the pick holds for that visit. `data-theme-name` is independent of the light/dark `data-theme`.
+**Fonts that redirect.** A `fonts` stylesheet, or a font file it names, that redirects to a host the policy does not list is blocked by the browser: the CSP is checked against where the request ends up, so it fails closed (the text falls back to the next font in the stack). List the final host in `fontHosts` if a provider redirects.
+
+**Named themes.** With `names`, the server puts `data-theme-names` and `data-theme-default` on `<html>`, and `explorer/theme-boot.js`, a classic script that is the last thing in the page's `<head>` (after every stylesheet link, so before the body is parsed and before anything is drawn), sets `data-theme-name` on `<html>` before the first paint: the viewer's pick from `localStorage` (`cornfield:theme-name`) when it is still one of `names`, else `default`. It also points the named theme's `<link>` at that file, so a stylesheet scoped to `:root[data-theme-name="night"]` or a whole file per name both work. A small `<select>` in the header, next to the light/dark toggle, switches it and remembers the pick. If storage is blocked, the page still renders and the pick holds for that visit. `data-theme-name` is independent of the light/dark `data-theme`.
 
 The order of stylesheets is: cornfield's own, the `fonts` links, `css`, then the current named theme. `/cornfield/config.json` carries `theme: { names, default }` for the picker, never a file path.
+
+**Images and fonts beside a theme.** A theme may use its own images (pixel-art backgrounds, border images) and self-hosted fonts. The server serves the files in the theme's folder (the folder that holds the `css` and `names` files; when they sit in different folders, the deepest folder that holds them all) at `/cornfield/theme/assets/<path under that folder>`:
+
+- only `.png`, `.svg`, `.webp`, `.gif`, `.avif`, `.woff2` and `.woff` files, each at most **1 MB**, with their own `Content-Type` and `X-Content-Type-Options: nosniff`, same-origin (`img-src 'self'` and `font-src 'self'` already allow them);
+- an SVG is sent as `image/svg+xml` with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`, so opened on its own it runs and loads nothing;
+- path segments are plain (letters, digits, `.`, `_`, `-`; none starting with a dot, so no `..` and no `.git`), at most 8 deep; a symlink that leads out of the theme folder, a folder (no listings) and anything else is a 404;
+- nothing is served this way when the theme files sit at the top of the repo: put them in a folder, like `tools/cornfield/`.
+
+cornfield does not rewrite the CSS, so a `url()` is read relative to where the file is **served**, not where it sits in the repo. Write it as **`/cornfield/theme/assets/<path>`**, which works in every theme file. Relative also works if it is relative to the served URL: from `css` (served at `/cornfield/theme.css`) that is `theme/assets/<path>`, and from a named theme (served at `/cornfield/theme/<name>.css`) it is `assets/<path>`. For `tools/cornfield/theme.css` and `tools/cornfield/img/bricks.png`:
+
+```css
+body { background-image: url(/cornfield/theme/assets/img/bricks.png); image-rendering: pixelated; }   /* in any theme file */
+@font-face { font-family: Pixel; src: url(/cornfield/theme/assets/fonts/pixel.woff2) format("woff2"); }
+```
 
 **What `cornfield validate` checks** in each file named by `css` and `names`:
 
 - it exists, is a plain file, and stays inside the repo (a symlink that leads out is refused);
 - it is at most **256 KB**;
 - it is CSS: no NUL bytes, no HTML, balanced braces;
-- it keeps out of script: no `expression(`, `javascript:`, `vbscript:`, `behavior:` or `-moz-binding` (CSS escapes and comments inside the word do not hide it), and no `@import` except of an `https:` URL that is listed in `theme.fonts`.
+- it keeps out of script: no `expression(`, `javascript:`, `vbscript:`, `behavior:` or `-moz-binding` (CSS escapes and comments inside the word do not hide it, nor a comment marker inside a string), and no `@import` except of an `https:` URL that is listed in `theme.fonts` (an `@import` of a bare string, with a comment before its `url(`, or with nothing after it is refused too);
+- every `url()` (and `src()`) leads, read relative to where the file is served, to an image or font beside the theme that the server would serve (above), or is a `data:` image (`data:image/png`, `gif`, `webp`, `avif` or `svg+xml`). A URL on another host is refused: the CSP would block it anyway.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails, for a file over the cap, and for any path the config does not name. Nothing else of the repo is reachable through these routes.
 

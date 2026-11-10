@@ -18,6 +18,7 @@
  *   GET  /repo/<path>.js                a browser module the config names (and the files in its folder)
  *   GET  /cornfield/theme.css, /cornfield/theme/<name>.css
  *                                       the stylesheets the config's `theme` names (css, names): those files only, as text/css
+ *   GET  /cornfield/theme/assets/<path> an image or font beside the theme files (png, svg, webp, gif, avif, woff2, woff; 1 MB each)
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
  *   POST /api/forge/pulls/<n>/merge|rerun   land a green pull request, re-run a failed check (server/forge-actions.js)
  *   POST /api/forge/issues/<n>/spec, /pulls/<n>/build   the pipeline's steps (server/pipeline.js, server/forge-actions.js)
@@ -52,7 +53,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel, runnerQuietAfterMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
-import { MAX_THEME_BYTES, THEME_NAME, clientTheme, cssProblems, fontOrigins, fontUrl } from '../core/theme.js';
+import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, fontOrigins, fontUrl, themeAssetFile, themeAssetPath } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
@@ -156,6 +157,28 @@ function sendTheme(req, res, config, rel, reqPath) {
     if (cssProblems(text, { fonts: config.theme.fonts }).length) return notFound(res, reqPath);
     res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     return res.end(req.method === 'HEAD' ? undefined : text);
+  } catch {
+    return notFound(res, reqPath);
+  }
+}
+
+/**
+ * Serves one image or font from beside the theme (docs/config.md#theme): only a THEME_ASSET_TYPES file under the theme folder
+ * (core/theme.js `themeAssetPath`, `themeAssetFile`: plain names, no dot segments, no link out, at most 1 MB), never a listing,
+ * with nosniff; an SVG gets a policy of its own, so opened by itself it runs and loads nothing.
+ */
+function sendThemeAsset(req, res, config, reqPath) {
+  try {
+    const rel = themeAssetPath(reqPath.slice(THEME_ASSET_PREFIX.length));
+    const found = rel && themeAssetFile(config.root, config.theme || {}, rel);
+    if (!found || 'problem' in found) return notFound(res, reqPath);
+    const body = fs.readFileSync(found.file);
+    if (body.length > MAX_THEME_ASSET_BYTES) return notFound(res, reqPath); // it grew since it was looked at
+    res.writeHead(200, {
+      'Content-Type': found.type, 'Content-Length': body.length, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff',
+      ...(found.type === 'image/svg+xml' ? { 'Content-Security-Policy': THEME_SVG_CSP } : {}),
+    });
+    return res.end(req.method === 'HEAD' ? undefined : body);
   } catch {
     return notFound(res, reqPath);
   }
@@ -383,6 +406,7 @@ export function createCornfieldServer(config, opts = {}) {
       return res.end(req.method === 'HEAD' ? undefined : page());
     }
     if (themeFile.has(reqPath)) return sendTheme(req, res, config, themeFile.get(reqPath), reqPath);
+    if (reqPath.startsWith(THEME_ASSET_PREFIX)) return sendThemeAsset(req, res, config, reqPath);
     if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config, signedIn));
     if (reqPath === '/topology.json') {
       const file = inside(root, config.topology);
