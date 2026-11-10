@@ -148,11 +148,8 @@ export function renderFlowLegend() {
 
 export function flowSummary(node) {
   const flows = state.edges.filter((e) => e.kind === 'flow' && (e.from === node.id || e.to === node.id));
-  if (flows.length === 0) return '';
-  return `<div class="hx-sec" data-corn="section"><strong class="hx-strong">Data flows:</strong>
-    ${flows.map((e) => {
-      const out = e.from === node.id;
-      const s = FLOW_STYLES[e.flow] || FLOW_STYLES.sync;
-      return `<div class="hx-line"><span class="hx-glyph" style="--glyph:${s.color}">${out ? '→' : '←'}</span><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`;
-    }).join('')}</div>`;
+  const fact = (key, list, out) => (list.length
+    ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${key}</div><div class="hx-fact-v">${list.map((e) => `<div class="hx-line"><span><span class="hx-name">${escHtml(nameOf(out ? e.to : e.from))}</span> · ${escHtml(e.label)}${e.status === 'live' ? '' : ' <span class="hx-warn">(proposed)</span>'}</span></div>`).join('')}</div></div>`
+    : '');
+  return fact('Sends to', flows.filter((e) => e.from === node.id), true) + fact('Gets from', flows.filter((e) => e.to === node.id && e.from !== node.id), false);
 }

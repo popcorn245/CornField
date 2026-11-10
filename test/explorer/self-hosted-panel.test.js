@@ -68,16 +68,16 @@ describe('a self-hosted container\'s panel', () => {
     mount();
     await selectNode(state.nodes.find((n     ) => n.id === 'container-nextcloud'));
     const meta = document.getElementById('drawer-meta-list') .textContent ;
-    expect(meta).toContain('Self-hosted:');
+    expect(meta).toContain('Role');
     expect(meta).toContain(SUMMARY);
-    expect(meta).toMatch(/Called by services:\s*←\s*lib\/caldav\.ts · caldav/);
-    expect(meta).toMatch(/Called by endpoints:\s*←\s*\/api\/v1\/files/);
-    expect(meta).toMatch(/Pushes to \(webhook\):\s*→\s*\/api\/v1\/webhooks\/nextcloud\s*from nextcloud-webhooks/);
+    expect(meta).toMatch(/Called by services\s*lib\/caldav\.ts · caldav/);
+    expect(meta).toMatch(/Called by endpoints\s*\/api\/v1\/files/);
+    expect(meta).toMatch(/Pushes to\s*\/api\/v1\/webhooks\/nextcloud\s*from nextcloud-webhooks/);
   });
 
   it('leaves any other container as it was', async () => {
     mount();
     await selectNode(state.nodes.find((n     ) => n.id === 'container-nextcloud-db'));
-    expect(document.getElementById('drawer-meta-list') .textContent).not.toContain('Self-hosted:');
+    expect(document.getElementById('drawer-meta-list') .textContent).not.toContain('Role');
   });
 });

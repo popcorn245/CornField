@@ -518,7 +518,7 @@ function mountDrawerBox() {
   drawerBox.id = 'whatif-drawer';
   drawerBox.className = 'hx-block hx-whatif-drawer';
   drawerBox.hidden = true;
-  block.parentElement.insertBefore(drawerBox, block);
+  block.after(drawerBox); // under the facts, the mockups and the threads: the node comes first, the tools to edit it after
   drawerBox.addEventListener('click', onClick);
   return drawerBox;
 }

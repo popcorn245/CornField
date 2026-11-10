@@ -509,9 +509,8 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `stop` | Stop |
 | `continueRun` | Continue |
 | `reply` | Reply |
-| `propsTitle` | Properties & Attributes |
-| `detailsTitle` | Details |
-| `openRoute` | Open Live Route |
+| `openRoute` | Open route |
+| `startRun` | Start a run |
 | `copySpec` | Copy Spec |
 | `hintInspect` | Tap node to inspect live spec |
 | `hintDrag` | Drag nodes to move • Double-tap to inspect |
@@ -520,6 +519,8 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `errorTitle` | The map could not be loaded |
 | `retry` | Retry |
 <!-- strings:end -->
+
+The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openRoute` now says "Open route" and is the primary action; `startRun` ("Start a run") is new.
 
 ## The old `--hx-*` names
 

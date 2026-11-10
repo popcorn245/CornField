@@ -743,7 +743,7 @@ describe('the Threads tab and a node\'s "Mentioned in"', () => {
       closeForge({ restoreFocus: false });
       await selectNode(state.nodes.find((n) => n.id === 'page-a'));
       await settle();
-      expect($('drawer-threads').textContent).toContain('Mentioned in 1 thread');
+      expect($('drawer-threads').textContent).toContain('Threads');
     }],
   ];
 

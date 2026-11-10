@@ -134,6 +134,7 @@ const ACTIONS = {
   'clear-search': () => handleSearch(''),
   'close-drawer': () => closeDrawer(),
   'copy-spec': (el) => copySpec(el),
+  'start-run': () => startRun(),
   'select-node': (el) => selectNode(nodeById(el.dataset.id)),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),

@@ -118,7 +118,7 @@ describe('the cloud node panel', () => {
   it('fills the drawer: the kind badge, roles, plan, breaks line and Used by by when', async () => {
     mount();
     await selectNode(state.nodes.find((n     ) => n.id === 'ext-cloudflare'));
-    expect($('drawer-badge').textContent).toBe('CLOUD');
+    expect($('drawer-badge').textContent).toBe('Cloud');
     expect($('drawer-title').textContent).toBe('Cloudflare');
     const meta = $('drawer-meta-list');
     const badges = [...meta.querySelectorAll('.hx-cloud-badges > span')].map((b) => b.textContent);
@@ -137,7 +137,7 @@ describe('the cloud node panel', () => {
     expect($('drawer-meta-list').querySelector('.hx-cloud-plan-note') .textContent).toBe('Anonymous pulls');
     expect($('drawer-meta-list').querySelector('.hx-cloud-when--deploy')).not.toBeNull();
     await selectNode(state.nodes.find((n     ) => n.id === 'ext-public-web'));
-    expect($('drawer-badge').textContent).toBe('PUBLIC WEB');
+    expect($('drawer-badge').textContent).toBe('Public web');
     expect($('drawer-meta-list').querySelector('.hx-cloud-plan')).toBeNull();
     expect($('drawer-meta-list').textContent).toContain('Nothing on the map uses it.');
   });

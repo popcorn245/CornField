@@ -6324,7 +6324,13 @@
       "to": "core-core-strings",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T09:29:24.819Z"
+  "updatedAt": "2026-11-10T18:48:39.313Z"
 }

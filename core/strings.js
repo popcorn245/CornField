@@ -47,9 +47,8 @@ export const STRINGS = Object.freeze({
   continueRun: 'Continue',
   reply: 'Reply',
   // The node panel
-  propsTitle: 'Properties & Attributes',
-  detailsTitle: 'Details',
-  openRoute: 'Open Live Route',
+  openRoute: 'Open route',
+  startRun: 'Start a run',
   copySpec: 'Copy Spec',
   // The hint, loading and errors
   hintInspect: 'Tap node to inspect live spec',

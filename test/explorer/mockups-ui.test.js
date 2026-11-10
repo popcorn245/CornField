@@ -165,8 +165,9 @@ describe('in the node\'s panel', () => {
     await open();
     await selectNode(state.nodes.find((n) => n.id === 'app-a'));
     const list = document.querySelector('#drawer-meta-list');
-    expect(list.firstElementChild.hasAttribute('data-proposal-mark')).toBe(true);
-    expect(list.children[1].hasAttribute('data-mockups')).toBe(true);
+    const order = [...list.children].map((c) => (c.hasAttribute('data-mockups') ? 'mockups' : c.hasAttribute('data-proposal-mark') ? 'diff' : ''));
+    expect(order.indexOf('mockups')).toBeGreaterThan(-1);
+    expect(order.indexOf('mockups')).toBeLessThan(order.indexOf('diff')); // the mockups, then the diff
     expect(panelButtons().map((b) => b.dataset.mockup)).toEqual(['4']);
   });
 
