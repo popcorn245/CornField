@@ -369,12 +369,11 @@
       <form id="agent-start-form" class="hx-forge-confirm" novalidate>
       <label class="hx-forge-field">Kind of run<select id="agent-kind" class="hx-forge-select"></select></label>
       <label id="agent-profile-field" class="hx-forge-field" hidden>Profile<select id="agent-profile" class="hx-forge-select"></select></label>
-      <p id="agent-limits" class="hx-forge-meta" hidden></p>
-      <fieldset id="agent-limits-edit" class="hx-forge-field" hidden><legend>Limits (hints for the runner; blank for none)</legend>
-        <label>Minutes <input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" /></label>
-        <label>Turns <input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" /></label>
-        <label>Cost <input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" /></label>
-        <label>Tokens <input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" /></label>
+      <fieldset id="agent-limits-edit" class="hx-forge-field hx-forge-limits"><legend>Limits, hints for the runner (one left blank takes the config's, if any)</legend>
+        <label class="hx-forge-field">Minutes<input type="number" id="agent-limit-minutes" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field">Turns<input type="number" id="agent-limit-turns" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
+        <label class="hx-forge-field">Cost<input type="number" id="agent-limit-cost" class="hx-forge-input" min="0" step="any" inputmode="decimal" /></label>
+        <label class="hx-forge-field">Tokens<input type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
       </fieldset>
       <label class="hx-forge-field">Brief for the runner<textarea id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
       <label id="agent-force-field" class="hx-forge-toggle" hidden><input type="checkbox" id="agent-force" /> Ask for another run on purpose</label>

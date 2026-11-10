@@ -697,6 +697,26 @@ describe('the JSON Schema', () => {
     const before = full();
     expect(c.validateRequest(before)).toEqual({ ok: true, value: before });
   });
+  it('agrees on mutations of retryOf (issue #100): only a run id is one', () => {
+    const id = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEG';
+    const odd = [undefined, null, 0, 1, '', 'x', ' ', true, [], {}, [id], { runId: id }, 'run-1', 'run-', id.toLowerCase(), id.toUpperCase().replace('RUN', 'Run'), `${id} `, ` ${id}`, `${id}\n`,
+      `${id}X`, id.slice(0, -1), id.replace('HDEG', 'HDEI'), id.replace('HDEG', 'HDEL'), id.replace('HDEG', 'HDEO'), id.replace('HDEG', 'HDEU'), id.replace('run-0', 'run-8'), id.replace('run-', 'run_'), 'a'.repeat(300), id];
+    let ok = 0;
+    for (const o of odd) {
+      const ex = full();
+      if (o !== undefined) ex.retryOf = o;
+      const said = c.validateRequest(ex).ok;
+      expect(check(SCHEMA.$defs.request, ex), `retryOf=${JSON.stringify(o)}`).toBe(said);
+      expect(c.validateRunBody(ex).ok, `retryOf=${JSON.stringify(o)}`).toBe(said);
+      if (said) ok++;
+    }
+    // absent, and the one run id
+    expect(ok).toBe(2);
+    // and through a block, as a runner reads it
+    const made = c.createRequest({ kind: 'code', refs: { issue: 12 }, brief: '', requestedBy: 'maintainer-one', retryOf: id }).value;
+    expect(made.retryOf).toBe(id);
+    expect(c.parseRunBlocks(c.formatRunComment(made.runId, made))[0].value.retryOf).toBe(id);
+  });
   it('is looser than the validator in exactly the documented ways', () => {
     // Rules a schema cannot hold: the developer's profile list, and a date that does not exist
     expect(c.validateRequest(request({ profile: 'gpt' }), { profiles: ['claude'] }).ok).toBe(false);

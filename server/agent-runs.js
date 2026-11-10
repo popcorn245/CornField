@@ -58,9 +58,10 @@
  *     (refused as a duplicate). A fence without an id gets one from cornfield, the same on every look (`handRunId`), confirmed by a reply block in the
  *     thread that the poll's signed-in maintainer posts (the block's `requestedBy` is the author; the audit row names who posted it). A reply the forge
  *     refuses is posted on a later look; the run is kept meanwhile (on pull it may be claimed at once)
+ *   - a `retryOf` is checked as an API request's is (`retryProblem`: a run of this repo that failed or was stopped), before the cap
  *   - the cap and the one-run-per-subject rule are `reserve`'s, in the same transaction as the insert, so a hand-written request counts toward later
  *     cap checks and is refused when they say so; the rate limit guards people at the dashboard and does not apply
- *   - what started nothing (not a maintainer, edited, malformed with the contract's reason, duplicate, old, cap, subject) is kept in `actions` and shown by `list` as `handWritten.refused`
+ *   - what started nothing (not a maintainer, edited, malformed with the contract's reason, duplicate, old, retryOf, cap, subject) is kept in `actions` and shown by `list` as `handWritten.refused`
  *
  * ## Waiting, and the answer (issue #101)
  *
@@ -1010,6 +1011,18 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return row ? publicRun(row, now(), quietMs, extrasFor(db, [row], now()).get(row.run_id)) : null;
   }
 
+  /**
+   * The whole brief of one run of this repo, for **Start again** (the list and `get` show the first `BRIEF_SHOWN` characters): '' for a request
+   * without one, null when this repo has no such run. The route that answers it is the signed-in maintainer's only (server/agent-api.js)
+   */
+  async function briefOf(runId) {
+    if (!isRunId(runId)) return null;
+    const db = await auth.store();
+    const row = /** @type {{ request: string } | undefined} */ (db.prepare(`SELECT request FROM runs WHERE run_id = ? AND repo = ? AND ${POSTED}`).get(runId, repo));
+    if (!row) return null;
+    try { return String(JSON.parse(row.request).brief ?? ''); } catch { return ''; }
+  }
+
   /** The runs a follow looks at: posted, not over for good (a trusted pull request merged or closed), and active within the follow window or waiting on a maintainer */
   function followable(db, at) {
     const window = Math.max(2 * quietMs, FOLLOW_FLOOR_MS);
@@ -1224,6 +1237,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
         }
         if (at - Date.parse(request.requestedAt) >= quietMs) return { accepted: false, why: 'old', reason: 'posted more than agents.quietAfter ago, so the run would be quiet at once and count for nothing; write it again to ask now' };
         try {
+          // `retryOf` is checked as it is for a request from the API: first, then the cap and the one-run-per-subject rule
+          if (request.retryOf !== undefined) retryProblem(db, request.retryOf);
           reserve(db, request, { target: t.number, who: { userId: '' }, via: null, force: false, hand: { comment } });
         } catch (err) {
           if (err instanceof Refused) return { accepted: false, why: err.code ?? 'refused', reason: err.message };
@@ -1900,7 +1915,7 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
     return hit ? hit.run_id : null;
   }
 
-  return { request, stop, answer, list, get, follow, discover, discovers, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
+  return { request, stop, answer, list, get, brief: briefOf, follow, discover, discovers, hasWork, resume, queued, claim, runnerGet, report, openOn, maxOpen: cap, profiles, transport };
 }
 
 /** @typedef {ReturnType<typeof createRuns>} Runs */

@@ -24,7 +24,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, canRetry, retryRefs, retryWords, limitsFromFields, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, limitsWords, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
+import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answerWords, answerWordsFor, timelineWords, canRetry, retryRefs, retryWords, limitsFromFields, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, defaultLimits, startBody, startWords, stopWords, confirmStartWords } from '../../explorer/runs-model.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
@@ -72,6 +72,7 @@ function fakeServer(opts = {}) {
       runs = runs.map((r) => (u.pathname.includes(r.runId) ? { ...r, answer: { ...sent, at, by: 'maintainer-one' } } : r));
       return json(200, { ok: true });
     }
+    if (/\/brief$/.test(u.pathname)) return opts.brief ? json(opts.brief.status, opts.brief.body) : json(200, { ok: true, runId: u.pathname.split('/')[3], brief: `${'x'.repeat(2000)} and the rest of it` });
     if (init.method === 'POST' && /\/stop$/.test(u.pathname)) { runs = runs.map((r) => (r.runId === RUN.runId ? { ...r, status: 'stop-requested', stopRequested: { at, by: 'maintainer-one' } } : r)); return opts.stop ? json(opts.stop.status, opts.stop.body) : json(200, { ok: true }); }
     if (u.pathname === '/api/agent-runs') return opts.runsDown ? json(502, { ok: false, error: 'cornfield could not read its runs.', code: 'unavailable' }) : json(200, { ok: true, runs, open: runs.filter((r) => r.open).length, maxOpen: 3, profiles: opts.profiles ?? ['claude', 'local-qwen'], limits: opts.limits ?? {}, ...(opts.presence ? { runnerPresence: opts.presence } : {}), ...(opts.totals ? { totals: opts.totals } : {}), ...(opts.triggerSkipped ? { triggerSkipped: opts.triggerSkipped } : {}), ...(opts.handWritten ? { handWritten: opts.handWritten } : {}) });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, 'Meals <b>page</b>'), issue(5, 'Sign-in')] });
@@ -165,32 +166,46 @@ describe('Start an agent', () => {
     expect($('agent-profile-field').hidden).toBe(true);
   });
 
-  it('shows the limits the request will carry for the chosen profile, read-only, and sends none itself (CF-27)', async () => {
-    expect(limitsWords({}, 'claude')).toBe('');
-    expect(limitsWords({ claude: { cost: 5 } }, '')).toBe('It will carry no limits.');
-    expect(limitsWords({ minutes: 1, turns: 40, cost: 0.5, tokens: 1000 }, 'cost')).toBe('Limits it will carry (hints for the runner): 1 minute, 40 turns, cost 0.5, 1000 tokens.');
+  it('fills the limit fields with what the config gives the chosen profile, all editable, and sends what they hold (CF-27, CF-25)', async () => {
+    expect(defaultLimits({}, 'claude')).toEqual({});
+    expect(defaultLimits(undefined, '')).toEqual({});
+    expect(defaultLimits({ claude: { cost: 5 } }, '')).toEqual({});
+    expect(defaultLimits({ minutes: 1, turns: 40, cost: 0.5, tokens: 1000 }, 'cost')).toEqual({ minutes: 1, turns: 40, cost: 0.5, tokens: 1000 });
+    expect(defaultLimits({ minutes: 30, claude: { cost: 5, minutes: 60 } }, 'claude')).toEqual({ minutes: 60, cost: 5 });
+    const fields = () => ['minutes', 'turns', 'cost', 'tokens'].map((k) => $(`agent-limit-${k}`).value);
     const server = fakeServer({ limits: { minutes: 30, claude: { cost: 5, minutes: 60 } } });
     mount();
     await openIssues();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
-    expect($('agent-limits').hidden).toBe(false);
-    expect($('agent-limits').textContent).toBe('Limits it will carry (hints for the runner): 30 minutes.');
+    expect($('agent-limits-edit').hidden).toBe(false);
+    expect(fields()).toEqual(['30', '', '', '']);
     $('agent-profile').value = 'claude';
     $('agent-profile').dispatchEvent(new Event('change', { bubbles: true }));
-    expect($('agent-limits').textContent).toBe('Limits it will carry (hints for the runner): 60 minutes, cost 5.');
+    expect(fields()).toEqual(['60', '', '5', '']);
+    // typed in: another profile leaves them as they are
+    $('agent-limit-turns').value = '12';
+    $('agent-profile').value = '';
+    $('agent-profile').dispatchEvent(new Event('change', { bubbles: true }));
+    expect(fields()).toEqual(['60', '12', '5', '']);
+    $('agent-limit-cost').value = '';
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
-    expect(JSON.parse(server.posts()[0].init.body)).not.toHaveProperty('limits');
+    // a blank field is left out: the server fills it from the config
+    expect(JSON.parse(server.posts()[0].init.body).limits).toEqual({ minutes: 60, turns: 12 });
   });
 
-  it('shows no limits line when the config sets none', async () => {
-    fakeServer();
+  it('leaves the limit fields blank and sends no limits when the config sets none', async () => {
+    const server = fakeServer();
     mount();
     await openIssues();
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
-    expect($('agent-limits').hidden).toBe(true);
+    expect($('agent-limits-edit').hidden).toBe(false);
+    expect(['minutes', 'turns', 'cost', 'tokens'].map((k) => $(`agent-limit-${k}`).value)).toEqual(['', '', '', '']);
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect(JSON.parse(server.posts()[0].init.body)).not.toHaveProperty('limits');
   });
 
   it('is also on an issue group and a proposal group of the Agents tab', async () => {
@@ -539,7 +554,7 @@ describe.each(['dark', 'light'])('accessibility, %s theme', (theme) => {
     expect(await audit()).toEqual([]);
     click(q('[data-forge-agent="issue:7"]'));
     await settle();
-    expect($('agent-limits').hidden).toBe(false);
+    expect($('agent-limit-minutes').value).toBe('30');
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
     expect(await audit()).toEqual([]);
@@ -641,12 +656,11 @@ const STOPPED = { ...FAILED, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF2', status: 's
 const DONE = { ...FAILED, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF3', status: 'done', refs: { issue: 5 } };
 
 describe('Start again', () => {
-  it('words it: only failed and stopped runs can, with their own refs, limits as numbers, and a note that says a cut brief', () => {
+  it('words it: only failed and stopped runs can, with their own refs, and limits as numbers', () => {
     document.body.innerHTML = body;
     expect([FAILED, STOPPED, DONE, RUN, QUIET, WAITING].map(canRetry)).toEqual([true, true, false, false, false, false]);
     expect(retryRefs({ refs: { issue: 7, thread: 8, pull: 3 } })).toEqual({ issue: 7, thread: 8 });
     expect(retryWords(FAILED)).toBe(`Starts again on ${FAILED.runId}.`);
-    expect(retryWords(STOPPED)).toMatch(/longer than 2000 characters and is shown cut/);
     expect(limitsFromFields({ minutes: '30', turns: '', cost: ' 2.5 ', tokens: '' })).toEqual({ minutes: 30, cost: 2.5 });
     expect(limitsFromFields({ minutes: '0' })).toBeNull();
     expect(limitsFromFields({ turns: 'x' })).toBeNull();
@@ -690,23 +704,27 @@ describe('Start again', () => {
     expect(document.activeElement).toBe(q(`[data-forge-retry="${FAILED.runId}"]`));
   });
 
-  it('prefills a proposal run, says a cut brief, and a plain Start an agent afterwards is clean again', async () => {
-    const server = fakeServer({ runs: [STOPPED], profiles: ['claude'] });
+  it('prefills a proposal run with its whole brief, read when the list\'s was cut, and a plain Start an agent afterwards is clean again', async () => {
+    const server = fakeServer({ runs: [STOPPED], profiles: ['claude'], limits: { turns: 9 } });
     mount();
     await openAgents();
     click(q(`[data-forge-retry="${STOPPED.runId}"]`));
     await settle();
+    expect(server.urls()).toContain(`/api/agent-runs/${STOPPED.runId}/brief`);
     expect($('agent-start-about').textContent).toBe('About proposal 0040-meals');
     expect($('agent-kind').value).toBe('code');
     expect($('agent-profile').value).toBe('');
-    expect($('agent-retry-note').textContent).toMatch(/shown cut/);
+    expect($('agent-brief').value).toBe(`${'x'.repeat(2000)} and the rest of it`);
+    expect($('agent-retry-note').textContent).toBe(`Starts again on ${STOPPED.runId}.`);
+    // the run asked for no limits: none are filled in, and the server gives a blank one the config's
+    expect($('agent-limit-turns').value).toBe('');
     click(q('[data-action="agent-start-cancel"]'));
     await settle();
     click(q('[data-forge-agent="proposal:0040-meals"]'));
     await settle();
     expect($('agent-start-title').textContent).toBe('Start an agent');
     expect($('agent-retry-note').hidden).toBe(true);
-    expect($('agent-limits-edit').hidden).toBe(true);
+    expect($('agent-limit-turns').value).toBe('9');
     expect($('agent-brief').value).toBe('');
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
@@ -751,8 +769,34 @@ describe('Start again', () => {
     $('agent-limit-turns').value = '0';
     q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await settle();
-    expect($('agent-start-msg').textContent).toMatch(/number above zero/);
+    expect($('agent-start-msg').textContent).toBe('A limit is a number above zero, or blank for the config\'s (turns).');
+    expect($('agent-limit-turns').getAttribute('aria-invalid')).toBe('true');
+    expect($('agent-limit-turns').getAttribute('aria-describedby')).toBe('agent-start-msg');
+    expect($('agent-limit-minutes').hasAttribute('aria-invalid')).toBe(false);
+    expect(document.activeElement).toBe($('agent-limit-turns'));
     expect(server.posts()).toHaveLength(0);
+    $('agent-limit-turns').value = '3';
+    q('#agent-start form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    expect($('agent-limit-turns').hasAttribute('aria-invalid')).toBe(false);
+    expect(JSON.parse(server.posts()[0].init.body).limits).toEqual({ minutes: 30, turns: 3, cost: 2.5 });
+  });
+
+  it('reads the whole brief only when the list\'s was cut, and opens nothing when it cannot be read', async () => {
+    const server = fakeServer({ runs: [FAILED, STOPPED], brief: { status: 404, body: { ok: false, error: 'cornfield has no such run.', code: 'not-found' } } });
+    mount();
+    await openAgents();
+    click(q(`[data-forge-retry="${FAILED.runId}"]`));
+    await settle();
+    expect(server.urls().some((u) => u.endsWith('/brief'))).toBe(false);
+    click(q('[data-action="agent-start-cancel"]'));
+    await settle();
+    click(q(`[data-forge-retry="${STOPPED.runId}"]`));
+    await settle();
+    expect(server.urls()).toContain(`/api/agent-runs/${STOPPED.runId}/brief`);
+    expect($('agent-start').hidden).toBe(true);
+    expect($('forge-runs-note').textContent).toMatch(new RegExp(`The brief of ${STOPPED.runId} could not be read, so Start again did not open`));
+    expect(await said()).toMatch(/could not be read/);
   });
 });
 

@@ -488,6 +488,36 @@ describe('the agent API', () => {
       expect(world.posted).toEqual([]);
     });
 
+    it('read a run\'s whole brief for Start again: a signed-in maintainer\'s session only, never a token, never past a demotion', async () => {
+      const long = `${'b'.repeat(2400)} the end`;
+      const made = await page('POST', '/api/agent-runs', code({ brief: long }));
+      const id = made.json.request.runId;
+      const listed = (await page('GET', '/api/agent-runs')).json.runs[0];
+      expect(listed).toMatchObject({ runId: id, briefCut: true });
+      expect(listed.brief).toHaveLength(2000);
+      const read = await page('GET', `/api/agent-runs/${id}/brief`);
+      expect(read.status, read.text).toBe(200);
+      expect(read.json).toEqual({ ok: true, runId: id, brief: long });
+      expect(read.headers['cache-control']).toBe('no-store');
+      expect((await page('HEAD', `/api/agent-runs/${id}/brief`)).status).toBe(200);
+      expect((await page('GET', '/api/agent-runs/run-01JC8Z3Q5M7VXK2RT9N4B6HDEF/brief')).status).toBe(404);
+      expect((await page('POST', `/api/agent-runs/${id}/brief`, {})).status).toBe(405);
+      // no session: the guard; a token in place of one: the guard reads cookies, never Authorization
+      const noSession = await raw(srv.port, 'GET', `/api/agent-runs/${id}/brief`);
+      expect(noSession.status).toBe(401);
+      expect(noSession.text).not.toContain('the end');
+      const { secret } = await mint();
+      const byToken = await raw(srv.port, 'GET', `/api/agent-runs/${id}/brief`, { headers: { authorization: `Bearer ${secret}` } });
+      expect([401, 403]).toContain(byToken.status);
+      expect(byToken.text).not.toContain('the end');
+      // no longer a maintainer: once the forge is asked again, the guard says no
+      world.demoted.add('maintainer-one');
+      clock += 16 * 60_000;
+      const demoted = await page('GET', `/api/agent-runs/${id}/brief`);
+      expect(demoted.status).toBe(403);
+      expect(demoted.text).not.toContain('the end');
+    });
+
     it('stop a run: a stop-requested block in the same place, as the maintainer who clicked, once', async () => {
       const made = await page('POST', '/api/agent-runs', code());
       const id = made.json.request.runId;

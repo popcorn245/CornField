@@ -518,3 +518,50 @@ describe('which conversations are read (agents.handWritten)', () => {
     expect(setup().runs.discovers).toBe(true);
   });
 });
+
+describe('a hand-written request that starts again (retryOf, issue #100)', () => {
+  const RUN3 = 'run-01JC8Z3Q5M7VXK2RT9N4B6HDEH';
+  const [UNKNOWN, A, B, C, D] = ['run-01JC8Z3Q5M7VXK2RT9N4B6HDF0', 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF1', 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF2', 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF3', 'run-01JC8Z3Q5M7VXK2RT9N4B6HDF4'];
+
+  it('is checked as one from the API is: an unknown, an open and a done run are refused and listed with the reason; a failed one is taken and linked', async () => {
+    const t = setup();
+    // RUN on #12 fails, RUN2 on #13 stays open, RUN3 on #14 is done
+    t.say(12, 'maintainer-one', block());
+    t.say(13, 'maintainer-one', block({ runId: RUN2, refs: { issue: 13 } }));
+    t.say(14, 'maintainer-one', block({ runId: RUN3, refs: { issue: 14 } }));
+    expect(await t.look()).toMatchObject({ imported: 3 });
+    t.say(12, 'runner-bot', formatRunComment(RUN, { state: 'failed', note: 'unknown profile' }));
+    t.say(14, 'runner-bot', formatRunComment(RUN3, { state: 'done' }));
+    await t.look();
+    expect((await t.runs.get(RUN)).status).toBe('failed');
+    expect((await t.runs.get(RUN3)).status).toBe('done');
+    t.say(12, 'maintainer-one', block({ runId: A, retryOf: UNKNOWN }));
+    t.say(12, 'maintainer-one', block({ runId: B, retryOf: RUN2 }));
+    t.say(12, 'maintainer-one', block({ runId: C, retryOf: RUN3 }));
+    t.say(12, 'maintainer-one', block({ runId: D, retryOf: RUN }));
+    expect(await t.look()).toMatchObject({ imported: 1, refused: 3 });
+    const list = await t.runs.list();
+    const refused = Object.fromEntries(list.handWritten.refused.map((r) => [r.runId, r]));
+    expect(refused[A]).toMatchObject({ why: 'not-found', number: 12 });
+    expect(refused[A].reason).toBe(`"retryOf" names ${UNKNOWN}, which is not a run of owner/name.`);
+    expect(refused[B]).toMatchObject({ why: 'retry-open' });
+    expect(refused[B].reason).toMatch(/still open/);
+    expect(refused[C]).toMatchObject({ why: 'retry-not-over' });
+    expect(refused[C].reason).toMatch(/ended as done/);
+    expect(handLines(list).find((l) => l.includes(A))).toContain('started nothing: "retryOf" names');
+    expect([A, B, C].map((id) => list.runs.some((r) => r.runId === id))).toEqual([false, false, false]);
+    expect(list.runs.find((r) => r.runId === D)).toMatchObject({ retryOf: RUN, via: 'hand', status: 'requested' });
+    expect((await t.runs.get(RUN)).retriedBy).toEqual([D]);
+  });
+
+  it('is checked before the cap: a bad retryOf is said as such even when the repo is full', async () => {
+    const t = setup({ agents: { maxOpen: 1 } });
+    t.say(13, 'maintainer-one', block({ runId: RUN2, refs: { issue: 13 } }));
+    await t.look();
+    t.say(12, 'maintainer-one', block({ runId: A, retryOf: UNKNOWN }));
+    t.say(12, 'maintainer-one', block({ runId: B }));
+    await t.look();
+    const refused = Object.fromEntries((await t.runs.list()).handWritten.refused.map((r) => [r.runId, r.why]));
+    expect(refused).toEqual({ [A]: 'not-found', [B]: 'cap-reached' });
+  });
+});

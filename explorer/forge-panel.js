@@ -69,7 +69,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, canRetry, retryRefs, retryWords, limitsFromFields, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, limitsWords, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -122,7 +122,8 @@ const ui = {
   runnerSaid: null, // the runner state last shown ('online', 'offline', 'none'; null off the pull transport), so a change is said once
   runTimelines: new Set(), // the runs whose timeline is open
   runReplies: new Map(), // the reply typed so far for each waiting run, so a repaint (the runs are looked at again) keeps it
-  agent: null, // { opener, refs, posting } while the Start an agent dialog is open
+  agent: null, // { opener, refs, posting, retryOf, filled } while the Start an agent dialog is open
+  retrying: false, // a Start again reading its run's whole brief, so a second click does nothing
 };
 
 /** The Release notes view: the draft loaded for a tag, and where the confirm step is */
@@ -1453,10 +1454,11 @@ function keepFocusInAgent(e) {
 }
 
 /**
- * Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field. With `again` (a run that failed or was
- * stopped) it is **Start again**: the same kind, refs, profile, brief and limits filled in, all editable, and the request will carry `retryOf`.
+ * Opens the Start an agent dialog for `issue:<n>` or `proposal:<slug>`; the focus goes to the first field. The limit fields hold what the request
+ * starts from (the config's, for the profile). With `again` (a run that failed or was stopped) it is **Start again**: the same kind, refs,
+ * profile, brief and limits filled in, all editable, and the request will carry `retryOf`. `brief` is that run's whole brief when the list's was cut
  */
-async function openAgent(ref, opener, again = null) {
+async function openAgent(ref, opener, again = null, brief = null) {
   if (!agentEl() || ui.agent) return;
   const at = ref.indexOf(':');
   const type = ref.slice(0, at);
@@ -1480,11 +1482,8 @@ async function openAgent(ref, opener, again = null) {
   const note = $('agent-retry-note');
   note.hidden = !again;
   note.textContent = again ? retryWords(again) : '';
-  const edit = $('agent-limits-edit');
-  edit.hidden = !again;
-  for (const k of ['minutes', 'turns', 'cost', 'tokens']) $(`agent-limit-${k}`).value = again && again.limits && again.limits[k] != null ? String(again.limits[k]) : '';
-  paintLimits();
-  $('agent-brief').value = again && typeof again.brief === 'string' ? again.brief : '';
+  fillLimits(again ? again.limits || {} : limitDefaultsNow());
+  $('agent-brief').value = brief ?? (again && typeof again.brief === 'string' ? again.brief : '');
   $('agent-force').checked = false;
   $('agent-force-field').hidden = true;
   $('agent-start-msg').hidden = true;
@@ -1500,12 +1499,25 @@ async function openAgent(ref, opener, again = null) {
   announce(`${again ? 'Start again' : 'Start an agent'} on ${aboutWords(refs)}. ${confirmStartWords(refs, forgeName())}`);
 }
 
-/** "Start again" on a run that failed or was stopped */
-function startAgain(runId) {
+/** "Start again" on a run that failed or was stopped. A brief the list shows cut is read whole first: the dialog never starts from part of one */
+async function startAgain(runId) {
   const run = ui.runs && ui.runs.data ? ui.runs.data.runs.find((r) => r.runId === runId) : null;
-  if (!run || !canRetry(run)) return;
+  if (!run || !canRetry(run) || ui.agent || ui.retrying) return;
+  let brief = null;
+  if (run.briefCut) {
+    ui.retrying = true;
+    const res = await request(briefUrl(runId), false);
+    ui.retrying = false;
+    if (!res.ok || typeof res.body.brief !== 'string') {
+      ui.runNote = { text: `The brief of ${runId} could not be read, so Start again did not open: ${errorWords(res.status, res.body)}`, ok: false };
+      paint();
+      announce(ui.runNote.text);
+      return;
+    }
+    brief = res.body.brief;
+  }
   const about = run.refs.proposal != null ? `proposal:${run.refs.proposal}` : `issue:${run.refs.issue ?? run.refs.thread}`;
-  openAgent(about, `[data-forge-retry="${runId}"]`, run);
+  openAgent(about, `[data-forge-retry="${runId}"]`, run, brief);
 }
 
 /** Takes the person to another run of the list: the row scrolls into view and has the focus */
@@ -1516,14 +1528,25 @@ function goToRun(runId) {
   row.focus();
 }
 
-/** The limits the request will carry for the chosen profile, read-only under the select; the server fills them in */
-function paintLimits() {
-  const el = $('agent-limits');
-  if (!el) return;
-  if (ui.agent && ui.agent.retryOf) { el.hidden = true; return; } // the fields below hold the limits
-  const words = limitsWords(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
-  el.hidden = !words;
-  el.textContent = words;
+/** The limits the config gives a request under the chosen profile */
+const limitDefaultsNow = () => defaultLimits(ui.runs && ui.runs.data && ui.runs.data.limits, $('agent-profile-field').hidden ? '' : $('agent-profile').value);
+/** What the four limit fields hold, as text */
+const limitFields = () => Object.fromEntries(LIMIT_KEYS.map((k) => [k, $(`agent-limit-${k}`).value]));
+
+/** Fills the four limit fields (blank where `limits` has none) and remembers what was filled */
+function fillLimits(limits) {
+  for (const k of LIMIT_KEYS) {
+    const field = $(`agent-limit-${k}`);
+    field.value = limits && limits[k] != null ? String(limits[k]) : '';
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+  }
+  if (ui.agent) ui.agent.filled = JSON.stringify(limitFields());
+}
+
+/** Another profile: its limits fill the fields, unless the person has typed in them */
+function onAgentProfile() {
+  if (ui.agent && ui.agent.filled === JSON.stringify(limitFields())) fillLimits(limitDefaultsNow());
 }
 
 /** Closes the dialog; the focus goes back to the button that opened it unless told not to */
@@ -1550,21 +1573,29 @@ async function submitAgent(e) {
   go.textContent = 'Asking …';
   $('agent-start-msg').hidden = true;
   const again = ui.agent.retryOf;
-  const limits = again ? limitsFromFields({ minutes: $('agent-limit-minutes').value, turns: $('agent-limit-turns').value, cost: $('agent-limit-cost').value, tokens: $('agent-limit-tokens').value }) : undefined;
+  const fields = limitFields();
+  const limits = limitsFromFields(fields);
+  // Each field that is not a number above zero is marked, and the first has the focus; the message says why
+  const wrong = LIMIT_KEYS.filter((k) => limitsFromFields({ [k]: fields[k] }) === null);
+  for (const k of LIMIT_KEYS) {
+    const field = $(`agent-limit-${k}`);
+    if (wrong.includes(k)) { field.setAttribute('aria-invalid', 'true'); field.setAttribute('aria-describedby', 'agent-start-msg'); } else { field.removeAttribute('aria-invalid'); field.removeAttribute('aria-describedby'); }
+  }
   if (limits === null) {
     ui.agent.posting = false;
     go.disabled = false;
     go.removeAttribute('aria-busy');
     go.textContent = 'Ask the runner';
     const bad = $('agent-start-msg');
-    bad.textContent = 'A limit is a number above zero (or leave it blank).';
+    bad.textContent = `A limit is a number above zero, or blank for the config's (${wrong.join(', ')}).`;
     bad.hidden = false;
+    $(`agent-limit-${wrong[0]}`).focus();
     announce(bad.textContent);
     return;
   }
   const res = await post(RUNS_URL, startBody({
     kind: $('agent-kind').value, profile: $('agent-profile-field').hidden ? '' : $('agent-profile').value, brief: $('agent-brief').value, refs: ui.agent.refs, force: $('agent-force').checked,
-    ...(again ? { limits, retryOf: again } : {}),
+    limits, ...(again ? { retryOf: again } : {}),
   }));
   if (!ui.agent) return;
   ui.agent.posting = false;
@@ -1923,7 +1954,7 @@ export function initForgePanel(config, opts = {}) {
       agent.addEventListener('click', onAgentClick);
       agent.addEventListener('keydown', onAgentKey);
       agent.querySelector('form').addEventListener('submit', submitAgent);
-      $('agent-profile').addEventListener('change', paintLimits);
+      $('agent-profile').addEventListener('change', onAgentProfile);
     }
     const confirm = confirmEl();
     if (confirm) {
@@ -1965,5 +1996,5 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   runsTimer = 0;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null });
+  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'pulls', filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
 }

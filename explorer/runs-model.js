@@ -12,6 +12,8 @@ export const RUNS_URL = '/api/agent-runs';
 export const runsUrl = (follow) => (follow ? `${RUNS_URL}?follow=1` : RUNS_URL);
 export const stopUrl = (runId) => `${RUNS_URL}/${encodeURIComponent(runId)}/stop`;
 export const answerUrl = (runId) => `${RUNS_URL}/${encodeURIComponent(runId)}/answer`;
+/** A run's whole brief, for Start again: the list carries its first 2000 characters */
+export const briefUrl = (runId) => `${RUNS_URL}/${encodeURIComponent(runId)}/brief`;
 
 /** The kinds of run (the contract's), and what each asks the runner for */
 export const KINDS = Object.freeze([
@@ -202,8 +204,8 @@ export function runnerWords(presence, nowMs) {
 
 /**
  * The body of a start. Only what the person chose; the server writes the run id, the time and who asked, and checks the rest.
- * @param {{ kind: string, profile?: string, brief?: string, refs: object, force?: boolean, limits?: object, retryOf?: string }} input `limits` and
- *   `retryOf` only come with Start again
+ * @param {{ kind: string, profile?: string, brief?: string, refs: object, force?: boolean, limits?: object, retryOf?: string }} input `limits`: the
+ *   dialog's fields, blanks left out (the server fills those from the config); `retryOf` only with Start again
  */
 export function startBody({ kind, profile, brief, refs, force, limits, retryOf }) {
   const out = { kind, refs, brief: (brief || '').trim() };
@@ -214,20 +216,21 @@ export function startBody({ kind, profile, brief, refs, force, limits, retryOf }
   return out;
 }
 
-const LIMIT_WORDS = [['minutes', (n) => `${n} ${n === 1 ? 'minute' : 'minutes'}`], ['turns', (n) => `${n} ${n === 1 ? 'turn' : 'turns'}`], ['cost', (n) => `cost ${n}`], ['tokens', (n) => `${n} tokens`]];
+/** The four limits a request may carry, in the order the Start dialog's fields show them */
+export const LIMIT_KEYS = Object.freeze(['minutes', 'turns', 'cost', 'tokens']);
 
 /**
- * The limits a request for `profile` will carry, in one line for the Start dialog: the config's flat `agents.limits`, then the profile's own
- * over them key by key (as core/config.js `limitDefaults`; the server fills them in, this only shows them). '' when the config sets none.
+ * The limits a request for `profile` starts from, to fill the Start dialog's fields: the config's flat `agents.limits`, then the profile's own
+ * over them key by key (as core/config.js `limitDefaults`, which the server applies to a field left blank). `{}` when the config sets none.
  * @param {Record<string, any> | undefined} limits the `limits` of `GET /api/agent-runs`
  * @param {string} profile '' for none
  */
-export function limitsWords(limits, profile) {
-  if (!limits || typeof limits !== 'object' || !Object.keys(limits).length) return '';
-  const names = LIMIT_WORDS.map(([k]) => k);
-  const own = profile && !names.includes(profile) && limits[profile] && typeof limits[profile] === 'object' ? limits[profile] : {};
-  const said = LIMIT_WORDS.map(([k, say]) => { const n = own[k] ?? limits[k]; return typeof n === 'number' ? say(n) : ''; }).filter(Boolean);
-  return said.length ? `Limits it will carry (hints for the runner): ${said.join(', ')}.` : 'It will carry no limits.';
+export function defaultLimits(limits, profile) {
+  if (!limits || typeof limits !== 'object') return {};
+  const own = profile && !LIMIT_KEYS.includes(profile) && limits[profile] && typeof limits[profile] === 'object' ? limits[profile] : {};
+  const out = {};
+  for (const k of LIMIT_KEYS) { const n = own[k] ?? limits[k]; if (typeof n === 'number') out[k] = n; }
+  return out;
 }
 
 /** Start again is offered on a run that failed (a runner's refusal is a `failed` report too) or was stopped, and on nothing else */
@@ -243,7 +246,7 @@ export function retryRefs(run) {
 /** The four limits as the dialog's fields hold them (text), to the object a request carries: blanks are left out, and `null` when a field is not a number above zero */
 export function limitsFromFields(fields) {
   const out = {};
-  for (const k of ['minutes', 'turns', 'cost', 'tokens']) {
+  for (const k of LIMIT_KEYS) {
     const text = String(fields[k] ?? '').trim();
     if (text === '') continue;
     const n = Number(text);
@@ -255,7 +258,7 @@ export function limitsFromFields(fields) {
 
 /** The line under the dialog's title when it starts a run again */
 export function retryWords(run) {
-  return `Starts again on ${run.runId}${run.briefCut ? '. Its brief was longer than 2000 characters and is shown cut: check it' : ''}.`;
+  return `Starts again on ${run.runId}.`;
 }
 
 /** What a start came to, in words */

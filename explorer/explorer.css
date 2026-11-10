@@ -825,6 +825,9 @@ button.hx-proposal-item:focus-visible { outline: 2px solid var(--hx-indigo); out
 .hx-forge-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
 .hx-forge-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--hx-slate-400); }
 .hx-forge-field--text { grid-column: 1 / -1; }
+/* The Start dialog's four limits: two a row, under their legend */
+.hx-forge-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; margin: 0; padding: 0; border: 0; }
+.hx-forge-limits > legend { padding: 0 0 4px; }
 .hx-forge-select, .hx-forge-input { width: 100%; min-width: 0; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--hx-line); background: var(--hx-well); color: var(--hx-ink); font: inherit; font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
 .hx-forge-input::placeholder { color: var(--hx-slate-500); }
 .hx-forge-input:focus-visible { outline: 2px solid var(--hx-indigo); outline-offset: 2px; }
