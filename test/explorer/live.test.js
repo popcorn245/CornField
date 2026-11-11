@@ -221,7 +221,7 @@ describe('merging a live answer into the map', () => {
     const out = mergeLive(nodes, edges, answer);
     expect(JSON.stringify(nodes)).toBe(before);
     const room = out.nodes.find((n     ) => n.id === 'live-room-kitchen');
-    expect(room).toMatchObject({ type: 'room', live: true, color: '#ea9856', r: 16 });
+    expect(room).toMatchObject({ type: 'room', live: true, color: '#f5ea75', r: 16 });
     expect(out.nodes.filter((n     ) => n.live)).toHaveLength(11);
     expect(out.edges.slice(0, edges.length)).toEqual(edges);
   });

@@ -13,17 +13,20 @@ import { WHEN_STYLES } from './cloud-model.js';
 import { edgeKeyHtml, keySwatch } from './edge-key.js';
 import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
+import { NODE_THEMES } from '../core/schema.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
 import { layerShows } from './scene.js';
 import { getMapStyle, groupToken, setMapSubjects } from './map-style.js';
 import { t } from './strings.js';
 
-/** The dot of each starting row: the colour its nodes are drawn in (a project layer's dot is its nodes' own, or the theme's group token) */
+/**
+ * The dot of each starting row: the colour its nodes are drawn in, read from the node types' own colours (core/schema.js), so the dots and
+ * the map cannot drift apart when the palette moves (a project layer's dot is its nodes' own, or the theme's group token)
+ */
 const COLORS = {
-  app: '#6366f1', pkg: '#8feae8', page: '#38bdf8', atom: '#1ac96e', molecule: '#cf07f9', token: '#f2489f', tool: '#f55406', flow: '#fb923c',
-  core: '#bc9dd5', store: '#fb923c', table: '#fde047', rom: '#f90744', service: '#d2e239', cloud: '#94a3b8', web: '#94a3b8', stack: '#c75471',
-  machine: '#78716c', container: '#d6d3d1', device: '#2dd4bf', house: '#a3e830', runs: '#5eead4', persona: '#fb7185',
+  ...Object.fromEntries(Object.entries(NODE_THEMES).map(([type, { color }]) => [type, color])),
+  flow: NODE_THEMES.store.color, cloud: NODE_THEMES.external.color, web: NODE_THEMES.external.color, house: NODE_THEMES.floor.color, runs: '#5eead4',
 };
 /** The starting layers that start off: the infra layer is its own view, and the physical world's are loaded when first turned on (spec 0029) */
 const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona']);

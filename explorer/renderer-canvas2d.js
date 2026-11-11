@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
+import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
 import { GLYPH_TOKEN, ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 import { GLYPH_RATIO, glyphImage, glyphInk, showsGlyph } from './glyphs.js';
@@ -18,8 +18,6 @@ const TAU = Math.PI * 2;
 const GLOW_MIN_PX = 1.5;
 /** A scene with this many edges or fewer is drawn directly each frame; more, and its lines go into the layer while packets move */
 export const LAYER_MIN_EDGES = 600;
-/** A line dimmer than this (its alpha times its colour's), with no mark, glow or packet, is a trace no eye finds: it is not drawn (a selection dims thousands of lines to 4%) */
-export const TRACE_ALPHA = 0.06;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
 
 /**
@@ -237,15 +235,42 @@ function drawPacket(ctx, edge, timeMs, zoom) {
   ctx.restore();
 }
 
-/** The edges worth a stroke: not the traces (see TRACE_ALPHA), worked out once per scene */
-const drawnLists = new WeakMap();
-function drawnEdges(scene) {
-  let list = drawnLists.get(scene);
-  if (!list) {
-    list = scene.edges.filter((e) => (e.mark && e.mark !== 'none') || e.glow || e.packet || e.alpha * parseColor(e.color)[3] >= TRACE_ALPHA);
-    drawnLists.set(scene, list);
+/**
+ * Each edge's box in world units, worked out once per scene: the hull of its curve, grown by what is drawn past the line (its glow,
+ * its end mark, its ticks, its packet). An edge whose box misses the view draws nothing there, so it is not drawn: the picture is the
+ * same, and a pan at zoom 1 strokes the few hundred lines in view, not every line of a big map (a selection's faint traces included).
+ */
+const EDGE_REACH = 16; // world units past the line: the largest end mark (a diamond, 12), a tick, a strike, a packet's glow
+const boxLists = new WeakMap();
+function edgeBoxes(scene) {
+  let boxes = boxLists.get(scene);
+  if (!boxes) {
+    boxes = new Float64Array(scene.edges.length * 4);
+    scene.edges.forEach((e, i) => {
+      const cx = e.curve ? e.curve.cx : e.x1, cy = e.curve ? e.curve.cy : e.y1;
+      const glow = (e.glow || 0) * 0.6 + (e.packet ? e.packet.radius + (e.packet.glow || 0) * 0.5 : 0);
+      const pad = (e.width || 0) / 2 + glow + EDGE_REACH;
+      boxes[i * 4] = Math.min(e.x1, e.x2, cx) - pad;
+      boxes[i * 4 + 1] = Math.min(e.y1, e.y2, cy) - pad;
+      boxes[i * 4 + 2] = Math.max(e.x1, e.x2, cx) + pad;
+      boxes[i * 4 + 3] = Math.max(e.y1, e.y2, cy) + pad;
+    });
+    boxLists.set(scene, boxes);
   }
-  return list;
+  return boxes;
+}
+/** The edges whose box reaches the part of the world the camera shows (with a few screen px for the widths a zoomed-out edge is held to) */
+function edgesInView(scene, camera, width, height) {
+  const boxes = edgeBoxes(scene);
+  const z = camera.zoom || 1;
+  const m = 4 / z;
+  const x0 = -camera.x / z - m, y0 = -camera.y / z - m, x1 = (width - camera.x) / z + m, y1 = (height - camera.y) / z + m;
+  const out = [];
+  for (let i = 0; i < scene.edges.length; i++) {
+    if (boxes[i * 4 + 2] < x0 || boxes[i * 4] > x1 || boxes[i * 4 + 3] < y0 || boxes[i * 4 + 1] > y1) continue;
+    out.push(scene.edges[i]);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +313,7 @@ function drawNode(ctx, node, zoom, looks, style) {
     }
   }
 
-  // The node's silhouette, glowing, with a white core dot
+  // The node's silhouette, glowing
   silhouette(ctx, node.shape, node.x, node.y, node.r);
   if (node.glow && node.glow * zoom >= GLOW_MIN_PX) {
     // A soft disc behind the node, not `shadowBlur` (see drawEdge): one cheap fill instead of a blur pass
@@ -302,9 +327,16 @@ function drawNode(ctx, node, zoom, looks, style) {
   }
   ctx.fillStyle = node.color;
   ctx.fill();
-  circle(ctx, node.x, node.y, node.r * CORE_RATIO);
-  ctx.fillStyle = looks.core;
-  ctx.fill();
+  // What sits in the middle: a theme's icon, else a finer kind's letters, else the type's glyph (spec 0008 D8), else the white core dot.
+  // The glyph takes the core dot's place: drawn over it, the dot would fill the glyph's own shapes and blur it at the sizes nodes have
+  const image = node.icon && style.icons ? style.icons.get(node.icon) : null;
+  const letters = !image && showsLetters(node, zoom);
+  const glyph = !image && !letters && showsGlyph(node, zoom) ? glyphImage(node.glyph, glyphInk(node, style)) : null;
+  if (!glyph) {
+    circle(ctx, node.x, node.y, node.r * CORE_RATIO);
+    ctx.fillStyle = looks.core;
+    ctx.fill();
+  }
 
   // The theme's outline (--corn-map-stroke), just inside the edge of the circle
   if (node.stroke) {
@@ -315,12 +347,11 @@ function drawNode(ctx, node, zoom, looks, style) {
   }
 
   // The theme's icon for this kind (theme.icons), inside the circle; crisp when the theme is pixelated
-  const image = node.icon && style.icons ? style.icons.get(node.icon) : null;
   if (image) {
     const side = node.r * ICON_RATIO;
     ctx.imageSmoothingEnabled = !style.pixelated;
     ctx.drawImage(image, node.x - side / 2, node.y - side / 2, side, side);
-  } else if (showsLetters(node, zoom)) {
+  } else if (letters) {
     // A finer kind's letters (spec 0009 D5), where a theme's icon would be: the shortest start of its name, once the node is wide enough
     const letters = letterImage(node.letters, style.values && style.values[GLYPH_TOKEN]);
     if (letters) {
@@ -328,14 +359,11 @@ function drawNode(ctx, node, zoom, looks, style) {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(letters, node.x - side / 2, node.y - side / 2, side, side);
     }
-  } else if (showsGlyph(node, zoom)) {
-    // The type's own glyph (spec 0008 D8), where the white core dot is: after a theme's icon and a finer kind's letters, and before nothing
-    const glyph = glyphImage(node.glyph, glyphInk(node, style));
-    if (glyph) {
-      const side = node.r * GLYPH_RATIO;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(glyph, node.x - side / 2, node.y - side / 2, side, side);
-    }
+  } else if (glyph) {
+    // The type's own glyph (spec 0008 D8), in place of the white core dot: after a theme's icon and a finer kind's letters
+    const side = node.r * GLYPH_RATIO;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(glyph, node.x - side / 2, node.y - side / 2, side, side);
   }
   ctx.restore();
 }
@@ -378,7 +406,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
   const layerMin = opts.layerMinEdges ?? LAYER_MIN_EDGES;
   const hasPacket = new WeakMap();
   const packetsIn = (scene) => {
-    if (!hasPacket.has(scene)) hasPacket.set(scene, drawnEdges(scene).length > layerMin && scene.edges.some((e) => e.packet));
+    if (!hasPacket.has(scene)) hasPacket.set(scene, scene.edges.some((e) => e.packet));
     return hasPacket.get(scene);
   };
 
@@ -390,7 +418,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
     if (decor.grid) drawGrid(c, decor.grid, camera, width, height);
     if (decor.lanes.length) drawLanes(c, decor.lanes);
     if (decor.rings.length) drawRings(c, decor.rings);
-    drawnEdges(scene).forEach((edge) => drawEdge(c, edge, 0, camera.zoom, false));
+    edgesInView(scene, camera, width, height).forEach((edge) => drawEdge(c, edge, 0, camera.zoom, false));
     c.restore();
   }
 
@@ -414,7 +442,8 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
       ctx.clearRect(0, 0, width, height);
 
       const looks = looksWith(looksFor(scene.theme), style); // the halos, mark rings and core for the scene's ground, in the theme's colours
-      if (packetsIn(scene) && makeLayer()) {
+      const inView = edgesInView(scene, camera, width, height);
+      if (packetsIn(scene) && inView.length > layerMin && makeLayer()) {
         const same = layerFor && layerFor.scene === scene && layerFor.x === camera.x && layerFor.y === camera.y && layerFor.zoom === camera.zoom && layerFor.w === canvas.width && layerFor.h === canvas.height;
         if (!same) {
           if (layer.width !== canvas.width || layer.height !== canvas.height) { layer.width = canvas.width; layer.height = canvas.height; }
@@ -430,7 +459,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
         ctx.save();
         ctx.translate(camera.x, camera.y);
         ctx.scale(camera.zoom, camera.zoom);
-        scene.edges.forEach((edge) => { if (edge.packet) drawPacket(ctx, edge, timeMs, camera.zoom); });
+        inView.forEach((edge) => { if (edge.packet) drawPacket(ctx, edge, timeMs, camera.zoom); });
         scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
         ctx.restore();
         return;
@@ -445,7 +474,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
       if (decor.lanes.length) drawLanes(ctx, decor.lanes);
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
-      drawnEdges(scene).forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
+      inView.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
       scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 

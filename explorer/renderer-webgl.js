@@ -38,7 +38,7 @@ import {
 //  Packing: scene -> typed arrays (pure)
 // ---------------------------------------------------------------------------
 
-/** Floats per node: x, y, r, alpha | red, green, blue, glow | halo code, mark code, colour alpha, shape code (SHAPE_CODE) */
+/** Floats per node: x, y, r, alpha | red, green, blue, glow | halo code, mark code, colour alpha, shape code (SHAPE_CODE, plus GLYPH_FLAG when the type's glyph takes the core dot's place) */
 export const NODE_STRIDE = 12;
 /** Floats per ring: x, y, r, width | rgba | dash on, off */
 export const RING_STRIDE = 10;
@@ -61,6 +61,8 @@ export const HALO_CODE = { none: 0, selected: 1, match: 2, child: 3 };
 export const TIP_CODE = { arrow: 1, strike: 2, chevron: 3, bar: 4, diamond: 5, tick: 6 };
 /** The silhouettes, as the node shader numbers them (core/schema.js SHAPES) */
 export const SHAPE_CODE = Object.freeze(Object.fromEntries(SHAPES.map((name, i) => [name, i])));
+/** Added to a node's shape code when its glyph is drawn in place of the white core dot (no theme icon, no letters): the shader leaves the dot out once the glyph shows */
+export const GLYPH_FLAG = 8;
 export const MARK_CODE = { none: 0, added: 1, changed: 2, removed: 3, edit: 4 };
 
 /** A CSS colour as [r, g, b, a], all 0..1 */
@@ -81,7 +83,7 @@ export function packNodes(scene) {
   nodes.forEach((n, i) => {
     const [r, g, b, a] = rgba(n.color);
     // scene.js has already faded a removed node (MARK.removed.alpha is in n.alpha); the ring is the shader's (u_markGeom, u_markColor)
-    data.set([n.x, n.y, n.r, n.alpha, r, g, b, n.glow || 0, codeOf(HALO_CODE, n.halo), codeOf(MARK_CODE, n.mark), a, codeOf(SHAPE_CODE, n.shape)], i * NODE_STRIDE);
+    data.set([n.x, n.y, n.r, n.alpha, r, g, b, n.glow || 0, codeOf(HALO_CODE, n.halo), codeOf(MARK_CODE, n.mark), a, codeOf(SHAPE_CODE, n.shape) + (n.glyph && !n.icon && !n.letters ? GLYPH_FLAG : 0)], i * NODE_STRIDE);
   });
   return { data, count: nodes.length, stride: NODE_STRIDE };
 }
@@ -226,15 +228,16 @@ export function packIcons(scene, has, style = null) {
     if (!kind && !n.icon && n.letters && has(letterKey(n.letters))) { kind = letterKey(n.letters); side = n.r * LETTER_RATIO; }
     if (!kind && !n.icon && !n.letters && n.glyph) { const key = glyphKey(n.glyph, glyphInk(n, style)); if (has(key)) { kind = key; side = n.r * GLYPH_RATIO; } } // the type's own glyph, last (glyphs.js)
     if (!kind) return;
-    if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity });
+    if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity, maxR: 0 });
     const group = byKind.get(kind);
+    group.maxR = Math.max(group.maxR, n.r);
     group.rows.push([n.x, n.y, side, n.alpha]);
     group.minR = Math.min(group.minR, n.r);
   });
   const groups = [];
   const rows = [];
-  for (const [kind, { rows: list, minR }] of byKind) {
-    groups.push({ kind, first: rows.length, count: list.length, minR });
+  for (const [kind, { rows: list, minR, maxR }] of byKind) {
+    groups.push({ kind, first: rows.length, count: list.length, minR, maxR });
     rows.push(...list);
   }
   const data = new Float32Array(rows.length * ICON_STRIDE);
@@ -317,6 +320,7 @@ const CONSTANTS = {
     gl.uniform1f(at('u_coreRatio'), tables.coreRatio);
     gl.uniform4f(at('u_shape'), SHAPE_SIZES.roundedHalf, SHAPE_SIZES.roundedCorner, SHAPE_SIZES.hexInradius, SHAPE_SIZES.squareHalf);
     gl.uniform2f(at('u_shape2'), SHAPE_SIZES.squareCorner, SHAPE_SIZES.diamondHalf);
+    gl.uniform1f(at('u_glyphMin'), GLYPH_MIN_PX);
   },
   edges(gl, at, tables) {
     gl.uniform3fv(at('u_markMin'), tables.markMin);
@@ -573,8 +577,12 @@ export function createWebglRenderer(canvas, opts = {}) {
       for (const group of packed.icons.groups) {
         const letters = isLetterKey(group.kind);
         const glyph = isGlyphKey(group.kind);
-        if (letters && group.minR * 2 * camera.zoom < LETTER_MIN_PX) continue; // too small on screen: the letters would be a smudge (kind-letters.js)
-        if (glyph && group.minR * 2 * camera.zoom < GLYPH_MIN_PX) continue; // and a glyph (glyphs.js): the silhouette does the work
+        // Letters and a glyph are drawn only on a node wide enough on screen (kind-letters.js, glyphs.js): the vertex shader drops each
+        // smaller one, as Canvas 2D does node by node, and a group whose largest node is under it is not drawn at all
+        const minPx = letters ? LETTER_MIN_PX : glyph ? GLYPH_MIN_PX : 0;
+        if (minPx && group.maxR * 2 * camera.zoom < minPx) continue;
+        gl.uniform1f(icons.at('u_minR'), minPx / 2);
+        gl.uniform1f(icons.at('u_sideRatio'), letters ? LETTER_RATIO : glyph ? GLYPH_RATIO : 1);
         const image = letters ? letterImage(lettersOfKey(group.kind), style.values && style.values[GLYPH_TOKEN]) : glyph ? glyphImage(glyphOfKey(group.kind).type, glyphOfKey(group.kind).ink) : style.icons && style.icons.get(group.kind);
         if (!image) continue;
         gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated && !letters && !glyph));

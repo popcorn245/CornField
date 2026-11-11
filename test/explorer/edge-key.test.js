@@ -43,3 +43,16 @@ describe('the Key', () => {
   });
 });
 const $legend = () => document.getElementById('flow-legend');
+
+describe('a dash means only "proposed" (spec 0008 D7)', () => {
+  it('no proposal mark draws its line in a usage link\'s dots: a what-if edit is long-dashed, added dashed, removed short-dashed and struck', async () => {
+    const { USAGE_DASH, PROPOSED_DASH } = await import('../../explorer/scene.js');
+    const { MARK_SHAPES } = await import('../../explorer/diff-marks.js');
+    const dashes = Object.values(MARK_SHAPES).map((m) => m.edgeDash).filter(Boolean);
+    for (const d of dashes) expect(d[0], String(d)).toBeGreaterThanOrEqual(2 * USAGE_DASH[0]); // a dash, not a dot
+    expect(MARK_SHAPES.edit.edgeDash).toEqual([12, 4]);
+    expect(new Set(dashes.map(String)).size).toBe(dashes.length); // each mark its own rhythm
+    expect(MARK_SHAPES.added.edgeDash).toEqual(PROPOSED_DASH);
+  });
+});
+

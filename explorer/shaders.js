@@ -210,7 +210,7 @@ export const NODE_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_geom;    // x, y, r (world), alpha
 layout(location = 2) in vec4 a_color;   // r, g, b (0..1), glow (px)
-layout(location = 3) in vec4 a_kind;    // halo code, mark code, colour alpha, shape code (0 circle, 1 rounded square, 2 hexagon, 3 square, 4 diamond)
+layout(location = 3) in vec4 a_kind;    // halo code, mark code, colour alpha, shape code (0 circle, 1 rounded square, 2 hexagon, 3 square, 4 diamond; plus 8 when a glyph takes the core dot's place)
 uniform vec4 u_haloGeom[4];             // fillR, ringR, ringWidth (world)
 uniform vec4 u_markGeom[5];             // per mark code: ringR, ringWidth (world), dash on, dash off
 uniform vec3 u_markMin;                 // MARK_MIN_PX, in screen px: ring thickness, edge thickness, gap from the node
@@ -243,6 +243,7 @@ flat in vec4 v_color;
 flat in vec4 v_kind;
 uniform vec4 u_shape;                   // rounded square half side, its corner, hexagon inradius, square half side (x radius)
 uniform vec2 u_shape2;                  // square corner, diamond half diagonal (x radius)
+uniform float u_glyphMin;               // GLYPH_MIN_PX: a node this wide on screen shows its glyph (the icon pass) instead of the core dot
 uniform vec4 u_haloFill[4];
 uniform vec4 u_haloRing[4];
 uniform vec4 u_haloGeom[4];
@@ -292,9 +293,12 @@ void main() {
   float glow = v_color.w;
   if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr));
 
-  // The silhouette and its white core
-  over(acc, v_color.rgb, v_kind.z * al * coverEdge(sdShape(v_local, R, int(v_kind.w + 0.5), len), pix));
-  over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
+  // The silhouette, and its white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
+  int shapeCode = int(v_kind.w + 0.5);
+  bool glyph = shapeCode >= 8;
+  if (glyph) shapeCode -= 8;
+  over(acc, v_color.rgb, v_kind.z * al * coverEdge(sdShape(v_local, R, shapeCode, len), pix));
+  if (!glyph || 2.0 * R < u_glyphMin) over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
 
   // Mark: a ring with the look of its own mark (dashed when its dash is set: added), and for removed a
   // strike through the node. However far out the camera is, the ring stays u_markMin.z px from the node
@@ -596,9 +600,12 @@ void main() {
 export const ICON_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_geom;    // x, y, side (world), alpha
+uniform float u_minR;                   // letters and glyphs: the least on-screen radius (px) of a node that shows them; 0 for a theme's icon
+uniform float u_sideRatio;              // the image's side as a multiple of the node's radius (LETTER_RATIO, GLYPH_RATIO), to read the radius back
 out vec2 v_uv;
 flat out float v_alpha;
 void main() {
+  if (u_minR > 0.0 && a_geom.z / u_sideRatio * u_cam.z < u_minR) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); v_uv = vec2(0.0); v_alpha = 0.0; return; } // too small on screen: outside the clip space, nothing drawn
   vec2 centre = u_cam.xy + a_geom.xy * u_cam.z;
   vec2 pos = centre + a_corner * (a_geom.z * 0.5 * u_cam.z);
   v_uv = vec2(a_corner.x * 0.5 + 0.5, a_corner.y * 0.5 + 0.5); // screen y runs down and an image's first row is its top, so the corner below the centre reads the last row

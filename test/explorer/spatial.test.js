@@ -5,6 +5,8 @@
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
 import { createSpatialIndex, createSpatialCache, hitTestScreen } from '../../explorer/spatial.js';
+// @ts-expect-error plain JS modules, no declarations
+import { SHAPE_REACH } from '../../explorer/scene.js';
 
 
 const item = (id        , x        , y        , r = 10)       => ({ id, x, y, r });
@@ -188,3 +190,17 @@ describe('the index on 5,000 nodes', () => {
     expect(avg).toBeLessThan(NODE_AT_AVG_MS);
   });
 });
+
+describe('silhouettes (spec 0008 D8)', () => {
+  it('hits a square\'s corner and a diamond\'s point: a node is hit as far as its silhouette reaches (hitR), not only its circle', () => {
+    const sq = { id: 'sq', x: 0, y: 0, r: 20, hitR: 20 * SHAPE_REACH.square };
+    const index = createSpatialIndex([sq]);
+    expect(index.nodeAt(16, 16)).toBe(sq); // by the corner, 22.6 from the centre: past the circle of radius 20
+    expect(createSpatialIndex([{ id: 'c', x: 0, y: 0, r: 20 }]).nodeAt(16, 16)).toBeNull(); // a circle there is missed
+    const di = { id: 'di', x: 0, y: 0, r: 20, hitR: 20 * SHAPE_REACH.diamond };
+    expect(createSpatialIndex([di]).nodeAt(22.5, 0)).toBe(di); // the point, at 23
+    expect(SHAPE_REACH.circle).toBe(1);
+    for (const v of Object.values(SHAPE_REACH)) expect(v).toBeLessThan(1.25); // still a sensible disc
+  });
+});
+

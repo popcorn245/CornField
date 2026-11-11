@@ -15,7 +15,7 @@ import { buildScene } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createCanvas2dRenderer, silhouette } from '../../explorer/renderer-canvas2d.js';
 // @ts-expect-error plain JS modules, no declarations
-import { packIcons, packNodes, NODE_STRIDE, SHAPE_CODE } from '../../explorer/renderer-webgl.js';
+import { packIcons, packNodes, NODE_STRIDE, SHAPE_CODE, GLYPH_FLAG } from '../../explorer/renderer-webgl.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NODE_VERT, NODE_FRAG } from '../../explorer/shaders.js';
 
@@ -84,6 +84,24 @@ describe('where the glyph sits', () => {
   });
 });
 
+describe('the core dot', () => {
+  const rec = () => { const log = []; return { log, ctx: new Proxy({}, { get: (_t, k) => (...a) => { log.push([k, ...a]); }, set: () => true }) }; };
+  it('gives way to the glyph once the glyph shows, in Canvas 2D: the glyph is drawn in its place, never over it', () => {
+    const glyphCtx = new Proxy({}, { get: () => () => {}, set: () => true });
+    vi.stubGlobal('OffscreenCanvas', class { constructor(w, h) { this.width = w; this.height = h; } getContext() { return glyphCtx; } });
+    const coreArcs = (zoom) => {
+      const { log, ctx } = rec();
+      const r = createCanvas2dRenderer({ getContext: () => ctx, style: {}, parentElement: {} }, { mapStyle: () => plain });
+      r.resize(400, 300, 1);
+      log.length = 0;
+      r.draw(buildScene(mk([node('p', 'page', 0)])), { x: 200, y: 150, zoom }, 0);
+      return { arcs: log.filter((c) => c[0] === 'arc' && Math.abs(c[3] - 20 * 0.32) < 1e-9).length, images: log.filter((c) => c[0] === 'drawImage').length };
+    };
+    expect(coreArcs(1)).toEqual({ arcs: 0, images: 1 }); // 40 px across: the glyph, no dot under it
+    expect(coreArcs(0.3)).toEqual({ arcs: 1, images: 0 }); // 12 px across: no glyph, so the dot
+  });
+});
+
 describe('silhouettes', () => {
   const rec = () => { const log = []; return { log, ctx: new Proxy({}, { get: (_t, k) => (...a) => { log.push([k, ...a]); }, set: () => true }) }; };
   it('Canvas 2D draws a circle, a rounded square, a hexagon, a square and a diamond', () => {
@@ -112,7 +130,9 @@ describe('silhouettes', () => {
     const scene = buildScene(mk([node('s', 'store', 0), node('e', 'external', 50), node('p', 'persona', 100), node('a', 'app', 150)]));
     const packed = packNodes(scene);
     expect(NODE_STRIDE).toBe(12);
-    expect([0, 1, 2, 3].map((i) => packed.data[i * NODE_STRIDE + 11])).toEqual([1, 2, 4, 0]);
+    expect([0, 1, 2, 3].map((i) => packed.data[i * NODE_STRIDE + 11])).toEqual([1, 2, 4, 0].map((c) => c + GLYPH_FLAG)); // each has a glyph, so the shader leaves its core dot out once it shows
+    expect(packNodes({ ...scene, nodes: scene.nodes.map((n) => ({ ...n, letters: 'ab' })) }).data[11]).toBe(1); // letters (or a theme's icon) keep the dot
+    expect(NODE_FRAG).toMatch(/u_glyphMin/);
     expect(NODE_FRAG).toMatch(/sdShape/);
     expect(NODE_FRAG).toMatch(/sdHex/);
     expect(NODE_VERT).toMatch(/shape code/);

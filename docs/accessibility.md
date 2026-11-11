@@ -45,7 +45,7 @@ The map's one polite live region says what the eyes would see change, once each 
 
 ## Colour, shape and size
 
-- A proposal's four marks differ without colour: added is a dashed ring, changed a solid ring, removed a faded ring with its label struck through, and your own what-if edit a dotted ring. The legend ("Proposal marks") says so, and so do the dots in the bar and the change list.
+- A proposal's four marks differ without colour: added is a dashed ring, changed a solid ring, removed a faded ring with its label struck through, and your own what-if edit a dotted ring. A line keeps the same rule: added is dashed, removed short-dashed and struck across, a what-if edit long-dashed; a usage link is dotted, so a dot is never a change. The legend ("Proposal marks") says so, and so do the dots in the bar and the change list.
 - Every mark is 3:1 against the darkest and lightest ground the map draws, in light and dark, at the opacity it is drawn at; a label a diff dims is 3:1 as well (`cornfield validate` holds both for any theme).
 - On a phone, or a coarse pointer, every control is 44 by 44 (the drawn size may be smaller: the hit area counts), and a change row is 28px tall at a desk. The counts say what they count ("4 nodes, 2 edges added").
 

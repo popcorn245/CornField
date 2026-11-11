@@ -31,5 +31,7 @@ export const MARK_SHAPES = Object.freeze({
   added: Object.freeze({ ringDash: Object.freeze([5, 4]), edgeDash: Object.freeze([7, 5]), strike: false }), // a dashed ring
   changed: Object.freeze({ ringDash: null, edgeDash: null, strike: false }), // a plain solid ring
   removed: Object.freeze({ ringDash: null, edgeDash: Object.freeze([3, 4]), strike: true }), // a faded ring, struck through
-  edit: Object.freeze({ ringDash: Object.freeze([2, 5]), edgeDash: Object.freeze([2, 5]), strike: false }), // a dotted ring: short marks, wide gaps (a 1.5/3.5 dot blurred into a solid ring at 1x)
+  // a dotted ring: short marks, wide gaps (a 1.5/3.5 dot blurred into a solid ring at 1x); its line is long-dashed: dashed, as everything not built is
+  // (spec 0008 D7), and not dotted, which is a usage link's (a lit one is lilac too)
+  edit: Object.freeze({ ringDash: Object.freeze([2, 5]), edgeDash: Object.freeze([12, 4]), strike: false }),
 });

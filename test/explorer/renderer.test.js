@@ -123,6 +123,24 @@ describe('renderer-canvas2d', () => {
     expect(lines(drawn({ end: null, arrow: false, ticks: 1 })) - lines(drawn({ end: null, arrow: false, ticks: 0 }))).toBe(1);
   });
 
+  it('strokes only the lines whose box reaches the view: the picture is the same, a pan on a big map strokes what is in view', () => {
+    const ctx = recordingCtx();
+    const r = createCanvas2dRenderer(fakeCanvas(ctx));
+    r.resize(800, 600, 1);
+    const e = (key, x1, y1, x2, y2, extra = {}) => ({ key, from: 'a', to: 'b', kind: 'reads', x1, y1, x2, y2, r1: 0, r2: 0, color: '#38bdf8', width: 1.6, alpha: 0.04, dash: null, ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null, label: null, packet: null, mark: 'none', ...extra });
+    const edges = [
+      e('in', 100, 100, 200, 200), // in view
+      e('across', -5000, 300, 5000, 300), // both ends far outside, the line crosses the view
+      e('curve', -400, -400, 1200, -400, { curve: { cx: 400, cy: 1400 } }), // the ends above the view, the curve dips into it
+      e('out', 3000, 3000, 3100, 3100), // nowhere near
+      e('near', 815, 100, 900, 100, { arrow: true, end: 'diamond' }), // its end mark reaches back to the right edge: kept
+    ];
+    r.draw({ nodes: [], edges, decor: { grid: null, rings: [], lanes: [] }, preset: false, theme: 'dark', version: 1 }, { x: 0, y: 0, zoom: 1 }, 0);
+    const starts = ctx.log.filter((c) => c[0] === 'moveTo').map((c) => c.slice(1).join(','));
+    expect(starts).toEqual(expect.arrayContaining(['100,100', '-5000,300', '-400,-400', '815,100']));
+    expect(starts).not.toContain('3000,3000');
+  });
+
   it('draws the lines of a scene with packets once, and only the packets again while nothing but time moves (F30)', () => {
     const layerCtx = recordingCtx();
     vi.stubGlobal('OffscreenCanvas', class { width = 1; height = 1; getContext() { return layerCtx; } });

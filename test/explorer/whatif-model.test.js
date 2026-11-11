@@ -345,7 +345,7 @@ describe('the edit mark', () => {
     expect(removed).toMatchObject({ mark: 'edit', labelStrike: true });
     expect(removed.alpha).toBeLessThan(1); // faded, but still 3:1 (F19)
     const edge = scene.edges.find((e     ) => e.to === 'service-planner');
-    expect(edge).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit, dash: [2, 5] });
+    expect(edge).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit, dash: [12, 4] }); // long dashes: not a usage link's dots (spec 0008 D7)
     const gone = scene.edges.find((e     ) => e.to === 'page-keep');
     expect(gone).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit });
     expect(gone.dash).not.toBeNull();

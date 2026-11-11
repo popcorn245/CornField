@@ -50,6 +50,7 @@
  * @property {number} y
  * @property {number} r            world radius of the node: the circle's, or the silhouette's circumscribing one
  * @property {'circle'|'rounded-square'|'hexagon'|'square'|'diamond'} shape  the silhouette (core/schema.js `NODE_SHAPES`)
+ * @property {number} [hitR]       world radius of the disc a click or tap hits: `r` times how far the silhouette reaches (SHAPE_REACH)
  * @property {string} [glyph]      the type whose built-in glyph the node shows (glyphs.js), when the type has one
  * @property {string} [letters]    a finer kind's letters (kind-letters.js)
  * @property {string} color        fill, and the glow colour
@@ -213,6 +214,14 @@ export const END_MARKS = Object.freeze({ flow: 'chevron', reads: 'chevron', writ
 export const END_SHAPES = Object.freeze({ strokeWidth: 1.8, barHalf: 5, diamondHalf: 6, diamondAcross: 4.5, tickHalf: 4, tickWidth: 1.6, tickGap: 6 });
 /** The sizes of the silhouettes, as fractions of a node's radius: a rounded square's half side and corner, a hexagon's inradius, a square's half side and corner, a diamond's half diagonal (both renderers draw them) */
 export const SHAPE_SIZES = Object.freeze({ roundedHalf: 0.9, roundedCorner: 0.3, hexInradius: 0.9, squareHalf: 0.86, squareCorner: 0.12, diamondHalf: 1.15 });
+/** How far each silhouette reaches from its centre, as a fraction of the node's radius: a click or tap on a square's corner or a diamond's point is on the node (spatial.js hit-tests a disc this wide) */
+export const SHAPE_REACH = Object.freeze({
+  circle: 1,
+  'rounded-square': (SHAPE_SIZES.roundedHalf - SHAPE_SIZES.roundedCorner) * Math.SQRT2 + SHAPE_SIZES.roundedCorner,
+  hexagon: SHAPE_SIZES.hexInradius / Math.cos(Math.PI / 6),
+  square: (SHAPE_SIZES.squareHalf - SHAPE_SIZES.squareCorner) * Math.SQRT2 + SHAPE_SIZES.squareCorner,
+  diamond: SHAPE_SIZES.diamondHalf,
+});
 /** The dash a proposed edge is drawn with: the one dashed thing on the map (a usage link is dotted, a `when` is told by ticks) */
 export const PROPOSED_DASH = Object.freeze([7, 5]);
 /** The dash of a usage link: dots */
@@ -574,6 +583,7 @@ function buildNodes(state, subgraph) {
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
       shape: shapeOf(shown.type), // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
+      hitR: shown.r * SHAPE_REACH[shapeOf(shown.type)], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
       ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: shown.color,
