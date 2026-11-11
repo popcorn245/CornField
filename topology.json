@@ -6958,7 +6958,22 @@
       "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
       "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0008-reading-a-big-map",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T11:57:32.996Z"
+  "updatedAt": "2026-11-11T17:06:46.101Z"
 }
