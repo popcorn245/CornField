@@ -85,7 +85,7 @@ describe('hub proposal routes', () => {
     expect(list.map((e     ) => `${e.slug}@${e.source}`)).toEqual([
       '0013-meals@topo-09', '0013-meals@checkout', '0014-broken@checkout', '0015-garbled@checkout', '0016-array@checkout', '0017-worktree-only@topo-09',
     ]);
-    expect(list[0]).toEqual({ slug: '0013-meals', title: 'Meals, newer', summary: 'Adds /meals.', spec: '0013', source: 'topo-09', counts: { added: 1, changed: 1, removed: 0, scenarios: 0 }, errors: 0, review: null });
+    expect(list[0]).toEqual({ slug: '0013-meals', title: 'Meals, newer', summary: 'Adds /meals.', spec: '0013', source: 'topo-09', counts: { added: 1, changed: 1, removed: 0, scenarios: 0, nodes: { added: 1, changed: 1, removed: 0 }, edges: { added: 0, changed: 0, removed: 0 } }, errors: 0, review: null });
     expect(list[1].title).toBe('Meals');
   });
 

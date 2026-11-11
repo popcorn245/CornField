@@ -168,7 +168,7 @@ function describeProposal(slug, source, proposal, topology) {
     summary: object ? text(proposal.summary) : '',
     spec: object && typeof proposal.spec === 'string' ? proposal.spec : null,
     source,
-    counts: (({ added, changed, removed, scenarios }) => ({ added, changed, removed, scenarios }))(summarize(proposal)), // the four totals; the split is the viewer's (summarize's `nodes` and `edges`)
+    counts: summarize(proposal), // the totals, and `nodes` and `edges` apart, so the list can say what it counts
     errors: topology ? proposalProblems(topology, proposal).errors.length : null,
   };
 }

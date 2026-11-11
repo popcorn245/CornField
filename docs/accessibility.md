@@ -40,7 +40,7 @@ Drawing an edge in a what-if edit is a drag on the map. Without one: turn on Edi
 
 ## What is said, and when
 
-The map's one polite live region says what the eyes would see change, once each and never on a background refresh: when a proposal has loaded, its title, counts and view ("Proposal Meals: 1 node, 1 edge added, 1 node changed, 1 node removed. Diff view."); the view on a switch ("After view"); a change row's node ("page-old, removed. The map is on it."); an undo or a redo and what it was ("Undid: Added the page “/one” under tasks"); and "Paused", "Resumed" or "Playing" for the scenario player (each step is said as it comes).
+The map's one polite live region says what the eyes would see change, once each and never on a background refresh: when a proposal has loaded, its title, counts and view ("Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. Diff view."); the view on a switch ("After view"); a change row's node ("page-old, removed. The map is on it."); an undo or a redo and what it was ("Undid: Added the page “/one” under tasks"); and "Paused", "Resumed" or "Playing" for the scenario player (each step is said as it comes).
 
 ## Colour, shape and size
 

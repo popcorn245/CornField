@@ -175,9 +175,15 @@ describe('step 1: Start a spec, on an issue', () => {
     expect(document.activeElement).toBe(go);
     tab(go);
     // it wraps to the first stop, which is the preview region (a scrollable region with tabindex 0 is a stop of the trap now), then on to Cancel
-    expect($('forge-confirm').contains(document.activeElement)).toBe(true);
-    expect(document.activeElement).not.toBe(go);
-    while (document.activeElement !== cancel) tab(document.activeElement);
+    const previews = [...$('forge-confirm').querySelectorAll('pre')];
+    expect(previews.length).toBeGreaterThan(0);
+    for (const pre of previews) {
+      expect(document.activeElement).toBe(pre); // in visual order, each named: a scrollable region the keyboard can scroll
+      expect(pre.getAttribute('role')).toBe('region');
+      expect(pre.getAttribute('aria-label')).toBeTruthy();
+      tab(pre);
+    }
+    expect(document.activeElement).toBe(cancel);
     $('forge-btn').focus();
     expect(document.activeElement).toBe(cancel);
     key(cancel, 'Escape');

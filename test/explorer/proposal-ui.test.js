@@ -711,7 +711,7 @@ describe('what a screen reader is told (F18)', () => {
 
   it('says the proposal\'s title and counts, and the view, when a link has loaded it, once', async () => {
     await open();
-    expect(await said()).toBe('Proposal Meals: 1 node, 1 edge added, 1 node changed, 1 node removed. Diff view.');
+    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. Diff view.');
   });
 
   it('says the view on a switch, and the same switch again says nothing new', async () => {
@@ -736,6 +736,6 @@ describe('what a screen reader is told (F18)', () => {
 
   it('says only the opening for a link that also asks for a view', async () => {
     await open('?proposal=0013-meals&proposalView=after');
-    expect(await said()).toBe('Proposal Meals: 1 node, 1 edge added, 1 node changed, 1 node removed. After view.');
+    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. After view.');
   });
 });

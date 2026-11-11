@@ -101,11 +101,12 @@ export function touchedIds(nodes, edges) {
 // ---------------------------------------------------------------------------
 
 /**
- * "3 added · 1 changed · 1 removed": zero counts are left out; nothing at all reads "No changes".
+ * "4 nodes, 2 edges added · 1 node changed" (the bar's words, without the scenarios), or "3 added · 1 changed" for counts
+ * without the split: zero counts are left out; nothing at all reads "No changes".
  * @param {{added?:number, changed?:number, removed?:number}} counts `summarize(proposal)`
  */
 export function chipText(counts) {
-  const parts = MARKS.filter((m) => (counts?.[m] || 0) > 0).map((m) => `${counts[m]} ${m}`);
+  const parts = barCounts({ ...counts, scenarios: 0 }).filter((c) => c.mark).map((c) => c.text.replace(/^\+/, ''));
   return parts.length ? parts.join(' · ') : 'No changes';
 }
 
@@ -135,12 +136,12 @@ export const viewWords = (view) => `${view === 'before' ? 'Before' : view === 'a
 
 /**
  * What it hears when a proposal has loaded: its title and counts, and the view it is in
- * ("Proposal Alerts: 4 nodes, 2 edges added, 1 changed, 3 scenarios. Diff view.").
+ * ("Proposal Alerts: 4 nodes and 2 edges added, 1 node changed, 3 scenarios. Diff view.": in speech a comma would split a part in two).
  * @param {string} title
  * @param {object} counts `summarize(proposal)`
  * @param {'before'|'diff'|'after'} view
  */
-export const openedWords = (title, counts, view) => `Proposal ${title}: ${barCounts(counts).map((c) => c.text.replace(/^\+/, '')).join(', ')}. ${viewWords(view)}.`;
+export const openedWords = (title, counts, view) => `Proposal ${title}: ${barCounts(counts).map((c) => c.text.replace(/^\+/, '').replace(', ', ' and ')).join(', ')}. ${viewWords(view)}.`;
 
 /** What a click on a change row did: the node (or edge) the camera went to, and what the proposal does to it */
 export const jumpWords = (markWord, name) => `${name}, ${String(markWord).toLowerCase()}. The map is on it.`;

@@ -278,8 +278,9 @@ describe('chipText', () => {
     expect(chipText(null)).toBe('No changes');
   });
 
-  it('reads what summarize counts', () => {
-    expect(chipText(summarize(proposal))).toBe('2 added · 1 changed · 1 removed');
+  it('reads what summarize counts, and says what it counts: nodes and edges apart (F57)', () => {
+    expect(chipText(summarize(proposal))).toBe('1 node, 1 edge added · 1 node changed · 1 node removed');
+    expect(chipText({ added: 11, changed: 0, removed: 0, nodes: { added: 5, changed: 0, removed: 0 }, edges: { added: 6, changed: 0, removed: 0 } })).toBe('5 nodes, 6 edges added');
   });
 });
 
