@@ -163,6 +163,7 @@ import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-m
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenDash } from './cloud-model.js';
+import { projectLayerKey, shownByProposal } from './layer-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
@@ -238,11 +239,18 @@ export const PROPOSAL_DIM_ALPHA = 0.28;
 //  Visibility and focus (moved unchanged from render.js)
 // ---------------------------------------------------------------------------
 export function isNodeVisible(state, node) {
-  const { activeLayers } = state;
   if (state.proposal && !showsNode(state.proposalView || 'diff', node)) return false; // Before hides what is added, After what is removed
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
+  return layerShows(state, node) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+}
+
+/** Whether the Layers menu has the node's layer on: a project layer that takes it decides alone, else its starting layer, with the rules each type has */
+export function layerShows(state, node) {
+  const { activeLayers } = state;
+  const project = projectLayerKey(state, node);
+  if (project) return activeLayers[project] !== false;
   if (node.type === 'core') return (activeLayers.pkg || activeLayers.atom) && activeLayers.core !== false; // its own row in Layers, and Packages or Atoms
   if (node.type === 'store') return activeLayers.flow !== false && activeLayers.store !== false; // its own row, and Data Flow
   if (node.type === 'rom') return activeLayers.rom !== false && activeLayers.flow !== false;
