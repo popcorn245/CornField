@@ -64,6 +64,15 @@ describe('the Layers menu (F59)', () => {
     expect(row('root')).toBeNull(); // the root is always shown
   });
 
+  it('puts a type it has no row for in as text, never as markup', () => {
+    base.nodes.push(node('odd-a', '"><img src=x onerror=alert(1)>'));
+    try {
+      mount();
+      expect(document.querySelector('#layer-toggles-container img')).toBeNull();
+      expect(document.querySelector('#layer-toggles-container').textContent).toContain('<img');
+    } finally { base.nodes.pop(); }
+  });
+
   it('hides core and stores with their own rows', () => {
     mount();
     const ids = () => render.getScene().nodes.map((n) => n.id);
