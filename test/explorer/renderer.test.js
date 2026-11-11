@@ -4,6 +4,7 @@
  * it (TOPO-02). No real canvas: a recording context stands in, so the tests read what the
  * renderer asked it to draw.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -147,17 +148,18 @@ describe('renderer-canvas2d proposal marks', () => {
 
   it('draws no ring for an unmarked node', () => {
     const ctx = marked('none');
-    for (const color of ['#2dd4bf', '#fbbf24', '#f87171', '#a78bfa']) expect(ringsOf(ctx, color), color).toHaveLength(0);
+    for (const color of Object.values(DIFF_MARK_COLORS.dark)) expect(ringsOf(ctx, color), color).toHaveLength(0);
   });
 
-  it('draws a dashed ring in the added colour for an addition, and a solid one for the others', () => {
+  it('draws a dashed ring in the added colour for an addition, a dotted one for an edit, and a solid one for the others', () => {
     const added = marked('added');
-    expect(ringsOf(added, '#2dd4bf')).toHaveLength(1);
+    expect(ringsOf(added, DIFF_MARK_COLORS.dark.added)).toHaveLength(1);
     expect(added.log).toContainEqual(['setLineDash', [5, 4]]);
-    for (const [mark, color] of [['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
+    for (const [mark, color] of [['changed', DIFF_MARK_COLORS.dark.changed], ['removed', DIFF_MARK_COLORS.dark.removed], ['edit', DIFF_MARK_COLORS.dark.edit]]) {
       const ctx = marked(mark);
       expect(ringsOf(ctx, color), mark).toHaveLength(1);
       expect(ctx.log, mark).not.toContainEqual(['setLineDash', [5, 4]]);
+      if (mark === 'edit') expect(ctx.log).toContainEqual(['setLineDash', [1.5, 3.5]]); // F20: not the changed mark's solid ring
     }
   });
 

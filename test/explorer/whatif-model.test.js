@@ -3,6 +3,7 @@
  * the refusal of an edit that makes the proposal worse, the `edit` mark on the applied map, the scenario sync, hit-testing and the
  * words of the edits list. No DOM: these run in node.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
 import * as W from '../../explorer/whatif-model.js';
@@ -342,11 +343,11 @@ describe('the edit mark', () => {
     expect(added).toMatchObject({ mark: 'edit', labelStrike: false });
     expect(added.alpha).toBe(1);
     expect(removed).toMatchObject({ mark: 'edit', labelStrike: true });
-    expect(removed.alpha).toBeLessThan(0.6);
+    expect(removed.alpha).toBeLessThan(1); // faded, but still 3:1 (F19)
     const edge = scene.edges.find((e     ) => e.to === 'service-planner');
-    expect(edge).toMatchObject({ mark: 'edit', color: '#a78bfa', dash: null });
+    expect(edge).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit, dash: [1.5, 3.5] });
     const gone = scene.edges.find((e     ) => e.to === 'page-keep');
-    expect(gone).toMatchObject({ mark: 'edit', color: '#a78bfa' });
+    expect(gone).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit });
     expect(gone.dash).not.toBeNull();
     // After hides the removal, Before hides the addition
     expect(buildScene({ ...state, proposalView: 'after' }).nodes.some((n     ) => n.id === 'page-keep')).toBe(false);

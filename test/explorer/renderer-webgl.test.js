@@ -139,7 +139,8 @@ describe('styleTables (the looks in scene.js, handed to the shaders as uniforms)
     expect(width('removed')).toBe(2);
     expect(width('changed')).toBeGreaterThan(width('added'));
     expect(dash('added')).toEqual([5, 4]);
-    for (const name of ['changed', 'removed', 'edit']) expect(dash(name), name).toEqual([0, 0]);
+    expect(dash('edit')).toEqual([1.5, 3.5]); // a dotted ring: not the changed mark's solid one (F20)
+    for (const name of ['changed', 'removed']) expect(dash(name), name).toEqual([0, 0]);
   });
 
   it('hands the on-screen minimums of scene.js MARK_MIN_PX over as one uniform: ring thickness, edge thickness, gap', () => {

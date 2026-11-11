@@ -5,6 +5,7 @@
  * one, and both renderers and the label layer take their own looks for the scene's ground. No GPU: the WebGL
  * renderer runs on the fake GL and the tests read the uniforms it sets.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -189,7 +190,7 @@ describe('the looks a renderer draws itself', () => {
     expect(looksFor(undefined)).toBe(looksFor('dark'));
     const light = looksFor('light');
     for (const k of Object.keys(MARK)) {
-      expect(light.mark[k].color).toBe(lightColor(MARK[k].color));
+      expect(light.mark[k].color).toBe(DIFF_MARK_COLORS.light[k]); // chosen, not derived: 3:1 over the glow too
       expect({ ...light.mark[k], color: 0 }).toEqual({ ...MARK[k], color: 0 }); // only the colour moves
     }
     expect(light.halo.selected.ring).toBe(lightColor(HALO.selected.ring));
@@ -208,7 +209,7 @@ describe('the looks a renderer draws itself', () => {
   it('the WebGL style tables follow the theme; the renderer sets them again when the scene\'s theme changes', () => {
     const dark = styleTables('dark');
     const light = styleTables('light');
-    expect([...light.markColor.slice(MARK_CODE.added * 4, MARK_CODE.added * 4 + 3)].map((v) => Math.round(v * 255))).toEqual(parseColor(lightColor(MARK.added.color)).slice(0, 3));
+    expect([...light.markColor.slice(MARK_CODE.added * 4, MARK_CODE.added * 4 + 3)].map((v) => Math.round(v * 255))).toEqual(parseColor(DIFF_MARK_COLORS.light.added).slice(0, 3));
     expect([...dark.markColor]).not.toEqual([...light.markColor]);
     expect([...dark.core]).toEqual([...light.core]);
 
@@ -350,9 +351,9 @@ describe('tokens.css: the light tokens', () => {
   });
 
   it('draws the diff tokens in the colour the light map draws', () => {
-    for (const [k, c] of [['added', '#2dd4bf'], ['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
-      expect(dark.get(`--corn-${k}`)).toBe(c);
-      expect(light.get(`--corn-${k}`)).toBe(lightColor(c));
+    for (const k of ['added', 'changed', 'removed', 'edit']) {
+      expect(dark.get(`--corn-${k}`)).toBe(DIFF_MARK_COLORS.dark[k]);
+      expect(light.get(`--corn-${k}`)).toBe(DIFF_MARK_COLORS.light[k]);
     }
   });
 });

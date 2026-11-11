@@ -166,6 +166,7 @@ import { externalLayer, whenDash } from './cloud-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
 //  Constants every renderer shares, so the looks cannot drift apart
@@ -200,10 +201,10 @@ const PACKET = { color: '#ffffff', radius: 3.5, glow: 10, cycleMs: 2600 };
  * `alpha` fades a removed node and its edge; `strike` strikes its label through (`labelStrike`).
  */
 export const MARK = {
-  added: { color: '#2dd4bf', ringR: 9, ringWidth: 2, ringDash: [5, 4], edgeDash: [7, 5], edgeWidth: 2.2, alpha: 1, strike: false },
-  changed: { color: '#fbbf24', ringR: 9, ringWidth: 2.5, ringDash: null, edgeDash: null, edgeWidth: 2.4, alpha: 1, strike: false },
-  removed: { color: '#f87171', ringR: 9, ringWidth: 2, ringDash: null, edgeDash: [3, 4], edgeWidth: 2, alpha: 0.55, strike: true },
-  edit: { color: '#a78bfa', ringR: 9, ringWidth: 2.5, ringDash: null, edgeDash: null, edgeWidth: 2.4, alpha: 1, strike: false },
+  added: { ...MARK_SHAPES.added, color: DIFF_MARK_COLORS.dark.added, ringR: 9, ringWidth: 2, edgeWidth: 2.2, alpha: 1 },
+  changed: { ...MARK_SHAPES.changed, color: DIFF_MARK_COLORS.dark.changed, ringR: 9, ringWidth: 2.5, edgeWidth: 2.4, alpha: 1 },
+  removed: { ...MARK_SHAPES.removed, color: DIFF_MARK_COLORS.dark.removed, ringR: 9, ringWidth: 2, edgeWidth: 2, alpha: REMOVED_ALPHA },
+  edit: { ...MARK_SHAPES.edit, color: DIFF_MARK_COLORS.dark.edit, ringR: 9, ringWidth: 2.5, edgeWidth: 2.4, alpha: 1 }, // dotted: not the same ring as a change
 };
 /**
  * The looks a renderer draws itself, per theme (MAP-01): the halos, the mark rings, the core dot and the
@@ -224,7 +225,7 @@ const lightLook = (look) => {
 const DARK_LOOKS = Object.freeze({ halo: HALO, mark: MARK, core: CORE_COLOR, labelOutline: LABEL_OUTLINE });
 const LIGHT_LOOKS = Object.freeze({
   halo: Object.fromEntries(Object.entries(HALO).map(([k, v]) => [k, lightLook(v)])),
-  mark: Object.fromEntries(Object.entries(MARK).map(([k, v]) => [k, lightLook(v)])),
+  mark: Object.fromEntries(Object.entries(MARK).map(([k, v]) => [k, { ...v, color: DIFF_MARK_COLORS.light[k] }])), // chosen to be 3:1 over the light ground and its glow (diff-marks.js)
   core: CORE_COLOR, // the white dot stays white: it sits on the node's own (deepened) colour, not on the ground
   labelOutline: { node: { color: 'rgba(244, 246, 250, 0.9)', width: 3.5 }, edge: { color: 'rgba(244, 246, 250, 0.92)', width: 3 } },
 });
@@ -467,7 +468,7 @@ function styleForProposal(edge, mark, view, gone = false) {
   edge.color = look.color;
   edge.dash = gone ? MARK.removed.edgeDash : look.edgeDash; // an edge a what-if edit removes: violet, but dotted and faded like any removal
   edge.width = Math.max(edge.width, look.edgeWidth);
-  if (edge.alpha >= 0.1) edge.alpha = Math.max(edge.alpha, 0.9) * (gone ? MARK.removed.alpha : look.alpha); // not under the selection's deep dimming
+  if (edge.alpha >= 0.1) edge.alpha = Math.max(edge.alpha, EDGE_MIN_ALPHA) * (gone ? MARK.removed.alpha : look.alpha); // not under the selection's deep dimming
   if (edge.glow) edge.glowColor = look.color;
 }
 
@@ -578,7 +579,7 @@ function buildNodes(state, subgraph) {
       label: shown.label,
       labelSize: big ? 12 : 11,
       labelBold: big,
-      labelAlpha: alpha,
+      labelAlpha: focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
       labelKeep: LANDMARK_TYPES.includes(shown.type) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
