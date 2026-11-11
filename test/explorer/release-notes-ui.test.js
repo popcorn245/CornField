@@ -157,7 +157,7 @@ describe('the Release notes tab', () => {
     const server = fakeServer({ notes: () => ({ ok: false, status: 404, headers: new Headers(), json: async () => ({ ok: false, error: 'owner/name has no tag named "v9.9.9".', code: 'not-found' }) }) });
     await openNotes(server);
     expect($('forge-notice').hidden).toBe(false);
-    expect($('forge-notice').textContent).toBe('owner/name has no tag named "v9.9.9".');
+    expect($('forge-notice').textContent).toBe('Could not load the release notes. owner/name has no tag named "v9.9.9". Retry');
     expect($('notes-copy').disabled).toBe(true);
     expect($('notes-post').disabled).toBe(true);
     await refreshForge();
@@ -167,7 +167,7 @@ describe('the Release notes tab', () => {
   it('says an older answer is old, and an empty draft is empty', async () => {
     const server = fakeServer({ notes: () => ok({ ...NOTES, stale: 'GitHub asked cornfield to slow down; try again in 40 seconds.', count: 0, groups: [], markdown: 'No pull requests were merged since v0.2.0.\n' }) });
     await openNotes(server);
-    expect($('forge-notice').textContent).toBe('Showing an older answer. GitHub asked cornfield to slow down; try again in 40 seconds.');
+    expect($('forge-notice').textContent).toBe('Showing an older answer. GitHub asked cornfield to slow down; try again in 40 seconds. Retry');
     expect($('forge-status').textContent).toBe('No pull requests merged since v0.2.0 (2026-10-12).');
     click($('notes-post'));
     await settle();
@@ -344,7 +344,7 @@ describe('Post as draft', () => {
     vi.stubGlobal('fetch', vi.fn(async (url) => { if (String(url).includes('release-drafts')) throw new TypeError('Failed to fetch'); return ok(NOTES); }));
     click($('notes-confirm-yes'));
     await settle();
-    expect($('notes-message').textContent).toBe('cornfield could not be reached; check that it is still running, then refresh.');
+    expect($('notes-message').textContent).toBe('cornfield could not be reached. Check that it is still running, then try again.');
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401, headers: new Headers(), json: async () => ({ ok: false, error: 'Not signed in.' }) })));
     click($('notes-confirm-yes'));
     await settle();

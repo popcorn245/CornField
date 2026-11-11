@@ -13,7 +13,7 @@ import { EXPLORER, CORNFIELD } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
-import { MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, mapTokenNames } from '../../explorer/map-style.js';
+import { EDGE_WIDTH_TOKEN, FONT_TOKEN, GLOW_TOKEN, MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, mapTokenNames } from '../../explorer/map-style.js';
 
 const NAMED = 'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgrey darkgreen darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray grey green greenyellow honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgrey lightgreen lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen'.split(' ');
 const NAMED_RE = new RegExp(`(?<![\\w-])(${NAMED.join('|')})(?![\\w-])`, 'i');
@@ -57,8 +57,8 @@ export function literalsIn(prop, rawValue) {
   if (/(?<![\w-])(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|device-cmyk)\s*\(/i.test(bare)) found.push('colour function');
   if (NAMED_RE.test(bare.replace(/\b(currentColor|transparent|inherit)\b/gi, ' ').replace(/color-mix\(\s*in [\w ]+,/gi, ' '))) found.push('named colour');
   if (/^--corn-/.test(prop)) found.push('a token defined outside tokens.css');
-  if (prop === 'font-family' && !/^(inherit|var\(--corn-(font|font-display|mono)\))$/.test(value)) found.push('font-family');
-  if (prop === 'font' && !/^(inherit|var\(--corn-text-[\w]+\)\/[\d.]+ var\(--corn-(font|font-display|mono)\))$/.test(value)) found.push('font shorthand');
+  if (prop === 'font-family' && !/^(inherit|var\(--corn-(font|font-display|font-num|mono)\))$/.test(value)) found.push('font-family');
+  if (prop === 'font' && !/^(inherit|var\(--corn-text-[\w]+\)\/[\d.]+ var\(--corn-(font|font-display|font-num|mono)\))$/.test(value)) found.push('font shorthand');
   if (prop === 'font-size' && !/^(inherit|var\(--corn-text-[\w]+\))$/.test(value)) found.push('font-size not a token');
   if (/^border(-(top|bottom)-(left|right)|-(start|end)-(start|end))?-radius$/.test(prop) && LENGTH.test(bare)) found.push('border-radius length');
   if (prop === 'box-shadow' && value !== 'none' && value !== 'inherit' && topLevel(value).some((s) => !s.includes('var(--corn-'))) found.push('box-shadow without tokens');
@@ -185,7 +185,7 @@ describe('tokens.css defines the documented tokens', () => {
     expect(defined.filter((t) => !documented.includes(t))).toEqual([]);
     const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n') + tokensCss;
     // the map's colours (--corn-map-*) are read by script (explorer/map-style.js), not by a stylesheet: the module's own list says which
-    const readByScript = new Set([...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN]);
+    const readByScript = new Set([...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN]);
     expect(defined.filter((t) => !readByScript.has(t) && !sheets.includes(`var(${t})`))).toEqual([]);
   });
 
@@ -194,6 +194,7 @@ describe('tokens.css defines the documented tokens', () => {
     expect(mapTokenNames().filter((t) => !have.has(t))).toEqual([]);
     for (const t of MAP_COLOR_TOKENS) expect(darkBlock, t).toMatch(new RegExp(`${t}:\\s*auto;`));
     expect(darkBlock).toMatch(/--corn-map-collision:\s*var\(--corn-warn\);/);
+    for (const t of [FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN]) expect(darkBlock, t).toMatch(new RegExp(`${t}:\\s*auto;`));
   });
 
   it('leaves the map tokens out of the light blocks: auto is right on either ground, and a theme sets its own', () => {

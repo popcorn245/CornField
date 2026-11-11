@@ -48,6 +48,8 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   };
   const mockupsOf = (slug) => Object.keys(repoFiles).filter((f) => f.startsWith(`${FOLDER}/${slug}/`));
   const state = { runner };
+  const comments = new Map(); // issue or PR number -> the comments posted to it since the rig started
+  let nextComment = 9900;
   let touchRunner = () => {};
 
   const dispatch = (key, req) => {
@@ -68,7 +70,8 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     }
     if (method === 'POST' && p === '/login/oauth/access_token') return { body: { access_token: 'rig-token', token_type: 'bearer' } };
     if (method === 'DELETE' && p.startsWith(`${API}/applications/`)) return { status: 204 };
-    if (!p.startsWith(API)) return { status: 404, body: { message: 'Not Found' } };
+    // The recorded lists page through a `Link` header that points at `/repositories/<id>/...` (outside the API prefix): the recorded second pages answer
+    if (!p.startsWith(API)) return base[`${method} ${p}${url.search}`] || { status: 404, body: { message: 'Not Found' } };
     const rest = p.slice(API.length);
     if (method === 'GET' && rest === '/user') return base['GET /user'];
     if (method === 'GET' && rest === `/repos/${REPO}`) return base[`GET /repos/${REPO}`];
@@ -88,7 +91,7 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
         return { body: { ...pullOf(spec), mergeable: true, mergeable_state: 'clean', merged: false } };
       }
     }
-    if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/issues/(\\d+)/comments$`).exec(rest)) && specs.some((s) => s.n === Number(m[1]))) return { body: [] };
+    if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/issues/(\\d+)/comments$`).exec(rest)) && specs.some((s) => s.n === Number(m[1]))) return { body: comments.get(Number(m[1])) || [] };
     // a spec PR's head holds its file and mockups; anything else at that sha is not there
     if (method === 'GET' && rest.startsWith(`/repos/${REPO}/contents/`)) {
       const file = rest.slice(`/repos/${REPO}/contents/`.length);
@@ -105,7 +108,13 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     if (hit) return hit;
     if (method === 'GET' && rest === `/repos/${REPO}/issues`) return base[`GET /repos/${REPO}/issues?state=open&sort=created&direction=desc&per_page=100`] ? { body: base[`GET /repos/${REPO}/issues?state=open&sort=created&direction=desc&per_page=100`].body } : { body: [] };
     if (method === 'GET' && /\/issues\/\d+\/comments$/.test(rest)) return { body: [] };
-    if (method === 'POST' && /\/issues\/\d+\/comments$/.test(rest)) return { status: 201, body: { id: 9900, user: user(MAINTAINER), body: JSON.parse(req.body || '{}').body || '', html_url: `https://github.example.com/${REPO}/issues/1#issuecomment-9900`, created_at: minutesAgo(0), updated_at: minutesAgo(0) } };
+    if (method === 'POST' && (m = /\/issues\/(\d+)\/comments$/.exec(rest))) {
+      // A comment is kept (in memory), so what is posted reads back: an approval shows in the Work panel and on the proposal
+      const at = new Date().toISOString();
+      const made = { id: nextComment++, user: user(MAINTAINER), body: JSON.parse(req.body || '{}').body || '', html_url: `https://github.example.com/${REPO}/issues/${m[1]}#issuecomment-${nextComment - 1}`, created_at: at, updated_at: at };
+      comments.set(Number(m[1]), [...(comments.get(Number(m[1])) || []), made]);
+      return { status: 201, body: made };
+    }
     return { status: 404, body: { message: 'Not Found' } };
   };
   const routes = new Proxy({}, { get: (_, key) => (typeof key === 'string' ? (req) => dispatch(key, req) : undefined) });
@@ -144,7 +153,7 @@ export function seedRuns(dataDir, specs) {
       ['stopped', 'Rename the orders table everywhere', 12, null, 300, 'stopped', 'Stopped by a maintainer.', null],
     ];
     rows.forEach(([name, brief, issue, proposal, ago, report, note, extra], i) => {
-      const runId = `run-01RIGRUN${String(i).padStart(14, '0')}`;
+      const runId = `run-01RIGRUN${String(i).padStart(18, '0')}`; // 'run-' and 26 characters, as the API takes
       const at = minutesAgo(ago + 5);
       const request = { version: 1, runId, kind: proposal ? 'spec' : 'code', refs: proposal ? { proposal } : { issue }, brief, requestedBy: MAINTAINER, requestedAt: at.replace(/\.\d{3}Z$/, 'Z') };
       const stopped = name === 'stopped';

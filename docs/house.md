@@ -2,6 +2,8 @@
 
 The House view draws the physical side of a repo: each floor's rooms, the machines and devices in them, the people (as persona counts, never names) beside the plan, the software around it, and the Cloud band above the street. It is optional, and read-only: cornfield displays a house; the plan and the devices come from a source.
 
+**When House is offered.** The View switch shows House when `cornfield.config.js` names a `house`, `live` or `devices` source, or when the map already holds a floor or a room. With neither there is no plan to draw, so the switch is Map and Flow only, and `/?view=house` opens the map (since 0.35; before, House opened an empty plan with a red "live layer unavailable" chip). A named source that fails to load still offers House, and the live chip says it did not load, in the error tone. With no live source named, the chip is neutral ("No live layer"), not an error.
+
 ## The quickest source: a JSON file in the repo
 
 ```js

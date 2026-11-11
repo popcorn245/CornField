@@ -360,7 +360,7 @@ describe('the Forgejo adapter', () => {
     expect((await forgeError(() => forge.pull(2), 'invalid')).message).toBe('Forgejo did not accept the request for pull request #2 in owner/name. Forgejo said: "[]: Do: Required"');
     expect((await forgeError(() => forge.pull(3), 'unavailable')).message).toBe('Forgejo could not answer for pull request #3 in owner/name (HTTP 502); try again in a minute.');
     expect((await forgeError(() => forge.pull(4), 'unavailable')).message).toBe('Forgejo answered for pull request #4 in owner/name with something that is not JSON.');
-    expect((await forgeError(() => forge.pull(5), 'not-found')).message).toBe('Forgejo has no pull request #5 in owner/name, or this sign-in cannot see it.');
+    expect((await forgeError(() => forge.pull(5), 'not-found')).message).toBe('Forgejo could not find pull request #5 in owner/name, or this sign-in cannot see it.');
   });
 
   it('gives up on a forge that does not answer in time, or at all', async () => {

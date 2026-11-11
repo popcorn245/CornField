@@ -276,7 +276,11 @@ export function failureWords(error, { settable = false } = {}) {
   const reason = error && error.reason;
   const hint = error && typeof error.hint === 'string' && error.hint ? error.hint : '';
   let w;
-  if (reason === 'no-token') {
+  if (error && error.notConfigured === true) {
+    // No live source is set: nothing is wrong, so the chip is neutral (off), not an error
+    const short = hint || 'no live source is set';
+    w = { text: `No live layer: ${short}`, short, tone: 'off', href: null, fix: '' };
+  } else if (reason === 'no-token') {
     const short = hint || 'no token';
     w = { text: `Live layer off: ${short}`, short, tone: 'off', href: error.href || null, fix: settable ? 'Set one in the Live menu.' : '' };
   } else if (reason === 'forbidden') {
@@ -308,7 +312,7 @@ export function chipModel(snap, { other = 0, now = Date.now(), house = false } =
   }
   if (snap.error) {
     const w = failureWords(snap.error);
-    if (house) return { ...base, tone: w.tone, text: `Default plan, live layer ${w.tone === 'off' ? 'off' : 'unavailable'}`, lines: [w.house], href: w.href, note: errorNote(snap.error) };
+    if (house) return { ...base, tone: w.tone, text: snap.error.notConfigured === true ? 'Default plan, no live layer' : `Default plan, live layer ${w.tone === 'off' ? 'off' : 'unavailable'}`, lines: [w.house], href: w.href, note: errorNote(snap.error) };
     return { ...base, tone: w.tone, text: w.text, href: w.href, note: errorNote(snap.error) };
   }
   return { ...base, tone: 'idle', text: 'Live layer: loading…' };

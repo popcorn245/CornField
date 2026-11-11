@@ -47,7 +47,7 @@ const hooks = tableValues('## The hooks').filter((v, i, a) => a.indexOf(v) === i
 const kinds = tableValues('### Button kinds: `data-corn-kind`');
 const states = tableValues('### States: `data-corn-state`');
 
-const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), path.join(CORNFIELD, 'plugins/house/browser.js')];
+const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
 const source = SOURCES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 /** Every literal value written as `data-corn="x"` or `dataset.corn = 'x'` (the attribute, in markup and in script) */
 const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);
@@ -212,11 +212,11 @@ describe('markup made by script', () => {
     const host = document.createElement('ul');
     host.innerHTML = runsHtml(ctx, [run]);
     const card = host.querySelector('[data-corn="run"]');
-    expect(card.getAttribute('data-corn-state')).toBe('running');
-    expect(card.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('running');
+    expect(card.getAttribute('data-corn-state')).toBe('working');
+    expect(card.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('working');
     expect(card.querySelector('[data-forge-stop]').getAttribute('data-corn-kind')).toBe('danger');
     host.innerHTML = runsHtml(ctx, [{ ...run, status: 'failed', open: false }, { ...run, runId: 'r2', status: 'requested' }]);
-    expect([...host.querySelectorAll('[data-corn="run"]')].map((r) => r.getAttribute('data-corn-state')).sort()).toEqual(['failed', 'queued']);
+    expect([...host.querySelectorAll('[data-corn="run"]')].map((r) => r.getAttribute('data-corn-state')).sort()).toEqual(['failed', 'requested']);
   });
 
   it('maps every internal word onto the documented states, and nothing else', () => {

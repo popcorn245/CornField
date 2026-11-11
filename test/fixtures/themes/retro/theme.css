@@ -3,14 +3,15 @@
    test/fixtures/big/README.md ("What retro could not reach").
 
    Cream paper in the light level, deep indigo in the dark one; radius 0, 2px ink borders, hard offset shadows, a red accent,
-   a blue focus ring, a pixel face for titles and a rounded sans for the rest and for anything with digits. */
+   a blue focus ring, a pixel face for titles and a rounded sans for the rest, for anything with digits (--corn-font-num) and for the
+   map's labels (--corn-map-font). No !important and no .hx-* selector: tokens and hooks only. */
 
 /* Both levels: shape, type and the accent fill. Dark values follow. */
 :root {
   --corn-font: "Nunito", ui-rounded, "Trebuchet MS", system-ui, sans-serif;
   --corn-font-display: "Pixelify Sans", "Courier New", ui-monospace, monospace;
-  /* digits live in Nunito, never in the pixel face */
-  --corn-mono: "Nunito", ui-rounded, system-ui, sans-serif;
+  /* digits (counts, costs, times, PR numbers, the step counter) live in Nunito, never in the pixel face; code keeps the real monospace */
+  --corn-font-num: "Nunito", ui-rounded, system-ui, sans-serif;
 
   --corn-radius-xs: 0;
   --corn-radius-sm: 0;
@@ -20,6 +21,7 @@
   --corn-border: 2px;
   --corn-border-strong: 4px;
   --corn-focus-width: 3px;
+  --corn-focus-offset: 3px;
   --corn-blur: 0px;
 
   --corn-accent: #c8102e;
@@ -38,6 +40,7 @@
   --corn-shadow-sm: 2px 2px 0 #0a0720;
   --corn-shadow-lg: 6px 6px 0 #0a0720;
   --corn-shadow-color: #0a0720;
+  --corn-shadow-sheet: 0 -4px 0 #0a0720;
   --corn-glow: 0px;
   --corn-scrim: rgba(10, 7, 32, 0.72);
 
@@ -63,7 +66,10 @@
   --corn-hue-pink: #ff8fc0;
   --corn-hue-lime: #b6f23a;
 
-  /* The map, dark: saturated fills with an ink ring, cream labels */
+  /* The map, both levels: Nunito labels, a heavier flat line and no glow. Then, in dark: saturated fills with an ink ring, cream labels */
+  --corn-map-font: "Nunito", ui-rounded, "Trebuchet MS", sans-serif;
+  --corn-map-edge-width: 2.4px;
+  --corn-map-glow: 0;
   --corn-map-stroke: #0a0720;
   --corn-map-stroke-width: 2px;
   --corn-map-label: #fdf3dc;
@@ -119,6 +125,7 @@
     --corn-shadow-sm: 2px 2px 0 #1b1636;
     --corn-shadow-lg: 6px 6px 0 #1b1636;
     --corn-shadow-color: #1b1636;
+    --corn-shadow-sheet: 0 -4px 0 #1b1636;
     --corn-glow: 0px;
     --corn-scrim: rgba(27, 22, 54, 0.45);
 
@@ -199,6 +206,7 @@
   --corn-shadow-sm: 2px 2px 0 #1b1636;
   --corn-shadow-lg: 6px 6px 0 #1b1636;
   --corn-shadow-color: #1b1636;
+  --corn-shadow-sheet: 0 -4px 0 #1b1636;
   --corn-glow: 0px;
   --corn-scrim: rgba(27, 22, 54, 0.45);
 
@@ -274,6 +282,13 @@
 [data-corn-kind="approve"],
 [data-corn-kind="danger"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
 [data-corn-kind]:active { transform: translate(2px, 2px); box-shadow: none; }
-[data-corn="state-pill"] { font-family: var(--corn-font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+/* State pills stay in the body face: in the pixel face at this size a C reads as an O ("OLAIMED") */
+[data-corn="state-pill"] { text-transform: uppercase; letter-spacing: 0.04em; }
 [data-corn="row"], [data-corn="run"] { box-shadow: var(--corn-shadow-sm); }
 [data-corn$="-dialog"] { box-shadow: var(--corn-shadow-lg); }
+/* The hint's hand becomes a pixel arrow; digits are tabular and heavier; the sign-in pages take the card's hard shadow */
+[data-corn="hint-icon"] svg { display: none; }
+[data-corn="hint-icon"]::before { content: "\25B6"; font-family: var(--corn-font-display); }
+[data-corn="count"] { font-weight: 700; }
+[data-corn="auth-card"] { box-shadow: var(--corn-shadow-lg); }
+[data-corn="auth-brand"] { padding-bottom: 12px; border-bottom: var(--corn-border) solid var(--corn-line-soft); }

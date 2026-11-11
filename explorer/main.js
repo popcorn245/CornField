@@ -42,6 +42,7 @@ import { initMockups } from './mockups.js';
 import { benchMeta, measureParams, readoutLines, resultLine, runBench, showReadout } from './bench.js';
 import { initLive } from './live.js';
 import { initHouse } from './house.js';
+import { houseOffered } from './house-model.js';
 import { initChecks } from './check.js';
 import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
@@ -49,6 +50,9 @@ import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
 import { initTheme, setThemeChoice } from './theme.js';
 import { initAccountMenu } from './account-menu.js';
+import { watchHeaderFit } from './header-fit.js';
+import { watchHint } from './hint.js';
+import { watchFocusRoom } from './focus-room.js';
 import { applyMapTheme, onMapStyleChange, watchMapStyle } from './map-style.js';
 
 const $ = (id) => document.getElementById(id);
@@ -214,13 +218,13 @@ $('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.v
 resize();
 syncViewUi();
 // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-const configReady = loadClientConfig().then((config) => { applyBranding(document, config); applyMapTheme(document, config.theme); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyMapTheme(document, config.theme); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
 loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional
   const config = await configReady;
   state.forge = config.forge || null;
-  const { liveSource, floorRenderer, checker } = await loadSources(config);
+  const { liveSource, floorRenderer, checker, houseSource } = await loadSources(config);
   const forgeOn = initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
   initReviewTokens(config); // review tokens for the review API: only for somebody signed in (review-tokens.js)
   initWhatIf(); // before a proposal can open, so its edits come with it
@@ -230,7 +234,7 @@ loadTopology().then(async (ok) => {
   // The live layer (live.js): loads only once a live layer goes on in the Layers menu; with no source it stays off
   initLive({ source: liveSource, onSelectionGone: closeDrawer });
   // The House view (house.js): a source's floor renderer draws the plan under the map (plain room boxes without one); /?view=house opens it
-  initHouse({ floor: floorRenderer });
+  initHouse({ floor: floorRenderer, offered: houseOffered(houseSource, state.nodes) }); // no house source and no house in the map: no House button
   initChecks({ checker }); // scenarios ask the source's checker, when there is one (check.js)
   if (new URLSearchParams(window.location.search).get("view") === "dataflow") setView("dataflow");
   // /?run=, /?issue= and /?proposal=…&start=1 land on a run, an issue's Start button and a proposal's Start dialog (deep-link.js)

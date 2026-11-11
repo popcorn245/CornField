@@ -13,8 +13,8 @@
 :root {
   /* Ground and surfaces */
   --corn-ground: #090d16;
-  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.28) 0%, transparent 45%),
-                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.22) 0%, transparent 45%),
+  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.2) 0%, transparent 45%),
+                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.16) 0%, transparent 45%),
                        radial-gradient(circle at 50% 50%, rgba(66, 153, 225, 0.10) 0%, transparent 60%);
   --corn-surface-1: rgba(26, 34, 52, 0.72);
   --corn-surface-2: rgba(30, 41, 59, 0.8);
@@ -27,6 +27,8 @@
   --corn-shadow-color: rgba(0, 0, 0, 0.5);
   --corn-glow: 8px;
   --corn-scrim: rgba(0, 0, 0, 0.6);
+  /* The shadow of a phone's bottom sheet, cast upward: it takes --corn-shadow-color, so a flat brand sets it to a hard offset */
+  --corn-shadow-sheet: 0 -8px 24px color-mix(in srgb, var(--corn-shadow-color) 70%, transparent);
   --corn-blur: 16px;
 
   /* Text */
@@ -50,6 +52,16 @@
   --corn-bad: #fca5a5;
   --corn-info: #7dd3fc;
   --corn-ok-soft: color-mix(in srgb, var(--corn-ok) 15%, transparent);
+  /* An agent run's seven states, each its own colour for a theme to set (a pill also has a word and an icon, so none is told by colour alone).
+     They follow the status colours above in the light level too; a theme that sets one sets it for both levels, or leaves the alias. */
+  --corn-run-requested: var(--corn-text-3);
+  --corn-run-claimed: var(--corn-info);
+  --corn-run-working: var(--corn-info);
+  --corn-run-waiting: var(--corn-warn);
+  --corn-run-waiting-ink: var(--corn-ground);
+  --corn-run-done: var(--corn-ok);
+  --corn-run-failed: var(--corn-bad);
+  --corn-run-stopped: var(--corn-text-2);
 
   /* Diff: what a proposal adds, changes, removes and edits (the map draws the same four) */
   --corn-added: #2dd4bf;
@@ -73,6 +85,8 @@
   --corn-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --corn-font-display: var(--corn-font);
   --corn-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  /* The face of numbers shown as data (counts, times, costs, PR numbers, the step counter): a pixel or display face misreads 2, 5 and 8, so a brand sets one with clear digits */
+  --corn-font-num: var(--corn-font);
   --corn-text-2xs: 10px;
   --corn-text-xs: 11px;
   --corn-text-sm: 12px;
@@ -90,6 +104,7 @@
   --corn-border: 1px;
   --corn-border-strong: 2px;
   --corn-focus-width: 2px;
+  --corn-focus-offset: 2px;
 
   /* Spacing: padding, gaps and margins are steps of this scale (or calc() over it) */
   --corn-space: 4px;
@@ -118,6 +133,10 @@
   --corn-map-label: auto;
   --corn-map-label-halo: auto;
   --corn-map-collision: var(--corn-warn);
+  /* The label font list (auto: the map's own stack), an ordinary line's width in px (auto: each line's own) and the glow factor (auto and 1: as drawn, 0: none) */
+  --corn-map-font: auto;
+  --corn-map-edge-width: auto;
+  --corn-map-glow: auto;
   /* Diff, selection and focus */
   --corn-map-added: auto;
   --corn-map-changed: auto;
@@ -185,8 +204,8 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --corn-ground: #f4f6fa;
-    --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.12) 0%, transparent 45%),
-                         radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.07) 0%, transparent 45%);
+    --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.06) 0%, transparent 45%),
+                         radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.04) 0%, transparent 45%);
     --corn-surface-1: rgba(255, 255, 255, 0.8);
     --corn-surface-2: rgba(241, 245, 249, 0.92);
     --corn-surface-3: rgba(226, 232, 240, 0.95);
@@ -234,8 +253,8 @@
 
 :root[data-theme="light"] {
   --corn-ground: #f4f6fa;
-  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.12) 0%, transparent 45%),
-                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.07) 0%, transparent 45%);
+  --corn-ground-image: radial-gradient(circle at 14% 18%, rgba(66, 153, 225, 0.06) 0%, transparent 45%),
+                       radial-gradient(circle at 86% 82%, rgba(229, 62, 62, 0.04) 0%, transparent 45%);
   --corn-surface-1: rgba(255, 255, 255, 0.8);
   --corn-surface-2: rgba(241, 245, 249, 0.92);
   --corn-surface-3: rgba(226, 232, 240, 0.95);
