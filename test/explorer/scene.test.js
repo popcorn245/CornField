@@ -122,15 +122,13 @@ describe('cloud on the map (spec 0031, CLOUD-06)', () => {
     expect(noCloud).not.toContain('ext-old');
   });
 
-  it('draws a call solid when it bites now, dashed at the next deploy, dotted at the next renewal', () => {
+  it('draws a call with no tick when it bites now, one at the next deploy, two at the next renewal, and never dashed for it', () => {
     const scene = buildScene(st());
     expect(edge(scene, 'svc', 'ext-cloudflare').dash).toBeNull();
     expect(edge(scene, 'svc', 'ext-public-web').dash).toBeNull();
-    const dashed = edge(scene, 'svc2', 'ext-cloudflare').dash;
-    const dotted = edge(scene, 'svc3', 'ext-cloudflare').dash;
-    expect(dashed).toHaveLength(2);
-    expect(dotted).toHaveLength(2);
-    expect(dotted[0]).toBeLessThan(dashed[0]);
+    expect(edge(scene, 'svc', 'ext-cloudflare').ticks).toBe(0);
+    expect(edge(scene, 'svc2', 'ext-cloudflare')).toMatchObject({ ticks: 1, dash: null }); // a dash means proposed and nothing else
+    expect(edge(scene, 'svc3', 'ext-cloudflare')).toMatchObject({ ticks: 2, dash: null });
     expect(edge(scene, 'svc4', 'ext-cloudflare').dash).toEqual([7, 5]); // proposed reads as proposed
   });
 });
@@ -193,10 +191,10 @@ describe('ownership and usage edges', () => {
   const nodes = [node('a', 'app', 0, 0), node('b', 'page', 100, 0), node('c', 'page', 200, 0), node('d', 'page', 300, 0)];
   const edges = [link('a', 'b'), link('b', 'c', { dashed: true }), link('c', 'd')];
 
-  it('are straight lines between the centres: solid and faint, usage dashed and indigo', () => {
+  it('are straight lines between the centres: solid and faint, usage dotted and indigo', () => {
     const scene = buildScene(mkState(nodes, edges));
     expect(edge(scene, 'a', 'b')).toMatchObject({ x1: 0, y1: 0, x2: 100, y2: 0, r1: 20, r2: 20, color: 'rgba(255, 255, 255, 0.16)', width: 1.4, dash: null, curve: null, arrow: false, glow: 0, packet: null, alpha: 1 });
-    expect(edge(scene, 'b', 'c')).toMatchObject({ color: 'rgba(129, 140, 248, 0.35)', width: 1.2, dash: [4, 4], kind: 'usage' });
+    expect(edge(scene, 'b', 'c')).toMatchObject({ color: 'rgba(129, 140, 248, 0.35)', width: 1.2, dash: [1.5, 4], kind: 'usage', end: null });
   });
 
   it('light up when they touch the selection, and fade out when they do not', () => {
@@ -204,9 +202,9 @@ describe('ownership and usage edges', () => {
     expect(edge(scene, 'a', 'b')).toMatchObject({ color: '#ffffff', width: 2.4, glow: 10, glowColor: 'rgba(255, 255, 255, 0.8)', dash: null });
     expect(edge(scene, 'c', 'd')).toMatchObject({ color: 'rgba(255, 255, 255, 0.02)', width: 0.8, dash: null });
     const tail = buildScene(mkState(nodes, edges, { selectedNode: nodes[3] }));
-    expect(edge(tail, 'b', 'c')).toMatchObject({ color: 'rgba(255, 255, 255, 0.02)', dash: [4, 4] }); // faint but still dashed
+    expect(edge(tail, 'b', 'c')).toMatchObject({ color: 'rgba(255, 255, 255, 0.02)', dash: [1.5, 4] }); // faint but still dotted
     const focus = buildScene(mkState(nodes, edges, { selectedNode: nodes[1] }));
-    expect(edge(focus, 'b', 'c')).toMatchObject({ color: '#818cf8', width: 2.0, glow: 8, glowColor: 'rgba(129, 140, 248, 0.7)', dash: [5, 4] });
+    expect(edge(focus, 'b', 'c')).toMatchObject({ color: '#818cf8', width: 2.0, glow: 8, glowColor: 'rgba(129, 140, 248, 0.7)', dash: [1.5, 4] });
   });
 });
 
@@ -253,21 +251,35 @@ describe('flow edges', () => {
     expect(focus).toMatchObject({ alpha: 1, width: 2.4, glow: 8, glowColor: '#f59e0b' });
     expect(focus.packet).toMatchObject({ color: '#ffffff', glowColor: '#f59e0b', radius: 3.5, glow: 10 });
     expect(focus.packet.speed).toBeCloseTo(1000 / 2600, 10);
-    expect(focus.label).toMatchObject({ text: 'writes rows', color: '#f59e0b', italic: false });
+    expect(focus.label).toMatchObject({ text: 'flow', color: '#f59e0b', italic: false }); // the kind's word, not the topology's text
     const mid = edgePoint(focus, 0.5);
     expect(focus.label.x).toBeCloseTo(mid.x, 10);
-    expect(focus.label.y).toBeCloseTo(mid.y - 6, 10);
+    expect(focus.label.y).toBeCloseTo(mid.y, 10);
     const far = edge(scene, 'z', 'p');
     expect(far).toMatchObject({ alpha: 0.04, packet: null, label: null, glow: 0 });
   });
 
-  it('label a table\'s data edges only for the page end that is selected', () => {
+  it('say their kind on every lit line, and nothing on the others (spec 0008 D7)', () => {
     const forPage = buildScene(mkState(nodes, [reads, writes], { selectedNode: nodes[2] }));
-    expect(edge(forPage, 't', 'p').label).not.toBeNull();
-    expect(edge(forPage, 'p', 't').label).not.toBeNull();
-    const forTable = buildScene(mkState(nodes, [reads, writes], { selectedNode: nodes[1] }));
-    expect(edge(forTable, 't', 'p').label).toBeNull(); // a table's edges converge: their page labels them
-    expect(edge(forTable, 'p', 't').label).toBeNull();
+    expect(edge(forPage, 't', 'p').label).toMatchObject({ text: 'reads' });
+    expect(edge(forPage, 'p', 't').label).toMatchObject({ text: 'writes' });
+    const none = buildScene(mkState(nodes, [reads, writes]));
+    expect(edge(none, 't', 'p').label).toBeNull();
+  });
+
+  it('end in one mark per family, and a dash only for a proposed edge (spec 0008 D7)', () => {
+    const mk = (kind, extra = {}) => link('a', 't', { kind, status: 'live', ...extra });
+    const end = (kind, extra) => edge(buildScene(mkState(nodes, [mk(kind, extra)], { selectedNode: nodes[0] })), 'a', 't'); // lit: token links are drawn for a selection only
+    expect(['flow', 'reads', 'writes'].map((k) => end(k).end)).toEqual(['chevron', 'chevron', 'chevron']);
+    expect(['calls', 'triggers', 'delivers'].map((k) => end(k).end)).toEqual(['triangle', 'triangle', 'triangle']);
+    const onMachine = edge(buildScene(mkState([...nodes, node('m', 'machine', 0, 200)], [link('a', 'm', { kind: 'runs-on', status: 'live' })])), 'a', 'm');
+    expect(onMachine.end).toBe('bar');
+    expect(['uses', 'extends'].map((k) => end(k).end)).toEqual(['diamond', 'diamond']);
+    expect(end('calls', { status: 'proposed' })).toMatchObject({ dash: [7, 5], end: 'triangle' }); // proposed: dashed, with its kind's own mark
+    expect(end('reads', { status: 'proposed' })).toMatchObject({ dash: [7, 5], end: 'chevron' });
+    for (const k of ['flow', 'reads', 'calls', 'uses']) expect(end(k).dash).toBeNull();
+    const dotted = buildScene(mkState(nodes, [link('a', 'p', { dashed: true })]));
+    expect(edge(dotted, 'a', 'p')).toMatchObject({ dash: [1.5, 4], end: null, arrow: false }); // a usage link: dotted, no mark
   });
 
   it('describe no packet at all under reduced motion', () => {
@@ -474,7 +486,7 @@ describe('the data-flow preset', () => {
 
   it('puts a packet on every edge, and a label on the selection\'s', () => {
     const picked = buildScene(mkState(nodes, [], { view: 'dataflow', flow, selectedNode: nodes[0] }));
-    expect(edge(picked, 'store-idb', 'app-api').label).toMatchObject({ text: 'outbox' });
+    expect(edge(picked, 'store-idb', 'app-api').label).toMatchObject({ text: 'flow' });
     expect(edge(picked, 'store-idb', 'app-api').packet).not.toBeNull();
     expect(edge(picked, 'tbl', 'app-api').packet).toBeNull(); // not in the focus
   });
@@ -504,7 +516,7 @@ describe('the ROM simulation (a scenario that links the nodes it visits; see sce
     const lit = edge(scene, 'tbl', 'rom');
     expect(lit).toMatchObject({ alpha: 1, glow: 8 });
     expect(lit.packet).not.toBeNull();
-    expect(lit.label).toMatchObject({ text: 'dep' });
+    expect(lit.label).toMatchObject({ text: 'flow' });
     expect(edge(scene, 'rom', 'page')).toMatchObject({ alpha: 0.04, packet: null });
   });
 

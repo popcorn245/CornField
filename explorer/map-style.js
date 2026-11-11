@@ -55,6 +55,8 @@ export const FONT_TOKEN = '--corn-map-font';
 export const EDGE_WIDTH_TOKEN = '--corn-map-edge-width';
 export const GLOW_TOKEN = '--corn-map-glow';
 export const LABEL_MIN_TOKEN = '--corn-map-label-min';
+/** The ink of a node's glyph and of a finer kind's letters (spec 0008 D8); `auto` is the white or the dark that reads on the node's fill (glyphs.js) */
+export const GLYPH_TOKEN = '--corn-map-glyph';
 /** The largest label minimum a theme may ask for: bigger text would leave no room for another label */
 export const MAX_LABEL_MIN = 24;
 /** The width an ordinary line has with no theme (scene.js `flowEdge`): the `--corn-map-edge-width` scales every line by its ratio to this */
@@ -86,6 +88,7 @@ export const MAP_COLOR_TOKENS = Object.freeze([
   STROKE_TOKEN,
   LABEL_TOKEN,
   LABEL_HALO_TOKEN,
+  GLYPH_TOKEN,
   ...MAP_EDGE_KINDS.map(edgeToken),
   ...MAP_MARKS.map(stateToken),
   ...MAP_STATES.map(stateToken),

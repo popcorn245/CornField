@@ -23,7 +23,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
-import { NODE_THEMES } from './schema.js';
+import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
+import { deltaE2000 } from './delta-e.js';
 import { LAYER_KEY_RE, MAX_KEY, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
@@ -555,6 +556,18 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
       out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of ${anOf(label)} ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
     }
   }
+  // The ink of a glyph and of a finer kind's letters (spec 0008 D8), when the theme sets one: against every fill it can sit on (`auto` picks white or dark per fill, which a test holds)
+  const glyph = mapToken(props, '--corn-map-glyph');
+  if (glyph.problem) out.push({ ...base, fg: '--corn-map-glyph', bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: 'the ink of a node\'s glyph', problem: glyph.problem });
+  else if (glyph.color) {
+    for (const type of Object.keys(NODE_THEMES)) {
+      const fill = mapFillOf(props, type, mode);
+      if (!fill || !isColor(fill.color)) continue;
+      const bg = over(fill.color, ground);
+      const ink = over(glyph.color, bg);
+      out.push({ ...base, fg: '--corn-map-glyph', bg: fill.name, min: MAP_FILL_MIN, kind: 'ui', use: `the glyph on ${anOf(type)} ${type} node`, fgValue: toHex(ink), bgValue: toHex(bg), ratio: ratio(luminance(ink), luminance(bg)) });
+    }
+  }
   // The tokens a theme sets for a finer kind (`--corn-map-kind-<type>-<kind>`) and a project layer (`--corn-map-group-<key>`): the same fill
   // check, for each one the theme sets (an `auto` one draws the type's own colour, which is checked above)
   for (const name of extra) {
@@ -727,6 +740,56 @@ export function mapExtraTokens(sheets) {
   return [...declaredProps(sheets)].filter((n) => parseKindToken(n) || projectGroupOf(n)).sort();
 }
 
+// ---------------------------------------------------------------------------
+//  The map's palette (spec 0008 D8): types that share a silhouette are told apart by colour alone, so they are kept apart
+// ---------------------------------------------------------------------------
+
+/** The colour a type's node is drawn in for one page state: its token, else its group's, else its own from core/schema.js (deepened on the light ground); null when it cannot be read */
+function mapFillOf(props, type, mode) {
+  for (const group of MAP_GROUPS_OF(type)) {
+    for (const name of [`--corn-map-node-${type}`, `--corn-map-group-${group}`]) {
+      const t = mapToken(props, name);
+      if (t.color) return { color: t.color, name };
+      if (t.problem) return null;
+    }
+  }
+  return { color: readColor(mode === 'light' ? lightColor(NODE_THEMES[type].color) : NODE_THEMES[type].color), name: `--corn-map-node-${type}` };
+}
+
+/**
+ * The pairs of node types that share a silhouette and are under MIN_SHAPE_DELTA_E apart (CIEDE2000) in one theme, on the dark ground and the light.
+ * The default palette has none (a test holds it); a theme that sets map colours may.
+ * @param {{ theme: string, sheets: string[], name?: string }[]} themes
+ * @returns {{ theme: string, mode: string, a: string, b: string, shape: string, deltaE: number }[]}
+ */
+export function paletteProblems(themes) {
+  const out = [];
+  for (const { theme, sheets, name } of themes) {
+    for (const mode of ['light', 'dark']) {
+      const props = resolveProps(sheets, { mode, system: mode, name });
+      const types = Object.keys(NODE_SHAPES).filter((t) => Object.hasOwn(NODE_THEMES, t));
+      const fills = new Map(types.map((t) => [t, mapFillOf(props, t, mode)]));
+      for (let i = 0; i < types.length; i++) {
+        for (let j = i + 1; j < types.length; j++) {
+          const [a, b] = [types[i], types[j]];
+          if (NODE_SHAPES[a] !== NODE_SHAPES[b]) continue;
+          const [fa, fb] = [fills.get(a), fills.get(b)];
+          if (!fa || !fb || !isColor(fa.color) || !isColor(fb.color)) continue;
+          const d = deltaE2000(fa.color.slice(0, 3), fb.color.slice(0, 3));
+          if (d < MIN_SHAPE_DELTA_E) out.push({ theme, mode, a, b, shape: NODE_SHAPES[a], deltaE: d, tokens: [fa.name, fb.name] });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** One line for a palette finding: the two types, their tokens and how far apart they are */
+export function describePalette(f) {
+  const who = f.theme === 'standard' ? 'standard theme' : `named theme "${f.theme}"`;
+  return `${who} (${f.mode}): ${f.a} (${f.tokens[0]}) and ${f.b} (${f.tokens[1]}) share the ${f.shape} silhouette and are ΔE ${f.deltaE.toFixed(1)} apart, under ${MIN_SHAPE_DELTA_E}: the map tells them apart by colour alone, so give one of them a colour further from the other.`;
+}
+
 /** The pairs under their minimum: { fails, unresolved } */
 export function contrastProblems(themes) {
   const all = checkSheets(themes);
@@ -805,5 +868,7 @@ export function checkThemeContrast(config) {
   const lines = fails.map((f) => `theme contrast: ${describeFinding(f)}`);
   const warnings = unresolved.map((f) => `theme contrast: ${describeFinding(f)}`);
   const summary = contrastSummary(themes, total, fails.length, unresolved.length);
-  return (config.theme || {}).contrast === 'warn' ? { errors: [], warnings: [...lines, ...warnings], summary } : { errors: lines, warnings, summary };
+  // Types of one silhouette too close in colour (spec 0008 D8): a warning, never an error: a brand picks its own colours
+  const palette = paletteProblems(themes).map((f) => `theme map colours: ${describePalette(f)}`);
+  return (config.theme || {}).contrast === 'warn' ? { errors: [], warnings: [...lines, ...warnings, ...palette], summary } : { errors: lines, warnings: [...warnings, ...palette], summary };
 }

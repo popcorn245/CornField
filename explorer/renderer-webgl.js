@@ -24,9 +24,11 @@
  * The pure packing (`packNodes`, `packEdges`, `packDecor`, `styleTables`) is what the tests read: there is no GPU in CI.
  */
 
-import { ARROW, CORE_RATIO, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
-import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { ARROW, CORE_RATIO, EDGE_STRIKE, END_SHAPES, SHAPE_SIZES, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
+import { GLYPH_TOKEN, ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_MIN_PX, LETTER_RATIO, isLetterKey, letterImage, letterKey, lettersOfKey } from './kind-letters.js';
+import { GLYPH_MIN_PX, GLYPH_RATIO, glyphImage, glyphInk, glyphKey, glyphOfKey, isGlyphKey } from './glyphs.js';
+import { SHAPES } from '../core/schema.js';
 import {
   CURVE_SEGMENTS, EDGE_FRAG, GRID_FRAG, GRID_VERT, ICON_FRAG, ICON_VERT, LANE_FRAG, LANE_VERT, NODE_FRAG, NODE_VERT, PACKET_FRAG, PACKET_VERT,
   RING_FRAG, RING_VERT, TIP_FRAG, TIP_VERT, edgeVert,
@@ -36,8 +38,8 @@ import {
 //  Packing: scene -> typed arrays (pure)
 // ---------------------------------------------------------------------------
 
-/** Floats per node: x, y, r, alpha | red, green, blue, glow | halo code, mark code, colour alpha */
-export const NODE_STRIDE = 11;
+/** Floats per node: x, y, r, alpha | red, green, blue, glow | halo code, mark code, colour alpha, shape code (SHAPE_CODE, plus GLYPH_FLAG when the type's glyph takes the core dot's place) */
+export const NODE_STRIDE = 12;
 /** Floats per ring: x, y, r, width | rgba | dash on, off */
 export const RING_STRIDE = 10;
 /** Floats per lane: x, y, w, h | fill rgba | stroke rgba | radius, stroke width */
@@ -55,7 +57,12 @@ export const TIP_STRIDE = 9;
 export const PACKET_STRIDE = 18;
 
 export const HALO_CODE = { none: 0, selected: 1, match: 2, child: 3 };
-export const TIP_CODE = { arrow: 1, strike: 2 };
+/** What a tip is: a filled arrowhead, the strike across a removed edge, and (spec 0008 D7) the open chevron, the bar and the open diamond that end the other families, and the tick of a `when` */
+export const TIP_CODE = { arrow: 1, strike: 2, chevron: 3, bar: 4, diamond: 5, tick: 6 };
+/** The silhouettes, as the node shader numbers them (core/schema.js SHAPES) */
+export const SHAPE_CODE = Object.freeze(Object.fromEntries(SHAPES.map((name, i) => [name, i])));
+/** Added to a node's shape code when its glyph is drawn in place of the white core dot (no theme icon, no letters): the shader leaves the dot out once the glyph shows */
+export const GLYPH_FLAG = 8;
 export const MARK_CODE = { none: 0, added: 1, changed: 2, removed: 3, edit: 4 };
 
 /** A CSS colour as [r, g, b, a], all 0..1 */
@@ -76,7 +83,7 @@ export function packNodes(scene) {
   nodes.forEach((n, i) => {
     const [r, g, b, a] = rgba(n.color);
     // scene.js has already faded a removed node (MARK.removed.alpha is in n.alpha); the ring is the shader's (u_markGeom, u_markColor)
-    data.set([n.x, n.y, n.r, n.alpha, r, g, b, n.glow || 0, codeOf(HALO_CODE, n.halo), codeOf(MARK_CODE, n.mark), a], i * NODE_STRIDE);
+    data.set([n.x, n.y, n.r, n.alpha, r, g, b, n.glow || 0, codeOf(HALO_CODE, n.halo), codeOf(MARK_CODE, n.mark), a, codeOf(SHAPE_CODE, n.shape) + (n.glyph && !n.icon && !n.letters ? GLYPH_FLAG : 0)], i * NODE_STRIDE);
   });
   return { data, count: nodes.length, stride: NODE_STRIDE };
 }
@@ -141,7 +148,18 @@ export function packEdges(scene) {
     if (edge.arrow) {
       // along the end tangent: from the control point (a straight edge: from its start)
       const ang = Math.atan2(edge.y2 - (edge.curve ? edge.curve.cy : edge.y1), edge.x2 - (edge.curve ? edge.curve.cx : edge.x1));
-      rows.tips.push([edge.x2, edge.y2, Math.cos(ang), Math.sin(ang), r, g, b, lineAlpha, TIP_CODE.arrow]);
+      const code = edge.end && edge.end !== 'triangle' ? codeOf(TIP_CODE, edge.end) || TIP_CODE.arrow : TIP_CODE.arrow;
+      rows.tips.push([edge.x2, edge.y2, Math.cos(ang), Math.sin(ang), r, g, b, lineAlpha, code]);
+    }
+    if (edge.ticks) {
+      // across the middle, one or two, a few units apart along the chord (renderer-canvas2d.js drawTicks)
+      const mid = edgePoint(edge, 0.5);
+      const len = Math.hypot(edge.x2 - edge.x1, edge.y2 - edge.y1);
+      const [dx, dy] = len > 0 ? [(edge.x2 - edge.x1) / len, (edge.y2 - edge.y1) / len] : [1, 0];
+      for (let i = 0; i < edge.ticks; i++) {
+        const along = (i - (edge.ticks - 1) / 2) * END_SHAPES.tickGap;
+        rows.tips.push([mid.x + dx * along, mid.y + dy * along, dx, dy, r, g, b, lineAlpha, TIP_CODE.tick]);
+      }
     }
     if (edge.mark === 'removed') {
       // across the edge at its midpoint (the quadratic's tangent there is its chord)
@@ -202,22 +220,24 @@ export function packStrokes(scene) {
  * @param {(kind: string) => boolean} has whether the kind's image has loaded (a letters key: whether its image could be made)
  * @returns {{data: Float32Array, count: number, stride: number, groups: {kind: string, first: number, count: number, minR: number}[]}}
  */
-export function packIcons(scene, has) {
+export function packIcons(scene, has, style = null) {
   const byKind = new Map();
   scene.nodes.forEach((n) => {
     let kind = n.icon && has(n.icon) ? n.icon : null;
     let side = n.r * ICON_RATIO;
     if (!kind && !n.icon && n.letters && has(letterKey(n.letters))) { kind = letterKey(n.letters); side = n.r * LETTER_RATIO; }
+    if (!kind && !n.icon && !n.letters && n.glyph) { const key = glyphKey(n.glyph, glyphInk(n, style)); if (has(key)) { kind = key; side = n.r * GLYPH_RATIO; } } // the type's own glyph, last (glyphs.js)
     if (!kind) return;
-    if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity });
+    if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity, maxR: 0 });
     const group = byKind.get(kind);
+    group.maxR = Math.max(group.maxR, n.r);
     group.rows.push([n.x, n.y, side, n.alpha]);
     group.minR = Math.min(group.minR, n.r);
   });
   const groups = [];
   const rows = [];
-  for (const [kind, { rows: list, minR }] of byKind) {
-    groups.push({ kind, first: rows.length, count: list.length, minR });
+  for (const [kind, { rows: list, minR, maxR }] of byKind) {
+    groups.push({ kind, first: rows.length, count: list.length, minR, maxR });
     rows.push(...list);
   }
   const data = new Float32Array(rows.length * ICON_STRIDE);
@@ -284,7 +304,7 @@ export const PASSES = [
   { name: 'curved', vert: edgeVert(CURVE_SEGMENTS), frag: EDGE_FRAG, stride: EDGE_STRIDE, verts: CURVED_VERTS, attribs: [[1, 4, 0], [2, 4, 4], [3, 4, 8], [4, 4, 12], [5, 2, 16], [6, 1, 18]], constants: 'edges' },
   { name: 'tips', vert: TIP_VERT, frag: TIP_FRAG, stride: TIP_STRIDE, attribs: [[1, 4, 0], [2, 4, 4], [3, 1, 8]], constants: 'tips' },
   { name: 'packets', vert: PACKET_VERT, frag: PACKET_FRAG, stride: PACKET_STRIDE, attribs: [[1, 4, 0], [2, 4, 4], [3, 4, 8], [4, 4, 12], [5, 2, 16]], time: true },
-  { name: 'nodes', vert: NODE_VERT, frag: NODE_FRAG, stride: NODE_STRIDE, attribs: [[1, 4, 0], [2, 4, 4], [3, 3, 8]], constants: 'nodes' },
+  { name: 'nodes', vert: NODE_VERT, frag: NODE_FRAG, stride: NODE_STRIDE, attribs: [[1, 4, 0], [2, 4, 4], [3, 4, 8]], constants: 'nodes' },
 ];
 
 /** The uniforms that never change, set once per program (the looks live in scene.js, nowhere else) */
@@ -298,12 +318,17 @@ const CONSTANTS = {
     gl.uniform3fv(at('u_markMin'), tables.markMin);
     gl.uniform4fv(at('u_core'), tables.core);
     gl.uniform1f(at('u_coreRatio'), tables.coreRatio);
+    gl.uniform4f(at('u_shape'), SHAPE_SIZES.roundedHalf, SHAPE_SIZES.roundedCorner, SHAPE_SIZES.hexInradius, SHAPE_SIZES.squareHalf);
+    gl.uniform2f(at('u_shape2'), SHAPE_SIZES.squareCorner, SHAPE_SIZES.diamondHalf);
+    gl.uniform1f(at('u_glyphMin'), GLYPH_MIN_PX);
   },
   edges(gl, at, tables) {
     gl.uniform3fv(at('u_markMin'), tables.markMin);
   },
   tips(gl, at) {
     gl.uniform4f(at('u_tip'), ARROW.length, ARROW.spread, EDGE_STRIKE.halfLength, EDGE_STRIKE.width);
+    gl.uniform4f(at('u_end'), END_SHAPES.strokeWidth, END_SHAPES.barHalf, END_SHAPES.diamondHalf, END_SHAPES.diamondAcross);
+    gl.uniform2f(at('u_tick'), END_SHAPES.tickHalf, END_SHAPES.tickWidth);
   },
 };
 
@@ -494,13 +519,16 @@ export function createWebglRenderer(canvas, opts = {}) {
     if (lost || !gpu || !width || !height) return;
     const style = styleOf();
     const scene = styledScene(drawn, style); // the map in the theme's colours, outlines and icons (map-style.js); the scene itself when nothing is set
-    if (gpu.iconStore !== style.icons) { // a new set of icons (or none): the old ones' textures go now, not when the renderer does
+    const ink = style.values ? style.values[GLYPH_TOKEN] : undefined; // the theme's glyph ink: the letters' and glyphs' textures are made in it
+    if (gpu.iconStore !== style.icons || gpu.glyphInk !== ink) { // a new set of icons (or none), or another ink: the old ones' textures go now, not when the renderer does
       gpu.textures.forEach(({ texture }) => gl.deleteTexture(texture));
       gpu.textures.clear();
       gpu.iconStore = style.icons;
+      gpu.glyphInk = ink;
+      packedScene = null; // the icon rows are made again for the new ink
     }
     if (scene !== packedScene || scene.version !== packedVersion) {
-      packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => (isLetterKey(kind) ? !!letterImage(lettersOfKey(kind)) : !!(style.icons && style.icons.get(kind)))) };
+      packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => (isLetterKey(kind) ? !!letterImage(lettersOfKey(kind), ink) : isGlyphKey(kind) ? !!glyphImage(glyphOfKey(kind).type, glyphOfKey(kind).ink) : !!(style.icons && style.icons.get(kind))), style) };
       packedScene = scene;
       packedVersion = scene.version;
       upload();
@@ -548,10 +576,16 @@ export function createWebglRenderer(canvas, opts = {}) {
       gl.bindBuffer(gl.ARRAY_BUFFER, icons.buffer);
       for (const group of packed.icons.groups) {
         const letters = isLetterKey(group.kind);
-        if (letters && group.minR * 2 * camera.zoom < LETTER_MIN_PX) continue; // too small on screen: the letters would be a smudge (kind-letters.js)
-        const image = letters ? letterImage(lettersOfKey(group.kind)) : style.icons && style.icons.get(group.kind);
+        const glyph = isGlyphKey(group.kind);
+        // Letters and a glyph are drawn only on a node wide enough on screen (kind-letters.js, glyphs.js): the vertex shader drops each
+        // smaller one, as Canvas 2D does node by node, and a group whose largest node is under it is not drawn at all
+        const minPx = letters ? LETTER_MIN_PX : glyph ? GLYPH_MIN_PX : 0;
+        if (minPx && group.maxR * 2 * camera.zoom < minPx) continue;
+        gl.uniform1f(icons.at('u_minR'), minPx / 2);
+        gl.uniform1f(icons.at('u_sideRatio'), letters ? LETTER_RATIO : glyph ? GLYPH_RATIO : 1);
+        const image = letters ? letterImage(lettersOfKey(group.kind), style.values && style.values[GLYPH_TOKEN]) : glyph ? glyphImage(glyphOfKey(group.kind).type, glyphOfKey(group.kind).ink) : style.icons && style.icons.get(group.kind);
         if (!image) continue;
-        gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated && !letters));
+        gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated && !letters && !glyph));
         gl.vertexAttribPointer(1, 4, gl.FLOAT, false, ICON_STRIDE * 4, group.first * ICON_STRIDE * 4); // this kind's rows
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, group.count);
         stats.draws++;

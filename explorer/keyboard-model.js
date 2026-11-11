@@ -13,6 +13,7 @@
  * The keys (on the focused map; a playing scenario keeps Left, Right and Space for itself):
  *   Arrow keys   pan (Shift: further)               + / -    zoom in / out        0   fit the map
  *   N / ]        the next node, selected and centred P / [    the previous one     Home / End  the first / the last
+ *   F            frame the selected node and what it lights
  *   Enter        into the selected node's panel     Escape   close the panel
  *   Alt+Arrow    in Freeform, move the selected node (Shift: further)
  */
@@ -38,6 +39,7 @@ export const MAP_KEYS = [
   ['N or ]', 'select the next node'],
   ['P or [', 'select the previous node'],
   ['Home and End', 'select the first and the last node'],
+  ['F', 'frame the selected node and what it lights'],
   ['Enter', 'go to the selected node\'s panel'],
   ['Escape', 'close the panel'],
   ['Alt and an arrow', 'in Freeform, move the selected node'],
@@ -48,7 +50,7 @@ export const MAP_KEYS = [
  * @param {{shift?: boolean, alt?: boolean, ctrl?: boolean, meta?: boolean, scenario?: boolean, freeform?: boolean, selected?: boolean}} [opts]
  *   `scenario`: a scenario is playing (its player owns Left, Right and Space); `freeform`: nodes can be moved; `selected`: a node is selected
  * @returns {null | {type: 'pan', dx: number, dy: number} | {type: 'zoom', factor: number} | {type: 'fit'} | {type: 'step', by: number}
- *   | {type: 'first'} | {type: 'last'} | {type: 'open'} | {type: 'close'} | {type: 'move', dx: number, dy: number}}
+ *   | {type: 'frame'} | {type: 'first'} | {type: 'last'} | {type: 'open'} | {type: 'close'} | {type: 'move', dx: number, dy: number}}
  */
 export function mapKeyAction(key, opts = {}) {
   const { shift = false, alt = false, ctrl = false, meta = false, scenario = false, freeform = false, selected = false } = opts;
@@ -68,6 +70,7 @@ export function mapKeyAction(key, opts = {}) {
     case '0': return { type: 'fit' };
     case 'n': case 'N': case ']': return { type: 'step', by: 1 };
     case 'p': case 'P': case '[': return { type: 'step', by: -1 };
+    case 'f': case 'F': return selected ? { type: 'frame' } : null;
     case 'Home': return { type: 'first' };
     case 'End': return { type: 'last' };
     case 'Enter': return selected ? { type: 'open' } : null;

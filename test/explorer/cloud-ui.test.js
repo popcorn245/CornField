@@ -97,16 +97,16 @@ describe('the Layers menu', () => {
     toggleLayer('web');
   });
 
-  it('shows the Cloud legend, solid, dashed and dotted, while the Cloud layer is on', () => {
+  it('shows the Cloud legend, with no tick, one and two, while the Cloud layer is on', () => {
     mount();
     const legend = $('cloud-legend');
     expect(legend.hidden).toBe(false);
     expect(legend.querySelector('.hx-swatch-when--run')).not.toBeNull();
     expect(legend.querySelector('.hx-swatch-when--deploy')).not.toBeNull();
     expect(legend.querySelector('.hx-swatch-when--renew')).not.toBeNull();
-    expect(legend.textContent).toMatch(/Solid: breaks as soon as it is down/);
-    expect(legend.textContent).toMatch(/Dashed: breaks at the next deploy/);
-    expect(legend.textContent).toMatch(/Dotted: breaks at the next certificate renewal/);
+    expect(legend.textContent).toMatch(/No tick: breaks as soon as it is down/);
+    expect(legend.textContent).toMatch(/One tick: breaks at the next deploy/);
+    expect(legend.textContent).toMatch(/Two ticks: breaks at the next certificate renewal/);
     expect(legend.textContent).toContain('(browser)');
     toggleLayer('cloud');
     expect(legend.hidden).toBe(true);
