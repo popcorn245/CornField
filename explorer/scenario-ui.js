@@ -32,6 +32,7 @@ import { edgeKey } from '../core/proposal.js';
 import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks } from './check.js';
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
 import { toggleLayer } from './layers.js';
+import { announce } from './keyboard.js';
 
 /** A frame that arrives later than this (a tab that was hidden) counts as this long */
 const MAX_FRAME_MS = 250;
@@ -234,6 +235,7 @@ function act(action) {
   if (action === 'scenario-toggle') {
     const s = player.snapshot();
     if (s.playing) player.pause(); else player.play();
+    announce(s.playing ? 'Paused' : s.done ? 'Playing again' : s.index > 0 ? 'Resumed' : 'Playing');
   } else if (action === 'scenario-prev') player.prev();
   else if (action === 'scenario-next') player.next();
   else return;

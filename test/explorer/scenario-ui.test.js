@@ -119,6 +119,19 @@ describe('the bar', () => {
     expect(getPlayer().snapshot().playing).toBe(false);
   });
 
+  it('says Paused and Resumed through the live region, once each (F18)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    const said = async () => { await new Promise((r) => setTimeout(r, 50)); return live.textContent; };
+    playScenario(scenario(), { autoplay: false });
+    click('scenario-toggle');
+    expect(await said()).toBe('Playing');
+    click('scenario-toggle');
+    expect(await said()).toBe('Paused');
+    live.remove();
+  });
+
   it('starts playing by default, and a close button takes the bar and the highlight away', () => {
     const before = state.sceneVersion;
     playScenario(scenario());

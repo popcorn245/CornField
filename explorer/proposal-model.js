@@ -117,10 +117,33 @@ export function chipText(counts) {
  */
 export function barCounts(counts) {
   const n = (k) => counts?.[k] || 0;
-  const parts = MARKS.filter((m) => n(m) > 0).map((m) => ({ mark: m, text: `${m === 'added' ? '+' : ''}${n(m)} ${m}` }));
+  // with the split (`summarize` gives it) the chip says what it counts: "4 nodes, 2 edges added"; without, the bare number
+  const unit = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+  const what = (m) => {
+    const ns = counts?.nodes?.[m] || 0;
+    const es = counts?.edges?.[m] || 0;
+    if (!counts?.nodes || ns + es !== n(m)) return `${m === 'added' ? '+' : ''}${n(m)} ${m}`;
+    return `${[ns && unit(ns, 'node'), es && unit(es, 'edge')].filter(Boolean).join(', ')} ${m}`;
+  };
+  const parts = MARKS.filter((m) => n(m) > 0).map((m) => ({ mark: m, text: what(m) }));
   if (n('scenarios') > 0) parts.push({ mark: null, text: `${n('scenarios')} ${n('scenarios') === 1 ? 'scenario' : 'scenarios'}` });
   return parts.length ? parts : [{ mark: null, text: 'No changes' }];
 }
+
+/** What a screen reader hears when a view is picked: "Diff view" */
+export const viewWords = (view) => `${view === 'before' ? 'Before' : view === 'after' ? 'After' : 'Diff'} view`;
+
+/**
+ * What it hears when a proposal has loaded: its title and counts, and the view it is in
+ * ("Proposal Alerts: 4 nodes, 2 edges added, 1 changed, 3 scenarios. Diff view.").
+ * @param {string} title
+ * @param {object} counts `summarize(proposal)`
+ * @param {'before'|'diff'|'after'} view
+ */
+export const openedWords = (title, counts, view) => `Proposal ${title}: ${barCounts(counts).map((c) => c.text.replace(/^\+/, '')).join(', ')}. ${viewWords(view)}.`;
+
+/** What a click on a change row did: the node (or edge) the camera went to, and what the proposal does to it */
+export const jumpWords = (markWord, name) => `${name}, ${String(markWord).toLowerCase()}. The map is on it.`;
 
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
