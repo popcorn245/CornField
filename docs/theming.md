@@ -557,7 +557,7 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 
 **The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
-Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
+Only labels a brand would want to voice are keys (about fifty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
 <!-- strings:start -->
 | Key | Default |
@@ -587,6 +587,15 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `tabThreads` | Threads |
 | `tabRuns` | Runs |
 | `tabDeploys` | Deploys |
+| `waitingOnYou` | waiting on you |
+| `toDecide` | To decide |
+| `withAgent` | With the agent |
+| `approvedGroup` | Approved |
+| `drafts` | Drafts |
+| `needsYou` | Needs you |
+| `inMotion` | In motion |
+| `finished` | Finished |
+| `answer` | Answer |
 | `newIdea` | New idea |
 | `landIt` | Land it |
 | `startAgent` | Start an agent |

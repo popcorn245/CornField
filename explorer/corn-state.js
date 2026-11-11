@@ -5,7 +5,7 @@
  */
 
 /** Every value `data-corn-state` can take */
-export const CORN_STATES = Object.freeze(['open', 'merged', 'closed', 'draft', 'queued', 'running', 'requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped', 'success', 'failure', 'added', 'changed', 'removed', 'edit']);
+export const CORN_STATES = Object.freeze(['open', 'merged', 'closed', 'draft', 'queued', 'running', 'requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped', 'success', 'failure', 'added', 'changed', 'removed', 'edit', 'sent-back']);
 
 /** The four marks of a proposal's diff (the map's rings, the panel's pill and dots): a mark is not a status, so `changed` here is a change a proposal makes, never a mockup that changed */
 export const MARK_STATES = Object.freeze(['added', 'changed', 'removed', 'edit']);
