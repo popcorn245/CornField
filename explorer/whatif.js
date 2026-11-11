@@ -25,6 +25,7 @@ import { render, isNodeVisible } from './render.js';
 import { hooks, rebuildProposalMap, closeProposal } from './proposal.js';
 import { getPlayer, playScenario, stopScenario, tickScenario } from './scenario-ui.js';
 import { kindOfMark } from './proposal-model.js';
+import { announce } from './keyboard.js';
 import { edgeKey } from '../core/proposal.js';
 import * as M from './whatif-model.js';
 
@@ -197,15 +198,21 @@ function doIntent(intent, where) {
 
 export function undoEdit() {
   if (!state.proposal || !M.canUndo(state.whatIf)) return false;
-  return step(M.undo(state.whatIf));
+  const edit = state.whatIf.edits[state.whatIf.edits.length - 1];
+  return step(M.undo(state.whatIf), edit, 'Undid');
 }
 export function redoEdit() {
   if (!state.proposal || !M.canRedo(state.whatIf)) return false;
-  return step(M.redo(state.whatIf));
+  const edit = state.whatIf.undone[state.whatIf.undone.length - 1];
+  return step(M.redo(state.whatIf), edit, 'Redid');
 }
-function step(whatIf) {
+/** Applies an undo or a redo, and says which edit it was ("Undid: Added the service “X”"); names are read where the node exists (before for an add, after for a remove) */
+function step(whatIf, edit, verb) {
   clearMessages();
+  const words = () => M.describeEdit(edit, { nameOf, scenarioTitle: (id) => (scenariosOf(state.effectiveProposal || state.proposal).find((s) => s.id === id) || { title: id }).title });
+  const before = words();
   apply({ whatIf, effective: M.evaluate(base(), state.proposal, whatIf.edits).effective });
+  announce(`${verb}: ${/^remove/.test(edit.op) ? words() : before}`);
   return true;
 }
 

@@ -721,11 +721,18 @@ export function proposalProblems(topology, proposal) {
 /**
  * The numbers behind the counts chip ("3 added · 1 changed · 1 removed"): nodes and edges counted together.
  * @param {object} proposal
- * @returns {{ added: number, changed: number, removed: number, scenarios: number }}
+ * `nodes` and `edges` give the same counts apart, for the words that say what is counted.
+ * @param {object} proposal
+ * @returns {{ added: number, changed: number, removed: number, scenarios: number, nodes: { added: number, changed: number, removed: number }, edges: { added: number, changed: number, removed: number } }}
  */
 export function summarize(proposal) {
-  const count = (op) => asList(proposal?.nodes?.[op]).length + asList(proposal?.edges?.[op]).length;
-  return { added: count('add'), changed: count('change'), removed: count('remove'), scenarios: asList(proposal?.scenarios).length };
+  const of = (group) => ({ added: asList(group?.add).length, changed: asList(group?.change).length, removed: asList(group?.remove).length });
+  const nodes = of(proposal?.nodes);
+  const edges = of(proposal?.edges);
+  return {
+    added: nodes.added + edges.added, changed: nodes.changed + edges.changed, removed: nodes.removed + edges.removed,
+    scenarios: asList(proposal?.scenarios).length, nodes, edges,
+  };
 }
 
 /**

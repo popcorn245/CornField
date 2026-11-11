@@ -24,6 +24,7 @@ import { hooks } from './proposal.js';
 import { mockupsOf } from '../core/proposal.js';
 import { mockupsFor, mockupsSectionHtml, stateWords } from './mockups-model.js';
 import { cornState } from './corn-state.js';
+import { focusableIn, trapTab } from './focusables.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -79,8 +80,6 @@ export async function refreshMockups() {
 //  The window
 // ---------------------------------------------------------------------------
 
-const FOCUSABLE = 'button, [href], iframe, [tabindex]:not([tabindex="-1"])';
-
 /** Shuts the window and gives the focus back to the button that opened it */
 export function closeMockup() {
   if (!dialog) return;
@@ -99,13 +98,8 @@ function onKey(e) {
     e.stopPropagation();
     closeMockup();
   } else if (e.key === 'Tab') {
-    const stops = [...dialog.querySelectorAll(FOCUSABLE)];
-    const at = stops.indexOf(document.activeElement);
-    const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at < 0 || at === stops.length - 1 ? 0 : at + 1);
-    if (stops.length) {
-      e.preventDefault();
-      stops[next].focus();
-    }
+    // the frame is a stop too, though it holds the focus rather than a tabindex
+    if (focusableIn(dialog).length) trapTab(e, dialog);
   }
 }
 
