@@ -79,7 +79,7 @@ describe('the Layers menu with no layers in the config', () => {
       const extra = Object.keys(counts).filter((k) => !defs.includes(k) && k !== 'flow');
       expect(rowKeys()).toEqual([...defs, ...extra, 'runs']);
       for (const key of defs) expect(countOf(key), key).toBe(key === 'flow' ? `${counts.flow} ${counts.flow === 1 ? 'link' : 'links'}` : String(counts[key] || 0));
-      expect(chip()).toBe(`· ${defs.length - 6 + 0 >= 0 ? defs.length - 6 : 0} of ${defs.length + extra.length}`);
+      expect(chip()).toBe(`· ${defs.length - 6} of ${defs.length + extra.length}`); // the six that start off (Infra, Machines, Containers, Devices, House, People) are not on
       expect($('layer-toggles-container').querySelector('[data-corn="overlays"]').textContent).toBe('Overlays');
     });
   }
