@@ -58,7 +58,7 @@ describe('planSync and what derivers own', () => {
   it('adds what is derived with its theme and a description, and a second plan changes nothing', () => {
     const { next, changes } = planSync({ nodes: [], edges: [] }, derived);
     expect(changes).toEqual(['add root root (r)', 'add pkg pkg-a (a)', 'add edge root|pkg-a|own']);
-    expect(next.nodes[1]).toMatchObject({ id: 'pkg-a', color: '#8feae8', r: 24, desc: 'The a workspace package (a).' });
+    expect(next.nodes[1]).toMatchObject({ id: 'pkg-a', color: '#0f8293', r: 24, desc: 'The a workspace package (a).' });
     expect(planSync(next, derived).changes).toEqual([]);
   });
 

@@ -12,28 +12,28 @@ export const DERIVED_FLOW = 'api';
 
 export const NODE_THEMES = {
   root:     { color: '#f59e0b', r: 28 },
-  app:      { color: '#6366f1', r: 24 },
+  app:      { color: '#5168ec', r: 24 },
   page:     { color: '#38bdf8', r: 18 },  // Mandatory Sky Blue for all pages
-  pkg:      { color: '#8feae8', r: 24 },  // Pale cyan for Packages / Libraries (the palette keeps same-silhouette types 15 ΔE apart: MIN_SHAPE_DELTA_E)
-  core:     { color: '#bc9dd5', r: 20 },
-  token:    { color: '#f2489f', r: 20 },
-  atom:     { color: '#1ac96e', r: 19 },
-  molecule: { color: '#cf07f9', r: 21 },
-  tool:     { color: '#f55406', r: 19 },
+  pkg:      { color: '#0f8293', r: 24 },  // Cyan for Packages / Libraries, deep enough to sit 15 ΔE from page and core (MIN_SHAPE_DELTA_E)
+  core:     { color: '#14b8a6', r: 20 },
+  token:    { color: '#ef409b', r: 20 },
+  atom:     { color: '#108d4e', r: 19 },
+  molecule: { color: '#a855f7', r: 21 },
+  tool:     { color: '#f43f5e', r: 19 },
   store:    { color: '#fb923c', r: 20 },  // Storage tiers & data-flow endpoints (ADR 0020)
   table:    { color: '#fde047', r: 18 },  // One model table; pages read and write it
-  rom:      { color: '#f90744', r: 19 },  // Render on Mutation pipeline stage
-  service:  { color: '#d2e239', r: 20 },  // An API module that runs on a timer, a webhook or a change hook (MAP-03)
+  rom:      { color: '#c398c6', r: 19 },  // Render on Mutation pipeline stage
+  service:  { color: '#84cc16', r: 20 },  // An API module that runs on a timer, a webhook or a change hook (MAP-03)
   external: { color: '#94a3b8', r: 21 },  // An outside system the API calls or that calls it
-  stack:    { color: '#c75471', r: 22 },  // One docker-compose stack: its containers, ports and the domains it serves (MAP-06)
+  stack:    { color: '#b49fa0', r: 22 },  // One docker-compose stack: its containers, ports and the domains it serves (MAP-06)
   // The physical world (spec 0029). Derived from code: machine, container, persona, and a device with a `file`
   machine:   { color: '#78716c', r: 26 },  // A computer the code runs on, by hostname
   container: { color: '#d6d3d1', r: 12 },  // One service of a stack
   persona:   { color: '#fb7185', r: 22 },  // An archetype a scenario can act as; never a real person
   device:    { color: '#2dd4bf', r: 14 },  // A camera, phone, NFC tag or Home Assistant device; `kind` says which (DEVICE_KINDS)
   // Live only: drawn from the live layer, never in topology.json (LIVE_TYPES)
-  floor:     { color: '#a3e830', r: 20 },  // A level of the house
-  room:      { color: '#ea9856', r: 16 },  // A room, with its box on the floor plan
+  floor:     { color: '#a3e635', r: 20 },  // A level of the house
+  room:      { color: '#f7ed81', r: 16 },  // A room, with its box on the floor plan (yellow beside the floor's lime: one silhouette, 15 ΔE apart)
 };
 
 /**
