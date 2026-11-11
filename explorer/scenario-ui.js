@@ -225,16 +225,16 @@ function showBar(speed) {
   bar.innerHTML = `
     <div class="hx-player-head">
       <span class="hx-player-title"></span>
-      <select class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
+      <select data-corn="control" class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
     <p class="hx-player-text" aria-live="polite"><span class="hx-player-count" data-corn="count"></span> · <span class="hx-player-step"></span></p>
     <div class="hx-player-controls">
-      <button type="button" class="hx-btn" data-action="scenario-prev" data-peek-ok>◀ Previous</button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-prev" data-peek-ok>◀ Previous</button>
       <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
-      <button type="button" class="hx-btn" data-action="scenario-next" data-peek-ok>Next ▶</button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-next" data-peek-ok>Next ▶</button>
     </div>
-    <div class="hx-player-track" aria-hidden="true"><span class="hx-player-fill"></span></div>`;
+    <div class="hx-player-track" data-corn="scenario-track" aria-hidden="true"><span class="hx-player-fill" data-corn="scenario-fill"></span></div>`;
   bar.addEventListener('click', (e) => {
     const button = e.target.closest('[data-action]');
     if (button) act(button.dataset.action);
@@ -402,6 +402,7 @@ export function refreshList() {
   list = document.createElement('div');
   list.id = 'proposal-scenarios';
   list.className = 'hx-scenarios glass';
+  list.dataset.corn = 'scenario-list';
   list.dataset.key = key;
   list.hidden = !!document.getElementById('proposal-play') && (!wasOpen || scenarios.length < 2); // behind Play when the toolbar has one
   scenarios.forEach((s) => {

@@ -35,6 +35,7 @@ import { reviewWords } from './review-model.js';
 import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
 import { announce } from './keyboard.js';
 import { t } from './strings.js';
+import { markStateAttr } from './corn-state.js';
 import { isOffline } from './connection.js';
 
 const $ = (id) => document.getElementById(id);
@@ -361,7 +362,7 @@ export function renderBar() {
 
   const counts = summarize(p);
   const chip = $('proposal-chip');
-  chip.innerHTML = barCounts(counts).map((c) => `${c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" aria-hidden="true"></span>` : ''}${escHtml(c.text)}`).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
+  chip.innerHTML = barCounts(counts).map((c) => `${c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" data-corn="mark-dot"${markStateAttr(c.mark)} aria-hidden="true"></span>` : ''}${escHtml(c.text)}`).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
   chip.title = 'Click for the list of changes.';
   $('proposal-mode').textContent = t(state.proposalView);
 
@@ -391,10 +392,10 @@ function renderChanges() {
   const rows = [];
   for (const mark of [...MARKS, 'edit']) {
     for (const n of state.nodes.filter((x) => x.mark === mark)) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark-dot"${markStateAttr(mark)}></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
     }
     for (const e of state.edges.filter((x) => x.mark === mark && said.has(edgeKey(x)))) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}"></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
+      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark-dot"${markStateAttr(mark)}></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
     }
   }
   list.innerHTML = rows.join('') || '<p class="hx-faint">This proposal changes nothing on the map.</p>';
@@ -537,7 +538,7 @@ function renderMenu(loading = false) {
   else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
   else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
   const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
-  menu.innerHTML = `<div class="hx-menu-title hx-menu-head"><span>${escHtml(t('proposals'))}</span></div>${forge}${body}`;
+  menu.innerHTML = `<div class="hx-menu-title hx-menu-head" data-corn="menu-title"><span>${escHtml(t('proposals'))}</span></div>${forge}${body}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -573,7 +574,7 @@ export function markedEdgeAt(x, y, tolerance) {
 export function showEdgePanel(edge) {
   closeDrawer(); // clears a node selection and any panel still loading
   state.selectedEdge = edge;
-  const row = (label, value) => (value ? `<div class="hx-fact"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
+  const row = (label, value) => (value ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
   const facts = row('Kind', kindOf(edge)) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
 
   $('drawer-title').textContent = `${nameOf(edge.from)} → ${nameOf(edge.to)}`;
@@ -585,8 +586,8 @@ export function showEdgePanel(edge) {
   $('drawer-description').hidden = true;
   $('drawer-meta-list').innerHTML = `${facts ? `<div class="hx-facts">${facts}</div>` : ''}
     <div class="hx-facts">
-      <div class="hx-fact"><div class="hx-fact-k">From</div><div class="hx-fact-v"><button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div></div>
-      <div class="hx-fact"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div></div>
+      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">From</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div></div>
+      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div></div>
     </div>${proposalPanelHtml(edge)}`;
   $('drawer-open-btn').hidden = true;
   $('drawer-file-btn').hidden = true;

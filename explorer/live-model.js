@@ -469,7 +469,7 @@ export function liveDetailsHtml(node, live, esc) {
     }
     const item = hw.item || {};
     const photo = item.image ? `<img class="hx-live-photo" data-live-photo="${esc(item.image)}" alt="Photo of ${esc(item.name || node.label)}" hidden />` : '';
-    const room = item.room_id ? `<div>Room: <button type="button" class="hx-linkbtn" data-action="select-node" data-id="live-room-${esc(item.room_id)}">${esc(hw.roomName || item.room_id)}</button></div>` : '<div class="hx-faint">Its item has no room</div>';
+    const room = item.room_id ? `<div>Room: <button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="live-room-${esc(item.room_id)}">${esc(hw.roomName || item.room_id)}</button></div>` : '<div class="hx-faint">Its item has no room</div>';
     const contents = hw.contents || [];
     const total = hw.contents_total ?? contents.length;
     const rows = contents.map((c) => `<li style="padding-left:${Math.max(0, (c.depth || 1) - 1) * 14}px">${esc(c.name)}${c.quantity && c.quantity !== 1 ? ` <span class="hx-faint">× ${esc(String(c.quantity))}</span>` : ''}</li>`).join('');

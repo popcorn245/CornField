@@ -24,7 +24,7 @@ import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scen
 // @ts-expect-error plain JS modules, no declarations
 import { applyBranding } from '../../explorer/plugins.js';
 // @ts-expect-error plain JS modules, no declarations
-import { CORN_STATES, cornState } from '../../explorer/corn-state.js';
+import { CORN_STATES, MARK_STATES, cornState, markState, markStateAttr } from '../../explorer/corn-state.js';
 
 const docs = fs.readFileSync(path.join(CORNFIELD, 'docs', 'theming.md'), 'utf8');
 /** The first-column values (in backticks) of the tables in a section of the docs, from its heading to the next heading of its level or higher */
@@ -60,12 +60,12 @@ const usedStates = [...new Set([...literal('attr', /\bdata-corn-state="([^"$]+)"
 const usedKindsJs = [...new Set(literal('kind', /\.dataset\.cornKind = '([^']+)'/g))];
 
 describe('the documented list', () => {
-  it('is a short list, the hooks a brand needs, with no repeats', () => {
-    expect(hooks.length).toBeGreaterThanOrEqual(50);
-    expect(hooks.length).toBeLessThanOrEqual(80);
+  it('is a list a brand can read in one sitting, with no repeats', () => {
+    expect(hooks.length).toBeGreaterThanOrEqual(100);
+    expect(hooks.length).toBeLessThanOrEqual(160);
     const all = tableValues('## The hooks');
     expect(all.length).toBe(hooks.length);
-    expect(kinds.sort()).toEqual(['approve', 'danger', 'icon', 'primary', 'quiet']);
+    expect(kinds.sort()).toEqual(['approve', 'danger', 'icon', 'primary', 'quiet', 'secondary']);
   });
 
   it('documents exactly the states corn-state.js gives, one value per meaning', () => {
@@ -107,6 +107,122 @@ describe('the markup', () => {
   });
 });
 
+describe('every control has a hook', () => {
+  // A button, link, field or disclosure in the markup (index.html, the explorer's script, the house plugin, the sign-in pages) is found by a
+  // `data-corn`, or by its `data-corn-kind` when it is an ordinary button; one with neither is a part a brand cannot single out
+  const CONTROL = /<(button|a|input|select|textarea|summary)\b([^>]*)>/g;
+  /** Every control tag in a source, with its line, leaving out what a comment says */
+  function controls(file) {
+    const text = fs.readFileSync(file, 'utf8');
+    const out = [];
+    for (const m of text.matchAll(CONTROL)) {
+      const lineStart = text.lastIndexOf('\n', m.index) + 1;
+      const before = text.slice(lineStart, m.index);
+      if (/^\s*(\*|\/\/|<!--)/.test(before)) continue; // a comment (a JSDoc line, a note) naming a tag
+      out.push({ el: m[1], tag: m[0], line: text.slice(0, m.index).split('\n').length });
+    }
+    return out;
+  }
+  const rel = (f) => path.relative(CORNFIELD, f);
+
+  it('has a data-corn on every link, field, select and disclosure, and a data-corn or a data-corn-kind on every button', () => {
+    const missing = [];
+    for (const file of SOURCES) {
+      for (const { el, tag, line } of controls(file)) {
+        if (/\btype="hidden"/.test(tag)) continue;
+        const hasCorn = /\bdata-corn="/.test(tag);
+        const hasKind = /\bdata-corn-kind="/.test(tag);
+        // A link that is a button drawn as a link (the sign-in pages' Sign in) names its kind; every other control names a part
+        if (el === 'button' || (el === 'a' && /\bcf-button\b/.test(tag))) { if (!hasCorn && !hasKind) missing.push(`${rel(file)}:${line} ${tag.slice(0, 90)}`); } else if (!hasCorn) missing.push(`${rel(file)}:${line} ${tag.slice(0, 90)}`);
+      }
+    }
+    expect(missing, `controls with no hook:\n${missing.join('\n')}`).toEqual([]);
+  });
+
+  it('gives a button made by script a hook or a kind too', () => {
+    const missing = [];
+    for (const file of SOURCES) {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      lines.forEach((l, i) => {
+        const made = /createElement\('(button|a|input|select|textarea)'\)/.exec(l);
+        if (!made) return;
+        const next = lines.slice(i, i + 14).join('\n');
+        if (!/dataset\.corn\b|dataset\.cornKind|setAttribute\('data-corn/.test(next)) missing.push(`${rel(file)}:${i + 1} ${l.trim().slice(0, 90)}`);
+      });
+    }
+    expect(missing, missing.join('\n')).toEqual([]);
+  });
+
+  it('names a button\'s importance in a kind: no ordinary button is without one', () => {
+    // A button with its own hook (a tab, a chip, a row) is a part; an ordinary action is `secondary` at least
+    const bare = [];
+    for (const file of SOURCES) {
+      for (const { el, tag, line } of controls(file)) {
+        if (el !== 'button' || /\bdata-corn="/.test(tag) || /\bdata-corn-kind="/.test(tag)) continue;
+        bare.push(`${rel(file)}:${line}`);
+      }
+    }
+    expect(bare).toEqual([]);
+  });
+});
+
+describe('the parts 0.35 added hooks to', () => {
+  // [source, hook, how it is written there]: the hook has to stay on the real element, in markup made by script too
+  const PLACES = [
+    ['explorer/index.html', 'preset-map', /id="preset-map-btn"[^>]*data-corn="preset-map"|data-corn="preset-map"[^>]*id="preset-map-btn"/],
+    ['explorer/index.html', 'view-switch', /class="hx-view"[^>]*data-corn="view-switch"/],
+    ['explorer/index.html', 'fit-button', /id="fit-btn"[^>]*data-corn="fit-button"/],
+    ['explorer/index.html', 'avatar', /id="account-initial"[^>]*data-corn="avatar"/],
+    ['explorer/index.html', 'account-who', /id="account-who"[^>]*data-corn="account-who"/],
+    ['explorer/index.html', 'account-row', /class="hx-account-row" data-corn="account-row"/],
+    ['explorer/index.html', 'theme-option', /data-choice="system"/],
+    ['explorer/index.html', 'proposal-title', /id="proposal-title"[^>]*data-corn="proposal-title"/],
+    ['explorer/index.html', 'proposal-counts', /id="proposal-chip"[^>]*data-corn="proposal-counts"/],
+    ['explorer/index.html', 'proposal-mode', /id="proposal-mode"[^>]*data-corn="proposal-mode"/],
+    ['explorer/index.html', 'compare', /id="proposal-seg"[^>]*data-corn="compare"/],
+    ['explorer/index.html', 'filter-chip', /data-corn="filter-chip"[^>]*id="forge-filter-chip"/],
+    ['explorer/index.html', 'diff-pill', /id="drawer-diff"[^>]*data-corn="diff-pill"/],
+    ['explorer/review.js', 'review-note', /<textarea data-corn="review-note" id="review-note"/],
+    ['explorer/capped.js', 'more', /<button data-corn="more" data-corn-kind="quiet"/],
+    ['explorer/forge-panel.js', 'label', /class="hx-forge-label" data-corn="label"/],
+    ['explorer/forge-panel.js', 'out-link', /data-corn="out-link" class="hx-forge-out"/],
+    ['explorer/forge-panel.js', 'back', /<button data-corn="back"/],
+    ['explorer/forge-panel.js', 'detail', /class="hx-forge-detail-title" data-corn="detail"/],
+    ['explorer/forge-panel.js', 'node-chip', /<button data-corn="node-chip"/],
+    ['explorer/forge-panel.js', 'file', /class="hx-forge-file" data-corn="file"/],
+    ['explorer/runs-view.js', 'run-actions', /class="hx-run-actions" data-corn="run-actions"/],
+    ['explorer/panels.js', 'diff-block', /class="hx-diff hx-diff--\$\{escHtml\(kind\)\}" data-corn="diff-block"/],
+    ['explorer/live.js', 'live-chip state', /btn\.dataset\.cornState = live/],
+  ];
+  for (const [file, name, re] of PLACES) {
+    it(`keeps ${name} in ${file}`, () => {
+      expect(fs.readFileSync(path.join(CORNFIELD, file), 'utf8')).toMatch(re);
+    });
+  }
+
+  it('gives Send back, Play and Edit a kind (secondary), and the run actions theirs', () => {
+    expect(source).toMatch(/data-corn-kind="secondary"[^>]*data-review="notes"|data-review="notes"[^>]*data-corn-kind="secondary"/);
+    expect(source).toMatch(/id="proposal-play"[^>]*data-corn-kind="secondary"|data-corn-kind="secondary"[^>]*id="proposal-play"/);
+    expect(source).toMatch(/id="proposal-edit"[^>]*data-corn-kind="secondary"|data-corn-kind="secondary"[^>]*id="proposal-edit"/);
+    expect(fs.readFileSync(path.join(EXPLORER, 'runs-view.js'), 'utf8').match(/data-corn-kind="secondary"/g).length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('tells the four marks of a diff apart as states, and keeps a changed mockup waiting', () => {
+    expect([...MARK_STATES].sort()).toEqual(['added', 'changed', 'edit', 'removed']);
+    for (const m of MARK_STATES) { expect(markState(m)).toBe(m); expect(states).toContain(m); }
+    expect(markState('none')).toBe('');
+    expect(markState(undefined)).toBe('');
+    expect(markStateAttr('removed')).toBe(' data-corn-state="removed"');
+    expect(markStateAttr('none')).toBe('');
+    expect(cornState('changed')).toBe('waiting'); // a mockup that changed since it was reviewed: not a diff mark
+    expect(cornState('added')).toBe('');
+  });
+
+  it('maps the live chip\'s tones onto states', () => {
+    expect(['ok', 'stale', 'off', 'error', 'idle'].map(cornState)).toEqual(['success', 'waiting', 'stopped', 'failure', 'running']);
+  });
+});
+
 // --- The page and some panels, mounted -------------------------------------------------------------------------------
 
 const html = explorerPage();
@@ -136,6 +252,37 @@ describe('the mounted page', () => {
     expect(hook('account-menu')).toBe(document.getElementById('account-menu'));
     expect(hook('account-menu').contains(hook('proposals-button'))).toBe(true);
     expect(hook('zoom')).toBeNull(); // the zoom buttons are gone (CF-41)
+  });
+
+  it('has the header\'s View switch in full: Map, Flow, House, then Fit; and the account menu\'s theme options', () => {
+    expect([...hook('view-switch').querySelectorAll('[data-corn]')].map((e) => e.getAttribute('data-corn'))).toEqual(['preset-map', 'preset-dataflow', 'preset-house', 'fit-button']);
+    expect(hook('fit-button').getAttribute('data-corn-kind')).toBe('icon');
+    expect(hook('avatar').closest('[data-corn="account-button"]')).not.toBeNull();
+    expect(hook('account-menu').contains(hook('account-who'))).toBe(true);
+    const options = [...hook('theme-toggle').querySelectorAll('[data-corn="theme-option"]')];
+    expect(options.map((o) => o.getAttribute('data-choice'))).toEqual(['system', 'dark', 'light']);
+    for (const o of options) expect(['true', 'false']).toContain(o.getAttribute('aria-pressed'));
+    expect(hook('account-menu').contains(hook('account-row'))).toBe(true);
+  });
+
+  it('has the proposal bar\'s toolbar in full: name, counts, Before / Diff / After, Play, Edit, Send back, Approve', () => {
+    const bar = hook('proposal-bar');
+    for (const name of ['proposal-title', 'proposal-counts', 'proposal-mode', 'compare']) expect(bar.contains(hook(name)), name).toBe(true);
+    const options = [...hook('compare').querySelectorAll('[data-corn="compare-option"]')];
+    expect(options.map((o) => o.getAttribute('data-view'))).toEqual(['before', 'diff', 'after']);
+    expect(options.map((o) => o.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+    expect(bar.querySelector('#proposal-play').getAttribute('data-corn-kind')).toBe('secondary');
+    expect(bar.querySelector('#proposal-edit').getAttribute('data-corn-kind')).toBe('secondary');
+    expect(bar.querySelector('[data-review="notes"]').getAttribute('data-corn-kind')).toBe('secondary');
+    expect(bar.querySelector('[data-review="approved"]').getAttribute('data-corn-kind')).toBe('approve');
+  });
+
+  it('has the Work panel\'s Filter chip and its fields, and the node panel\'s diff pill', () => {
+    expect(hook('work-panel').contains(hook('filter-chip'))).toBe(true);
+    expect(hook('filter-chip')).toBe(document.getElementById('forge-filter-chip'));
+    for (const c of document.querySelectorAll('#forge-filter-box select, #forge-filter-box input')) expect(c.getAttribute('data-corn'), c.id).toBe('control');
+    expect(hook('node-panel').contains(hook('diff-pill'))).toBe(true);
+    expect(hook('node-panel').contains(hook('node-title'))).toBe(true);
   });
 
   it('has each panel', () => {

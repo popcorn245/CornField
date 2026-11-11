@@ -5,7 +5,10 @@
  */
 
 /** Every value `data-corn-state` can take */
-export const CORN_STATES = Object.freeze(['open', 'merged', 'closed', 'draft', 'queued', 'running', 'requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped', 'success', 'failure']);
+export const CORN_STATES = Object.freeze(['open', 'merged', 'closed', 'draft', 'queued', 'running', 'requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped', 'success', 'failure', 'added', 'changed', 'removed', 'edit']);
+
+/** The four marks of a proposal's diff (the map's rings, the panel's pill and dots): a mark is not a status, so `changed` here is a change a proposal makes, never a mockup that changed */
+export const MARK_STATES = Object.freeze(['added', 'changed', 'removed', 'edit']);
 
 /** The seven states of an agent run, in the order of its life: each has its own `data-corn-state`, colour token (`--corn-run-<state>`) and icon */
 export const RUN_STATES = Object.freeze(['requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped']);
@@ -23,12 +26,27 @@ const WORDS = Object.freeze({
   allowed: 'success', refused: 'failure', mismatch: 'failure', pending: 'running',
   // A notice that went well, a message about a problem
   ok: 'success', bad: 'failure',
+  // The live layer's chip: fresh, as of a while ago, off, unavailable, loading
+  stale: 'waiting', off: 'stopped', error: 'failure', idle: 'running',
 });
 
 /** The public state for an internal word, or '' when it has none */
 export function cornState(word) {
   const w = String(word || '');
-  return CORN_STATES.includes(w) ? w : WORDS[w] || '';
+  // The table first: `changed` is a mockup that changed since it was reviewed (waiting) here, and only a proposal's mark in markState()
+  return WORDS[w] || (CORN_STATES.includes(w) && !MARK_STATES.includes(w) ? w : '');
+}
+
+/** The public state of a proposal mark (`added`, `changed`, `removed` or `edit`), or '' for anything else, `none` included */
+export function markState(mark) {
+  const m = String(mark || '');
+  return MARK_STATES.includes(m) ? m : '';
+}
+
+/** The `data-corn-state` attribute of a proposal mark for markup (with its leading space), or nothing when it has none */
+export function markStateAttr(mark) {
+  const s = markState(mark);
+  return s ? ` data-corn-state="${s}"` : '';
 }
 
 /** The `data-corn-state` attribute for markup (with its leading space), or nothing when the word has no public state */

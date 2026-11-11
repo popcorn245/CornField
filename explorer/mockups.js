@@ -132,6 +132,7 @@ export function openMockup(index, opener = null) {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'hx-btn hx-mockup-close';
+  close.dataset.cornKind = 'secondary';
   close.dataset.mockupClose = '';
   close.textContent = 'Close';
   head.append(title, close);
@@ -143,6 +144,7 @@ export function openMockup(index, opener = null) {
   status.textContent = stateWords(item.state);
   const stage = document.createElement('div');
   stage.className = 'hx-mockup-stage';
+  stage.dataset.corn = 'mockup-stage';
   if (item.type === 'page') {
     const frame = document.createElement('iframe');
     frame.className = 'hx-mockup-frame';

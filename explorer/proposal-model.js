@@ -19,6 +19,7 @@
  */
 
 import { escHtml } from './state.js';
+import { markStateAttr } from './corn-state.js';
 
 export const PROPOSAL_VIEWS = ['before', 'diff', 'after'];
 
@@ -207,10 +208,10 @@ export function proposalPanelHtml(item) {
   if (!hasMark(item)) return '';
   const rows = fieldRows(item);
   const body = rows.map((r) => (item.mark === 'changed'
-    ? `<div class="hx-change"><span class="hx-change-field">${escHtml(r.field)}</span><span class="hx-change-before">${escHtml(r.before) || '<em>nothing</em>'}</span><span class="hx-change-arrow" aria-hidden="true">→</span><span class="hx-change-after">${escHtml(r.after) || '<em>nothing</em>'}</span></div>`
-    : `<div class="hx-change"><span class="hx-change-field">${escHtml(r.field)}</span><span class="hx-change-after">${escHtml(r.after)}</span></div>`)).join('');
+    ? `<div class="hx-change" data-corn="change"><span class="hx-change-field">${escHtml(r.field)}</span><span class="hx-change-before">${escHtml(r.before) || '<em>nothing</em>'}</span><span class="hx-change-arrow" aria-hidden="true">→</span><span class="hx-change-after">${escHtml(r.after) || '<em>nothing</em>'}</span></div>`
+    : `<div class="hx-change" data-corn="change"><span class="hx-change-field">${escHtml(r.field)}</span><span class="hx-change-after">${escHtml(r.after)}</span></div>`)).join('');
   return `<div class="hx-sec hx-proposal-sec hx-proposal-sec--${escHtml(item.mark)}" data-proposal-mark="${escHtml(item.mark)}" data-corn="section">
-    <strong class="hx-strong"><span class="hx-mark-dot hx-mark-dot--${escHtml(item.mark)}"></span>${escHtml(item.mark === 'edit' ? `${item.editOp === 'removed' ? 'Removed' : 'Added'} by your edit` : `${MARK_WORDS[item.mark] || item.mark} by this proposal`)}</strong>
+    <strong class="hx-strong"><span class="hx-mark-dot hx-mark-dot--${escHtml(item.mark)}" data-corn="mark-dot"${markStateAttr(item.mark)}></span>${escHtml(item.mark === 'edit' ? `${item.editOp === 'removed' ? 'Removed' : 'Added'} by your edit` : `${MARK_WORDS[item.mark] || item.mark} by this proposal`)}</strong>
     ${item.why ? `<div class="hx-why">${escHtml(item.why)}</div>` : ''}
     ${body}
   </div>`;

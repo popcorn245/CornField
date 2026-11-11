@@ -6862,7 +6862,31 @@
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-sign-in",
       "dashed": true
+    },
+    {
+      "from": "core-explorer-live",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T10:17:17.701Z"
+  "updatedAt": "2026-11-11T11:21:48.535Z"
 }

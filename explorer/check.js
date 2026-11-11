@@ -135,6 +135,7 @@ function mountControls(bar) {
 
   const line = document.createElement('p');
   line.className = 'hx-player-check';
+  line.dataset.corn = 'scenario-check';
   line.setAttribute('aria-live', 'polite');
   line.hidden = true;
   const text = bar.querySelector('.hx-player-text');
@@ -143,8 +144,8 @@ function mountControls(bar) {
   const row = document.createElement('div');
   row.className = 'hx-player-as';
   row.innerHTML = `
-    <label class="hx-player-as-label">As <select class="hx-player-speed hx-player-as-menu" data-check="as" aria-label="Act every step as"></select></label>
-    <button type="button" class="hx-btn" data-check="recheck">Check again</button>
+    <label class="hx-player-as-label">As <select data-corn="control" class="hx-player-speed hx-player-as-menu" data-check="as" aria-label="Act every step as"></select></label>
+    <button data-corn-kind="secondary" type="button" class="hx-btn" data-check="recheck">Check again</button>
     <span class="hx-player-as-sum hx-faint"></span>`;
   const controls = bar.querySelector('.hx-player-controls');
   if (controls) controls.after(row); else bar.appendChild(row);
