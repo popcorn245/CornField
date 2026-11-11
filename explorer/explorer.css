@@ -177,7 +177,11 @@ h1, h2, h3, p { margin: 0; }
   .hx-brand { min-width: 0; min-height: 0; }
   .hx-only-wide { display: inline; }
   .hx-only-mobile { display: none; }
-  .hx-search { display: flex; }
+  .hx-search { display: flex; flex: 0 1 260px; width: auto; }
+  /* A narrow desktop (768 to about 900 px, signed in): the search gives up width before it runs over the Layers chip; the left group
+     keeps its own (the right group shrinks, the search down to its min-width) */
+  .hx-header-left { flex: none; }
+  .hx-header-right { flex: 0 1 auto; min-width: 0; }
 }
 /* Not for a desktop: the brand keeps its logo and shows its wordmark; with no wordmark the logo stands alone (the button keeps its name) */
 @media (max-width: 767px) {
@@ -1184,7 +1188,12 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-search-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--corn-radius-xs); background: none; color: var(--corn-text-3); }
 .hx-search-btn:hover { background: var(--corn-surface-3); color: var(--corn-text); }
 .hx-search-btn:focus-visible, .hx-search-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-offset) * -1); }
-.hx-search:has(.hx-search-steps:not([hidden])) { width: 340px; }
+.hx-search:has(.hx-search-steps:not([hidden])) { flex-basis: 340px; }
+/* A narrow desktop leaves the field too little room for the count and three buttons: Previous and Next go (Enter and Shift+Enter, N and P
+   and the list's rows still step), the count and Clear stay */
+@media (min-width: 768px) and (max-width: 959px) {
+  .hx-search [data-action="search-prev"], .hx-search [data-action="search-next"] { display: none; }
+}
 .hx-search-results { position: absolute; top: calc(100% + var(--corn-space-2)); right: 0; z-index: 40; width: min(440px, 92vw); max-height: min(60vh, 560px); overflow-y: auto; padding: var(--corn-space-1) 0; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); box-shadow: var(--corn-shadow); color: var(--corn-text); font-size: var(--corn-text-sm); } /* the ground itself, not a surface: a surface is see-through, and the panel under the list would show in it */
 .hx-search-results[hidden] { display: none; }
 /* The list is part of the header, which sits under the node panel (40): while the list is open the header is over it, so a row is never half under the panel */

@@ -369,6 +369,16 @@ describe('the map\'s half of it', () => {
     for (const line of css.split('\n').filter((l) => l.includes(':has(.hx-search-results'))) expect(line.split('{')[0]).not.toContain(',');
   });
 
+  it('gives up width in a narrow desktop header rather than run over the Layers chip', () => {
+    mount();
+    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const wide = /@media \(min-width: 768px\) \{([^@]*?)\n\}/.exec(css)[1];
+    expect(wide).toMatch(/\.hx-search \{[^}]*flex: 0 1 260px/); // it shrinks ...
+    expect(wide).toMatch(/\.hx-header-left \{ flex: none; \}/); // ... the left group does not ...
+    expect(wide).toMatch(/\.hx-header-right \{[^}]*min-width: 0/); // ... and the right group lets it
+    expect(css).toMatch(/\.hx-search:has\(\.hx-search-steps:not\(\[hidden\]\)\) \{ flex-basis: 340px; \}/); // wider with a query, as room allows
+  });
+
   it('is the markup: the field has a count, steps and a list with their hooks', () => {
     mount();
     for (const hook of ['search-count', 'search-steps', 'search-results', 'search-status']) expect(document.querySelectorAll(`[data-corn="${hook}"]`).length, hook).toBeGreaterThanOrEqual(2); // the desktop's and the phone's
