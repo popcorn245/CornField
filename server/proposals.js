@@ -45,8 +45,10 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
-import { REVIEW_LIMIT, latestReview, migrateStage1Reviews } from './reviews.js';
-import { submitReview, refusal } from './submit-review.js';
+import { REVIEW_LIMIT, latestReview, migrateStage1Reviews, proposalHash } from './reviews.js';
+import { submitReview, refusal, standsApproved } from './submit-review.js';
+import { hashPullMockups } from './mockups.js';
+import { readDecision } from './decision.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { serveMockups } from './mockups.js';
 
@@ -247,9 +249,23 @@ const forgeStatus = (err) => (err instanceof ForgeError ? (err.code === 'not-fou
 async function getPullReview(res, where, forgeFor, slug, n) {
   try {
     const forge = forgeFor();
-    if (!(await findPullProposal(forge, where, slug, n))) return send(res, 404, { error: 'No such proposal' });
+    const entry = await findPullProposal(forge, where, slug, n);
+    if (!entry) return send(res, 404, { error: 'No such proposal' });
     const found = await latestReview(forge, n, slug);
-    return found ? send(res, 200, found) : send(res, 404, { error: 'No review yet' });
+    if (!found) return send(res, 404, { error: 'No review yet' });
+    // An approval says whether it is of the file as the head holds it now (`current`): the Approve button reads Approved only then (spec 0007 D2)
+    const current = found.verdict === 'approved' ? standsApproved(found, proposalHash(await readPullProposal(forge, where, entry)), await hashPullMockups(forge, where, entry)) : undefined;
+    return send(res, 200, current === undefined ? found : { ...found, current });
+  } catch (err) {
+    return send(res, forgeStatus(err), { error: forgeWords(err) });
+  }
+}
+
+/** GET /proposals/<slug>/decision?source=pull/<n>[&fresh=1]: the facts the line above Approve is made from (server/decision.js) */
+async function getDecision(res, where, forgeFor, signedIn, slug, n, fresh) {
+  try {
+    const answer = await readDecision(forgeFor(), where, { slug, n, fresh, now: signedIn.limits?.now, ...(signedIn.decision || {}) });
+    return send(res, 200, answer, { 'Cache-Control': 'no-store' });
   } catch (err) {
     return send(res, forgeStatus(err), { error: forgeWords(err) });
   }
@@ -303,6 +319,25 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
  */
 export function serveProposals(req, res, reqPath, url, where, forgeFor = null, signedIn = null) {
   if (reqPath !== '/proposals' && !reqPath.startsWith('/proposals/')) return false;
+
+  // What Approve would do in this state (spec 0007 D1): read-only, for the signed-in maintainer, only for a proposal of a spec PR
+  const decision = /^\/proposals\/([^/]+)\/decision$/.exec(reqPath);
+  if (decision) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      req.resume();
+      send(res, 405, { error: 'The facts of a decision are read with GET' }, { Allow: 'GET, HEAD' });
+      return true;
+    }
+    const n = forgeFor && signedIn ? pullNumber(url.searchParams.get('source')) : null;
+    if (n === null || !forgeFor || !signedIn) {
+      send(res, 404, { error: 'A decision is about a spec PR: this proposal is not on one (or you are not signed in).' });
+      return true;
+    }
+    getDecision(res, where, forgeFor, signedIn, decision[1], n, url.searchParams.get('fresh') === '1').catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'The decision could not be read' });
+    });
+    return true;
+  }
 
   // The review of one proposal: a comment on its spec PR, the only thing here that can be written
   const review = /^\/proposals\/([^/]+)\/review$/.exec(reqPath);

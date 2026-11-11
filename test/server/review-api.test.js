@@ -283,6 +283,7 @@ describe('the review API', () => {
       const { secret } = await mint();
       const viaApi = await call(secret, approve({ note: 'Same.' }));
       expect(viaApi.status, viaApi.text).toBe(200);
+      world.comments.length = 0; // the first approval's comment was deleted on the forge: this version stands approved no more, so it is open to approve again (a standing one is refused, spec 0007 D3)
       clock += 60_000;
       const viaButton = await page('PUT', `/proposals/${SLUG}/review?source=pull%2F40`, { verdict: 'approved', note: 'Same.', edits: [] });
       expect(viaButton.status, viaButton.text).toBe(200);
@@ -475,11 +476,12 @@ describe('the review API', () => {
     it('asks the forge now whether the owner still maintains the repo: a demoted owner is refused (403), and the token is revoked for good', async () => {
       const { secret } = await mint();
       expect((await call(secret, approve())).status).toBe(200);
+      world.comments.length = 0; // the first approval's comment was deleted on the forge: this version stands approved no more, so it is open to approve again (a standing one is refused, spec 0007 D3)
       clock += 60_000;
       world.demoted.add('maintainer-one');
       const res = await call(secret, approve());
       expect(res.status, res.text).toBe(403);
-      expect(res.json.error).toMatch(/not one now/);
+      expect(res.json.error).toMatch(/no longer maintains this repo/);
       expect(world.posted).toHaveLength(1);
       expect(rows().some((r) => r.action === 'token-revoke' && r.answer.revoked === 1 && r.request.reason === 'owner-not-maintainer')).toBe(true);
       // the owner is a maintainer again: the token stays revoked, and a new one is made
@@ -521,6 +523,7 @@ describe('the review API', () => {
       expect(Number(again.headers['retry-after'])).toBeGreaterThanOrEqual(1);
       expect(world.posted).toHaveLength(1);
       expect(reviewRows().at(-1)).toMatchObject({ status: 429 });
+      world.comments.length = 0; // (see above: only the cooldown is under test)
       clock += COOLDOWN_MS + 1;
       expect((await call(secret, approve())).status).toBe(200);
     });

@@ -73,7 +73,7 @@ import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
 import { createSpecPoll } from './spec-poll.js';
-import { createRunnerWatch } from './runner-presence.js';
+import { createRunnerWatch, runnerPresence } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
 import { brandHead, escapeHtml, themeHead, themeHtmlTag } from './page-head.js';
 import { compressResponse } from './compress.js';
@@ -307,8 +307,16 @@ export function createCornfieldServer(config, opts = {}) {
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost };
   const fixtureCache = new Map();
+  // What the line above Approve says an approval does besides posting (spec 0007 D1, server/decision.js): landing, and the run a trigger asks for
+  const approvalRun = triggersOf(config).find(([event]) => event === 'spec.approved');
+  const decisionFacts = {
+    lands: !!config.approveLands,
+    landing: null,
+    run: approvalRun ? { kind: approvalRun[1].kind, transport: config.agents?.transport ?? 'forge', presence: async () => runnerPresence(await auth.store(), (opts.now ?? Date.now)(), runnerQuietAfterMs(config)) } : null,
+  };
   const lander = config.approveLands ? createLander({ config, where, auth, hooks, now: opts.now, timer: opts.landTimer }) : null;
   if (lander) {
+    decisionFacts.landing = (n) => lander.pending(n);
     // What a restart left waiting: looked at again, in the background
     lander.resume().catch((err) => console.error(`[cornfield] pending landings could not be picked up: ${err instanceof Error ? err.message : err}`));
   }
@@ -448,7 +456,7 @@ export function createCornfieldServer(config, opts = {}) {
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
-    const reviewer = session ? { login: session.login, userId: session.userId, repo: config.forge.repo, record: (entry) => auth.record(entry), limits: { auth, now: opts.now }, hooks, lander } : null;
+    const reviewer = session ? { login: session.login, userId: session.userId, repo: config.forge.repo, record: (entry) => auth.record(entry), limits: { auth, now: opts.now }, hooks, lander, decision: decisionFacts } : null;
     if (serveProposals(req, res, reqPath, url, where, forgeFor, reviewer)) return;
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {

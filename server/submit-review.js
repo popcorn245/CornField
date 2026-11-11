@@ -20,8 +20,9 @@
  *   7. the proposal file's SHA-256 at the PR's head: when the caller names the version it read (`sha256`; the API
  *      requires it) and the head holds another, 409, so a review counts only for the version that was read. An
  *      approval records the head's hash (`proposal`) and its mockups' (`mockups`), as the server read them, never the caller's word
- *   8. with the API, the token once more (`stillAllowed`): one revoked or expired while the forge was being asked is 403
- *   9. the comment is posted as that person (`postReview`)
+ *   8. an approval of a version that is already the latest review of it is 409, and posts nothing (idempotent per head: a second tab or a script cannot post twice)
+ *   9. with the API, the token once more (`stillAllowed`): one revoked or expired while the forge was being asked is 403
+ *  10. the comment is posted as that person (`postReview`)
  *
  * Every attempt that gets past step 1 is a row in `actions` (`record`), whatever the answer: a posted review and a forge
  * that refused it are written by `postReview`, every refusal before that here. The audit never holds a token's secret,
@@ -38,7 +39,8 @@ import { ForgeError, isMaintainer } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
 import { findPullProposal, forgeWords, forgetReviewState, readPullProposal } from './proposal-pulls.js';
 import { hashPullMockups } from './mockups.js';
-import { postReview, proposalHash, validateReview } from './reviews.js';
+import { latestReview, postReview, proposalHash, validateReview } from './reviews.js';
+import { forgetDecision } from './decision.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 import { proposalPayload } from './hooks.js';
 
@@ -110,7 +112,7 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
     const forge = await ctx.forge();
     const me = await forge.me();
     if (String(me.id) !== who.userId) throw new Refused(403, 'The forge says this sign-in is someone else now; sign in again.', 'forbidden');
-    if (!isMaintainer(await forge.permission(repo, me.login))) throw new Refused(403, `Only the repo's maintainers review proposals; ${me.login} is not one now.`, 'forbidden');
+    if (!isMaintainer(await forge.permission(repo, me.login))) throw new Refused(403, `${me.login} no longer maintains this repo, so the forge would not count the review.`, 'forbidden');
 
     const entry = await findPullProposal(forge, ctx.where, slug, pull);
     if (!entry) throw new Refused(404, `Pull request #${pull} is not open or does not hold the proposal ${slug}.`, 'not-found');
@@ -123,6 +125,12 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
       checkedReview = { ...checkedReview, proposal: head };
       const mockups = await hashPullMockups(forge, ctx.where, entry);
       if (mockups.length) checkedReview = { ...checkedReview, mockups };
+      // Idempotent per head (spec 0007 D3): an approval of exactly what a standing approval covers (the file and its mockups as the head holds
+      // them) posts nothing, so a second tab, a script or a double press cannot post twice. A push, or a send back, makes it open again.
+      const standing = await latestReview(forge, pull, slug);
+      if (standsApproved(standing, head, mockups)) {
+        throw new Refused(409, `${slug} is already approved at this head of pull request #${pull} (by ${standing.by}). Nothing was posted; a push, or a send back, makes it open to approve again.`, 'conflict');
+      }
     }
     // The checks above took a while: a token revoked (or expired) since it was looked up does not post
     if (ctx.stillAllowed) {
@@ -131,6 +139,7 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
     }
     const posted = await postReview(forge, pull, slug, checkedReview, { login: me.login, record, via });
     forgetReviewState(ctx.where, pull); // the listing's review state for this PR is read again (spec 0010)
+    forgetDecision(ctx.where, pull); // and the line above Approve: an approval can start a landing
     // The one place a review is posted, so the button and the API fire the same event; the actor is who the forge says
     // the poster is (with the API, the token's owner), never a name the caller sent
     ctx.hooks?.emit(posted.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, ctx.where, entry, { actor: me.login, note: checkedReview.note, edits: checkedReview.edits }));
@@ -173,6 +182,14 @@ export function refusal(err) {
   }
   return { status: 500, body: { error: 'The review could not be saved; the log says why.', code: 'unavailable' }, headers: {} };
 }
+
+/**
+ * Whether a review that stands is an approval of exactly this: the proposal file as the head holds it and its mockups (what an approval covers).
+ * @param {import('./reviews.js').FoundReview | null} standing
+ * @param {string} head the proposal file's SHA-256 at the head
+ * @param {{ node: string, path: string, sha256: string }[]} mockups the mockups as the head holds them
+ */
+export const standsApproved = (standing, head, mockups) => !!standing && standing.verdict === 'approved' && standing.proposal === head && JSON.stringify(standing.mockups ?? []) === JSON.stringify(mockups);
 
 /** The checks on a `sha256` the caller names: 64 lower-case hex digits */
 export const isSha256 = (v) => typeof v === 'string' && SHA256.test(v);
