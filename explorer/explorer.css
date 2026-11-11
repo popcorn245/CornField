@@ -1170,6 +1170,9 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-search-results[hidden] { display: none; }
 /* The list is part of the header, which sits under the node panel (40): while the list is open the header is over it, so a row is never half under the panel */
 .hx-header:has(.hx-search-results:not([hidden])) { z-index: 46; }
+/* On a phone the list is in the search bar, under the sheets (the dock, 45): while it is open the bar is over them, so a proposal's or the
+   Work sheet never covers rows of it. Without :has() the list stays under the sheets, as the bar always was */
+.hx-mobile-search:has(.hx-search-results:not([hidden])) { z-index: 46; }
 .hx-search-group-title { position: sticky; top: 0; display: flex; justify-content: space-between; gap: var(--corn-space-3); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-1); background: var(--corn-ground); color: var(--corn-text-3); font-size: var(--corn-text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .hx-search-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--corn-space-3); width: 100%; min-height: 28px; padding: var(--corn-space-1) var(--corn-space-3); border: 0; border-left: var(--corn-border-strong) solid transparent; background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
 .hx-search-row:hover, .hx-search-row:focus-visible { background: var(--corn-surface-3); }

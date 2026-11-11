@@ -325,17 +325,38 @@ describe('the map\'s half of it', () => {
     for (const n of matches) { expect(n.alpha, n.id).toBe(1); expect(n.halo, n.id).toBe('match'); }
   });
 
+  it('puts an open list over the panel and, on a phone, over the sheets, and degrades to the old stacking without :has()', () => {
+    mount();
+    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const z = (sel) => { const m = new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{[^}]*z-index:\\s*(\\d+)`).exec(css); return m ? Number(m[1]) : null; };
+    const dock = Number(/@media[^{]*\{\s*\.hx-dock\s*\{[^}]*z-index:\s*(\d+)/.exec(css)[1]);
+    expect(z('.hx-header:has(.hx-search-results:not([hidden]))')).toBeGreaterThan(40); // the node panel
+    expect(z('.hx-mobile-search:has(.hx-search-results:not([hidden]))')).toBeGreaterThan(dock); // the phone's sheets
+    // each raise is a rule of its own: a browser without :has() drops only that rule
+    for (const line of css.split('\n').filter((l) => l.includes(':has(.hx-search-results'))) expect(line.split('{')[0]).not.toContain(',');
+  });
+
   it('is the markup: the field has a count, steps and a list with their hooks', () => {
     mount();
     for (const hook of ['search-count', 'search-steps', 'search-results', 'search-status']) expect(document.querySelectorAll(`[data-corn="${hook}"]`).length, hook).toBeGreaterThanOrEqual(2); // the desktop's and the phone's
     for (const b of document.querySelectorAll('.hx-search-btn')) expect(b.getAttribute('aria-label')).toBeTruthy();
     expect($('node-search').getAttribute('role')).toBe('combobox');
-    // One pattern: a combobox whose popup is a dialog the focus moves into (a combobox popup may not be a plain group)
-    for (const [input, list] of [['node-search', 'search-results'], ['mobile-node-search', 'mobile-search-results']]) {
-      expect($(input).getAttribute('aria-haspopup')).toBe('dialog');
-      expect($(input).getAttribute('aria-controls')).toBe(list);
-      expect($(list).getAttribute('role')).toBe('dialog');
-      expect($(list).getAttribute('aria-label')).toBeTruthy();
-    }
+    // One pattern: a combobox whose popup is a listbox of options in labelled groups (a combobox popup may not be a plain group)
+    for (const input of ['node-search', 'mobile-node-search']) expect($(input).getAttribute('aria-haspopup')).toBe('listbox');
+    type('sync');
+    const box = $($('node-search').getAttribute('aria-controls'));
+    expect($('node-search').getAttribute('aria-expanded')).toBe('true');
+    expect(box.getAttribute('role')).toBe('listbox');
+    expect(box.getAttribute('aria-label')).toBeTruthy();
+    expect($('search-results').contains(box)).toBe(true);
+    const options = rows();
+    expect(options.length).toBeGreaterThan(1);
+    for (const o of options) { expect(o.getAttribute('role')).toBe('option'); expect(o.closest('[role="listbox"]')).toBe(box); }
+    for (const g of box.querySelectorAll('[data-corn="search-group"]')) { expect(g.getAttribute('role')).toBe('group'); expect(g.parentElement).toBe(box); }
+    expect(options.filter((o) => o.tabIndex === 0)).toHaveLength(1); // a roving tab stop: the list that scrolls is reached by Tab too (axe scrollable-region-focusable)
+    expect(options[0].tabIndex).toBe(0); // Frame all, while nothing is chosen
+    type('zzzz'); // no match: no listbox, only the words
+    expect($('node-search').getAttribute('aria-expanded')).toBe('false');
+    expect($('search-results').querySelector('[role="listbox"]')).toBeNull();
   });
 });

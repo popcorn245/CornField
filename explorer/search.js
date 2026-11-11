@@ -65,21 +65,31 @@ export const searchActive = () => !!state.searchQuery && currentResult().total >
 
 const listOf = (field) => $(field.results);
 
-function rowHtml(m, off) {
+const FRAME_STOP = Symbol('frame all');
+
+function rowHtml(m, off, stop = false) {
   const type = off ? ` · ${escHtml(m.group)}` : '';
   const parent = m.parent ? escHtml(m.parent) : '';
   const current = state.searchCurrent === m.node.id;
-  return `<button type="button" class="hx-search-row" data-corn="search-result" data-search-id="${escHtml(m.node.id)}" tabindex="-1"${current ? ' aria-current="true"' : ''}><span class="hx-search-row-label">${escHtml(m.node.label)}</span><span class="hx-search-row-parent">${parent}${type}</span></button>`;
+  return `<button type="button" role="option" class="hx-search-row" data-corn="search-result" data-search-id="${escHtml(m.node.id)}" tabindex="${stop ? 0 : -1}" aria-selected="${current}"${current ? ' aria-current="true"' : ''}><span class="hx-search-row-label">${escHtml(m.node.label)}</span><span class="hx-search-row-parent">${parent}${type}</span></button>`;
 }
 
-/** The list's markup for a result: Frame all, the groups, the "and N more", or the no-match words */
-export function resultsHtml(result) {
+/**
+ * The list's markup for a result: a listbox (the combobox's popup) of Frame all and the groups of rows, then the "and N more" line; or the
+ * no-match words alone. The focus moves into the listbox, from option to option (each row is a button with the option role).
+ * @param {ReturnType<typeof searchNodes>} result
+ * @param {string} [listId] the listbox's id
+ */
+export function resultsHtml(result, listId = 'search-listbox') {
   if (!result.query) return '';
   if (!result.total) return `<p class="hx-search-empty" data-corn="search-empty">${escHtml(noMatchLine(result.query))}</p>`;
-  const frame = result.onMap ? `<button type="button" class="hx-search-row hx-search-frame" data-corn="search-result" data-search-frame tabindex="-1">Frame all ${result.onMap}</button>` : '';
-  const groups = result.groups.map((g) => `<div class="hx-search-group" role="group" aria-label="${escHtml(g.name)}, ${g.count}" data-corn="search-group"><div class="hx-search-group-title" aria-hidden="true">${escHtml(g.name)} <span class="hx-search-group-count">${g.count}</span></div>${g.rows.map((m) => rowHtml(m, g.off)).join('')}</div>`).join('');
+  // A roving tab stop: one option (the chosen match when it is listed, else the first) is in the tab order, so Tab reaches the list that scrolls
+  const listed = result.groups.flatMap((g) => g.rows);
+  const stop = listed.some((m) => m.node.id === state.searchCurrent) ? state.searchCurrent : result.onMap ? FRAME_STOP : listed[0].node.id;
+  const frame = result.onMap ? `<button type="button" role="option" aria-selected="false" class="hx-search-row hx-search-frame" data-corn="search-result" data-search-frame tabindex="${stop === FRAME_STOP ? 0 : -1}">Frame all ${result.onMap}</button>` : '';
+  const groups = result.groups.map((g) => `<div class="hx-search-group" role="group" aria-label="${escHtml(g.name)}, ${g.count}" data-corn="search-group"><div class="hx-search-group-title" aria-hidden="true">${escHtml(g.name)} <span class="hx-search-group-count">${g.count}</span></div>${g.rows.map((m) => rowHtml(m, g.off, m.node.id === stop)).join('')}</div>`).join('');
   const more = result.more ? `<p class="hx-search-more">${escHtml(moreLine(result.more))}</p>` : '';
-  return `${frame}${groups}${more}`;
+  return `<div role="listbox" id="${escHtml(listId)}" aria-label="Search results">${frame}${groups}</div>${more}`;
 }
 
 /** Paints the count, the step buttons and the list of both fields from the current result */
@@ -101,7 +111,8 @@ export function paintSearch({ keepOpen = true } = {}) {
     // A row that has the focus is repainted: the focus goes to the same row again, so a keyboard user keeps their place
     const held = list.contains(document.activeElement) ? document.activeElement : null;
     const heldId = held ? held.dataset.searchId || (held.hasAttribute('data-search-frame') ? '' : null) : null;
-    list.innerHTML = open ? resultsHtml(result) : '';
+    const listId = `${field.results}-listbox`;
+    list.innerHTML = open ? resultsHtml(result, listId) : '';
     if (held && open && heldId !== null) {
       const again = rowsOf(list).find((r) => (heldId === '' ? r.hasAttribute('data-search-frame') : r.dataset.searchId === heldId));
       if (again) again.focus();
@@ -109,8 +120,9 @@ export function paintSearch({ keepOpen = true } = {}) {
     list.hidden = !open;
     list.dataset.open = open ? 'true' : 'false';
     if (input) {
-      input.setAttribute('aria-expanded', String(open));
-      input.setAttribute('aria-controls', field.results);
+      const options = open && result.total > 0; // the popup is the listbox: with no match there is none, only the words (and the live region says them)
+      input.setAttribute('aria-expanded', String(options));
+      input.setAttribute('aria-controls', options ? listId : field.results);
     }
   }
 }
@@ -285,10 +297,10 @@ export function initSearch() {
     const input = $(field.input);
     if (!input || input.dataset.searchBound) continue;
     input.dataset.searchBound = '1';
-    // A combobox whose popup is a dialog (the ARIA pattern for a popup the focus moves into): its rows are buttons in labelled groups,
-    // reached with the down arrow, so a screen reader hears each row's own name and its group's
+    // A combobox whose popup is a listbox: its options (Frame all, then the rows) in labelled groups, reached with the down arrow and
+    // walked with the arrows (the focus moves from option to option), so a screen reader hears each row and its group
     input.setAttribute('role', 'combobox');
-    input.setAttribute('aria-haspopup', 'dialog');
+    input.setAttribute('aria-haspopup', 'listbox');
     input.setAttribute('aria-autocomplete', 'none');
     input.setAttribute('aria-expanded', 'false');
     input.setAttribute('aria-controls', field.results);
