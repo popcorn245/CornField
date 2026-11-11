@@ -1,6 +1,6 @@
 # Spec 0009: a project defines its own layers, and finer kinds show
 
-Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0009-project-layers-and-finer-kinds.json`](proposals/0009-project-layers-and-finer-kinds.json).
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. **Built** (all five steps; spec 0008 owns search reading the kind). Its proposal was deleted when it was built (`git log` keeps it).
 
 Issues: [#150](https://github.com/popcorn245/CornField/issues/150) (F27), [#175](https://github.com/popcorn245/CornField/issues/175) (F26), from the 0.34 design review.
 
