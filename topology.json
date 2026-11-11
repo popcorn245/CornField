@@ -7700,7 +7700,32 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-reviews-0-34-design-review",
+      "to": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-reviews-0-34-design-review",
+      "to": "page-doc-docs-specs-0007-the-decision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-reviews-0-34-design-review",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-reviews-0-34-design-review",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-reviews-0-34-design-review",
+      "to": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T19:10:41.509Z"
+  "updatedAt": "2026-11-11T20:05:31.868Z"
 }
