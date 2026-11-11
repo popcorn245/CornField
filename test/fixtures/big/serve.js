@@ -46,7 +46,7 @@ const isGenerated = (dir) => {
  *  - `from`: a topology folder (topology.json, and its cloud and personas files): a repo is generated from it into `dir`
  *  - neither: the synthetic big map is generated into `dir`
  */
-export async function prepare({ theme = null, dir, repo: existing, from, seed, env = {} } = {}) {
+export async function prepare({ theme = null, dir, repo: existing, from, seed, layers = false, env = {} } = {}) {
   let repo;
   let made = null;
   if (existing) {
@@ -64,7 +64,7 @@ export async function prepare({ theme = null, dir, repo: existing, from, seed, e
     repo = path.resolve(dir || path.join(os.tmpdir(), `cornfield-big-${theme || 'default'}`));
     if (fs.existsSync(repo) && fs.readdirSync(repo).length && !isGenerated(repo)) throw new Error(`${repo} is not empty and not a repo this rig made: refusing to replace it`);
     fs.rmSync(repo, { recursive: true, force: true });
-    made = writeBig(repo, { theme, seed, from: from ? path.resolve(from) : null });
+    made = writeBig(repo, { theme, seed, layers, from: from ? path.resolve(from) : null });
   }
   // cornfield's own state (sessions, runs) stays in the temp dir, never beside a repo you named
   const data = path.join(os.tmpdir(), `cornfield-big-data-${createHash('sha256').update(repo).digest('hex').slice(0, 12)}`);
@@ -88,7 +88,7 @@ async function main() {
   const theme = flags.theme && flags.theme !== true ? flags.theme : null;
   const port = Number(flags.port || 3401);
   // one folder per port, so (a), (b) and (c) can run side by side without replacing each other's repo
-  const opts = { theme, dir: flags.dir && flags.dir !== true ? flags.dir : path.join(os.tmpdir(), `cornfield-big-${theme || 'default'}-${port}`), repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, env: { CORNFIELD_PORT: String(port) } };
+  const opts = { theme, dir: flags.dir && flags.dir !== true ? flags.dir : path.join(os.tmpdir(), `cornfield-big-${theme || 'default'}-${port}`), repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, layers: !!flags.layers, env: { CORNFIELD_PORT: String(port) } };
   const { repo, made, config, data } = await prepare(opts);
   let world = null;
   // loopback only, whatever CORNFIELD_HOST or the config says: this is a review rig, never something to deploy

@@ -35,6 +35,7 @@
 import { NODE_THEMES } from '../core/schema.js';
 import { parseColor } from './theme-model.js';
 import { looksFor } from './scene.js';
+import { iconKeyShape, iconKeysFor, mapGroupToken, mapKindToken } from '../core/layers.js';
 
 /** The node kinds (topology types) and the groups (layers a node can belong to) the tokens exist for */
 export const MAP_KINDS = Object.freeze(Object.keys(NODE_THEMES));
@@ -69,6 +70,8 @@ export const ICON_URL_PREFIX = '/cornfield/theme/assets/';
 
 export const nodeToken = (kind) => `--corn-map-node-${kind}`;
 export const groupToken = (group) => `--corn-map-group-${group}`;
+/** The fill token of a finer kind: `--corn-map-kind-service-timer`, or null for a kind that cannot be a part of a name (core/layers.js) */
+export const kindToken = (type, kind) => mapKindToken(type, kind);
 export const edgeToken = (kind) => `--corn-map-edge-${kind}`;
 export const stateToken = (name) => `--corn-map-${name}`;
 
@@ -215,12 +218,13 @@ function factorOf(value) {
 /**
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
+ * @param {string[]} [extra] more colour tokens to read: those of the finer kinds and project layers on the map (`setMapSubjects`)
  * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null}}
  *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth` and `glow` are null at `auto` or when the value is not one
  */
-export function readMapTokens(read) {
+export function readMapTokens(read, extra = []) {
   const values = {};
-  for (const name of MAP_COLOR_TOKENS) {
+  for (const name of [...MAP_COLOR_TOKENS, ...extra]) {
     const c = cssColor(read(name));
     if (c) values[name] = c;
   }
@@ -266,7 +270,7 @@ export function createIconStore(urls, { load = loadImage, onChange = () => {}, w
   const entries = new Map();
   let ready = 0;
   for (const [kind, url] of Object.entries(urls || {})) {
-    if (!MAP_KINDS.includes(kind) || typeof url !== 'string' || !url.startsWith(ICON_URL_PREFIX) || url.includes('..')) continue;
+    if (!iconKeyShape(kind) || typeof url !== 'string' || !url.startsWith(ICON_URL_PREFIX) || url.includes('..')) continue;
     const entry = { status: 'loading', image: null };
     entries.set(kind, entry);
     Promise.resolve().then(() => load(url)).then((image) => {
@@ -323,6 +327,22 @@ function changed() {
   listeners.forEach((fn) => fn(current));
 }
 
+/** The tokens of the finer kinds and project layers on the map, read besides the fixed list (their names come from the map and the config, through core/layers.js, which refuses a name that is not a plain one) */
+let subjectTokens = [];
+const MAX_SUBJECT_TOKENS = 500;
+
+/**
+ * Tells the style which finer kinds (`[type, kind]`) and project layers (keys) are on the map, so the tokens that colour them
+ * (`--corn-map-kind-<type>-<kind>`, `--corn-map-group-<key>`) are read. True when the set changed and a token differed.
+ * @param {{kinds?: [string, string][], layers?: string[]}} [subjects]
+ */
+export function setMapSubjects({ kinds = [], layers = [] } = {}) {
+  const names = [...new Set([...kinds.map(([t, k]) => mapKindToken(t, k)), ...layers.map((l) => mapGroupToken(l))].filter(Boolean))].sort().slice(0, MAX_SUBJECT_TOKENS);
+  if (names.length === subjectTokens.length && names.every((n, i) => n === subjectTokens[i])) return false;
+  subjectTokens = names;
+  return refreshMapStyle();
+}
+
 /** @returns {MapStyle} */
 export const getMapStyle = () => current;
 
@@ -338,7 +358,7 @@ export function onMapStyleChange(fn) {
  */
 export function refreshMapStyle(read = pageReader()) {
   if (!read) return false;
-  const next = readMapTokens(read);
+  const next = readMapTokens(read, subjectTokens);
   const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow
     && Object.keys(next.values).length === Object.keys(tokens.values).length
     && Object.entries(next.values).every(([k, v]) => tokens.values[k] === v);
@@ -379,6 +399,7 @@ export function resetMapStyle() {
   tokens = NO_TOKENS;
   icons = null;
   pixelated = false;
+  subjectTokens = [];
   changed();
 }
 
@@ -452,8 +473,9 @@ function compute(scene, style) {
   const stroke = values[STROKE_TOKEN];
   const painted = scene.painted || { nodes: new Set(), edges: new Set() };
   const nodes = scene.nodes.map((n) => {
-    const fill = !painted.nodes.has(n.id) && firstOf(values, [nodeToken(n.type), groupToken(n.group || n.type)]);
-    const icon = style.icons && style.icons.get(n.type) ? n.type : null;
+    // Which fill wins, most specific first (spec 0009 D6): the finer kind, the project layer, the type, the starting layer
+    const fill = !painted.nodes.has(n.id) && firstOf(values, [kindToken(n.type, n.kind), n.layer ? mapGroupToken(n.layer) : null, nodeToken(n.type), groupToken(n.group || n.type)].filter(Boolean));
+    const icon = style.icons ? iconKeysFor(n.type, n.kind, n.layer).find((k) => style.icons.get(k)) || null : null; // the same order: kind, layer, type
     const glows = style.glow != null && style.glow !== 1 && n.glow > 0;
     if (!fill && !label && !stroke && !icon && !glows) return n;
     const out = { ...n };

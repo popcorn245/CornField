@@ -57,6 +57,7 @@ import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf,
 import { CLOUD_FILE } from '../core/cloud.js';
 import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, clientBrand, manifestOf } from '../core/brand.js';
 import { clientStrings } from '../core/strings.js';
+import { clientLayers } from '../core/layers.js';
 import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, cssUrls, fontOrigins, themeAssetFile, themeAssetPath, themeUrlTarget } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
@@ -81,7 +82,7 @@ import { compressResponse } from './compress.js';
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
 /** The pure core modules the explorer imports (no Node built-ins, no files): the only ones of core/ served */
-export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js', 'strings.js'];
+export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js', 'strings.js', 'layers.js'];
 /** The explorer files the sign-in pages load: cornfield's tokens, their own stylesheet and the script that applies Light or Dark. Served without a session. */
 const SIGN_IN_FILES = new Set(['/explorer/tokens.css', '/explorer/sign-in.css', '/explorer/theme-boot.js']);
 /** cornfield's own browser sources, by request path */
@@ -252,6 +253,8 @@ export function clientConfig(config, signIn = false) {
     brand: clientBrand(config.brand, PKG.homepage),
     // Only the labels the config overrides, as text (core/strings.js); the defaults are in the browser
     strings: clientStrings(config.strings),
+    // The project's own layers, as plain data of the known keys (core/layers.js; docs/config.md#layers)
+    layers: clientLayers(config.layers),
     forge: config.forge ? { type: config.forge.type, url: config.forge.url || (config.forge.type === 'github' ? 'https://github.com' : null), repo: config.forge.repo, mergeMethod: config.forge.mergeMethod || 'merge', ...(config.forge.baseBranch ? { baseBranch: config.forge.baseBranch } : {}), ...(config.approveLands ? { approveLands: true } : {}) } : null,
     // Threads (docs/threads.md): the idea label, or false when `threads: false` turns the Threads tab off
     threads: config.threads === false ? false : { label: ideaLabel(config) },

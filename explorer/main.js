@@ -28,7 +28,7 @@ import { updateSearchStatus } from './search-status.js';
 import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
-import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from './layers.js';
+import { clickWithLegendMenu, setProjectLayers, toggleAllLayers, toggleLayer, toggleLayerKinds, toggleLegendMenu } from './layers.js';
 import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
@@ -126,9 +126,10 @@ const ACTIONS = {
   'reset-view': () => fitGraphToViewport(fitPadding()),
   'fit': () => fitGraphToViewport(fitPadding()),
   'toggle-layers-menu': () => toggleLegendMenu(),
-  'layers-all': () => toggleAllLayers(true),
-  'layers-none': () => toggleAllLayers(false),
-  'toggle-layer': (el) => toggleLayer(el.dataset.layer),
+  'layers-all': () => toggleAllLayers(true, { viewer: true }),
+  'layers-none': () => toggleAllLayers(false, { viewer: true }),
+  'toggle-layer': (el) => toggleLayer(el.dataset.layer, { viewer: true }),
+  'toggle-layer-kinds': (el) => toggleLayerKinds(el.dataset.layer),
   'toggle-freeform': () => toggleFreeformMode(),
   'reset-positions': () => resetFreeformPositions(),
   'preset-map': () => {
@@ -151,16 +152,14 @@ const ACTIONS = {
   'set-theme': (el) => setThemeChoice(el.dataset.choice),
 };
 
-document.addEventListener('click', (e) => {
+// Any click outside the Layers menu closes it; a click on one of its rows does not (layers.js clickWithLegendMenu reads which before the action)
+document.addEventListener('click', (e) => clickWithLegendMenu(e.target, () => {
   const target = e.target.closest('[data-action]');
   if (target) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   }
-  // Any click outside the Layers menu closes it
-  const menu = $('legend-dropdown');
-  if (menu && !menu.hidden && !menu.contains(e.target) && !$('legend-toggle-btn').contains(e.target)) closeLegendMenu();
-});
+}));
 
 // ---------------------------------------------------------------------------
 //  /?bench=1: the scripted pan-and-zoom of bench.js on the map as loaded
@@ -220,7 +219,7 @@ $('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.v
 resize();
 syncViewUi();
 // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyMapTheme(document, config.theme); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyMapTheme(document, config.theme); setProjectLayers(config.layers); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
 loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

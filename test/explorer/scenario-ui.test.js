@@ -505,6 +505,35 @@ describe('the camera', () => {
     live.remove();
   });
 
+  it('turns on the project layer that takes a step\'s node, not the starting layer it would have been on (spec 0009 D3)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    const before = { layers: state.activeLayers, project: state.projectLayers };
+    state.nodes.push({ id: 'tbl2', type: 'table', x: 3000, y: 2000, r: 20, color: '#fff', label: 'orders' });
+    state.projectLayers = [{ key: 'data', label: 'Data <b>', match: { type: 'table' } }];
+    state.activeLayers = { ...(state.activeLayers || {}), table: true, data: false };
+    try {
+      playScenario(scenario({ steps: [{ node: 'a', text: 'Opens.' }, { node: 'tbl2', text: 'The row is read.' }] }), { autoplay: false });
+      expect(state.activeLayers.data).toBe(true); // the project layer decides alone
+      await new Promise((r) => setTimeout(r, 50));
+      expect(live.textContent).toBe('Turned on Data <b> to show this scenario\'s steps.'); // its own label, as text
+      // and with the project layer on, the starting layer being off hides nothing: no layer to turn on
+      state.activeLayers = { ...state.activeLayers, table: false };
+      clearScenario();
+      live.textContent = '';
+      playScenario(scenario({ steps: [{ node: 'tbl2', text: 'The row is read.' }] }), { autoplay: false });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(state.activeLayers.table).toBe(false);
+      expect(live.textContent).not.toContain('Turned on');
+    } finally {
+      clearScenario();
+      state.activeLayers = before.layers; state.projectLayers = before.project;
+      state.nodes.splice(state.nodes.findIndex((n) => n.id === 'tbl2'), 1);
+      live.remove();
+    }
+  });
+
   it('is the user\'s again as soon as they take hold of the map', () => {
     playScenario(scenario(), { autoplay: false });
     click('scenario-next'); click('scenario-next'); click('scenario-next');
