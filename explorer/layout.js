@@ -51,8 +51,8 @@ export function labelWidth(node) {
 //  1. The data tier (stores, tables, ROM stages) rings the root, grouped by kind.
 //  2. A hub's children fill concentric rings around it; the spacing along a ring
 //     comes from that cluster's own label widths, so labels never collide.
-//  3. Hubs with children share one ring around the core, each taking arc in
-//     proportion to its cluster's size; the ring is sized so clusters never touch.
+//  3. Hubs with children are packed round the core, largest first (ties by label), each in the free place nearest it,
+//     searched from the top clockwise (spec 0008 D1); a cluster's place depends only on the ones placed before it.
 //  4. Childless hubs (leaf apps, tools, packages) sit on an outer ring.
 // ---------------------------------------------------------------------------
 const DATA_TYPES = ['store', 'table', 'rom'];
@@ -145,6 +145,34 @@ function placePack(pack, ox, oy, clusters) {
   });
 }
 
+
+/**
+ * The free place nearest (0, 0) for a disc of radius `r` among `discs` (`{ x, y, r }`, each already holding its own gap),
+ * searched along rays from the top clockwise every STEP degrees: on each ray the nearest point where the disc touches
+ * none, and of the rays the nearest of all, the first in the search order winning a tie. Exact and deterministic.
+ */
+const PACK_STEP_DEG = 2;
+function nearestFreePlace(discs, r) {
+  let best = null;
+  for (let deg = 0; deg < 360; deg += PACK_STEP_DEG) {
+    const a = -Math.PI / 2 + (deg * Math.PI) / 180;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    // The stretches of this ray where the disc would touch another (open intervals of the distance along it)
+    const blocked = [];
+    for (const d of discs) {
+      const along = dx * d.x + dy * d.y;
+      const reach = d.r + r;
+      const disc = along * along - (d.x * d.x + d.y * d.y) + reach * reach;
+      if (disc > 0) blocked.push([along - Math.sqrt(disc), along + Math.sqrt(disc)]);
+    }
+    blocked.sort((p, q) => p[0] - q[0]);
+    let at = 0;
+    for (const [lo, hi] of blocked) if (lo < at + 1e-9 && hi > at) at = hi;
+    if (!best || at < best.at - 1e-6) best = { at, x: dx * at, y: dy * at };
+  }
+  return best;
+}
+
 export function computeOrbitalLayout() {
   touchScene(); // positions and rings change
   const { nodes, edges } = state;
@@ -214,31 +242,31 @@ export function computeOrbitalLayout() {
     packs.set(hub.id, packTree(children, kidsOf, spacingOf, byTypeThenLabel, new Set([hub.id])));
   });
 
-  // 3. Hubs with children around the core, arc proportional to cluster size
+  // 3. Hubs with children, packed (spec 0008 D1): the largest cluster first (ties by label) takes the free place nearest
+  //    the core, searched from the top clockwise, GAP from every cluster already placed. No physics: the same map
+  //    always draws the same, and a cluster's place depends only on the ones placed before it.
   const GAP = 70;
-  const big = hubs.filter((h) => packs.has(h.id)).sort((a, b) => packs.get(b.id).extent - packs.get(a.id).extent);
-  const maxExtent = big.length ? Math.max(...big.map((h) => packs.get(h.id).extent)) : 0;
-  const need = big.reduce((s, h) => s + 2 * packs.get(h.id).extent + GAP, 0);
-  const hubR = Math.max(coreExtent + maxExtent + GAP, need / (2 * Math.PI));
-  let angle = -Math.PI / 2;
+  const big = hubs.filter((h) => packs.has(h.id))
+    .sort((a, b) => packs.get(b.id).extent - packs.get(a.id).extent || String(a.label).localeCompare(String(b.label)));
+  const discs = [{ x: 0, y: 0, r: coreExtent }];
+  let hubReach = coreExtent; // how far from the centre the packed clusters reach
   big.forEach((hub) => {
     const pack = packs.get(hub.id);
-    const share = ((2 * pack.extent + GAP) / need) * Math.PI * 2;
-    const a = angle + share / 2;
-    hub.x = Math.cos(a) * hubR;
-    hub.y = Math.sin(a) * hubR;
+    const at = nearestFreePlace(discs, pack.extent + GAP / 2);
+    hub.x = at.x;
+    hub.y = at.y;
+    discs.push({ x: hub.x, y: hub.y, r: pack.extent + GAP / 2 });
+    hubReach = Math.max(hubReach, Math.hypot(hub.x, hub.y) + pack.extent);
     LAYOUT.clusters.push({ x: hub.x, y: hub.y, radii: pack.radii });
     placePack(pack, hub.x, hub.y, LAYOUT.clusters);
-    angle += share;
   });
-  if (big.length) LAYOUT.rings.push({ x: 0, y: 0, r: hubR });
 
   // 4. Childless hubs on an outer ring, and with them any node that has no parent and is none of the above
   //    (it would otherwise sit on the centre, under whatever else is there)
   const homeless = nodes.filter((n) => n.id !== 'root' && !parentMap[n.id] && !isData(n) && !hubIds.has(n.id));
   const leaves = [...hubs.filter((h) => !packs.has(h.id)), ...homeless].sort(byTypeThenLabel);
   const leafSpacing = Math.max(120, ...leaves.map((n) => labelWidth(n) + 30));
-  const leafR = Math.max(hubR + maxExtent + 90, (leaves.length * leafSpacing) / (2 * Math.PI));
+  const leafR = Math.max(hubReach + 90, (leaves.length * leafSpacing) / (2 * Math.PI));
   leaves.forEach((n, i) => {
     const a = -Math.PI / 2 + (i / Math.max(1, leaves.length)) * Math.PI * 2;
     n.x = Math.cos(a) * leafR;
