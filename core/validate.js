@@ -252,10 +252,10 @@ export function readTopology(config) {
 /**
  * Everything `cornfield validate` checks.
  * @param {{ config: object, derivers: { deriver: object, options?: object }[], topology?: object|null }} opts
- * @returns {Promise<{ errors: string[], warnings: string[], derived: object|null }>}
+ * @returns {Promise<{ errors: string[], warnings: string[], derived: object|null, notes: string[] }>}
  */
 export async function validateRepo({ config, derivers, topology = readTopology(config) }) {
-  if (!topology) return { errors: [`${config.topology} is missing: run cornfield sync to make it.`], warnings: [], derived: null };
+  if (!topology) return { errors: [`${config.topology} is missing: run cornfield sync to make it.`], warnings: [], derived: null, notes: [] };
   const errors = validateTopology(topology);
   try {
     errors.push(...missingPaths(topology, repoPaths(config.root)));
@@ -264,6 +264,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   }
   let derived = null;
   const warnings = [];
+  const notes = []; // what held, for a pass to say (the contrast check's one line)
   try {
     derived = await deriveTopology({ root: config.root, config, derivers, map: topology });
     warnings.push(...derived.warnings);
@@ -282,6 +283,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   const contrast = checkThemeContrast(config);
   errors.push(...contrast.errors);
   warnings.push(...contrast.warnings);
+  if (contrast.summary) notes.push(contrast.summary);
   errors.push(...validateCloudNodes(topology, config.root));
   errors.push(...validateProposalFiles(topology, path.join(config.root, config.proposals), config.root));
   const io = repoReader(config.root);
@@ -293,5 +295,5 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
       errors.push(`Deriver "${deriver.name}" could not check the map: ${err.message}`);
     }
   }
-  return { errors, warnings, derived };
+  return { errors, warnings, derived, notes };
 }

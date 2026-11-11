@@ -403,7 +403,7 @@ describe('cornfield validate, on a copy of the sample repo', () => {
 
   it('fails on a missing icon and passes once it is there', () => {
     fs.mkdirSync(path.join(root, 'tools/cf'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'tools/cf/theme.css'), ':root { --corn-map-node-app: #123456; }');
+    fs.writeFileSync(path.join(root, 'tools/cf/theme.css'), ':root { --corn-map-node-app: #808080; }');
     withTheme({ css: './tools/cf/theme.css', icons: { app: './tools/cf/app.svg' }, pixelated: true });
     const missing = validate();
     expect(missing.status).toBe(1);
