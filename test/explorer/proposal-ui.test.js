@@ -430,7 +430,11 @@ describe('the panel', () => {
     expect(meta.textContent).toContain('In this proposal');
     expect(meta.textContent).toContain('mentions meals');
     expect($('drawer-diff').textContent).toMatch(/^Changed by /);
+    expect($('drawer-diff').getAttribute('data-corn')).toBe('diff-pill');
+    expect($('drawer-diff').getAttribute('data-corn-state')).toBe('changed');
     const diff = meta.querySelector('[data-proposal-mark="changed"] .hx-diff');
+    expect(diff.getAttribute('data-corn')).toBe('diff-block');
+    expect(diff.getAttribute('data-corn-state')).toBe('changed');
     expect(diff.textContent).toContain('app-a');
     expect(diff.querySelector('.hx-change-before').textContent).toBe('old words');
     expect(diff.querySelector('.hx-change-after').textContent).toBe('new words');
@@ -445,6 +449,7 @@ describe('the panel', () => {
     await selectNode(state.nodes.find((n     ) => n.id === 'page-new'));
     expect($('drawer-meta-list').textContent).toContain('In this proposal');
     expect($('drawer-diff').textContent).toMatch(/^Added by /);
+    expect($('drawer-diff').getAttribute('data-corn-state')).toBe('added');
     expect($('drawer-description').textContent).toContain('planner');
   });
 

@@ -102,7 +102,7 @@ function userRow(item, mixed) {
 }
 
 /** The Play button (spec 0031 section 8, CLOUD-07): main.js plays outage-model.js `outageScenario` for the node. A quiet button under the facts. */
-const playButton = (node) => `<button type="button" class="hx-btn hx-btn--quiet hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">Play: ${esc(String(node.label || node.id))} is down</button>`;
+const playButton = (node) => `<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-cloud-play" data-action="play-outage" data-id="${esc(node.id)}">Play: ${esc(String(node.label || node.id))} is down</button>`;
 
 /**
  * The node panel's facts for a cloud node (kind `cloud`) or the public web (kind `web`), in the node panel's key/value

@@ -110,8 +110,8 @@ export function renderLayerToggles() {
     return `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">
         <span class="hx-toggle-label">
-          <span class="hx-dot" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
-          <span class="hx-toggle-name">${escHtml(layer.label)}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
+          <span class="hx-dot" data-corn="swatch" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
+          <span class="hx-toggle-name">${escHtml(layer.label)}</span>${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">
           <span class="hx-count" data-corn="count">${(unit[layer.key] || String)(counts[layer.key] || 0)}</span>
@@ -130,8 +130,8 @@ export function renderCloudLegend() {
   if (state.activeLayers.cloud === false) { el.innerHTML = ''; el.hidden = true; return; }
   el.hidden = false;
   el.innerHTML = `
-    <div class="hx-menu-title"><span>Cloud: when an outage bites</span></div>
-    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch"><span class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
+    <div class="hx-menu-title" data-corn="menu-title"><span>Cloud: when an outage bites</span></div>
+    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch"><span data-corn="swatch" class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
     <div class="hx-legend-row"><span class="hx-legend-swatch"></span><span class="hx-faint"><span class="hx-cloud-browser">(browser)</span> the visitor's browser makes the call, not our server</span></div>`;
 }
 

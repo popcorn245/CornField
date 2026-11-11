@@ -166,7 +166,7 @@ describe('the panel', () => {
   });
 
   it('puts a quiet Play button under the facts for a cloud node, and none for the public web', () => {
-    expect(html).toMatch(/<button type="button" class="hx-btn hx-btn--quiet[^"]*" data-action="play-outage" data-id="ext-cloudflare">Play: Cloudflare is down<\/button>$/);
+    expect(html).toMatch(/<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet[^"]*" data-action="play-outage" data-id="ext-cloudflare">Play: Cloudflare is down<\/button>$/);
     const web = node('ext-public-web', 'external', { kind: 'web', breaks: 'One site down.' });
     expect(cloudPanelHtml(web, [web], [])).not.toContain('play-outage');
   });
