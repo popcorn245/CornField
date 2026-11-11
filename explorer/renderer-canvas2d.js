@@ -8,13 +8,17 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
+import { CORE_RATIO, ARROW, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 
 const TAU = Math.PI * 2;
 /** A glow thinner than this on screen (px) is not drawn: zoomed out it is a fraction of a pixel, and costs a stroke or fill per edge and node */
 const GLOW_MIN_PX = 1.5;
+/** A scene with this many edges or fewer is drawn directly each frame; more, and its lines go into the layer while packets move */
+export const LAYER_MIN_EDGES = 600;
+/** A line dimmer than this (its alpha times its colour's), with no mark, glow or packet, is a trace no eye finds: it is not drawn (a selection dims thousands of lines to 4%) */
+export const TRACE_ALPHA = 0.06;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
 
 // ---------------------------------------------------------------------------
@@ -146,6 +150,17 @@ function drawPacket(ctx, edge, timeMs, zoom) {
   ctx.restore();
 }
 
+/** The edges worth a stroke: not the traces (see TRACE_ALPHA), worked out once per scene */
+const drawnLists = new WeakMap();
+function drawnEdges(scene) {
+  let list = drawnLists.get(scene);
+  if (!list) {
+    list = scene.edges.filter((e) => (e.mark && e.mark !== 'none') || e.glow || e.packet || e.alpha * parseColor(e.color)[3] >= TRACE_ALPHA);
+    drawnLists.set(scene, list);
+  }
+  return list;
+}
+
 // ---------------------------------------------------------------------------
 //  Nodes
 // ---------------------------------------------------------------------------
@@ -236,7 +251,7 @@ function drawNode(ctx, node, zoom, looks, style) {
 
 /**
  * @param {HTMLCanvasElement} canvas the canvas to draw on
- * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`)
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle, layerMinEdges?: number}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`); `layerMinEdges`: how many drawn lines make the layer worth it (default LAYER_MIN_EDGES)
  * @returns {import('./scene.js').Renderer}
  */
 export function createCanvas2dRenderer(canvas, opts = {}) {
@@ -262,9 +277,13 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
     if (!layerCtx) layer = null;
     return layer;
   };
+  // The layer pays for itself only when there are many lines to redraw every frame: a blit of the whole canvas is not free (a phone's
+  // software raster takes ~0.4 s for the first one), so a scene with a few hundred lines and a few packets (one hop of a selection)
+  // draws directly
+  const layerMin = opts.layerMinEdges ?? LAYER_MIN_EDGES;
   const hasPacket = new WeakMap();
   const packetsIn = (scene) => {
-    if (!hasPacket.has(scene)) hasPacket.set(scene, scene.edges.some((e) => e.packet));
+    if (!hasPacket.has(scene)) hasPacket.set(scene, drawnEdges(scene).length > layerMin && scene.edges.some((e) => e.packet));
     return hasPacket.get(scene);
   };
 
@@ -276,7 +295,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
     if (decor.grid) drawGrid(c, decor.grid, camera, width, height);
     if (decor.lanes.length) drawLanes(c, decor.lanes);
     if (decor.rings.length) drawRings(c, decor.rings);
-    scene.edges.forEach((edge) => drawEdge(c, edge, 0, camera.zoom, false));
+    drawnEdges(scene).forEach((edge) => drawEdge(c, edge, 0, camera.zoom, false));
     c.restore();
   }
 
@@ -331,7 +350,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
       if (decor.lanes.length) drawLanes(ctx, decor.lanes);
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
-      scene.edges.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
+      drawnEdges(scene).forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
       scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 

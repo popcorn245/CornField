@@ -105,7 +105,7 @@ describe('renderer-canvas2d', () => {
     vi.stubGlobal('OffscreenCanvas', class { width = 1; height = 1; getContext() { return layerCtx; } });
     try {
       const ctx = recordingCtx();
-      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      const r = createCanvas2dRenderer(fakeCanvas(ctx), { layerMinEdges: 0 }); // a small scene: the layer is asked for
       r.resize(800, 600, 1);
       const scene = buildScene(mk({ selectedNode: nodes[1] }));
       expect(scene.edges.some((e     ) => e.packet)).toBe(true);

@@ -1420,3 +1420,22 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"], .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50dvh), 50dvh); }
   .hx-dock > .hx-drawer[data-sheet-state="expanded"], .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60dvh), 60dvh); }
 }
+
+/* ---------------------------------------------------------------------------
+   The node panel's lines (spec 0008 D5 and D6): the lit lines by kind, the switch, and Frame them
+   --------------------------------------------------------------------------- */
+.hx-lines { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-lines .hx-chips { padding-top: 0; }
+.hx-lines-kind { display: inline-flex; align-items: baseline; gap: var(--corn-space-1); min-height: 28px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: none; color: var(--corn-text-2); font: inherit; font-size: var(--corn-text-xs); font-weight: 600; cursor: pointer; }
+.hx-lines-kind:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-lines-kind[aria-pressed="true"] { border-color: var(--corn-accent); background: var(--corn-accent-soft); color: var(--corn-accent-text); }
+.hx-lines-kind:focus-visible, .hx-lines-switch input:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-lines-count { font-variant-numeric: tabular-nums; color: var(--corn-text-3); }
+.hx-lines-list { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--corn-space-1) / 2); }
+.hx-lines-list .hx-linkbtn { margin-left: 0; text-align: left; overflow-wrap: anywhere; }
+.hx-lines-switch { display: flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; font-size: var(--corn-text-sm); color: var(--corn-text-2); cursor: pointer; }
+.hx-lines-reach { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-3); font-size: var(--corn-text-sm); color: var(--corn-text-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 767px), (pointer: coarse) {
+  .hx-lines-kind, .hx-lines-switch, .hx-lines-list .hx-linkbtn, .hx-lines-reach .hx-btn { min-height: 44px; }
+  .hx-lines-switch input { width: 24px; height: 24px; }
+}

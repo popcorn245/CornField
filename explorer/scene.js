@@ -170,6 +170,7 @@ import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
+import { activeSubgraph } from './selection-model.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
@@ -271,40 +272,14 @@ export function layerShows(state, node) {
 const viewEdgesOf = (state) => (state.view === 'dataflow' && state.flow ? state.flow.edges : state.view === 'house' ? houseViewEdges(state) : state.edges);
 
 /**
- * The focus subgraph: the selected node, its children and every path through them
+ * The focus subgraph (spec 0008 D5): the selected node and every node one edge away, of any kind; `throughChildren` adds its
+ * children's neighbours, `kind` keeps one kind of line. selection-model.js has the rule.
  * @param {{id:string}|null} selected
  * @param {object[]} edges the edges to walk
+ * @param {{throughChildren?: boolean, kind?: string|null}} [opts]
  */
-export function getActiveSubgraph(selected, edges) {
-  if (!selected) return null;
-
-  const connectedNodeIds = new Set([selected.id]);
-  const connectedEdgeKeys = new Set();
-  const key = (e) => `${e.from}->${e.to}`;
-  const owns = (e) => !e.dashed && !e.kind;
-
-  // Direct children (ownership edges out) and the direct parent (ownership edge in)
-  const childIds = new Set();
-  edges.forEach((e) => {
-    if (owns(e) && e.from === selected.id) { childIds.add(e.to); connectedNodeIds.add(e.to); connectedEdgeKeys.add(key(e)); }
-    if (owns(e) && e.to === selected.id) { connectedNodeIds.add(e.from); connectedEdgeKeys.add(key(e)); }
-  });
-
-  // Everything connected to the selected node or to any of its children
-  const focusCore = new Set([selected.id, ...childIds]);
-  edges.forEach((e) => {
-    if (focusCore.has(e.from)) { connectedNodeIds.add(e.to); connectedEdgeKeys.add(key(e)); }
-    if (focusCore.has(e.to)) { connectedNodeIds.add(e.from); connectedEdgeKeys.add(key(e)); }
-  });
-  // And the edges between connected nodes that touch the focus
-  edges.forEach((e) => {
-    if (connectedNodeIds.has(e.from) && connectedNodeIds.has(e.to)
-      && (focusCore.has(e.from) || focusCore.has(e.to) || e.from === selected.id || e.to === selected.id)) {
-      connectedEdgeKeys.add(key(e));
-    }
-  });
-
-  return { connectedNodeIds, connectedEdgeKeys, childIds, selectedId: selected.id };
+export function getActiveSubgraph(selected, edges, opts) {
+  return activeSubgraph(selected, edges, opts);
 }
 
 /**
@@ -698,7 +673,7 @@ export function emphasiseScenario(scene, scn, opts = {}) {
  */
 export function buildScene(state, opts = {}) {
   const preset = state.view === 'dataflow';
-  const subgraph = state.scenario ? scenarioSubgraph(state) : state.selectedNode ? getActiveSubgraph(state.selectedNode, viewEdgesOf(state)) : null;
+  const subgraph = state.scenario ? scenarioSubgraph(state) : state.selectedNode ? getActiveSubgraph(state.selectedNode, viewEdgesOf(state), { throughChildren: !!state.throughChildren, kind: state.selectedKind || null }) : null;
 
   const lanes = preset && state.flow ? buildLanes(state.flow) : [];
   const rings = !(preset && state.flow) && !state.isFreeform ? buildRings(state) : [];

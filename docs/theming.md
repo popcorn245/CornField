@@ -497,6 +497,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `back`, `detail-title` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
 | `tag` | a short tag on an item of a list: a pull request's or an issue's label ("spec"), a thread's kind, what a deploy lights |
 | `out-link`, `text-link` | the ↗ that opens an item on the forge in a new tab; a link inside text (a check's run, a thread's reply, the node's route, "Where to set a token") |
+| `lines-by-kind`, `lines-kind`, `lines-switch`, `frame-button` | in the node panel (spec 0008 D5, D6): the block of what the selection lights (a `section` of its own), one chip per kind of line ("Calls 12"; `aria-pressed` while that kind is lit alone; its number is a `count`), the check box "Include its children's lines" (the `strings` key `throughChildren`; there only for a node that has children), and Frame them (`data-corn-kind="secondary"`; the `strings` key `frame`; the `F` key does the same) |
 | `node-chip`, `node-link` | a button that shows a node on the map: a chip (the nodes a pull request, a thread or a deploy lights); a link-like one inside a sentence (the proposal's edge "From" and "To", a live room) |
 | `file` | a changed file in a pull request's detail, with its nodes |
 | `thread-message` | one message of a thread, in the Threads tab's detail |
@@ -646,6 +647,8 @@ Only labels a brand would want to voice are keys (about seventy). Sentences of h
 | `openRoute` | Open route |
 | `startRun` | Start a run |
 | `copySpec` | Copy Spec |
+| `frame` | Frame them |
+| `throughChildren` | Include its children's lines |
 | `hintInspect` | Click a node to see what it is |
 | `hintInspectTouch` | Tap a node to see what it is |
 | `hintDrag` | Drag nodes to move • Double-click to inspect |

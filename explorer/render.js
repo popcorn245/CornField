@@ -22,8 +22,8 @@ import { ZOOM_MIN, ZOOM_FLOOR } from './camera.js';
 // ---------------------------------------------------------------------------
 export const isNodeVisible = (node) => nodeVisible(state, node);
 
-/** The focus subgraph: the selected node, its children and every path through them */
-export const getActiveSubgraph = (selected, edges = viewEdges()) => activeSubgraph(selected, edges);
+/** The focus subgraph: the selected node and every node one edge away (selection-model.js); the switch and the kind come from the state */
+export const getActiveSubgraph = (selected, edges = viewEdges(), opts = { throughChildren: !!state.throughChildren, kind: state.selectedKind || null }) => activeSubgraph(selected, edges, opts);
 
 // ---------------------------------------------------------------------------
 //  Scene and renderer

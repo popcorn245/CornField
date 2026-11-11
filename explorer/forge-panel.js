@@ -69,7 +69,7 @@
 import { state, nodeById, escHtml, touchScene, onSceneTouch } from './state.js';
 import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
-import { announce, centreOn } from './keyboard.js';
+import { announce } from './keyboard.js';
 import { trapTab } from './focusables.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from './sheets.js';
 import { relativeTime } from './review-model.js';
@@ -2326,8 +2326,7 @@ function onClick(e) {
   if (nodeBtn) {
     const node = nodeById(nodeBtn.dataset.forgeNode);
     if (!node) return;
-    selectNode(node);
-    centreOn(node);
+    selectNode(node, { frame: true });
     if (isPhone()) collapseSheet('forge'); // the map and the node's sheet are what is wanted now
     announce(`${node.label}, ${node.type}`);
     return;

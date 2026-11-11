@@ -36,6 +36,10 @@ export const state = {
 
   camera: { x: 0, y: 0, zoom: 1 },
   selectedNode: null,
+  /** The node panel's "Include its children's lines" switch (spec 0008 D5): off, a selection lights one hop; on, the children's neighbours too. Kept across selections */
+  throughChildren: false,
+  /** The edge kind the panel chose to light alone (selection-model.js), or null for every kind; a new selection clears it */
+  selectedKind: null,
   /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
   forge: null,
   searchQuery: '',
