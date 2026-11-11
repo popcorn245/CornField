@@ -2158,6 +2158,36 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone) (docs/specs/0010-what-is-waiting-on-me.md)."
+    },
+    {
+      "id": "core-core-layers",
+      "label": "layers.js",
+      "type": "core",
+      "file": "core/layers.js",
+      "summary": "The Layers menu's rows as data (spec 0009): the starting layers cornfield ships, the project layers a repo adds in `cornfield.config.js` (`layers: { add, off, order }`), the matcher that says which…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Layers menu's rows as data (spec 0009): the starting layers cornfield ships, the project layers a repo adds in `cornfield.config.js` (`layers: { add, off, order }`), the matcher that says which… (core/layers.js)"
+    },
+    {
+      "id": "core-explorer-kind-letters",
+      "label": "kind-letters.js",
+      "type": "core",
+      "file": "explorer/kind-letters.js",
+      "summary": "The letters a finer `kind` shows in the middle of its node (spec 0009 D5): `j` for a job, `h` for a hook (core/layers.js `kindLetters` chooses them; scene.js puts them on the node as `letters`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The letters a finer `kind` shows in the middle of its node (spec 0009 D5): `j` for a job, `h` for a hook (core/layers.js `kindLetters` chooses them; scene.js puts them on the node as `letters`). (explorer/kind-letters.js)"
+    },
+    {
+      "id": "core-explorer-layer-model",
+      "label": "layer-model.js",
+      "type": "core",
+      "file": "explorer/layer-model.js",
+      "summary": "Which layer a node is in, as the Layers menu and the map read it (spec 0009 D3), from the state alone: no DOM, no drawing.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Which layer a node is in, as the Layers menu and the map read it (spec 0009 D3), from the state alone: no DOM, no drawing. (explorer/layer-model.js)"
     }
   ],
   "edges": [
@@ -2818,12 +2848,6 @@
     {
       "from": "core-explorer-layers",
       "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-live-model",
       "dashed": true,
       "label": "imports"
     },
@@ -6973,7 +6997,133 @@
       "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
       "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-layers"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-kind-letters"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-layer-model"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-layers",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-theme",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-kind-letters",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layer-model",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layer-model",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-kind-letters",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-kind-letters",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:06:46.101Z"
+  "updatedAt": "2026-11-11T17:37:58.294Z"
 }

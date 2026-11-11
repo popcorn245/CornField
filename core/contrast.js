@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { NODE_THEMES } from './schema.js';
+import { LAYER_KEY_RE, MAX_KEY, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
@@ -516,7 +517,7 @@ function worstOnGrounds(c, grounds) {
  * the fill and the ground; the label colour against the ground and against its halo. Always the same findings in the same order
  * (checkSheets lines the two system settings up by position).
  */
-function mapFindings(props, theme, mode, grounds) {
+function mapFindings(props, theme, mode, grounds, extra = []) {
   const out = [];
   if (!grounds.length) return out;
   const base = { theme, mode };
@@ -553,6 +554,23 @@ function mapFindings(props, theme, mode, grounds) {
       out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of ${anOf(label)} ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
     }
   }
+  // The tokens a theme sets for a finer kind (`--corn-map-kind-<type>-<kind>`) and a project layer (`--corn-map-group-<key>`): the same fill
+  // check, for each one the theme sets (an `auto` one draws the type's own colour, which is checked above)
+  for (const name of extra) {
+    const t = mapToken(props, name);
+    if (t.auto) continue;
+    const kind = parseKindToken(name);
+    const what = kind ? `the fill of ${anOf(kind.type)} ${kind.type} node of the kind "${kind.kind}"` : `the fill of a node in the "${name.slice('--corn-map-group-'.length)}" layer`;
+    if (t.problem) { out.push({ ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: what, problem: t.problem }); continue; }
+    const f = worstOnGrounds(t.color, grounds);
+    const finding = { ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: what, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) };
+    if (f.ratio >= MAP_FILL_MIN) { out.push(finding); continue; }
+    if (!strokeOn) { out.push({ ...finding, use: `${what}; set --corn-map-stroke, an outline at ${MAP_FILL_MIN}:1 on the fill and on the ground, or a deeper fill` }); continue; }
+    const onGround = worstOnGrounds(stroke.color, grounds);
+    const onFill = ratio(luminance(over(stroke.color, over(t.color, ground))), luminance(over(t.color, ground)));
+    const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(t.color, ground)) };
+    out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries ${what}, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
+  }
   // Labels are text: the colour against the ground, and against the halo under it (the halo is the ground's own colour at `auto`)
   const label = mapToken(props, '--corn-map-label');
   const haloTok = mapToken(props, '--corn-map-label-halo');
@@ -573,7 +591,7 @@ function mapFindings(props, theme, mode, grounds) {
 }
 
 /** Pair results for one page state: one per pair, the worst over the ground and the ground image */
-function checkState(props, theme, mode) {
+function checkState(props, theme, mode, extra = []) {
   const out = [];
   const canvas = mode === 'dark' ? [0, 0, 0, 1] : [255, 255, 255, 1];
   const cache = new Map();
@@ -601,7 +619,7 @@ function checkState(props, theme, mode) {
     const { image, ...rest } = worst;
     out.push({ ...finding, ...rest, ...(image ? { groundImage: true } : {}) });
   }
-  out.push(...mapFindings(props, theme, mode, grounds)); // the map's node fills and labels (their block above)
+  out.push(...mapFindings(props, theme, mode, grounds, extra)); // the map's node fills and labels (their block above)
   out.push(...diffMapFindings(props, theme, mode, grounds, isColor(g) ? over(g, canvas) : null));
   return out;
 }
@@ -671,18 +689,41 @@ function diffMapFindings(props, theme, mode, grounds, base) {
 export function checkSheets(themes) {
   const out = [];
   for (const { theme, sheets, name } of themes) {
+    const extra = mapExtraTokens(sheets);
     for (const mode of ['light', 'dark']) {
       const other = mode === 'light' ? 'dark' : 'light';
-      const same = checkState(resolveProps(sheets, { mode, system: mode, name }), theme, mode);
-      const flipped = checkState(resolveProps(sheets, { mode, system: other, name }), theme, mode);
+      const same = checkState(resolveProps(sheets, { mode, system: mode, name }), theme, mode, extra);
+      const flipped = checkState(resolveProps(sheets, { mode, system: other, name }), theme, mode, extra);
       same.forEach((f, i) => {
-        const g = flipped[i];
+        // The same findings in the same order, but for a kind or layer token that is `auto` on one system setting only: then by what it is about
+        const g = flipped.length === same.length ? flipped[i] : flipped.find((x) => x.fg === f.fg && x.bg === f.bg && x.use === f.use) || f;
         const worse = (f.problem === undefined && g.problem !== undefined) || (f.ratio !== undefined && g.ratio !== undefined && g.ratio < f.ratio && g.ratio < g.min && f.ratio >= f.min);
         out.push(worse ? { ...g, system: other } : f);
       });
     }
   }
   return out;
+}
+
+/** Every custom property a stylesheet declares, anywhere in it, once each */
+export function declaredProps(sheets) {
+  const names = new Set();
+  for (const css of sheets) for (const rule of parseRules(css)) for (const d of rule.decls) names.add(d.name);
+  return names;
+}
+
+/** The groups the standard tokens have (a type's own, and cloud, web and the house): any other `--corn-map-group-*` is a project layer's */
+const BUILTIN_GROUPS = new Set([...Object.keys(NODE_THEMES), 'cloud', 'web', 'house']);
+
+/** A project layer's group token: `--corn-map-group-<key>` with a key that passes the layer-key pattern and is not a starting group */
+export function projectGroupOf(name) {
+  const m = /^--corn-map-group-(.+)$/.exec(name);
+  return m && m[1].length <= MAX_KEY && LAYER_KEY_RE.test(m[1]) && !BUILTIN_GROUPS.has(m[1]) ? m[1] : null;
+}
+
+/** The kind and project-layer fill tokens a theme's stylesheets set (spec 0009 D6), sorted: what the contrast check reads besides the fixed list */
+export function mapExtraTokens(sheets) {
+  return [...declaredProps(sheets)].filter((n) => parseKindToken(n) || projectGroupOf(n)).sort();
 }
 
 /** The pairs under their minimum: { fails, unresolved } */

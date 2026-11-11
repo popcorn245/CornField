@@ -15,7 +15,7 @@ import { onThemeChange } from './theme.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
 import { layerShows } from './scene.js';
-import { getMapStyle, groupToken } from './map-style.js';
+import { getMapStyle, groupToken, setMapSubjects } from './map-style.js';
 import { t } from './strings.js';
 
 /** The dot of each starting row: the colour its nodes are drawn in (a project layer's dot is its nodes' own, or the theme's group token) */
@@ -182,7 +182,20 @@ function kindsHtml(layer, kinds) {
   return `<div class="hx-kinds"><button type="button" class="hx-textbtn hx-kinds-btn" data-action="toggle-layer-kinds" data-layer="${escHtml(layer.key)}" aria-expanded="${open}" aria-controls="${escHtml(id)}" data-corn="layer-kinds" data-corn-kind="quiet">${open ? '▾' : '▸'} ${escHtml(words)}</button>${list}</div>`;
 }
 
+/** The finer kinds and project layers on the map, so the theme's tokens for them are read (map-style.js `setMapSubjects`) */
+function syncMapSubjects() {
+  const seen = new Set();
+  const kinds = [];
+  state.nodes.forEach((n) => {
+    if (typeof n.kind !== 'string' || !n.kind) return;
+    const id = `${n.type}\u0000${n.kind}`;
+    if (!seen.has(id)) { seen.add(id); kinds.push([n.type, n.kind]); }
+  });
+  setMapSubjects({ kinds, layers: state.projectLayers.map((l) => l.key) });
+}
+
 export function renderLayerToggles() {
+  syncMapSubjects();
   paintCount();
   const container = document.getElementById('layer-toggles-container');
   if (!container) return;

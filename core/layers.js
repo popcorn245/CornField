@@ -76,6 +76,51 @@ const show = (v) => (typeof v === 'string' ? `"${v.length > 40 ? `${v.slice(0, 4
 const scalar = (v) => (typeof v === 'string' && v.length > 0 && v.length <= MAX_VALUE && !CONTROL.test(v)) || (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'boolean';
 
 // ---------------------------------------------------------------------------
+//  Names a theme can reach: the tokens and icon keys of a kind and of a project layer (D6)
+// ---------------------------------------------------------------------------
+
+/** A kind as it is written in a token name or an icon key: lower-case words and digits joined by "-", at most 32 characters. A kind that is anything else has no token of its own (it is still a kind) */
+export const KIND_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export const MAX_KIND_NAME = 32;
+const TYPE_SET = new Set(NODE_TYPES);
+
+/** `--corn-map-kind-<type>-<kind>`, or null when the type is not a node type or the kind cannot be a part of a name (types never hold a "-", so the name reads one way) */
+export const mapKindToken = (type, kind) => (TYPE_SET.has(type) && typeof kind === 'string' && kind.length <= MAX_KIND_NAME && KIND_NAME_RE.test(kind) ? `--corn-map-kind-${type}-${kind}` : null);
+/** `--corn-map-group-<key>` for a layer key that passes LAYER_KEY_RE, else null */
+export const mapGroupToken = (key) => (typeof key === 'string' && key.length <= MAX_KEY && LAYER_KEY_RE.test(key) ? `--corn-map-group-${key}` : null);
+/** Reads a kind token's name back: `{ type, kind }`, or null (the type is the part before the first "-") */
+export function parseKindToken(name) {
+  const m = /^--corn-map-kind-([a-z]+)-([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(String(name));
+  return m && TYPE_SET.has(m[1]) && m[2].length <= MAX_KIND_NAME ? { type: m[1], kind: m[2] } : null;
+}
+
+/**
+ * What a `theme.icons` key names: a node type (`"service"`), a finer kind of one (`"service:timer"`) or a project layer (`"layer:timers"`).
+ * Null when it is none of them. Whether the kind is on the map or the layer in the config is a warning, not a shape.
+ * @param {unknown} key
+ * @returns {{ type: string } | { type: string, kind: string } | { layer: string } | null}
+ */
+export function iconKeyShape(key) {
+  if (typeof key !== 'string') return null;
+  if (TYPE_SET.has(key)) return { type: key };
+  const i = key.indexOf(':');
+  if (i < 0) return null;
+  const head = key.slice(0, i);
+  const tail = key.slice(i + 1);
+  if (head === 'layer') return LAYER_KEY_RE.test(tail) && tail.length <= MAX_KEY ? { layer: tail } : null;
+  return TYPE_SET.has(head) && KIND_NAME_RE.test(tail) && tail.length <= MAX_KIND_NAME ? { type: head, kind: tail } : null;
+}
+
+/** The icon keys to try for a node, most specific first: its kind, its project layer, its type (D6) */
+export function iconKeysFor(type, kind, layer) {
+  const out = [];
+  if (typeof kind === 'string' && KIND_NAME_RE.test(kind) && kind.length <= MAX_KIND_NAME) out.push(`${type}:${kind}`);
+  if (layer) out.push(`layer:${layer}`);
+  out.push(type);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 //  Which layer a node is in
 // ---------------------------------------------------------------------------
 

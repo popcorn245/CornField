@@ -640,9 +640,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const flag = (name) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : undefined; };
   const out = flag('out');
   if (!out) {
-    console.error('Usage: node test/fixtures/big/make.js --out <dir> [--from <topology dir>] [--seed 245] [--theme retro]');
+    console.error('Usage: node test/fixtures/big/make.js --out <dir> [--from <topology dir>] [--seed 245] [--theme retro] [--layers]');
     process.exit(1);
   }
-  const made = writeBig(path.resolve(out), { seed: flag('seed') ? Number(flag('seed')) : SEED, theme: flag('theme') || null, from: flag('from') ? path.resolve(flag('from')) : null });
+  const made = writeBig(path.resolve(out), { seed: flag('seed') ? Number(flag('seed')) : SEED, theme: flag('theme') || null, layers: args.includes('--layers'), from: flag('from') ? path.resolve(flag('from')) : null });
   console.log(`Wrote ${made.topology.nodes.length} nodes, ${made.topology.edges.length} edges and ${made.proposals.length} proposals to ${path.resolve(out)}`);
 }

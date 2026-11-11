@@ -347,3 +347,23 @@ describe('a hostile config cannot reach markup, a style or a selector', () => {
     expect(state.projectLayers.map((l) => l.key)).toEqual(['jobs', 'outside-calls', 'data']);
   });
 });
+
+describe('the theme\'s kind and layer tokens are read for what is on the map', () => {
+  // @ts-expect-error plain JS modules, no declarations
+  const M = import('../../explorer/map-style.js');
+  it('reads --corn-map-kind-<type>-<kind> and --corn-map-group-<key> once the map and the config have that kind and layer', async () => {
+    const map = await M;
+    const style = document.createElement('style');
+    style.textContent = ':root { --corn-map-kind-service-timer: #123456; --corn-map-kind-service-hook: #654321; --corn-map-group-jobs: #0a0b0c; --corn-map-group-gone: #0d0e0f; }';
+    document.head.appendChild(style);
+    document.body.innerHTML = body;
+    Object.assign(state, { nodes: [node('root', 'root'), node('t', 'service', { kind: 'timer' })], edges: [], theme: 'dark', view: 'orbit', runsMap: null, proposal: null });
+    try {
+      setProjectLayers({ add: [{ key: 'jobs', label: 'Jobs', match: { kind: 'timer' } }] });
+      expect(map.getMapStyle().values['--corn-map-kind-service-timer']).toBe('#123456');
+      expect(map.getMapStyle().values['--corn-map-group-jobs']).toBe('#0a0b0c');
+      expect(map.getMapStyle().values['--corn-map-kind-service-hook']).toBeUndefined(); // no service of that kind on the map
+      expect(map.getMapStyle().values['--corn-map-group-gone']).toBeUndefined(); // no such layer in the config
+    } finally { style.remove(); map.resetMapStyle(); setProjectLayers(undefined); }
+  });
+});
