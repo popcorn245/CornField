@@ -14,6 +14,7 @@ Tab reaches the map after the header's controls. Its outline shows it has the fo
 | `N` or `]` | select the next node |
 | `P` or `[` | select the previous node |
 | `Home` and `End` | select the first and the last node |
+| `F` | with a node selected, frame it and what it lights (the same as "Frame them" in its panel); a click on the map never moves the camera, a selection from search, a list, a link or the keyboard does |
 | `Enter` | go to the selected node's panel |
 | `Escape` | close the panel |
 | `Alt` and an arrow | in Freeform, move the selected node (with Shift, further) |
@@ -25,7 +26,7 @@ Elsewhere:
 | Where | Keys |
 |---|---|
 | The search box | it reads names, ids, files, types and kinds. What it found is said ("33 matches", or "No match for …"), and shown as a count in the field and a list under it, grouped by type. `Enter` selects the best match and flies to it, `Enter` again the next, `Shift+Enter` the one before; `↓` goes into the list (`↑` and `↓` move through it, `Enter` chooses, `Escape` goes back to the field), and its first row, "Frame all", fits every match on the screen. With a search on, `N` and `P` on the map step through its matches. `Escape` closes the list, and again clears the search. Each step says "3 of 33: /sync/list, in Orders app" |
-| The node's panel | `Escape` closes it and gives the focus back to the map |
+| The node's panel | `Escape` closes it and gives the focus back to the map. A selection lights the node and what is one edge from it; its panel lists the lit lines by kind (a chip per kind lights that kind alone, and says how many lines) and has "Include its children's lines" for the wider set; each change is announced, and the focus stays on the control used |
 | The Layers and Proposals menus | `Escape` closes them, back on their button |
 | The Threads tab of that panel | a button in the panel's Show group; each thread is a row button that opens it, and a thread's messages are an ordered list named "Messages" with nothing to type into (replying is a link to the forge). **New idea** is a button that says it expands a labelled group (title, text, Open the idea, Cancel); its answer is a live status. A node's "Mentioned in" lists buttons that open the thread ([threads.md](threads.md)) |
 | The Runs tab of that panel | a button in the panel's Show group; the groups are headings, the two switches are checkboxes, and the "Agent" mark has its reason in words ([agents.md](agents.md)) |
