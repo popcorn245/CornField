@@ -15,6 +15,7 @@
 import { state, nameOf, escHtml } from './state.js';
 import { themed } from './theme-model.js';
 import { capped } from './capped.js';
+import { layersOf } from './layer-model.js';
 
 export const FLOW_STYLES = {
   outbox: { color: '#f59e0b', label: 'Outbox → API (writes)' },
@@ -132,7 +133,7 @@ export function buildDataFlow(nodes, edges) {
 export function renderFlowLegend() {
   const el = document.getElementById('flow-legend');
   if (!el) return;
-  const { activeLayers } = state;
+  const activeLayers = layersOf(state);
   if (activeLayers.flow === false && activeLayers.table === false) { el.innerHTML = ''; el.hidden = true; return; }
   el.hidden = false;
   const row = (swatch, text) => `<div class="hx-legend-row"><span class="hx-legend-swatch">${swatch}</span><span>${text}</span></div>`;

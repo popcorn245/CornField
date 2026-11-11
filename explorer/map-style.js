@@ -16,6 +16,8 @@
  *   --corn-map-font                           the font list of every label on the map (a list of families, `auto` for the map's own)
  *   --corn-map-edge-width                     the width of an ordinary line, in map px (`auto` keeps each line's own; the focus's and the marks' keep their proportion)
  *   --corn-map-label-min                      the smallest a label is drawn on screen, in px (11 by default; below 9px it is ignored; a hub's title is 2 more)
+ *   --corn-map-grey                           what a review greys (the nodes and lines a proposal does not involve) is drawn in: a colour, or `auto` for each one's own tone with its hue taken away
+ *   --corn-map-grey-alpha                     how much of a greyed node is left: a number from 0.1 to 1 (`auto` is 0.45); its lines are faded in the same proportion
  *   --corn-map-glow                           the soft glow round nodes, lines and packets: a factor (`0` none, `1` as drawn, `auto` as drawn)
  *
  * `auto` (the default of every one of them but the width and the collision) means "keep what the map draws without a theme": the
@@ -37,7 +39,7 @@ import { NODE_THEMES } from '../core/schema.js';
 import { parseColor } from './theme-model.js';
 import { cssColor, rgbaText } from './css-color.js';
 export { cssColor };
-import { LABEL_MIN_FLOOR, looksFor } from './scene.js';
+import { GREY_ALPHA, LABEL_MIN_FLOOR, looksFor } from './scene.js';
 import { iconKeyShape, iconKeysFor, mapFillNames, mapGroupToken, mapKindToken } from '../core/layers.js';
 
 /** The node kinds (topology types) and the groups (layers a node can belong to) the tokens exist for */
@@ -57,6 +59,10 @@ export const FONT_TOKEN = '--corn-map-font';
 export const EDGE_WIDTH_TOKEN = '--corn-map-edge-width';
 export const GLOW_TOKEN = '--corn-map-glow';
 export const LABEL_MIN_TOKEN = '--corn-map-label-min';
+export const GREY_TOKEN = '--corn-map-grey';
+export const GREY_ALPHA_TOKEN = '--corn-map-grey-alpha';
+/** The least a greyed node may be left at: under it the map would vanish (a value below is read as `auto`) */
+export const MIN_GREY_ALPHA = 0.1;
 /** The ink of a node's glyph and of a finer kind's letters (spec 0008 D8); `auto` is the white or the dark that reads on the node's fill (glyphs.js) */
 export const GLYPH_TOKEN = '--corn-map-glyph';
 /** The largest label minimum a theme may ask for: bigger text would leave no room for another label */
@@ -91,12 +97,13 @@ export const MAP_COLOR_TOKENS = Object.freeze([
   LABEL_TOKEN,
   LABEL_HALO_TOKEN,
   GLYPH_TOKEN,
+  GREY_TOKEN,
   ...MAP_EDGE_KINDS.map(edgeToken),
   ...MAP_MARKS.map(stateToken),
   ...MAP_STATES.map(stateToken),
 ]);
 /** Every map token */
-export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN];
+export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN, GREY_ALPHA_TOKEN];
 
 // ---------------------------------------------------------------------------
 //  Reading a token
@@ -161,6 +168,13 @@ function factorOf(value) {
   return Number.isFinite(n) && n >= 0 && n <= MAX_GLOW ? n : null;
 }
 
+/** The greyed node's opacity: a number from MIN_GREY_ALPHA to 1, or null for `auto` and anything else */
+function greyAlphaOf(value) {
+  const m = /^\s*(\d*\.?\d+)\s*$/.exec(String(value ?? ''));
+  const n = m ? parseFloat(m[1]) : NaN;
+  return Number.isFinite(n) && n >= MIN_GREY_ALPHA && n <= 1 ? n : null;
+}
+
 /**
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
@@ -182,6 +196,7 @@ export function readMapTokens(read, extra = []) {
     edgeWidth: pxOf(read(EDGE_WIDTH_TOKEN), MAX_EDGE_WIDTH),
     glow: factorOf(read(GLOW_TOKEN)),
     labelMin: labelMinOf(read(LABEL_MIN_TOKEN)),
+    greyAlpha: greyAlphaOf(read(GREY_ALPHA_TOKEN)),
   };
 }
 
@@ -251,12 +266,13 @@ export function createIconStore(urls, { load = loadImage, onChange = () => {}, w
  * @property {number | null} edgeWidth  an ordinary line's width in px (`--corn-map-edge-width`), null at `auto`
  * @property {number | null} glow   the glow factor (`--corn-map-glow`), null at `auto`
  * @property {number | null} labelMin  the smallest label size in px (`--corn-map-label-min`), null at `auto` or under 9px
+ * @property {number | null} greyAlpha  how much of a greyed node is left (`--corn-map-grey-alpha`), null at `auto` or when it is not a number from 0.1 to 1
  * @property {ReturnType<typeof createIconStore> | null} icons
  * @property {boolean} pixelated   sample icons without smoothing
  * @property {boolean} plain       nothing to apply: no colour set, no icon loaded (the scene is drawn as it is)
  */
 
-const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null };
+const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null };
 let tokens = NO_TOKENS;
 let icons = null;
 let pixelated = false;
@@ -265,8 +281,8 @@ let current = compose();
 const listeners = new Set();
 
 function compose() {
-  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null && tokens.labelMin === null;
-  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, labelMin: tokens.labelMin, icons, pixelated, plain });
+  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null && tokens.labelMin === null && tokens.greyAlpha === null;
+  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, labelMin: tokens.labelMin, greyAlpha: tokens.greyAlpha, icons, pixelated, plain });
 }
 
 function changed() {
@@ -421,8 +437,18 @@ function styleEdge(e, style, painted) {
   return shapeEdge(out, style);
 }
 
+/** A colour with its hue taken away: the grey of the same lightness, alpha kept. Both renderers read the same `rgb()` */
+export function greyOf(color) {
+  const [r, g, b, a] = parseColor(color);
+  const l = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+  return a >= 1 ? `rgb(${l}, ${l}, ${l})` : rgbaText(l, l, l, a);
+}
+
 function compute(scene, style) {
   const { values } = style;
+  const greyToken = values[GREY_TOKEN];
+  const fade = style.greyAlpha == null ? 1 : style.greyAlpha / GREY_ALPHA;
+  const toGrey = (c) => (greyToken ? withAlphaOf(greyToken, c) : greyOf(c));
   const label = values[LABEL_TOKEN];
   const stroke = values[STROKE_TOKEN];
   const painted = scene.painted || { nodes: new Set(), edges: new Set() };
@@ -431,16 +457,23 @@ function compute(scene, style) {
     const fill = !painted.nodes.has(n.id) && fillOf(values, n);
     const icon = style.icons ? iconKeysFor(n.type, n.kind, n.layer).find((k) => style.icons.get(k)) || null : null; // the same order: kind, layer, type
     const glows = style.glow != null && style.glow !== 1 && n.glow > 0;
-    if (!fill && !label && !stroke && !icon && !glows) return n;
+    const grey = !!n.greyed && !painted.nodes.has(n.id); // a review greys what the change does not involve; a colour a painter gave means something and stays
+    if (!fill && !label && !stroke && !icon && !glows && !grey) return n;
     const out = { ...n };
     if (glows) out.glow = n.glow * style.glow;
     if (fill) out.color = fill;
     if (label) out.labelColor = withAlphaOf(label, n.labelColor);
-    if (stroke && style.strokeWidth > 0) out.stroke = { color: stroke, width: style.strokeWidth };
-    if (icon) out.icon = icon;
+    if (stroke && style.strokeWidth > 0) out.stroke = { color: grey ? toGrey(stroke) : stroke, width: style.strokeWidth };
+    if (icon && !grey) out.icon = icon; // a picture has its own hues: a greyed node keeps its silhouette, glyph and letters
+    if (grey) { out.color = toGrey(out.color); out.alpha = Math.min(1, n.alpha * fade); }
     return out;
   });
-  const out = { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, style, painted.edges)) };
+  const edges = scene.edges.map((e) => {
+    const styled = styleEdge(e, style, painted.edges);
+    if (!e.greyed || painted.edges.has(e.key)) return styled;
+    return { ...styled, color: toGrey(styled.color), glowColor: null, alpha: Math.min(1, styled.alpha * fade) };
+  });
+  const out = { ...scene, nodes, edges };
   if (style.font) out.labelFont = style.font; // every label's font list (labels.js reads `scene.labelFont`)
   if (style.labelMin != null) out.labelMin = style.labelMin; // the smallest label on screen (labels.js reads `scene.labelMin`)
   const halo = values[LABEL_HALO_TOKEN];
@@ -460,7 +493,7 @@ const sceneMemo = new WeakMap();
  * @param {MapStyle} [style]
  */
 export function styledScene(scene, style = current) {
-  if (!style || style.plain) return scene;
+  if (!style || (style.plain && !scene.greying)) return scene; // a review's greying is applied even with no theme
   const hit = sceneMemo.get(scene);
   if (hit && hit.version === style.version) return hit.out;
   const out = compute(scene, style);

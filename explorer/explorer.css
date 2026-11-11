@@ -1498,3 +1498,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 /* (the waiting line's Answer is in the proposal bar too, so it is the bar's height; it is a strip's action elsewhere, at its own size) */
 :where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn, :where(.hx-header) .hx-live-chip { height: var(--hx-control); }
 /* ==== end of the panel head and control height ============================================================================================ */
+
+/* ---- The review narrows the map to the change (issue #232) ---- */
+/* A Layers row the review hid: its name with "hidden while reviewing" under it */
+.hx-toggle-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }

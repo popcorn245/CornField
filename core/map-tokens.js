@@ -1,7 +1,7 @@
 /**
  * @module core/map-tokens
  *
- * The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow` and `--corn-map-label-min`. The
+ * The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow`, `--corn-map-label-min` and `--corn-map-grey-alpha`. The
  * map reads each with the same parser (explorer/map-style.js `readMapTokens`), and one it cannot read is drawn as if it were `auto`; this
  * says so before the theme ships, as a warning naming the token, the theme, the level and what it may hold (docs/theming.md, The map).
  */
@@ -10,12 +10,13 @@ import { declaredProps, expand, projectGroupOf, resolveProps, themesToCheck } fr
 import { iconKeyShape, parseKindToken } from './layers.js';
 import { readColor } from './color.js';
 import { MAX_NODE_COLOR_CHARS } from '../explorer/css-color.js';
-import { EDGE_WIDTH_TOKEN, FONT_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN, MAX_EDGE_WIDTH, MAX_GLOW, MAX_LABEL_MIN, readMapTokens } from '../explorer/map-style.js';
+import { EDGE_WIDTH_TOKEN, FONT_TOKEN, GLOW_TOKEN, GREY_ALPHA_TOKEN, LABEL_MIN_TOKEN, MAX_EDGE_WIDTH, MAX_GLOW, MAX_LABEL_MIN, readMapTokens } from '../explorer/map-style.js';
 
 const WANTS = {
   [FONT_TOKEN]: ['font', 'a list of font families (quoted names or plain words, at most 8; no url(), and no punctuation but commas and quotes)'],
   [EDGE_WIDTH_TOKEN]: ['edgeWidth', `a width in px over 0 and at most ${MAX_EDGE_WIDTH}`],
   [GLOW_TOKEN]: ['glow', `a factor from 0 (no glow) to ${MAX_GLOW}`],
+  [GREY_ALPHA_TOKEN]: ['greyAlpha', 'a number from 0.1 to 1 (0.45 is the default; a greyed node under 0.1 would vanish)'],
   [LABEL_MIN_TOKEN]: ['labelMin', `a size in px from 9 to ${MAX_LABEL_MIN} (11px is the default and the least it draws at; under 9px is ignored)`],
 };
 

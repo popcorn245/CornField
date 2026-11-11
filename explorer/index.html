@@ -216,6 +216,8 @@
           </div>
           <div class="hx-proposal-tools">
             <!-- Shown only while there are what-if edits: off, the map is the proposal as written; the edits are kept and still go with a review (whatif.js) -->
+            <!-- The review narrows the map to the change; this puts the whole map back, as Diff always was (layers.js setWholeMap). Off at every opening -->
+            <button data-corn="whole-map" data-corn-kind="secondary" type="button" id="proposal-whole" class="hx-btn" data-action="proposal-whole" aria-pressed="false" data-peek-ok data-corn-string="showWholeMap">Show the whole map</button>
             <button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>
             <button data-corn-kind="secondary" type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
           </div>

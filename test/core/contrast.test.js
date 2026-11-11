@@ -282,6 +282,21 @@ describe('a brand theme resolves as a browser would', () => {
   });
 });
 
+describe('what a review greys (issue #232)', () => {
+  const grey = (css) => checkSheets([{ theme: 'standard', sheets: [tokens, css] }]).filter((f) => f.fg === '--corn-map-grey');
+  it('adds nothing at auto: the default greys are held by a test of the scene, and its labels by the dimmed-label pair above', () => {
+    expect(grey('')).toEqual([]);
+  });
+  it('reads a theme\'s grey as a colour, and holds it, at its faded strength, 1.5:1 from the ground in light and dark', () => {
+    const faint = grey(':root { --corn-map-grey: #0b1020; } :root[data-theme="light"] { --corn-map-grey: #f4f6fa; }');
+    expect(faint.length).toBeGreaterThan(0);
+    expect(faint.some((f) => f.ratio < f.min)).toBe(true);
+    const fine = grey(':root { --corn-map-grey: #94a3b8; --corn-map-grey-alpha: 0.6; }');
+    expect(fine.every((f) => f.ratio === undefined || f.ratio >= f.min || f.mode === 'light')).toBe(true);
+    expect(grey(':root { --corn-map-grey: notacolour; }').some((f) => f.problem)).toBe(true);
+  });
+});
+
 describe('the diff marks and dimmed labels on the map (F19, F23)', () => {
   const MAP = ['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-label'];
   const run = (...extra) => checkSheets([{ theme: 'standard', sheets: [tokens, ...extra] }]).filter((f) => MAP.includes(f.fg));

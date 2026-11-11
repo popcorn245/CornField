@@ -23,6 +23,7 @@ import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensure
 import { frameNodes, largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from './camera.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
+import { beginReview, endReview, renderLayerToggles, reviewLayersLine, setWholeMap } from './layers.js';
 import { edgePoint, looksFor } from './scene.js';
 import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
@@ -126,7 +127,7 @@ export async function openProposal(slug, source = null) {
     const sha256 = res.headers.get('X-Proposal-Sha256'); // the version on screen: a review names it, so a push since is refused, not approved unseen
     showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true, sha256 });
     // said once, here: a proposal opens on a person's asking, never on a background refresh
-    announce(reviewOpenedLine($('proposal-title').textContent));
+    announce([reviewOpenedLine($('proposal-title').textContent), reviewLayersLine()].filter(Boolean).join(' ')); // and, once, which layers the review hid
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
@@ -157,6 +158,7 @@ let openToken = 0;
  */
 export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true, sha256 = null } = {}) {
   state.proposal = proposal;
+  beginReview(); // the map narrows to the change: a review of its own, the viewer's layers untouched (layers.js, layer-model.js)
   state.proposalSlug = slug;
   state.proposalSource = source;
   state.proposalSha256 = typeof sha256 === 'string' && /^[0-9a-f]{64}$/.test(sha256) ? sha256 : null;
@@ -190,6 +192,7 @@ export function rebuildProposalMap(effective = hooks.effective ? hooks.effective
   }
   swapMap(applied.nodes, applied.edges);
   renderBar(); // first: the fit below leaves out what the bar covers, so the bar must be laid out
+  renderLayerToggles(); // the menu follows the layers the change touches
   if (fit) fitToChange();
   render();
   ensureFlowLoop();
@@ -204,6 +207,7 @@ export function closeProposal() {
   state.proposalSource = null;
   state.proposalSha256 = null;
   state.proposalErrors = [];
+  endReview(); // the viewer's own layers are what is drawn again, exactly as they were
   swapMap(state.baseNodes.map((n) => ({ ...n })), state.baseEdges);
   fitGraphToViewport(fitPadding());
   render();
@@ -385,6 +389,13 @@ export function renderBar() {
     const on = btn.dataset.view === state.proposalView;
     btn.setAttribute('aria-pressed', String(on));
     btn.classList.toggle('is-on', on);
+  }
+
+  const whole = $('proposal-whole'); // the switch is the review's: off at every opening, kept across Before, Diff and After
+  if (whole) { // the pressed look is the one the bar's other chosen buttons have (it holds on hover)
+    const on = !!(state.review && state.review.whole);
+    whole.setAttribute('aria-pressed', String(on));
+    whole.classList.toggle('hx-btn--active', on);
   }
 
   const errors = state.proposalErrors || [];
@@ -611,6 +622,7 @@ const ACTIONS = {
   'toggle-proposals-menu': () => toggleMenu(),
   'open-proposal': (el) => openProposal(el.dataset.slug, el.dataset.source || null),
   'close-proposal': () => closeProposal(),
+  'proposal-whole': () => { setWholeMap(!(state.review && state.review.whole)); renderBar(); }, // "Show the whole map": announced by layers.js, the focus stays on the switch
   'proposal-view': (el) => { setProposalView(el.dataset.view); toggleMode(false); },
   'toggle-proposal-mode': () => toggleMode(),
   'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),

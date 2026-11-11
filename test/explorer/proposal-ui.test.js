@@ -744,7 +744,7 @@ describe('what a screen reader is told (F18)', () => {
 
   it('says "Opened <title>: N changes" when a link has loaded it, once', async () => {
     await open();
-    expect(await said()).toBe('Opened Meals: 4 changes.');
+    expect(await said()).toMatch(/^Opened Meals: 4 changes\.( Showing \d+ of \d+ layers: the ones this proposal changes\.)?$/); // and once, which layers the review hid (issue #232)
   });
 
   it('says the view on a switch, and the same switch again says nothing new', async () => {

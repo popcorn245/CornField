@@ -26,6 +26,13 @@ export const markOpacity = (mark) => EDGE_MIN_ALPHA * (mark === 'removed' || mar
 /** The opacity of the label of a node a diff dims (the node itself is at PROPOSAL_DIM_ALPHA) */
 export const DIFF_LABEL_ALPHA = 0.6;
 
+/**
+ * How much of a node a review greys (issue #232) is left (`--corn-map-grey-alpha: auto`), and the least a greyed disc may differ from the ground it sits on
+ * (core/contrast.js checks a theme's `--corn-map-grey` against it): faded, but the map still reads as a map. Its label is at DIFF_LABEL_ALPHA like any dimmed one.
+ */
+export const GREY_ALPHA = 0.45;
+export const GREY_MIN_RATIO = 1.5;
+
 /** How a mark differs without colour: the ring's dash (`null` is solid) and whether it is struck through. Four marks, four styles. */
 export const MARK_SHAPES = Object.freeze({
   added: Object.freeze({ ringDash: Object.freeze([5, 4]), edgeDash: Object.freeze([7, 5]), strike: false }), // a dashed ring

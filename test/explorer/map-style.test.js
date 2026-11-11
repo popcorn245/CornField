@@ -57,8 +57,8 @@ describe('the tokens', () => {
     expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
     expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
-    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 4 + 1);
-    expect(M.mapTokenNames()).toHaveLength(67); // 63 colours, widths and marks (the glyph ink among them), and the font, the edge width, the glow and the smallest label
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 4 + 1 + 2);
+    expect(M.mapTokenNames()).toHaveLength(69); // 64 colours, widths and marks (the glyph ink and the review's grey among them), and the font, the edge width, the glow, the smallest label and the grey's opacity
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -88,7 +88,7 @@ describe('the tokens', () => {
 
   it('reads only the colour tokens that are set, and the width as a length', () => {
     const got = M.readMapTokens(reader({ '--corn-map-node-app': '#112233', '--corn-map-node-page': 'auto', '--corn-map-edge-flow': 'oops', '--corn-map-stroke-width': '3px' }));
-    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null, labelMin: null });
+    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null });
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': 'wide' })).strokeWidth).toBe(M.DEFAULT_STROKE_WIDTH);
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': '0' })).strokeWidth).toBe(0);
   });
