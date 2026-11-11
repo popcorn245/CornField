@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX } from '../../explorer/camera.js';
+import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX, ZOOM_FLOOR, panIntoView } from '../../explorer/camera.js';
 
 
 const toWorld = (c     , sx        , sy        ) => ({ x: (sx - c.x) / c.zoom, y: (sy - c.y) / c.zoom });
@@ -73,5 +73,48 @@ describe('pinchCamera', () => {
     expect(viaPinch.x).toBeCloseTo(viaZoom.x, 8);
     expect(viaPinch.y).toBeCloseTo(viaZoom.y, 8);
     expect(viaPinch.zoom).toBeCloseTo(viaZoom.zoom, 8);
+  });
+});
+
+describe('the zoom floor of a big map (F22)', () => {
+  it('goes as low as the map needs, never above the default floor, never below the absolute one', () => {
+    expect(clampZoom(0.01, 0.04)).toBe(0.04);
+    expect(clampZoom(0.5, 0.04)).toBe(0.5);
+    expect(clampZoom(0.1, 0.9)).toBe(ZOOM_MIN); // a small map keeps the default
+    expect(clampZoom(0.0001, 0.00001)).toBe(ZOOM_FLOOR);
+  });
+
+  it('zooms out to the map\'s floor by wheel and by pinch', () => {
+    const cam = { x: 0, y: 0, zoom: 1 };
+    let z = cam;
+    for (let i = 0; i < 80; i++) z = zoomAbout(z, 0.88, 100, 100, 0.04);
+    expect(z.zoom).toBeCloseTo(0.04, 10);
+    expect(pinchCamera(pinchStart(cam, 400, { x: 0, y: 0 }), 4, { x: 0, y: 0 }, 0.04).zoom).toBeCloseTo(0.04, 10);
+  });
+
+  it('never zooms in when asked to zoom out, even from below the floor', () => {
+    expect(zoomAbout({ x: 0, y: 0, zoom: 0.03 }, 0.88, 10, 10, 0.05).zoom).toBeLessThanOrEqual(0.03);
+    expect(zoomAbout({ x: 0, y: 0, zoom: 0.03 }, 1.12, 10, 10, 0.05).zoom).toBeGreaterThanOrEqual(0.05);
+  });
+});
+
+describe('panIntoView: a node under the phone\'s sheet (F32)', () => {
+  const box = { left: 0, top: 0, right: 390, bottom: 338 }; // the part of the map the expanded sheet leaves
+  it('leaves the camera alone when the point is in the box', () => {
+    expect(panIntoView({ x: 100, y: 100, zoom: 1 }, { x: 50, y: 50 }, box, 20)).toBeNull();
+  });
+  it('puts a point under the sheet in the middle of the part still showing, without zooming', () => {
+    const cam = { x: 195, y: 446, zoom: 0.5 }; // the node at world (0, 0) is at y 446: under the sheet
+    const next = panIntoView(cam, { x: 0, y: 0 }, box, 20);
+    expect(next).not.toBeNull();
+    expect(next.zoom).toBe(0.5);
+    expect(next.x).toBe(195); // x was fine
+    expect(next.y).toBeCloseTo(169, 6); // the middle of 0..338
+    expect(next.y + 0 * next.zoom).toBeLessThanOrEqual(box.bottom);
+  });
+  it('also pans sideways for a point off the side', () => {
+    const next = panIntoView({ x: -50, y: 100, zoom: 1 }, { x: 0, y: 0 }, box, 20);
+    expect(next.x).toBe(195);
+    expect(next.y).toBe(100);
   });
 });
