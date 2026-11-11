@@ -33,7 +33,9 @@ let version = 0;
 
 /** Hands the tool its checker (main.js, from the plugin); none means every checked step reads "Not checked" */
 export function initChecks(opts = {}) {
-  checker = opts.checker || null;
+  const next = opts.checker || null;
+  if (next !== checker) closeChecks(); // answers asked of another checker are not this one's
+  checker = next;
 }
 
 /** Changes whenever a verdict may have: scenario-ui.js puts it in the player's signature, so an answer redraws the step */

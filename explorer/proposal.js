@@ -348,7 +348,7 @@ export function renderBar() {
   bar.hidden = !open;
   const legend = $('proposal-legend');
   if (legend) legend.hidden = !open;
-  if (!open) { closeMore(); toggleMode(false); collapseSheet('proposal'); if (hooks.bar) hooks.bar(false); return; }
+  if (!open) { closeMore(); toggleMode(false); collapseSheet('proposal'); renderReviewColumn(); if (hooks.bar) hooks.bar(false); return; }
 
   bar.classList.remove('is-error');
   $('proposal-message').hidden = true;

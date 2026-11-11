@@ -23,7 +23,7 @@ import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initReview, resetReviewForTests } from '../../explorer/review.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initSheets, visibleMapRect, expandedSheet } from '../../explorer/sheets.js';
+import { initSheets, visibleMapRect, expandedSheet, expandSheet } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initChecks } from '../../explorer/check.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -107,15 +107,14 @@ describe('on screen the moment a proposal opens (D1)', () => {
     expect($('proposal-play')).toBeNull();
     expect(q('#rc-changes').getAttribute('data-corn')).toBe('change-list');
     expect(q('#rc-scenarios').getAttribute('data-corn')).toBe('scenario-list');
-    expect(q('#rc-changes h3').textContent.replace(/\s+/g, ' ')).toBe('Changes · , 4');
+    expect(q('#rc-changes h3').textContent.replace(/\s+/g, ' ')).toBe('Changes · , 3');
     expect(q('#rc-scenarios h3').textContent.replace(/\s+/g, ' ')).toBe('Personas and scenarios · , 3');
-    expect(qa('#rc-changes li button')).toHaveLength(4);
+    expect(qa('#rc-changes li button')).toHaveLength(3);
     expect(qa('.hx-sc-row').map((b) => b.querySelector('.hx-sc-title') .textContent)).toEqual(['An adult plans a meal', 'A guest asks, an admin answers', 'A guest asks, an admin answers', 'The old page goes']);
   });
 
   it('closes with the proposal', () => {
     open();
-    state.proposal = null;
     document.querySelector('[data-action="close-proposal"]') .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect($('review-column').hidden).toBe(true);
   });
@@ -162,7 +161,7 @@ describe('a scenario reads as a list of steps (D4)', () => {
     open();
     const row = qa('.hx-sc-row')[0];
     expect(row.getAttribute('aria-expanded')).toBe('false');
-    expect(row.querySelector('.hx-sc-meta') .textContent).toBe('2 steps · walks 3 of 5 changes');
+    expect(row.querySelector('.hx-sc-meta') .textContent).toBe('2 steps · walks 2 of 3 changes');
     click(row);
     const again = qa('.hx-sc-row')[0];
     expect(again.getAttribute('aria-expanded')).toBe('true');
@@ -171,8 +170,8 @@ describe('a scenario reads as a list of steps (D4)', () => {
     expect(list.getAttribute('data-corn')).toBe('step-list');
     const steps = [...list.querySelectorAll('[data-corn="step"]')];
     expect(steps.map((s) => s.getAttribute('aria-label'))).toEqual([
-      'Step 1 of 2, as Adult: /meals, Added. The page opens.',
-      'Step 2 of 2, as Adult: /meals → table-t, Added. The row is stored.',
+      'Step 1 of 2, as Adult: /meals, Added. The page opens. Not checked: nothing in this step to ask.',
+      'Step 2 of 2, as Adult: /meals → table-t, Added. The row is stored. Checking…',
     ]);
     expect(steps[0].textContent).toContain('As Adult');
   });
@@ -189,13 +188,16 @@ describe('a scenario reads as a list of steps (D4)', () => {
     expect(labels[1]).toContain('as Admin');
   });
 
-  it('shows no verdict words for a step nobody acts, and not checked words when there is no checker', () => {
+  it('shows no verdict words for a step nobody acts, and not checked words when there is no checker', async () => {
     open();
     click(qa('.hx-sc-row')[3]);
     expect(q('[data-corn="step"]') .getAttribute('aria-label')).toBe('Step 1 of 1: page-old, Removed. It is removed.');
+    expect(q('[data-corn="state-pill"]')).toBeNull();
     click(qa('.hx-sc-row')[3]);
     click(qa('.hx-sc-row')[0]);
-    expect(qa('[data-corn="state-pill"]').map((p) => p.textContent)).toEqual(['Not checked: nothing in this step to ask', 'Not checked: nothing in this step to ask']);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(qa('[data-corn="state-pill"]').map((p) => p.textContent)).toEqual(['Not checked: nothing in this step to ask', 'Not checked: the checker did not answer (no permission checker)']);
     expect(qa('[data-corn="state-pill"]').every((p) => !p.hasAttribute('data-corn-state'))).toBe(true); // not checked: no state, the words carry it
   });
 
@@ -211,7 +213,7 @@ describe('a scenario reads as a list of steps (D4)', () => {
     const pills = qa('[data-corn="state-pill"]');
     expect(pills.map((p) => p.textContent)).toEqual(['Allowed', 'Refused: Only admins.']);
     expect(pills.map((p) => p.getAttribute('data-corn-state'))).toEqual(['success', 'failure']);
-    expect(qa('.hx-sc-meta')[0].textContent).toBe('2 steps · walks 1 of 5 changes · 1 allowed · 1 refused');
+    expect(qa('.hx-sc-meta')[0].textContent).toBe('2 steps · walks 1 of 3 changes · 1 allowed · 1 refused');
     // opening nothing else asks nothing more; folding and opening it again asks again (a checker may be a live API)
     expect(calls).toHaveLength(1);
   });
@@ -292,12 +294,13 @@ describe('on a phone (D1)', () => {
     open();
     expect($('review-column').parentElement .id).toBe('proposal-body');
     const tabs = qa('[role="tab"]');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Changes · 4', 'Scenarios · 3']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['Changes · 3', 'Scenarios · 3']);
     expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true']);
     expect($('rc-changes').hidden).toBe(true);
     expect($('rc-scenarios').hidden).toBe(false);
     expect($('rc-scenarios').getAttribute('role')).toBe('tabpanel');
     expect(q('[role="tablist"]') .getAttribute('data-corn')).toBe('tabs');
+    expandSheet('proposal'); // a tap on a peek only expands it
     click(tabs[0]);
     expect($('rc-changes').hidden).toBe(false);
     expect(localStorage.getItem('cornfield.reviewTab')).toBe('changes');
@@ -309,9 +312,9 @@ describe('on a phone (D1)', () => {
   it('opens on Changes for a proposal with no scenarios, and the peek reads the counts', () => {
     open(robot({ scenarios: undefined }));
     expect(qa('[role="tab"]')[0].getAttribute('aria-selected')).toBe('true');
-    expect($('proposal-peek').textContent).toBe('4 changes');
+    expect($('proposal-peek').textContent).toBe('3 changes');
     open();
-    expect($('proposal-peek').textContent).toBe('4 changes · 3 scenarios for 3 personas');
+    expect($('proposal-peek').textContent).toBe('3 changes · 3 scenarios for 3 personas');
   });
 
   it('moves between the tabs with the arrow keys', () => {
@@ -325,6 +328,7 @@ describe('on a phone (D1)', () => {
   it('the decision is the foot of the sheet, and the scenario player folds the sheet; closing it opens the sheet on the step again', () => {
     open();
     expect($('review-decision').closest('#proposal-body')).not.toBeNull();
+    expandSheet('proposal');
     click(qa('.hx-sc-row')[0]);
     click(qa('[data-corn="step"]')[0]);
     expect(expandedSheet()).not.toBe('proposal');
