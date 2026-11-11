@@ -243,13 +243,14 @@ describe('the seven run states differ without colour (F34)', () => {
     const ctx = { esc: (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`), safeUrl: () => null, forgeName: 'GitHub', forgeType: 'github', repoUrl: null, now: NOW, nodes: [], selected: null, timelines: new Set(), replies: new Map(), busy: false };
     host.innerHTML = runsHtml(ctx, SEVEN);
     const pills = [...host.querySelectorAll('.hx-run-head [data-corn="state-pill"]')];
-    expect(pills.map((p) => p.dataset.cornState)).toEqual(['requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped']);
+    // in the Runs list's groups (spec 0010 D6): Needs you, then In motion, then Finished
+    expect(pills.map((p) => p.dataset.cornState)).toEqual(['waiting', 'requested', 'claimed', 'working', 'done', 'failed', 'stopped']);
     expect(new Set(pills.map((p) => p.dataset.cornState)).size).toBe(7);
-    expect(pills.map((p) => p.textContent.trim())).toEqual(['Requested', 'Claimed', 'Working', 'Waiting', 'Done', 'Failed', 'Stopped']); // a word always
+    expect(pills.map((p) => p.textContent.trim())).toEqual(['Waiting', 'Requested', 'Claimed', 'Working', 'Done', 'Failed', 'Stopped']); // a word always
     const shapes = pills.map((p) => p.querySelector('[data-corn="state-icon"]').innerHTML);
     expect(new Set(shapes).size).toBe(7); // a distinct icon each
     for (const p of pills) expect(p.querySelector('svg').getAttribute('aria-hidden')).toBe('true');
-    expect(pills.map((p) => p.className.match(/hx-forge-state--(\w+)/)[1])).toEqual(['requested', 'claimed', 'working', 'waiting', 'done', 'failed', 'stopped']);
+    expect(pills.map((p) => p.className.match(/hx-forge-state--(\w+)/)[1])).toEqual(['waiting', 'requested', 'claimed', 'working', 'done', 'failed', 'stopped']);
     // the card carries the same state as its pill
     expect([...host.querySelectorAll('[data-corn="run"]')].map((c) => c.dataset.cornState)).toEqual(pills.map((p) => p.dataset.cornState));
   });
@@ -323,9 +324,10 @@ describe('one row for each proposal (F36)', () => {
     openForge();
     await settle();
     const rows = qa('#forge-list > li');
-    expect(rows).toHaveLength(3);
-    expect(q('[data-forge-kind="specs"] .hx-forge-count').textContent).toBe('3');
-    expect($('forge-status').textContent).toMatch(/^3 proposals/);
+    expect(rows).toHaveLength(3); // one group each: To decide, With the agent, Drafts
+    expect(qa('#forge-list .hx-forge-item')).toHaveLength(3); // one row for each proposal
+    expect(q('[data-forge-kind="specs"] .hx-forge-count').textContent).toBe('1'); // what waits on you; the total is in the status
+    expect($('forge-status').textContent).toMatch(/^1 to decide · 3 proposals/);
     expect(rows[0].textContent).toContain('PR #21, and a copy in the checkout');
   });
 });

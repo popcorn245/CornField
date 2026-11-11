@@ -166,6 +166,8 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(commits.map((c) => c.sha)).toEqual([`c1${'0'.repeat(38)}`, `c2${'0'.repeat(38)}`]);
       expect(commits[0].message).toBe('Add the meals page');
       expect(commits[1].message).toBe('Wire it up\n\nCornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF');
+      // when it was committed (spec 0010: a send-back stands until a commit after it): the committer's date, else the author's
+      expect(commits.map((c) => c.date)).toEqual(['2026-10-17T09:30:00Z', '2026-10-17T09:40:00Z']);
     });
 
     it('comments(): oldest first, with their text as written', async () => {

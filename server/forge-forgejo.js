@@ -83,7 +83,7 @@ const toFile = (f) => ({ path: f.filename, status: FILE_STATUS[f.status] || 'mod
 
 /** @returns {import('./forge.js').Comment} */
 /** @returns {import('./forge.js').PullCommit} */
-const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '' });
+const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '', date: c.commit?.committer?.date ?? c.commit?.author?.date ?? null });
 
 const toComment = (c) => ({ id: String(c.id), author: author(c.user), body: c.body ?? '', url: c.html_url, createdAt: c.created_at, updatedAt: c.updated_at });
 

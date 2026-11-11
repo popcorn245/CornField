@@ -130,6 +130,8 @@
       <button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
         <span data-corn-string="issuesAndPrs">Work</span>
         <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
+        <!-- What waits on you (explorer/waiting-model.js): specs to decide plus runs that need an answer; hidden at 0 and for anyone not signed in -->
+        <span id="forge-btn-waiting" class="hx-waiting-badge" data-corn="waiting-badge" aria-hidden="true" hidden></span>
       </button>
 
       <!-- The one account menu (explorer/account-menu.js): who, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it -->
@@ -269,6 +271,10 @@
         <div id="forge-bar" class="hx-forge-bar">
           <p id="forge-status" class="hx-forge-status hx-faint"></p>
           <button data-corn="filter-chip" type="button" id="forge-filter-chip" class="hx-forge-chip" data-action="toggle-filters" aria-expanded="false" aria-controls="forge-filter-box" hidden>Filter<span class="hx-forge-count" data-corn="count" hidden></span></button>
+        </div>
+        <!-- The Specs tab's one search field (spec 0010 D5): titles, slugs and summaries, as you type -->
+        <div id="forge-specs-search" class="hx-forge-specsearch" data-corn="specs-search" hidden>
+          <label class="hx-forge-field hx-forge-field--text" data-corn="field">Find a spec<input data-corn="control" type="search" id="specs-search" class="hx-forge-input" placeholder="Title, name, summary" autocomplete="off" /></label>
         </div>
         <div id="forge-filter-box" class="hx-forge-controls" data-corn="filters" hidden>
           <div id="forge-work-filters" class="hx-forge-work-filters" hidden>

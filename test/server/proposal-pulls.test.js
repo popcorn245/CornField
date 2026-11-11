@@ -36,7 +36,12 @@ describe('proposals from spec PRs', () => {
   let port;
   /** What forgeFor does in the next request: gives the forge, or throws */
   let forgeFor;
-  const routes = () => recordings('github-spec-prs');
+  // The review state asks each ready PR's comments and head commit (spec 0010); the recordings hold none, so these say there are none
+  const routes = () => ({
+    ...recordings('github-spec-prs'),
+    'GET /repos/owner/name/issues/23/comments?per_page=100': { body: [] },
+    'GET /repos/owner/name/pulls/23/commits?per_page=100': { body: [{ sha: SHA_MEALS, commit: { message: 'Meals', committer: { date: '2026-10-01T10:00:00Z' } } }] },
+  });
 
   const put = (where, name, text) => {
     const dir = path.join(root, where, 'docs/specs/proposals');
@@ -80,6 +85,13 @@ describe('proposals from spec PRs', () => {
   });
   const filesAsked = () => fake.requests.filter((r) => /\/pulls\/\d+\/files/.test(r.url)).map((r) => r.url);
 
+  it('carries each ready PR\'s review state and the push it waits on, and reads none for a draft PR (spec 0010)', async () => {
+    const { json: list } = await get('/proposals');
+    expect(list.find((e) => e.source === 'pull/23')).toMatchObject({ review: null, pull: { pushedAt: '2026-10-01T10:00:00Z' } });
+    expect(list.find((e) => e.source === 'pull/20')).toMatchObject({ review: null, pull: { draft: true, pushedAt: null } });
+    expect(fake.requests.some((r) => /\/issues\/20\/comments|\/pulls\/20\/commits/.test(r.url))).toBe(false);
+  });
+
   it('lists the open PRs that touch the proposals folder, with the checkout and the worktrees, and names the PR', async () => {
     const { status, json: list, headers } = await get('/proposals');
     expect(status).toBe(200);
@@ -89,7 +101,7 @@ describe('proposals from spec PRs', () => {
     ]);
     const meals = list.find((e) => e.source === 'pull/23');
     expect(meals).toMatchObject({ title: 'Meals', summary: 'Adds /meals.', spec: '0013', counts: { added: 1 }, errors: 0, review: null });
-    expect(meals.pull).toEqual({ number: 23, title: 'Meals proposal', url: 'https://github.example.com/owner/name/pull/23', draft: false, author: 'agent-four' });
+    expect(meals.pull).toMatchObject({ number: 23, title: 'Meals proposal', url: 'https://github.example.com/owner/name/pull/23', draft: false, author: 'agent-four' });
     expect(list.find((e) => e.slug === '0014-planner').pull).toMatchObject({ number: 20, draft: true });
     expect(list.find((e) => e.source === 'checkout')).not.toHaveProperty('pull');
   });
@@ -268,7 +280,7 @@ describe('what a menu open costs', () => {
   it('asks the forge for the open PRs only, once their heads were read; a PR pushed to is read again at its new head', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-pulls-cache-'));
     fs.writeFileSync(path.join(root, 'topology.json'), JSON.stringify(topology));
-    const answers = recordings('github-spec-prs');
+    const answers = { ...recordings('github-spec-prs'), 'GET /repos/owner/name/issues/23/comments?per_page=100': { body: [] }, 'GET /repos/owner/name/pulls/23/commits?per_page=100': { body: [{ sha: SHA_MEALS, commit: { message: 'Meals', committer: { date: '2026-10-01T10:00:00Z' } } }] } };
     const fake = await fakeForge(answers);
     const where = whereOf(root); // one server, one where: the cache is its own
     const forgeFor = () => createForge({ type: 'github', url: 'https://github.com', repo: 'owner/name' }, { token: TOKEN, apiUrl: fake.url });
@@ -293,7 +305,8 @@ describe('what a menu open costs', () => {
       answers[`GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=${moved}`] = answers[`GET /repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=${SHA_MEALS}`];
       fake.requests.length = 0;
       await list();
-      expect(askedFor().sort()).toEqual(['/repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=' + moved, '/repos/owner/name/pulls/23/files?per_page=100']);
+      // (its comments and commits are asked again too: the review state is read at the new head, spec 0010)
+      expect(askedFor().sort()).toEqual(['/repos/owner/name/contents/docs/specs/proposals/0013-meals.json?ref=' + moved, '/repos/owner/name/issues/23/comments?per_page=100', '/repos/owner/name/pulls/23/commits?per_page=100', '/repos/owner/name/pulls/23/files?per_page=100']);
     } finally {
       await new Promise((resolve) => server.close(() => resolve(undefined)));
       await fake.close();

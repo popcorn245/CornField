@@ -415,12 +415,15 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`, and so is a proposal only in a checkout or a worktree, the Specs tab's "Local") | `state-pill`, `proposal-source` |
-| `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`) | `run`, `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`, and so is a proposal only in a checkout or a worktree; on the Specs tab, "Local" and "Draft PR") | `state-pill`, `proposal-source`, `review-state` |
+| `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`). `waiting` is also a spec that waits on your decision (the Specs tab's "To decide" and "Changed since approved") and the proposal bar's `waiting-line` | `run`, `state-pill`, `review-state`, `waiting-line` |
 | `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped (a run asked to stop is `stopped` too); a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
 | `queued`, `running` | a check or deploy that has not started, and one under way (a run is never either: it has the four above) | `state-pill` |
-| `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem; what an action came to; a sign-in page about a problem (`failure`); the live chip: fresh (`success`), unavailable (`failure`) | `state-pill`, `notice`, `message`, `result`, `auth-card`, `live-chip` |
+| `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem; what an action came to; a sign-in page about a problem (`failure`); the live chip: fresh (`success`), unavailable (`failure`); a spec approved at its current version (`success`) and a review that could not be read (`failure`) on the Specs tab | `state-pill`, `notice`, `message`, `result`, `auth-card`, `live-chip`, `review-state` |
+| `sent-back` | a spec a maintainer sent back and nobody has pushed to since: it waits on the agent, not on you. The Specs tab's "Sent back" pill. (A spec to decide, or one changed since it was approved, is `waiting`; an approved one is `success`; a draft PR and a local copy are `draft`; a review that could not be read is `failure`.) | `review-state` |
 | `added`, `changed`, `removed`, `edit` | what a proposal does to a node, an edge or a file: the four marks of the diff (the same four as the map's rings and `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit`). `edit` is your own what-if edit, whether it adds or removes. Not a status: a deploy that restarts a node is `changed` | `diff-pill`, `diff-block`, `mark-dot` |
+
+**Changed for a theme that styles the Work panel's Specs and Runs (spec 0010).** A Specs row's pill is now `[data-corn="review-state"]`, no longer `state-pill`, and says its review state in words (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, Review state unknown) instead of Open, Draft and Local; a rule on a Specs row's `state-pill` becomes one on `review-state`. The list is in groups (`spec-group`), the Runs list is in groups too (`run-group` headings; the run cards are the same), a tab's count becomes a `waiting-badge` while something waits on you, the Work button carries one (`waiting-badge`, hidden at 0), and the browser tab's title starts "(3) " while three things wait. The `data-corn-state` value `sent-back` is new. On a phone a sheet's `data-sheet-state` can now be `stub`, Work opens as a peek (it used to open expanded), and the node panel and Work take turns.
 
 A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-pill` never says `changed`, which is the diff mark's. `failed` is only ever a run; `failure` is only ever a result. The live chip is also `waiting` (its answer is a while old, "as of 6 min ago"), `stopped` (the layer is off or not set up) or `running` (loading, and before its first answer, while the chip is still hidden).
 
@@ -466,6 +469,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
 | `dock`, `sheet-handle`, `sheet-grip`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle and the bar drawn in it, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
+| `sheet-stub` | on a phone, the one 44px row a sheet folds to while the other sheet is expanded: its title, and its badge (a `waiting-badge`, on Work). A button: a tap expands it and folds the other. The sheet's `data-sheet-state` is `peek`, `expanded` or `stub`; at most two sheets are open (the review, and Work or the node panel), only one is expanded, and the map keeps 35% of the screen (`--hx-sheet-cap` is written on the dock, in px) |
 | `house-chip`, `house-more` | in the House view's bar: a floor, a person, Software or Cloud (the one that is on has `aria-pressed="true"`; Edit plan is one too), and a room's "+3 more" |
 | `hint`, `hint-icon`, `loading`, `error` | the hint at the map's corner and its icon (an SVG, so `[data-corn="hint-icon"]` can be hidden or given another picture), the loading line, the load-error box |
 
@@ -478,6 +482,10 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `diff-block` | the key / value rows of the node panel's "In this proposal" (`data-corn-state` as for the pill) |
 | `more` | the capped list's "and 15 more" button (`data-corn-kind="quiet"`, `aria-expanded`) |
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
+| `waiting-badge` | the one number of what waits on you (specs to decide plus runs that need an answer), as a filled badge: on the Work button ("Work 3", spoken "Work, 3 waiting on you"; hidden at 0) and on the Specs and Runs tabs (their share; a tab with nothing waiting shows its plain total, a `count`). A tab's count span changes from `count` to `waiting-badge` and back. Takes `--corn-run-waiting` and `--corn-run-waiting-ink` |
+| `spec-group`, `review-state`, `specs-search` | on the Specs tab: a group of rows with its heading (`data-group` is `decide`, `agent`, `approved` or `drafts`: To decide, With the agent, Approved, Drafts; Drafts fold behind their heading past ten rows); a row's pill that says its review state in words (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, Review state unknown; its `data-corn-state` is `waiting`, `sent-back`, `success`, `draft` or `failure`); the search field above the list |
+| `waiting-line` | in the proposal bar, under the buttons, when a run is waiting on the open proposal: "A run is waiting on you: Plan ready: approve to build, … · Answer" (`data-corn-state="waiting"`; the runner's words are cut to 90 characters; Answer is a `secondary` button that opens Work on Runs at that run with its reply field focused) |
+| `run-group` | a heading of the Runs list (`data-group` is `needs`, `motion` or `finished`: Needs you, In motion, Finished). It is an item of the flat list, so a run's card is never moved into a section |
 | `work-head`, `work-title`, `work-foot` | in the Work panel: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
 | `filter-chip`, `filters`, `check-field` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only"; the box itself is a `control`) |
 | `back`, `detail-title` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
@@ -560,7 +568,7 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 
 **The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
-Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
+Only labels a brand would want to voice are keys (about fifty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
 <!-- strings:start -->
 | Key | Default |
@@ -590,6 +598,15 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `tabThreads` | Threads |
 | `tabRuns` | Runs |
 | `tabDeploys` | Deploys |
+| `waitingOnYou` | waiting on you |
+| `toDecide` | To decide |
+| `withAgent` | With the agent |
+| `approvedGroup` | Approved |
+| `drafts` | Drafts |
+| `needsYou` | Needs you |
+| `inMotion` | In motion |
+| `finished` | Finished |
+| `answer` | Answer |
 | `newIdea` | New idea |
 | `landIt` | Land it |
 | `startAgent` | Start an agent |

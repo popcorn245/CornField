@@ -296,7 +296,7 @@ describe('the runs on the Agents tab', () => {
     await openAgents();
     expect(q('#forge-runs').hidden).toBe(false);
     expect($('forge-runs-status').textContent).toBe('1 open of 3 allowed, 2 runs');
-    const rows = qa('#forge-runs-list > li');
+    const rows = qa('#forge-runs-list > li[data-run], #forge-runs-list > li.hx-run-group');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('Working');
     expect(rows[0].textContent).toContain('code on issue #7');
@@ -343,7 +343,7 @@ describe('the runs on the Agents tab', () => {
     // the result is in the run's own card, by the control that was used, not at the top of a list that may be scrolled away
     expect(q(`[data-run-result="${RUN.runId}"]`).textContent).toMatch(/^Asked this run to stop\. The runner decides/);
     expect(q(`[data-run="${RUN.runId}"]`).contains(q(`[data-run-result="${RUN.runId}"]`))).toBe(true);
-    expect(qa('#forge-runs-list > li')[0].textContent).toContain('Stop requested');
+    expect(qa('#forge-runs-list > li[data-run], #forge-runs-list > li.hx-run-group')[0].textContent).toContain('Stop requested');
     expect(q('[data-forge-stop]')).toBe(null);
     expect(await said()).toMatch(/to stop/);
   });
@@ -373,7 +373,7 @@ describe('a run that waits for an answer (issue #101)', () => {
     fakeServer(waiting());
     mount();
     await openAgents();
-    const row = q('#forge-runs-list > li');
+    const row = q('#forge-runs-list > li[data-run]');
     expect(row.textContent).toContain('Waiting');
     expect(row.textContent).toContain('Runner: Plan ready <b>approve</b> to build');
     expect(row.querySelector('b')).toBe(null);
@@ -396,7 +396,7 @@ describe('a run that waits for an answer (issue #101)', () => {
     await settle();
     expect(server.posts().map((p) => [p.url, JSON.parse(p.init.body)])).toEqual([[`/api/agent-runs/${WAITING.runId}/answer`, { action: 'continue' }]]);
     expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toMatch(/^Told this run to continue\. The runner picks it up/);
-    expect(q('#forge-runs-list > li').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
+    expect(q('#forge-runs-list > li[data-run]').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
     expect(await said()).toMatch(/Told this run to continue/);
     // the reply: empty is not sent; typed text is, once, and the field is empty again
     click(q('[data-run-answer="reply"]'));
@@ -411,7 +411,7 @@ describe('a run that waits for an answer (issue #101)', () => {
     await settle();
     expect(JSON.parse(server.posts()[1].init.body)).toEqual({ action: 'reply', text: 'Use the second <i>plan</i>.' });
     expect(q('[data-run-reply]').value).toBe('');
-    expect(q('#forge-runs-list > li').textContent).toContain('answered: reply: Use the second <i>plan</i>.');
+    expect(q('#forge-runs-list > li[data-run]').textContent).toContain('answered: reply: Use the second <i>plan</i>.');
     expect(q('#forge-runs-list i')).toBe(null);
     click(q('[data-run-answer="stop"]'));
     await settle();

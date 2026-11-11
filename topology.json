@@ -547,7 +547,7 @@
       "label": "sheet-model.js",
       "type": "core",
       "file": "explorer/sheet-model.js",
-      "summary": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded.",
+      "summary": "The state machine of the phone's bottom sheets (TOPO-18, spec 0010 D7), with no DOM: which sheets exist, which are open, and which one is expanded.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded. (explorer/sheet-model.js)"
@@ -2178,6 +2178,36 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
+    },
+    {
+      "id": "core-explorer-waiting-line",
+      "label": "waiting-line.js",
+      "type": "core",
+      "file": "explorer/waiting-line.js",
+      "summary": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\".",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\". (explorer/waiting-line.js)"
+    },
+    {
+      "id": "core-explorer-waiting-model",
+      "label": "waiting-model.js",
+      "type": "core",
+      "file": "explorer/waiting-model.js",
+      "summary": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in). (explorer/waiting-model.js)"
+    },
+    {
+      "id": "core-explorer-waiting-view",
+      "label": "waiting-view.js",
+      "type": "core",
+      "file": "explorer/waiting-view.js",
+      "summary": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings. (explorer/waiting-view.js)"
     },
     {
       "id": "core-explorer-cluster",
@@ -7068,6 +7098,114 @@
     },
     {
       "from": "pkg-explorer",
+      "to": "core-explorer-waiting-line"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-waiting-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-waiting-view"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-line",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-waiting-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-reviews",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
       "to": "core-explorer-cluster"
     },
     {
@@ -7197,5 +7335,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:44:18.198Z"
+  "updatedAt": "2026-11-11T18:38:31.439Z"
 }
