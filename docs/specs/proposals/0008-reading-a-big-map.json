@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "spec": "0008",
+  "title": "Reading a big map: layout, labels, search, selection, edge kinds and type shapes",
+  "summary": "Hub clusters packed by size round the core so Fit shows the whole map about twice as close, with every cluster named; labels placed by priority with no collisions and never under 11 px; a search that counts, lists by type, steps and flies to a match; a selection that lights one hop and frames what it lit when it came from elsewhere; edge kinds told apart by line and end mark, a dash only for proposed; types told apart by silhouette and glyph. The two persona nodes are archetypes for the scenarios, not something to build.",
+  "nodes": {
+    "add": [
+      {
+        "id": "core-explorer-search-model",
+        "label": "search-model.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/search-model.js",
+        "desc": "Pure: what a search reads (label, id, file, type, finer kind), how it ranks, the groups by type, the count and the step to the next match."
+      },
+      {
+        "id": "core-explorer-search",
+        "label": "search.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/search.js",
+        "desc": "The search field's count, its list of matches grouped by type, stepping with Enter, the arrows and N / P, Frame all, and the no-match words."
+      },
+      {
+        "id": "core-explorer-glyphs",
+        "label": "glyphs.js",
+        "type": "core",
+        "parent": "pkg-explorer",
+        "file": "explorer/glyphs.js",
+        "desc": "The built-in glyph per node type, drawn in the node's core through the same path as theme.icons, and the silhouette per family."
+      },
+      {
+        "id": "persona-maintainer",
+        "label": "Maintainer",
+        "type": "persona",
+        "parent": "root",
+        "desc": "An archetype: the one maintainer who reads the map and decides specs, at a desk or on a phone. Never a real person."
+      },
+      {
+        "id": "persona-household-reader",
+        "label": "Household reader",
+        "type": "persona",
+        "parent": "root",
+        "desc": "An archetype: someone who looks at the map to see what is there and never reviews a spec. Never a real person."
+      }
+    ],
+    "change": [
+      {
+        "id": "core-explorer-layout",
+        "set": {
+          "desc": "Where every node sits: the root and the data core in the middle, then each hub's cluster, largest first, at the free place nearest the centre, 70 px apart; deterministic, no physics."
+        },
+        "why": "every cluster on one ring leaves 84.7% of the box empty, and Fit is zoom 0.057 at 1440 (#218)"
+      },
+      {
+        "id": "core-explorer-input",
+        "set": {
+          "desc": "Pointer and touch on the map, where a click or tap on a cluster's title frames that cluster."
+        },
+        "why": "at Fit a node is 2 px across, so the cluster titles are what a first click can reach (#218)"
+      },
+      {
+        "id": "core-explorer-labels",
+        "set": {
+          "desc": "The label overlay: every visible node is a candidate at every zoom, placed greedily in a fixed priority order (selection, matches, lit neighbours, marks, hubs, the rest) with no two labels touching and none under 11 px; a node with no label shows it on hover and focus."
+        },
+        "why": "296 of 297 nodes go unlabelled at zoom 0.5, and labels are 4 px at the first view (#172)"
+      },
+      {
+        "id": "core-explorer-scene",
+        "set": {
+          "desc": "The scene: the focus is one hop over every edge kind (children's lines on request), a dash means only proposed, usage lines are dotted, a cloud call's when is ticks, each edge family has its end mark, and lit edges carry their kind word."
+        },
+        "why": "selecting a hub lights most of the map (#174), and edge kinds differ by colour alone (#176)"
+      },
+      {
+        "id": "core-explorer-layers",
+        "set": {
+          "desc": "The Layers menu, and its Key: each edge row drawn with its real line and end mark, one meaning per line style."
+        },
+        "why": "the legend says both Dashed: proposed and Dashed: breaks at the next deploy (#176)"
+      },
+      {
+        "id": "core-explorer-map-style",
+        "set": {
+          "desc": "The map's tokens, adding --corn-map-label-min and --corn-map-glyph to the font, edge width and glow tokens of the small fixes."
+        },
+        "why": "a theme can set the label floor and the glyph colour, never the meaning of a line (#177)"
+      },
+      {
+        "id": "core-explorer-panels",
+        "set": {
+          "desc": "The node panel: the lit lines by kind with counts, Include its children's lines, and what is off screen with Frame them."
+        },
+        "why": "a selection's neighbours stay off screen (#174)"
+      }
+    ]
+  },
+  "edges": {
+    "add": [
+      {
+        "from": "core-explorer-main",
+        "to": "core-explorer-search",
+        "dashed": true,
+        "label": "imports"
+      },
+      {
+        "from": "core-explorer-search",
+        "to": "core-explorer-search-model",
+        "dashed": true,
+        "label": "imports"
+      },
+      {
+        "from": "core-explorer-search",
+        "to": "core-explorer-render",
+        "dashed": true,
+        "label": "imports"
+      },
+      {
+        "from": "core-explorer-map-style",
+        "to": "core-explorer-glyphs",
+        "dashed": true,
+        "label": "imports"
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "the-whole-map-first",
+      "title": "The maintainer arrives cold and sees the whole map with every big cluster named",
+      "actor": "maintainer",
+      "steps": [
+        {
+          "node": "core-explorer-layout",
+          "text": "The clusters are packed by size round the core: on the fixture the box is 5,838 px across, not 13,289."
+        },
+        {
+          "node": "core-explorer-labels",
+          "text": "Fit is zoom 0.128 at 1440, and the cluster titles are drawn at 13 px, the largest first."
+        },
+        {
+          "node": "core-explorer-input",
+          "text": "A click on a title frames that cluster, where its nodes can be read."
+        }
+      ]
+    },
+    {
+      "id": "find-a-node-by-name",
+      "title": "The maintainer finds a node by name on a map of 900 nodes",
+      "actor": "maintainer",
+      "steps": [
+        {
+          "node": "core-explorer-search",
+          "text": "The maintainer types four letters. The field says 1 of 33 and the list opens, grouped by type."
+        },
+        {
+          "node": "core-explorer-search-model",
+          "text": "The matches are ranked: labels that start with the term first, then words, then files, then types and kinds."
+        },
+        {
+          "node": "core-explorer-labels",
+          "text": "Every match wins a label at 11 px or more; nothing else collides with it."
+        },
+        {
+          "node": "core-explorer-search",
+          "text": "Enter steps to the next match and the camera flies to it at zoom 1."
+        }
+      ]
+    },
+    {
+      "id": "what-a-node-touches",
+      "title": "The maintainer selects a service and reads what it touches without colour",
+      "actor": "maintainer",
+      "steps": [
+        {
+          "node": "core-explorer-scene",
+          "text": "Selecting it lights one hop: what it calls, reads and writes, and its parent."
+        },
+        {
+          "node": "core-explorer-panels",
+          "text": "The panel says Calls 3, Reads 2, and 3 off screen; Frame them brings them in."
+        },
+        {
+          "node": "core-explorer-layers",
+          "text": "Each lit line says its kind in words; a dashed one is proposed, and the Key draws the real marks."
+        }
+      ]
+    },
+    {
+      "id": "what-is-in-a-cluster",
+      "title": "A household reader zooms over a cluster and reads what it holds",
+      "actor": "household-reader",
+      "steps": [
+        {
+          "node": "core-explorer-labels",
+          "text": "At zoom 0.5 about a third of the cluster is labelled, not one node in 297."
+        },
+        {
+          "node": "core-explorer-glyphs",
+          "text": "Pages, tables and outside services differ by shape, so the colours need no legend."
+        }
+      ]
+    }
+  ]
+}

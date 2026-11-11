@@ -2130,6 +2130,36 @@
       "desc": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`. (server/page-head.js)"
     },
     {
+      "id": "page-doc-docs-specs-0008-reading-a-big-map",
+      "type": "page",
+      "label": "/docs/specs/0008-reading-a-big-map",
+      "file": "docs/specs/0008-reading-a-big-map.md",
+      "summary": "Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "type": "page",
+      "label": "/docs/specs/0009-project-layers-and-finer-kinds",
+      "file": "docs/specs/0009-project-layers-and-finer-kinds.md",
+      "summary": "Spec 0009: a project defines its own layers, and finer kinds show",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0009: a project defines its own layers, and finer kinds show (docs/specs/0009-project-layers-and-finer-kinds.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "type": "page",
+      "label": "/docs/specs/0010-what-is-waiting-on-me",
+      "file": "docs/specs/0010-what-is-waiting-on-me.md",
+      "summary": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone) (docs/specs/0010-what-is-waiting-on-me.md)."
+    },
+    {
       "id": "page-doc-docs-specs-0006-scenarios-and-personas",
       "type": "page",
       "label": "/docs/specs/0006-scenarios-and-personas",
@@ -6909,6 +6939,63 @@
     },
     {
       "from": "app-docs",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0010-what-is-waiting-on-me"
+    },
+    {
+      "from": "page-doc-docs-specs-0008-reading-a-big-map",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-vision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0008-reading-a-big-map",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "app-docs",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas"
     },
     {
@@ -6917,7 +7004,17 @@
     },
     {
       "from": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
       "to": "page-doc-docs-specs-0007-the-decision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
       "dashed": true
     },
     {
@@ -6934,17 +7031,7 @@
       "from": "page-doc-docs-specs-0007-the-decision",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas",
       "dashed": true
-    },
-    {
-      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
-      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-specs-0007-the-decision",
-      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
-      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T17:06:43.403Z"
+  "updatedAt": "2026-11-11T17:10:31.941Z"
 }
