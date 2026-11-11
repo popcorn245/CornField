@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { chooseLabels, createLabelLayer, MAX_LABELS } from '../../explorer/labels.js';
+import { chooseLabels, createLabelLayer, placeLabels, LABEL_PAD, MAX_LABELS } from '../../explorer/labels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { buildScene, FONT_NODE, LABEL_OUTLINE } from '../../explorer/scene.js';
 
@@ -16,13 +16,13 @@ import { buildScene, FONT_NODE, LABEL_OUTLINE } from '../../explorer/scene.js';
 const VIEW = { width: 800, height: 600 };
 const CAM = { x: 0, y: 0, zoom: 1 };
 /** Every label is 60 world px wide, so the boxes in these tests are exact */
-const measure = () => 60;
+const measure = (_text, size) => (60 * size) / 11; // 60 px wide at 11 px
 const noMargin = { margin: 0, measure };
 
 /** A scene node, with every field `labelAt` and `chooseLabels` read */
 const sn = (id        , x        , y        , extra         = {})      => ({
   id, type: 'page', x, y, r: 10, color: '#336699', alpha: 1, glow: 0, halo: 'none', mark: 'none',
-  selected: false, match: false, connected: true,
+  selected: false, match: false, current: false, degree: 0, connected: true,
   label: id, labelSize: 11, labelBold: false, labelAlpha: 1, labelColor: '#f8fafc', labelKeep: false,
   ...extra,
 });
@@ -32,23 +32,20 @@ const ids = (items       ) => items.filter((i) => i.kind === 'node').map((i) => 
 describe('chooseLabels: what is drawn', () => {
   it('turns a node into a text item placed under the circle, with the node outline', () => {
     const [item] = chooseLabels(sc([sn('a', 100, 50, { labelBold: true, labelSize: 12 })]), CAM, VIEW, noMargin);
-    expect(item).toMatchObject({ kind: 'node', id: 'a', text: 'a', x: 100, y: 50 + 10 + 12 + 3, size: 12, bold: true, italic: false, align: 'center', color: '#f8fafc', alpha: 1, outline: LABEL_OUTLINE.node, family: FONT_NODE });
+    // zoom 1: a node's label is 12 px here, so it is a hub's 13 minimum? no: 'page' is no hub, its minimum is 11 and 12 is more
+    expect(item).toMatchObject({ kind: 'node', id: 'a', text: 'a', x: 100, y: 50 + 10 + 3 + 12, size: 12, bold: true, italic: false, align: 'center', color: '#f8fafc', alpha: 1, outline: LABEL_OUTLINE.node, family: FONT_NODE });
   });
 
   it('keeps a label whose box touches the viewport and drops one that is fully outside, at each edge', () => {
     // the box is 60 wide, 11 high above the baseline (y + 24) and 3.3 below it
-    const at = (x        , y        ) => ids(chooseLabels(sc([sn('n', x, y)]), CAM, VIEW, noMargin));
-    // right: box left = x - 30
-    expect(at(829, 100)).toEqual(['n']);
+    const at = (x, y) => ids(chooseLabels(sc([sn('n', x, y)]), CAM, VIEW, noMargin));
+    expect(at(829, 100)).toEqual(['n']); // right: box left = x - 30
     expect(at(831, 100)).toEqual([]);
-    // left: box right = x + 30
-    expect(at(-29, 100)).toEqual(['n']);
+    expect(at(-29, 100)).toEqual(['n']); // left: box right = x + 30
     expect(at(-31, 100)).toEqual([]);
-    // bottom: box top = y + 24 - 11
-    expect(at(400, 586)).toEqual(['n']);
+    expect(at(400, 586)).toEqual(['n']); // bottom: box top = y + 24 - 11
     expect(at(400, 589)).toEqual([]);
-    // top: box bottom = y + 24 + 3.3
-    expect(at(400, -27)).toEqual(['n']);
+    expect(at(400, -27)).toEqual(['n']); // top: box bottom = y + 24 + 3.3
     expect(at(400, -29)).toEqual([]);
   });
 
@@ -64,33 +61,54 @@ describe('chooseLabels: what is drawn', () => {
     expect(ids(chooseLabels(scene, { x: -500, y: 0, zoom: 2 }, VIEW, noMargin))).toEqual(['n']); // screen x = 700
     expect(ids(chooseLabels(scene, { x: 100, y: 0, zoom: 2 }, VIEW, noMargin))).toEqual([]); // screen x = 1300
     expect(ids(chooseLabels(scene, { x: -500, y: 900, zoom: 2 }, VIEW, noMargin))).toEqual([]); // screen y = 1100
-    // zoom scales the box: at zoom 2 its half width is 60 px, so a centre at 859.. is just in (left 799), 862 just out
+    // a label is 22 px at zoom 2 (11 world units) and 60 / 11 * 22 = 120 wide: half is 60, so a centre at 859.. is just in (left 799)
     expect(ids(chooseLabels(sc([sn('n', 429.5, 100)]), { x: 0, y: 0, zoom: 2 }, VIEW, noMargin))).toEqual(['n']);
     expect(ids(chooseLabels(sc([sn('n', 431, 100)]), { x: 0, y: 0, zoom: 2 }, VIEW, noMargin))).toEqual([]);
   });
 
-  it('applies labelAt: only landmarks and the focus below zoom 0.6, larger; everything above', () => {
-    const scene = sc([sn('plain', 100, 100), sn('landmark', 200, 100, { type: 'app', labelKeep: true, labelSize: 12, labelBold: true })]);
-    const out = chooseLabels(scene, { x: 0, y: 0, zoom: 0.5 }, VIEW, noMargin);
-    expect(ids(out)).toEqual(['landmark']);
-    expect(out[0].size).toBe(Math.round(12 * 1.5)); // the zoomed-out boost: 0.75 / 0.5
-    const near = chooseLabels(scene, { x: 0, y: 0, zoom: 0.6 }, VIEW, noMargin);
-    expect(ids(near)).toEqual(['plain', 'landmark']);
-    expect(near.map((i     ) => i.size)).toEqual([11, 12]);
+  it('has no zoom cut-off: a plain node is labelled at every zoom, and never under 11 px on screen (spec 0008 D2)', () => {
+    const scene = sc([sn('plain', 100, 100), sn('landmark', 4100, 100, { type: 'app', labelKeep: true, labelSize: 12, labelBold: true })]);
+    for (const zoom of [0.05, 0.1, 0.25, 0.5, 0.59, 0.6, 1, 2, 3]) {
+      const out = chooseLabels(scene, { x: 0, y: 0, zoom }, { width: 20000, height: 5000 }, noMargin);
+      expect(ids(out), `zoom ${zoom}`).toEqual(['plain', 'landmark']);
+      const [plain, hub] = out;
+      expect(plain.size * zoom, `plain at ${zoom}`).toBeGreaterThanOrEqual(11 - 1e-9);
+      expect(hub.size * zoom, `hub at ${zoom}`).toBeGreaterThanOrEqual(13 - 1e-9); // a cluster's title is 13 px and bold
+      expect(hub.bold).toBe(true);
+    }
   });
 
-  it('labels every node in the data-flow view at any zoom, with its own boost', () => {
-    const scene = sc([sn('a', 100, 100), sn('b', 200, 100)], { preset: true });
-    const out = chooseLabels(scene, { x: 0, y: 0, zoom: 0.4 }, VIEW, noMargin);
-    expect(ids(out)).toEqual(['a', 'b']);
-    expect(out[0].size).toBe(Math.round(11 * Math.min(1.8, 0.8 / 0.4)));
+  it('draws a label at 11 px when zoomed out, and grows with the map when zoomed in (the same as before from zoom 1)', () => {
+    const scene = sc([sn('n', 100, 100)]);
+    const size = (zoom) => chooseLabels(scene, { x: 0, y: 0, zoom }, { width: 5000, height: 5000 }, noMargin)[0].size;
+    expect(size(0.25) * 0.25).toBeCloseTo(11);
+    expect(size(0.5)).toBeCloseTo(22);
+    expect(size(1)).toBeCloseTo(11);
+    expect(size(2)).toBeCloseTo(11); // 22 px on screen: 11 world units, scaled by the zoom
+    expect(size(2) * 2).toBeCloseTo(22);
   });
 
-  it('draws a dimmed node at its dim alpha and colour', () => {
-    const scene = sc([sn('dim', 100, 100, { connected: false, alpha: 0.07, labelAlpha: 0.07, labelColor: 'rgba(255, 255, 255, 0.3)', labelKeep: true })]);
+  it('lets a theme raise the minimum (--corn-map-label-min) and ignores one under 9 px', () => {
+    const at = (labelMin) => chooseLabels(sc([sn('n', 100, 100)], { labelMin }), { x: 0, y: 0, zoom: 0.5 }, VIEW, noMargin)[0].size * 0.5;
+    expect(at(undefined)).toBeCloseTo(11);
+    expect(at(14)).toBeCloseTo(14);
+    expect(at(8)).toBeCloseTo(11);
+    expect(at(6)).toBeCloseTo(11);
+    expect(at(8.9)).toBeCloseTo(11);
+    expect(at(9)).toBeCloseTo(9); // 9 is the lowest a theme may ask for
+  });
+
+  it('draws a dimmed node at its dim alpha and colour, and gives a label nobody can read no room', () => {
+    const scene = sc([sn('dim', 100, 100, { connected: false, alpha: 0.28, labelAlpha: 0.28, labelColor: 'rgba(255, 255, 255, 0.3)', labelKeep: true })]);
     const [item] = chooseLabels(scene, CAM, VIEW, noMargin);
-    expect(item.alpha).toBe(0.07);
+    expect(item.alpha).toBe(0.28);
     expect(item.color).toBe('rgba(255, 255, 255, 0.3)');
+    const gone = sc([sn('gone', 100, 100, { alpha: 0.07, labelAlpha: 0.07 }), sn('next', 110, 100)]);
+    expect(ids(chooseLabels(gone, CAM, VIEW, noMargin))).toEqual(['next']); // the focus dim: its label takes no room from a neighbour
+  });
+
+  it('draws no label for a node with no text (a room in the House view)', () => {
+    expect(ids(chooseLabels(sc([sn('room', 100, 100, { label: '' })]), CAM, VIEW, noMargin))).toEqual([]);
   });
 
   it('estimates the box without a measure function (the longer the text, the wider)', () => {
@@ -100,75 +118,111 @@ describe('chooseLabels: what is drawn', () => {
   });
 });
 
-describe('chooseLabels: the cap and its priority', () => {
-  /** 600 nodes on a grid, all on screen, radius 10 + (i % 7) so the radius order is not the scene order */
-  const grid = (n = 600, extra                        = () => ({})) => Array.from({ length: n }, (_, i) =>
-    sn(`n${i}`, 20 + (i % 40) * 19, 20 + Math.floor(i / 40) * 22, { r: 10 + (i % 7), ...extra(i) }));
+describe('placeLabels: no two labels touch, in a fixed priority order (spec 0008 D2)', () => {
+  /** Ten nodes in a row 20 world px apart: at zoom 1 their 60 px labels (11 px high) sit on one line and every one touches the next */
+  const row = (extra = () => ({})) => Array.from({ length: 10 }, (_, i) => sn(`n${i}`, 100 + i * 20, 100, extra(i)));
+  const placedIds = (scene, zoom = 1) => placeLabels(scene, zoom, { measure: () => 60 }).map((p) => p.id);
+  // measure answers for a font size of 100: width 60 at 100 px, so 6.6 at 11. Use a measure that is the real width instead:
+  const wide = (_t, size) => size * 0.55 * 6; // six glyphs wide
 
-  it('draws at most 400 node labels by default, and says so in MAX_LABELS', () => {
+  const collisions = (placed, pad = 0) => {
+    const bad = [];
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i], b = placed[j];
+        if (a.l - pad < b.r && a.r + pad > b.l && a.t - pad < b.b && a.b + pad > b.t) bad.push(`${a.id}/${b.id}`);
+      }
+    }
+    return bad;
+  };
+
+  it('places the first, and skips what touches it: no two placed boxes touch, and they are at least 2 px apart', () => {
+    const placed = placeLabels(sc(row()), 1, { measure: wide });
+    expect(placed.length).toBeGreaterThan(0);
+    expect(placed.length).toBeLessThan(10);
+    expect(collisions(placed, LABEL_PAD)).toEqual([]);
+  });
+
+  it('places the selection first, then the current match, the other matches, the lit neighbours, marked nodes, hubs, then the rest', () => {
+    const kinds = [
+      ['rest', {}], ['hub', { type: 'app' }], ['marked', { mark: 'added' }], ['lit', { connected: true }], ['match', { match: true }],
+      ['current', { match: true, current: true }], ['selected', { selected: true }],
+    ];
+    // All on one spot so only one can win: the best tier is the one left. Remove it, and the next best wins.
+    let rest = kinds.map(([name, extra], i) => sn(name, 100, 100, { connected: name === 'lit' || name === 'match' || name === 'current' || name === 'selected' ? true : false, ...extra, r: 10 + (i % 2) }));
+    const winners = [];
+    while (rest.length) {
+      // `focused` (a selection or a dimmed node exists) makes the lit tier count
+      const [first] = placeLabels(sc(rest), 1, { measure: wide });
+      winners.push(first.id);
+      rest = rest.filter((n) => n.id !== first.id);
+    }
+    expect(winners).toEqual(['selected', 'current', 'match', 'lit', 'marked', 'hub', 'rest']);
+  });
+
+  it('breaks a tie by the larger disc, then more edges, then scene order', () => {
+    const win = (nodes) => placeLabels(sc(nodes), 1, { measure: wide })[0].id;
+    expect(win([sn('small', 100, 100, { r: 10 }), sn('big', 100, 100, { r: 16 })])).toBe('big');
+    expect(win([sn('few', 100, 100, { degree: 2 }), sn('many', 100, 100, { degree: 9 })])).toBe('many');
+    expect(win([sn('first', 100, 100), sn('second', 100, 100)])).toBe('first');
+  });
+
+  it('is the same wherever the camera is: a pan changes which labels are in view, never which are placed', () => {
+    const nodes = Array.from({ length: 200 }, (_, i) => sn(`n${i}`, (i % 20) * 30, Math.floor(i / 20) * 25, { r: 10 + (i % 5) }));
+    const a = placeLabels(sc(nodes), 0.7, { measure: wide });
+    const b = placeLabels(sc(nodes), 0.7, { measure: wide });
+    expect(a).toEqual(b);
+    const seen = (cam) => new Set(ids(chooseLabels(sc(nodes), cam, VIEW, { margin: 0, measure: wide, placed: a })));
+    const all = new Set(a.map((p) => p.id));
+    for (const cam of [{ x: 0, y: 0, zoom: 0.7 }, { x: -120, y: -40, zoom: 0.7 }, { x: 31, y: 7, zoom: 0.7 }]) for (const id of seen(cam)) expect(all.has(id)).toBe(true);
+  });
+
+  it('a match wins its label over a plain neighbour on the same spot, and the neighbour gives way', () => {
+    const scene = sc([sn('plain', 100, 100, { r: 18 }), sn('hit', 100, 100, { match: true, r: 10 })]);
+    expect(placedIds(scene)).toEqual(['hit']);
+  });
+
+  it('puts a chip, over everything, on a hovered node that has no label, and none on one that has', () => {
+    const scene = sc([sn('a', 100, 100), sn('b', 100, 100)]); // b is under a's label: no room
+    const withChip = chooseLabels(scene, CAM, VIEW, { ...noMargin, hover: 'b' });
+    expect(withChip.at(-1)).toMatchObject({ kind: 'chip', id: 'b', text: 'b', alpha: 1 });
+    expect(withChip.at(-1).size * 1).toBeGreaterThanOrEqual(11);
+    expect(chooseLabels(scene, CAM, VIEW, { ...noMargin, hover: 'a' }).some((i) => i.kind === 'chip')).toBe(false); // it already shows its label
+    expect(chooseLabels(scene, CAM, VIEW, noMargin).some((i) => i.kind === 'chip')).toBe(false);
+  });
+});
+
+describe('chooseLabels: the cap', () => {
+  /** 600 nodes on a grid with room for every label, all on screen */
+  const grid = (n = 600, extra = () => ({})) => Array.from({ length: n }, (_, i) =>
+    sn(`n${i}`, 20 + (i % 40) * 119, 20 + Math.floor(i / 40) * 40, { r: 10 + (i % 7), ...extra(i) }));
+  const BIG = { width: 5000, height: 700 };
+
+  it('draws at most 400 node labels in view by default, and says so in MAX_LABELS', () => {
     expect(MAX_LABELS).toBe(400);
-    const out = chooseLabels(sc(grid()), CAM, VIEW, noMargin);
+    const out = chooseLabels(sc(grid()), CAM, BIG, noMargin);
     expect(ids(out)).toHaveLength(400);
   });
 
-  it('keeps the largest radius first when nothing else ranks them', () => {
-    const out = chooseLabels(sc(grid()), CAM, VIEW, { ...noMargin, max: 100 });
-    const radii = ids(out).map((id) => 10 + (Number(id.slice(1)) % 7));
-    expect(Math.min(...radii)).toBe(15); // 600 nodes: 85 have r=16, so the other 15 places go to r=15
-    expect(radii.filter((r) => r === 16)).toHaveLength(85);
-  });
-
-  it('ranks: selection and its neighbours, then search matches, then landmarks, then radius', () => {
-    const nodes = grid(300, (i) => {
-      if (i === 5) return { selected: true, labelKeep: true, r: 10 };
-      if (i >= 10 && i < 14) return { connected: true, labelKeep: true, r: 10 }; // neighbours
-      if (i >= 20 && i < 23) return { connected: false, match: true, labelKeep: true, r: 10 }; // matches
-      if (i >= 30 && i < 32) return { connected: false, type: 'app', labelKeep: true, r: 10 }; // landmarks
-      return { connected: false, r: 10 + (i % 7) };
-    });
-    // a landmark has a small radius on purpose: the landmark tier still beats a bigger plain node
-    const out = chooseLabels(sc(nodes), CAM, VIEW, { ...noMargin, max: 12 });
-    const got = new Set(ids(out));
-    expect(got.size).toBe(12);
-    for (const i of [5, 10, 11, 12, 13]) expect(got.has(`n${i}`), `n${i} (selection or neighbour)`).toBe(true);
-    for (const i of [20, 21, 22]) expect(got.has(`n${i}`), `n${i} (match)`).toBe(true);
-    for (const i of [30, 31]) expect(got.has(`n${i}`), `n${i} (landmark)`).toBe(true);
-    // the last two places go to the biggest plain nodes (r = 16), the earliest in the scene first
-    const rest = [...got].filter((id) => ![5, 10, 11, 12, 13, 20, 21, 22, 30, 31].includes(Number(id.slice(1))));
-    expect(rest.sort()).toEqual(['n27', 'n6']);
-  });
-
-  it('with the selection, spends the cap on the selection tier before a search match', () => {
-    const nodes = grid(100, (i) => (i === 50 ? { selected: true, r: 10, labelKeep: true } : i < 5 ? { connected: false, match: true, labelKeep: true } : { connected: false }));
-    const out = chooseLabels(sc(nodes), CAM, VIEW, { ...noMargin, max: 3 });
-    expect(ids(out)).toContain('n50');
-    expect(ids(out)).toHaveLength(3);
+  it('keeps the best placed ones over the cap: the priority order, not the scene order', () => {
+    const out = chooseLabels(sc(grid(600, (i) => (i === 599 ? { selected: true } : {}))), CAM, BIG, { ...noMargin, max: 5 });
+    expect(ids(out)).toContain('n599');
+    expect(ids(out)).toHaveLength(5);
   });
 
   it('does not count what is off screen against the cap', () => {
-    const nodes = [...grid(300), ...Array.from({ length: 300 }, (_, i) => sn(`far${i}`, 5000 + i * 30, 100, { r: 40 }))];
-    const out = chooseLabels(sc(nodes), CAM, VIEW, { ...noMargin, max: 400 });
+    const nodes = [...grid(300), ...Array.from({ length: 300 }, (_, i) => sn(`far${i}`, 50000 + i * 130, 100, { r: 40 }))];
+    const out = chooseLabels(sc(nodes), CAM, BIG, { ...noMargin, max: 400 });
     expect(ids(out)).toHaveLength(300);
     expect(ids(out).every((id) => id.startsWith('n'))).toBe(true);
   });
 
-  it('keeps ties in scene order, so labels do not flicker while the camera pans', () => {
-    const nodes = grid(600, () => ({ r: 10 }));
-    const a = chooseLabels(sc(nodes), CAM, VIEW, noMargin);
-    const b = chooseLabels(sc(nodes), CAM, VIEW, noMargin);
-    expect(a).toEqual(b);
-    expect(ids(a)).toEqual(nodes.slice(0, 400).map((n) => n.id)); // the first 400 in scene order
-    // a few pixels of pan changes nothing about which labels are chosen
-    for (const dx of [1, 3, -2, 7]) expect(ids(chooseLabels(sc(nodes), { x: dx, y: dx, zoom: 1 }, VIEW, noMargin))).toEqual(ids(a));
-    // and the items come out in scene order, whatever the priority
-    const mixed = chooseLabels(sc(grid(600)), CAM, VIEW, noMargin);
-    const order = ids(mixed).map((id) => Number(id.slice(1)));
+  it('gives the items in scene order, whatever the priority, and the same on every call', () => {
+    const nodes = grid(100, (i) => (i === 50 ? { selected: true } : {}));
+    const a = chooseLabels(sc(nodes), CAM, BIG, noMargin);
+    expect(a).toEqual(chooseLabels(sc(nodes), CAM, BIG, noMargin));
+    const order = ids(a).map((id) => Number(id.slice(1)));
     expect(order).toEqual([...order].sort((x, y) => x - y));
-  });
-
-  it('chooses the same set on every call (a pure function of its arguments)', () => {
-    const scene = sc(grid());
-    expect(chooseLabels(scene, { x: 10, y: -5, zoom: 0.9 }, VIEW, { margin: 40 })).toEqual(chooseLabels(scene, { x: 10, y: -5, zoom: 0.9 }, VIEW, { margin: 40 }));
   });
 });
 
@@ -184,15 +238,15 @@ describe('chooseLabels: lane titles and selection edge labels are always there',
   it('adds every lane title, note and arrow, centred, with no outline, however many nodes there are', () => {
     const scene = sc([sn('a', 100, 100)], { preset: true, decor: { grid: null, rings: [], lanes: [lane('Browser', 100), lane('API', 400)] } });
     const out = chooseLabels(scene, CAM, VIEW, { ...noMargin, max: 0 });
-    const lanes = out.filter((i     ) => i.kind === 'lane');
-    expect(lanes.map((i     ) => i.text)).toEqual(['Browser', 'Browser note', '→', 'API', 'API note', '→']);
+    const lanes = out.filter((i) => i.kind === 'lane');
+    expect(lanes.map((i) => i.text)).toEqual(['Browser', 'Browser note', '→', 'API', 'API note', '→']);
     expect(lanes[0]).toMatchObject({ x: 100, y: -86, size: 15, bold: true, color: '#e2e8f0', align: 'center', outline: null, alpha: 1, italic: false });
     expect(ids(out)).toEqual([]); // max 0: no node labels, the lane text is not capped
   });
 
   it('draws lane text even when it is off screen (it is always included)', () => {
     const scene = sc([], { decor: { grid: null, rings: [], lanes: [lane('Far', 90000)] } });
-    expect(chooseLabels(scene, CAM, VIEW, noMargin).filter((i     ) => i.kind === 'lane')).toHaveLength(3);
+    expect(chooseLabels(scene, CAM, VIEW, noMargin).filter((i) => i.kind === 'lane')).toHaveLength(3);
   });
 
   it('adds a selection edge label in the edge font and outline, italic when proposed, at the edge alpha', () => {
@@ -204,7 +258,7 @@ describe('chooseLabels: lane titles and selection edge labels are always there',
 
   it('orders them lanes, then edge labels, then node labels', () => {
     const scene = sc([sn('a', 100, 100)], { preset: true, decor: { grid: null, rings: [], lanes: [lane('Browser', 100)] }, edges: [edge({ text: 'x', x: 1, y: 2, color: '#fff', italic: false })] });
-    expect(chooseLabels(scene, CAM, VIEW, noMargin).map((i     ) => i.kind)).toEqual(['lane', 'lane', 'lane', 'edge', 'node']);
+    expect(chooseLabels(scene, CAM, VIEW, noMargin).map((i) => i.kind)).toEqual(['lane', 'lane', 'lane', 'edge', 'node']);
   });
 
   it('works on a real scene from buildScene in the data-flow view', () => {
@@ -213,26 +267,29 @@ describe('chooseLabels: lane titles and selection edge labels are always there',
     const layers = { app: true, store: true, flow: true };
     const scene = buildScene({ nodes, edges: [], view: 'dataflow', flow, rings: { rings: [], clusters: [] }, selectedNode: null, searchQuery: '', isFreeform: false, activeLayers: layers, sim: null, sceneVersion: 3 });
     const out = chooseLabels(scene, { x: 400, y: 300, zoom: 1 }, VIEW, {});
-    expect(out.filter((i     ) => i.kind === 'lane').map((i     ) => i.text)).toEqual(['Browser', 'saved first', '→', 'API', 'the writer']);
+    expect(out.filter((i) => i.kind === 'lane').map((i) => i.text)).toEqual(['Browser', 'saved first', '→', 'API', 'the writer']);
     expect(ids(out)).toEqual(['store-idb', 'app-api']);
   });
 });
 
-describe('chooseLabels: how fast', () => {
-  it('chooses from 5,000 nodes in under 5 ms (median of 25 runs)', () => {
-    const nodes = Array.from({ length: 5000 }, (_, i) => sn(`node-${i}`, (i % 100) * 40 - 1000, Math.floor(i / 100) * 40 - 800, { r: 8 + (i % 9), type: i % 50 === 0 ? 'app' : 'page', labelKeep: i % 50 === 0 }));
-    const scene = sc(nodes);
-    const cams = [{ x: 400, y: 300, zoom: 0.3 }, { x: 0, y: 0, zoom: 0.8 }, { x: -800, y: -400, zoom: 1.5 }];
-    for (const cam of cams) {
-      const times           = [];
-      for (let i = 0; i < 25; i++) {
-        const t0 = performance.now();
-        const out = chooseLabels(scene, cam, { width: 1400, height: 900 }, {});
-        times.push(performance.now() - t0);
-        expect(ids(out).length).toBeLessThanOrEqual(400);
-      }
-      times.sort((a, b) => a - b);
-      expect(times[12], `median at zoom ${cam.zoom}`).toBeLessThan(5);
+describe('placing and choosing: how fast', () => {
+  const nodes = Array.from({ length: 5000 }, (_, i) => sn(`node-${i}`, (i % 100) * 40 - 1000, Math.floor(i / 100) * 40 - 800, { r: 8 + (i % 9), type: i % 50 === 0 ? 'app' : 'page', labelKeep: i % 50 === 0 }));
+  const scene = sc(nodes);
+  const median = (run) => {
+    const times = [];
+    for (let i = 0; i < 15; i++) { const t0 = performance.now(); run(); times.push(performance.now() - t0); }
+    return times.sort((a, b) => a - b)[7];
+  };
+
+  it('places 5,000 nodes at a zoom in under 40 ms (a zoom change; a pan never does it again)', () => {
+    for (const zoom of [0.3, 0.8, 1.5]) expect(median(() => placeLabels(scene, zoom, { measure })), `zoom ${zoom}`).toBeLessThan(40);
+  });
+
+  it('chooses what is in view from a kept placing in under 5 ms, however far the camera pans', () => {
+    for (const cam of [{ x: 400, y: 300, zoom: 0.3 }, { x: 0, y: 0, zoom: 0.8 }, { x: -800, y: -400, zoom: 1.5 }]) {
+      const placed = placeLabels(scene, cam.zoom, { measure });
+      expect(median(() => chooseLabels(scene, cam, { width: 1400, height: 900 }, { measure, placed })), `zoom ${cam.zoom}`).toBeLessThan(5);
+      expect(ids(chooseLabels(scene, cam, { width: 1400, height: 900 }, { measure, placed })).length).toBeLessThanOrEqual(400);
     }
   });
 });

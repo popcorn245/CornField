@@ -22,6 +22,8 @@ import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initSearch } from '../../explorer/search.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initAccountMenu, resetAccountMenuForTests } from '../../explorer/account-menu.js';
 // @ts-expect-error plain JS modules, no declarations
 import { applyBranding } from '../../explorer/plugins.js';
@@ -109,6 +111,7 @@ function mount() {
   setMap(MAP.nodes.map((n) => ({ ...n })), MAP.edges);
   resetKeyboardForTests();
   initKeyboard();
+  initSearch(); // the search field's own keys (Enter steps through the matches)
   resetAccountMenuForTests();
   initAccountMenu();
   return canvas;
@@ -923,7 +926,8 @@ describe('the map by keyboard', () => {
     expect(state.selectedNode.id).toBe(order[0]);
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
     await settle(40);
-    expect($('map-announcer').textContent).toBe(`${state.selectedNode.label}, ${state.selectedNode.type}, 1 connection, 1 of ${order.length}`);
+    const { label, type, degree } = state.selectedNode; // which node is first in reading order follows the layout (the packed one, spec 0008)
+    expect($('map-announcer').textContent).toBe(`${label}, ${type}, ${degree} ${degree === 1 ? 'connection' : 'connections'}, 1 of ${order.length}`);
     key(canvas, ']');
     expect(state.selectedNode.id).toBe(order[1]);
     key(canvas, 'p');

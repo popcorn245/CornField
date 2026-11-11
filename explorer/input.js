@@ -13,11 +13,12 @@
  */
 
 import { state, touchScene } from './state.js';
-import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom } from './render.js';
+import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom, setHoverNode } from './render.js';
 import { saveFreeformPositions } from './layout.js';
 import { selectNode, closeDrawer } from './panels.js';
 import { hitTestScreen } from './spatial.js';
 import { zoomAbout, pinchStart, pinchCamera } from './camera.js';
+import { stopFlight } from './fly.js';
 
 let isDragging = false;
 let dragNode = null;
@@ -71,6 +72,8 @@ function touchMid(e) {
 
 function onPointerDown(e) {
   downOnCanvas = true;
+  stopFlight(); // the hand takes the camera: a flight to a match ends where it is
+  setHoverNode(null); // a press starts a tap or a drag: the chip that named a node under the pointer goes
   if (e.touches && e.touches.length === 2) {
     pinch = pinchStart(state.camera, touchDistance(e), touchMid(e));
     pendingPos = null;
@@ -124,7 +127,9 @@ function applyHover() {
   const p = pendingHover;
   pendingHover = null;
   if (!p || isDragging || dragNode) return;
-  setHover(!!findNodeAt(p.x, p.y, false));
+  const over = findNodeAt(p.x, p.y, false);
+  setHover(!!over);
+  setHoverNode(over ? over.id : null); // a node with no label is named by a chip (labels.js)
 }
 
 function setHover(over) {
@@ -199,7 +204,7 @@ export function bindCanvasInput() {
   const { canvas } = state;
   canvas.addEventListener('mousedown', onPointerDown);
   canvas.addEventListener('mousemove', onPointerMove);
-  canvas.addEventListener('mouseleave', () => { pendingHover = null; setHover(false); });
+  canvas.addEventListener('mouseleave', () => { pendingHover = null; setHover(false); setHoverNode(null); });
   window.addEventListener('mouseup', onPointerUp);
 
   canvas.addEventListener('touchstart', onPointerDown, { passive: false });
@@ -209,6 +214,7 @@ export function bindCanvasInput() {
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
+    stopFlight();
     const p = getPointerPos(e);
     Object.assign(state.camera, zoomAbout(state.camera, e.deltaY < 0 ? 1.12 : 0.88, p.x, p.y, getMinZoom()));
     render(); // a camera change is cheap; the draw is one per frame however many wheel events arrive

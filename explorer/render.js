@@ -172,8 +172,20 @@ function paint() {
   getRenderer().draw(scene, state.camera, performance.now());
   // The labels repaint only when the camera, the scene or the size changed, never on a packet frame
   const labels = getLabelLayer();
-  if (labels) labels.draw(scene, state.camera);
+  if (labels) labels.draw(scene, state.camera, { hover: state.hoverNodeId });
   paintHooks.forEach((fn) => fn(scene, state.camera));
+}
+
+/**
+ * The node the pointer is on (or null): a node with no label is named by a chip over the map while it is. Only the label layer
+ * draws again (the map has nothing new to show), so moving across the map costs one small redraw per node entered.
+ */
+export function setHoverNode(id) {
+  const next = id || null;
+  if (state.hoverNodeId === next) return;
+  state.hoverNodeId = next;
+  const labels = getLabelLayer();
+  if (labels && state.canvas && state.width) labels.draw(getScene(), state.camera, { hover: next });
 }
 
 /** Things drawn over the map by the page itself (the runs' marks, explorer/runs-map.js): called after each draw with the scene and the camera */

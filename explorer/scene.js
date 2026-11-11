@@ -17,9 +17,9 @@
  * What changes the scene (and so what must call `touchScene()` in state.js): the topology, the
  * layout, the layers, the selection, the search, the view, a playing scenario (the ROM simulation is one), a dragged node, a selected pull request.
  * What does NOT: the camera (pan, zoom, fit) and time (packets). So the scene is built once per
- * `state.sceneVersion` and drawn many times. The one camera-dependent decision, label level of
- * detail, is therefore not in the scene's nodes but in `labelAt(node, zoom, scene)`, which
- * every renderer or label layer calls with the current zoom.
+ * `state.sceneVersion` and drawn many times. The one camera-dependent decision, which labels fit
+ * and how big they are, is therefore not in the scene's nodes but in labels.js (`placeLabels(scene,
+ * zoom)`, which the label layer calls and caches by zoom).
  *
  * buildScene needs no text metrics (a label's size comes from rules, not from measuring it), so it
  * takes no `measure` function; the one place that measures text is layout.js `labelWidth`, which
@@ -55,14 +55,16 @@
  * @property {Halo} halo
  * @property {Mark} mark
  * @property {boolean} selected    this is the selected node
- * @property {boolean} match       the search query matches its label
+ * @property {boolean} match       the search finds it (its label, id, file, type or kind: search-model.js)
+ * @property {boolean} current     it is the search match the stepping is on (`state.searchCurrent`): its label is placed first of the matches
+ * @property {number} degree       how many edges it has (the label placer's tie-break: more edges first)
  * @property {boolean} connected   inside the focus subgraph (always true when nothing is focused)
- * @property {string} label        the text, always set; whether it is drawn is `labelAt`'s decision
- * @property {number} labelSize    px at zoom >= 0.6 (before the zoomed-out boost): 12 for `root`/`app`, else 11
+ * @property {string} label        the text, always set; whether it is drawn is labels.js's decision (`placeLabels`)
+ * @property {number} labelSize    px in world units: 12 for `root`/`app`, else 11. On screen a label is never under LABEL_MIN_PX (a hub's, 2 more)
  * @property {boolean} labelBold
  * @property {number} labelAlpha   = alpha
  * @property {string} labelColor   `#f8fafc`, or a dim white for a node outside the focus
- * @property {boolean} labelKeep   keeps its label when zoomed out: a landmark type, the selection, a match, a marked node, or in the focus
+ * @property {boolean} labelKeep   its label is asked for: a landmark type, the selection, a match, a marked node, or in the focus (and what a painter lights: an outage, a pull request)
  * @property {boolean} labelStrike the label is struck through (a node a proposal removes, in the Diff view)
  * @property {boolean} live        the node came from the live layer (spec 0029: a floor, a room, a live device), not from topology.json
  * @property {{x:number, y:number, w:number, h:number}|null} box  a live room's box in the 800 x 600 floor viewBox (for the House view), else null
@@ -139,7 +141,7 @@
  * @property {{nodes: Set<string>, edges: Set<string>}} painted  the ids of the nodes and the keys of the edges a painter (an outage, a check's verdict, a pull request) gave a colour of its own: map-style.js leaves those alone
  * @property {SceneDecor} decor
  * @property {{node: {color: string, width: number}, edge: {color: string, width: number}}} [labelOutline]  the outline under the labels when the theme sets one (map-style.js, `--corn-map-label-halo`); else `looksFor(theme).labelOutline`
- * @property {boolean} preset      the data-flow view: every node is labelled and the label boost differs (see `labelAt`)
+ * @property {boolean} preset      the data-flow view
  * @property {'dark'|'light'} theme  the ground it is drawn for (`state.theme`, theme.js): every colour in it already suits it; `looksFor(theme)` has the rest
  * @property {number} version      the `state.sceneVersion` it was built from
  *
@@ -166,6 +168,7 @@ import { externalLayer, whenDash } from './cloud-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
+import { matchIds } from './search-model.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
@@ -174,8 +177,13 @@ import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVE
 export const LANDMARK_TYPES = ['root', 'app', 'pkg', 'tool', 'store', 'rom', 'floor']; // a floor (spec 0029) names its cluster of rooms like an app names its pages
 export const FONT_NODE = '"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
 export const FONT_EDGE = '"Segoe UI", -apple-system, sans-serif';
-/** Below this zoom (outside the data-flow view) only landmarks and the focus keep a label */
-export const LABEL_ZOOM = 0.6;
+/**
+ * The smallest a label is ever drawn on screen (px), whatever the zoom (spec 0008 D2): a node's own, and a hub's (its cluster's title).
+ * A theme may raise the first with `--corn-map-label-min` (not below LABEL_MIN_FLOOR); a hub's is that plus 2.
+ */
+export const LABEL_MIN_PX = 11;
+export const LABEL_MIN_FLOOR = 9;
+export const HUB_LABEL_EXTRA_PX = 2;
 /** The white dot in the middle of a node, as a fraction of its radius */
 export const CORE_RATIO = 0.32;
 export const CORE_COLOR = '#ffffff';
@@ -362,27 +370,6 @@ export function packetPoint(edge, timeMs) {
 export { parseColor };
 
 // ---------------------------------------------------------------------------
-//  Labels: the one decision that depends on the camera
-// ---------------------------------------------------------------------------
-
-/**
- * The label a node shows at `zoom`, or null. Zoomed out (below LABEL_ZOOM, outside the data-flow
- * view) only landmarks and the focus keep a label, drawn larger so it stays readable on screen;
- * the data-flow view is small enough to label everything, a little larger when zoomed out.
- * @param {SceneNode} node
- * @param {number} zoom
- * @param {{preset:boolean}} scene
- * @returns {{text:string, x:number, y:number, size:number, bold:boolean, color:string, alpha:number, strike:boolean}|null}
- */
-export function labelAt(node, zoom, scene) {
-  const zoomedOut = !scene.preset && zoom < LABEL_ZOOM;
-  if (zoomedOut && !node.labelKeep) return null;
-  const boost = zoomedOut ? Math.min(2.2, 0.75 / zoom) : scene.preset ? Math.min(1.8, 0.8 / zoom) : 1;
-  const size = Math.round(node.labelSize * Math.max(1, boost));
-  return { text: node.label, x: node.x, y: node.y + node.r + size + 3, size, bold: node.labelBold, color: node.labelColor, alpha: node.labelAlpha, strike: node.labelStrike };
-}
-
-// ---------------------------------------------------------------------------
 //  Edges
 // ---------------------------------------------------------------------------
 const edgeKind = (e) => e.kind || (e.dashed ? 'usage' : 'ownership');
@@ -542,11 +529,12 @@ function buildEdges(state, subgraph, reduceMotion) {
 //  Nodes
 // ---------------------------------------------------------------------------
 /** A node's group: its layer in the Layers menu (layers.js), one per kind but for the rooms and floors (House) and the outside nodes (Cloud, or the Public web) */
-const groupOf = (node) => (node.type === 'floor' || node.type === 'room' ? 'house' : node.type === 'external' ? externalLayer(node) : node.type);
+export const groupOf = (node) => (node.type === 'floor' || node.type === 'room' ? 'house' : node.type === 'external' ? externalLayer(node) : node.type);
 
 function buildNodes(state, subgraph) {
   const { nodes, selectedNode, searchQuery } = state;
-  const query = searchQuery.toLowerCase();
+  const found = searchQuery ? matchIds(nodes, searchQuery) : null; // what the search finds: label, id, file, type, kind (search-model.js)
+  const searching = !!found && nodes.some((n) => found.has(n.id) && isNodeVisible(state, n)); // with no match on the map nothing dims: it would only be a blank map
   const out = [];
   const view = proposalView(state);
   const focus = view === 'diff' ? touchedIds(nodes, viewEdgesOf(state)) : null;
@@ -555,7 +543,8 @@ function buildNodes(state, subgraph) {
     if (!isNodeVisible(state, node)) return;
 
     const shown = view === 'before' ? beforeOf(node) : node; // Before reads a changed node as it was
-    const match = !!query && shown.label.toLowerCase().includes(query);
+    const match = !!found && found.has(node.id);
+    const current = match && state.searchCurrent === node.id;
     const selected = !!selectedNode && selectedNode.id === node.id;
     const connected = subgraph ? subgraph.connectedNodeIds.has(node.id) : true;
     const child = subgraph && subgraph.childIds ? subgraph.childIds.has(node.id) : false;
@@ -564,6 +553,7 @@ function buildNodes(state, subgraph) {
     const gone = mark === 'edit' && node.editOp === 'removed'; // a node a what-if edit removes: violet ring, faded, label struck through
     // deep dimming for what is not connected; a proposal's Diff view fades what it does not touch, less deeply, and a removed node is faded too
     let alpha = subgraph && !connected ? DIM_ALPHA : 1;
+    if (searching && !match && !selected && !(subgraph && connected)) alpha = DIM_ALPHA; // a search dims what it did not find, as a focus does
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
@@ -575,7 +565,8 @@ function buildNodes(state, subgraph) {
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,
       halo: match ? 'match' : selected ? 'selected' : child ? 'child' : 'none',
       mark,
-      selected, match, connected,
+      selected, match, current, connected,
+      degree: node.degree || 0,
       label: shown.label,
       labelSize: big ? 12 : 11,
       labelBold: big,

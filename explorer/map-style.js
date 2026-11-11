@@ -15,6 +15,7 @@
  *   --corn-map-collision                      the collision mark of two runs on one node (a DOM mark: explorer.css reads it)
  *   --corn-map-font                           the font list of every label on the map (a list of families, `auto` for the map's own)
  *   --corn-map-edge-width                     the width of an ordinary line, in map px (`auto` keeps each line's own; the focus's and the marks' keep their proportion)
+ *   --corn-map-label-min                      the smallest a label is drawn on screen, in px (11 by default; below 9px it is ignored; a hub's title is 2 more)
  *   --corn-map-glow                           the soft glow round nodes, lines and packets: a factor (`0` none, `1` as drawn, `auto` as drawn)
  *
  * `auto` (the default of every one of them but the width and the collision) means "keep what the map draws without a theme": the
@@ -34,7 +35,7 @@
 
 import { NODE_THEMES } from '../core/schema.js';
 import { parseColor } from './theme-model.js';
-import { looksFor } from './scene.js';
+import { LABEL_MIN_FLOOR, looksFor } from './scene.js';
 
 /** The node kinds (topology types) and the groups (layers a node can belong to) the tokens exist for */
 export const MAP_KINDS = Object.freeze(Object.keys(NODE_THEMES));
@@ -52,6 +53,9 @@ export const COLLISION_TOKEN = '--corn-map-collision';
 export const FONT_TOKEN = '--corn-map-font';
 export const EDGE_WIDTH_TOKEN = '--corn-map-edge-width';
 export const GLOW_TOKEN = '--corn-map-glow';
+export const LABEL_MIN_TOKEN = '--corn-map-label-min';
+/** The largest label minimum a theme may ask for: bigger text would leave no room for another label */
+export const MAX_LABEL_MIN = 24;
 /** The width an ordinary line has with no theme (scene.js `flowEdge`): the `--corn-map-edge-width` scales every line by its ratio to this */
 export const BASE_EDGE_WIDTH = 1.6;
 /** The most a font list may hold: the families, and the characters */
@@ -84,7 +88,7 @@ export const MAP_COLOR_TOKENS = Object.freeze([
   ...MAP_STATES.map(stateToken),
 ]);
 /** Every map token */
-export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN];
+export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN];
 
 // ---------------------------------------------------------------------------
 //  Reading a token
@@ -203,6 +207,12 @@ function pxOf(value, max) {
   return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 }
 
+/** The label minimum: a length in px from LABEL_MIN_FLOOR to MAX_LABEL_MIN, or null for `auto` and anything else (under the floor is ignored, so a theme cannot make labels unreadable) */
+function labelMinOf(value) {
+  const n = pxOf(value, MAX_LABEL_MIN);
+  return n !== null && n >= LABEL_MIN_FLOOR ? n : null;
+}
+
 /** The glow factor: a number (`0` for none, `1` as drawn, up to MAX_GLOW; `0px` reads as 0), or null for `auto` and anything else */
 function factorOf(value) {
   const m = /^\s*(\d*\.?\d+)(px)?\s*$/i.exec(String(value ?? ''));
@@ -215,8 +225,8 @@ function factorOf(value) {
 /**
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
- * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null}}
- *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth` and `glow` are null at `auto` or when the value is not one
+ * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null, labelMin: number | null}}
+ *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth`, `glow` and `labelMin` are null at `auto` or when the value is not one
  */
 export function readMapTokens(read) {
   const values = {};
@@ -231,6 +241,7 @@ export function readMapTokens(read) {
     font: cssFontList(read(FONT_TOKEN)),
     edgeWidth: pxOf(read(EDGE_WIDTH_TOKEN), MAX_EDGE_WIDTH),
     glow: factorOf(read(GLOW_TOKEN)),
+    labelMin: labelMinOf(read(LABEL_MIN_TOKEN)),
   };
 }
 
@@ -299,12 +310,13 @@ export function createIconStore(urls, { load = loadImage, onChange = () => {}, w
  * @property {string | null} font   the label font list (`--corn-map-font`), null at `auto`
  * @property {number | null} edgeWidth  an ordinary line's width in px (`--corn-map-edge-width`), null at `auto`
  * @property {number | null} glow   the glow factor (`--corn-map-glow`), null at `auto`
+ * @property {number | null} labelMin  the smallest label size in px (`--corn-map-label-min`), null at `auto` or under 9px
  * @property {ReturnType<typeof createIconStore> | null} icons
  * @property {boolean} pixelated   sample icons without smoothing
  * @property {boolean} plain       nothing to apply: no colour set, no icon loaded (the scene is drawn as it is)
  */
 
-const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null };
+const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null };
 let tokens = NO_TOKENS;
 let icons = null;
 let pixelated = false;
@@ -313,8 +325,8 @@ let current = compose();
 const listeners = new Set();
 
 function compose() {
-  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null;
-  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, icons, pixelated, plain });
+  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null && tokens.labelMin === null;
+  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, labelMin: tokens.labelMin, icons, pixelated, plain });
 }
 
 function changed() {
@@ -339,7 +351,7 @@ export function onMapStyleChange(fn) {
 export function refreshMapStyle(read = pageReader()) {
   if (!read) return false;
   const next = readMapTokens(read);
-  const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow
+  const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow && next.labelMin === tokens.labelMin
     && Object.keys(next.values).length === Object.keys(tokens.values).length
     && Object.entries(next.values).every(([k, v]) => tokens.values[k] === v);
   if (same) return false;
@@ -466,6 +478,7 @@ function compute(scene, style) {
   });
   const out = { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, style, painted.edges)) };
   if (style.font) out.labelFont = style.font; // every label's font list (labels.js reads `scene.labelFont`)
+  if (style.labelMin != null) out.labelMin = style.labelMin; // the smallest label on screen (labels.js reads `scene.labelMin`)
   const halo = values[LABEL_HALO_TOKEN];
   if (halo) { // the outline under the labels, at the widths it has (labels.js reads `scene.labelOutline` before the ground's own)
     const { node, edge } = looksFor(scene.theme).labelOutline;

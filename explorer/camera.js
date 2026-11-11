@@ -64,7 +64,7 @@ export function pinchCamera(start, dist, mid, min = ZOOM_MIN) {
 //  Framing: put these nodes in the part of the map nothing covers
 // ---------------------------------------------------------------------------
 
-/** The zoom at which a node's label is about 11px on screen (labels are 11px in world units from LABEL_ZOOM up, scene.js): where a step or a picked change is shown */
+/** The zoom at which a node's label is about 11px on screen (a label is never drawn under 11px, labels.js): where a step or a picked change is shown */
 export const READ_ZOOM = 1.0;
 /**
  * The lowest zoom a change is framed at when it opens (proposal.js `fitToChange`): below it node discs and marks run together, so a change

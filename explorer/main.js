@@ -17,6 +17,7 @@
  *   scenario.js the player's pure core      scenario-ui.js  its bar, keys and camera
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
+ *   search.js   search: the count, the list by type and the stepping; search-model.js its pure half (what it reads and the rank)
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
  *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
  *   forge-panel.js  the issues and PRs panel, when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half
@@ -24,7 +25,7 @@
  */
 
 import { state, nodeById, touchScene } from './state.js';
-import { updateSearchStatus } from './search-status.js';
+import { initSearch, setQuery, stepMatch } from './search.js';
 import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
@@ -86,27 +87,6 @@ function resetFreeformPositions() {
 // ---------------------------------------------------------------------------
 //  Search
 // ---------------------------------------------------------------------------
-function handleSearch(value) {
-  state.searchQuery = value.trim();
-  touchScene();
-  for (const id of ['mobile-node-search', 'node-search']) {
-    const input = $(id);
-    if (input && input.value !== value) input.value = value;
-  }
-  if (state.searchQuery) {
-    const q = state.searchQuery.toLowerCase();
-    const found = state.nodes.find((n) => isNodeVisible(n) && n.label.toLowerCase().includes(q));
-    if (found) {
-      state.camera.x = state.width / 2 - found.x * state.camera.zoom;
-      state.camera.y = state.height / 2 - found.y * state.camera.zoom;
-    }
-    updateSearchStatus(state.searchQuery, !!found);
-  } else {
-    updateSearchStatus('', false);
-  }
-  render();
-}
-
 function toggleMobileSearch(open) {
   const bar = $('mobile-search-bar');
   const input = $('mobile-node-search');
@@ -140,7 +120,9 @@ const ACTIONS = {
   },
   'toggle-mobile-search': () => toggleMobileSearch(),
   'close-mobile-search': () => toggleMobileSearch(false),
-  'clear-search': () => handleSearch(''),
+  'clear-search': () => { setQuery(''); const field = $('node-search'); const bar = $('mobile-search-bar'); (bar && !bar.hidden ? $('mobile-node-search') : field).focus(); },
+  'search-prev': () => stepMatch(-1),
+  'search-next': () => stepMatch(1),
   'close-drawer': () => closeDrawer(),
   'copy-spec': (el) => copySpec(el),
   'start-run': () => startRun(),
@@ -212,8 +194,7 @@ initAccountMenu(); // the one menu at the right of the header (account-menu.js)
 initSheets();
 initScenarioUi();
 window.addEventListener('resize', resize);
-$('node-search').addEventListener('input', (e) => handleSearch(e.target.value));
-$('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.value));
+initSearch(); // the count, the list and the stepping of both search fields (search.js)
 
 resize();
 syncViewUi();

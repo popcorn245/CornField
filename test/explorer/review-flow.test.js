@@ -161,7 +161,8 @@ describe('F06 the camera on open: the changed nodes, in the part of the map noth
     const shown = all.filter((n     ) => inRect(n, r));
     expect(group.length).toBeLessThan(all.length); // they do not all fit
     expect(group.length).toBeGreaterThan(1);
-    expect(shown.map((n     ) => n.id).sort()).toEqual(group.map((n     ) => n.id).sort()); // the biggest group is on screen, whole
+    for (const n of group) expect(shown.map((m     ) => m.id)).toContain(n.id); // the biggest group is on screen, whole (a node just past its window may be too: the packed layout, 0008, puts them closer)
+    expect(shown.length).toBeGreaterThanOrEqual(group.length);
   });
 
   it('leaves out a change on a layer that is off: the camera frames only what is drawn', () => {
