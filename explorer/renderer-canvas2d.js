@@ -10,6 +10,7 @@
 
 import { CORE_RATIO, ARROW, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 
 const TAU = Math.PI * 2;
 /** A glow thinner than this on screen (px) is not drawn: zoomed out it is a fraction of a pixel, and costs a stroke or fill per edge and node */
@@ -217,6 +218,14 @@ function drawNode(ctx, node, zoom, looks, style) {
     const side = node.r * ICON_RATIO;
     ctx.imageSmoothingEnabled = !style.pixelated;
     ctx.drawImage(image, node.x - side / 2, node.y - side / 2, side, side);
+  } else if (showsLetters(node, zoom)) {
+    // A finer kind's letters (spec 0009 D5), where a theme's icon would be: the shortest start of its name, once the node is wide enough
+    const letters = letterImage(node.letters);
+    if (letters) {
+      const side = node.r * LETTER_RATIO;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(letters, node.x - side / 2, node.y - side / 2, side, side);
+    }
   }
   ctx.restore();
 }

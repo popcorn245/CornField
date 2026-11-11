@@ -19,6 +19,7 @@ export default {
   releaseNotes: { breakingLabel: 'breaking' },
   hooks: [{ url: 'https://chat.example.org/hooks/cornfield', events: ['spec.ready', 'spec.approved'] }],
   links: [{ label: 'Docs', href: 'https://example.org/docs' }],
+  layers: { add: [{ key: 'jobs', label: 'Background jobs', match: { type: 'service', kind: ['timer', 'job'] } }], off: ['jobs'] },
   theme: { css: './tools/cornfield/theme.css', fonts: ['https://fonts.googleapis.com/css2?family=Nunito&display=swap'], names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' }, default: 'day' },
   proxy: { '/api/': 'http://127.0.0.1:3245' },
   importMap: {},
@@ -46,8 +47,9 @@ export default {
 | `hookPoll` | `{ specs: '5m' }` or `false`: how often cornfield looks at the open spec PRs and the threads by itself, so `spec.ready` and the `thread.*` events fire without anyone opening the dashboard. On at 5 minutes when a hook subscribes to one of them, off otherwise. [Hook poll](#hook-poll) |
 | `threads` | `{ label: 'idea' }` or `false`: an idea is an issue with this label and its thread is the issue's comments; `false` turns threads off (no tab, no routes, no `thread.*` events). Checked strictly: the only key is `label`, a name without a comma. [Threads](threads.md) |
 | `links` | extra links in the explorer's account menu (the forge and Docs are there too) |
-| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the account menu, an icon per node kind on the map, and a contrast check. [Theme](#theme) |
+| `theme` | `{ css?, fonts?, fontHosts?, names?, default?, icons?, pixelated?, contrast? }`: a repo's own look, CSS and images only. A stylesheet served same-origin and loaded after cornfield's own, an allow-list of `https:` font stylesheets, named themes with a picker in the account menu, an icon per node type, kind or layer on the map, and a contrast check. [Theme](#theme) |
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
+| `layers` | `{ add?, off?, order? }`: the project's own layers in the Layers menu, as data (a `match` of `type`, `kind`, `parent`, `field`; never a pattern or a function), which layers start off, and the order of the rows. [Layers](#layers) |
 | `strings` | `{ approve?, sendBack?, … }`: the repo's own words for about forty visible labels, plain text, one line. [Strings](#strings) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
@@ -216,7 +218,7 @@ theme: {
   fontHosts: [],                                             // only for a fonts host that is not a known pair (below)
   names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' },
   default: 'day',                                            // must be one of `names`
-  icons: { app: './tools/cornfield/icons/app.svg', page: './tools/cornfield/icons/page.png' }, // an icon per node kind, drawn inside the node on the map
+  icons: { app: './tools/cornfield/icons/app.svg', page: './tools/cornfield/icons/page.png', 'service:timer': './tools/cornfield/icons/timer.svg', 'layer:jobs': './tools/cornfield/icons/jobs.svg' }, // an icon per node type, per finer kind ("<type>:<kind>") or per project layer ("layer:<key>"), drawn inside the node on the map
   pixelated: true,                                           // draw small icons crisp (nearest-neighbour), not smoothed
   contrast: 'error',                                         // 'warn' makes a failing contrast pair a warning
 }
@@ -230,7 +232,7 @@ theme: {
 | `names` | named themes: `{ name: './path.css' }`, at most 12. A name is lower-case letters, digits and hyphens (at most 32 characters). Each file is served at `/cornfield/theme/<name>.css`. |
 | `contrast` | `'error'` (the default) or `'warn'`: what `validate` does with a theme pair under WCAG AA (4.5:1 text, 3:1 UI), in light or dark, for the standard theme and for each named theme (with no theme, for cornfield's own tokens), and the map: each node kind's fill (3:1 on the ground, or carried by an outline that is) and the label colours (4.5:1). `'error'` fails `validate`; `'warn'` reports the same lines as warnings. See [the contrast check](theming.md#the-contrast-check). |
 | `default` | the name in force until a viewer picks another. One of `names`. Without it, no named theme is on until a viewer picks one, and the picker offers "Standard" (cornfield without a named theme). |
-| `icons` | an icon per node kind: `{ '<kind>': './path.svg' }`, where the kind is a node type (`root`, `app`, `page`, `pkg`, `core`, `token`, `atom`, `molecule`, `tool`, `store`, `table`, `rom`, `service`, `external`, `stack`, `machine`, `container`, `persona`, `device`, `floor`, `room`) and the file is an `.svg` or `.png` inside the repo **and inside the theme's folder** (below). It is drawn inside the node's circle on the map, in both renderers. |
+| `icons` | an icon per node type, finer kind or project layer: `{ '<key>': './path.svg' }`, where the key is a node type (`root`, `app`, `page`, `pkg`, `core`, `token`, `atom`, `molecule`, `tool`, `store`, `table`, `rom`, `service`, `external`, `stack`, `machine`, `container`, `persona`, `device`, `floor`, `room`), `"<type>:<kind>"` for a finer kind of one (`"service:timer"`: lower-case words joined by `-`), or `"layer:<key>"` for a project layer, and the file is an `.svg` or `.png` inside the repo **and inside the theme's folder** (below). The most specific wins: the kind, the layer, the type; with none, a node with a finer kind shows its kind's letters. `validate` warns about a kind not on the map and a layer not in the config. It is drawn inside the node's circle on the map, in both renderers. |
 | `pixelated` | `true` draws the icons without smoothing (nearest-neighbour: WebGL `NEAREST`, Canvas 2D `imageSmoothingEnabled = false`), so small pixel art stays crisp when the map is zoomed. It also sets `image-rendering: pixelated` on every `<img>` in the page (`<html data-pixelated>`). Default `false`. |
 
 **What the CSP gets.** `style-src` gains the origin of each `fonts` URL and `font-src` gains the same origins plus the font file hosts, and nothing else is widened (`default-src`, `script-src`, `connect-src` and `img-src` stay as they were). The file hosts are known for two stylesheet hosts: `fonts.googleapis.com` (files from `fonts.gstatic.com`) and `fonts.bunny.net` (files from the same host). For any other host in `fonts`, the config is refused until `fontHosts` lists where its font files come from. A font file that a stylesheet in `fonts` names from a host the policy does not list is blocked by the browser.
@@ -266,7 +268,7 @@ body { background-image: url(/cornfield/theme/assets/img/bricks.png); image-rend
 
 **Map icons.** `icons` is served by the same route as the images beside a theme: an icon at `tools/cornfield/icons/app.svg` is fetched from `/cornfield/theme/assets/icons/app.svg`, so it must sit in the theme's folder (the folder of the `css` and `names` files) and follow the same rules (plain names, at most 1 MB, nothing served when the theme files are at the top of the repo). The browser is told only the served path of each, in `/cornfield/config.json`'s `theme.icons`. An icon is an image and nothing else: give an SVG a `width` and a `height` (it is drawn as an image, so it cannot run script or load anything). The map draws it as a square inside the node, over the node's colour; a kind with no icon, an icon that is still loading and one that fails to load all draw as a plain node, so a missing file never breaks the map. The map's colours come from `--corn-map-*` tokens in the theme's stylesheet: [docs/theming.md, The map](theming.md#the-map).
 
-**What `cornfield validate` checks** in `icons` and `pixelated`: `pixelated` is true or false; each key is a node kind; each icon is an `.svg` or `.png` path inside the repo and inside the theme folder, that exists as a plain file there (a link out of it is refused), is at most 1 MB, and is what its extension says (a PNG with the PNG signature; an SVG with an `<svg>` element and no `<script>`, `on…=` handler or `javascript:`). `configProblems` reports the shape (a kind that is not a node type, a path outside the theme folder), `validate` the files.
+**What `cornfield validate` checks** in `icons` and `pixelated`: `pixelated` is true or false; each key is a node type, `"<type>:<kind>"` or `"layer:<key>"`; each icon is an `.svg` or `.png` path inside the repo and inside the theme folder, that exists as a plain file there (a link out of it is refused), is at most 1 MB, and is what its extension says (a PNG with the PNG signature; an SVG with an `<svg>` element and no `<script>`, `on…=` handler or `javascript:`). `configProblems` reports the shape (a kind that is not a node type, a path outside the theme folder), `validate` the files.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails, for a file over the cap, and for any path the config does not name. Nothing else of the repo is reachable through these routes.
 
@@ -308,6 +310,71 @@ Every key is optional. An unknown key is refused.
 - it is at most **512 KB**.
 
 The server applies the same checks when it serves a file and answers 404 for one that fails.
+
+## Layers
+
+A project can add its own layers to the Layers menu: "timers and schedules", "pages the household uses", "everything in one stack". cornfield has a starting set (Apps, Pages, Services, Cloud, ...); `layers` adds to it. A layer is **data**: a `match` of fixed keys, compared exactly. There is no pattern, no function and no template, and a config value never becomes script.
+
+```js
+layers: {
+  add: [{ key, label, desc?, match }],   // project layers, at most 24
+  off: ['key', …],                       // layers (starting or project) that start off
+  order: ['key', …],                     // the order of the rows; the rest follow as usual
+}
+```
+
+- **`key`**: lower-case words joined by `-` (letters and digits), at most 32 characters, unique, and not a starting layer's key (`app`, `pkg`, `page`, `atom`, `molecule`, `token`, `tool`, `flow`, `core`, `store`, `table`, `rom`, `service`, `cloud`, `web`, `stack`, `machine`, `container`, `device`, `house`, `runs`, `persona`) or a node type (`root`, `external`, `floor`, `room`). A theme reaches a layer by it: `--corn-map-group-<key>`, `theme.icons` `"layer:<key>"`.
+- **`label`**: plain text, one line, at most 40 characters. **`desc`**: at most 120; it is the row's tooltip. Both are text: shown as text everywhere, never as markup.
+- **No colour, no icon, no `on`.** A layer's colour and icon are the theme's (`--corn-map-group-<key>`, `"layer:<key>"`), where the contrast check sees them; whether a layer starts off is `off`, one place for both kinds of layer.
+
+**`match`** says which nodes a layer holds. Within a key, any; across keys, all.
+
+| Key | Value | A node meets it when |
+|---|---|---|
+| `type` | a node type, or a list | its `type` is one of them |
+| `kind` | text, or a list | its finer `kind` is one of them |
+| `parent` | a node id, or a list | its direct parent (the ownership line) is one of them |
+| `field` | `{ name: value or [values] }`, at most 4 names | for every name, the node's field equals one of the values (a field holding a list: holds one of them) |
+
+Values are text, a number, `true` or `false`, compared exactly (no case folding, no wildcard); a list holds at most 20. A node without the field does not match. A `field` name is letters, digits and `_`, starting with a letter, and not `type`, `kind` or `parent`.
+
+**A node is in exactly one layer: the first project layer in `add` that takes it**; a node no project layer takes stays in its starting layer. So the counts add up to the map, and turning a layer off hides exactly the nodes its row counts. A project layer **takes** its nodes from their starting layer: with the first example below, Services counts the services that are not timers, schedulers or jobs. While a proposal is open, every node it touches is drawn whatever its layer says, and the row says "+1 shown by the proposal".
+
+```js
+// 1. Finer kinds of one type, in a layer that starts off
+layers: {
+  add: [{ key: 'timers', label: 'Timers and schedules', desc: 'What runs on a clock',
+          match: { type: 'service', kind: ['timer', 'scheduler', 'job'] } }],
+  off: ['timers'],
+}
+// 2. By a field's value
+layers: {
+  add: [{ key: 'household', label: 'Household pages',
+          match: { type: 'page', field: { audience: 'household' } } }],
+  order: ['app', 'household', 'page'],
+}
+// 3. Several types as one layer
+layers: {
+  add: [{ key: 'data', label: 'Data', desc: 'Stores and tables', match: { type: ['store', 'table'] } }],
+}
+```
+
+**The menu.** The chip counts layers on of all ("Layers · 15 of 22"; overlays and project layers with no node are not counted). Rows run in `order` first, then the project layers in `add` order, then the starting layers; the overlays (Runs in flight) follow under their own heading. All and None switch every layer, never an overlay; the root stays drawn. "Off by default" means off for a viewer who has not touched that layer: a viewer's own changes are kept in their browser (only the changes), so a layer added to the config later arrives with its default. A link does not carry layers. Under a row whose nodes have a finer kind, "5 kinds" opens a key: the kind's letters, its name and its count. A key is not a toggle; a project that wants one declares a layer.
+
+**What `cornfield validate` checks.** The config load and `validate` refuse a bad `layers`, each problem on its own line, naming the key and what would be right:
+
+```
+layers.add[0].key "service" is a starting layer: pick another key.
+layers.add[1].key "Edge Stack": lower-case words joined by "-", like "edge-stack".
+layers.add[1].match is empty: say at least one of type, kind, parent, field.
+layers.add[2].match.type "servce" is not a node type (root, app, page, pkg, core, …).
+layers.add[2].match.field.audience: a value is text, a number, true or false, or a list of them.
+layers.add[3] has unknown key "color": known: key, label, desc, match. Colours and icons are the theme's.
+layers.off "tokens" is not a layer (app, pkg, page, …, timers).
+layers.add has 25 layers: at most 24.
+```
+
+`validate`, which reads the map too, **warns** without failing about a project layer that matches no node, and one whose every node an earlier layer took.
 
 ## Strings
 

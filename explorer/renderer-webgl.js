@@ -26,6 +26,7 @@
 
 import { ARROW, CORE_RATIO, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { LETTER_MIN_PX, LETTER_RATIO, isLetterKey, letterImage, letterKey, lettersOfKey } from './kind-letters.js';
 import {
   CURVE_SEGMENTS, EDGE_FRAG, GRID_FRAG, GRID_VERT, ICON_FRAG, ICON_VERT, LANE_FRAG, LANE_VERT, NODE_FRAG, NODE_VERT, PACKET_FRAG, PACKET_VERT,
   RING_FRAG, RING_VERT, TIP_FRAG, TIP_VERT, edgeVert,
@@ -194,22 +195,29 @@ export function packStrokes(scene) {
 }
 
 /**
- * The icons of the nodes that have one, grouped by kind (one texture, one draw each), in scene order within a kind.
+ * The icons of the nodes that have one, grouped by kind (one texture, one draw each), in scene order within a kind. A node with no theme icon
+ * but a finer kind's letters (spec 0009 D5) goes in a group of its own letters (`letters:j`), drawn from the image in explorer/kind-letters.js;
+ * a group says its smallest node's radius (`minR`), for the zoom below which its letters are not drawn.
  * @param {import('./scene.js').Scene} scene a scene through `styledScene`
- * @param {(kind: string) => boolean} has whether the kind's image has loaded
- * @returns {{data: Float32Array, count: number, stride: number, groups: {kind: string, first: number, count: number}[]}}
+ * @param {(kind: string) => boolean} has whether the kind's image has loaded (a letters key: whether its image could be made)
+ * @returns {{data: Float32Array, count: number, stride: number, groups: {kind: string, first: number, count: number, minR: number}[]}}
  */
 export function packIcons(scene, has) {
   const byKind = new Map();
   scene.nodes.forEach((n) => {
-    if (!n.icon || !has(n.icon)) return;
-    if (!byKind.has(n.icon)) byKind.set(n.icon, []);
-    byKind.get(n.icon).push([n.x, n.y, n.r * ICON_RATIO, n.alpha]);
+    let kind = n.icon && has(n.icon) ? n.icon : null;
+    let side = n.r * ICON_RATIO;
+    if (!kind && !n.icon && n.letters && has(letterKey(n.letters))) { kind = letterKey(n.letters); side = n.r * LETTER_RATIO; }
+    if (!kind) return;
+    if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity });
+    const group = byKind.get(kind);
+    group.rows.push([n.x, n.y, side, n.alpha]);
+    group.minR = Math.min(group.minR, n.r);
   });
   const groups = [];
   const rows = [];
-  for (const [kind, list] of byKind) {
-    groups.push({ kind, first: rows.length, count: list.length });
+  for (const [kind, { rows: list, minR }] of byKind) {
+    groups.push({ kind, first: rows.length, count: list.length, minR });
     rows.push(...list);
   }
   const data = new Float32Array(rows.length * ICON_STRIDE);
@@ -492,7 +500,7 @@ export function createWebglRenderer(canvas, opts = {}) {
       gpu.iconStore = style.icons;
     }
     if (scene !== packedScene || scene.version !== packedVersion) {
-      packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => !!(style.icons && style.icons.get(kind))) };
+      packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => (isLetterKey(kind) ? !!letterImage(lettersOfKey(kind)) : !!(style.icons && style.icons.get(kind)))) };
       packedScene = scene;
       packedVersion = scene.version;
       upload();
@@ -539,9 +547,11 @@ export function createWebglRenderer(canvas, opts = {}) {
       gl.bindVertexArray(icons.vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, icons.buffer);
       for (const group of packed.icons.groups) {
-        const image = style.icons && style.icons.get(group.kind);
+        const letters = isLetterKey(group.kind);
+        if (letters && group.minR * 2 * camera.zoom < LETTER_MIN_PX) continue; // too small on screen: the letters would be a smudge (kind-letters.js)
+        const image = letters ? letterImage(lettersOfKey(group.kind)) : style.icons && style.icons.get(group.kind);
         if (!image) continue;
-        gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated));
+        gl.bindTexture(gl.TEXTURE_2D, textureOf(group.kind, image, !!style.pixelated && !letters));
         gl.vertexAttribPointer(1, 4, gl.FLOAT, false, ICON_STRIDE * 4, group.first * ICON_STRIDE * 4); // this kind's rows
         gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, group.count);
         stats.draws++;

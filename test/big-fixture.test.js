@@ -78,6 +78,24 @@ describe('the big map', () => {
     }
   });
 
+  it('with project layers, `validate` warns without failing about a layer that matches nothing and a theme token that names nothing (spec 0009)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-big-test-'));
+    try {
+      writeBig(dir, { theme: 'retro', layers: true });
+      const config = await loadConfig(dir, { env: { CORNFIELD_DATA: path.join(dir, '.data') } });
+      const derivers = await loadDerivers(config);
+      const clean = await validateRepo({ config, derivers });
+      expect(clean.errors).toEqual([]);
+      expect(clean.warnings.filter((w) => /layers\.add|--corn-map-(kind|group)-/.test(w))).toEqual([]); // the rig's example is a good one
+      config.layers = { ...config.layers, add: [...config.layers.add, { key: 'nothing', label: 'Nothing', match: { kind: 'no-such-kind' } }] };
+      fs.appendFileSync(path.join(dir, config.theme.css), '\n:root { --corn-map-kind-service-timr: auto; }\n');
+      const { errors, warnings } = await validateRepo({ config, derivers });
+      expect(errors).toEqual([]);
+      expect(warnings).toContain('layers.add[3] "nothing" matches no node on the map: its row will not show.');
+      expect(warnings.some((w) => w.startsWith('theme: --corn-map-kind-service-timr in the standard theme names a kind no service on the map has'))).toBe(true);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('writes a repo that passes `cornfield validate`, in the default theme and in retro (config and contrast)', async () => {
     for (const theme of [null, 'retro']) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-big-test-'));

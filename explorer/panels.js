@@ -100,7 +100,8 @@ function dataSummary(node) {
     const row = (e, side) => `${nm(e[side])}${e.label && e.label !== 'imports' ? ` · ${escHtml(e.label)}` : ''}`;
     // The summary is the first sentence of the description above: shown again only when the description does not hold it
     const again = node.summary && !String(node.desc || '').includes(node.summary);
-    return section('Kind:', [line(`${code(node.kind)}${again ? `<div class="hx-faint">${escHtml(node.summary)}</div>` : ''}`)])
+    // The kind is in the badge ("Service · timer", typeWords): it has no row of its own
+    return (again ? section('Summary:', [line(`<span class="hx-faint">${escHtml(node.summary)}</span>`)]) : '')
       + section('Started by:', [...(node.triggers || []).map((t) => line(escHtml(t))), ...edgesOf('triggers', 'to', node.id).map((e) => line(row(e, 'from')))])
       + section('Jobs:', (node.jobs || []).map((j) => line(`${code(j.name)} · cron ${code(j.cron)}`)))
       + section('Runs:', edgesOf('triggers', 'from', node.id).map((e) => line(row(e, 'to'))))
@@ -179,10 +180,11 @@ export function repaintThreads() {
 //  The head: type · host, and what the open proposal does to the node
 // ---------------------------------------------------------------------------
 
-/** "Page", "Cloud", "Public web": the kind of node, in words */
+/** "Page", "Cloud", "Public web", "Service · timer": the kind of node, in words, with its finer kind (spec 0009 D5) after a dot. A kind is text, shown as text */
 function typeWords(node) {
   if (node.type === 'external' && node.kind) return node.kind === 'web' ? 'Public web' : 'Cloud';
-  return node.type.charAt(0).toUpperCase() + node.type.slice(1);
+  const type = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+  return typeof node.kind === 'string' && node.kind ? `${type} · ${node.kind}` : type;
 }
 
 /** The host a node answers on, when it has one */

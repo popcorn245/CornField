@@ -168,18 +168,16 @@ describe('F06 the camera on open: the changed nodes, in the part of the map noth
     expect(shown.map((n     ) => n.id).sort()).toEqual(group.map((n     ) => n.id).sort()); // the biggest group is on screen, whole
   });
 
-  it('leaves out a change on a layer that is off: the camera frames only what is drawn', () => {
+  it('draws a change on a layer that is off, and frames it: a review never hides its own change (spec 0009 D3)', () => {
     $('proposal-bar').getBoundingClientRect = rect(48, 190) ;
     state.activeLayers = { ...state.activeLayers, table: false };
     try {
       open();
-      const r = visibleMapRect();
-      for (const n of changed().filter((m     ) => m.type !== 'table')) expect(inRect(n, r), n.id).toBe(true);
       const table = state.nodes.find((n     ) => n.id === 'table-t');
-      // framed without it: page-old, app-a and page-meals alone fill the rect, so the table (to their right) is not what sets the zoom
-      const only = frameNodes(changed().filter((m     ) => m.type !== 'table'), r, { padding: 40 });
-      expect(state.camera.zoom).toBeCloseTo(only.zoom, 5);
       expect(table).toBeTruthy();
+      expect(render.isNodeVisible(table)).toBe(true); // the Tables layer is off, and the proposal changes this table
+      const r = visibleMapRect();
+      for (const n of changed()) expect(inRect(n, r), n.id).toBe(true);
     } finally { state.activeLayers = { ...state.activeLayers, table: true }; }
   });
 });

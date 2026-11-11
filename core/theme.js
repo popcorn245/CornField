@@ -11,7 +11,7 @@
  *     fontHosts: [],                                                // the hosts of the font FILES, when a fonts host is not a known pair
  *     names: { day: './tools/cornfield/day.css' },                  // named themes: data-theme-name on <html>, a picker in the header
  *     default: 'day',                                               // the name used until a viewer picks one
- *     icons: { app: './tools/cornfield/icons/app.svg' },            // an icon per node kind, drawn inside the node on the map (svg or png)
+ *     icons: { app: './tools/cornfield/icons/app.svg' },            // an icon per node type ("app"), per finer kind ("service:timer") or per project layer ("layer:timers"), drawn inside the node on the map (svg or png)
  *     pixelated: true,                                              // small icons are drawn crisp (nearest-neighbour), not smoothed
  *     contrast: 'error',                                            // 'warn' turns a failing contrast pair in `validate` into a warning
  *   }
@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { NODE_THEMES } from './schema.js';
+import { iconKeyShape } from './layers.js';
 
 export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'icons', 'pixelated', 'contrast']);
 /** The node kinds an icon may be set for: every node type of the map */
@@ -109,10 +110,10 @@ export function themeProblems(t) {
   }
   if (t.pixelated !== undefined && typeof t.pixelated !== 'boolean') out.push('theme.pixelated is true or false.');
   if (t.icons !== undefined) {
-    if (!isObject(t.icons)) out.push('theme.icons is { "<node kind>": "./path.svg" }.');
+    if (!isObject(t.icons)) out.push('theme.icons is { "<node type>": "./path.svg" } (or "<type>:<kind>", or "layer:<key>").');
     else {
       for (const [kind, rel] of Object.entries(t.icons)) {
-        if (!ICON_KINDS.includes(kind)) out.push(`theme.icons "${kind}": not a node kind (${ICON_KINDS.join(', ')}).`);
+        if (!iconKeyShape(kind)) out.push(`theme.icons "${kind.slice(0, 60)}": not a node type (${ICON_KINDS.join(', ')}), a finer kind like "service:timer", or a project layer like "layer:timers".`);
         const found = themeIconAsset(t, rel);
         if ('problem' in found) out.push(`theme.icons.${kind} ${found.problem}`);
       }
@@ -145,7 +146,7 @@ export function iconUrls(theme) {
   const out = {};
   if (!theme || !isObject(theme.icons)) return out;
   for (const [kind, rel] of Object.entries(theme.icons)) {
-    if (!ICON_KINDS.includes(kind)) continue;
+    if (!iconKeyShape(kind)) continue;
     const found = themeIconAsset(theme, rel);
     if (!('problem' in found)) out[kind] = THEME_ASSET_PREFIX + found.asset;
   }

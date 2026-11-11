@@ -28,7 +28,7 @@ import { applyBranding } from '../../explorer/plugins.js';
 // @ts-expect-error plain JS modules, no declarations
 import { readingOrder } from '../../explorer/keyboard-model.js';
 // @ts-expect-error plain JS modules, no declarations
-import { toggleLegendMenu, renderLayerToggles } from '../../explorer/layers.js';
+import { toggleLegendMenu, renderLayerToggles, setProjectLayers, toggleLayerKinds } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initProposals, openProposal, closeProposal } from '../../explorer/proposal.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -138,6 +138,32 @@ describe('axe finds no violation', () => {
     toggleLegendMenu();
     expect($('legend-toggle-btn').getAttribute('aria-expanded')).toBe('true');
     expect(await audit(...LAYERS)).toEqual([]);
+  });
+
+  it('with project layers, a row\'s kinds open and a row a proposal shows through (spec 0009), in light and dark', async () => {
+    for (const theme of ['light', 'dark']) {
+      mount();
+      document.documentElement.dataset.theme = theme;
+      state.theme = theme;
+      state.nodes.filter((n) => n.type === 'service' || n.type === 'page').forEach((n, i) => { n.kind = ['timer', 'hook', 'client'][i % 3]; });
+      try {
+        setProjectLayers({ add: [{ key: 'clock', label: 'On a clock', desc: 'Timers', match: { kind: 'timer' } }], off: ['clock'] });
+        state.proposal = { name: 'x' };
+        const one = state.nodes.find((n) => n.kind === 'timer');
+        if (one) one.mark = 'changed';
+        renderLayerToggles();
+        for (const key of ['clock', 'service', 'page']) if (document.querySelector(`[data-action="toggle-layer-kinds"][data-layer="${key}"]`)) toggleLayerKinds(key);
+        toggleLegendMenu();
+        expect(document.querySelectorAll('[data-corn="kind-key"]').length, theme).toBeGreaterThan(0);
+        expect(document.querySelector('[data-corn="layer-note"]'), theme).not.toBeNull();
+        expect(await audit(...LAYERS), theme).toEqual([]);
+      } finally {
+        for (const key of ['clock', 'service', 'page']) if (document.querySelector(`[data-action="toggle-layer-kinds"][data-layer="${key}"][aria-expanded="true"]`)) toggleLayerKinds(key);
+        state.proposal = null;
+        setProjectLayers(undefined);
+        delete document.documentElement.dataset.theme;
+      }
+    }
   });
 
   it('with the account menu open, signed in, with a forge, the links and a named theme: a menu button, its parts named', async () => {

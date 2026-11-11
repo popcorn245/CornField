@@ -55,6 +55,15 @@ export const state = {
   },
 
   /**
+   * The project's own layers (spec 0009): `{ key, label, desc?, match }` in `add` order, as the config sent them (core/layers.js); a node is
+   * in the first one whose match it meets (explorer/layer-model.js). `layerOrder` is the config's `order`; `layerDefaults` what each layer is
+   * when the viewer has not touched it (layers.js `setProjectLayers`). Empty with no `layers` in the config: the menu is then the starting set.
+   */
+  projectLayers: [],
+  layerOrder: [],
+  layerDefaults: {},
+
+  /**
    * The map as the last `setMap` (view.js) was handed it, before the live layer is laid in: the base
    * copies, or a proposal applied over them. `nodes` and `edges` are these plus the live ones.
    */
