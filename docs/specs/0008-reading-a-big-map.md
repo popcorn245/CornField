@@ -75,6 +75,9 @@ Extended to the whole map: **nothing on the map is told by colour alone, and not
 - **A click or tap on the map** leaves the camera where it is: the reader pointed at the node. The panel says what is off screen: "27 connected · 9 off screen · Frame them". `F` does the same.
 - **A selection from search, a list, a link or the keyboard** flies the camera to frame the node and its lit set, if that fits at zoom 0.5 or closer; otherwise it centres the node at zoom 1. It frames inside the part of the map no sheet covers (`state.coveredBottom`).
 - **Rejected:** always framing on click (the map moves under the pointer and the next click misses); never moving (the finding).
+- **Two exceptions, kept on purpose** (the maintainer, 2026-11-11):
+  - **A search match is flown to at zoom 1 or closer** (D4), not framed with its lit set: a match has to be readable where it lands.
+  - **On a phone, a tap pans the node out from under the sheet** when the sheet would cover it, and only then. The zoom does not change. A node hidden under its own panel is worse than a small pan, and the reason for the rule above does not apply: the next tap is on the sheet, not the map.
 
 ### D7. Edge kinds: one meaning per line style, one end mark per family, words when lit
 
