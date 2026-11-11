@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NODE_THEMES } from '../../../core/schema.js';
 import { missingPaths } from '../../../core/sync.js';
-import { makeProposals } from './proposals.js';
+import { makeProposals, rng, json, kebab } from './proposals.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,34 +32,6 @@ export const PROPOSAL_COUNT = 70;
 /** The mix of edges of a real map of this size (ownership counts the dashed usage lines), summing to EDGE_TOTAL */
 export const EDGE_MIX = Object.freeze({ own: 1674, reads: 782, writes: 415, calls: 305, uses: 239, 'runs-on': 61, flow: 59, extends: 57, triggers: 35, delivers: 5 });
 
-// ---------------------------------------------------------------------------
-//  Seeded randomness
-// ---------------------------------------------------------------------------
-
-function rng(seed) {
-  let a = seed >>> 0;
-  const next = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const int = (n) => Math.floor(next() * n);
-  const pick = (list) => list[int(list.length)];
-  const chance = (p) => next() < p;
-  const shuffle = (list) => {
-    const out = [...list];
-    for (let i = out.length - 1; i > 0; i--) {
-      const j = int(i + 1);
-      [out[i], out[j]] = [out[j], out[i]];
-    }
-    return out;
-  };
-  return { next, int, pick, chance, shuffle };
-}
-
-const kebab = (s) => s.replace(/_/g, '-');
 const slug = (s) => s.toLowerCase().replace(/:[a-z]+/gi, (m) => m.slice(1)).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'home';
 
 // ---------------------------------------------------------------------------
@@ -105,48 +77,48 @@ const FRONT_APPS = [
 const API_WEIGHT = { commerce: 14, billing: 12, catalog: 10, support: 8, content: 7, identity: 12, logistics: 10, marketing: 7, analytics: 6, people: 6, devices: 7, ops: 9, scheduling: 6, files: 6 };
 
 const CLOUD = [
-  ['stripe', 'Stripe', ['runtime', 'account'], 'Card payments, payouts and the customer portal.', 'Now: no new payment goes through and refunds queue. Orders already paid are unaffected.', 'paid'],
-  ['cloudflare', 'Cloudflare', ['runtime', 'account'], 'DNS for every domain, the CDN and the tunnel.', 'Now: the sites stop resolving once cached answers expire. At the next renewal: no certificate is issued.', 'paid'],
-  ['aws-s3', 'Amazon S3', ['runtime'], 'Object storage for uploads, exports and backups.', 'Now: uploads fail and exports cannot be fetched.', 'paid'],
-  ['aws-ses', 'Amazon SES', ['runtime'], 'Transactional email.', 'Now: no receipts, resets or notices leave; they are retried for a day.', 'paid'],
-  ['sendgrid', 'SendGrid', ['runtime'], 'Marketing email and campaign delivery.', 'Now: campaigns stall; nothing else is affected.', 'paid'],
-  ['twilio', 'Twilio', ['runtime'], 'SMS codes and delivery notices.', 'Now: two-factor by text and delivery texts fail.', 'paid'],
-  ['github', 'GitHub', ['software', 'account'], 'The code, its CI and its packages.', 'At the next deploy: nothing can be built or pulled.', 'paid'],
-  ['docker-hub', 'Docker Hub', ['software'], 'Base images for the stacks.', 'At the next deploy: images cannot be pulled; running containers stay up.', 'free'],
-  ['npm-registry', 'npm registry', ['software'], 'Packages the apps are built from.', 'At the next deploy: a clean install fails.', 'free'],
-  ['sentry', 'Sentry', ['runtime'], 'Error reports from every app.', 'Now: errors are not collected; nothing user-facing breaks.', 'paid'],
-  ['datadog', 'Datadog', ['runtime'], 'Metrics, logs and alerts.', 'Now: dashboards go blank and no alert pages anyone.', 'paid'],
-  ['pagerduty', 'PagerDuty', ['runtime', 'account'], 'On-call paging.', 'Now: an incident pages nobody.', 'paid'],
-  ['slack', 'Slack', ['runtime'], 'Chat notices from the hooks.', 'Now: chat notices are dropped.', 'free'],
-  ['google-maps', 'Google Maps', ['runtime'], 'Address search and the store locator.', 'Now: the store locator and address search are empty.', 'paid'],
-  ['google-analytics', 'Google Analytics', ['runtime'], 'Visitor analytics.', 'Now: visits are not counted.', 'free'],
-  ['recaptcha', 'reCAPTCHA', ['runtime'], 'Bot checks on sign-up and checkout.', 'Now: sign-up and checkout forms refuse every submission.', 'free'],
-  ['auth0', 'Auth0', ['runtime', 'account'], 'Social sign-in for the storefronts.', 'Now: social sign-in fails; password sign-in works.', 'paid'],
-  ['algolia', 'Algolia', ['runtime'], 'Product and article search.', 'Now: search returns nothing.', 'paid'],
-  ['shippo', 'Shippo', ['runtime'], 'Carrier rates and shipping labels.', 'Now: no label can be bought; packing waits.', 'paid'],
-  ['avalara', 'Avalara', ['runtime'], 'Sales tax lookups.', 'Now: checkout falls back to the stored rate table.', 'paid'],
-  ['quickbooks', 'QuickBooks', ['runtime', 'account'], 'The ledger the finance console exports to.', 'Now: the nightly ledger export is retried.', 'paid'],
-  ['zendesk-import', 'Zendesk import', ['runtime'], 'Old tickets, read once a night.', 'Now: the import is skipped for the night.', 'off'],
-  ['mapbox', 'Mapbox', ['runtime'], 'Map tiles in the device manager.', 'Now: the device map shows a grey grid.', 'free'],
-  ['openai', 'A language model API', ['runtime'], 'Drafts for macros and article summaries.', 'Now: draft buttons are disabled.', 'paid'],
-  ['postmark', 'Postmark', ['runtime'], 'Receipts when SES is down.', 'Now: the fallback path is unavailable.', 'unknown'],
-  ['firebase-push', 'Push gateway', ['runtime'], 'Push notices to the mobile web app.', 'Now: no push notice is delivered.', 'free'],
-  ['hcaptcha', 'hCaptcha', ['runtime'], 'The bot check on the press forms.', 'Now: press form submissions are refused.', 'free'],
-  ['lets-encrypt', "Let's Encrypt", ['software'], 'Certificates for the self-hosted names.', 'At the next renewal: no certificate is issued.', 'free'],
-  ['backblaze', 'Backblaze B2', ['runtime'], 'Off-site backups.', 'At the next backup: the copy is not made.', 'paid'],
-  ['vercel', 'Vercel', ['runtime', 'account'], 'Preview deploys of the docs site.', 'At the next deploy: no preview appears.', 'free'],
-  ['segment', 'Segment', ['runtime'], 'Event routing to the warehouse.', 'Now: events queue on disk.', 'paid'],
-  ['bigquery', 'BigQuery', ['runtime'], 'The warehouse the analytics board reads.', 'Now: the analytics board shows the last cached day.', 'paid'],
-  ['hubspot', 'HubSpot', ['runtime'], 'Leads from the partner forms.', 'Now: leads are kept locally and retried.', 'unknown'],
-  ['intercom', 'Intercom', ['runtime'], 'The chat bubble in the help center.', 'Now: the bubble is missing.', 'paid'],
-  ['calendly-api', 'Calendar API', ['runtime'], 'Two-way calendar sync for bookings.', 'Now: bookings stay local and sync later.', 'free'],
-  ['dropbox', 'Dropbox', ['runtime'], 'An import source for the file vault.', 'Now: the import button is disabled.', 'off'],
-  ['pusher', 'Pusher', ['runtime'], 'Live updates on the warehouse board.', 'Now: the board needs a manual refresh.', 'paid'],
-  ['cloudinary', 'Cloudinary', ['runtime'], 'Image resizing for product media.', 'Now: original images are served, slowly.', 'free'],
-  ['mailgun', 'Mailgun', ['runtime'], 'Inbound mail for support tickets.', 'Now: replies by email are not turned into messages.', 'paid'],
-  ['namecheap', 'Registrar', ['account'], 'The domain registrations.', 'At renewal: a domain lapses.', 'paid'],
-  ['statuspage-io', 'Status hosting', ['runtime'], 'The public status page mirror.', 'Now: the mirror is stale.', 'free'],
-  ['untappd-feed', 'A partner feed', ['runtime'], 'A partner product feed read hourly.', 'Now: partner products go stale.', 'unknown'],
+  ['pay-gateway', 'Payment gateway', ['runtime', 'account'], 'Card payments, payouts and the customer portal.', 'Now: no new payment goes through and refunds queue. Orders already paid are unaffected.', 'paid'],
+  ['dns-cdn', 'DNS and CDN', ['runtime', 'account'], 'DNS for every domain, the CDN and the tunnel.', 'Now: the sites stop resolving once cached answers expire. At the next renewal: no certificate is issued.', 'paid'],
+  ['object-store', 'Object storage', ['runtime'], 'Object storage for uploads, exports and backups.', 'Now: uploads fail and exports cannot be fetched.', 'paid'],
+  ['mail-relay', 'Transactional mail relay', ['runtime'], 'Transactional email.', 'Now: no receipts, resets or notices leave; they are retried for a day.', 'paid'],
+  ['bulk-mail', 'Campaign mail', ['runtime'], 'Marketing email and campaign delivery.', 'Now: campaigns stall; nothing else is affected.', 'paid'],
+  ['sms-provider', 'SMS provider', ['runtime'], 'SMS codes and delivery notices.', 'Now: two-factor by text and delivery texts fail.', 'paid'],
+  ['code-host', 'Code host', ['software', 'account'], 'The code, its CI and its packages.', 'At the next deploy: nothing can be built or pulled.', 'paid'],
+  ['image-registry', 'Container image registry', ['software'], 'Base images for the stacks.', 'At the next deploy: images cannot be pulled; running containers stay up.', 'free'],
+  ['package-registry', 'Package registry', ['software'], 'Packages the apps are built from.', 'At the next deploy: a clean install fails.', 'free'],
+  ['error-tracker', 'Error tracker', ['runtime'], 'Error reports from every app.', 'Now: errors are not collected; nothing user-facing breaks.', 'paid'],
+  ['metrics-host', 'Hosted metrics and logs', ['runtime'], 'Metrics, logs and alerts.', 'Now: dashboards go blank and no alert pages anyone.', 'paid'],
+  ['paging', 'On-call paging', ['runtime', 'account'], 'On-call paging.', 'Now: an incident pages nobody.', 'paid'],
+  ['team-chat', 'Team chat', ['runtime'], 'Chat notices from the hooks.', 'Now: chat notices are dropped.', 'free'],
+  ['maps-api', 'Maps and places API', ['runtime'], 'Address search and the store locator.', 'Now: the store locator and address search are empty.', 'paid'],
+  ['web-analytics', 'Web analytics', ['runtime'], 'Visitor analytics.', 'Now: visits are not counted.', 'free'],
+  ['bot-check', 'Bot check', ['runtime'], 'Bot checks on sign-up and checkout.', 'Now: sign-up and checkout forms refuse every submission.', 'free'],
+  ['social-sign-in', 'Social sign-in broker', ['runtime', 'account'], 'Social sign-in for the storefronts.', 'Now: social sign-in fails; password sign-in works.', 'paid'],
+  ['search-host', 'Hosted search', ['runtime'], 'Product and article search.', 'Now: search returns nothing.', 'paid'],
+  ['shipping-labels', 'Shipping labels', ['runtime'], 'Carrier rates and shipping labels.', 'Now: no label can be bought; packing waits.', 'paid'],
+  ['tax-lookup', 'Sales tax lookup', ['runtime'], 'Sales tax lookups.', 'Now: checkout falls back to the stored rate table.', 'paid'],
+  ['ledger-app', 'Accounting ledger', ['runtime', 'account'], 'The ledger the finance console exports to.', 'Now: the nightly ledger export is retried.', 'paid'],
+  ['old-helpdesk', 'Old help desk import', ['runtime'], 'Old tickets, read once a night.', 'Now: the import is skipped for the night.', 'off'],
+  ['map-tiles', 'Map tiles', ['runtime'], 'Map tiles in the device manager.', 'Now: the device map shows a grey grid.', 'free'],
+  ['llm-api', 'A language model API', ['runtime'], 'Drafts for macros and article summaries.', 'Now: draft buttons are disabled.', 'paid'],
+  ['mail-fallback', 'Fallback mail relay', ['runtime'], 'Receipts when the main relay is down.', 'Now: the fallback path is unavailable.', 'unknown'],
+  ['push-gateway', 'Push gateway', ['runtime'], 'Push notices to the mobile web app.', 'Now: no push notice is delivered.', 'free'],
+  ['form-check', 'Form bot check', ['runtime'], 'The bot check on the press forms.', 'Now: press form submissions are refused.', 'free'],
+  ['cert-authority', 'Certificate authority', ['software'], 'Certificates for the self-hosted names.', 'At the next renewal: no certificate is issued.', 'free'],
+  ['offsite-backup', 'Off-site backup', ['runtime'], 'Off-site backups.', 'At the next backup: the copy is not made.', 'paid'],
+  ['preview-host', 'Preview host', ['runtime', 'account'], 'Preview deploys of the docs site.', 'At the next deploy: no preview appears.', 'free'],
+  ['event-router', 'Event router', ['runtime'], 'Event routing to the warehouse.', 'Now: events queue on disk.', 'paid'],
+  ['warehouse', 'Data warehouse', ['runtime'], 'The warehouse the analytics board reads.', 'Now: the analytics board shows the last cached day.', 'paid'],
+  ['crm', 'CRM', ['runtime'], 'Leads from the partner forms.', 'Now: leads are kept locally and retried.', 'unknown'],
+  ['chat-widget', 'Chat widget', ['runtime'], 'The chat bubble in the help center.', 'Now: the bubble is missing.', 'paid'],
+  ['calendar-api', 'Calendar API', ['runtime'], 'Two-way calendar sync for bookings.', 'Now: bookings stay local and sync later.', 'free'],
+  ['file-import', 'File import source', ['runtime'], 'An import source for the file vault.', 'Now: the import button is disabled.', 'off'],
+  ['realtime', 'Realtime channel', ['runtime'], 'Live updates on the warehouse board.', 'Now: the board needs a manual refresh.', 'paid'],
+  ['image-resizer', 'Image resizer', ['runtime'], 'Image resizing for product media.', 'Now: original images are served, slowly.', 'free'],
+  ['inbound-mail', 'Inbound mail', ['runtime'], 'Inbound mail for support tickets.', 'Now: replies by email are not turned into messages.', 'paid'],
+  ['registrar', 'Registrar', ['account'], 'The domain registrations.', 'At renewal: a domain lapses.', 'paid'],
+  ['status-host', 'Status hosting', ['runtime'], 'The public status page mirror.', 'Now: the mirror is stale.', 'free'],
+  ['partner-feed', 'A partner feed', ['runtime'], 'A partner product feed read hourly.', 'Now: partner products go stale.', 'unknown'],
   ['weather-api', 'Weather API', ['runtime'], 'Forecasts for the delivery planner.', 'Now: the planner shows no forecast.', 'free'],
   ['currency-api', 'Currency rates', ['runtime'], 'Exchange rates for the marketplace.', 'Now: the last rate is used.', 'free'],
   ['exchange-rates-backup', 'Backup rates feed', ['runtime'], 'The second source of exchange rates.', 'Now: nothing, until the first one fails too.', 'unknown'],
@@ -157,7 +129,7 @@ const SERVICES = {
   client: ['geocoder', 'mailer', 'sms-gateway', 'payments-client', 'tax-client', 'shipping-rates', 'address-lookup', 'pdf-renderer'],
   dispatch: ['order-dispatch', 'notification-dispatch', 'webhook-dispatch', 'email-dispatch', 'push-dispatch', 'label-dispatch', 'task-dispatch', 'shipment-dispatch'],
   hook: ['on-order-paid', 'on-user-created', 'on-refund-issued', 'on-ticket-closed', 'on-stock-low', 'on-plan-changed', 'on-return-received', 'on-review-posted'],
-  webhook: ['stripe-events', 'github-events', 'shipping-events', 'chat-events', 'calendar-events', 'files-events', 'sms-status'],
+  webhook: ['payment-events', 'code-host-events', 'shipping-events', 'chat-events', 'calendar-events', 'files-events', 'sms-status'],
   timer: ['token-expiry', 'session-cleanup', 'trial-ending', 'cache-warmer', 'heartbeat', 'rate-limit-reset', 'quota-reset'],
   effects: ['theme-effects', 'sound-effects', 'particle-effects', 'haptic-effects', 'confetti-effects'],
   scheduler: ['cron-scheduler', 'queue-scheduler', 'report-scheduler', 'backup-scheduler', 'release-scheduler', 'campaign-scheduler', 'shift-scheduler'],
@@ -172,7 +144,7 @@ const TOOLS = [['ci', 'CI workflows', '.github/workflows'], ['lint', 'Lint and f
 const STORES = [['cloud', 'Cloud services', 'registry'], ['idb', 'IndexedDB', 'browser'], ['redis', 'Redis cache', 'cache'], ['objects', 'Object storage', 'server'], ['queue', 'Job queue', 'server'], ['search', 'Search index', 'server'], ['sessions', 'Session store', 'cache'], ['logs', 'Log archive', 'server']];
 const PERSONAS = [['shopper', 'Shopper', 'member', 'Buys things and returns some of them.'], ['seller', 'Seller', 'member', 'Lists products and ships orders.'], ['support-agent', 'Support agent', 'admin', 'Answers tickets and issues refunds.'], ['finance-lead', 'Finance lead', 'admin', 'Closes the month and approves payouts.'], ['site-admin', 'Site admin', 'admin', 'Runs the stacks, the flags and the accounts.']];
 const STACK_NAMES = ['edge', 'core', 'storefront', 'billing', 'catalog', 'support', 'content', 'identity', 'logistics', 'marketing', 'analytics', 'people', 'devices', 'ops'];
-const CONTAINER_KINDS = [['web', 'node:22-alpine', [3000]], ['api', 'node:22-alpine', [3245]], ['worker', 'node:22-alpine', []], ['db', 'postgres:16', [5432]], ['cache', 'redis:7', [6379]], ['proxy', 'caddy:2', [80, 443]], ['queue', 'rabbitmq:3', [5672]], ['search', 'getmeili/meilisearch:v1', [7700]], ['mailer', 'mailhog/mailhog', [8025]], ['metrics', 'prom/prometheus', [9090]], ['storage', 'minio/minio', [9000]], ['cron', 'node:22-alpine', []]];
+const CONTAINER_KINDS = [['web', 'images.example.test/app:1', [3000]], ['api', 'images.example.test/app:1', [3245]], ['worker', 'images.example.test/app:1', []], ['db', 'images.example.test/sql-db:16', [5432]], ['cache', 'images.example.test/kv-cache:7', [6379]], ['proxy', 'images.example.test/proxy:2', [80, 443]], ['queue', 'images.example.test/queue:3', [5672]], ['search', 'images.example.test/search:1', [7700]], ['mailer', 'images.example.test/mail-catcher:1', [8025]], ['metrics', 'images.example.test/metrics:1', [9090]], ['storage', 'images.example.test/object-store:1', [9000]], ['cron', 'images.example.test/app:1', []]];
 
 const PAGE_FRONT = [['/{R}/:id/overview', 'One of the {R}, in full.'], ['/{R}/:id/edit', 'Change one of the {R}.'], ['/{R}', 'The {R} list.'], ['/{R}/new', 'A form to add to the {R}.'], ['/{R}/:id/{S}', 'The {S} of one of the {R}.'], ['/{R}/:id/{S}/:sid', 'One of the {S} of one of the {R}.'], ['/{R}/search', 'Search the {R}.'], ['/{R}/:id/{S}/:sid/edit', 'Change one of the {S} of one of the {R}.'], ['/account/{R}', 'Your own {R}.'], ['/{R}/export', 'Download the {R} as a file.']];
 const PAGE_API = [['/api/v1/{R}/:id', 'GET · PATCH · DELETE: one of the {R}.', ['GET', 'PATCH', 'DELETE']], ['/api/v1/{R}', 'GET · POST: list and add {R}.', ['GET', 'POST']], ['/api/v1/{R}/:id/{S}', 'GET: the {S} of one of the {R}.', ['GET']], ['/api/v1/{R}/bulk', 'POST: change many {R} at once.', ['POST']], ['/api/v2/{R}/:id/{S}/:sid', 'GET · PUT: one of the {S} of one of the {R}.', ['GET', 'PUT']], ['/api/v1/{R}/search', 'GET: search the {R}.', ['GET']], ['/api/v1/{R}/:id/events', 'GET: what happened to one of the {R}.', ['GET']]];
@@ -452,10 +424,10 @@ export function buildTopology(seed = SEED) {
   for (const t of TOOLS.map((x) => `tool-${x[0]}`)) addEdge({ from: t, to: R.pick(cloudIds), kind: 'calls', status: 'live', label: 'talks to it in CI' });
   for (const t of ['tool-ci', 'tool-bench', 'tool-codegen']) for (const p of R.shuffle(pageIds).slice(0, 4)) addEdge({ from: t, to: p, kind: 'calls', status: 'live', label: 'exercises' });
   for (const p of ['pkg-pdf', 'pkg-maps', 'pkg-analytics', 'core-auth']) addEdge({ from: p, to: R.pick(cloudIds), kind: 'calls', status: 'live', label: 'calls out' });
-  addEdge({ from: 'root', to: 'ext-github', kind: 'calls', status: 'live', label: 'the code lives there', when: 'deploy' });
-  for (const m of machines.map((x) => `machine-${x[0]}`).slice(0, 3)) addEdge({ from: m, to: 'ext-cloudflare', kind: 'calls', status: 'live', label: 'resolves the names', when: 'run' });
-  for (const [s, ext] of [['edge', 'ext-lets-encrypt'], ['core', 'ext-docker-hub']]) addEdge({ from: stacks.find((x) => x.name === s).containers[0], to: ext, kind: 'calls', status: 'live', label: 'pulls from it', when: 'deploy' });
-  addEdge({ from: 'ext-namecheap', to: 'ext-cloudflare', kind: 'calls', status: 'live', label: 'delegates the zone' });
+  addEdge({ from: 'root', to: 'ext-code-host', kind: 'calls', status: 'live', label: 'the code lives there', when: 'deploy' });
+  for (const m of machines.map((x) => `machine-${x[0]}`).slice(0, 3)) addEdge({ from: m, to: 'ext-dns-cdn', kind: 'calls', status: 'live', label: 'resolves the names', when: 'run' });
+  for (const [s, ext] of [['edge', 'ext-cert-authority'], ['core', 'ext-image-registry']]) addEdge({ from: stacks.find((x) => x.name === s).containers[0], to: ext, kind: 'calls', status: 'live', label: 'pulls from it', when: 'deploy' });
+  addEdge({ from: 'ext-registrar', to: 'ext-dns-cdn', kind: 'calls', status: 'live', label: 'delegates the zone' });
   // pages reach containers (self-hosted) and containers deliver webhooks
   for (const p of R.shuffle(pages.filter((x) => x.app.kind !== 'api')).slice(0, 14)) addEdge({ from: p.id, to: R.pick(stacks.find((s) => s.name === 'core').containers), kind: 'calls', status: 'live', label: 'embeds it' });
   for (const p of R.shuffle(pages.filter((x) => x.app.kind === 'api')).slice(0, 8)) addEdge({ from: R.pick(R.pick(stacks).containers), to: p.id, kind: 'delivers', status: 'live', label: 'a change was made' });
@@ -523,7 +495,7 @@ export function buildTopology(seed = SEED) {
     triggers: () => addEdge({ from: 'store-queue', to: R.pick(services).id, kind: 'triggers', status: 'live', label: 'a message is queued' }),
     flow: () => addEdge({ from: R.pick(frontApps).id, to: R.pick(apiApps).id, kind: 'flow', flow: 'api', status: 'live', label: 'the pages call the API' }),
     delivers: () => addEdge({ from: R.pick(cloudIds), to: R.pick(apiPages).id, kind: 'delivers', status: 'live', label: 'the outside system pushes' }),
-    'runs-on': () => addEdge({ from: R.pick(['pkg-queue', 'pkg-testing', 'pkg-pdf', 'pkg-cache', 'pkg-logger']), to: R.pick(machines)[0] ? `machine-${R.pick(machines)[0]}` : 'machine-rack-1', kind: 'runs-on', label: 'the worker runs here' }),
+    'runs-on': () => addEdge({ from: R.pick(['pkg-queue', 'pkg-testing', 'pkg-pdf', 'pkg-cache', 'pkg-logger']), to: `machine-${R.pick(machines)[0]}`, kind: 'runs-on', label: 'the worker runs here' }),
   };
   for (const c of Object.keys(EDGE_MIX)) {
     let guard = 0;
@@ -539,8 +511,6 @@ export function buildTopology(seed = SEED) {
 // ---------------------------------------------------------------------------
 //  The repo
 // ---------------------------------------------------------------------------
-
-const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
 
 export function configText({ theme, retro }) {
   const lines = [

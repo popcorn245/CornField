@@ -22,6 +22,8 @@ node test/fixtures/big/serve.js --forge --port 3403                 # add --them
 
 A map of your own: `node test/fixtures/big/make.js --from <topology dir> [--theme retro] --out <dir>`, then `node test/fixtures/big/serve.js --repo <dir> --port 3401` (with `--theme retro` it rewrites that repo's config and `tools/cornfield/` for the theme; with `--forge` it adds the signed-in states). Each command prints its URLs and the proposal slugs.
 
+Every server binds to 127.0.0.1 only, whatever `CORNFIELD_HOST` says, and ignores any real sign-in or hook secret in your shell. The generated repo goes to `<tmp>/cornfield-big-<theme>-<port>` (or `--dir <dir>`, which must be empty or a repo the rig made: anything else is refused, never replaced), and cornfield's own state (sessions, runs) to another folder under the OS temp dir. This is a review rig, not something to deploy.
+
 ## The proposals
 
 70 files in `docs/specs/proposals/`: `0001`-`0064` are small (a page, a service, a table, a change, a removal, an edge, an outside service; one to three scenarios), `0100`-`0105` are rich:

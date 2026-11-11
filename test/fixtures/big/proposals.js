@@ -9,7 +9,8 @@
  * Nothing here names anything: every word of a title comes from the picked nodes. Deterministic for a seed.
  */
 
-const rng = (seed) => {
+/** A seeded generator (mulberry32): the same numbers for the same seed; make.js uses it too */
+export const rng = (seed) => {
   let a = seed >>> 0;
   const next = () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -19,11 +20,11 @@ const rng = (seed) => {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   const int = (n) => Math.floor(next() * n);
-  return { int, pick: (l) => l[int(l.length)], chance: (p) => next() < p, shuffle: (l) => { const o = [...l]; for (let i = o.length - 1; i > 0; i--) { const j = int(i + 1); [o[i], o[j]] = [o[j], o[i]]; } return o; } };
+  return { next, int, pick: (l) => l[int(l.length)], chance: (p) => next() < p, shuffle: (l) => { const o = [...l]; for (let i = o.length - 1; i > 0; i--) { const j = int(i + 1); [o[i], o[j]] = [o[j], o[i]]; } return o; } };
 };
 
-const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
-const kebab = (s) => String(s).replace(/_/g, '-');
+export const json = (v) => `${JSON.stringify(v, null, 2)}\n`;
+export const kebab = (s) => String(s).replace(/_/g, '-');
 const words = (s) => kebab(s).replace(/[^A-Za-z0-9]+/g, ' ').trim();
 const slugOf = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x';
 const clip = (s, n) => String(s).slice(0, n).replace(/-$/, '');
@@ -215,8 +216,8 @@ export function makeProposals(topo, { seed = 245 } = {}) {
   }
 
   // ---- six rich proposals ---------------------------------------------------------------------------------------
-  const pickApp = (n) => frontApps[(n * 7 + R.int(3)) % frontApps.length];
   const rich = (num, slug, build) => put(num, slug, build());
+  const pickApp = (n) => frontApps[(n * 7 + R.int(3)) % frontApps.length];
   const someTable = () => R.pick(tablesAll);
   const someExt = () => R.pick(cloud);
 
@@ -335,7 +336,7 @@ export function makeProposals(topo, { seed = 245 } = {}) {
         { id: 'old-path', title: 'The old path goes away', steps: rem.flatMap((p) => [{ node: p.id, text: `${p.label} is removed.` }]) },
         { id: 'new-row-shows-up', title: 'A new row shows up elsewhere', steps: [{ edge: { from: np, to: t.id, kind: 'writes' }, text: 'A row is stored.' }, { node: svc.id, text: 'The service reacts to the change.' }, { node: R.pick(pagesOf(pickApp(4).id)).id, text: 'A page in another app shows it.' }] },
         { id: 'across-the-map', title: 'From the retired area to the far side', steps: walkSteps(farWalk(rem[0].id, 8), sayNode) },
-      ].concat(w ? [] : []),
+      ],
     };
   });
 
@@ -361,7 +362,7 @@ export function makeProposals(topo, { seed = 245 } = {}) {
         { id: 'someone-fixes', title: 'Someone matches one by hand', steps: [{ node: pg.id, text: 'They open the page.' }, { edge: { from: tn, to: pg.id, kind: 'reads' }, text: 'The unmatched lines are listed.' }] },
         { id: 'provider-down', title: 'The new provider is down', down: [id], steps: [{ node: id, text: 'The provider is unavailable.' }, { node: sv, text: 'The client gets nothing and says so.' }, { node: pg.id, text: 'People see last night\'s list, marked stale.' }] },
         { id: 'across-the-map', title: 'From the provider to the far side', steps: walkSteps(farWalk(consumer.id, 8), sayNode) },
-      ].concat(w ? [] : []),
+      ],
     };
   });
 
@@ -403,7 +404,7 @@ export function makeProposals(topo, { seed = 245 } = {}) {
     return {
       title: 'A second site', summary: `A new machine and stack run ${app.label}, so the main site can go down without taking it with it.`,
       nodes: {
-        add: [{ id: mid, label: 'site-two', type: 'machine', hostname: 'site-two', file: mc.file, parent: parentOf.get(mc.id) || rootId, desc: 'The box at the second location.' }, { id: sid, label: 'site-two', type: 'stack', parent: parentOf.get(st.id) || rootId, file: st.file, services: [{ name: 'web', image: 'node:22-alpine', ports: [], volumes: [] }, { name: 'db', image: 'postgres:16', ports: [], volumes: [] }], desc: 'Docker compose stack: web, db.' }, { id: c1, label: 'site-two-web', type: 'container', parent: sid, stack: 'site-two', service: 'web', image: 'node:22-alpine', file: st.file, ports: [] }, { id: c2, label: 'site-two-db', type: 'container', parent: sid, stack: 'site-two', service: 'db', image: 'postgres:16', file: st.file, ports: [] }, { id: eid, label: 'Second site line', type: 'external', kind: 'cloud', ...(cloudParent ? { parent: cloudParent } : {}), roles: ['runtime', 'account'], breaks: 'Now: the second site is offline; the main site is unaffected.', plan: { tier: 'paid' }, desc: 'The internet line at the second location.' }],
+        add: [{ id: mid, label: 'site-two', type: 'machine', hostname: 'site-two', file: mc.file, parent: parentOf.get(mc.id) || rootId, desc: 'The box at the second location.' }, { id: sid, label: 'site-two', type: 'stack', parent: parentOf.get(st.id) || rootId, file: st.file, services: [{ name: 'web', image: 'images.example.test/app:1', ports: [], volumes: [] }, { name: 'db', image: 'images.example.test/sql-db:16', ports: [], volumes: [] }], desc: 'Docker compose stack: web, db.' }, { id: c1, label: 'site-two-web', type: 'container', parent: sid, stack: 'site-two', service: 'web', image: 'images.example.test/app:1', file: st.file, ports: [] }, { id: c2, label: 'site-two-db', type: 'container', parent: sid, stack: 'site-two', service: 'db', image: 'images.example.test/sql-db:16', file: st.file, ports: [] }, { id: eid, label: 'Second site line', type: 'external', kind: 'cloud', ...(cloudParent ? { parent: cloudParent } : {}), roles: ['runtime', 'account'], breaks: 'Now: the second site is offline; the main site is unaffected.', plan: { tier: 'paid' }, desc: 'The internet line at the second location.' }],
         change: [{ id: app.id, set: { desc: `${app.label}: now served from both sites.` }, why: 'it moves to the new stack too' }, { id: mc.id, set: { desc: `${mc.desc || mc.label} Some load moves off it.` }, why: 'load moves to the new box' }, { id: st.id, set: { desc: `${st.desc || st.label} The main copy.` }, why: 'there are two now' }],
         remove: dev ? [{ id: dev.id, why: 'it moves with the work and is re-added on the new machine' }] : [],
       },

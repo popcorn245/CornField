@@ -7,7 +7,7 @@
  *   node test/fixtures/big/serve.js --repo <dir> [--theme retro]            a repo already generated (make.js --from), served
  *
  * The repo is generated (test/fixtures/big/make.js) into a folder under the OS temp dir (or `--dir <dir>`), then served by
- * cornfield's own server on 127.0.0.1, with no sign-in, so every route answers. Ctrl-C stops it. See README.md.
+ * cornfield's own server on 127.0.0.1 only, with no sign-in, so every route answers. Its state goes to a folder under the OS temp dir. Ctrl-C stops it. See README.md.
  *
  *   node test/fixtures/big/serve.js --forge --port 3403 [--runner offline]   the same, with sign-in against a fake GitHub: sign in as a maintainer
  *     (open /auth/start), PRs, issues, threads, checks, a spec PR per rich proposal, and runs in every state (forge.js)
@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { loadConfig } from '../../../core/config.js';
 import { listen } from '../../../server/server.js';
 import { writeBig, configText, retroTheme } from './make.js';
@@ -31,13 +32,21 @@ export function parseFlags(argv) {
   return flags;
 }
 
+/** The shell's env without anything that would turn on real sign-in, a real hook secret or another host, URL or config */
+const rigEnv = () => Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^CORNFIELD_(GITHUB|FORGEJO|SESSION|HOOK|HOST|PUBLIC_URL|CONFIG|HA)_?/.test(k)));
+
+/** Whether `dir` holds a repo make.js wrote (its config carries the generator's first line) */
+const isGenerated = (dir) => {
+  try { return fs.readFileSync(path.join(dir, 'cornfield.config.js'), 'utf8').startsWith(configText({}).split('\n')[0]); } catch { return false; }
+};
+
 /**
  * The repo to serve, with its config loaded:
  *  - `repo`: an existing repo folder, served as it is (with `theme`, its config and tools/cornfield/ are rewritten for that theme)
  *  - `from`: a topology folder (topology.json, and its cloud and personas files): a repo is generated from it into `dir`
  *  - neither: the synthetic big map is generated into `dir`
  */
-export async function prepare({ theme = null, dir, repo: existing, from, seed, env = {}, configure } = {}) {
+export async function prepare({ theme = null, dir, repo: existing, from, seed, env = {} } = {}) {
   let repo;
   let made = null;
   if (existing) {
@@ -53,12 +62,14 @@ export async function prepare({ theme = null, dir, repo: existing, from, seed, e
     made = { topology, proposals: slugs };
   } else {
     repo = path.resolve(dir || path.join(os.tmpdir(), `cornfield-big-${theme || 'default'}`));
+    if (fs.existsSync(repo) && fs.readdirSync(repo).length && !isGenerated(repo)) throw new Error(`${repo} is not empty and not a repo this rig made: refusing to replace it`);
     fs.rmSync(repo, { recursive: true, force: true });
-    made = writeBig(repo, { theme, seed, from: from ? path.resolve(from) : null, ...(configure ? { configure } : {}) });
+    made = writeBig(repo, { theme, seed, from: from ? path.resolve(from) : null });
   }
-  const data = `${repo}.data`;
+  // cornfield's own state (sessions, runs) stays in the temp dir, never beside a repo you named
+  const data = path.join(os.tmpdir(), `cornfield-big-data-${createHash('sha256').update(repo).digest('hex').slice(0, 12)}`);
   fs.mkdirSync(data, { recursive: true });
-  const config = await loadConfig(repo, { env: { ...process.env, ...env, CORNFIELD_DATA: data } });
+  const config = await loadConfig(repo, { env: { ...rigEnv(), ...env, CORNFIELD_DATA: data } });
   return { repo, data, made, config };
 }
 
@@ -76,15 +87,17 @@ async function main() {
   const flags = parseFlags(process.argv.slice(2));
   const theme = flags.theme && flags.theme !== true ? flags.theme : null;
   const port = Number(flags.port || 3401);
-  const opts = { theme, dir: flags.dir, repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, env: { CORNFIELD_PORT: String(port) } };
+  // one folder per port, so (a), (b) and (c) can run side by side without replacing each other's repo
+  const opts = { theme, dir: flags.dir && flags.dir !== true ? flags.dir : path.join(os.tmpdir(), `cornfield-big-${theme || 'default'}-${port}`), repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, env: { CORNFIELD_PORT: String(port) } };
   const { repo, made, config, data } = await prepare(opts);
   let world = null;
-  let serverConfig = { ...config, port };
-  let env = process.env;
+  // loopback only, whatever CORNFIELD_HOST or the config says: this is a review rig, never something to deploy
+  let serverConfig = { ...config, host: '127.0.0.1', port };
+  let env = rigEnv();
   if (flags.forge) {
     world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: port + 100, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
     serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull' }, forge: { type: 'github', url: world.forge.url, repo: REPO }, publicUrl: `http://127.0.0.1:${port}` };
-    env = { ...process.env, ...SIGN_IN_ENV };
+    env = { ...env, ...SIGN_IN_ENV };
   }
   const { url } = await listen(serverConfig, { env });
   console.log(`\n${flags.repo || flags.from ? 'Map' : 'Big map'}, ${config.theme && config.theme.css ? 'themed' : 'default theme'}${world ? ', signed-in states with a fake forge' : ''}: ${made.topology.nodes.length} nodes, ${made.topology.edges.length} edges, repo ${repo}`);

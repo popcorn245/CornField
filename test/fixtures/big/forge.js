@@ -15,7 +15,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { openStore } from '../../../server/db.js';
 import { fakeForge, recordings } from '../../server/fake-forge.js';
 
@@ -24,8 +24,8 @@ export const MAINTAINER = 'maintainer-one';
 const API = '/api/v3';
 const GH = `${API}/repos/${REPO}`;
 const FOLDER = 'docs/specs/proposals';
-export const SESSION_SECRET = 'rig-session-secret-not-a-secret-0123456789';
-export const SIGN_IN_ENV = { CORNFIELD_GITHUB_CLIENT_ID: 'rig-client-id', CORNFIELD_GITHUB_CLIENT_SECRET: 'not-real', CORNFIELD_SESSION_SECRET: SESSION_SECRET };
+/** Sign-in for the fake forge only: a fake client, and a session secret made fresh on each run (never stored, never reused) */
+export const SIGN_IN_ENV = { CORNFIELD_GITHUB_CLIENT_ID: 'rig-client-id', CORNFIELD_GITHUB_CLIENT_SECRET: 'not-real', CORNFIELD_SESSION_SECRET: `rig-${randomBytes(24).toString('hex')}` };
 
 const sha = (n) => createHash('sha1').update(`rig-${n}`).digest('hex');
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
@@ -49,12 +49,6 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   const mockupsOf = (slug) => Object.keys(repoFiles).filter((f) => f.startsWith(`${FOLDER}/${slug}/`));
   const state = { runner };
   let touchRunner = () => {};
-
-  const recorded = (method, p, query) => {
-    const key = `${method} ${p}${query}`;
-    const found = base[key.replace(`${GH}`, `/repos/${REPO}`).replace(`${API}/user`, '/user').replace(`${API}/repos/`, '/repos/')] || base[key.replace(API, '')];
-    return found;
-  };
 
   const dispatch = (key, req) => {
     const space = key.indexOf(' ');
@@ -114,7 +108,6 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     if (method === 'POST' && /\/issues\/\d+\/comments$/.test(rest)) return { status: 201, body: { id: 9900, user: user(MAINTAINER), body: JSON.parse(req.body || '{}').body || '', html_url: `https://github.example.com/${REPO}/issues/1#issuecomment-9900`, created_at: minutesAgo(0), updated_at: minutesAgo(0) } };
     return { status: 404, body: { message: 'Not Found' } };
   };
-  void recorded;
   const routes = new Proxy({}, { get: (_, key) => (typeof key === 'string' ? (req) => dispatch(key, req) : undefined) });
   const forge = await fakeForge(routes, port);
 
@@ -157,7 +150,7 @@ export function seedRuns(dataDir, specs) {
       const stopped = name === 'stopped';
       insert.run({
         id: runId, repo: REPO, kind: request.kind, profile: i % 2 ? 'builder' : null, issue: proposal ? null : issue, proposal: proposal ?? null, target: proposal ? specs[0]?.n ?? 21 : issue, cid: '', curl: null,
-        request: JSON.stringify(request), by: MAINTAINER, at, state: name === 'waiting' ? 'waiting' : ['requested', 'claimed', 'working', 'done', 'failed', 'stopped'].includes(name) ? name : 'requested',
+        request: JSON.stringify(request), by: MAINTAINER, at, state: name,
         reported_at: report ? minutesAgo(ago) : null, reported_by: report ? 'runner:rig-runner' : null, note: note ?? null, url: report ? 'https://runner.example.test/logs/' + runId : null, tokens: report ? 41000 + i * 3000 : null, cost: report ? 0.4 + i * 0.35 : null,
         stop_at: stopped ? minutesAgo(ago) : null, stop_by: stopped ? MAINTAINER : null, last: minutesAgo(ago),
         pull: extra?.pull ?? null, pull_state: extra?.pull ? 'open' : null, pull_url: extra?.pull ? `https://github.example.com/${REPO}/pull/${extra.pull}` : null, pull_by: extra?.pull ? 'agent-four' : null, trusted: extra?.pull ? 1 : 0, branch: extra?.branch ?? null, head: extra?.pull ? sha(`run${i}`) : null, checks: extra?.checks ?? null,
