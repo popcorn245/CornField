@@ -2018,6 +2018,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "type": "page",
+      "label": "/docs/specs/0009-project-layers-and-finer-kinds",
+      "file": "docs/specs/0009-project-layers-and-finer-kinds.md",
+      "summary": "Spec 0009: a project defines its own layers, and finer kinds show",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0009: a project defines its own layers, and finer kinds show (docs/specs/0009-project-layers-and-finer-kinds.md)."
     }
   ],
   "edges": [
@@ -6439,7 +6449,21 @@
       "from": "page-doc-docs-specs-0008-reading-a-big-map",
       "to": "page-doc-docs-accessibility",
       "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds"
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-adr-0009-generic-here-facts-in-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T08:15:47.333Z"
+  "updatedAt": "2026-11-11T08:17:46.027Z"
 }
