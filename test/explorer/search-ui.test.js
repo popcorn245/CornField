@@ -108,8 +108,11 @@ describe('the count and the list', () => {
   it('announces the count of a search that found something, and hides the count and the list with no query', () => {
     vi.useFakeTimers();
     mount();
+    type('syn');
     type('sync');
-    expect($('search-status').textContent).toBe('7 matches');
+    expect($('search-status').textContent).toBe(''); // not on every key ...
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS);
+    expect($('search-status').textContent).toBe('7 matches'); // ... once the typing pauses
     type('');
     expect($('search-count').textContent).toBe('');
     expect($('search-steps').hidden).toBe(true);
@@ -192,13 +195,14 @@ describe('stepping', () => {
     expect(state.camera.zoom).toBeGreaterThanOrEqual(2);
   });
 
-  it('says the match in the live region and the announcer', async () => {
+  it('says the match once, by the announcer (not by the search region too: it would be read twice)', async () => {
     vi.useFakeTimers();
     mount();
     type('mailer');
     key($('node-search'), 'Enter');
     await settle();
-    expect($('search-status').textContent).toBe('1 of 1: mailer, in Orders app');
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS); // the count the typing would have said is not said over it
+    expect($('search-status').textContent).toBe('');
     expect($('map-announcer').textContent).toBe('1 of 1: mailer, in Orders app');
   });
 
@@ -314,6 +318,11 @@ describe('the map\'s half of it', () => {
     const current = render.getScene().nodes.filter((n) => n.current);
     expect(current.map((n) => n.id)).toEqual([state.searchCurrent]);
     expect(current[0].halo).toBe('match');
+    // The current match is selected now; the other matches are not dimmed by its focus: each keeps its halo and its label's full colour
+    const matches = render.getScene().nodes.filter((n) => n.match);
+    expect(matches.length).toBeGreaterThan(1);
+    expect(matches.filter((n) => !n.connected).length).toBeGreaterThan(0); // some lie outside the selection's focus
+    for (const n of matches) { expect(n.alpha, n.id).toBe(1); expect(n.halo, n.id).toBe('match'); }
   });
 
   it('is the markup: the field has a count, steps and a list with their hooks', () => {
@@ -321,5 +330,12 @@ describe('the map\'s half of it', () => {
     for (const hook of ['search-count', 'search-steps', 'search-results', 'search-status']) expect(document.querySelectorAll(`[data-corn="${hook}"]`).length, hook).toBeGreaterThanOrEqual(2); // the desktop's and the phone's
     for (const b of document.querySelectorAll('.hx-search-btn')) expect(b.getAttribute('aria-label')).toBeTruthy();
     expect($('node-search').getAttribute('role')).toBe('combobox');
+    // One pattern: a combobox whose popup is a dialog the focus moves into (a combobox popup may not be a plain group)
+    for (const [input, list] of [['node-search', 'search-results'], ['mobile-node-search', 'mobile-search-results']]) {
+      expect($(input).getAttribute('aria-haspopup')).toBe('dialog');
+      expect($(input).getAttribute('aria-controls')).toBe(list);
+      expect($(list).getAttribute('role')).toBe('dialog');
+      expect($(list).getAttribute('aria-label')).toBeTruthy();
+    }
   });
 });

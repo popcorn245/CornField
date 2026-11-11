@@ -130,12 +130,9 @@ function closeList(field) {
 //  The query
 // ---------------------------------------------------------------------------
 
-/** What the live region says for a result: the count, and for none the no-match words (after the typing pauses, search-status.js) */
+/** What the live region says for a result, once the typing pauses: the count, or for none the no-match words (search-status.js) */
 function announceResult(result) {
-  if (!result.query) { updateSearchStatus('', false); return; }
-  if (!result.total) { updateSearchStatus(result.query, false); return; }
-  updateSearchStatus(result.query, true);
-  showSearchStatus(countText(result, state.searchCurrent));
+  updateSearchStatus(result.query, result.total > 0, countText(result, state.searchCurrent)); // once the typing pauses, not on every key
 }
 
 /** Sets the query (typed in either field, or cleared): the map redraws, the count and the list follow */
@@ -184,7 +181,7 @@ export async function chooseMatch(match, { say = true } = {}) {
   flyTo(centreTarget(node, Math.max(state.camera.zoom, MATCH_ZOOM)));
   paintSearch();
   const words = `${at + 1} of ${result.total}: ${node.label}${match.parent ? `, in ${match.parent}` : ''}`;
-  showSearchStatus(words);
+  showSearchStatus(''); // said once, by the map's announcer: two live regions with the same words are read out twice
   if (say) announce(words);
 }
 
@@ -204,9 +201,8 @@ export function frameAll() {
   const ids = new Set(result.matches.filter((m) => m.on).map((m) => m.node.id));
   if (!ids.size) return;
   fitGraphToViewport(fitPadding(), ids);
-  const words = `Framed ${ids.size} ${ids.size === 1 ? 'match' : 'matches'}`;
-  showSearchStatus(words);
-  announce(words);
+  showSearchStatus('');
+  announce(`Framed ${ids.size} ${ids.size === 1 ? 'match' : 'matches'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -289,9 +285,13 @@ export function initSearch() {
     const input = $(field.input);
     if (!input || input.dataset.searchBound) continue;
     input.dataset.searchBound = '1';
+    // A combobox whose popup is a dialog (the ARIA pattern for a popup the focus moves into): its rows are buttons in labelled groups,
+    // reached with the down arrow, so a screen reader hears each row's own name and its group's
     input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-haspopup', 'dialog');
     input.setAttribute('aria-autocomplete', 'none');
     input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-controls', field.results);
     input.addEventListener('input', (e) => setQuery(e.target.value));
     input.addEventListener('keydown', (e) => onFieldKey(e, field));
     input.addEventListener('focus', () => { const list = listOf(field); if (list && state.searchQuery) { list.dataset.open = 'true'; paintSearch(); } });

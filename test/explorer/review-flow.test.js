@@ -162,7 +162,7 @@ describe('F06 the camera on open: the changed nodes, in the part of the map noth
     expect(group.length).toBeLessThan(all.length); // they do not all fit
     expect(group.length).toBeGreaterThan(1);
     for (const n of group) expect(shown.map((m     ) => m.id)).toContain(n.id); // the biggest group is on screen, whole (a node just past its window may be too: the packed layout, 0008, puts them closer)
-    expect(shown.length).toBeGreaterThanOrEqual(group.length);
+    expect(shown.length).toBeLessThan(all.length); // and it is not the ground between: what is left out is still left out
   });
 
   it('leaves out a change on a layer that is off: the camera frames only what is drawn', () => {

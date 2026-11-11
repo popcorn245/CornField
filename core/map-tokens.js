@@ -13,7 +13,7 @@ const WANTS = {
   [FONT_TOKEN]: ['font', 'a list of font families (quoted names or plain words, at most 8; no url(), and no punctuation but commas and quotes)'],
   [EDGE_WIDTH_TOKEN]: ['edgeWidth', `a width in px over 0 and at most ${MAX_EDGE_WIDTH}`],
   [GLOW_TOKEN]: ['glow', `a factor from 0 (no glow) to ${MAX_GLOW}`],
-  [LABEL_MIN_TOKEN]: ['labelMin', `a size in px from 9 to ${MAX_LABEL_MIN} (11px is the default; under 9px is ignored)`],
+  [LABEL_MIN_TOKEN]: ['labelMin', `a size in px from 9 to ${MAX_LABEL_MIN} (11px is the default and the least it draws at; under 9px is ignored)`],
 };
 
 /**

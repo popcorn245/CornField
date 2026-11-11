@@ -88,14 +88,16 @@ describe('chooseLabels: what is drawn', () => {
     expect(size(2) * 2).toBeCloseTo(22);
   });
 
-  it('lets a theme raise the minimum (--corn-map-label-min) and ignores one under 9 px', () => {
+  it('lets a theme raise the minimum (--corn-map-label-min), never lower it: 9 and 10 px draw at 11, under 9 px is ignored', () => {
     const at = (labelMin) => chooseLabels(sc([sn('n', 100, 100)], { labelMin }), { x: 0, y: 0, zoom: 0.5 }, VIEW, noMargin)[0].size * 0.5;
     expect(at(undefined)).toBeCloseTo(11);
     expect(at(14)).toBeCloseTo(14);
     expect(at(8)).toBeCloseTo(11);
     expect(at(6)).toBeCloseTo(11);
     expect(at(8.9)).toBeCloseTo(11);
-    expect(at(9)).toBeCloseTo(9); // 9 is the lowest a theme may ask for
+    expect(at(9)).toBeCloseTo(11); // read (validate does not warn), but a theme may not lower the 11 px (spec 0008, open question 3)
+    expect(at(10)).toBeCloseTo(11);
+    expect(at(11.5)).toBeCloseTo(11.5);
   });
 
   it('draws a dimmed node at its dim alpha and colour, and gives a label nobody can read no room', () => {

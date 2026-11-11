@@ -70,8 +70,15 @@ const CELL = 64;
 /** Priority tiers, best first */
 const TIER = { selected: 0, current: 1, match: 2, lit: 3, marked: 4, hub: 5, rest: 6 };
 
-/** The smallest label size on screen (px) for a scene: the theme's `--corn-map-label-min`, else 11 */
-export const labelMinOf = (scene) => (Number.isFinite(scene.labelMin) && scene.labelMin >= LABEL_MIN_FLOOR ? scene.labelMin : LABEL_MIN_PX);
+/**
+ * The smallest label size on screen (px) for a theme's `--corn-map-label-min` (a number, or null for `auto`): a theme may raise the 11 px,
+ * never lower it (spec 0008, open question 3). 9 and 10 px are read but drawn at 11; under 9 px is not read at all (map-style.js), and
+ * `validate` warns.
+ * @param {number|null|undefined} value
+ */
+export const labelMinPx = (value) => (Number.isFinite(value) && value >= LABEL_MIN_FLOOR ? Math.max(LABEL_MIN_PX, value) : LABEL_MIN_PX);
+/** The smallest label size on screen (px) for a scene: the theme's `--corn-map-label-min`, never under 11 */
+export const labelMinOf = (scene) => labelMinPx(scene.labelMin);
 
 const isHub = (node) => LANDMARK_TYPES.includes(node.type);
 

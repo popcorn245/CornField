@@ -926,8 +926,11 @@ describe('the map by keyboard', () => {
     expect(state.selectedNode.id).toBe(order[0]);
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
     await settle(40);
-    const { label, type, degree } = state.selectedNode; // which node is first in reading order follows the layout (the packed one, spec 0008)
-    expect($('map-announcer').textContent).toBe(`${label}, ${type}, ${degree} ${degree === 1 ? 'connection' : 'connections'}, 1 of ${order.length}`);
+    // Which node is first in reading order follows the layout (the packed one, spec 0008); its connections are counted here from the map's own edges
+    const { id, label, type } = state.selectedNode;
+    const lines = MAP.edges.filter((e) => e.from === id || e.to === id).length;
+    expect(lines).toBeGreaterThan(0);
+    expect($('map-announcer').textContent).toBe(`${label}, ${type}, ${lines} ${lines === 1 ? 'connection' : 'connections'}, 1 of ${order.length}`);
     key(canvas, ']');
     expect(state.selectedNode.id).toBe(order[1]);
     key(canvas, 'p');

@@ -552,7 +552,8 @@ function buildNodes(state, subgraph) {
     const look = MARK[mark];
     const gone = mark === 'edit' && node.editOp === 'removed'; // a node a what-if edit removes: violet ring, faded, label struck through
     // deep dimming for what is not connected; a proposal's Diff view fades what it does not touch, less deeply, and a removed node is faded too
-    let alpha = subgraph && !connected ? DIM_ALPHA : 1;
+    // A search's matches are what the reader asked for: a selection's focus does not dim them, so each keeps its label (spec 0008 D4)
+    let alpha = subgraph && !connected && !(searching && match) ? DIM_ALPHA : 1;
     if (searching && !match && !selected && !(subgraph && connected)) alpha = DIM_ALPHA; // a search dims what it did not find, as a focus does
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;

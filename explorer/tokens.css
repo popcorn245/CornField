@@ -137,7 +137,7 @@
   --corn-map-font: auto;
   --corn-map-edge-width: auto;
   --corn-map-glow: auto;
-  /* The smallest a map label is drawn on screen (spec 0008): auto is 11px; below 9px it is ignored. A hub's title is 2px more */
+  /* The smallest a map label is drawn on screen (spec 0008): auto is 11px; a theme may raise it, not lower it. A hub's title is 2px more */
   --corn-map-label-min: auto;
   /* Diff, selection and focus */
   --corn-map-added: auto;
