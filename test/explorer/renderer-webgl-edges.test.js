@@ -92,6 +92,31 @@ describe('packEdges: the line', () => {
   });
 });
 
+describe('packEdges: one end mark per family, and the ticks of a `when` (spec 0008 D7)', () => {
+  const codeOfEnd = (end        ) => row(packEdges(scene([edge({ arrow: true, end })])).tips, 0)[8];
+  it('gives each family its own tip code: triangle, chevron, bar, diamond', () => {
+    expect([codeOfEnd('triangle'), codeOfEnd('chevron'), codeOfEnd('bar'), codeOfEnd('diamond')]).toEqual([TIP_CODE.arrow, TIP_CODE.chevron, TIP_CODE.bar, TIP_CODE.diamond]);
+    expect(new Set(Object.values(TIP_CODE)).size).toBe(Object.keys(TIP_CODE).length); // every code is its own
+    expect(codeOfEnd(undefined)).toBe(TIP_CODE.arrow); // a scene that says no `end` keeps the arrowhead
+  });
+  it('puts one or two ticks across the middle, centred on it and a few units apart along the line', () => {
+    const one = packEdges(scene([edge({ ticks: 1 })])).tips;
+    expect(one.count).toBe(1);
+    expect(row(one, 0).slice(0, 2)).toEqual([50, 20]);
+    expect(row(one, 0)[8]).toBe(TIP_CODE.tick);
+    const two = packEdges(scene([edge({ ticks: 2 })])).tips;
+    expect(two.count).toBe(2);
+    const [a, b] = [row(two, 0), row(two, 1)];
+    expect(Math.hypot(a[0] - b[0], a[1] - b[1])).toBeCloseTo(6, 4);
+    expect(((a[0] + b[0]) / 2)).toBeCloseTo(50, 4);
+    expect(packEdges(scene([edge({ ticks: 0 })])).tips.count).toBe(0);
+  });
+  it('compiles in the shader: the open marks and the tick are in the tip fragment shader', () => {
+    expect(PASSES.find((p        ) => p.name === 'tips').frag).toMatch(/sdRhombus/);
+    expect(PASSES.find((p        ) => p.name === 'tips').frag).toMatch(/u_tick/);
+  });
+});
+
 describe('packEdges: the arrowhead', () => {
   it('makes no tip for an edge without an arrow', () => {
     expect(packEdges(scene([edge()])).tips.count).toBe(0);

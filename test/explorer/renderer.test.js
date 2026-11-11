@@ -55,7 +55,7 @@ describe('renderer-canvas2d', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../explorer/renderer-canvas2d.js'), 'utf8');
     expect(src).not.toMatch(/state\.js/);
     expect(src).not.toMatch(/\bstate\b\./);
-    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js', './kind-letters.js']);
+    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js', './kind-letters.js', './glyphs.js']);
   });
 
   it('sizes the canvas for the device pixel ratio and scales the context to match', () => {
@@ -100,12 +100,53 @@ describe('renderer-canvas2d', () => {
     expect(ctx.log.some((c     ) => c[0] === 'arc' && Math.abs(c[3] - (sel.r + sel.glow * 0.7)) < 1e-9)).toBe(true); // the selected page's halo
   });
 
+  it('draws the end mark of each family and the ticks of a `when` (spec 0008 D7)', () => {
+    const drawn = (extra        ) => {
+      const ctx = recordingCtx();
+      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      r.resize(800, 600, 1);
+      const e = { key: 'a->b', from: 'a', to: 'b', kind: 'reads', x1: 0, y1: 0, x2: 100, y2: 0, r1: 20, r2: 20, color: '#38bdf8', width: 1.6, alpha: 1, dash: null, ticks: 0, curve: null, arrow: true, end: 'chevron', glow: 0, glowColor: null, label: null, packet: null, mark: 'none', ...extra };
+      r.draw({ nodes: [], edges: [e], decor: { grid: null, rings: [], lanes: [] }, preset: false, theme: 'dark', version: 1 }, { x: 0, y: 0, zoom: 1 }, 0);
+      return ctx.log          ;
+    };
+    const verbs = (log        , from = 0) => log.slice(from).map((c        ) => c[0]);
+    expect(verbs(drawn({ end: 'triangle' }))).toContain('fill'); // a filled triangle
+    const chevron = drawn({ end: 'chevron' });
+    expect(verbs(chevron).filter((v        ) => v === 'fill').length).toBe(0); // open: stroked only
+    expect(chevron.filter((c        ) => c[0] === 'lineTo').length).toBe(3); // the line, then the two barbs
+    expect(drawn({ end: 'bar' }).filter((c        ) => c[0] === 'moveTo').length).toBe(2);
+    const diamond = drawn({ end: 'diamond' });
+    expect(verbs(diamond)).toContain('closePath');
+    expect(verbs(diamond)).not.toContain('fill');
+    const lines = (log        ) => log.filter((c        ) => c[0] === 'moveTo').length;
+    expect(lines(drawn({ end: null, arrow: false, ticks: 2 })) - lines(drawn({ end: null, arrow: false, ticks: 0 }))).toBe(2); // one stroke segment per tick
+    expect(lines(drawn({ end: null, arrow: false, ticks: 1 })) - lines(drawn({ end: null, arrow: false, ticks: 0 }))).toBe(1);
+  });
+
+  it('strokes only the lines whose box reaches the view: the picture is the same, a pan on a big map strokes what is in view', () => {
+    const ctx = recordingCtx();
+    const r = createCanvas2dRenderer(fakeCanvas(ctx));
+    r.resize(800, 600, 1);
+    const e = (key, x1, y1, x2, y2, extra = {}) => ({ key, from: 'a', to: 'b', kind: 'reads', x1, y1, x2, y2, r1: 0, r2: 0, color: '#38bdf8', width: 1.6, alpha: 0.04, dash: null, ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null, label: null, packet: null, mark: 'none', ...extra });
+    const edges = [
+      e('in', 100, 100, 200, 200), // in view
+      e('across', -5000, 300, 5000, 300), // both ends far outside, the line crosses the view
+      e('curve', -400, -400, 1200, -400, { curve: { cx: 400, cy: 1400 } }), // the ends above the view, the curve dips into it
+      e('out', 3000, 3000, 3100, 3100), // nowhere near
+      e('near', 815, 100, 900, 100, { arrow: true, end: 'diamond' }), // its end mark reaches back to the right edge: kept
+    ];
+    r.draw({ nodes: [], edges, decor: { grid: null, rings: [], lanes: [] }, preset: false, theme: 'dark', version: 1 }, { x: 0, y: 0, zoom: 1 }, 0);
+    const starts = ctx.log.filter((c) => c[0] === 'moveTo').map((c) => c.slice(1).join(','));
+    expect(starts).toEqual(expect.arrayContaining(['100,100', '-5000,300', '-400,-400', '815,100']));
+    expect(starts).not.toContain('3000,3000');
+  });
+
   it('draws the lines of a scene with packets once, and only the packets again while nothing but time moves (F30)', () => {
     const layerCtx = recordingCtx();
     vi.stubGlobal('OffscreenCanvas', class { width = 1; height = 1; getContext() { return layerCtx; } });
     try {
       const ctx = recordingCtx();
-      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      const r = createCanvas2dRenderer(fakeCanvas(ctx), { layerMinEdges: 0 }); // a small scene: the layer is asked for
       r.resize(800, 600, 1);
       const scene = buildScene(mk({ selectedNode: nodes[1] }));
       expect(scene.edges.some((e     ) => e.packet)).toBe(true);
@@ -163,7 +204,7 @@ describe('renderer-canvas2d', () => {
     const scene = buildScene({ ...mk(), nodes: flowNodes, edges: [], view: 'dataflow', flow });
     ctx.log.length = 0;
     r.draw(scene, { x: 0, y: 0, zoom: 1 }, 0);
-    expect((ctx.log          ).filter((c) => c[0] === 'roundRect')).toHaveLength(2);
+    expect((ctx.log          ).filter((c) => c[0] === 'roundRect' && c[5] === 14)).toHaveLength(2); // the lanes (a store's rounded square is a roundRect too: its corner is not 14)
     expect(texts(ctx)).toEqual([]); // the titles, notes and arrows are the label layer's
     expect((ctx.log          ).filter((c) => c[0] === 'setLineDash' && c[1].length === 2 && c[1][0] === 4 && c[1][1] === 6)).toHaveLength(0); // no orbital rings here
   });

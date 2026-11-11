@@ -36,6 +36,10 @@ export const state = {
 
   camera: { x: 0, y: 0, zoom: 1 },
   selectedNode: null,
+  /** The node panel's "Include its children's lines" switch (spec 0008 D5): off, a selection lights one hop; on, the children's neighbours too. Kept across selections */
+  throughChildren: false,
+  /** The edge kind the panel chose to light alone (selection-model.js), or null for every kind; a new selection clears it */
+  selectedKind: null,
   /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
   forge: null,
   searchQuery: '',
@@ -107,6 +111,8 @@ export const state = {
   proposal: null,
   proposalView: 'diff',
   proposalSource: null,
+  /** The open proposal's file as the server sent it, its SHA-256 (X-Proposal-Sha256), or null: a review names it, so a push since is refused (spec 0007) */
+  proposalSha256: null,
   proposalSlug: null,
   proposalErrors: [],
   /** Where each of the open proposal's mockups stands with the review, by position: 'approved' | 'changed' | 'unreviewed' | 'missing' (mockups.js; none read yet is empty) */
@@ -118,6 +124,8 @@ export const state = {
   effectiveProposal: null,
   /** The maintainer's what-if edits to the open proposal, and what Undo took back (whatif-model.js): `{ edits, undone }` */
   whatIf: { edits: [], undone: [] },
+  /** The My edits toggle is off: the map is drawn from the proposal as written, the edits are kept and still go with a review (whatif.js, spec 0007 D5) */
+  whatIfOff: false,
   /** A marked edge picked on the map (nodes are `selectedNode`): the panel shows it, the scene does not change */
   selectedEdge: null,
 

@@ -62,6 +62,7 @@
           <p id="layers-preset-note" class="hx-note" data-corn="notice" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
           <div id="layer-toggles-container" class="hx-toggles"></div>
           <div id="flow-legend" hidden></div>
+          <div id="edge-key" class="hx-menu-section" data-corn="legend-key"></div>
           <div id="cloud-legend" class="hx-menu-section" data-corn="menu-section" hidden></div>
 
           <!-- What the marks of agent runs mean, while there are runs on the map (runs-map.js) -->
@@ -77,22 +78,7 @@
             <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added" data-corn="mark-dot" data-corn-state="added"></span><span>Added: dashed ring</span></div>
             <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" data-corn-state="changed"></span><span>Changed: solid ring</span></div>
             <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed" data-corn="mark-dot" data-corn-state="removed"></span><span>Removed: faded ring, label struck through</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit"></span><span>Your edit: dotted ring</span></div>
-          </div>
-
-          <div class="hx-menu-section" data-corn="menu-section">
-            <div class="hx-menu-title" data-corn="menu-title">
-              <span>Connections</span>
-              <span class="hx-faint hx-mono">Click node to focus</span>
-            </div>
-            <div class="hx-legend-row hx-legend-row--split">
-              <span class="hx-legend-label"><span data-corn="swatch" class="hx-swatch-line hx-swatch-solid"></span>Solid</span>
-              <span class="hx-faint hx-mono">Parent-Child / Hub</span>
-            </div>
-            <div class="hx-legend-row hx-legend-row--split">
-              <span class="hx-legend-label"><span data-corn="swatch" class="hx-swatch-line hx-swatch-dashed hx-swatch-indigo"></span>Dotted</span>
-              <span class="hx-faint hx-mono">Usage &amp; Dependency</span>
-            </div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit"></span><span>Your edit: dotted ring, long-dashed line</span></div>
           </div>
           </div><!-- .hx-menu-body: the rows scroll, the title with All and None stays (spec 0009 D8) -->
         </div>
@@ -133,6 +119,7 @@
         <span data-corn-string="issuesAndPrs">Work</span>
         <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
         <!-- What waits on you (explorer/waiting-model.js): specs to decide plus runs that need an answer; hidden at 0 and for anyone not signed in -->
+        <span id="forge-btn-dot" class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
         <span id="forge-btn-waiting" class="hx-waiting-badge" data-corn="waiting-badge" aria-hidden="true" hidden></span>
       </button>
 
@@ -199,7 +186,7 @@
   <div class="hx-stage" role="main" data-corn="stage">
     <!-- The map takes the keyboard when it has the focus (keyboard.js): its keys are below, read out with its name -->
     <canvas id="graph-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help" data-corn="map-canvas"></canvas>
-    <p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>
+    <p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>
     <!-- What the keyboard landed on, said by a screen reader (keyboard.js) -->
     <p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>
     <!-- Every label, drawn on its own transparent canvas over the map (explorer/labels.js); the map canvas still gets the pointer -->
@@ -228,6 +215,8 @@
             <button data-corn="compare-option" type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false" data-corn-string="after">After</button>
           </div>
           <div class="hx-proposal-tools">
+            <!-- Shown only while there are what-if edits: off, the map is the proposal as written; the edits are kept and still go with a review (whatif.js) -->
+            <button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>
             <button data-corn-kind="secondary" type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
           </div>
           <div class="hx-proposal-more">
@@ -325,8 +314,8 @@
         <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Runs tab; each run's state, what it is about, links, and Stop -->
         <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden>
           <h3 id="forge-runs-title" class="hx-forge-runs-title">Agent runs</h3>
-          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
           <p id="forge-runs-runner" class="hx-forge-meta" hidden></p>
+          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
           <p id="forge-runs-note" class="hx-forge-notice" hidden data-corn="notice"></p>
           <p id="forge-runs-trigger" class="hx-forge-notice" hidden data-corn="notice"></p>
           <div id="forge-runs-totals" data-corn="run-totals" role="group" aria-label="Tokens and cost the runners reported" hidden></div>

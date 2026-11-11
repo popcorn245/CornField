@@ -69,7 +69,7 @@
 import { state, nodeById, escHtml, touchScene, onSceneTouch } from './state.js';
 import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
-import { announce, centreOn } from './keyboard.js';
+import { announce } from './keyboard.js';
 import { trapTab } from './focusables.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from './sheets.js';
 import { relativeTime } from './review-model.js';
@@ -1538,13 +1538,32 @@ function graftAround(root, keep, twin) {
   }
 }
 
-/** The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply */
+/** Whether a run would wait for a runner that is not there (pull transport only; issue #183, spec 0007 D1) */
+function runnerAway() {
+  const data = ui.runs && ui.runs.data;
+  const state = data ? runnerState(data.runnerPresence, now()) : null;
+  return state === 'offline' || state === 'none';
+}
+
+/** The Start dialog's button: "Ask the runner", or "Queue it (no runner online)" while no runner polls, so the click says what it does */
+function askRunnerWords() {
+  return runnerAway() ? `${t('queueIt')} (no runner online)` : t('askRunner');
+}
+
+/**
+ * The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply.
+ * While no runner is online it is a notice at the top of the view, not the faint line: a run asked for would wait (issue #183).
+ */
 function paintRunner(id, data) {
   const el = $(id);
   if (!el) return;
   const words = data ? runnerWords(data.runnerPresence, now()) : '';
   el.hidden = !words;
   el.textContent = words;
+  const state = data ? runnerState(data.runnerPresence, now()) : null;
+  const away = state === 'offline' || state === 'none';
+  el.className = away ? 'hx-forge-notice' : 'hx-forge-meta';
+  if (away) { el.dataset.corn = 'notice'; el.dataset.cornState = 'waiting'; } else { delete el.dataset.corn; delete el.dataset.cornState; }
 }
 
 /** What the Runs view needs to know of the page */
@@ -1618,12 +1637,16 @@ function paintButton() {
     tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
   }
   const n = waitingNow().total;
+  // A run would wait for a runner that is not there: a dot, and the name says so (issue #183); it sits beside the waiting badge, not on it
+  const away = runnerAway();
+  const dot = $('forge-btn-dot');
+  if (dot) dot.hidden = !away;
   const badge = $('forge-btn-waiting');
   if (badge) {
     badge.hidden = n === 0;
     badge.textContent = n ? String(n) : '';
   }
-  btn.setAttribute('aria-label', `${workButtonName(t('issuesAndPrs'), n)}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
+  btn.setAttribute('aria-label', `${workButtonName(t('issuesAndPrs'), n)}${away ? ', no runner online' : ''}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1872,7 +1895,7 @@ async function openAgent(ref, opener, again = null, brief = null) {
   const go = $('agent-start-go');
   go.disabled = false;
   go.removeAttribute('aria-busy');
-  go.textContent = t('askRunner');
+  go.textContent = askRunnerWords();
   document.addEventListener('focusin', keepFocusInAgent);
   agentEl().hidden = false;
   $('agent-kind').focus();
@@ -1962,7 +1985,7 @@ async function submitAgent(e) {
     ui.agent.posting = false;
     go.disabled = false;
     go.removeAttribute('aria-busy');
-    go.textContent = t('askRunner');
+    go.textContent = askRunnerWords();
     const bad = $('agent-start-msg');
     bad.textContent = `A limit is a number above zero, or blank for the config's (${wrong.join(', ')}).`;
     bad.hidden = false;
@@ -1987,7 +2010,7 @@ async function submitAgent(e) {
   }
   go.disabled = false;
   go.removeAttribute('aria-busy');
-  go.textContent = t('askRunner');
+  go.textContent = askRunnerWords();
   const msg = $('agent-start-msg');
   msg.textContent = text;
   msg.hidden = false;
@@ -2326,8 +2349,7 @@ function onClick(e) {
   if (nodeBtn) {
     const node = nodeById(nodeBtn.dataset.forgeNode);
     if (!node) return;
-    selectNode(node);
-    centreOn(node);
+    selectNode(node, { frame: true });
     if (isPhone()) collapseSheet('forge'); // the map and the node's sheet are what is wanted now
     announce(`${node.label}, ${node.type}`);
     return;

@@ -6,8 +6,8 @@
  * cloud node (spec 0031) its plan, what breaks if it is down and who uses it, by when (cloud-model.js).
  */
 
-import { state, nodeById, nameOf, escHtml, touchScene } from './state.js';
-import { render } from './render.js';
+import { state, nodeById, nameOf, escHtml, touchScene, viewEdges } from './state.js';
+import { render, onPaint } from './render.js';
 import { flowSummary } from './flows.js';
 import { clearScenario } from './scenario-ui.js';
 import { kindOfMark, fieldRows, MARK_WORDS } from './proposal-model.js';
@@ -23,6 +23,9 @@ import { capped, toggleCapped } from './capped.js';
 import { dismissHint } from './hint.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
 import { sayResult, clearResult, showResultIn, RESULT_MS } from './feedback.js';
+import { activeSubgraph, connectedLine, farEnds, kindPanelWord, linesByKind } from './selection-model.js';
+import { frameSelection, reach } from './selection-view.js';
+import { announce } from './keyboard.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -221,23 +224,104 @@ function diffSection(node) {
 }
 
 // ---------------------------------------------------------------------------
+//  What the selection lights: the lines by kind, the switch, Frame them (spec 0008 D5 and D6)
+// ---------------------------------------------------------------------------
+
+/** The most rows a kind's list shows before "and N more" */
+export const LINES_CAP = 12;
+
+/** The lit set the panel describes: the same rule the scene lights by (selection-model.js) */
+const litNow = () => activeSubgraph(state.selectedNode, viewEdges(), { throughChildren: state.throughChildren, kind: state.selectedKind });
+
+/** The panel's "Calls 12 · Reads 9" chips, the chosen kind's far ends, the switch, and the line that says how much is on screen, with Frame them */
+function linesHtml(node) {
+  const sub = litNow();
+  if (!sub || !sub.kinds.size) return '';
+  const kinds = linesByKind(sub);
+  const chips = kinds.map(({ kind, count, word }) => `<button type="button" class="hx-lines-kind" data-corn="lines-kind" data-corn-kind="quiet" data-lines-kind="${escHtml(kind)}" data-focus-key="kind:${escHtml(kind)}" aria-pressed="${sub.kind === kind}">${escHtml(word)} <span class="hx-lines-count" data-corn="count">${count}</span></button>`).join('');
+  const open = sub.kind ? farEnds(sub, sub.kind).map((r) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${escHtml(r.id)}"><span class="hx-sr-only">${r.out ? 'to ' : 'from '}</span><span aria-hidden="true">${r.out ? '→' : '←'}</span> ${escHtml(nameOf(r.id))}</button>`) : [];
+  const list = open.length ? `<div class="hx-lines-list">${capped(open, LINES_CAP)}</div>` : '';
+  const hasChildren = activeSubgraph(node, viewEdges(), { throughChildren: false }).childIds.size > 0;
+  const through = hasChildren ? `<label class="hx-lines-switch"><input type="checkbox" data-corn="lines-switch" data-lines-switch data-focus-key="switch"${state.throughChildren ? ' checked' : ''}> <span>${escHtml(t('throughChildren'))}</span></label>` : '';
+  const { connected, off } = reach();
+  return `<div class="hx-sec-block hx-lines" id="drawer-lines" data-corn="lines-by-kind"><h3 class="hx-sec-title">Lines</h3><div class="hx-chips" role="group" aria-label="Lit lines by kind">${chips}</div>${list}${through}<div class="hx-lines-reach"><span data-lines-reach>${escHtml(connectedLine(connected, off))}</span> <button type="button" data-corn="frame-button" data-corn-kind="secondary" class="hx-btn hx-btn--secondary" data-action="frame-selection" data-focus-key="frame">${escHtml(t('frame'))}</button></div></div>`;
+}
+
+/** Draws the lines block again after a switch or a kind was chosen; the focus stays on the control that was used */
+function paintLines() {
+  const box = $('drawer-lines');
+  if (!box || !state.selectedNode) return;
+  const key = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.focusKey : '';
+  const html = linesHtml(state.selectedNode);
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const next = holder.firstElementChild;
+  if (next) box.replaceWith(next); else box.remove();
+  if (key) { const again = $('drawer-lines'); const el = again && [...again.querySelectorAll('[data-focus-key]')].find((x) => x.dataset.focusKey === key); if (el) el.focus(); }
+}
+
+/** One step through the panel's lines controls: a kind's chip lights that kind alone (the same chip again lights them all), the switch widens the set */
+function onLinesClick(e) {
+  const chip = e.target.closest && e.target.closest('[data-lines-kind]');
+  if (!chip || !state.selectedNode) return false;
+  const kind = chip.dataset.linesKind;
+  state.selectedKind = state.selectedKind === kind ? null : kind;
+  touchScene();
+  render();
+  paintLines();
+  const sub = litNow();
+  announce(sub && sub.kind ? `Showing ${kindPanelWord(sub.kind).toLowerCase()} only: ${sub.edges.length} ${sub.edges.length === 1 ? 'line' : 'lines'}` : 'Showing every kind of line');
+  return true;
+}
+function onLinesChange(e) {
+  const box = e.target.closest && e.target.closest('[data-lines-switch]');
+  if (!box || !state.selectedNode) return;
+  state.throughChildren = !!box.checked;
+  state.selectedKind = null; // the set changed under the chosen kind: it may not be in it
+  touchScene();
+  render();
+  paintLines();
+  const sub = litNow();
+  announce(`${state.throughChildren ? 'Including' : 'Not including'} its children's lines: ${sub ? sub.connectedNodeIds.size - 1 : 0} connected`);
+}
+
+/** Keeps "9 connected · 3 off screen" true as the camera moves (after every draw, while a node is selected and its panel is open) */
+onPaint(() => {
+  if (!state.selectedNode) return;
+  const el = document.querySelector('[data-lines-reach]');
+  if (!el) return;
+  const { connected, off } = reach();
+  const text = connectedLine(connected, off);
+  if (el.textContent !== text) el.textContent = text;
+});
+
+// ---------------------------------------------------------------------------
 //  The drawer
 // ---------------------------------------------------------------------------
 let selectToken = 0;
 
-/** Selects a node: highlights its neighbourhood on the map and fills the side panel */
-export async function selectNode(node) {
+/**
+ * Selects a node: lights what is one edge from it on the map and fills the side panel. `frame` is for a selection that did not come
+ * from a click on the map (a search, a list, a link, the keyboard): the camera then flies to the node and what it lights (selection-model.js);
+ * a click leaves the camera where it is (spec 0008 D6).
+ */
+export async function selectNode(node, { frame = false } = {}) {
   if (!node) return;
   const token = ++selectToken;
   clearScenario();
   dismissHint(); // a node has been picked: the hint's job is done for this session
+  if (!state.selectedNode || state.selectedNode.id !== node.id) state.selectedKind = null; // a kind chosen for one node means nothing for the next
   state.selectedNode = node;
   state.selectedEdge = null;
   touchScene();
   render();
 
   const metaList = $('drawer-meta-list');
-  if (!metaList.dataset.moreBound) { metaList.dataset.moreBound = '1'; metaList.addEventListener('click', (e) => { toggleCapped(e.target); }); }
+  if (!metaList.dataset.moreBound) {
+    metaList.dataset.moreBound = '1';
+    metaList.addEventListener('click', (e) => { if (!onLinesClick(e)) toggleCapped(e.target); });
+    metaList.addEventListener('change', onLinesChange);
+  }
   const openBtn = $('drawer-open-btn');
   const title = $('drawer-title');
 
@@ -257,7 +341,7 @@ export async function selectNode(node) {
   if (token !== selectToken) return;
 
   const facts = `${node.file ? section('File', [code(node.file)]) : ''}${flowSummary(node)}${dataSummary(node)}`;
-  metaList.innerHTML = `${facts ? `<div class="hx-facts">${facts}</div>` : ''}
+  metaList.innerHTML = `${linesHtml(node)}${facts ? `<div class="hx-facts">${facts}</div>` : ''}
     <div id="drawer-live">${liveSection(node)}</div>
     ${nodeMockupsHtml(node.id)}
     <div id="drawer-threads">${threadsSection(node)}</div>
@@ -285,7 +369,8 @@ export async function selectNode(node) {
   $('spec-drawer').inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
   $('drawer-backdrop').hidden = false;
   showSheet('drawer'); // on a phone it takes Work's place (the node sheet and Work take turns), and comes back from away when its node is tapped again
-  keepSelectedInView();
+  if (frame) frameSelection(); // the panel is open now, so what it covers is known
+  else keepSelectedInView();
 }
 
 /**

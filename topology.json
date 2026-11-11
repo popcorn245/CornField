@@ -16,7 +16,7 @@
       "type": "pkg",
       "file": "cli",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The cli workspace package (cli)."
     },
     {
@@ -25,7 +25,7 @@
       "type": "pkg",
       "file": "core",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The core workspace package (core)."
     },
     {
@@ -34,7 +34,7 @@
       "type": "pkg",
       "file": "explorer",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The explorer workspace package (explorer)."
     },
     {
@@ -43,7 +43,7 @@
       "type": "pkg",
       "file": "plugins/cloud",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/cloud workspace package (plugins/cloud)."
     },
     {
@@ -52,7 +52,7 @@
       "type": "pkg",
       "file": "plugins/house",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/house workspace package (plugins/house)."
     },
     {
@@ -61,7 +61,7 @@
       "type": "pkg",
       "file": "plugins/personas",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/personas workspace package (plugins/personas)."
     },
     {
@@ -70,7 +70,7 @@
       "type": "pkg",
       "file": "plugins/starter",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/starter workspace package (plugins/starter)."
     },
     {
@@ -79,7 +79,7 @@
       "type": "pkg",
       "file": "server",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The server workspace package (server)."
     },
     {
@@ -864,7 +864,7 @@
       "type": "pkg",
       "file": "plugins/docs",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/docs workspace package (plugins/docs)."
     },
     {
@@ -903,7 +903,7 @@
       "label": "docs",
       "file": "README.md",
       "r": 24,
-      "color": "#6366f1",
+      "color": "#5168ec",
       "desc": "cornfield's own docs, mapped by the docs deriver: a page per document, the links between them and to the code they describe. cornfield docs builds them as the site GitHub Pages serves."
     },
     {
@@ -1172,7 +1172,7 @@
       "type": "pkg",
       "file": "plugins/compose",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/compose workspace package (plugins/compose)."
     },
     {
@@ -1201,7 +1201,7 @@
       "type": "pkg",
       "file": "plugins/openapi",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/openapi workspace package (plugins/openapi)."
     },
     {
@@ -1319,7 +1319,7 @@
       "type": "pkg",
       "file": "plugins/world",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#0f8293",
       "desc": "The plugins/world workspace package (plugins/world)."
     },
     {
@@ -2347,6 +2347,76 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field… (explorer/search.js)"
+    },
+    {
+      "id": "core-explorer-decision-model",
+      "label": "decision-model.js",
+      "type": "core",
+      "file": "explorer/decision-model.js",
+      "summary": "The pure half of the decision (spec 0007): what the line above Approve says in this exact state (D1), whether a press is allowed, asks first or is refused (D2), the words of the hold (D3) and of wh…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of the decision (spec 0007): what the line above Approve says in this exact state (D1), whether a press is allowed, asks first or is refused (D2), the words of the hold (D3) and of wh… (explorer/decision-model.js)"
+    },
+    {
+      "id": "core-server-decision",
+      "label": "decision.js",
+      "type": "core",
+      "file": "server/decision.js",
+      "summary": "The facts the line above Approve is made from (spec 0007 D1): `GET /proposals/<slug>/decision?source=pull/<n>`, for the maintainer who is signed in, like the review routes.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The facts the line above Approve is made from (spec 0007 D1): `GET /proposals/<slug>/decision?source=pull/<n>`, for the maintainer who is signed in, like the review routes. (server/decision.js)"
+    },
+    {
+      "id": "core-core-delta-e",
+      "label": "delta-e.js",
+      "type": "core",
+      "file": "core/delta-e.js",
+      "summary": "Colour distance as the eye reads it: CIEDE2000 (ΔE00, Sharma, Wu and Dalal 2005) between two sRGB colours.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Colour distance as the eye reads it: CIEDE2000 (ΔE00, Sharma, Wu and Dalal 2005) between two sRGB colours. (core/delta-e.js)"
+    },
+    {
+      "id": "core-explorer-edge-key",
+      "label": "edge-key.js",
+      "type": "core",
+      "file": "explorer/edge-key.js",
+      "summary": "The Key in the Layers menu (spec 0008 D7): each kind of line drawn as the map draws it, with its real style and end mark, not a coloured dot.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Key in the Layers menu (spec 0008 D7): each kind of line drawn as the map draws it, with its real style and end mark, not a coloured dot. (explorer/edge-key.js)"
+    },
+    {
+      "id": "core-explorer-glyphs",
+      "label": "glyphs.js",
+      "type": "core",
+      "file": "explorer/glyphs.js",
+      "summary": "The built-in glyph of each node type (spec 0008 D8): a small monochrome picture drawn in the middle of a node once it is 14 px across on screen, where the white core dot is.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The built-in glyph of each node type (spec 0008 D8): a small monochrome picture drawn in the middle of a node once it is 14 px across on screen, where the white core dot is. (explorer/glyphs.js)"
+    },
+    {
+      "id": "core-explorer-selection-model",
+      "label": "selection-model.js",
+      "type": "core",
+      "file": "explorer/selection-model.js",
+      "summary": "What a selection lights, and where the camera goes for it (spec 0008 D5 and D6).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a selection lights, and where the camera goes for it (spec 0008 D5 and D6). (explorer/selection-model.js)"
+    },
+    {
+      "id": "core-explorer-selection-view",
+      "label": "selection-view.js",
+      "type": "core",
+      "file": "explorer/selection-view.js",
+      "summary": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them. (explorer/selection-view.js)"
     }
   ],
   "edges": [
@@ -7702,6 +7772,244 @@
       "label": "imports"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-decision-model"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-decision"
+    },
+    {
+      "from": "core-explorer-decision-model",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-decision-model",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-decision-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-review-column",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-decision",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-submit-review",
+      "to": "core-server-decision",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-delta-e"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-edge-key"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-glyphs"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-selection-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-selection-view"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-delta-e",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-edge-key",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-glyphs",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-glyphs",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-kind-letters",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-edge-key",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-model",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "page-doc-docs-reviews-0-34-design-review",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas",
       "dashed": true
@@ -7727,5 +8035,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T20:05:31.868Z"
+  "updatedAt": "2026-11-11T21:46:13.056Z"
 }

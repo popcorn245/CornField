@@ -15,7 +15,8 @@
  * search radius touches, where the radius is the largest hit radius any node can have, so a big
  * node whose circle spans several cells is still found from any of them.
  *
- * A node's hit radius is `r + slop` for a number slop, or `max(r + slop.pad, slop.min)` for
+ * A node's hit radius is measured from `hitR` when it has one (a scene node: as far as its silhouette reaches, scene.js SHAPE_REACH), else `r`:
+ * `r + slop` for a number slop, or `max(r + slop.pad, slop.min)` for
  * `{ pad, min }`: input.js asks for "a few px more than the circle, and never less than a finger"
  * in world units, which depends on the zoom.
  *
@@ -28,6 +29,8 @@
  */
 
 export const DEFAULT_CELL_SIZE = 64;
+/** The radius an item is hit within: its silhouette's reach (a square's corner, a diamond's point) when the scene gave one, else its circle */
+const radiusOf = (item) => (typeof item.hitR === 'number' && item.hitR > item.r ? item.hitR : item.r);
 
 /**
  * @template {SpatialItem} T
@@ -41,7 +44,7 @@ export function createSpatialIndex(items, { cellSize = DEFAULT_CELL_SIZE } = {})
   const key = (cx, cy) => cx * 4194304 + cy; // 2^22: |cy| stays far below it for any map
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (item.r > maxR) maxR = item.r;
+    if (radiusOf(item) > maxR) maxR = radiusOf(item);
     const k = key(Math.floor(item.x / cellSize), Math.floor(item.y / cellSize));
     const cell = cells.get(k);
     if (cell) cell.push(i);
@@ -81,7 +84,7 @@ export function createSpatialIndex(items, { cellSize = DEFAULT_CELL_SIZE } = {})
             const i = cell[j];
             if (i <= best) continue;
             const item = items[i];
-            const reachOfItem = Math.max(item.r + pad, min);
+            const reachOfItem = Math.max(radiusOf(item) + pad, min);
             if (Math.hypot(item.x - x, item.y - y) <= reachOfItem) best = i;
           }
         }
@@ -111,7 +114,7 @@ export function createSpatialIndex(items, { cellSize = DEFAULT_CELL_SIZE } = {})
             const item = items[i];
             const dx = item.x - Math.min(Math.max(item.x, minX), maxX);
             const dy = item.y - Math.min(Math.max(item.y, minY), maxY);
-            if (dx * dx + dy * dy <= item.r * item.r) found.push(i);
+            if (dx * dx + dy * dy <= radiusOf(item) ** 2) found.push(i);
           }
         }
       }

@@ -18,7 +18,7 @@
  * A label is never drawn under 11 px (a hub's, 13 px, bold; a theme may raise the 11 with `--corn-map-label-min`): text that
  * would be smaller is not drawn smaller, it competes for room at 11 px. Zoomed in, it grows with the map.
  * A node left without a label is named by a chip over everything else while the pointer is on it (`hover`).
- * Lane titles, notes and arrows and the selection's edge labels are always included and take no part in the placing.
+ * Lane titles, notes and arrows are always included and take no part in the placing. The kind words on a selection's lit edges (spec 0008 D7) are placed last, after every node label: a word is drawn only where it touches no node label, no lit node's disc and no word before it.
  * The layer redraws only when the camera, the scene, the size or the hover changed, so a packet frame (the renderer
  * redrawing for animation) costs the labels nothing.
  *
@@ -26,7 +26,7 @@
  * never the explorer's state.
  *
  * @typedef {object} LabelItem One piece of text to draw
- * @property {'node'|'edge'|'lane'|'chip'} kind
+ * @property {'node'|'edge'|'lane'|'chip'} kind  `edge`: a kind word on a lit edge, in screen space
  * @property {string} [id]        the node, for `kind: 'node'` and `'chip'`
  * @property {string} text
  * @property {number} x           world coordinates; the text is drawn on this baseline point
@@ -44,11 +44,13 @@
  * @property {boolean} [screen]   a node's label at its minimum size: drawn in screen space at `px`, so the font stays one string while the zoom changes (a changing font string is the slow part of drawing text)
  */
 
-import { EDGE_LABEL_SIZE, FONT_EDGE, FONT_NODE, HUB_LABEL_EXTRA_PX, LABEL_MIN_FLOOR, LABEL_MIN_PX, LANDMARK_TYPES, looksFor } from './scene.js';
+import { FONT_EDGE, FONT_NODE, HUB_LABEL_EXTRA_PX, LABEL_MIN_FLOOR, LABEL_MIN_PX, LANDMARK_TYPES, looksFor } from './scene.js';
 import { getMapStyle, styledScene } from './map-style.js';
 
 /** At most this many node labels in view at a time (lane text and selection edge labels are extra); the placing itself never needs it */
 export const MAX_LABELS = 400;
+/** At most this many kind words on the lit edges in view (spec 0008 D7) */
+export const MAX_EDGE_WORDS = 120;
 /** A label this many screen px past the viewport is still kept, so none pops in at the border */
 export const CULL_MARGIN = 32;
 /** A label whose box, this many px bigger on every side, touches a placed one is skipped: placed labels are at least this far apart */
@@ -162,7 +164,7 @@ export function placeLabels(scene, zoom, opts = {}) {
  *   `max` node labels in view (default 400); `margin` px past the viewport (default 32); `measure` the width of a text at a font
  *   size (default: an estimate from its length); `hover`: the node the pointer is on, named by a chip when it has no label;
  *   `placed`: the placing for this scene at this zoom, when the caller has kept it (default: made here)
- * @returns {LabelItem[]} lane text, then edge labels, then node labels in scene order, then the chip
+ * @returns {LabelItem[]} lane text, then node labels in scene order, then the words on the lit edges, then the chip
  */
 export function chooseLabels(scene, camera, viewport, opts = {}) {
   const { max = MAX_LABELS, margin = CULL_MARGIN, measure = null, hover = null } = opts;
@@ -175,12 +177,6 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
       if (t) out.push({ kind: 'lane', text: t.text, x: t.x, y: t.y, size: t.size, bold: t.bold, italic: false, color: t.color, alpha: 1, outline: null, align: 'center', family: scene.labelFont || FONT_NODE });
     }
   }
-  // ... and the labels on the selection's edges
-  for (const edge of scene.edges) {
-    const l = edge.label;
-    if (l) out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y, size: EDGE_LABEL_SIZE, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: outline.edge, align: 'center', family: scene.labelFont || FONT_EDGE });
-  }
-
   // Node labels: the placing for this zoom, then the boxes that reach the viewport
   const { zoom } = camera;
   const placed = opts.placed || placeLabels(scene, zoom, { measure });
@@ -194,6 +190,30 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   for (const p of inView) {
     const k = Math.max(1, 1 / zoom); // the outline keeps its weight on screen (3.5 px) when zoomed out, and grows with the map when zoomed in
     out.push({ kind: 'node', id: p.id, text: p.node.label, x: p.x, y: p.y, size: p.size, bold: p.bold, italic: false, color: p.node.labelColor, alpha: p.node.labelAlpha, outline: outline.node ? { color: outline.node.color, width: outline.node.width * k } : null, align: 'center', family, strike: !!p.node.labelStrike, px: p.px, screen: p.screen });
+  }
+
+  // The words on the lit edges ("reads", "calls": spec 0008 D7) go last, below every node label: one is placed only where it touches no node label, no lit
+  // node's disc and no word placed before it, so it never covers a name; at the label minimum size, in screen space
+  const px = labelMinOf(scene);
+  const taken = inView.map((p) => ({ l: camera.x + p.l, r: camera.x + p.r, t: camera.y + p.t, b: camera.y + p.b }));
+  for (const n of scene.nodes) {
+    if (n.alpha < 0.5) continue;
+    const cx = camera.x + n.x * zoom, cy = camera.y + n.y * zoom, rr = n.r * zoom;
+    if (cx + rr < 0 || cx - rr > viewport.width || cy + rr < 0 || cy - rr > viewport.height) continue;
+    taken.push({ l: cx - rr, r: cx + rr, t: cy - rr, b: cy + rr });
+  }
+  let words = 0;
+  for (const edge of scene.edges) {
+    const l = edge.label;
+    if (!l || words >= MAX_EDGE_WORDS) continue;
+    const sx = camera.x + l.x * zoom, sy = camera.y + l.y * zoom;
+    if (sx < 0 || sx > viewport.width || sy < 0 || sy > viewport.height) continue;
+    const w = (measure ? measure(l.text, px, false) : l.text.length * px * 0.55) / 2 + LABEL_PAD;
+    const box = { l: sx - w, r: sx + w, t: sy - px * 0.6 - LABEL_PAD, b: sy + px * 0.6 + LABEL_PAD };
+    if (taken.some((o) => box.l < o.r && box.r > o.l && box.t < o.b && box.b > o.t)) continue;
+    taken.push(box);
+    words++;
+    out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y + (px * 0.35) / zoom, size: px / zoom, px, screen: true, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: outline.edge, align: 'center', family: scene.labelFont || FONT_EDGE });
   }
 
   // The chip: a node with no label, named while the pointer is on it
@@ -269,26 +289,6 @@ function drawItem(ctx, t, pen, v = WORLD) {
     ctx.stroke();
     pen.stroke = t.color; pen.width = 1.4; // the strike left its own colour and width on the context
   }
-}
-
-/**
- * Erases every node circle from what is drawn so far. The map used to draw an edge's label before
- * the circles, so a node covered it; this layer is above the circles, so it cuts them out of the
- * lane and edge text instead (a dimmed node, which hides almost nothing, does not cut).
- */
-function coverWithNodes(ctx, nodes) {
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  nodes.forEach((n) => {
-    if (n.alpha < 0.5) return;
-    ctx.moveTo(n.x + n.r, n.y);
-    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-  });
-  ctx.fill();
-  ctx.restore();
 }
 
 /**
@@ -375,11 +375,9 @@ export function createLabelLayer(canvas, opts = {}) {
       // The placing is for the whole map at this zoom: kept while the scene, the zoom and the style stay (a pan, a hover), made again when one changes
       if (!samePlacing) kept = placeLabels(scene, camera.zoom, { measure });
       const items = chooseLabels(scene, camera, { width, height }, { measure, hover, placed: kept });
-      // The lane text and the selection's edge labels, then the circles cut out of them (only when there are edge labels), then the node labels
+      // The lane text (the words on the lit edges are placed below the node labels, and drawn with them in screen space, below)
       let pen = newPen();
-      let edges = false;
-      for (const t of items) { if (t.kind === 'lane' || t.kind === 'edge') { drawItem(ctx, t, pen); if (t.kind === 'edge') edges = true; } }
-      if (edges) { coverWithNodes(ctx, scene.nodes); pen = newPen(); }
+      for (const t of items) if (t.kind === 'lane') drawItem(ctx, t, pen);
       for (const t of items) if (t.kind === 'node' && !t.screen) drawItem(ctx, t, pen); // a label that grows with the map: the camera's transform
       ctx.restore();
       // A label at its minimum size is drawn in screen space at a whole font size, whatever the zoom: the font string does not change as the
@@ -387,6 +385,7 @@ export function createLabelLayer(canvas, opts = {}) {
       const screen = { ox: camera.x, oy: camera.y, k: camera.zoom };
       pen = newPen();
       for (const t of items) if (t.kind === 'node' && t.screen) drawItem(ctx, t, pen, screen);
+      for (const t of items) if (t.kind === 'edge') drawItem(ctx, t, pen, screen); // the kind words: where no node label, disc or word is
       for (const t of items) if (t.kind === 'chip') drawItem(ctx, t, pen, screen);
       return true;
     },

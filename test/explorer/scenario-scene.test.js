@@ -119,8 +119,8 @@ describe('a scenario on the scene', () => {
     expect(edgeOf(scene, 'app', 'other').color).toBe('rgba(255, 255, 255, 0.02)'); // an ownership link outside the walk: the dimmed look
   });
 
-  it('shows the label of the current edge step', () => {
-    expect(edgeOf(build(3), 'api', 'tbl').label).toMatchObject({ text: 'meals' });
+  it('says the kind of the current edge step, at its middle', () => {
+    expect(edgeOf(build(3), 'api', 'tbl').label).toMatchObject({ text: 'writes' });
   });
 
   it('starts the packet at the beginning of the edge when the step begins, and ends the trip with the step', () => {

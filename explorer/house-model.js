@@ -778,8 +778,8 @@ export const CLOUD_LINE_ALPHA = { run: 0.9, deploy: 0.25, renew: 0.9 };
 /** A line an outage travels, as outage-model.js `paintOutage` draws a walked edge */
 const OUTAGE_LINE = { alpha: 0.9, width: 2.2 };
 const WHENS = Object.keys(WHEN_STYLES);
-/** The `when` a drawn call is for, read off its dash (scene.js draws it with `whenDash`) */
-const whenOfDrawn = (e) => WHENS.find((w) => String(WHEN_STYLES[w].dash) === String(e.dash)) || 'run';
+/** The `when` a drawn call is for, read off its ticks (scene.js draws it with `whenTicks`) */
+const whenOfDrawn = (e) => WHENS.find((w) => WHEN_STYLES[w].ticks === (e.ticks || 0)) || 'run';
 
 /**
  * The Cloud band's lines, after the scene is built: with nothing selected, `deploy` lines quiet and the rest at full;

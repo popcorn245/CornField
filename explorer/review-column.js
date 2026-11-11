@@ -111,16 +111,19 @@ function model() {
   return buildScenarioList({ scenarios: scenariosNow(), nodes: state.nodes, edges: state.edges, proposal, verdicts, seen: ui.seen, words, hidden });
 }
 
+/** The proposal's own changes: the reviewer's what-if edits are a group of their own (spec 0007 D5), never counted into them */
+const theirRows = (proposal) => changeRows(state.nodes, state.edges, proposal).filter((r) => r.mark !== 'edit');
+
 /** What opening a proposal says: "Opened Checkout: 6 changes, 3 scenarios for 2 personas." */
 export function reviewOpenedLine(title) {
   const proposal = state.effectiveProposal || state.proposal;
-  return reviewOpenedWords(title, changeRows(state.nodes, state.edges, proposal).length, model());
+  return reviewOpenedWords(title, theirRows(proposal).length, model());
 }
 
 /** The phone's peek line: "6 changes · 3 scenarios for 2 personas" */
 export function reviewPeekLine() {
   const proposal = state.effectiveProposal || state.proposal;
-  return reviewCounts(changeRows(state.nodes, state.edges, proposal).length, model());
+  return reviewCounts(theirRows(proposal).length, model());
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +170,9 @@ function groupHtml(g) {
 /** Everything the two lists say, as markup (the foot is static in index.html) */
 function listsHtml() {
   const proposal = state.effectiveProposal || state.proposal;
-  const rows = changeRows(state.nodes, state.edges, proposal);
+  const everyRow = changeRows(state.nodes, state.edges, proposal);
+  const rows = everyRow.filter((r) => r.mark !== 'edit');
+  const mine = everyRow.filter((r) => r.mark === 'edit'); // "Your edits · 1": the first group, not the last row
   const list = model();
   const phone = isPhone();
   // the phone's tab: the reviewer's last choice, or Scenarios when there are any; a proposal with none opens on its changes
@@ -181,6 +186,7 @@ function listsHtml() {
 
   const changes = `<section id="rc-changes" class="hx-rc-section" data-corn="proposal-changes"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-changes"${tab === 'changes' ? '' : ' hidden'}` : ' aria-labelledby="rc-changes-h"'}>`
     + `<h3 id="rc-changes-h" class="hx-rc-h" tabindex="-1">${countHeading(t('changes'), rows.length)}</h3>`
+    + (mine.length ? `<h4 class="hx-rc-sub">${countHeading(t('yourEdits'), mine.length)}</h4><ul class="hx-change-list">${mine.map(changeRowHtml).join('')}</ul>` : '')
     + (rows.length ? `<ul class="hx-change-list">${rows.map(changeRowHtml).join('')}</ul>` : '<p class="hx-faint hx-rc-empty">This proposal changes nothing on the map.</p>')
     + '</section>';
 
@@ -190,7 +196,6 @@ function listsHtml() {
     body = list.groups.map(groupHtml).join('');
     if (!personas) body += `<p class="hx-faint hx-rc-note">This map has no personas (topology.personas.json), so every scenario is listed under ${escHtml(t('anyone'))}.</p>`;
     if (list.coverage) body += `<p class="hx-rc-coverage" data-corn="notice">${escHtml(t('notInAnyScenario'))}: ${list.notInAny.map(escHtml).join(', ')}</p>`;
-    if (list.playedLine) body += `<p class="hx-faint hx-rc-note" data-corn="notice">${escHtml(list.playedLine)}</p>`;
   }
   const scenarios = `<section id="rc-scenarios" class="hx-rc-section" data-corn="scenario-list"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-scenarios"${tab === 'scenarios' ? '' : ' hidden'}` : ' aria-labelledby="rc-scenarios-h"'}>`
     + `<h3 id="rc-scenarios-h" class="hx-rc-h" tabindex="-1">${countHeading(t('personasAndScenarios'), list.total)}</h3><div class="hx-rc-sbody">${body}</div></section>`;
@@ -254,6 +259,18 @@ export function shareRoom() {
   col.style.setProperty('--hx-changes-max', `${Math.floor(Math.max(0.4 * h, h - need - gap))}px`);
 }
 
+/** "2 of 3 scenarios played", or '': the decision line says it (spec 0007 D1; it used to sit under the scenario list) */
+export function playedLine() {
+  return state.proposal ? model().playedLine : '';
+}
+
+const paintWatchers = new Set();
+/** `fn()` after the lists are drawn again: the decision line follows what was played */
+export function onReviewColumnPaint(fn) {
+  paintWatchers.add(fn);
+  return () => paintWatchers.delete(fn);
+}
+
 function repaint() {
   const lists = $('review-lists');
   const col = $('review-column');
@@ -277,6 +294,7 @@ function repaint() {
     if (again) again.focus();
   }
   shareRoom();
+  for (const fn of paintWatchers) fn();
 }
 
 // ---------------------------------------------------------------------------

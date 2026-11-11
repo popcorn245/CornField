@@ -10,14 +10,15 @@ export const CAP = 5;
 let counter = 0;
 
 /**
- * The items as HTML, folded after CAP when there are more.
+ * The items as HTML, folded after `cap` (CAP by default) when there are more.
  * @param {string[]} items already-escaped HTML, one per item
+ * @param {number} [cap]
  */
-export function capped(items) {
-  if (items.length <= CAP + 1) return items.join(''); // "and 1 more" saves nothing
+export function capped(items, cap = CAP) {
+  if (items.length <= cap + 1) return items.join(''); // "and 1 more" saves nothing
   const id = `hx-more-${++counter}`;
-  const rest = items.length - CAP;
-  return `${items.slice(0, CAP).join('')}<div class="hx-more" id="${id}" hidden>${items.slice(CAP).join('')}</div><button data-corn="more" data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-textact hx-more-btn" data-more="${id}" data-rest="${rest}" aria-expanded="false" aria-controls="${id}">and ${rest} more</button>`;
+  const rest = items.length - cap;
+  return `${items.slice(0, cap).join('')}<div class="hx-more" id="${id}" hidden>${items.slice(cap).join('')}</div><button data-corn="more" data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-textact hx-more-btn" data-more="${id}" data-rest="${rest}" aria-expanded="false" aria-controls="${id}">and ${rest} more</button>`;
 }
 
 /** Opens or folds the list a "more" button belongs to; true when the click was one */
