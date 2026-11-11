@@ -152,14 +152,17 @@ const ACTIONS = {
 };
 
 document.addEventListener('click', (e) => {
+  // Whether the click was inside the Layers menu is read before the action runs: a row's action draws the rows again, and the node
+  // that was clicked is then out of the page, so asking afterwards would take a click on a row for a click outside the menu
+  const menu = $('legend-dropdown');
+  const inside = !!menu && (menu.contains(e.target) || $('legend-toggle-btn').contains(e.target));
   const target = e.target.closest('[data-action]');
   if (target) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   }
   // Any click outside the Layers menu closes it
-  const menu = $('legend-dropdown');
-  if (menu && !menu.hidden && !menu.contains(e.target) && !$('legend-toggle-btn').contains(e.target)) closeLegendMenu();
+  if (menu && !menu.hidden && !inside) closeLegendMenu();
 });
 
 // ---------------------------------------------------------------------------

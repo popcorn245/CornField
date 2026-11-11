@@ -173,8 +173,9 @@ describe('the menu with project layers', () => {
     expect(countOf('timers')).toBe('2');
     expect(countOf('service')).toBe('3');
     expect(countOf('data')).toBe('2');
-    expect(countOf('table')).toBe('0');
-    expect(countOf('store')).toBe('0');
+    expect(row('table')).toBeNull(); // Data took every table and store: their rows go (spec example 3)
+    expect(row('store')).toBeNull();
+    expect(row('atom')).not.toBeNull(); // a starting row nothing was taken from stays, empty as it is
     const total = rows().filter((r) => !['flow', 'runs'].includes(r.dataset.layer)).reduce((n, r) => n + Number(r.querySelector('.hx-count').textContent), 0);
     expect(total).toBe(nodes.length - 1); // every node but the root
   });

@@ -545,7 +545,7 @@ flat out float v_alpha;
 void main() {
   vec2 centre = u_cam.xy + a_geom.xy * u_cam.z;
   vec2 pos = centre + a_corner * (a_geom.z * 0.5 * u_cam.z);
-  v_uv = vec2(a_corner.x * 0.5 + 0.5, 0.5 - a_corner.y * 0.5);
+  v_uv = vec2(a_corner.x * 0.5 + 0.5, a_corner.y * 0.5 + 0.5); // screen y runs down and an image's first row is its top, so the corner below the centre reads the last row
   v_alpha = a_geom.w;
   gl_Position = toClip(pos);
 }

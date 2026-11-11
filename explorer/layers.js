@@ -12,7 +12,7 @@ import { renderFlowLegend } from './flows.js';
 import { WHEN_STYLES } from './cloud-model.js';
 import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
-import { STARTING_LAYERS, clientLayers, kindLetters, orderRows } from '../core/layers.js';
+import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
 import { layerShows } from './scene.js';
 import { getMapStyle, groupToken, setMapSubjects } from './map-style.js';
@@ -80,9 +80,17 @@ function projectColor(layer) {
  */
 function layerRows() {
   const held = new Set();
-  state.nodes.forEach((n) => { const key = rowKeyOf(state, n); if (key) held.add(key); });
+  const left = new Set(); // starting layers a project layer took nodes from
+  state.nodes.forEach((n) => {
+    const key = rowKeyOf(state, n);
+    if (!key) return;
+    held.add(key);
+    const own = startingLayerOf(n);
+    if (own !== key) left.add(own);
+  });
   const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, color: projectColor(l) }));
-  const starting = LAYER_DEFS.filter((l) => !l.overlay);
+  // A starting row a project layer has taken every node from goes (spec 0009 D7, example 3); with no project layer, every starting row stays, as it always was
+  const starting = LAYER_DEFS.filter((l) => !l.overlay && (held.has(l.key) || !left.has(l.key)));
   const known = new Set([...LAYER_DEFS.map((l) => l.key), ...state.projectLayers.map((l) => l.key)]);
   const extra = [];
   held.forEach((key) => {

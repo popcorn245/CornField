@@ -22,6 +22,14 @@ const wider = (el) => el.scrollWidth > el.clientWidth + 1;
 export function fitLeft(left) {
   left.removeAttribute(SHORT_ATTR);
   left.removeAttribute(OVERFLOW_ATTR);
+  // A menu that is open hangs under its chip and past the group's edge; that is not the group's content running over, and the fade
+  // (explorer.css [data-overflow]) is a mask that would hide the menu itself. Measure with open menus out of the way, then put them back.
+  const open = [...left.querySelectorAll('.hx-menu')].filter((m) => !m.hidden).map((m) => [m, m.style.display]);
+  open.forEach(([m]) => { m.style.display = 'none'; });
+  try { return measure(left); } finally { open.forEach(([m, was]) => { m.style.display = was; }); }
+}
+
+function measure(left) {
   let short = false;
   if (left.querySelector('[data-corn="brand-wordmark"]') && wider(left)) {
     left.setAttribute(SHORT_ATTR, '');

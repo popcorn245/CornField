@@ -15,6 +15,8 @@ import { createCanvas2dRenderer } from '../../explorer/renderer-canvas2d.js';
 import { createWebglRenderer, packIcons } from '../../explorer/renderer-webgl.js';
 // @ts-expect-error plain JS modules, no declarations
 import { ICON_RATIO } from '../../explorer/map-style.js';
+// @ts-expect-error plain JS modules, no declarations
+import { ICON_VERT } from '../../explorer/shaders.js';
 
 const node = (id, type, x, extra = {}) => ({ id, type, x, y: 0, r: 20, color: '#336699', label: id, ...extra });
 const nodes = [
@@ -109,6 +111,9 @@ describe('Canvas 2D', () => {
 });
 
 describe('WebGL', () => {
+  it('reads an image the right way up: the corner below the centre is the last row (screen y runs down, an image\'s first row is its top)', () => {
+    expect(ICON_VERT).toMatch(/v_uv = vec2\(a_corner\.x \* 0\.5 \+ 0\.5, a_corner\.y \* 0\.5 \+ 0\.5\);/);
+  });
   const sc = () => scene();
   it('packs the letters like icons: a group per letters, in scene order, saying its smallest node\'s radius', () => {
     const p = packIcons(sc(), () => true);
