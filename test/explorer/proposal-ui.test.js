@@ -228,6 +228,19 @@ describe('/?proposal=<slug>', () => {
     expect(state.nodes).toHaveLength(base.nodes.length);
   });
 
+  it('names the proposal and never a parser\'s words when its file cannot be read, and Retry puts the focus somewhere stated (#185)', async () => {
+    fakeHub(LISTING, {});
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => { throw new SyntaxError('Unterminated string in JSON at position 14'); } })));
+    expect(await mount('?proposal=0013-meals')).toBe(false);
+    expect($('proposal-message').textContent).toMatch(/^0013-meals could not be opened: cornfield sent a file this page could not read\./);
+    expect($('proposal-message').textContent).not.toMatch(/JSON|position/);
+    const retry = $('proposal-ways').querySelector('[data-way="retry"]');
+    retry.focus();
+    retry.click();
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement).toBe($('proposal-ways').querySelector('[data-way="retry"]')); // failed again: the new Retry
+  });
+
   it('ignores a slug that cannot be a file name without asking the hub', async () => {
     const hub = fakeHub(LISTING, {});
     expect(await mount('?proposal=../../etc/passwd')).toBe(false);

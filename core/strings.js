@@ -55,8 +55,10 @@ export const STRINGS = Object.freeze({
   startRun: 'Start a run',
   copySpec: 'Copy Spec',
   // The hint, loading and errors
-  hintInspect: 'Tap node to inspect live spec',
-  hintDrag: 'Drag nodes to move • Double-tap to inspect',
+  hintInspect: 'Click a node to see what it is',
+  hintInspectTouch: 'Tap a node to see what it is',
+  hintDrag: 'Drag nodes to move • Double-click to inspect',
+  hintDragTouch: 'Drag nodes to move • Double-tap to inspect',
   hintDataFlow: 'Data flow: browser → servers → API → tables → services → outside',
   loading: 'Loading topology.json …',
   errorTitle: 'The map could not be loaded',

@@ -74,13 +74,13 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   // Always there: the data-flow lanes' titles, notes and arrows ...
   for (const lane of scene.decor.lanes) {
     for (const t of [lane.title, lane.note, lane.arrow]) {
-      if (t) out.push({ kind: 'lane', text: t.text, x: t.x, y: t.y, size: t.size, bold: t.bold, italic: false, color: t.color, alpha: 1, outline: null, align: 'center', family: FONT_NODE });
+      if (t) out.push({ kind: 'lane', text: t.text, x: t.x, y: t.y, size: t.size, bold: t.bold, italic: false, color: t.color, alpha: 1, outline: null, align: 'center', family: scene.labelFont || FONT_NODE });
     }
   }
   // ... and the labels on the selection's edges
   for (const edge of scene.edges) {
     const l = edge.label;
-    if (l) out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y, size: EDGE_LABEL_SIZE, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: outline.edge, align: 'center', family: FONT_EDGE });
+    if (l) out.push({ kind: 'edge', text: l.text, x: l.x, y: l.y, size: EDGE_LABEL_SIZE, bold: false, italic: !!l.italic, color: l.color, alpha: edge.alpha, outline: outline.edge, align: 'center', family: scene.labelFont || FONT_EDGE });
   }
 
   // Node labels: level of detail, then the ones whose box reaches the viewport
@@ -116,7 +116,7 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   }
 
   for (const { label, id } of kept) {
-    out.push({ kind: 'node', id, text: label.text, x: label.x, y: label.y, size: label.size, bold: label.bold, italic: false, color: label.color, alpha: label.alpha, outline: outline.node, align: 'center', family: FONT_NODE, strike: !!label.strike });
+    out.push({ kind: 'node', id, text: label.text, x: label.x, y: label.y, size: label.size, bold: label.bold, italic: false, color: label.color, alpha: label.alpha, outline: outline.node, align: 'center', family: scene.labelFont || FONT_NODE, strike: !!label.strike });
   }
   return out;
 }
@@ -184,11 +184,12 @@ export function createLabelLayer(canvas, opts = {}) {
 
   // Text widths for the culling, measured once per font and string
   const widths = new Map();
+  let family = FONT_NODE; // the theme's label font (`--corn-map-font`) when it sets one, else the map's own
   const measure = (text, size, bold) => {
-    const key = `${bold ? 'b' : 'n'}${size}|${text}`;
+    const key = `${bold ? 'b' : 'n'}${size}|${family}|${text}`;
     let w = widths.get(key);
     if (w === undefined) {
-      ctx.font = fontOf({ italic: false, bold, size, family: FONT_NODE });
+      ctx.font = fontOf({ italic: false, bold, size, family });
       w = ctx.measureText(text).width;
       widths.set(key, w);
     }
@@ -213,7 +214,8 @@ export function createLabelLayer(canvas, opts = {}) {
       if (!dirty && drawn === lastScene && drawn.version === lastVersion && camera.x === lastX && camera.y === lastY && camera.zoom === lastZoom && styleKey === lastStyle) return false;
       lastScene = drawn; lastVersion = drawn.version; lastX = camera.x; lastY = camera.y; lastZoom = camera.zoom; lastStyle = styleKey;
       dirty = false;
-      const scene = styledScene(drawn, style); // the label colours of the theme (map-style.js)
+      const scene = styledScene(drawn, style); // the label colours and font of the theme (map-style.js)
+      family = scene.labelFont || FONT_NODE;
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);

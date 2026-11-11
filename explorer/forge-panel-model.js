@@ -402,13 +402,28 @@ export function mergeBlock(detail) {
   const { pull, checks } = detail;
   if (pull.state === 'merged') return 'It has landed already.';
   if (pull.state !== 'open') return 'It is closed, so it cannot be landed.';
-  if (pull.draft) return 'It is a draft: mark it ready on the forge first.';
-  if (!checks.length) return 'It has no checks, so nothing says it works.';
+  if (pull.draft) return 'It is a draft. Next: mark it ready for review on the forge, then press Refresh here.';
+  if (!checks.length) return 'It has no checks, so nothing says it works. Next: wait for the forge to start them, then press Refresh.';
   const words = { queued: 'is waiting to run', running: 'is still running', failure: 'failed', cancelled: 'was cancelled' };
   const not = checks.filter((c) => !GREEN.includes(c.state));
-  if (not.length) return `Can't land yet: ${not.map((c) => `${c.name} ${words[c.state] || c.state}`).join(', ')}.`;
+  if (not.length) {
+    // What to do about each, in words: a failure is re-run (here when the forge lets cornfield, else there); a check that is not done is waited for
+    const next = not.map((c) => (c.state === 'failure' || c.state === 'cancelled' ? `re-run ${c.name}${c.canRerun ? ' below' : ' on the forge'}` : `wait for ${c.name} to ${c.state === 'queued' ? 'start and finish' : 'finish'}`));
+    return `Can't land yet: ${not.map((c) => `${c.name} ${words[c.state] || c.state}`).join(', ')}. Next: ${next.join(', then ')}, then press Refresh.`;
+  }
   if (detail.stale) return 'This is an older answer from the forge: refresh before landing it.';
   return null;
+}
+
+/**
+ * A line of warning for a spec pull request whose proposal is not approved yet ('' when it is, or the pull request is not a spec's). Only words:
+ * what Land does is not changed by it.
+ * @param {{ pull: { state: string }, specs?: { slug: string, approved: boolean }[] }} detail
+ */
+export function approvalWarning(detail) {
+  if (!detail || detail.pull.state !== 'open') return '';
+  const open = (detail.specs || []).filter((s) => !s.approved).map((s) => s.slug);
+  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (Specs, open the proposal, Approve), then land this.` : '';
 }
 
 /**
@@ -483,11 +498,30 @@ export function actionWords(action, status, body, number) {
  * @param {{ error?: string } | null} body the JSON the server gave, if it did
  * @returns {string}
  */
-export function errorWords(status, body) {
-  if (status === null) return 'cornfield could not be reached; check that it is still running, then refresh.';
+export function errorWords(status, body, { offline = false, what = '' } = {}) {
+  const head = what ? `Could not load ${what}. ` : '';
+  if (status === null) return `${head}${offline ? 'You are offline.' : 'cornfield could not be reached. Check that it is still running, then try again.'}`;
   if (status === 401) return 'Your sign-in has ended. Sign in again to see issues and pull requests.';
-  if (body && typeof body.error === 'string' && body.error) return body.error;
-  return `cornfield answered ${status} for the forge.`;
+  // The server's own sentence says what went wrong in plain words (the forge's name, what it could not find); nothing a parser or a runtime said is passed on
+  if (body && typeof body.error === 'string' && body.error) return `${head}${body.error}`;
+  if (status >= 200 && status < 300) return `${head}cornfield sent an answer this page could not read. Try again.`;
+  if (status === 404) return `${head}It was not found. It may have been removed. Try again.`;
+  if (status === 403) return `${head}This sign-in may not see it. Ask a maintainer, or sign in as another account.`;
+  if (status === 429) return `${head}The forge asked cornfield to slow down. Try again in a minute.`;
+  if (status >= 500) return `${head}The server had a problem (error ${status}). Try again in a minute.`;
+  return `${head}The server refused (error ${status}). Try again.`;
+}
+
+/** What a list says when it has nothing in it: what would appear here and how to make one (the `kind` is the tab) */
+export function emptyWords(kind, forgeName = 'the forge') {
+  return {
+    specs: 'No proposals yet. A proposal is a change to the map written down before it is built. Start one from an issue (Issues, then Start a spec), or push one as a file to the proposals folder.',
+    pulls: `No open pull requests. Agents open one when a run makes code, and you can open one on ${forgeName}.`,
+    issues: `No open issues. Open one on ${forgeName}, or write a New idea in Threads.`,
+    threads: 'No threads. A thread is an idea or a spec conversation; start one with New idea below.',
+    deploys: `No deploys to show. They appear here when a workflow runs on ${forgeName}.`,
+    work: 'No work here yet. Start an agent from an issue or a proposal and its pull request shows here.',
+  }[kind] || 'Nothing here yet.';
 }
 
 // ---------------------------------------------------------------------------

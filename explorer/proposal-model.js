@@ -223,10 +223,39 @@ export function proposalPanelHtml(item) {
 /** What a listing entry's state pill says: its spec PR's state, or "Local" for a proposal that is only in a checkout or a worktree */
 export const specState = (entry) => (entry.pull ? (entry.pull.draft ? 'Draft' : 'Open') : 'Local');
 
-/** Where a listing entry is, as a line of meta: "PR #11", or the checkout or worktree it is in */
+/** Where a listing entry is, as a line of meta: "PR #11", or the checkout or worktree it is in; a proposal that is also somewhere else says so ("PR #11, and a copy in the checkout") */
 export function specWhere(entry) {
-  if (entry.pull) return `PR #${entry.pull.number}`;
-  return entry.source === 'checkout' ? 'in the checkout' : `in worktree ${entry.source}`;
+  const place = (source) => (source === 'checkout' ? 'the checkout' : `worktree ${source}`);
+  const copies = Array.isArray(entry.also) ? entry.also : [];
+  if (entry.pull) return `PR #${entry.pull.number}${copies.length ? `, and a copy in ${copies.map(place).join(' and ')}` : ''}`;
+  return `in ${place(entry.source)}${copies.length ? `, and in ${copies.map(place).join(' and ')}` : ''}`;
+}
+
+/**
+ * One row for each proposal. A proposal that is a draft in a checkout or a worktree and also on a spec PR is listed twice by the server (the two
+ * are different sources); here it is one row, the PR's (the one that can be reviewed), which says there is a local copy too (`also`: the sources
+ * of the copies). Local copies only (a checkout and a worktree) are one row as well. An entry that could not be read is never hidden behind
+ * another: its row stays and says why. Spec PRs come first (open, then draft), then local drafts; within each, the listing's order.
+ * @template T
+ * @param {T[]} entries the server's listing
+ * @returns {T[]}
+ */
+export function mergeSpecs(entries) {
+  const groups = new Map();
+  for (const entry of entries || []) groups.set(entry.slug, [...(groups.get(entry.slug) || []), entry]);
+  const out = [];
+  for (const group of groups.values()) {
+    const read = group.filter((e) => !e.error);
+    const prs = read.filter((e) => e.pull);
+    const locals = read.filter((e) => !e.pull);
+    const also = (list) => (list.length ? { also: list.map((e) => e.source) } : {});
+    if (prs.length) out.push({ ...prs[0], ...also(locals) }, ...prs.slice(1));
+    else if (locals.length) out.push({ ...locals[0], ...also(locals.slice(1)) });
+    out.push(...group.filter((e) => e.error)); // a copy that could not be read keeps its own row, with why
+  }
+  // The ones a maintainer can review come first: open spec PRs, then draft ones, then the drafts in a checkout (in the listing's order within each)
+  const rank = (e) => (e.pull ? (e.pull.draft ? 1 : 0) : 2);
+  return out.map((e, i) => [e, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(([e]) => e);
 }
 
 /**
@@ -241,7 +270,7 @@ export function specRowHtml(entry, { current = null } = {}) {
     return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-spec" data-corn="row">${head}<span class="hx-forge-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-forge-meta">${escHtml(specWhere(entry))}</span></div></li>`;
   }
   const state = specState(entry);
-  const tone = state === 'Local' ? '' : ` data-corn-state="${state === 'Draft' ? 'draft' : 'open'}"`;
+  const tone = ` data-corn-state="${state === 'Open' ? 'open' : 'draft'}"`; // a proposal only in a checkout is a draft too, as a branch with no pull request is
   const c = entry.counts || {};
   const meta = [
     entry.spec ? `<span>spec ${escHtml(entry.spec)}</span>` : '',
@@ -252,7 +281,7 @@ export function specRowHtml(entry, { current = null } = {}) {
     c.scenarios ? `<span>${c.scenarios} ${c.scenarios === 1 ? 'scenario' : 'scenarios'}</span>` : '',
     entry.errors ? `<span class="hx-warn">${entry.errors} ${entry.errors === 1 ? 'problem' : 'problems'}</span>` : '',
   ].filter(Boolean).join('');
-  const mine = !!current && current.slug === entry.slug && current.source === entry.source;
+  const mine = !!current && current.slug === entry.slug && (current.source === entry.source || (Array.isArray(entry.also) && entry.also.includes(current.source)));
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" aria-pressed="${mine}" data-corn="row">`
     + `<span class="hx-forge-line">${head}<span class="hx-forge-state hx-forge-state--${state === 'Draft' ? 'draft' : state === 'Open' ? 'open' : 'neutral'}" data-corn="state-pill"${tone}>${state}</span></span>`
     + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button></li>`;

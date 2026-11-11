@@ -1,0 +1,73 @@
+/*
+ * The sign-in, "ask a maintainer" and 401 pages (server/auth.js), the ones a visitor sees before the explorer. Plain CSS; every colour,
+ * font, size, radius, border width, shadow and space is a --corn-* token from explorer/tokens.css (loaded before this file), and the
+ * repo's theme stylesheet is linked after it, so a brand reaches these pages as it reaches the map. Hooks: [data-corn="auth-page"] (the
+ * body), "auth-card", "auth-brand", "auth-reason"; the buttons carry data-corn-kind. Not loaded by the explorer. The server sends these
+ * files without a session (server/server.js, docs/sign-in.md), so keep nothing private in them.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--corn-space-5);
+  background-color: var(--corn-ground);
+  background-image: var(--corn-ground-image);
+  background-attachment: fixed;
+  color: var(--corn-text-2);
+  font-family: var(--corn-font);
+  font-size: var(--corn-text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-corn="auth-card"] {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--corn-space-6);
+  background: var(--corn-surface-1);
+  border: var(--corn-border) solid var(--corn-line);
+  border-radius: var(--corn-radius-lg);
+  box-shadow: var(--corn-shadow);
+}
+
+[data-corn="auth-brand"] { display: flex; align-items: center; gap: var(--corn-space-3); margin-bottom: var(--corn-space-5); color: var(--corn-text); }
+[data-corn="auth-brand"] svg { flex: none; width: 28px; height: 28px; }
+[data-corn="auth-brand"] .cf-mark-bg { fill: var(--corn-accent); }
+[data-corn="auth-brand"] .cf-mark-fg { fill: var(--corn-text-on-accent); }
+[data-corn="auth-brand"] .cf-mark-line { fill: none; stroke: var(--corn-text-on-accent); stroke-width: 1.5; }
+[data-corn="auth-brand"] img { display: block; flex: none; max-width: 100%; }
+[data-corn="auth-brand"] [data-corn="brand-logo"] { width: 28px; height: 28px; }
+[data-corn="auth-brand"] [data-corn="brand-wordmark"] { height: 18px; width: auto; }
+.cf-app-name { font-family: var(--corn-font-display); font-size: var(--corn-text-base); font-weight: 650; }
+
+h1 { margin: 0 0 var(--corn-space-3); font-family: var(--corn-font-display); font-size: var(--corn-text-xl); line-height: 1.25; color: var(--corn-text); overflow-wrap: anywhere; }
+p { margin: 0 0 var(--corn-space-5); color: var(--corn-text-2); }
+code { font-family: var(--corn-mono); font-size: var(--corn-text-sm); color: var(--corn-text); overflow-wrap: anywhere; }
+[data-corn="auth-reason"] { padding: var(--corn-space-3) var(--corn-space-4); background: var(--corn-surface-2); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); color: var(--corn-text); }
+[data-corn-state="failure"] h1 { color: var(--corn-bad); }
+
+form { margin: 0; }
+.cf-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--corn-space-3) var(--corn-space-5);
+  border: var(--corn-border) solid var(--corn-accent);
+  border-radius: var(--corn-radius-sm);
+  background: var(--corn-accent);
+  color: var(--corn-text-on-accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cf-button:hover { background: var(--corn-accent-hover); border-color: var(--corn-accent-hover); }
+.cf-button[data-corn-kind="quiet"] { background: transparent; border-color: var(--corn-line); color: var(--corn-accent-text); }
+.cf-button[data-corn-kind="quiet"]:hover { background: var(--corn-surface-3); }
+.cf-button:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }

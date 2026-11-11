@@ -12,7 +12,8 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast, mixColors, over, parseColor, readColor, toHex } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
-import { TOKENS_FILE, UI_PAIRS, checkSheets, checkThemeContrast, contrastPairs, contrastProblems, describeFinding, matchRoot, parseRules, resolveColor, resolveProps, substitute, themesToCheck } from '../../core/contrast.js';
+import { NODE_THEMES } from '../../core/schema.js';
+import { TOKENS_FILE, UI_PAIRS, checkSheets, contrastSummary, checkThemeContrast, contrastPairs, contrastProblems, describeFinding, matchRoot, parseRules, resolveColor, resolveProps, substitute, themesToCheck } from '../../core/contrast.js';
 // @ts-expect-error plain JS modules, no declarations
 import { DEFAULTS } from '../../core/config.js';
 import { CORNFIELD, EXPLORER, SAMPLE } from '../helpers.js';
@@ -276,7 +277,7 @@ describe('a brand theme resolves as a browser would', () => {
     // dark on a dark system is fine; dark picked on a light system puts cornfield's dark text-2 on the brand's white
     const f = fails.find((x) => x.mode === 'dark' && x.fg === '--corn-text-2' && x.bg === '--corn-surface-1');
     expect(f).toMatchObject({ system: 'light', bgValue: '#ffffff' });
-    expect(fails.filter((x) => x.mode === 'dark' && !x.system)).toEqual([]);
+    expect(fails.filter((x) => x.mode === 'dark' && !x.system && !/^--corn-map-(node|group|stroke|label)/.test(x.fg))).toEqual([]);
     expect(describeFinding(f)).toMatch(/^standard theme \(dark, on a system set to light\): --corn-text-2 /);
   });
 });
@@ -326,7 +327,8 @@ describe('the default tokens', () => {
 
   it('resolve every pair, in light and dark, and every one passes, over the ground and its image', () => {
     const all = checkSheets(themes);
-    expect(all.length).toBe((contrastPairs().length + 5) * 2); // + the map's four diff marks and a dimmed label (F19, F23)
+    // The fixed pairs, plus the map's four diff marks and a dimmed label (F19, F23); the node fills and labels are counted in their describe below
+    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5) * 2);
     const { fails, unresolved } = contrastProblems(themes);
     expect(fails.map(describeFinding)).toEqual([]);
     expect(unresolved.map(describeFinding)).toEqual([]);
@@ -343,8 +345,8 @@ describe('the default tokens', () => {
 
   it('and over the ground image: a surface over the brightest stop of each glow, in paint order (ground, image, surface, text)', () => {
     const f = checkSheets(themes).find((x) => x.mode === 'dark' && x.fg === '--corn-text-3' && x.bg === '--corn-surface-3');
-    // the first layer of the dark --corn-ground-image peaks at rgba(66, 153, 225, 0.28)
-    const glow = over(parseColor('rgba(66, 153, 225, 0.28)'), parseColor('#090d16'));
+    // the first layer of the dark --corn-ground-image peaks at rgba(66, 153, 225, 0.2)
+    const glow = over(parseColor('rgba(66, 153, 225, 0.2)'), parseColor('#090d16'));
     expect(f.groundImage).toBe(true);
     expect(f.bgValue).toBe(toHex(over(parseColor('rgba(51, 65, 85, 0.8)'), glow)));
     expect(f.ratio).toBeCloseTo(contrast(f.fgValue, f.bgValue), 6);
@@ -360,7 +362,9 @@ describe('the default tokens', () => {
 
   it('are checked by every validate, with or without a theme', () => {
     expect(themesToCheck({ root: SAMPLE, theme: { ...DEFAULTS.theme } })).toEqual([{ theme: 'standard', sheets: [tokens] }]);
-    expect(checkThemeContrast({ root: SAMPLE, theme: { ...DEFAULTS.theme } })).toEqual({ errors: [], warnings: [] });
+    const checked = checkThemeContrast({ root: SAMPLE, theme: { ...DEFAULTS.theme } });
+    expect(checked).toMatchObject({ errors: [], warnings: [] });
+    expect(checked.summary).toMatch(/^theme contrast: \d+ pairs of the standard theme, in light and dark: all at or above their minimum \(4\.5:1 for text, 3:1 /);
   });
 });
 
@@ -411,7 +415,7 @@ describe('a brand theme that fails', () => {
     const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-text-2: oklch(70% 0.1 200); --corn-map-fill: auto; --corn-map-x: var(--corn-map-fill)}'] }]);
     expect(r.fails).toEqual([]);
     expect(r.unresolved.length).toBeGreaterThan(0);
-    expect(r.unresolved.every((f) => f.fg === '--corn-text-2')).toBe(true);
+    expect(r.unresolved.every((f) => f.fg === '--corn-text-2' || f.fg === '--corn-run-stopped')).toBe(true);
     expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: --corn-text-2 is "oklch\(70% 0\.1 200\)": oklch\(\) is not a colour cornfield reads/);
   });
 });
@@ -616,5 +620,67 @@ describe('cornfield validate: the contrast check', () => {
     expect(themesToCheck({ root, theme: { ...DEFAULTS.theme, css: './html.css' } })).toBeNull();
     fs.writeFileSync(path.join(root, 'night.css'), ':root{--corn-text:#000}' + ' '.repeat(300 * 1024));
     expect(themesToCheck({ root, theme: { ...DEFAULTS.theme, names: { night: './night.css' } } })).toHaveLength(1);
+  });
+});
+
+describe('the map\'s colours (CF review F48)', () => {
+  const tokensText = tokens;
+  const check = (brand) => contrastProblems([{ theme: 'standard', sheets: [tokensText, brand] }]);
+  const mapFails = (brand) => check(brand).fails.filter((f) => /^--corn-map-(node|group|stroke|label)/.test(f.fg));
+  // A cream ground, as a flat brand has, with the dark values left alone
+  const FLAT = ':root[data-theme="light"], :root { --corn-ground-image: none; } :root[data-theme="light"] { --corn-ground: #fdf3dc; }';
+
+  it('holds every node kind\'s own colour, light and dark, against the default ground and its image', () => {
+    const all = checkSheets([{ theme: 'standard', sheets: [tokensText] }]);
+    const fills = all.filter((f) => /^--corn-map-node-/.test(f.fg) && f.use && f.use.startsWith('the fill of'));
+    for (const mode of ['light', 'dark']) for (const kind of Object.keys(NODE_THEMES)) expect(fills.some((f) => f.mode === mode && f.fg.startsWith(`--corn-map-node-${kind}`)), `${mode} ${kind}`).toBe(true);
+    expect(fills.every((f) => f.min === 3 && f.ratio >= 3)).toBe(true);
+    expect(mapFails('')).toEqual([]);
+  });
+
+  it('fails a brand whose light fills are 1.5 to 2.7:1 on its ground, naming the token', () => {
+    const brand = `${FLAT} :root[data-theme="light"] { --corn-map-node-table: #f2c500; --corn-map-node-service: #7ad100; }`;
+    const fails = mapFails(brand);
+    const table = fails.find((f) => f.fg.startsWith('--corn-map-node-table'));
+    expect(table).toMatchObject({ mode: 'light', min: 3 });
+    expect(table.ratio).toBeLessThan(2);
+    expect(describeFinding(table)).toMatch(/^standard theme \(light\): --corn-map-node-table \(the fill of a table node.*\) \(#f2c500\) on --corn-ground \(#fdf3dc\) is 1\.\d\d:1, below 3:1/);
+    expect(fails.some((f) => f.fg.startsWith('--corn-map-node-service'))).toBe(true);
+    // a group's token is named when the kind has none
+    const group = mapFails(`${FLAT} :root[data-theme="light"] { --corn-map-group-table: #f2c500; }`).find((f) => /table/.test(f.use));
+    expect(group.fg).toBe('--corn-map-group-table');
+  });
+
+  it('lets an outline carry a fill under 3:1 only when it is 3:1 against the fill and the ground', () => {
+    const fills = ':root[data-theme="light"] { --corn-map-node-table: #f2c500; }';
+    expect(mapFails(`${FLAT} ${fills} :root[data-theme="light"] { --corn-map-stroke: #1b1636; }`).filter((f) => /table/.test(f.use))).toEqual([]);
+    // a pale outline does not: it is named, with what the fill is on its own
+    const pale = mapFails(`${FLAT} ${fills} :root[data-theme="light"] { --corn-map-stroke: #e8dcb0; }`).find((f) => /table/.test(f.use));
+    expect(pale).toMatchObject({ fg: '--corn-map-stroke', min: 3 });
+    expect(pale.use).toMatch(/which is 1\.\d\d:1 on its own/);
+    // an outline of width 0 is no outline
+    expect(mapFails(`${FLAT} ${fills} :root[data-theme="light"] { --corn-map-stroke: #1b1636; --corn-map-stroke-width: 0; }`).some((f) => /table/.test(f.use))).toBe(true);
+  });
+
+  it('checks a label against the ground and against its halo, as text', () => {
+    const fails = mapFails(':root { --corn-map-label: #777777; --corn-map-label-halo: #888888; }');
+    expect(fails.map((f) => `${f.mode} ${f.bg}`).sort()).toContain('dark --corn-ground');
+    expect(fails.some((f) => f.bg === '--corn-map-label-halo' && f.min === 4.5)).toBe(true);
+    expect(mapFails(':root { --corn-map-label: #ffffff; --corn-map-label-halo: #000000; } :root[data-theme="light"] { --corn-map-label: #000000; --corn-map-label-halo: #ffffff; }')).toEqual([]);
+  });
+
+  it('reports a token it cannot read as a warning that names it, and keeps the findings in step across the two system settings', () => {
+    const { unresolved } = check(':root { --corn-map-node-app: oklch(70% 0.1 200); }');
+    expect(unresolved.some((f) => f.fg === '--corn-map-node-app' && /oklch/.test(f.problem))).toBe(true);
+    // a value written only under the system setting must not shift the findings of the other pairs
+    const lengths = checkSheets([{ theme: 'standard', sheets: [tokensText, '@media (prefers-color-scheme: dark) { :root { --corn-map-stroke: #fff; } }'] }]).length;
+    expect(lengths).toBe(checkSheets([{ theme: 'standard', sheets: [tokensText] }]).length);
+  });
+
+  it('says in one line what was checked, when it passes', () => {
+    const r = checkThemeContrast({ root: SAMPLE, theme: { ...DEFAULTS.theme } });
+    expect(r.errors).toEqual([]);
+    expect(r.summary).toMatch(/^theme contrast: \d{3} pairs of the standard theme, in light and dark: all at or above their minimum/);
+    expect(contrastSummary([{}, {}, {}], 400, 2, 1)).toBe('theme contrast: 400 pairs of the standard theme and 2 named themes, in light and dark: 2 under their minimum, 1 that could not be worked out.');
   });
 });

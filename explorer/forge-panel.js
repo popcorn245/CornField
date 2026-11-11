@@ -76,21 +76,23 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
-import { runsHtml, totalsHtml } from './runs-view.js';
+import { runsHtml, totalsHtml, loadingRowsHtml, runPillHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
   landingUrl, cancelLandingUrl, landingWords, mergeBlock, rerunWhy, confirmMerge, mergeBody, actionUrl, actionWords,
   specBlock, buildOffers, planUrl, confirmSpec, confirmBuild, specBody, buildBody, existingWords,
-  listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta,
+  listKeyOf, litForDeploy, nodesForRestarts, deployWords, deployMeta, emptyWords, approvalWarning,
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
-import { cornStateAttr } from './corn-state.js';
+import { cornStateAttr, stateIconHtml } from './corn-state.js';
+import { sayResult, clearResult, resultOf, showResultIn, resetFeedbackForTests } from './feedback.js';
+import { isOffline, initConnection, notSentWords, resetConnectionForTests } from './connection.js';
 import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
-import { specRowHtml } from './proposal-model.js';
+import { specRowHtml, mergeSpecs } from './proposal-model.js';
 import { t } from './strings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -172,7 +174,8 @@ const current = () => (ui.kind === 'work' ? ui.work : ui.kind === 'specs' ? spec
 /** The proposals the Proposals menu lists (proposal.js reads them), as a list of the panel's own shape; null before the first answer */
 function specsList() {
   const { entries, problem, forgeProblem, at } = proposalListing();
-  return entries ? { items: entries, at: at ? new Date(at).toISOString() : '', rate: '', stale: '', problem: problem || forgeProblem || '' } : null;
+  // One row for a proposal, however many places it is in: its spec PR and the copy in a checkout or a worktree are one (mergeSpecs)
+  return entries ? { items: mergeSpecs(entries), at: at ? new Date(at).toISOString() : '', rate: '', stale: '', problem: problem || forgeProblem || '' } : null;
 }
 const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
@@ -183,6 +186,9 @@ const safeUrl = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : n
 // ---------------------------------------------------------------------------
 //  Asking the server
 // ---------------------------------------------------------------------------
+
+/** A failed answer in words (the model's), said as offline when the browser is, and naming what could not be loaded */
+const failWords = (res, what = '') => errorWords(res.status, res.body, { offline: isOffline(), what });
 
 /** One GET (or the one POST, with its JSON); `{ ok, status, body }`, with a status of null when the server did not answer */
 async function request(url, refresh, post) {
@@ -211,7 +217,7 @@ async function loadWork(refresh, token) {
     ui.work = { grouped: groupWork(b), problem: b.specsProblem || '', at: b.at, rate: b.rate || '', stale: b.stale || '' };
     announce(`${workStatus(groupsShown(), '', now())}${ui.work.stale ? '. This is an older answer' : ''}`);
   } else {
-    ui.error = errorWords(res.status, res.body);
+    ui.error = failWords(res, 'the work');
     announce(ui.error);
   }
   paint();
@@ -221,7 +227,7 @@ async function loadWork(refresh, token) {
 async function loadRuns(refresh, { say = true } = {}) {
   const before = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
   const res = await request(runsUrl(refresh), refresh);
-  ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: errorWords(res.status, res.body) };
+  ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: failWords(res, 'the runs') };
   if (!(ui.runs && ui.runs.data)) return;
   // The map shows the open runs' nodes; a run lit on the map follows its nodes; what changed is said, once the first answer is in
   setRunsOnMap(ui.runs.data.runs);
@@ -285,7 +291,7 @@ async function loadList(refresh = false, quiet = false) {
     }
     if (!quiet) announce(`${plural(filterItems(ui.lists[key].items, ui.kind, ui.filters).length, kindWords())} shown${ui.lists[key].stale ? '. This is an older answer' : ''}`);
   } else {
-    ui.error = errorWords(res.status, res.body);
+    ui.error = failWords(res, `the ${kindWords()}s`);
     if (!quiet) announce(ui.error);
   }
   paintFilters();
@@ -301,7 +307,7 @@ async function loadSpecs(token, quiet) {
   if (token !== listToken) return;
   ui.loading = false;
   const { entries, problem } = proposalListing();
-  if (!entries) ui.error = `The proposals could not be listed: ${problem || 'no answer'}`;
+  if (!entries) ui.error = `Could not load the proposals. ${problem || 'cornfield did not answer.'}`;
   if (!quiet) announce(ui.error || `${plural(entries.length, 'spec')} shown`);
   paint();
 }
@@ -343,7 +349,7 @@ async function selectPull(n) {
   const res = await request(pullUrl(n), false);
   if (token !== pullToken) return;
   if (!res.ok) {
-    ui.detailError = errorWords(res.status, res.body);
+    ui.detailError = failWords(res, `pull request ${n}`);
     announce(ui.detailError);
     paint();
     return;
@@ -508,7 +514,7 @@ async function selectThread(n) {
   // An answer without a thread in it is a failure too: nothing to show or light
   const thread = threadOf(res);
   if (!thread) {
-    ui.threadError = res.ok ? `Thread ${n} could not be read: the answer had no thread in it. Refresh to ask again.` : errorWords(res.status, res.body);
+    ui.threadError = res.ok ? `Thread ${n} could not be read: the answer had no thread in it. Refresh to ask again.` : failWords(res, `thread ${n}`);
     announce(ui.threadError);
     paint();
     return;
@@ -753,7 +759,7 @@ async function loadNotes(refresh = false) {
     n.data = res.body;
     announce(`Release notes drafted. ${notesSummary(n.data)}${n.data.stale ? ' This is an older answer' : ''}`);
   } else {
-    n.error = errorWords(res.status, res.body);
+    n.error = failWords(res, 'the release notes');
     announce(n.error);
   }
   paint();
@@ -827,7 +833,7 @@ async function postDraft() {
     $('notes-post').focus();
     return;
   }
-  say(res.status === 401 ? 'Your sign-in has ended. Sign in again to post a draft.' : errorWords(res.status, res.body), true);
+  say(res.status === 401 ? 'Your sign-in has ended. Sign in again to post a draft.' : failWords(res), true);
   $('notes-tag').focus();
 }
 
@@ -933,7 +939,7 @@ function deployHtml(d) {
   const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open deploy ${escHtml(d.name)} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-deploy="${escHtml(d.id)}" aria-pressed="${ui.deploy === d.id}" data-corn="row">
     <span class="hx-forge-title">${escHtml(d.name)}${d.title && d.title !== d.name ? `<span class="hx-faint"> · ${escHtml(d.title)}</span>` : ''}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
     <span class="hx-forge-labels"><span class="hx-forge-label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
 }
 
@@ -945,7 +951,7 @@ function threadHtml(t) {
   // The run that is about this thread, as a word (issue #104): the Agents tab's list, read for every tab, says it; the row only names its state
   const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
   const run = runOnThread(runs, t.number);
-  const runWord = run ? `<span class="hx-forge-state hx-forge-state--${runTone(run)}" data-thread-run="${escHtml(run.runId)}" data-corn="state-pill"${cornStateAttr(run.status)}>${escHtml(threadRunWords(runs, t.number))}</span> ` : '';
+  const runWord = run ? `${runPillHtml({ esc: escHtml }, run, threadRunWords(runs, t.number), ` data-thread-run="${escHtml(run.runId)}"`)} ` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}" data-corn="row">
     <span class="hx-forge-title">${escHtml(t.title)}</span>
     <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
@@ -1012,7 +1018,7 @@ function deployDetailHtml() {
   const lit = ui.litDeploy;
   const url = safeUrl(d.url);
   const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3>
-    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
+    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
   const stale = ui.lists.deploys && ui.lists.deploys.stale;
   let body;
   if (!d.restarts.length) {
@@ -1073,7 +1079,7 @@ function detailHtml() {
   if (!shown) return '';
   const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title">${title}</h3>`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
-  if (!ui.detail) return `${head(`Pull request ${ui.selected}`)}<p class="hx-faint">Loading its files and checks …</p>`;
+  if (!ui.detail) return `${head(`Pull request ${ui.selected}`)}<p class="hx-faint">Loading its files and checks …</p><ul class="hx-forge-list" aria-hidden="true">${loadingRowsHtml(4)}</ul>`;
   const { pull, checks, stale } = ui.detail;
   const lit = ui.lit;
   const mapped = lit.files.filter((f) => f.nodes.length).length;
@@ -1093,7 +1099,7 @@ function detailHtml() {
       ? `<button type="button" class="hx-btn hx-forge-act" data-forge-rerun="${escHtml(c.id)}" aria-label="Re-run ${escHtml(c.name)}"${ui.busy ? ' disabled' : ''}>Re-run</button>`
       : '';
     const whyNot = why ? `<span class="hx-faint hx-forge-lights">${escHtml(why)}</span>` : '';
-    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}" data-corn="state-pill"${cornStateAttr(c.state)}>${escHtml(checkWords(c))}</span> ${name}${again}${lights}${whyNot}</li>`;
+    return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}" data-corn="state-pill"${cornStateAttr(c.state)}>${stateIconHtml(c.state)}${escHtml(checkWords(c))}</span> ${name}${again}${lights}${whyNot}</li>`;
   }).join('');
 
   const fileRows = lit.files.map((f) => {
@@ -1109,7 +1115,7 @@ function detailHtml() {
   const land = block
     ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
     : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
-  const act = `<div class="hx-forge-cta">${land}${url ? `<a class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}`;
+  const act = `<div class="hx-forge-cta">${land}${url ? `<a class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${approvalWarning(ui.detail) ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(approvalWarning(ui.detail))}</p>` : ''}`;
   // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
   const waiting = ui.landing && pull.state === 'open'
     ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, now()))}</p><button type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
@@ -1124,15 +1130,15 @@ function detailHtml() {
     : '';
 
   const key = lit.changed.size || lit.failing.size
-    ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
+    ? `<p class="hx-forge-key hx-faint">${lit.changed.size ? '<span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes ' : ''}${lit.failing.size ? '<span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names' : ''}</p>`
     : '';
   // Its run: who is running it, their state, the time and the cost (the runs are read for the Runs tab, and once for the first PR selected)
   const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
   const made = runOnPull(runs, pull.number);
   const runSection = made
-    ? `<h4 class="hx-forge-sub">Run</h4><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${escHtml(pullRunWords(made, now()))}</p>`
+    ? `<h4 class="hx-forge-sub">Run</h4><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${runPillHtml({ esc: escHtml }, made, statusWords(made))} ${escHtml(pullRunWords(made, now(), { state: false }))}</p>`
     : '';
-  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span>#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
+  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span data-corn="count">#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
   return `${head(escHtml(pull.title), meta)}
     ${act}
     ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}
@@ -1174,15 +1180,30 @@ let shownKey = '';
 let shownKind = '';
 let returnTo = null; // the selector of the row that opened the selection
 
+const key0 = () => detailKey();
+
 /** Everything the panel shows, from `ui` (a row or node button that had the focus has it again) */
 function paint() {
   const panel = $('forge-panel');
   if (!panel) return;
   const had = panel.contains(document.activeElement) ? document.activeElement : null;
   const again = had ? findAgain(had) : null;
+  // A list drawn again must not move what the person is looking at: the scroll of the panel stays where it was
+  const scroller = panel.querySelector('.hx-forge-body');
+  const scrolled = scroller ? scroller.scrollTop : 0;
+  const keyBefore = shownKey;
   draw(panel);
+  if (scroller && scrolled && key0() === keyBefore && scroller.scrollTop !== scrolled) scroller.scrollTop = scrolled;
   const back = again && panel.querySelector(again);
   if (back && back !== document.activeElement && !back.closest('[hidden]')) back.focus();
+  // Retry was pressed and its notice is gone (the list is being read again): the focus goes to the panel's title, never to the page
+  if (had && had.dataset && had.dataset.action === 'retry-forge' && !panel.contains(document.activeElement)) $('forge-title').focus();
+  // A control of a run card that is no longer drawn (the run went on): the focus goes to that run's card, never to the page
+  const hadRun = had && !had.isConnected && had.closest('[data-run]');
+  if (hadRun && !panel.contains(document.activeElement)) {
+    const card = [...panel.querySelectorAll('[data-run]')].find((c) => c.dataset.run === hadRun.dataset.run);
+    if (card) card.focus();
+  }
   // A selection replaces the list: the focus goes to its back control, and returns to the row when it is let go of
   // (a tab changed leaves the focus on the tab)
   const key = detailKey();
@@ -1203,7 +1224,7 @@ function paint() {
 /** The tabs' counts, where there is one: the proposals, the open pull requests and issues and threads, the runs still open */
 function paintCounts() {
   const open = (key) => (ui.lists[key] ? ui.lists[key].items.length : null);
-  const specs = proposalListing().entries;
+  const specs = specsList() && specsList().items;
   const runs = ui.runs && ui.runs.data ? ui.runs.data.open : null;
   const counts = { specs: specs ? specs.length : null, pulls: open('pulls|open'), issues: open('issues|open'), threads: ui.config && ui.config.threads === false ? null : open('threads|open'), work: runs };
   for (const btn of document.querySelectorAll('#forge-panel [data-forge-kind]')) {
@@ -1212,6 +1233,35 @@ function paintCounts() {
     if (!el) continue;
     el.hidden = !n;
     el.textContent = n ? String(n) : '';
+  }
+}
+
+/** Says (on the panel's top, for the CSS) that the tabs run on past an edge: a fade shows on that side, so Deploys is not simply missing on a phone */
+function paintTabsMore() {
+  const top = document.querySelector('#forge-panel .hx-forge-top');
+  const tabs = top && top.querySelector('.hx-forge-tabs');
+  if (!tabs) return;
+  const more = [];
+  if (tabs.scrollLeft > 1) more.push('start');
+  if (tabs.scrollWidth - tabs.clientWidth - tabs.scrollLeft > 1) more.push('end');
+  if (more.length) top.dataset.more = more.join(' '); else delete top.dataset.more;
+  // A row given the focus is scrolled clear of the fixed top, never left under it (its height changes with the theme and the width)
+  const body = top.parentElement;
+  if (body) body.style.scrollPaddingTop = `${top.offsetHeight}px`;
+}
+
+/** A notice line: its words, and a Retry that reads the tab again (for a failure or an older answer) */
+function setNotice(el, words, retry) {
+  el.hidden = !words;
+  el.textContent = words;
+  if (words && retry) {
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.className = 'hx-btn hx-forge-act';
+    again.dataset.action = 'retry-forge';
+    again.dataset.cornKind = 'quiet';
+    again.textContent = 'Retry';
+    el.append(' ', again);
   }
 }
 
@@ -1242,13 +1292,12 @@ function draw(panel) {
   if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : specs ? 'Looking for proposals …' : `Loading ${kindWords()}s from ${forgeName()} …`;
   else if (!list) status.textContent = '';
   else if (work) status.textContent = workStatus(groups, list.at, now());
-  else if (specs) status.textContent = `${plural(list.items.length, 'open spec')}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
+  else if (specs) status.textContent = `${plural(list.items.length, 'proposal')}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
   const words = ui.error || (list && list.stale ? `Showing an older answer. ${list.stale}` : '') || (specs && list && list.problem ? `The spec PRs could not be listed: ${list.problem}` : '') || (work && list && list.problem ? `Spec pull requests could not all be read: ${list.problem}` : '') || (ui.kind === 'threads' && list && list.problem ? `Some threads could not all be read: ${list.problem}` : '');
-  notice.hidden = !words;
-  notice.textContent = words;
+  setNotice(notice, words, !!words);
 
   const act = $('forge-act-note');
   if (act) {
@@ -1260,13 +1309,16 @@ function draw(panel) {
   }
 
   const rows = $('forge-list');
-  if (!list) rows.innerHTML = '';
+  const empty = (words) => `<li class="hx-forge-empty hx-faint" data-corn="empty">${escHtml(words)}</li>`;
+  rows.setAttribute('aria-busy', String(!!ui.loading && !list));
+  // A list that is being read holds its height with rows of the right size, so nothing jumps when the data comes
+  if (!list) rows.innerHTML = ui.loading ? loadingRowsHtml(4) : '';
   else if (specs) {
     const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
-    rows.innerHTML = list.items.length ? list.items.map((e) => specRowHtml(e, { current: open })).join('') : '<li class="hx-forge-empty hx-faint">No proposals</li>';
+    rows.innerHTML = list.items.length ? list.items.map((e) => specRowHtml(e, { current: open })).join('') : empty(emptyWords('specs', forgeName()));
   }
-  else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : `<li class="hx-forge-empty hx-faint">${ui.work.grouped.groups.length ? 'No work matches these filters.' : 'No work here yet.'}</li>`;
-  else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : `<li class="hx-forge-empty hx-faint">${list.items.length ? `No ${kindWords()} matches these filters.` : `No ${kindWords()}s here.`}</li>`;
+  else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : empty(ui.work.grouped.groups.length ? 'No work matches these filters.' : emptyWords('work', forgeName()));
+  else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : empty(list.items.length ? `No ${kindWords()} matches these filters.` : emptyWords(ui.kind, forgeName()));
 
   const detail = $('forge-detail');
   detail.hidden = !showing;
@@ -1279,6 +1331,7 @@ function draw(panel) {
   $('forge-rate').textContent = rate;
   paintRuns();
   paintButton();
+  paintTabsMore();
 }
 
 /** The runs of the Agents tab: state, what each is about, links, and Stop. A runner's words are escaped like any text from the forge. */
@@ -1290,11 +1343,11 @@ function paintRuns() {
   const data = ui.runs && ui.runs.data;
   $('forge-runs-status').textContent = data ? runsStatus(data) : ui.loading ? 'Loading the runs …' : '';
   const note = $('forge-runs-note');
-  const words = (ui.runs && ui.runs.error) || (ui.runNote ? ui.runNote.text : '');
-  note.hidden = !words;
-  note.className = `hx-forge-notice${!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
-  if (!(ui.runs && ui.runs.error) && ui.runNote && ui.runNote.ok) note.dataset.cornState = 'success'; else delete note.dataset.cornState;
-  note.textContent = words;
+  const failed = ui.runs && ui.runs.error;
+  const words = failed || (ui.runNote ? ui.runNote.text : '');
+  note.className = `hx-forge-notice${!failed && ui.runNote && ui.runNote.ok ? ' hx-forge-notice--ok' : ''}`;
+  if (!failed && ui.runNote && ui.runNote.ok) note.dataset.cornState = 'success'; else delete note.dataset.cornState;
+  setNotice(note, words, !!failed);
   paintRunner('forge-runs-runner', data);
   const trig = $('forge-runs-trigger');
   if (trig) {
@@ -1315,8 +1368,77 @@ function paintRuns() {
     hand.innerHTML = lines.map((l) => `<li>${escHtml(l)}</li>`).join('');
   }
   const list = $('forge-runs-list');
-  if (!data) { list.innerHTML = ''; return; }
-  list.innerHTML = data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint">No agent has been asked for yet. Start one from an issue or a proposal.</li>';
+  list.setAttribute('aria-busy', String(!data && !!ui.loading));
+  if (!data) { list.innerHTML = ui.loading ? loadingRowsHtml(3) : ''; return; }
+  patchList(list, data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint" data-corn="empty">No agent has been asked for yet. Start one from an issue or a proposal: Issues, then Start an agent.</li>');
+}
+
+/**
+ * Draws a list again without disturbing what the person is doing in it. The new rows are made first and set against the old by their key
+ * (a run's id, a compare group's): a row that has not changed is left alone, a row that has is replaced, and **a row that holds the focus in
+ * a field, or a reply typed and not sent, is kept as it is** (its result line is the one part brought up to date), so the caret, the
+ * selection, the focus and the text stay where they were. A row whose field is no longer asked for is replaced like any other.
+ */
+function patchList(list, html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const fresh = [...tpl.content.children];
+  const keyOf = (el) => el.dataset.key || el.dataset.run || null;
+  const old = new Map([...list.children].filter((el) => keyOf(el)).map((el) => [keyOf(el), el]));
+  const typing = (el) => el.contains(document.activeElement) && document.activeElement.matches('input, textarea');
+  const redraw = new Set(redrawRuns); // runs the page has just acted on: their cards say what the action did, so they are drawn anew (the focus is put back by hand)
+  redrawRuns.clear();
+  const unsent = (el) => [...el.querySelectorAll('[data-run-reply]')].some((f) => f.value !== '');
+  const target = fresh.map((f) => {
+    const was = keyOf(f) && old.get(keyOf(f));
+    if (!was) return f;
+    if (was.outerHTML === f.outerHTML) return was;
+    const field = was.querySelector('[data-run-reply]');
+    const twin = field && f.querySelector(`[data-run-reply="${field.dataset.runReply}"]`);
+    if (!redraw.has(keyOf(f)) && (typing(was) || unsent(was)) && twin) {
+      // The field stays (the very element, never taken out of the page, so the focus, caret, selection and a phone's keyboard stay);
+      // everything around it is the new card's, so a state that changed is shown (graftAround)
+      const theirs = twin.getAttribute('value') || '';
+      graftAround(was, field, twin);
+      // The typed text is in `ui.runReplies` as well, always (every keystroke); a field that differs from it was changed by the page itself
+      if (field.value !== theirs) field.value = theirs;
+      return was;
+    }
+    return f;
+  });
+  target.forEach((node, i) => {
+    const at = list.children[i];
+    if (at === node) return;
+    if (at && keyOf(at) && keyOf(at) === keyOf(node)) at.replaceWith(node); else list.insertBefore(node, at || null);
+  });
+  while (list.children.length > target.length) list.lastElementChild.remove();
+}
+
+/**
+ * Makes `root` (an old row) what `fresh` (its new drawing) is, except that `keep` (inside `root`) stays the same element in the same place,
+ * standing for `twin` (its match inside `fresh`): at each level from `keep` up to `root`, the parent takes the new parent's attributes and
+ * children, with the kept branch in its place. `keep` itself is never taken out of the page.
+ */
+function graftAround(root, keep, twin) {
+  const sync = (to, from) => {
+    for (const a of [...to.attributes]) if (!from.hasAttribute(a.name) && a.name !== 'value') to.removeAttribute(a.name);
+    for (const a of [...from.attributes]) if (a.name !== 'value' && to.getAttribute(a.name) !== a.value) to.setAttribute(a.name, a.value);
+  };
+  sync(keep, twin);
+  let w = keep;
+  let f = twin;
+  while (w !== root && w.parentElement && f.parentElement) {
+    const wp = w.parentElement;
+    const fp = f.parentElement;
+    sync(wp, fp);
+    const kids = [...fp.childNodes];
+    const at = kids.indexOf(f);
+    for (const n of [...wp.childNodes]) if (n !== w) n.remove();
+    for (const n of kids.slice(0, at)) wp.insertBefore(n, w);
+    for (const n of kids.slice(at + 1)) wp.append(n);
+    w = wp;
+    f = fp;
+  }
 }
 
 /** The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply */
@@ -1335,6 +1457,7 @@ function viewContext() {
   return {
     esc: escHtml, safeUrl, forgeName: forgeName(), forgeType: f ? f.type : 'github', repoUrl: base && f.repo ? `${base}/${f.repo}` : null,
     now: now(), nodes: state.nodes, selected: ui.runSel, timelines: ui.runTimelines, replies: ui.runReplies, busy: !!ui.busy,
+    results: { get: (id) => resultOf(id) },
   };
 }
 
@@ -1378,8 +1501,7 @@ function drawNotes() {
   $('forge-status').textContent = n.loading && !n.data ? `Drafting the release notes from ${forgeName()} …` : n.data ? notesSummary(n.data) : '';
   const notice = $('forge-notice');
   const words = n.error || (n.data && n.data.stale ? `Showing an older answer. ${n.data.stale}` : '');
-  notice.hidden = !words;
-  notice.textContent = words;
+  setNotice(notice, words, !!words);
   $('forge-detail').hidden = true;
   paintIdea();
   $('forge-rate').textContent = (n.data && n.data.rate) || '';
@@ -1664,7 +1786,7 @@ async function startAgain(runId) {
     const res = await request(briefUrl(runId), false);
     ui.retrying = false;
     if (!res.ok || typeof res.body.brief !== 'string') {
-      ui.runNote = { text: `The brief of ${runId} could not be read, so Start again did not open: ${errorWords(res.status, res.body)}`, ok: false };
+      ui.runNote = { text: `The brief of ${runId} could not be read, so Start again did not open: ${failWords(res)}`, ok: false };
       paint();
       announce(ui.runNote.text);
       return;
@@ -1788,29 +1910,59 @@ function onAgentClick(e) {
   if (t.closest && t.closest('[data-action="agent-start-cancel"]') && ui.agent && !ui.agent.posting) closeAgent();
 }
 
-/** Asks a run to stop: one POST, then the runs are read again */
+/** The runs whose card is drawn anew at the next paint, whatever holds the focus in it (the page itself changed what it says) */
+const redrawRuns = new Set();
+
+/** Gives the focus to the first of `selectors` that is there and not disabled, inside the card of a run (else the card itself) */
+function focusInRun(runId, selectors) {
+  const panel = $('forge-panel');
+  const card = panel && [...panel.querySelectorAll('[data-run]')].find((c) => c.dataset.run === runId);
+  if (!card) return;
+  const to = selectors.map((sel) => card.querySelector(sel)).find((el) => el && !el.disabled) || card;
+  if (to !== document.activeElement) to.focus();
+  if (to.matches('input') && typeof to.setSelectionRange === 'function') to.setSelectionRange(to.value.length, to.value.length); // typing goes on at the end of what is there
+}
+
+/** Back online: a tab that could not be read is read again, so its error does not outlive the cause (the same function each time, added once) */
+function readOnline() {
+  if (ui.open && (ui.error || (ui.runs && ui.runs.error) || ui.detailError || (ui.kind === 'notes' && ui.notes.error))) refreshForge({ quiet: true });
+}
+
+/** Lets go of a reply that was not sent because its run stopped waiting: the field goes, and the focus goes to the run's card */
+function discardReply(runId) {
+  ui.runReplies.delete(runId);
+  redrawRuns.add(runId);
+  paint();
+  focusInRun(runId, []);
+}
+
+/** Asks a run to stop: one POST, then the runs are read again. What it came to is said in the run's own card, and to a screen reader */
 async function stopRun(runId) {
   if (ui.busy) return;
   ui.busy = 'stop';
   ui.runNote = null;
-  announce(`Asking ${runId} to stop`);
+  clearResult(runId);
+  announce('Asking this run to stop'); // the focus is in the run's card, whose controls name it
   paint();
   const res = await post(stopUrl(runId), {});
   ui.busy = '';
-  ui.runNote = { text: stopWords(res.status, res.body, runId), ok: res.ok };
-  announce(ui.runNote.text);
+  sayResult(runId, res.status === null ? notSentWords('The stop request') : stopWords(res.status, res.body, 'this run'), res.ok);
   await loadRuns(false, { say: false });
+  redrawRuns.add(runId);
   paint();
+  // The Stop button is gone once the stop is asked for: the focus goes to the run's row, never to the page
+  focusInRun(runId, [`[data-forge-stop="${runId}"]`]);
 }
 
 /** Answers a waiting run: Continue, Stop, or a reply with the text typed. One POST, then the runs are read again */
 async function answerRun(runId, action) {
   if (ui.busy) return;
   const text = ui.runReplies.get(runId) || '';
+  clearResult(runId);
   if (action === 'reply' && text.trim() === '') {
-    ui.runNote = { text: 'Write a reply first.', ok: false };
-    announce(ui.runNote.text);
+    sayResult(runId, 'Write a reply first.', false);
     paint();
+    focusInRun(runId, [`[data-run-reply="${runId}"]`]);
     return;
   }
   // Where the focus goes back to once it is sent: the reply field after a reply (empty, for the next one), the button after Continue; while the
@@ -1818,18 +1970,17 @@ async function answerRun(runId, action) {
   const back = action === 'reply' ? `[data-run-reply="${runId}"]` : `[data-run-answer="${action}"][data-run-id="${runId}"]`;
   ui.busy = 'answer';
   ui.runNote = null;
-  announce(`Answering ${runId}`);
+  announce(action === 'reply' ? 'Sending your reply' : 'Sending your answer');
   paint();
   const res = await post(answerUrl(runId), answerBody(action, text));
   ui.busy = '';
-  if (res.ok && action === 'reply') ui.runReplies.delete(runId);
-  ui.runNote = { text: answerWordsFor(res.status, res.body, runId, action), ok: res.ok };
-  announce(ui.runNote.text);
+  if (res.ok && action === 'reply') ui.runReplies.delete(runId); // sent: the field is empty for the next; a reply that was not sent stays as it was typed
+  const words = res.status === null ? notSentWords(action === 'reply' ? 'Your reply' : 'The answer') : answerWordsFor(res.status, res.body, 'this run', action);
+  sayResult(runId, words, res.ok);
   await loadRuns(false, { say: false });
+  redrawRuns.add(runId);
   paint();
-  const panel = $('forge-panel');
-  const to = panel && [back, `[data-run-timeline="${runId}"]`].map((sel) => panel.querySelector(sel)).find((el) => el && !el.disabled);
-  if (to && to !== document.activeElement) to.focus();
+  focusInRun(runId, [back, `[data-run-timeline="${runId}"]`]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1942,7 +2093,7 @@ async function issueNotListed(n) {
     announce(ui.actNote.text);
     return false;
   }
-  return linkMissing(res.status === 404 ? `There is no issue ${n}.` : errorWords(res.status, res.body));
+  return linkMissing(res.status === 404 ? `There is no issue ${n}.` : failWords(res, `issue ${n}`));
 }
 
 /** Whether the Start dialog can open now: the server runs agents and the page has the dialog (the node panel's "Start a run" asks) */
@@ -2070,6 +2221,8 @@ function onClick(e) {
   if (goto) { goToRun(goto.dataset.runGoto); return; }
   const answer = t.closest('[data-run-answer]');
   if (answer) { answerRun(answer.dataset.runId, answer.dataset.runAnswer); return; }
+  const discard = t.closest('[data-run-discard]');
+  if (discard) { discardReply(discard.dataset.runDiscard); return; }
   const pick = t.closest('[data-run-select]');
   if (pick) { selectRun(pick.dataset.runSelect); return; }
   const timeline = t.closest('[data-run-timeline]');
@@ -2087,7 +2240,7 @@ function onClick(e) {
   const action = t.closest('[data-action]');
   if (!action) return;
   if (action.dataset.action === 'close-forge') closeForge();
-  else if (action.dataset.action === 'refresh-forge') refreshForge();
+  else if (action.dataset.action === 'refresh-forge' || action.dataset.action === 'retry-forge') refreshForge();
   else if (action.dataset.action === 'copy-notes') copyNotes();
   else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeNotesConfirm(); else openNotesConfirm(); }
   else if (action.dataset.action === 'confirm-notes') postDraft();
@@ -2154,7 +2307,14 @@ function onChange(e) {
 }
 
 function onInput(e) {
-  if (e.target.dataset && e.target.dataset.runReply) { ui.runReplies.set(e.target.dataset.runReply, e.target.value); return; }
+  if (e.target.dataset && e.target.dataset.runReply) {
+    const id = e.target.dataset.runReply;
+    ui.runReplies.set(id, e.target.value);
+    // "Write a reply first" goes once something is written: a refusal does not outlive what it was about
+    const said = resultOf(id);
+    if (said && !said.ok && e.target.value.trim()) { clearResult(id); showResultIn(e.target.closest('[data-run]') && e.target.closest('[data-run]').querySelector(`[data-run-result="${id}"]`), id); }
+    return;
+  }
   if (e.target.id !== 'forge-text') return;
   ui.filters.text = e.target.value;
   filtersChanged(false);
@@ -2223,6 +2383,11 @@ export function initForgePanel(config, opts = {}) {
   }
   if (!wired) {
     wired = true;
+    initConnection();
+    if (typeof window !== 'undefined') window.addEventListener('online', readOnline);
+    const tabs = panel.querySelector('.hx-forge-tabs');
+    if (tabs) tabs.addEventListener('scroll', paintTabsMore, { passive: true });
+    if (typeof window !== 'undefined') window.addEventListener('resize', paintTabsMore);
     wireToggles();
     panel.addEventListener('click', onClick);
     panel.addEventListener('change', onChange);
@@ -2291,4 +2456,6 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   pageAway = false;
   clearRunsOnMap();
   Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'specs', filtersOpen: false, filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, selectedOn: '', detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
+  resetFeedbackForTests();
+  resetConnectionForTests();
 }

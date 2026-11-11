@@ -120,7 +120,7 @@ describe('the words (runs-model.js)', () => {
     expect(aboutWords({ issue: 12 })).toBe('issue #12');
     expect(aboutWords({ proposal: '0040-meals' })).toBe('proposal 0040-meals');
     expect(statusWords({ status: 'stop-requested' })).toBe('Stop requested');
-    expect(runMeta(RUN, NOW)).toBe('asked 1 hour ago by maintainer-one · profile claude · limits 30 min · reported 1200 tokens, cost 0.4 · checks running');
+    expect(runMeta(RUN, NOW)).toBe('asked 1 hour ago by maintainer-one · profile claude · limits 30 min · reported 1,200 tokens, cost 0.40 · checks running');
     expect(canStop(RUN)).toBe(true);
     expect(canStop({ ...RUN, stopRequested: { by: 'x' } })).toBe(false);
     expect(canStop(QUIET)).toBe(false);
@@ -303,7 +303,9 @@ describe('the runs on the Agents tab', () => {
     expect(rows[0].textContent).toContain('Runner: tests <img src=x onerror=alert(1)> failing');
     expect(rows[0].querySelector('img')).toBe(null);
     expect([...rows[0].querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['https://git.example.test/owner/name/issues/7#issuecomment-9', 'https://github.com/owner/name/issues/7', 'https://git.example.test/owner/name/pull/50', 'https://ci.example.org/1']);
-    expect(rows[0].querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe(`Stop run ${RUN.runId}`);
+    // a run is named by what the card shows, never by its id; the name starts with the visible label
+    expect(rows[0].querySelector('[data-forge-stop]').getAttribute('aria-label')).toBe('Stop: code on issue #7, profile claude, asked by maintainer-one, 1 hour ago');
+    expect(rows[0].textContent).not.toContain(RUN.runId);
     expect(rows[1].textContent).toContain('Quiet');
     expect(rows[1].textContent).toMatch(/no longer counts toward the limit/);
     expect(rows[1].querySelector('[data-forge-stop]')).toBe(null);
@@ -338,8 +340,9 @@ describe('the runs on the Agents tab', () => {
     click(q('[data-forge-stop]'));
     await settle();
     expect(server.posts().map((p) => p.url)).toEqual([`/api/agent-runs/${RUN.runId}/stop`]);
-    expect($('forge-runs-note').hidden).toBe(false);
-    expect($('forge-runs-note').textContent).toMatch(/Asked run-01JC8Z3Q5M7VXK2RT9N4B6HDEF to stop\. The runner decides/);
+    // the result is in the run's own card, by the control that was used, not at the top of a list that may be scrolled away
+    expect(q(`[data-run-result="${RUN.runId}"]`).textContent).toMatch(/^Asked this run to stop\. The runner decides/);
+    expect(q(`[data-run="${RUN.runId}"]`).contains(q(`[data-run-result="${RUN.runId}"]`))).toBe(true);
     expect(qa('#forge-runs-list > li')[0].textContent).toContain('Stop requested');
     expect(q('[data-forge-stop]')).toBe(null);
     expect(await said()).toMatch(/to stop/);
@@ -379,7 +382,8 @@ describe('a run that waits for an answer (issue #101)', () => {
     expect(row.textContent).toContain('Runner\'s link');
     expect(qa('[data-run-answer]').map((b) => [b.dataset.runAnswer, b.textContent])).toEqual([['continue', 'Continue'], ['stop', 'Stop'], ['reply', 'Reply']]);
     expect(q('[data-forge-stop]')).toBe(null);
-    expect(q('[data-run-reply]').closest('label').textContent).toContain('Reply to run');
+    expect(q('[data-run-reply]').closest('label').textContent).toContain('Reply to code on issue #9');
+    expect(q('[data-run-reply]').closest('label').textContent).not.toContain('asked by'); // the label is short; the buttons carry the longer name
     // an ordinary working run keeps its Stop and has no answers
     expect(canAnswer({ ...RUN })).toBe(false);
   });
@@ -391,14 +395,15 @@ describe('a run that waits for an answer (issue #101)', () => {
     click(q('[data-run-answer="continue"]'));
     await settle();
     expect(server.posts().map((p) => [p.url, JSON.parse(p.init.body)])).toEqual([[`/api/agent-runs/${WAITING.runId}/answer`, { action: 'continue' }]]);
-    expect($('forge-runs-note').textContent).toMatch(/Answered run-01JC8Z3Q5M7VXK2RT9N4B6HDEW: continue\. The runner picks it up/);
+    expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toMatch(/^Told this run to continue\. The runner picks it up/);
     expect(q('#forge-runs-list > li').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
-    expect(await said()).toMatch(/Answered/);
+    expect(await said()).toMatch(/Told this run to continue/);
     // the reply: empty is not sent; typed text is, once, and the field is empty again
     click(q('[data-run-answer="reply"]'));
     await settle();
     expect(server.posts()).toHaveLength(1);
-    expect($('forge-runs-note').textContent).toBe('Write a reply first.');
+    expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toBe('Write a reply first.');
+    expect(document.activeElement).toBe(q('[data-run-reply]')); // and the person is taken to the field
     const field = q('[data-run-reply]');
     field.value = '  Use the second <i>plan</i>.  ';
     field.dispatchEvent(new Event('input', { bubbles: true }));
@@ -460,7 +465,8 @@ describe('a run that waits for an answer (issue #101)', () => {
     await openAgents();
     click(q('[data-run-answer="continue"]'));
     await settle();
-    expect($('forge-runs-note').textContent).toBe('Run is not waiting for an answer.');
+    expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toBe('Run is not waiting for an answer.');
+    expect(q(`[data-run-result="${WAITING.runId}"]`).dataset.cornState).toBe('failure');
   });
 
   it('words the state, the answers and the timeline', () => {
@@ -509,9 +515,9 @@ describe('the totals of tokens and cost (CF-27)', () => {
     expect(totalsLines({ all: { runs: 1, tokens: 50, cost: null }, byProposal: [], byDay: [{ day: '2026-11-05', runs: 1, tokens: 50, cost: null }] })).toEqual(['Reported in all: 50 tokens over 1 run.', 'Per day (UTC): 2026-11-05 50 tokens (1 run).']);
     expect(totalsLines({ all: { runs: 2, tokens: null, cost: 0.123456789 } })).toEqual(['Reported in all: cost 0.12 over 2 runs.']);
     expect(totalsLines(TOTALS)).toEqual([
-      'Reported in all: 2107 tokens, cost 1.30 over 3 runs.',
-      'Per proposal: 0040-meals <b> 2000 tokens, cost 0.30 (2 runs).',
-      'Per day (UTC): 2026-11-05 7 tokens, cost 1.00 (1 run); 2026-11-04 2100 tokens, cost 0.30 (2 runs).',
+      'Reported in all: 2,107 tokens, cost 1.30 over 3 runs.',
+      'Per proposal: 0040-meals <b> 2,000 tokens, cost 0.30 (2 runs).',
+      'Per day (UTC): 2026-11-05 7 tokens, cost 1.00 (1 run); 2026-11-04 2,100 tokens, cost 0.30 (2 runs).',
     ]);
   });
 
@@ -810,8 +816,9 @@ describe('the Runs view links a run to the one it retries', () => {
     await openAgents();
     const newRow = q(`[data-run="${NEW.runId}"]`);
     const oldRow = q(`[data-run="${OLD.runId}"]`);
-    expect(newRow.textContent).toContain(`Starts again on ${FAILED.runId}`);
-    expect(oldRow.textContent).toContain(`Started again as ${NEW.runId}`);
+    expect(newRow.textContent).toContain('Starts again on summary on issue #7, profile local-qwen, asked by maintainer-one');
+    expect(oldRow.textContent).toContain('Started again as code on issue #7, profile claude, asked by maintainer-one');
+    expect(newRow.textContent).not.toContain(FAILED.runId); // an id is shown nowhere
     click(newRow.querySelector('[data-run-goto]'));
     expect(document.activeElement).toBe(oldRow);
     click(oldRow.querySelector('[data-run-goto]'));
@@ -819,7 +826,7 @@ describe('the Runs view links a run to the one it retries', () => {
     click(newRow.querySelector('[data-run-timeline]'));
     await settle();
     const tl = q(`#run-tl-${NEW.runId}`);
-    expect(tl.textContent).toContain(`Starts again on ${FAILED.runId}`);
+    expect(tl.textContent).toContain('Starts again on summary on issue #7');
     expect(tl.querySelector(`[data-run-goto="${FAILED.runId}"]`)).not.toBeNull();
   });
 
@@ -827,7 +834,7 @@ describe('the Runs view links a run to the one it retries', () => {
     fakeServer({ runs: [NEW] });
     mount();
     await openAgents();
-    expect(q(`[data-run="${NEW.runId}"]`).textContent).toContain(`Starts again on ${FAILED.runId}`);
+    expect(q(`[data-run="${NEW.runId}"]`).textContent).toContain('Starts again on an earlier run');
     expect(q('[data-run-goto]')).toBeNull();
   });
 });

@@ -174,9 +174,8 @@ describe('accessible names follow the visible label', () => {
     const pairs = [...stop, ...buttons(html)].map((b) => [b.textContent.trim(), b.getAttribute('aria-label')]).filter(([, a]) => a);
     expect(pairs.length).toBeGreaterThan(0);
     for (const [text, aria] of pairs) if (['Halt', 'Carry on', 'Answer', 'Go again'].includes(text)) expect(aria.startsWith(text), `${text} / ${aria}`).toBe(true);
-    expect(pairs.some(([t2, a]) => t2 === 'Halt' && a === 'Halt run r7')).toBe(true);
-    expect(pairs.some(([t2, a]) => t2 === 'Answer' && a === 'Answer to run r7')).toBe(true);
-    expect(pairs.some(([t2, a]) => t2 === 'Carry on' && a === 'Carry on run r7')).toBe(true);
+    // the label first, then what the run is called (what its card shows, never its id)
+    for (const label of ['Halt', 'Answer', 'Carry on']) expect(pairs.some(([t2, a]) => t2 === label && a.startsWith(`${label}: `) && !a.includes('r7')), label).toBe(true);
   });
 
   it('every labelled control whose name is its label carries the same words after an override', () => {
@@ -192,7 +191,7 @@ describe('accessible names follow the visible label', () => {
   it('with no override the names are the defaults, as before', () => {
     expect($('legend-toggle-btn').textContent).toContain('Layers'); // its name is its text
     const html = runsHtml(ctx, [run()], []);
-    expect(buttons(html).map((b) => b.getAttribute('aria-label'))).toContain('Stop run r7');
+    expect(buttons(html).map((b) => b.getAttribute('aria-label')).some((a) => a && a.startsWith('Stop: '))).toBe(true);
   });
 });
 
