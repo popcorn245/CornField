@@ -214,9 +214,9 @@ describe('opening and closing', () => {
     expect(q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
     expect(server.urls()).toContain('/proposals');
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Meals', 'Draft idea', 'Local only', '0016-broken']);
-    expect($('forge-status').textContent).toMatch(/^4 proposals, as of /);
-    expect(qa('[data-forge-kind] .hx-forge-count').map((c) => c.textContent)).toEqual(['4', '3', '3', '', '', '']);
-    expect(await said()).toBe('4 specs shown');
+    expect($('forge-status').textContent).toMatch(/^1 to decide · 4 proposals, as of /);
+    expect(qa('[data-forge-kind] .hx-forge-count').map((c) => c.textContent)).toEqual(['1', '3', '3', '', '', '']); // Specs shows what waits on you (the one spec PR to decide), the others their totals
+    expect(await said()).toBe('4 specs shown, 1 to decide');
     click(q('[data-forge-kind="pulls"]'));
     await settle();
     expect(server.urls().filter((u) => u.startsWith('/api/forge/pulls'))).toEqual(['/api/forge/pulls?state=open&limit=100']); // the count's read is the list's
@@ -299,7 +299,7 @@ describe('the lists and their filters', () => {
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Old work']);
     choose('forge-state', 'closed');
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Dropped']);
-    expect(server.calls).toHaveLength(2); // merged and closed share one list
+    expect(server.calls.filter((c) => c.url !== '/proposals')).toHaveLength(2); // merged and closed share one list (the proposals are read once at load, for the number)
     expect([...$('forge-state').options].map((o) => o.textContent)).toEqual(['Open', 'Merged', 'Closed', 'All']);
   });
 
@@ -350,7 +350,7 @@ describe('a pull request lights the map', () => {
     expect(sceneNode('core-meals')).toMatchObject({ alpha: 1, halo: 'match' });
     expect(sceneNode('root').alpha).toBeLessThan(0.5);
     expect($('forge-btn-lit').textContent).toBe('#12');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, pull request 12 selected');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, 1 waiting on you, pull request 12 selected');
     expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed.');
     // the legend names only what is lit: no failing check, no "a test a failing check names" (#189)
     expect(q('.hx-forge-key').textContent).toBe('a file this pull request changes ');
@@ -611,7 +611,7 @@ describe('the Agents tab', () => {
   it('is a third tab that reads the work in one request, once, and groups it by proposal, then issue, then neither', async () => {
     const server = await open();
     expect(tab().getAttribute('aria-pressed')).toBe('true');
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work', '/api/agent-runs']); // the runs (issue #80) come with the work
+    expect(server.urls().filter((u) => u !== '/proposals')).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/work', '/api/agent-runs']); // the runs (issue #80) come with the work
     expect(titles()).toEqual(['Proposal 0013-meals', '#5 Sign-in', 'Not linked to an issue or a proposal']);
     expect(rowTitles(groups()[0])).toEqual(['Meals page']);
     expect(rowTitles(groups()[1])).toEqual(['Lint everything', 'Branch claude/5-notes']);
@@ -985,7 +985,7 @@ describe('deploys light the map', () => {
     expect(q('.hx-forge-sub').textContent).toBe('Restarted: 3 nodes on the map');
     expect(qa('[data-forge-node]').map((b) => b.textContent)).toEqual(['web', 'app', 'db']);
     expect($('forge-btn-lit').textContent).toBe('deploy');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, a deploy selected');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, 1 waiting on you, a deploy selected');
     expect(await said()).toBe('Deploy Deploy web of main, succeeded: 3 nodes restarted and lit. Turned on the Infra and Containers layers.');
   });
 
@@ -1185,10 +1185,12 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     openForge();
     await settle();
     const [meals, draft, local, broken] = rows();
-    expect(meals.querySelector('.hx-forge-state').textContent).toBe('Open');
+    expect(meals.querySelector('.hx-forge-state').textContent).toBe('To decide');
+    expect(meals.querySelector('.hx-forge-state').dataset.cornState).toBe('waiting');
     expect(meals.querySelector('.hx-forge-sum').textContent).toBe('Adds /meals, read from the basket.');
-    expect(meals.querySelector('.hx-forge-facts').textContent).toBe('spec 0013PR #12+4~13 scenarios');
-    expect(draft.querySelector('.hx-forge-state').textContent).toBe('Draft');
+    expect(meals.querySelector('.hx-forge-facts').textContent).toContain('spec 0013PR #12');
+    expect(meals.querySelector('.hx-forge-facts').textContent).toContain('+4~13 scenarios');
+    expect(draft.querySelector('.hx-forge-state').textContent).toBe('Draft PR');
     expect(draft.querySelector('.hx-forge-facts').textContent).toContain('−2');
     expect(local.querySelector('.hx-forge-state').textContent).toBe('Local');
     expect(local.querySelector('.hx-forge-state').dataset.cornState).toBe('draft'); // every state-pill states its state (a proposal only in a checkout is a draft)

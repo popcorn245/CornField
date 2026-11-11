@@ -47,7 +47,7 @@ import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
 import { REVIEW_LIMIT, latestReview, migrateStage1Reviews } from './reviews.js';
 import { submitReview, refusal } from './submit-review.js';
-import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal } from './proposal-pulls.js';
+import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { serveMockups } from './mockups.js';
 
 // The review's checks live in server/reviews.js; these are re-exported for the callers that always had them here
@@ -211,7 +211,9 @@ async function listWithPulls(where, forgeFor, signedIn) {
   }
   const { entries, problem } = await listPullProposals(forge, where, { hooks: signedIn?.hooks });
   if (signedIn && entries.length) await migrateStage1Reviews({ forge, dataDir: where.dataDir, entries, login: signedIn.login, record: signedIn.record });
-  const pulls = await Promise.all(entries.map((entry) => describePull(entry, forge, where, topology)));
+  // Each ready PR's review state rides along (spec 0010 D4), kept by head; a draft PR is not read
+  const [pulls, states] = await Promise.all([Promise.all(entries.map((entry) => describePull(entry, forge, where, topology))), reviewStates(forge, where, entries)]);
+  pulls.forEach((p, i) => { p.review = states[i].review; if (p.pull) p.pull = { ...p.pull, pushedAt: states[i].pushedAt }; });
   const list = [...local, ...pulls].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
   return { list, problem };
 }

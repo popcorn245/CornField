@@ -6,7 +6,10 @@
  * the map (`#sheet-dock`, which is `display: contents` from 768px up, so the desktop layout is untouched).
  * Each is a **peek** by default (a handle, a title and a line or two) and **expands** to at most half the
  * screen (60% for the node panel) with its own scroll. A tap or a swipe on the handle expands or collapses it; a tap
- * on the map collapses it. At most one is expanded at a time (sheet-model.js).
+ * on the map collapses it. At most one is expanded at a time (sheet-model.js). Spec 0010 D7: the Work panel is a sheet too, with the review
+ * (the proposal bar or the scenario player) and one other sheet at most (opening Work displaces the node panel and the reverse); while one is
+ * expanded the sheet of the other group folds to a **stub** (one 44px row: its title and its badge; a tap swaps them), and an expanded sheet is
+ * capped so the map keeps 35% of the screen (`--hx-sheet-cap`, sheet-model.js `sheetCap`). Escape folds an expanded sheet, then closes.
  *
  * The sheets cover the bottom of the map, so the map must not fit or follow a step into that part:
  * `measureCovered()` is the height the dock covers (0 on a desktop), kept in `state.coveredBottom`
@@ -14,7 +17,7 @@
  */
 
 import { state } from './state.js';
-import { createSheetModel } from './sheet-model.js';
+import { createSheetModel, sheetCap } from './sheet-model.js';
 import { freeRect } from './camera.js';
 
 /** The width below which the sheets apply (matches the CSS) */
@@ -24,6 +27,9 @@ const SWIPE_PX = 20;
 
 const model = createSheetModel();
 const elements = new Map(); // id -> the sheet's element
+const options = new Map(); // id -> { stub?: () => { title: string, badge?: string, label?: string }, away?: () => void } what the sheet's owner gave it
+const wiredAs = new WeakMap(); // a sheet's element, and its handle -> the id their listeners were bound for
+const away = new Set(); // sheets displaced by the other of their group: open on the page, hidden until opened again
 const listeners = new Set();
 let dock = null;
 let lastCovered = 0;
@@ -34,8 +40,8 @@ export const isPhone = () => typeof window !== 'undefined' && typeof window.matc
 const $ = (id) => document.getElementById(id);
 const stageOf = () => (dock && dock.parentElement) || (state.canvas ? state.canvas.parentElement : null);
 
-/** 'expanded' or 'peek' for a registered sheet; undefined for one that is not */
-export const sheetState = (id) => (model.has(id) ? (model.isExpanded(id) ? 'expanded' : 'peek') : undefined);
+/** 'expanded', 'stub' or 'peek' for a registered sheet (a sheet that is not open is a peek, as it is when it opens); undefined for one that is not registered */
+export const sheetState = (id) => { const st = model.stateOf(id); return st === 'hidden' ? 'peek' : st; };
 /** The id of the expanded sheet, or null */
 export const expandedSheet = () => model.expanded();
 
@@ -47,20 +53,120 @@ export function onCoveredChange(fn) {
 
 /** Puts the model on the page: each sheet's attribute and handle, the stage's `data-sheet-open`, the covered height */
 function apply() {
+  syncShown();
   for (const [id, el] of elements) {
     const expanded = model.isExpanded(id);
-    el.dataset.sheetState = expanded ? 'expanded' : 'peek';
-    const handle = el.querySelector('.hx-sheet-handle');
+    const st = model.stateOf(id);
+    el.dataset.sheetState = st === 'hidden' ? 'peek' : st;
+    const handle = [...el.children].find((c) => c.classList.contains('hx-sheet-handle'));
     if (handle) {
       handle.setAttribute('aria-expanded', String(expanded));
       handle.setAttribute('aria-label', expanded ? 'Collapse this panel' : 'Expand this panel');
     }
+    paintStub(id, el, st === 'stub');
   }
   const stage = stageOf();
   if (stage) stage.dataset.sheetOpen = model.expanded() || '';
+  // The expanded sheet is capped so the map keeps 35% of the screen: what is left under the stub, if there is one
+  if (dock && isPhone() && typeof window !== 'undefined') dock.style.setProperty('--hx-sheet-cap', `${sheetCap(window.innerHeight || 0, model.stubs())}px`);
   markLast();
   measureCovered();
   listeners.forEach((fn) => fn());
+}
+
+/** Whether a sheet's element is open on the page (the proposal bar is shown, the Work panel and the node panel carry their open class) */
+function isOpenOnPage(id, el) {
+  if (id === 'forge') return el.classList.contains('forge-open');
+  if (id === 'drawer') return el.classList.contains('drawer-open');
+  return !el.hidden && el.isConnected;
+}
+
+/**
+ * Brings the model's open sheets in line with the page. A sheet that has just opened beside another of its group displaces it (Work and the node
+ * panel take turns): the displaced one is `away` (hidden on a phone, its selection kept) and its owner is told. A sheet that is closed on the page
+ * is hidden in the model and is no longer away.
+ */
+function syncShown() {
+  if (!isPhone()) { // the sheets are panels from 768px: nothing is displaced and nothing is a stub
+    away.clear();
+    for (const el of elements.values()) el.removeAttribute('data-sheet-away');
+    return;
+  }
+  for (const [id, el] of elements) {
+    const open = isOpenOnPage(id, el) && !away.has(id);
+    if (!open && !isOpenOnPage(id, el)) away.delete(id);
+    if (open && !model.isShown(id)) {
+      for (const gone of model.show(id)) displace(gone);
+    } else if (!open && model.isShown(id)) model.hide(id);
+  }
+  for (const [id, el] of elements) {
+    const gone = away.has(id);
+    const was = el.hasAttribute('data-sheet-away');
+    el.toggleAttribute('data-sheet-away', gone);
+    if (gone && !el.inert) el.inert = true; // out of reach of Tab while it is away
+    else if (!gone && was && isOpenOnPage(id, el)) el.inert = false;
+  }
+}
+
+/** A sheet displaced by the other of its group: hidden, not closed (the node stays selected); Work is closed by its own code */
+function displace(id) {
+  const el = elements.get(id);
+  if (!el) return;
+  away.add(id);
+  const on = options.get(id);
+  if (on && on.away) on.away();
+}
+
+/** The stub's row: made on first use, shown only in the stub state, with the title and the badge the sheet's owner says */
+function paintStub(id, el, on) {
+  let stub = [...el.children].find((c) => c.classList.contains('hx-sheet-stub'));
+  if (!stub) {
+    if (!on) return;
+    stub = document.createElement('button');
+    stub.type = 'button';
+    stub.className = 'hx-sheet-stub';
+    stub.dataset.corn = 'sheet-stub';
+    stub.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); expandSheet(id); const h = [...el.children].find((c) => c.classList.contains('hx-sheet-handle')); if (h && isPhone()) h.focus(); });
+    el.append(stub);
+  }
+  stub.hidden = !on;
+  if (!on) return;
+  const opt = options.get(id);
+  const said = (opt && opt.stub ? opt.stub() : null) || { title: el.getAttribute('aria-label') || id };
+  const title = String(said.title || '');
+  const badge = said.badge ? String(said.badge) : '';
+  const key = `${title}\u0000${badge}\u0000${said.label || ''}`;
+  if (stub.dataset.key === key) return;
+  stub.dataset.key = key;
+  stub.replaceChildren();
+  const t = document.createElement('span');
+  t.className = 'hx-sheet-stub-title';
+  t.textContent = title;
+  stub.append(t);
+  if (badge) {
+    const b = document.createElement('span');
+    b.className = 'hx-waiting-badge';
+    b.dataset.corn = 'waiting-badge';
+    b.setAttribute('aria-hidden', 'true');
+    b.textContent = badge;
+    stub.append(b);
+  }
+  stub.setAttribute('aria-label', said.label || (badge ? `${title}, ${badge}` : title));
+}
+
+/** Says a stub's words may have changed (the number waiting, a proposal's title): drawn again, if it is showing */
+export function refreshStubs() {
+  for (const [id, el] of elements) if (model.stateOf(id) === 'stub') paintStub(id, el, true);
+}
+
+/**
+ * Opens a sheet's place in the dock without expanding it (Work opens as a peek, a node panel opens as a peek): the other sheet of its group is
+ * displaced, and this one is no longer away. Called by what opens a sheet (the node panel's code); the Work panel's open class is seen too.
+ */
+export function showSheet(id) {
+  if (!elements.has(id)) return;
+  away.delete(id);
+  apply();
 }
 
 /** The lowest visible sheet gets `data-sheet-last`: it carries the bottom safe-area inset */
@@ -123,11 +229,12 @@ export function visibleMapRect() {
 // ---------------------------------------------------------------------------
 
 /** Makes `el` a sheet called `id` (a peek until expanded) and gives it a handle if it has none */
-export function registerSheet(id, el) {
+export function registerSheet(id, el, opts = {}) {
   if (!el) return;
   unregisterSheet(id, false);
   model.add(id);
   elements.set(id, el);
+  options.set(id, opts);
   el.classList.add('hx-sheet');
   let handle = [...el.children].find((c) => c.classList.contains('hx-sheet-handle'));
   if (!handle) {
@@ -138,8 +245,8 @@ export function registerSheet(id, el) {
     handle.innerHTML = '<span data-corn="sheet-grip"></span>';
     el.prepend(handle);
   }
-  bindHandle(id, handle);
-  el.addEventListener('click', (e) => peekClick(id, e), true);
+  if (wiredAs.get(handle) !== id) { wiredAs.set(handle, id); bindHandle(id, handle); } // registered again (a re-init): one listener, or a tap toggles twice
+  if (wiredAs.get(el) !== id) { wiredAs.set(el, id); el.addEventListener('click', (e) => peekClick(id, e), true); }
   apply();
 }
 
@@ -148,10 +255,12 @@ export function unregisterSheet(id, redraw = true) {
   if (!model.has(id)) return;
   model.remove(id);
   elements.delete(id);
+  options.delete(id);
+  away.delete(id);
   if (redraw) apply();
 }
 
-export function expandSheet(id) { if (model.expand(id)) apply(); }
+export function expandSheet(id) { syncShown(); if (model.expand(id)) apply(); } // what is open on the page is known first (a bar shown a moment ago)
 export function collapseSheet(id) { if (model.collapse(id)) apply(); }
 export function collapseAllSheets() { if (model.collapseAll()) apply(); }
 export function toggleSheet(id) { if (model.toggle(id)) apply(); }
@@ -190,7 +299,7 @@ function bindHandle(id, handle) {
 function peekClick(id, e) {
   if (!isPhone() || model.isExpanded(id)) return;
   const target = e.target;
-  if (target.closest && target.closest('.hx-sheet-handle')) return; // the handle's own listener
+  if (target.closest && target.closest('.hx-sheet-handle, .hx-sheet-stub')) return; // the handle's own listener, and the stub's (it swaps, and takes the focus to the handle)
   if (target.closest && target.closest('select, input, textarea, [data-peek-ok]')) return; // the speed menu, and the proposal's Send back, Approve and mode switcher, work from the peek
   const action = target.closest && target.closest('[data-action]');
   if (action && /close/.test(action.dataset.action)) return;
@@ -202,6 +311,20 @@ function peekClick(id, e) {
 /** A touch or click on the map collapses the expanded sheet */
 function onMapDown(e) {
   if (e.target === state.canvas && isPhone()) collapseAllSheets();
+}
+
+/** Escape in an expanded sheet folds it to a peek; Escape in a peek is the sheet's own (it closes it): "folds, then closes" (spec 0010 D7) */
+function onEscape(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented || !isPhone()) return;
+  const id = model.expanded();
+  const el = id && elements.get(id);
+  if (!el || !el.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('select, input, textarea')) return; // a field's own Escape first
+  e.preventDefault();
+  e.stopPropagation();
+  collapseSheet(id);
+  const handle = [...el.children].find((c) => c.classList.contains('hx-sheet-handle'));
+  if (handle) handle.focus();
 }
 
 /** The dim layer behind an expanded node panel: a tap there collapses the panel to its peek (it no longer closes it) */
@@ -225,11 +348,13 @@ export function initSheets() {
     observers = [];
     model.ids().forEach((id) => model.remove(id));
     elements.clear();
+    options.clear();
+    away.clear();
     lastCovered = 0;
     dock = found;
   }
-  registerSheet('proposal', $('proposal-bar'));
-  registerSheet('drawer', $('spec-drawer'));
+  registerSheet('proposal', $('proposal-bar'), { stub: () => ({ title: ($('proposal-title') && $('proposal-title').textContent) || 'Proposal' }) });
+  registerSheet('drawer', $('spec-drawer'), { stub: () => ({ title: ($('drawer-title') && $('drawer-title').textContent) || 'Node' }) });
   if (wiredDock !== dock) {
     wiredDock = dock;
     const backdrop = $('drawer-backdrop');
@@ -248,6 +373,7 @@ export function initSheets() {
   if (!documentWired) {
     documentWired = true;
     for (const type of ['pointerdown', 'touchstart', 'mousedown']) document.addEventListener(type, onMapDown, { passive: true, capture: true });
+    document.addEventListener('keydown', onEscape, true);
     if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       const mq = window.matchMedia(PHONE_QUERY);
       if (mq && mq.addEventListener) mq.addEventListener('change', () => { collapseAllSheets(); measureCovered(); });

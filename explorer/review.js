@@ -280,6 +280,7 @@ export async function sendReview(verdict) {
   const lost = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
   if (verdict === 'approved') { if (lost) button('approved')?.focus(); }
   else if (wasNoting || lost) button('notes')?.focus();
+  if (hooks.reviewed) hooks.reviewed(); // what waits on you changed: the count is read again (spec 0010)
   refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;

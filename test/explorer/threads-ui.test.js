@@ -128,7 +128,7 @@ describe('the Threads tab', () => {
     const server = fakeServer();
     mount();
     await openThreads();
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/threads?state=open&limit=100', '/api/agent-runs']); // the runs, once, for the rows' run state
+    expect(server.urls().filter((u) => u !== '/proposals')).toEqual(['/api/forge/pulls?state=open&limit=100', '/api/forge/threads?state=open&limit=100', '/api/agent-runs']); // the runs, once, for the rows' run state
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Rework sign-in', 'Spec: Meals', 'A quiet one']);
     expect(qa('[data-thread-run]')).toEqual([]); // no run is about any of them
     const first = rows()[0];
@@ -384,7 +384,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     selectNode(pick('core-hooks'));
     expect(q('#drawer-threads').textContent).not.toContain('Threads');
     await settle();
-    expect(server.urls()).toEqual(['/api/forge/threads?state=open&limit=100']);
+    expect(server.urls().filter((u) => u !== '/proposals')).toEqual(['/api/forge/threads?state=open&limit=100']);
     const box = q('#drawer-threads');
     expect(box.querySelector('h3').textContent).toBe('Threads');
     expect([...box.querySelectorAll('[data-thread-open]')].map((b) => b.textContent)).toEqual(['Rework sign-in#41 · 2', 'Spec: Meals#40 · 1']);
@@ -392,7 +392,7 @@ describe('a node\'s panel lists the threads that mention it', () => {
     // the panel is not asked for again for the next node
     selectNode(pick('core-auth'));
     await settle();
-    expect(server.urls()).toHaveLength(1);
+    expect(server.urls().filter((u) => u !== '/proposals')).toHaveLength(1);
     expect(q('#drawer-threads').textContent).toContain('Threads');
   });
 
