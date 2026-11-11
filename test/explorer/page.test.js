@@ -102,7 +102,7 @@ describe('explorer/plugins.js: the header', () => {
 describe('explorer/plugins.js: the sources a config names', () => {
   it('with none, the live layer has a source that says so, and there is no floor hook or checker', async () => {
     const out = await loadSources({ sources: { live: null, house: null } });
-    expect(out).toEqual({ liveSource: NO_SOURCE, floorRenderer: null, checker: null });
+    expect(out).toEqual({ houseSource: false, liveSource: NO_SOURCE, floorRenderer: null, checker: null }); // no house source: the House view is not offered
     await expect(NO_SOURCE.load()).rejects.toMatchObject({ reason: 'unavailable', hint: expect.stringMatching(/no live source is set/) });
   });
 
@@ -113,6 +113,7 @@ describe('explorer/plugins.js: the sources a config names', () => {
     })[url]);
     const out = await loadSources({ sources: { house: { module: '/plugins/house/browser.js', options: { file: 'h.json' } }, checker: { module: '/repo/tools/check.js', options: {} } } }, importer);
     expect(out.liveSource.name).toBe('house h.json');
+    expect(out.houseSource).toBe(true);
     expect(out.floorRenderer).toBeTruthy();
     expect(out.checker.name).toBe('mine');
   });
