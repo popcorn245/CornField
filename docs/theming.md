@@ -421,7 +421,7 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem; what an action came to; a sign-in page about a problem (`failure`); the live chip: fresh (`success`), unavailable (`failure`) | `state-pill`, `notice`, `message`, `result`, `auth-card`, `live-chip` |
 | `added`, `changed`, `removed`, `edit` | what a proposal does to a node, an edge or a file: the four marks of the diff (the same four as the map's rings and `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit`). `edit` is your own what-if edit, whether it adds or removes. Not a status: a deploy that restarts a node is `changed` | `diff-pill`, `diff-block`, `mark-dot` |
 
-A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-pill` never says `changed`, which is the diff mark's. `failed` is only ever a run; `failure` is only ever a result. The live chip is also `waiting` (its answer is a while old, "as of 6 min ago"), `stopped` (the layer is off or not set up) or `running` (still loading); no state, no attribute (the chip is hidden until a layer is on).
+A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-pill` never says `changed`, which is the diff mark's. `failed` is only ever a run; `failure` is only ever a result. The live chip is also `waiting` (its answer is a while old, "as of 6 min ago"), `stopped` (the layer is off or not set up) or `running` (loading, and before its first answer, while the chip is still hidden).
 
 **Changed for a theme that styles runs.** Before this release a run's `data-corn-state` was `queued` (asked for, or picked up by a runner) or `running` (being worked on). It is now `requested`, `claimed` or `working`: a rule on `[data-corn="run"][data-corn-state="queued"]` or a run's `state-pill` with `queued` becomes `requested` and `claimed`, and `running` becomes `working`. `queued` and `running` still mean a check or a deploy, so a rule that styled those keeps working. The seven run states also have colour tokens (`--corn-run-<state>`): setting those is simpler than a selector per state.
 
@@ -471,26 +471,26 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | Hook | What it is |
 |---|---|
 | `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
-| `node-title`, `node-host`, `diff-pill`, `node-foot`, `open-link` | in the node panel: its heading (a file name, an id or a route, so it may hold digits), the host after the kind badge (" · app.example.test"), the pill that says what the open proposal does to the node ("Added by Checkout"; `data-corn-state` is `added`, `changed`, `removed` or `edit`; there only while a proposal is open), the foot with its actions, and Open file / Open route (`data-corn-kind` `primary`, or `quiet` for the route when there is a file). `open-link` is also the PR detail's "Open on GitHub" |
+| `node-title`, `node-host`, `diff-pill`, `node-foot`, `open-link` | in the node panel: its heading (a file name, an id or a route, so it may hold digits), the host after the kind badge (" · app.example.test"), the pill that says what the open proposal does to the node ("Added by Checkout"; `data-corn-state` is `added`, `changed`, `removed` or `edit`; there only while a proposal is open), the foot with its actions, and Open file / Open route (`data-corn-kind` `primary`, or `quiet` for the route when there is a file). `open-link` is also the PR detail's "Open on" the forge |
 | `diff-block` | the key / value rows of the node panel's "In this proposal" (`data-corn-state` as for the pill) |
 | `more` | the capped list's "and 15 more" button (`data-corn-kind="quiet"`, `aria-expanded`) |
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
 | `work-head`, `work-title`, `work-foot` | in the Work panel: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
-| `filter-chip`, `filters`, `toggle` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only") |
-| `back`, `detail` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
-| `label` | a label of a pull request, an issue, a thread or a deploy (a short word such as "spec") |
+| `filter-chip`, `filters`, `check-field` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only"; the box itself is a `control`) |
+| `back`, `detail-title` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
+| `tag` | a short tag on an item of a list: a pull request's or an issue's label ("spec"), a thread's kind, what a deploy lights |
 | `out-link`, `text-link` | the ↗ that opens an item on the forge in a new tab; a link inside text (a check's run, a thread's reply, the node's route, "Where to set a token") |
 | `node-chip`, `node-link` | a button that shows a node on the map: a chip (the nodes a pull request, a thread or a deploy lights); a link-like one inside a sentence (the proposal's edge "From" and "To", a live room) |
 | `file` | a changed file in a pull request's detail, with its nodes |
 | `thread-message` | one message of a thread, in the Threads tab's detail |
-| `change` | in "In this proposal" (the node panel): a field a change touches, with what it was and what it is |
+| `field-change` | in "In this proposal" (the node panel): a field a change touches, with what it was and what it is |
 | `run-actions`, `run-totals` | the buttons of a run card (Light on the map, Timeline, Stop, Reply and the rest: each has a `data-corn-kind`), the totals of what the runners reported |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar`, `proposal-head` | the open proposal's bar, and its toolbar row |
 | `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name, the counts button ("5 nodes, 6 edges added …": it opens the list of changes, `aria-expanded`), and on a phone the button that shows Before / Diff / After (it says which is on) |
 | `compare`, `compare-option` | the Before / Diff / After group and one of its options (the chosen one has `aria-pressed="true"`) |
 | `proposal-menu`, `proposal-errors`, `proposal-changes` | the bar's ⋯ menu, the folded list of problems with the file, the list of changes behind the counts (each change is a `row`) |
-| `scenario-list`, `whatif-row` | the list of scenarios behind Play (each is a `row`), the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
+| `scenario-list`, `whatif-toolbar` | the list of scenarios behind Play (each is a `row`), the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
 | `mark-dot` | the dot in front of a change or a count and in a legend; `data-corn-state` is `added`, `changed`, `removed` or `edit` |
 | `step-number` | in the What-if editor, the number of a scenario's step (it shows that step on the map) |
 | `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |

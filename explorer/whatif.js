@@ -238,7 +238,7 @@ function mount() {
     root.dataset.corn = 'whatif';
     root.setAttribute('aria-label', 'Try a change');
     root.innerHTML = `
-      <div class="hx-whatif-row" data-corn="whatif-row" role="toolbar" aria-label="Try a change">
+      <div class="hx-whatif-row" data-corn="whatif-toolbar" role="toolbar" aria-label="Try a change">
         <button data-corn-kind="secondary" type="button" class="hx-btn" data-whatif="add-node" title="Add a node to this proposal">Add a node</button>
         <button data-corn-kind="secondary" type="button" class="hx-btn" data-whatif="draw-edge" aria-pressed="false" title="Drag from one node to another on the map">Draw an edge</button>
         <button data-corn-kind="secondary" type="button" class="hx-btn" data-whatif="undo" title="Undo (Ctrl+Z)">Undo</button>

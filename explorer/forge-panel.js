@@ -942,7 +942,7 @@ function deployHtml(d) {
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-deploy="${escHtml(d.id)}" aria-pressed="${ui.deploy === d.id}" data-corn="row">
     <span class="hx-forge-title">${escHtml(d.name)}${d.title && d.title !== d.name ? `<span class="hx-faint"> · ${escHtml(d.title)}</span>` : ''}</span>
     <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
-    <span class="hx-forge-labels"><span class="hx-forge-label" data-corn="label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
+    <span class="hx-forge-labels"><span class="hx-forge-label" data-corn="tag">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
 }
 
 /** One thread in the list: a row that opens it, and a link out to the forge */
@@ -956,14 +956,14 @@ function threadHtml(t) {
   const runWord = run ? `${runPillHtml({ esc: escHtml }, run, threadRunWords(runs, t.number), ` data-thread-run="${escHtml(run.runId)}"`)} ` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}" data-corn="row">
     <span class="hx-forge-title">${escHtml(t.title)}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label" data-corn="label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label" data-corn="tag">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
 }
 
 function itemHtml(item, before = '', after = '') {
   if (ui.kind === 'deploys') return deployHtml(item);
   if (ui.kind === 'threads') return threadHtml(item);
   const link = safeUrl(item.url);
-  const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label" data-corn="label">${escHtml(l)}</span>`).join('')}</span>` : '';
+  const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label" data-corn="tag">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
     <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}" data-corn="state-pill"${cornStateAttr(item.draft ? 'draft' : item.state)}>${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${before}${after}${labels}`;
   const out = link ? `<a data-corn="out-link" class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(item.head ? 'pull request' : 'issue')} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
@@ -1019,7 +1019,7 @@ function deployDetailHtml() {
   const d = ui.deployItem;
   const lit = ui.litDeploy;
   const url = safeUrl(d.url);
-  const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title" data-corn="detail">${escHtml(d.name)}</h3>
+  const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title" data-corn="detail-title">${escHtml(d.name)}</h3>
     <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a data-corn="text-link" class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
   const stale = ui.lists.deploys && ui.lists.deploys.stale;
   let body;
@@ -1039,7 +1039,7 @@ const nodeButton = (n) => `<button data-corn="node-chip" type="button" class="hx
 
 /** The selected thread: read-only, its messages as written, a way to reply on the forge, and the nodes its text lights */
 function threadDetailHtml() {
-  const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title" data-corn="detail">${title}</h3>`;
+  const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title" data-corn="detail-title">${title}</h3>`;
   if (ui.threadError) return `${head(`Thread ${ui.thread}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
   if (!ui.threadDetail) return `${head(`Thread ${ui.thread}`)}<p class="hx-faint">Loading its messages …</p>`;
   const { thread: t, stale } = ui.threadDetail;
@@ -1079,7 +1079,7 @@ function detailHtml() {
   if (shown.startsWith('thread:')) return threadDetailHtml();
   if (shown.startsWith('deploy:')) return deployDetailHtml();
   if (!shown) return '';
-  const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title" data-corn="detail">${title}</h3>`;
+  const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title" data-corn="detail-title">${title}</h3>`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
   if (!ui.detail) return `${head(`Pull request ${ui.selected}`)}<p class="hx-faint">Loading its files and checks …</p><ul class="hx-forge-list" aria-hidden="true">${loadingRowsHtml(4)}</ul>`;
   const { pull, checks, stale } = ui.detail;

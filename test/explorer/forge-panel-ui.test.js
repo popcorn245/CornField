@@ -386,11 +386,11 @@ describe('a pull request lights the map', () => {
     await settle();
     expect($('forge-filter-chip').getAttribute('data-corn')).toBe('filter-chip');
     const [lint] = rows();
-    expect(lint.querySelector('[data-corn="label"]').textContent).toBe('agent');
+    expect(lint.querySelector('[data-corn="tag"]').textContent).toBe('agent');
     expect(lint.querySelector('a[data-corn="out-link"]').getAttribute('href')).toBe('https://git.example.test/owner/name/pull/13');
     await select(12);
     expect(q('#forge-detail [data-corn="back"]')).toBe(q('#forge-detail .hx-forge-back'));
-    expect(q('#forge-detail [data-corn="detail"]').textContent).toBe('Meals page');
+    expect(q('#forge-detail [data-corn="detail-title"]').textContent).toBe('Meals page');
     expect(qa('#forge-detail [data-corn="file"]').length).toBe(3);
     expect(qa('#forge-detail [data-corn="node-chip"]').map((b) => b.textContent)).toEqual(['server.js', 'meals.js']);
     expect(q('#forge-detail [data-corn="open-link"]').getAttribute('data-corn-kind')).toBe('secondary');

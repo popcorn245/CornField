@@ -318,8 +318,8 @@
 [data-corn="filter-chip"],
 [data-corn="back"],
 [data-corn="more"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
-[data-corn="label"] { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
-[data-corn="detail"] { font-family: var(--corn-font-display); }
+[data-corn="tag"] { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+[data-corn="detail-title"] { font-family: var(--corn-font-display); }
 [data-corn="node-chip"] { box-shadow: var(--corn-shadow-sm); }
 [data-corn="out-link"] { box-shadow: var(--corn-shadow-sm); }
 [data-corn="control"] { box-shadow: inset 2px 2px 0 var(--corn-line-soft); }

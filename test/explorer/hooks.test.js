@@ -139,18 +139,29 @@ describe('every control has a hook', () => {
     expect(missing, `controls with no hook:\n${missing.join('\n')}`).toEqual([]);
   });
 
+  // A control made by script: `x = document.createElement('button')`, and then a hook or a kind set on `x` itself in the lines that build it
+  const MADE = /(?:\b([A-Za-z_$][\w$]*)\s*=\s*)?\b\w+\.createElement\((['"`])(button|a|input|select|textarea|summary)\2\)/g;
+  /** The line of each control a source makes by script with no `data-corn` or `data-corn-kind` of its own */
+  function unhookedMade(text) {
+    const out = [];
+    for (const m of text.matchAll(MADE)) {
+      const name = m[1];
+      const next = text.slice(m.index).split('\n').slice(0, 30).join('\n');
+      const own = !!name && new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\.(dataset\\.corn(Kind)?\\s*=|setAttribute\\('data-corn(-kind)?')`).test(next);
+      if (!own) out.push(text.slice(0, m.index).split('\n').length);
+    }
+    return out;
+  }
+
   it('gives a button made by script a hook or a kind too', () => {
     const missing = [];
-    for (const file of SOURCES) {
-      const lines = fs.readFileSync(file, 'utf8').split('\n');
-      lines.forEach((l, i) => {
-        const made = /createElement\('(button|a|input|select|textarea)'\)/.exec(l);
-        if (!made) return;
-        const next = lines.slice(i, i + 14).join('\n');
-        if (!/dataset\.corn\b|dataset\.cornKind|setAttribute\('data-corn/.test(next)) missing.push(`${rel(file)}:${i + 1} ${l.trim().slice(0, 90)}`);
-      });
-    }
+    for (const file of SOURCES) for (const line of unhookedMade(fs.readFileSync(file, 'utf8'))) missing.push(`${rel(file)}:${line}`);
     expect(missing, missing.join('\n')).toEqual([]);
+  });
+
+  it('finds a control made by script with no hook, even next to one that has one', () => {
+    const probe = "const zoom = document.createElement('button');\nzoom.type = 'button';\nconst close = document.createElement(\"button\");\nclose.dataset.cornKind = 'quiet';\nel.append(doc.createElement('a'));\nconst ok = document.createElement('input');\nok.setAttribute('data-corn', 'control');";
+    expect(unhookedMade(probe)).toEqual([1, 5]);
   });
 
   it('names a button\'s importance in a kind: no ordinary button is without one', () => {
@@ -184,10 +195,10 @@ describe('the parts 0.35 added hooks to', () => {
     ['explorer/index.html', 'diff-pill', /id="drawer-diff"[^>]*data-corn="diff-pill"/],
     ['explorer/review.js', 'review-note', /<textarea data-corn="review-note" id="review-note"/],
     ['explorer/capped.js', 'more', /<button data-corn="more" data-corn-kind="quiet"/],
-    ['explorer/forge-panel.js', 'label', /class="hx-forge-label" data-corn="label"/],
+    ['explorer/forge-panel.js', 'tag', /class="hx-forge-label" data-corn="tag"/],
     ['explorer/forge-panel.js', 'out-link', /data-corn="out-link" class="hx-forge-out"/],
     ['explorer/forge-panel.js', 'back', /<button data-corn="back"/],
-    ['explorer/forge-panel.js', 'detail', /class="hx-forge-detail-title" data-corn="detail"/],
+    ['explorer/forge-panel.js', 'detail-title', /class="hx-forge-detail-title" data-corn="detail-title"/],
     ['explorer/forge-panel.js', 'node-chip', /<button data-corn="node-chip"/],
     ['explorer/forge-panel.js', 'file', /class="hx-forge-file" data-corn="file"/],
     ['explorer/runs-view.js', 'run-actions', /class="hx-run-actions" data-corn="run-actions"/],

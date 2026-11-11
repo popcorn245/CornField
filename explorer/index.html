@@ -259,8 +259,8 @@
         </div>
         <div id="forge-filter-box" class="hx-forge-controls" data-corn="filters" hidden>
           <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
-            <label class="hx-forge-toggle" data-corn="toggle"><input data-corn="control" type="checkbox" id="forge-work-agents" /> Agent-made only</label>
-            <label class="hx-forge-toggle" data-corn="toggle"><input data-corn="control" type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
+            <label class="hx-forge-toggle" data-corn="check-field"><input data-corn="control" type="checkbox" id="forge-work-agents" /> Agent-made only</label>
+            <label class="hx-forge-toggle" data-corn="check-field"><input data-corn="control" type="checkbox" id="forge-work-finished" /> Include merged and closed</label>
           </div>
           <div id="forge-filters" class="hx-forge-filters">
             <label class="hx-forge-field" data-corn="field">State<select data-corn="control" id="forge-state" class="hx-forge-select"></select></label>
@@ -274,7 +274,7 @@
         <!-- Release notes (forge-panel.js), reached from the PRs list: the pull requests merged since a tag, grouped by the map; copy them, or have the forge keep them as a draft release -->
         <section id="forge-notes" class="hx-forge-notes" aria-label="Release notes" hidden>
           <button data-corn="back" type="button" class="hx-forge-back" data-action="close-notes"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">All pull requests</span></button>
-          <h3 id="notes-title" class="hx-forge-notes-title" data-corn="detail" tabindex="-1">Release notes</h3>
+          <h3 id="notes-title" class="hx-forge-notes-title" data-corn="detail-title" tabindex="-1">Release notes</h3>
           <label class="hx-forge-field" data-corn="field">Since tag<select data-corn="control" id="notes-since" class="hx-forge-select"></select></label>
           <label class="hx-forge-field" data-corn="field">Draft, in Markdown<textarea data-corn="control" id="notes-preview" class="hx-forge-preview" rows="14" readonly spellcheck="false"></textarea></label>
           <div class="hx-forge-actions">
@@ -405,7 +405,7 @@
         <label class="hx-forge-field" data-corn="field">Tokens<input data-corn="control" type="number" id="agent-limit-tokens" class="hx-forge-input" min="0" step="1" inputmode="numeric" /></label>
       </fieldset>
       <label class="hx-forge-field" data-corn="field">Brief for the runner<textarea data-corn="control" id="agent-brief" class="hx-forge-preview" rows="6" maxlength="20000" spellcheck="true"></textarea></label>
-      <label id="agent-force-field" class="hx-forge-toggle" data-corn="toggle" hidden><input data-corn="control" type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
+      <label id="agent-force-field" class="hx-forge-toggle" data-corn="check-field" hidden><input data-corn="control" type="checkbox" id="agent-force" /> Ask for another run on purpose</label>
       <p id="agent-start-words" class="hx-confirm-note"></p>
       <p id="agent-start-msg" class="hx-forge-msg hx-forge-msg--bad" role="alert" hidden data-corn="message" data-corn-state="failure"></p>
       <div class="hx-confirm-actions">
