@@ -2417,6 +2417,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them. (explorer/selection-view.js)"
+    },
+    {
+      "id": "core-explorer-css-color",
+      "label": "css-color.js",
+      "type": "core",
+      "file": "explorer/css-color.js",
+      "summary": "A CSS colour as the renderers can use it, read once here so every reader (the map's tokens in map-style.js, a node's own colour in scene.js) agrees on what a colour is.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A CSS colour as the renderers can use it, read once here so every reader (the map's tokens in map-style.js, a node's own colour in scene.js) agrees on what a colour is. (explorer/css-color.js)"
     }
   ],
   "edges": [
@@ -8008,7 +8018,53 @@
       "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-css-color"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-explorer-css-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-css-color",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-css-color",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-css-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-css-color",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T20:58:28.419Z"
+  "updatedAt": "2026-11-11T21:43:19.871Z"
 }

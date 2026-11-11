@@ -172,12 +172,13 @@ import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } fr
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
 import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
-import { shapeOf } from '../core/schema.js';
+import { NODE_THEMES, shapeOf } from '../core/schema.js';
 import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
+import { nodeColor } from './css-color.js';
 import { activeSubgraph, kindEdgeWord } from './selection-model.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
@@ -547,6 +548,13 @@ function buildEdges(state, subgraph, reduceMotion) {
 /** A node's group: its layer in the Layers menu (layers.js), one per kind but for the rooms and floors (House) and the outside nodes (Cloud, or the Public web) */
 export const groupOf = (node) => (node.type === 'floor' || node.type === 'room' ? 'house' : node.type === 'external' ? externalLayer(node) : node.type);
 
+/**
+ * A node's fill before any theme token: its own `color` when that is a colour the browser reads, else its type's fill in NODE_THEMES (the
+ * built-in the map's fill order ends on, core/layers.js `mapFillNames`). Checked here, once, so WebGL and Canvas 2D are given the same valid
+ * fill and project data never reaches a shader or a `fillStyle` unchecked. The Layers menu's dot of a project layer reads it too (layers.js).
+ */
+export const fillOfNode = (node) => nodeColor(node.color) ?? (NODE_THEMES[node.type] || NODE_THEMES.external).color;
+
 function buildNodes(state, subgraph) {
   const { nodes, selectedNode, searchQuery } = state;
   const found = searchQuery ? matchIds(nodes, searchQuery) : null; // what the search finds: label, id, file, type, kind (search-model.js)
@@ -586,7 +594,7 @@ function buildNodes(state, subgraph) {
       hitR: shown.r * SHAPE_REACH[shapeOf(shown.type)], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
       ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
-      x: node.x, y: node.y, r: shown.r, color: shown.color,
+      x: node.x, y: node.y, r: shown.r, color: fillOfNode(shown),
       alpha,
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,
       halo: match ? 'match' : selected ? 'selected' : child ? 'child' : 'none',
