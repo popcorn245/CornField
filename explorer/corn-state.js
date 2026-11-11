@@ -75,6 +75,8 @@ const ICONS = Object.freeze({
   neutral: '<path d="M2.4 6h7.2"/>',
   skipped: '<path d="M2.4 6h7.2"/>',
   cancelled: '<circle cx="6" cy="6" r="4.2"/><path d="M3 9L9 3"/>',
+  // A spec sent back: an arrow that turns back (spec 0010)
+  'sent-back': '<path d="M4.6 2.2L2 4.8l2.6 2.6"/><path d="M2.2 4.8H7a2.8 2.8 0 0 1 0 5.6H4.6"/>',
 });
 
 /** The icon for a state word (a public `data-corn-state` value, or an internal word such as a check's `neutral`), as an inline SVG; '' when it has none */

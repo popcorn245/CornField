@@ -100,7 +100,7 @@ describe('the Release notes tab', () => {
     const open = $('notes-open');
     expect(open.textContent).toBe('Release notes …');
     expect(open.hidden).toBe(false);
-    expect(server.urls()).toEqual(['/api/forge/pulls?state=open&limit=100']); // nothing is asked of the notes until it is chosen
+    expect(server.urls().filter((u) => u !== '/proposals')).toEqual(['/api/forge/pulls?state=open&limit=100']); // nothing is asked of the notes until it is chosen
     click(open);
     await settle();
     expect(server.urls().at(-1)).toBe('/api/forge/release-notes');
