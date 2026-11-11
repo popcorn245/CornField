@@ -205,7 +205,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-shadow-color` | the colour the phone sheet's shadow (below) is made from (light) |
 | `--corn-shadow-sheet` | a phone's bottom sheet's whole `box-shadow`, cast upward (`0 -8px 24px` of `--corn-shadow-color` by default). A flat brand gives it a hard offset, like `0 -4px 0 #1b1636` |
 | `--corn-glow` | the blur of a live dot's glow; `0px` for none (light) |
-| `--corn-scrim` | the backdrop behind a sheet or a dialog: the node panel's on a phone, a confirmation, Start an agent, Review tokens, the mockup window (light) |
+| `--corn-scrim` | the backdrop behind a dialog: a confirmation, Start an agent, Review tokens, the mockup window (light) |
 | `--corn-blur` | the glass blur amount (a length; `0px` for none) |
 | `--corn-mockup-ground` | the page behind a proposal's mockup image or frame (white, as a browser shows a page) |
 | **Text** | |
@@ -456,7 +456,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
-| `dock`, `sheet-handle`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle, the scrim behind the node panel on a phone |
+| `dock`, `sheet-handle`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
 | `hint`, `hint-icon`, `loading`, `error` | the hint at the map's corner and its icon (an SVG, so `[data-corn="hint-icon"]` can be hidden or given another picture), the loading line, the load-error box |
 
 ### Panels and sheets
