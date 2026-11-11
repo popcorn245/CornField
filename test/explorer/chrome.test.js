@@ -154,6 +154,18 @@ describe('the header fits its wordmark (F46)', () => {
     expect(l.hasAttribute(OVERFLOW_ATTR)).toBe(false); // measured again each time
   });
 
+  it('does not count an open menu as the group running over (its fade is a mask that would hide the menu)', () => {
+    const l = left();
+    const menu = l.querySelector('#legend-dropdown');
+    menu.hidden = false;
+    // the group is 228 wide with its own content; the open menu hangs 90px past its edge, which scrollWidth reports while the menu is shown
+    sized(l, () => (menu.style.display === 'none' ? 200 : 318), 228);
+    expect(fitLeft(l)).toEqual({ short: false, overflow: false });
+    expect(l.hasAttribute(OVERFLOW_ATTR)).toBe(false);
+    expect(menu.style.display).toBe(''); // and it is shown again
+    menu.hidden = true;
+  });
+
   it('has the rules that hide the wordmark and fade the scrolling edge', () => {
     expect(css).toMatch(/\.hx-header-left\[data-brand-short\] \.hx-title \{ display: none; \}/);
     expect(css).toMatch(/\.hx-header-left\[data-overflow\] \{[^}]*mask/);

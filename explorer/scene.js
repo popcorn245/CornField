@@ -165,6 +165,7 @@ import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-m
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenDash } from './cloud-model.js';
+import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
@@ -246,11 +247,18 @@ export const PROPOSAL_DIM_ALPHA = 0.28;
 //  Visibility and focus (moved unchanged from render.js)
 // ---------------------------------------------------------------------------
 export function isNodeVisible(state, node) {
-  const { activeLayers } = state;
   if (state.proposal && !showsNode(state.proposalView || 'diff', node)) return false; // Before hides what is added, After what is removed
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
+  return layerShows(state, node) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+}
+
+/** Whether the Layers menu has the node's layer on: a project layer that takes it decides alone, else its starting layer, with the rules each type has */
+export function layerShows(state, node) {
+  const { activeLayers } = state;
+  const project = projectLayerKey(state, node);
+  if (project) return activeLayers[project] !== false;
   if (node.type === 'core') return (activeLayers.pkg || activeLayers.atom) && activeLayers.core !== false; // its own row in Layers, and Packages or Atoms
   if (node.type === 'store') return activeLayers.flow !== false && activeLayers.store !== false; // its own row, and Data Flow
   if (node.type === 'rom') return activeLayers.rom !== false && activeLayers.flow !== false;
@@ -558,9 +566,15 @@ function buildNodes(state, subgraph) {
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
+    // A finer kind (spec 0009): its letters, drawn in the node's core by the renderers (kind-letters.js), and the project layer that takes the node
+    const letters = lettersOf(state, shown);
+    const layer = projectLayerKey(state, shown);
 
     out.push({
       id: node.id, type: shown.type, group: groupOf(shown),
+      ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
+      ...(letters ? { letters } : {}),
+      ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: shown.color,
       alpha,
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,

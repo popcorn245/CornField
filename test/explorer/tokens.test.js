@@ -270,3 +270,33 @@ describe('the brand stylesheet in docs/theming.md', () => {
     }
   });
 });
+
+describe('every stylesheet closes what it opens', () => {
+  /** Brace depth through a stylesheet, comments and quoted strings taken out: how deep it goes, where it ends, and whether it ever closes too many */
+  function braces(css) {
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(["'])(?:\\.|(?!\1)[^\\\n])*\1/g, '""');
+    let depth = 0, deepest = 0, lowest = 0;
+    for (const ch of text) {
+      if (ch === '{') deepest = Math.max(deepest, ++depth);
+      else if (ch === '}') lowest = Math.min(lowest, --depth);
+    }
+    return { end: depth, deepest, lowest };
+  }
+  const sheets = fs.readdirSync(EXPLORER).filter(f => f.endsWith('.css'));
+
+  it('catches a lost closing brace', () => {
+    expect(braces('@media (max-width: 1px) { .a { color: red; }\n.b { color: blue; }').end).toBe(1);
+    expect(braces('.a { content: "}"; } /* } */').end).toBe(0);
+    expect(braces('.a { } }').lowest).toBe(-1);
+  });
+
+  // A merge that keeps two appended sections can drop the `}` of an @media between them: every rule after it then
+  // applies only inside that query, and nothing else fails. This holds the braces.
+  for (const sheet of sheets) {
+    it(`${sheet}: braces balance, and no block is left open`, () => {
+      const b = braces(fs.readFileSync(path.join(EXPLORER, sheet), 'utf8'));
+      expect(b.lowest, 'a } with nothing open').toBe(0);
+      expect(b.end, 'a { never closed').toBe(0);
+    });
+  }
+});

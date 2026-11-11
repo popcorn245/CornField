@@ -326,16 +326,43 @@ describe('choosing a step goes to it (D4, D6)', () => {
 });
 
 describe('a step on a layer that is off (#212)', () => {
+  const withOther = () => robot({ scenarios: [{ id: 'plan', title: 'An adult plans a meal', actor: 'adult', steps: [{ node: 'page-meals', text: 'The page opens.' }, { node: 'table-u', text: 'The row is read.' }] }] });
+
   it('says so in the list, and choosing it turns the layer on so the step can be followed', () => {
+    state.baseNodes.push(node('table-u', 'table', 700, 300)); // a table the proposal does not touch
     state.activeLayers.table = false;
-    open();
+    open(withOther());
     click(qa('.hx-sc-row')[0]);
-    const step = qa('[data-corn="step"]')[1]; // page-meals -> table-t: the table is on the Tables layer, which is off
+    const step = qa('[data-corn="step"]')[1]; // table-u is on the Tables layer, which is off
     expect(step.textContent).toContain('Layer off: shown when played');
-    expect(step.getAttribute('aria-label')).toMatch(/^Step 2 of 2, as Adult: \/meals → table-t, Added, on a layer that is off\. The row is stored\./);
+    expect(step.getAttribute('aria-label')).toMatch(/^Step 2 of 2, as Adult: table-u, on a layer that is off\. The row is read\./);
     click(step);
     expect(state.activeLayers.table).toBe(true);
     expect(qa('[data-corn="step"]')[1].textContent).not.toContain('Layer off');
+  });
+
+  it('does not say it of a node the proposal itself changes: a review draws its own change whatever the layer (spec 0009 D3)', () => {
+    state.activeLayers.table = false;
+    open();
+    click(qa('.hx-sc-row')[0]);
+    const step = qa('[data-corn="step"]')[1]; // page-meals -> table-t, an edge the proposal adds: both ends are drawn
+    expect(step.textContent).not.toContain('Layer off');
+    expect(step.getAttribute('aria-label')).not.toContain('on a layer that is off');
+    click(step);
+    expect(state.activeLayers.table).toBe(false); // nothing to turn on
+  });
+
+  it('names the project layer that takes the node, which decides alone (spec 0009 D3)', () => {
+    state.baseNodes.push(node('table-u', 'table', 700, 300));
+    state.projectLayers = [{ key: 'data', label: 'Data', match: { type: 'table' } }];
+    state.activeLayers.data = false; // the starting Tables layer is on, and does not count
+    try {
+      open(withOther());
+      click(qa('.hx-sc-row')[0]);
+      expect(qa('[data-corn="step"]')[1].textContent).toContain('Layer off: shown when played');
+      click(qa('[data-corn="step"]')[1]);
+      expect(state.activeLayers.data).toBe(true);
+    } finally { state.projectLayers = []; delete state.activeLayers.data; }
   });
 });
 

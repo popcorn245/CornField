@@ -13,7 +13,7 @@ import { state } from '../../explorer/state.js';
 import { setMap } from '../../explorer/view.js';
 import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
-import { LAYER_DEFS, renderLayerToggles } from '../../explorer/layers.js';
+import { LAYER_DEFS, renderLayerToggles, setProjectLayers } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -303,6 +303,23 @@ describe('stepping', () => {
     expect(render.getScene().nodes.some((n) => n.id === 'machine-sync')).toBe(true);
     // the list no longer has it under "layers that are off"
     expect([...$('search-results').querySelectorAll('[data-corn="search-group"]')].map((g) => g.getAttribute('aria-label'))).not.toContain('In layers that are off, 1');
+  });
+
+  it('turns on the project layer that hides a match (spec 0009: a project layer that takes a node decides alone)', async () => {
+    mount();
+    try {
+      setProjectLayers({ add: [{ key: 'clock', label: 'On a clock', desc: 'Timers', match: { kind: 'timer' } }], off: ['clock'] });
+      const node = state.nodes.find((n) => n.id === 'machine-sync');
+      node.kind = 'timer';
+      state.activeLayers.machine = true; // its starting layer is on: only the project layer hides it
+      render.render();
+      expect(render.isNodeVisible(node)).toBe(false);
+      type('sync');
+      rows().find((r) => r.dataset.searchId === 'machine-sync').click();
+      await settle();
+      expect(state.activeLayers.clock).toBe(true);
+      expect(render.getScene().nodes.some((n) => n.id === 'machine-sync')).toBe(true);
+    } finally { setProjectLayers(undefined); }
   });
 });
 

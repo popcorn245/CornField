@@ -20,6 +20,8 @@ node test/fixtures/big/serve.js --forge --port 3403                 # add --them
 #     open http://127.0.0.1:3403/?proposal=0100-new-flow-across-apps&source=pull/21 in a fresh browser profile
 ```
 
+Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.
+
 A map of your own: `node test/fixtures/big/make.js --from <topology dir> [--theme retro] --out <dir>`, then `node test/fixtures/big/serve.js --repo <dir> --port 3401` (with `--theme retro` it rewrites that repo's config and `tools/cornfield/` for the theme; with `--forge` it adds the signed-in states). Each command prints its URLs and the proposal slugs.
 
 Every server binds to 127.0.0.1 only, whatever `CORNFIELD_HOST` says, and ignores any real sign-in or hook secret in your shell. The generated repo goes to `<tmp>/cornfield-big-<theme>-<port>` (or `--dir <dir>`, which must be empty or a repo the rig made: anything else is refused, never replaced), and cornfield's own state (sessions, runs) to another folder under the OS temp dir. This is a review rig, not something to deploy.

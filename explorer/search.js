@@ -23,6 +23,7 @@ import { isPhone, visibleMapRect } from './sheets.js';
 import { announce } from './keyboard.js';
 import { flyTo } from './fly.js';
 import { groupOf } from './scene.js';
+import { projectLayerKey } from './layer-model.js';
 import { noMatchText, showSearchStatus, updateSearchStatus } from './search-status.js';
 import { countText, moreLine, noMatchLine, searchNodes, stepIndex } from './search-model.js';
 
@@ -171,7 +172,8 @@ export function setQuery(value) {
 
 /** Turns on the layer that hides `node`, so it can be shown (the matches in layers that are off) */
 function showLayerOf(node) {
-  const tries = [groupOf(node), node.type === 'store' || node.type === 'rom' ? 'flow' : null, node.type === 'core' ? 'pkg' : null, node.type === 'core' ? 'core' : null];
+  // A project layer that takes the node decides alone (spec 0009); else its starting layer, and what that one needs on with it
+  const tries = [projectLayerKey(state, node), groupOf(node), node.type === 'store' || node.type === 'rom' ? 'flow' : null, node.type === 'core' ? 'pkg' : null, node.type === 'core' ? 'core' : null];
   for (const key of tries) {
     if (isNodeVisible(node)) return;
     if (key && state.activeLayers[key] === false) toggleLayer(key);

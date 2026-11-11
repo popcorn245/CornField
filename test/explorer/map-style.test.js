@@ -542,7 +542,7 @@ describe('the WebGL renderer', () => {
     const scene = M.styledScene(buildScene(mk()), styleOf({}, { icons: { get: () => ({}), anyReady: () => true } }));
     scene.nodes.forEach((n) => { n.icon = n.type === 'page' || n.type === 'table' ? n.type : null; });
     const p = packIcons(scene, (k) => k !== 'table');
-    expect(p.groups).toEqual([{ kind: 'page', first: 0, count: 1 }]);
+    expect(p.groups).toEqual([{ kind: 'page', first: 0, count: 1, minR: 20 }]);
     expect(p.stride).toBe(ICON_STRIDE);
     const page = byId(scene, 'page');
     expect(Array.from(p.data)).toEqual([page.x, page.y, Math.fround(page.r * M.ICON_RATIO), page.alpha]);

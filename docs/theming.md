@@ -62,6 +62,7 @@ The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text a
 
 - **A node's fill, 3:1.** For each node type, its fill is `--corn-map-node-<kind>`, else its group's `--corn-map-group-<group>`, else `auto`, which is the node's own colour from the topology (deepened for the light ground). A fill under 3:1 on the ground passes **only if the outline carries it**: `--corn-map-stroke` is set, wider than 0, and is itself 3:1 on the fill and on the ground. Otherwise the line names the token:
   `standard theme (light): --corn-map-node-table (the fill of a table node; set --corn-map-stroke, an outline at 3:1 on the fill and on the ground, or a deeper fill) (#f2c500) on --corn-ground (#fdf3dc) is 1.49:1, below 3:1 (the UI minimum).`
+- **A finer kind's and a project layer's fill, 3:1, the same rule.** Every `--corn-map-kind-<type>-<kind>` and every project `--corn-map-group-<key>` the theme sets (in a stylesheet, anywhere in it) is read against the ground in light and dark, and carried by the outline the same way. One left at `auto` draws the type's own colour, which is checked above. A finding names the token: `standard theme (light): --corn-map-kind-service-timer (the fill of a service node of the kind "timer") (#f2f0a0) on --corn-ground (#fdf3dc) is 1.13:1, below 3:1 (the UI minimum).` `cornfield validate` also **warns** about a kind or layer a theme names that is not there, since a typo would otherwise do nothing: a `--corn-map-kind-*` token for a kind no node of that type has on the map, a `--corn-map-group-<key>` for a layer the config does not have, and a `theme.icons` key `"<type>:<kind>"` or `"layer:<key>"` likewise.
 - **A label, 4.5:1.** `--corn-map-label` (or the map's own near-white or near-black at `auto`) on the ground, and on `--corn-map-label-halo` (the ground's own colour at `auto`).
 - Edge colours and the selection halo are not checked; the diff marks are, below.
 
@@ -275,11 +276,12 @@ The map canvas is drawn from tokens too. Its renderers (WebGL, and the Canvas 2D
 
 - **`auto` is the default, and it is today's map.** A node is drawn in its own colour from the topology (deepened for the light ground, as it always was); every line, halo and mark keeps the colour it had. A theme that sets nothing changes nothing.
 - **A colour replaces it, as written.** Both themes read the same token, so a theme sets the light ground's colour too, under `:root[data-theme="light"]` (or `@media (prefers-color-scheme: light)`).
-- **A kind beats its group.** A node's *kind* is its type (`app`, `table`, ...). Its *group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`. Only the fill goes by kind and group; the outline and the label are one colour for the whole map. Each row of the Layers menu carries its layer's key as `data-layer` (`app`, `page`, `core`, `store`, `cloud`, `web`, `house`, `flow`, `runs`, ...): every node type on the map has a row, `core` and `store` included (a store also needs Data Flow on, and core Packages or Atoms), and a type cornfield has no row for gets one under its own name.
+- **A type beats its starting group.** A node's *type* is `app`, `table`, ... (the name `--corn-map-node-<type>` uses). Its *starting group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`. Only the fill goes by type, group, kind and layer; the outline and the label are one colour for the whole map. Each row of the Layers menu carries its layer's key as `data-layer` (`app`, `page`, `core`, `store`, `cloud`, `web`, `house`, `flow`, `runs`, and a project layer's own key, ...): every node type on the map has a row, `core` and `store` included (a store also needs Data Flow on, and core Packages or Atoms), and a type cornfield has no row for gets one under its own name.
+- **Finer kinds and project layers have fills too (spec 0009).** A node's `kind` (a service's `timer`, a device's `camera`) is its project's own word, and a project may add its own layers in `layers` (docs/config.md#layers). `--corn-map-kind-<type>-<kind>` fills a finer kind (`--corn-map-kind-service-timer`); `--corn-map-group-<key>` fills a project layer's nodes, as it fills a starting layer's. A type never holds a `-`, so a kind token reads one way (`--corn-map-kind-service-web-hook` is the kind `web-hook` of a service). **Which wins, most specific first:** the kind, the project layer, the type (`--corn-map-node-<type>`), the starting layer (`--corn-map-group-<starting key>`), then `auto`. A theme that names none of them leaves every node its type's colour. A kind or a layer key that is not lower-case words joined by `-` (at most 32 characters) has no token; it is still a kind or a layer. The tokens are not in `tokens.css`: their names depend on the project, and the map reads only those whose kind is on the map or whose layer is in the config.
 - **An outline is off until you set one.** `--corn-map-stroke` draws a ring just inside every node's edge, `--corn-map-stroke-width` thick. `--corn-map-label` keeps the label's own fade: a node the focus dims stays dim.
 - **Colours that mean something stay.** A node or an edge an outage, a permission check or a selected pull request colours (red, amber, green) keeps that colour; the map tokens style what is otherwise drawn in the node's or the line's own colour.
 - **Anything that is not a colour is `auto`.** A value is read as the browser reads a colour (`#e53e3e`, `rgb()`, `hsl()`, a name, `color-mix()`, `oklch()`), so a typo, a length or an empty value leaves that part of the map as it was rather than breaking it.
-- **Icons.** `theme.icons` in the config (docs/config.md#theme) draws an image per node kind inside the node; `theme.pixelated` draws small ones crisp.
+- **Icons.** `theme.icons` in the config (docs/config.md#theme) draws an image per node inside the node; `theme.pixelated` draws small ones crisp. A key is a node type (`"service"`), a finer kind of one (`"service:timer"`) or a project layer (`"layer:timers"`), and the most specific wins, in the same order as the fills: the kind, the layer, the type. **With no icon, a node with a finer kind shows its kind's letters in its core** (one or two letters, the shortest start of the kind's name that no other kind of that type on the map shares, drawn once the node is 14 px across; dark ink under a light outline, so it reads on any fill in either theme), else the type's glyph (spec 0008). The letters are text from the project's data: they are drawn on the canvas, never put in markup. Both renderers draw the same picture: Canvas 2D with `drawImage`, WebGL as a texture in the icon pass, one per letters.
 
 Dark and light, with a brand's own map (here each `--corn-map-*` is set in the light blocks too, because its colours are for a dark ground):
 
@@ -443,6 +445,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-
 | `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the "powered by cornfield" footer line of the account menu |
 | `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
 | `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
+| `layers-all`, `layers-none` | All and None in the Layers menu's title: they switch every layer on or off, never an overlay |
 | `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `fit-button` | the View switch (Map, Flow, House, then Fit), and its four buttons; the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
 | `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
 | `forge-button`, `tokens-button` | the Work toggle (its lit tag, "#21", is a `count`), the Review tokens entry of the account menu |
@@ -465,6 +468,9 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | Hook | What it is |
 |---|---|
 | `stage` | the area the map and the panels sit in |
+| `overlays` | the heading over the Layers menu's overlay rows ("Overlays": Runs in flight), which are marks over the map and not layers |
+| `layer-kinds`, `kind-key` | under a Layers row that holds nodes with a finer kind: the disclosure ("5 kinds") and, when open, one key row per kind (its letters, its name, its count). A key is not a toggle; a project that wants one declares a layer |
+| `layer-note` | on an off Layers row, "+1 shown by the proposal": nodes of that layer drawn only because the open proposal touches them |
 | `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
@@ -579,6 +585,9 @@ Only labels a brand would want to voice are keys (about seventy). Sentences of h
 | Key | Default |
 |---|---|
 | `layers` | Layers |
+| `layersAll` | All |
+| `layersNone` | None |
+| `overlays` | Overlays |
 | `dataFlow` | Flow |
 | `house` | House |
 | `proposals` | Proposals |

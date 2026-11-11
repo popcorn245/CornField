@@ -104,20 +104,21 @@ describe('the Layers menu (F59)', () => {
 });
 
 describe('the service panel (F60)', () => {
-  const kindRow = () => [...document.querySelectorAll('.hx-fact')].find((f) => f.querySelector('.hx-fact-k').textContent === 'Kind');
+  const fact = (name) => [...document.querySelectorAll('.hx-fact')].find((f) => f.querySelector('.hx-fact-k').textContent === name);
 
-  it('does not say again what the description says', async () => {
+  it('says the kind in the badge and not in a row, and does not say again what the description says', async () => {
     mount();
     await selectNode(state.nodes.find((n) => n.id === 'svc-a'));
     expect($('drawer-description').textContent).toContain('Takes the payment webhook.');
-    expect(kindRow().textContent).toContain('hook');
-    expect(kindRow().textContent).not.toContain('Takes the payment webhook.');
+    expect($('drawer-badge').textContent).toBe('Service · hook'); // spec 0009 D5: the Kind row is gone
+    expect(fact('Kind')).toBeUndefined();
+    expect(fact('Summary')).toBeUndefined(); // the description holds it
   });
 
   it('still shows a summary the description does not hold', async () => {
     mount();
     await selectNode(state.nodes.find((n) => n.id === 'svc-b'));
-    expect(kindRow().textContent).toContain('Runs nightly.');
+    expect(fact('Summary').textContent).toContain('Runs nightly.');
   });
 
   it('breaks the value at word boundaries only (the stylesheet says so)', () => {

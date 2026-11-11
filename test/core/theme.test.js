@@ -89,12 +89,15 @@ describe('theme.icons and theme.pixelated: the config', () => {
   it('accepts an icon per node kind, an .svg or .png inside the theme folder, and a boolean pixelated', () => {
     expect(theme({ ...T, icons: { app: './tools/cf/icons/app.svg', page: 'tools/cf/page.png', table: './tools/cf/a/b/t.PNG' }, pixelated: true })).toEqual([]);
     expect(theme({ ...T, icons: {}, pixelated: false })).toEqual([]);
+    // a finer kind and a project layer have icon keys too (spec 0009 D6)
+    expect(theme({ ...T, icons: { 'service:timer': './tools/cf/t.svg', 'service:web-hook': './tools/cf/h.svg', 'layer:timers': './tools/cf/l.svg' } })).toEqual([]);
     expect(ICON_KINDS).toEqual(expect.arrayContaining(['root', 'app', 'page', 'table', 'external', 'room']));
   });
 
   it('refuses a kind that is not a node kind, and a shape that is not a map', () => {
-    expect(theme({ ...T, icons: { widget: './tools/cf/w.svg' } })[0]).toMatch(/^theme\.icons "widget": not a node kind \(root, app,/);
-    for (const i of [['./a.svg'], 'a.svg', 3, null]) expect(theme({ ...T, icons: i })[0], String(i)).toBe('theme.icons is { "<node kind>": "./path.svg" }.');
+    expect(theme({ ...T, icons: { widget: './tools/cf/w.svg' } })[0]).toMatch(/^theme\.icons "widget": not a node type \(root, app,/);
+    for (const k of ['service:', ':timer', 'service:Timer', 'service:a b', 'layer:', 'layer:Not A Key', 'widget:timer', 'service:' + 'x'.repeat(33), 'layer:x"y', 'url(x)']) expect(theme({ ...T, icons: { [k]: './tools/cf/w.svg' } })[0], k).toMatch(/^theme\.icons ".*": not a node type/);
+    for (const i of [['./a.svg'], 'a.svg', 3, null]) expect(theme({ ...T, icons: i })[0], String(i)).toBe('theme.icons is { "<node type>": "./path.svg" } (or "<type>:<kind>", or "layer:<key>").');
     for (const p of [1, 'yes', null]) expect(theme({ ...T, pixelated: p }), String(p)).toEqual(['theme.pixelated is true or false.']);
   });
 

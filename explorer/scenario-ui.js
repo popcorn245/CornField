@@ -32,6 +32,7 @@ import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks }
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
 import { toggleLayer, LAYER_DEFS } from './layers.js';
 import { externalLayer } from './cloud-model.js';
+import { projectLayerKey, shownByProposal } from './layer-model.js';
 import { announce } from './keyboard.js';
 import { t } from './strings.js';
 import { currentStepSentence } from './scenario-list-model.js';
@@ -145,7 +146,9 @@ export function layersHiding(node) {
   if (!node || state.view === 'dataflow' || state.view === 'house') return [];
   const on = (key) => state.activeLayers[key] !== false;
   const t = node.type;
-  if (t === 'root') return [];
+  if (t === 'root' || shownByProposal(state, node)) return []; // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+  const project = projectLayerKey(state, node); // a project layer that takes the node decides alone (spec 0009 D3), as scene.js layerShows has it
+  if (project) return on(project) ? [] : [project];
   if (t === 'core') return [...(on('core') ? [] : ['core']), ...(state.activeLayers.pkg || state.activeLayers.atom ? [] : ['pkg'])];
   if (t === 'store') return ['flow', 'store'].filter((k) => !on(k));
   if (t === 'rom') return ['rom', 'flow'].filter((k) => !on(k));
@@ -167,7 +170,7 @@ function showStepLayers(scenario) {
   for (const id of stepNodeIds(scenario)) for (const key of layersHiding(byId.get(id))) if (!keys.includes(key)) keys.push(key);
   if (!keys.length) return;
   for (const key of keys) { if (key === 'pkg') state.activeLayers.pkg = false; toggleLayer(key); }
-  const names = keys.map((key) => (LAYER_DEFS.find((l) => l.key === key) || { label: key }).label);
+  const names = keys.map((key) => (LAYER_DEFS.find((l) => l.key === key) || (state.projectLayers || []).find((l) => l.key === key) || { label: key }).label);
   announce(`Turned on ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} to show this scenario's steps.`);
 }
 
