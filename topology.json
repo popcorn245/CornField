@@ -2010,6 +2010,16 @@
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
     },
     {
+      "id": "page-doc-docs-reviews-0-34-design-review",
+      "type": "page",
+      "label": "/docs/reviews/0.34-design-review",
+      "file": "docs/reviews/0.34-design-review.md",
+      "summary": "The 0.34 design review",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The 0.34 design review (docs/reviews/0.34-design-review.md)."
+    },
+    {
       "id": "page-doc-docs-specs-0008-reading-a-big-map",
       "type": "page",
       "label": "/docs/specs/0008-reading-a-big-map",
@@ -6453,16 +6463,24 @@
     },
     {
       "from": "app-docs",
+      "to": "page-doc-docs-reviews-0-34-design-review"
+    },
+    {
+      "from": "app-docs",
       "to": "page-doc-docs-specs-0008-reading-a-big-map"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0010-what-is-waiting-on-me"
     },
     {
       "from": "page-doc-docs-specs-0008-reading-a-big-map",
       "to": "page-doc-docs-accessibility",
       "dashed": true
-    },
-    {
-      "from": "app-docs",
-      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds"
     },
     {
       "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
@@ -6473,10 +6491,6 @@
       "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
       "to": "page-doc-docs-specs-0008-reading-a-big-map",
       "dashed": true
-    },
-    {
-      "from": "app-docs",
-      "to": "page-doc-docs-specs-0010-what-is-waiting-on-me"
     },
     {
       "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
@@ -6494,5 +6508,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T08:20:14.900Z"
+  "updatedAt": "2026-11-11T09:14:48.118Z"
 }
