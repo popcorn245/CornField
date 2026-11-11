@@ -78,7 +78,7 @@ import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } 
 import {
   RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
-import { runsHtml, totalsHtml, loadingRowsHtml, runPillHtml } from './runs-view.js';
+import { runsHtml, totalsHtml, loadingRowsHtml, loadingLinesHtml, runPillHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
 import {
   STATES, defaultFilters, listUrl, pullUrl, serverState, filterItems, facetsOf, stateWords, metaWords, checkWords, checksWords, litFor, errorWords,
@@ -1231,7 +1231,7 @@ function paintCounts() {
     const n = counts[btn.dataset.forgeKind];
     const el = btn.querySelector('.hx-forge-count');
     if (!el) continue;
-    el.hidden = !n;
+    el.hidden = !(btn.dataset.forgeKind in counts); // a tab with no count at all (Deploys) shows none; the others hold their width while empty
     el.textContent = n ? String(n) : '';
   }
 }
@@ -1312,7 +1312,9 @@ function draw(panel) {
   const empty = (words) => `<li class="hx-forge-empty hx-faint" data-corn="empty">${escHtml(words)}</li>`;
   rows.setAttribute('aria-busy', String(!!ui.loading && !list));
   // A list that is being read holds its height with rows of the right size, so nothing jumps when the data comes
-  if (!list) rows.innerHTML = ui.loading ? loadingRowsHtml(4) : '';
+  // (On Runs the list sits under the runs, whose height is not known yet: rows held there would jump when the runs arrive, so they wait. They
+  // are drawn with the work's answer all the same, which loadWork paints only once the runs are read too, failed or not.)
+  if (!list) rows.innerHTML = ui.loading && !(work && !(ui.runs && ui.runs.data)) ? loadingRowsHtml(4) : '';
   else if (specs) {
     const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
     rows.innerHTML = list.items.length ? list.items.map((e) => specRowHtml(e, { current: open })).join('') : empty(emptyWords('specs', forgeName()));
@@ -1349,6 +1351,8 @@ function paintRuns() {
   if (!failed && ui.runNote && ui.runNote.ok) note.dataset.cornState = 'success'; else delete note.dataset.cornState;
   setNotice(note, words, !!failed);
   paintRunner('forge-runs-runner', data);
+  const waiting = !data && !failed && !!ui.loading; // the runner line and the totals hold their place while the runs load (not beside a failure)
+  if (waiting) { const r = $('forge-runs-runner'); r.hidden = false; r.innerHTML = loadingLinesHtml(1); }
   const trig = $('forge-runs-trigger');
   if (trig) {
     const skipped = data ? triggerNotice(data) : '';
@@ -1358,8 +1362,8 @@ function paintRuns() {
   const totals = $('forge-runs-totals');
   if (totals) {
     const lines = data ? totalsLines(data.totals) : [];
-    totals.hidden = !lines.length;
-    totals.innerHTML = totalsHtml(viewContext(), lines);
+    totals.hidden = !lines.length && !waiting;
+    totals.innerHTML = waiting ? loadingLinesHtml(3) : totalsHtml(viewContext(), lines);
   }
   const hand = $('forge-runs-hand');
   if (hand) {

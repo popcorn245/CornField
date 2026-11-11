@@ -3,6 +3,8 @@
  * expanded at a time.
  */
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
 import { createSheetModel } from '../../explorer/sheet-model.js';
 
@@ -50,5 +52,19 @@ describe('sheet model', () => {
     m.remove('a');
     expect(m.expanded()).toBeNull();
     expect(m.has('a')).toBe(false);
+  });
+});
+
+describe('the phone\'s backdrop (F32)', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+  const phone = css.slice(css.indexOf('@media (max-width: 767px) {\n  .hx-dock'));
+
+  it('draws nothing over the free band the selected node is panned into, but stays a tap target', () => {
+    const rule = phone.match(/\.hx-stage\[data-sheet-open="drawer"\] \.hx-backdrop:not\(\[hidden\]\) \{([^}]*)\}/);
+    expect(rule).toBeTruthy();
+    expect(rule[1]).toMatch(/display: block/); // still there to close the panel on a tap
+    expect(rule[1]).toMatch(/background: transparent/); // no scrim
+    expect(rule[1]).toMatch(/backdrop-filter: none/); // no blur
+    expect(rule[1]).toMatch(/-webkit-backdrop-filter: none/);
   });
 });
