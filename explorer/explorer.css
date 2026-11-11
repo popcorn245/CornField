@@ -421,6 +421,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-change-row { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; text-align: left; font-size: var(--corn-text-xs); }
 .hx-change-row:hover { background: var(--corn-line-soft); }
 .hx-change-what { width: 56px; flex: none; color: var(--corn-text-3); }
+.hx-change-row .hx-name { min-width: 0; overflow-wrap: anywhere; } /* a long label wraps in its row: the list never scrolls sideways */
 
 /* The marks' colours, shared with the picture: the diff tokens, whose light values are theme-model.js `lightColor` of the dark ones */
 .hx-mark-dot { display: inline-block; width: 12px; height: 12px; flex: none; margin-right: var(--corn-space-2); border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-changed); vertical-align: -2px; }
@@ -1077,7 +1078,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   /* While a scenario plays the proposal sheet folds to its title and counts: the player needs the room */
   .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-rc-foot { display: none; }
   /* The note open: the field, Cancel and the send button are all there is, so all of them stay above the keyboard */
-  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line) { display: none; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line, .hx-rc-scroll, .hx-rc-tabs, .hx-proposal-peek) { display: none; } /* the review column's lists too: the sheet holds the note and its buttons */
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions { order: 4; grid-template-columns: 1fr; }
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions .hx-btn--approve { display: none; }
   /* Reflow: nothing is wider than the sheet, and long words and counts wrap instead of being cut */
@@ -1179,14 +1180,18 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-review-column { position: absolute; left: 12px; bottom: 12px; top: var(--hx-column-top, 150px); width: 400px; z-index: 14; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--corn-radius-lg); font-size: var(--corn-text-sm); user-select: text; }
 .hx-review-column[hidden] { display: none; }
 @media (max-width: 1023px) { .hx-review-column { width: 320px; } }
-@media (min-width: 768px) { .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); } }
+/* The Work panel: from 1280px the column moves over to make room for it; narrower, the panel lies over the column while it is open (moving it would leave the map a sliver) */
+@media (min-width: 1280px) { .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); } }
+/* The node panel (480px) and the 320px column do not both fit under 1024px: the column gives up its width, so the panel covers none of it */
+@media (min-width: 768px) and (max-width: 1023px) { .hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); } }
 .hx-rc-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); overflow: hidden; padding: var(--corn-space-3) var(--corn-space-4); }
 .hx-proposal-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: 0; flex: none; }
 .hx-rc-lists { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-4); }
 /* Both lists are on screen at once: the changes take what they need up to 40%, the scenarios the rest, each scrolling on its own */
 .hx-rc-section { display: flex; flex-direction: column; min-height: 0; }
-#rc-changes { flex: 0 1 auto; max-height: 40%; }
-#rc-scenarios { flex: 1 1 0; min-height: 12em; }
+/* review-column.js measures the scenarios and sets --hx-changes-max: 40% while the scenarios need the rest, more when they are few */
+#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }
+#rc-scenarios { flex: 1 1 0; min-height: min(12em, var(--hx-scenarios-need, 12em)); }
 .hx-change-list, .hx-rc-sbody { min-height: 0; overflow-y: auto; scroll-padding-block: var(--corn-space-2); }
 .hx-rc-h { flex: none; }
 .hx-rc-tabs { display: flex; gap: var(--corn-space-2); }
@@ -1225,6 +1230,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-step-mark { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-text-3); }
 .hx-step-mark .hx-mark-dot { margin: 0; }
 .hx-step-text { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-step-off { color: var(--corn-text-3); font-style: italic; }
 .hx-step-verdict { align-self: flex-start; white-space: normal; text-align: right; max-width: 40%; overflow-wrap: anywhere; }
 .hx-rc-foot { flex: none; display: flex; flex-direction: column; gap: var(--corn-space-2); padding: var(--corn-space-3) var(--corn-space-4); border-top: var(--corn-border) solid var(--corn-line); }
 .hx-rc-foot .hx-review { flex: none; order: 0; }
@@ -1235,6 +1241,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-rc-scroll, .hx-rc-lists, .hx-rc-section, .hx-change-list, .hx-rc-sbody { display: block; overflow: visible; max-height: none; min-height: 0; }
   .hx-rc-scroll { padding: var(--corn-space-2) 0; }
   .hx-rc-section[hidden] { display: none; }
+  /* the sheet scrolls, not a section: each section is as tall as its list (the desktop's 40% cap and 12em floor would let the rows run under the decision) */
+  #rc-changes, #rc-scenarios { flex: none; max-height: none; min-height: 0; }
   .hx-rc-lists { display: flex; flex-direction: column; }
   .hx-change-list { display: flex; }
   .hx-rc-foot { padding: var(--corn-space-3) 0 0; } /* after both lists, in the sheet's own flow: nothing overlaps the rows above it */
@@ -1262,12 +1270,15 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
    From 768px it sits at the foot of the map area, to the right of the review column; the stage tells it how wide the column is. */
 @media (min-width: 768px) {
   .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
-  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(400px, var(--hx-forge-w)); }
   .hx-stage:has(.drawer-open) .hx-player { right: 504px; }
+}
+@media (min-width: 1280px) {
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
 }
 @media (min-width: 768px) and (max-width: 1023px) {
   .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
-  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(320px + var(--hx-forge-w)); }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(320px, var(--hx-forge-w)); }
 }
 .hx-player-as, .hx-player-check { flex: 1 0 100%; }
 .hx-player-speed[data-corn="control"] { color: var(--corn-text); }

@@ -347,7 +347,7 @@ describe('the bar', () => {
     fakeHub(LISTING, { '0013-meals': good });
     await mount('?proposal=0013-meals');
     expect($('review-column').hidden).toBe(false);
-    expect($('rc-changes').getAttribute('data-corn')).toBe('change-list');
+    expect($('rc-changes').getAttribute('data-corn')).toBe('proposal-changes');
     const rows = [...document.querySelectorAll('.hx-change-row')]                 ;
     expect(rows).toHaveLength(4); // 1 added node + 1 added edge + 1 changed + 1 removed; the ownership edge is a consequence
     expect(rows.map((r) => r.querySelector('.hx-change-what') .textContent)).toEqual(['Added', 'Added', 'Changed', 'Removed']);

@@ -17,7 +17,7 @@ import { initProposals, showProposal } from '../../explorer/proposal.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, clearScenario, tickScenario, getPlayer } from '../../explorer/scenario-ui.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
+import { initReviewColumn, resetReviewColumnForTests, setPullHead, shareRoom } from '../../explorer/review-column.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -30,6 +30,8 @@ import { initChecks } from '../../explorer/check.js';
 import { seenKey, readSeen } from '../../explorer/scenario-list-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { reviewBody } from '../../explorer/review-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { selectNode } from '../../explorer/panels.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const page = fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8');
@@ -105,7 +107,7 @@ describe('on screen the moment a proposal opens (D1)', () => {
     open();
     expect($('review-column').hidden).toBe(false);
     expect($('proposal-play')).toBeNull();
-    expect(q('#rc-changes').getAttribute('data-corn')).toBe('change-list');
+    expect(q('#rc-changes').getAttribute('data-corn')).toBe('proposal-changes');
     expect(q('#rc-scenarios').getAttribute('data-corn')).toBe('scenario-list');
     expect(q('#rc-changes h3').textContent.replace(/\s+/g, ' ')).toBe('Changes · , 3');
     expect(q('#rc-scenarios h3').textContent.replace(/\s+/g, ' ')).toBe('Personas and scenarios · , 3');
@@ -218,6 +220,23 @@ describe('a scenario reads as a list of steps (D4)', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('keeps the verdicts in the list when the player that walked the scenario closes, without asking again', async () => {
+    const calls            = [];
+    const checker = { name: 'test', async check(items         ) { calls.push(items.length); return items.map((i         , k         ) => ({ id: i.id, allowed: k === 0, status: k === 0 ? 200 : 403, reason: k === 0 ? '' : 'Only admins.', checked: true })); } };
+    await mount(base(), { checker });
+    open(robot({ scenarios: [{ id: 'plan', title: 'Plan', actor: 'adult', steps: [{ node: 'page-meals', text: 'a', check: { route: '/meals', method: 'GET' } }, { node: 'page-meals', text: 'b', check: { route: '/meals', method: 'POST' } }] }] }));
+    click(qa('.hx-sc-row')[0]);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    click(qa('[data-corn="step"]')[1]);
+    click(q('[data-action=scenario-close]'));
+    expect(getPlayer()).toBeNull();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(qa('[data-corn="state-pill"]').map((p) => p.textContent)).toEqual(['Allowed', 'Refused: Only admins.']);
+    expect(qa('[data-corn="step"]')[1].getAttribute('aria-label')).toMatch(/Refused: Only admins\.$/);
+    expect(calls).toEqual([2]);
+  });
+
   it('plans the checks again when the open scenario is edited, so the verdicts are of the steps it has now', async () => {
     const calls            = [];
     const checker = { name: 'test', async check(items         ) { calls.push(items.length); return items.map((i         ) => ({ id: i.id, allowed: true, status: 200, reason: '', checked: true })); } };
@@ -264,11 +283,34 @@ describe('choosing a step goes to it (D4, D6)', () => {
     click(qa('[data-corn="step"]')[0]);
     (q('[data-action=scenario-next]')                     ).click();
     expect(qa('.hx-sc-seen').map((s) => s.textContent)).toEqual(['✓ Played']);
-    expect(readSeen(localStorage, seenKey('pull/23', '0013-meals', ''))).toEqual({ played: ['gone'], read: [] });
+    // the PR's head is not known yet (the forge did not answer): the tick is held for this visit, never kept under an empty head
+    expect(readSeen(localStorage, seenKey('pull/23', '0013-meals', ''))).toEqual({ played: [], read: [] });
     expect(q('.hx-rc-note[data-corn="notice"]').textContent).toBe('1 of 3 scenarios played');
+    setPullHead('abc123');
+    expect(readSeen(localStorage, seenKey('pull/23', '0013-meals', 'abc123'))).toEqual({ played: ['gone'], read: [] });
+    expect(qa('.hx-sc-seen').map((s) => s.textContent)).toEqual(['✓ Played']);
     // it never gates the decision, and is not part of the review
     expect((q('[data-review="approved"]')                     ).hasAttribute('aria-disabled')).toBe(false);
     expect(Object.keys(reviewBody('approved', '', [])).sort()).toEqual(['edits', 'note', 'verdict']);
+  });
+
+  it('keeps a PR copy\'s record per head: another head\'s ticks are not shown, and a head read for one proposal is not used for the next', () => {
+    localStorage.setItem(seenKey('pull/23', '0013-meals', 'old'), JSON.stringify({ played: ['plan'], read: [] }));
+    localStorage.setItem(seenKey('pull/23', '0013-meals', ''), JSON.stringify({ played: ['ask'], read: [] }));
+    open();
+    expect(qa('.hx-sc-seen')).toHaveLength(0); // the head is not known: neither the old head's record nor one under an empty head
+    setPullHead('old');
+    expect(qa('.hx-sc-seen').map((s) => s.textContent)).toEqual(['✓ Played']);
+    setPullHead('new');
+    expect(qa('.hx-sc-seen')).toHaveLength(0);
+    // another proposal opens: until its own PR is read, the last one's head is not its head
+    showProposal(robot(), { slug: '0014-other', source: 'pull/24', view: 'diff', fit: true });
+    click(qa('.hx-sc-row')[0]);
+    expect(localStorage.getItem(seenKey('pull/24', '0014-other', 'new'))).toBe(null);
+    // a copy in the checkout has no head: its record is kept at once
+    showProposal(robot(), { slug: '0015-local', source: null, view: 'diff', fit: true });
+    click(qa('.hx-sc-row')[0]);
+    expect(readSeen(localStorage, seenKey(null, '0015-local', ''))).toEqual({ played: [], read: ['plan'] });
   });
 
   it('works without storage: a store that throws changes nothing about the review', () => {
@@ -280,6 +322,70 @@ describe('choosing a step goes to it (D4, D6)', () => {
       expect(qa('.hx-sc-row')[0].getAttribute('aria-expanded')).toBe('true');
       expect(qa('.hx-sc-seen')).toHaveLength(1); // read, for this visit
     } finally { if (real) Object.defineProperty(window, 'localStorage', real); }
+  });
+});
+
+describe('a step on a layer that is off (#212)', () => {
+  it('says so in the list, and choosing it turns the layer on so the step can be followed', () => {
+    state.activeLayers.table = false;
+    open();
+    click(qa('.hx-sc-row')[0]);
+    const step = qa('[data-corn="step"]')[1]; // page-meals -> table-t: the table is on the Tables layer, which is off
+    expect(step.textContent).toContain('Layer off: shown when played');
+    expect(step.getAttribute('aria-label')).toMatch(/^Step 2 of 2, as Adult: \/meals → table-t, Added, on a layer that is off\. The row is stored\./);
+    click(step);
+    expect(state.activeLayers.table).toBe(true);
+    expect(qa('[data-corn="step"]')[1].textContent).not.toContain('Layer off');
+  });
+});
+
+describe('the column beside the other panels', () => {
+  it('closes the node panel when a step is chosen and the three would not fit side by side', () => {
+    open();
+    selectNode(state.nodes.find((n) => n.id === 'table-t'));
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
+    click(qa('.hx-sc-row')[0]);
+    click(qa('[data-corn="step"]')[0]); // the map area is 1000px wide here
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect(getPlayer()).not.toBeNull();
+  });
+
+  it('shares its height: the changes take up to 40% while the scenarios need the rest, and the room a short scenario list leaves', () => {
+    open();
+    const lists = $('review-lists');
+    Object.defineProperty(lists, 'clientHeight', { value: 600, configurable: true });
+    const sbody = q('#rc-scenarios .hx-rc-sbody');
+    Object.defineProperty(sbody, 'scrollHeight', { value: 100, configurable: true, writable: true });
+    Object.defineProperty(q('#rc-scenarios h3'), 'offsetHeight', { value: 20, configurable: true });
+    shareRoom();
+    const max = () => parseFloat($('review-column').style.getPropertyValue('--hx-changes-max'));
+    expect(max()).toBeGreaterThan(400); // two short scenario groups: the changes may use the rest
+    Object.defineProperty(sbody, 'scrollHeight', { value: 2000, configurable: true });
+    shareRoom();
+    expect(max()).toBe(240); // many scenarios: 40%
+    const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
+    expect(css).toContain('#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }');
+    // on a phone the sheet scrolls, not a section: the rows never run under the decision
+    expect(css).toMatch(/@media \(max-width: 767px\) \{[^}]*\}[\s\S]*#rc-changes, #rc-scenarios \{ flex: none; max-height: none; min-height: 0; \}/);
+    // the Work panel moves the column only where both leave a map; the node panel takes the column's width under 1024px
+    expect(css).toContain('@media (min-width: 1280px) { .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); } }');
+    expect(css).toContain('.hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); }');
+  });
+});
+
+describe('a scenario opened while another plays', () => {
+  it('says its steps are not checked while the other plays, rather than showing steps with no verdict', () => {
+    open();
+    click(qa('.hx-sc-row')[0]);
+    click(qa('[data-corn="step"]')[0]); // "An adult plans a meal" plays
+    click(qa('.hx-sc-row')[1]); // "A guest asks, an admin answers": its steps open, its checks are not asked
+    const row = qa('.hx-sc-row')[1];
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(row.parentElement .querySelector('.hx-sc-waits') .textContent).toMatch(/^Not checked while another scenario plays\./);
+    expect(qa('.hx-sc-waits')).toHaveLength(2); // it is listed under Guest and under Admin, open in both
+    // choosing one of its steps plays it, and the note goes
+    click(row.parentElement .querySelector('[data-corn="step"]') );
+    expect(qa('.hx-sc-waits')).toHaveLength(0);
   });
 });
 
@@ -354,6 +460,18 @@ describe('on a phone (D1)', () => {
     expect($('proposal-peek').textContent).toBe('3 changes');
     open();
     expect($('proposal-peek').textContent).toBe('3 changes · 3 scenarios for 3 personas');
+    // Scenarios chosen last is remembered, but a proposal with none still opens on its changes, not on "Scenarios · 0"
+    expandSheet('proposal');
+    click(qa('[role="tab"]')[1]);
+    expect(localStorage.getItem('cornfield.reviewTab')).toBe('scenarios');
+    showProposal(robot({ scenarios: undefined }), { slug: '0016-none', source: 'pull/25', view: 'diff', fit: true });
+    expect(qa('[role="tab"]').map((t) => t.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+    expect($('rc-changes').hidden).toBe(false);
+  });
+
+  it('holds only the note and its buttons while a note is written, so they stay above the keyboard', () => {
+    const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
+    expect(css).toMatch(/\.hx-proposal-bar:has\(\.hx-review-form:not\(\[hidden\]\)\) :is\([^)]*\.hx-rc-scroll, \.hx-rc-tabs, \.hx-proposal-peek\) \{ display: none; \}/);
   });
 
   it('moves between the tabs with the arrow keys', () => {

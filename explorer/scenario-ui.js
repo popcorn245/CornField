@@ -30,7 +30,8 @@ import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from '.
 import { edgeKey } from '../core/proposal.js';
 import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks } from './check.js';
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
-import { toggleLayer } from './layers.js';
+import { toggleLayer, LAYER_DEFS } from './layers.js';
+import { externalLayer } from './cloud-model.js';
 import { announce } from './keyboard.js';
 import { t } from './strings.js';
 import { currentStepSentence } from './scenario-list-model.js';
@@ -45,6 +46,9 @@ let player = null;
 let bar = null;
 let signature = '';
 let glide = null; // { to: {x, y, zoom}, last: nowMs|null }
+let held = false; // the viewer took hold of the map since the step began: the camera is theirs until the next step
+let framedFor = -1; // the player bar's height when the camera last followed the step
+let barWatch = null; // a ResizeObserver on the bar: when it grows (a check's line arrives), the step is followed again
 
 const $stage = () => (state.canvas ? state.canvas.parentElement : null);
 
@@ -71,6 +75,7 @@ export function playScenario(scenario, opts = {}) {
   showBar(speed);
   openChecks(scenario, () => { sync(); render(); }); // PHY-10: one batch of permission checks for the scenario (check.js); the same scenario already open in the list keeps its answers
   showOutageLayers(scenario);
+  showStepLayers(scenario);
   if (opts.autoplay !== false && !(opts.step > 0)) player.play();
   sync(true);
   render();
@@ -132,6 +137,40 @@ function showOutageLayers(scenario) {
     .forEach((key) => { if (state.activeLayers[key] === false) toggleLayer(key); });
 }
 
+/**
+ * The Layers keys that hide a node, or [] when no layer does (#212). Only what Layers decides: the Flow and House views and
+ * Before or After draw their own sets, and a layer would not change them.
+ */
+export function layersHiding(node) {
+  if (!node || state.view === 'dataflow' || state.view === 'house') return [];
+  const on = (key) => state.activeLayers[key] !== false;
+  const t = node.type;
+  if (t === 'root') return [];
+  if (t === 'core') return [...(on('core') ? [] : ['core']), ...(state.activeLayers.pkg || state.activeLayers.atom ? [] : ['pkg'])];
+  if (t === 'store') return ['flow', 'store'].filter((k) => !on(k));
+  if (t === 'rom') return ['rom', 'flow'].filter((k) => !on(k));
+  if (t === 'floor' || t === 'room') return on('house') ? [] : ['house'];
+  const key = t === 'external' ? externalLayer(node) : t;
+  return on(key) ? [] : [key];
+}
+
+/** The nodes a scenario's steps name: a node step's node, both ends of an edge step */
+const stepNodeIds = (scenario) => (Array.isArray(scenario?.steps) ? scenario.steps : []).flatMap((st) => (st?.edge ? [st.edge.from, st.edge.to] : st && st.node !== undefined ? [st.node] : []));
+
+/**
+ * A step on a layer that is off cannot be followed: the camera has nothing to go to (#212). Playing a scenario turns on the layers
+ * its steps are drawn on, as an outage turns on what it hits, and says which.
+ */
+function showStepLayers(scenario) {
+  const byId = new Map(state.nodes.map((n) => [n.id, n]));
+  const keys = [];
+  for (const id of stepNodeIds(scenario)) for (const key of layersHiding(byId.get(id))) if (!keys.includes(key)) keys.push(key);
+  if (!keys.length) return;
+  for (const key of keys) { if (key === 'pkg') state.activeLayers.pkg = false; toggleLayer(key); }
+  const names = keys.map((key) => (LAYER_DEFS.find((l) => l.key === key) || { label: key }).label);
+  announce(`Turned on ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} to show this scenario's steps.`);
+}
+
 /** The cloud panel's Play button (CLOUD-07): plays "X is down" for a cloud node, generated from the map (outage-model.js) */
 export function playOutage(id) {
   const node = state.nodes.find((n) => n.id === id);
@@ -143,22 +182,28 @@ export function playOutage(id) {
 export const getPlayer = () => player;
 
 /** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view). `keepChecks` while another scenario is about to start */
-export function clearScenario({ keepChecks = false } = {}) {
+export function clearScenario({ keepChecks = false, closing = false } = {}) {
   const had = !!player || !!state.scenario;
   player = null;
   glide = null;
   signature = '';
   state.scenario = null;
   if (!keepChecks) closeChecks();
+  if (barWatch) { barWatch.disconnect(); barWatch = null; }
   if (bar) { unregisterSheet('player'); bar.remove(); bar = null; }
-  if (had && !keepChecks) notify(null);
+  if (had && (!keepChecks || closing)) notify(null);
 }
+
+/** Who keeps a closed scenario's checks: the review column, while its steps are open in the list (their verdicts stay there) */
+let keepChecksOnClose = null;
+export function setKeepChecksOnClose(fn) { keepChecksOnClose = typeof fn === 'function' ? fn : null; }
 
 /** Ends the scenario and redraws the map without it */
 export function stopScenario() {
   if (!player && !state.scenario) return;
   const hadFocus = (!!bar && bar.contains(document.activeElement)) || !!document.activeElement?.closest?.('#review-column'); // in the player, or in the list that follows it
-  clearScenario();
+  const keep = !!player && !!keepChecksOnClose && keepChecksOnClose(player.scenario().id); // the list still shows its steps: their verdicts stay
+  clearScenario({ keepChecks: keep, closing: true });
   touchScene();
   render();
   if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone: it goes to the step the player was on
@@ -176,7 +221,7 @@ function sync(force = false) {
     const stepChanged = force || next.split('|')[0] !== signature.split('|')[0];
     signature = next;
     touchScene();
-    if (stepChanged) followStep(snap);
+    if (stepChanged) { held = false; followStep(snap); }
   }
   updateBar(snap);
   if (changed) notify({ id: snap.id, index: snap.index, total: snap.total, done: snap.done, playing: snap.playing, checks: checksVersion() });
@@ -191,6 +236,7 @@ function followStep(snap) {
   state.nodes.forEach((n) => { if (isNodeVisible(n)) visible.set(n.id, n); });
   // The step must be in the part of the map nothing covers: not under the proposal bar, the node panel, the player or (on a phone) the sheets
   const rect = visibleMapRect();
+  framedFor = bar ? bar.offsetHeight : 0;
   const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, rect, visible, 60, getMinZoom());
   if (!target) return;
   if (flowReduceMotion) { Object.assign(state.camera, target); glide = null; render(); return; } // reduced motion: jump, do not fly
@@ -241,7 +287,7 @@ function showBar(speed) {
   // The scenario's name is the title (heard, and shown on a phone's open sheet); the list beside the map has it open and the step marked.
   bar.innerHTML = `
     <span class="hx-player-title hx-sr-only"></span>
-    <div class="hx-player-controls" role="group" aria-label="Steps">
+    <div class="hx-player-controls" role="group">
       <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-prev" data-action="scenario-prev" data-peek-ok><span class="hx-player-label"></span></button>
       <button type="button" class="hx-btn hx-btn--active hx-player-toggle" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"><span class="hx-player-label"></span></button>
       <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next" data-action="scenario-next" data-peek-ok><span class="hx-player-label"></span></button>
@@ -254,6 +300,7 @@ function showBar(speed) {
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
     <div class="hx-player-track" data-corn="scenario-track" aria-hidden="true"><span class="hx-player-fill" data-corn="scenario-fill"></span></div>`;
+  bar.querySelector('.hx-player-controls').setAttribute('aria-label', t('steps'));
   bar.querySelector('.hx-player-prev .hx-player-label').textContent = t('previousStep');
   bar.querySelector('.hx-player-next .hx-player-label').textContent = t('nextStep');
   bar.querySelector('.hx-player-next-scenario').textContent = t('nextScenario');
@@ -271,6 +318,11 @@ function showBar(speed) {
   else (dock || stage).appendChild(bar);
   registerSheet('player', bar);
   collapseAllSheets();
+  // The bar grows once it has more to say (a step's check, its As row): the step it framed would now be under it, so it is followed again
+  if (typeof ResizeObserver === 'function') {
+    barWatch = new ResizeObserver(() => { if (bar && player && state.scenario && !held && bar.offsetHeight !== framedFor) followStep(player.snapshot()); });
+    barWatch.observe(bar);
+  }
 }
 
 /** Who knows the scenario after this one, in the order the list reads (review-column.js): `fn(scenarioId)` gives the scenario or null */
@@ -430,5 +482,5 @@ export function initScenarioUi() {
   // A sheet that opened or closed changes what the map shows: keep the step in view
   onCoveredChange(() => { if (player && state.scenario) followStep(player.snapshot()); });
   // Taking hold of the map (a drag, the wheel, a pinch) ends the camera's glide: the camera is theirs
-  for (const type of ['pointerdown', 'wheel', 'touchstart', 'mousedown']) document.addEventListener(type, (e) => { if (e.target === state.canvas) glide = null; }, { passive: true, capture: true });
+  for (const type of ['pointerdown', 'wheel', 'touchstart', 'mousedown']) document.addEventListener(type, (e) => { if (e.target === state.canvas) { glide = null; held = true; } }, { passive: true, capture: true });
 }

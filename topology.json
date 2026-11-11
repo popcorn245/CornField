@@ -7212,7 +7212,31 @@
       "to": "core-explorer-strings",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:46:03.946Z"
+  "updatedAt": "2026-11-11T18:34:20.688Z"
 }

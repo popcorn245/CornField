@@ -487,12 +487,12 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `run-actions`, `run-totals` | the buttons of a run card (Light on the map, Timeline, Stop, Reply and the rest: each has a `data-corn-kind`), the totals of what the runners reported |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar`, `proposal-head` | the open proposal's bar, and its toolbar row |
-| `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name (an `h2`), the counts ("5 nodes, 6 edges added · 5 scenarios": its parts are `quiet` buttons that take the focus to the Changes or the Scenarios section of the review column; on a phone they move its switch), and on a phone the button that shows Before / Diff / After (it says which is on) |
+| `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name (an `h2`), the counts ("5 nodes, 6 edges added · 5 scenarios": its parts are `quiet` buttons that take the focus to the Changes or the Scenarios section of the review column; on a phone they move its switch. Until spec 0006 it was one button that opened the list of changes (`aria-expanded`): a rule that styled it as a button, its hover or `[aria-expanded]` now goes on `[data-corn="proposal-counts"] button`; its font and colour still apply), and on a phone the button that shows Before / Diff / After (it says which is on) |
 | `compare`, `compare-option` | the Before / Diff / After group and one of its options (the chosen one has `aria-pressed="true"`) |
 | `proposal-menu`, `proposal-errors` | the bar's ⋯ menu, the folded list of problems with the file |
 | `whatif-toolbar` | the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
 | `review-column` | the review column, open with the proposal: docked on the left of the map under the bar from 768px (400px wide, 320px under 1024px), and on a phone the expanded proposal sheet's body. It holds the two lists and the decision. Rules that place it should leave its `top`, `bottom` and `left` alone: the map is framed into what it leaves free |
-| `change-list`, `scenario-list` | the review column's two sections, each with its heading (`h3`) and its list: Changes (each change is a `row`, a button) and Personas and scenarios |
+| `proposal-changes`, `scenario-list` | the review column's two sections, each with its heading (`h3`) and its list: Changes (each change is a `row`, a button, in a `li`) and Personas and scenarios. Since spec 0006 both are sections of the column, not boxes of their own: `proposal-changes` was the list behind the counts in the bar, and `scenario-list` the list behind Play, a box over the map; a rule that placed or sized either (`position`, `max-height`, `top`) no longer applies the same way |
 | `persona-group` | one persona's `h4` ("Adult · 1 scenario") and the scenarios that apply to it, one `row` each (a disclosure: `aria-expanded`); the last group is Anyone, the scenarios that name no persona |
 | `step-list`, `step` | an opened scenario's numbered list of steps, and one step (a button: who acts, the node, its mark, the text and its verdict; the one the player is on has `aria-current="step"`). Its verdict is a `state-pill` |
 | `decision` | the column's foot, a group: Send back and Approve and the review status above them (`review-bar`); spec 0007 puts the line that says what Approve does there |
@@ -588,6 +588,7 @@ Only labels a brand would want to voice are keys (about fifty). Sentences of hel
 | `openSpecsList` | Open the Specs list |
 | `changes` | Changes |
 | `personasAndScenarios` | Personas and scenarios |
+| `scenarios` | Scenarios |
 | `anyone` | Anyone |
 | `notInAnyScenario` | Not in any scenario |
 | `steps` | Steps |

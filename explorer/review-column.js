@@ -26,15 +26,20 @@ import { state, escHtml } from './state.js';
 import { t } from './strings.js';
 import { markStateAttr } from './corn-state.js';
 import { isPhone, expandSheet, PHONE_QUERY } from './sheets.js';
-import { playScenario, getPlayer, onPlayerChange, setCloseFocus, setNextScenario } from './scenario-ui.js';
+import { pullNumberOf } from './proposal-model.js';
+import { closeDrawer } from './panels.js';
+import { onLayersChange } from './layers.js';
+import { playScenario, getPlayer, onPlayerChange, setCloseFocus, setNextScenario, setKeepChecksOnClose, layersHiding } from './scenario-ui.js';
 import { openChecks, closeChecks, scenarioVerdicts, checkedScenarioId } from './check.js';
 import { buildScenarioList, changeRows, stepSentence, reviewCounts, reviewOpenedWords, seenKey, readSeen, writeSeen } from './scenario-list-model.js';
 
 const $ = (id) => document.getElementById(id);
 const TAB_KEY = 'cornfield.reviewTab';
+/** The narrowest map area that holds the column (400px), the player bar and the node panel (480px) side by side */
+const PLAYER_BESIDE_PANEL = 1360;
 
 /** What the column shows apart from the proposal: the scenario whose steps are open, the phone's tab, the PR head the record is keyed by */
-const ui = { checks: 0, open: null, tab: null, head: '', current: null, lastStep: null, seen: { played: [], read: [] }, seenFor: '' };
+const ui = { checks: 0, open: null, tab: null, tabNow: null, tabFor: '', openFor: '', head: '', headFor: '', current: null, lastStep: null, seen: { played: [], read: [] }, seenFor: '', pending: [] };
 let wiredRoot = null;
 
 const asList = (v) => (Array.isArray(v) ? v : []);
@@ -50,19 +55,47 @@ const scenariosNow = () => {
   return p && Array.isArray(p.scenarios) ? p.scenarios : [];
 };
 
-const recordKey = () => seenKey(state.proposalSource, state.proposalSlug, ui.head);
+/** The open proposal, as the record and the phone's tab know it: its source and its name */
+const proposalKey = () => `${state.proposalSource || ''}/${state.proposalSlug || ''}`;
+
+/**
+ * The browser key the open proposal's record is kept under, or null while it cannot be known: a PR's copy is kept per PR head,
+ * and until the PR has been read its head is not known (what is seen meanwhile is held in memory, then kept under the head)
+ */
+function recordKey() {
+  if (pullNumberOf(state.proposalSource)) return ui.headFor === proposalKey() && ui.head ? seenKey(state.proposalSource, state.proposalSlug, ui.head) : null;
+  return seenKey(state.proposalSource, state.proposalSlug, '');
+}
 
 /** The record of what this browser saw, read again when the proposal (or its PR head) is another */
 function refreshSeen() {
   const key = recordKey();
-  if (ui.seenFor !== key) { ui.seenFor = key; ui.seen = readSeen(storage(), key); }
+  const id = key || `pending:${proposalKey()}`;
+  if (ui.seenFor === id) return;
+  const was = ui.seenFor;
+  ui.seenFor = id;
+  if (!key) { ui.seen = { played: [], read: [] }; ui.pending = []; return; }
+  ui.seen = readSeen(storage(), key);
+  // what was seen of this proposal before its PR head was known is kept under the head now
+  if (was === `pending:${proposalKey()}`) for (const [scenario, how] of ui.pending) ui.seen = writeSeen(storage(), key, scenario, how);
+  ui.pending = [];
 }
 
-/** The PR head the record is keyed by: proposal.js hands it over when it has read the PR; '' until then */
+/** Adds a scenario to the record: kept in the browser once the key is known, held in memory until then */
+function markSeen(scenarioId, how) {
+  refreshSeen();
+  if (ui.seenFor.startsWith('pending:')) {
+    ui.pending.push([String(scenarioId), how]);
+    ui.seen = writeSeen(null, '', scenarioId, how, ui.seen);
+  } else ui.seen = writeSeen(storage(), ui.seenFor, scenarioId, how);
+}
+
+/** The PR head the record is keyed by: proposal.js hands it over when it has read the open proposal's PR */
 export function setPullHead(sha) {
   const head = typeof sha === 'string' ? sha : '';
-  if (head === ui.head) return;
+  if (head === ui.head && ui.headFor === proposalKey()) return;
   ui.head = head;
+  ui.headFor = proposalKey();
   if (state.proposal) repaint();
 }
 
@@ -73,7 +106,9 @@ function model() {
   if (id !== null) verdicts.set(id, scenarioVerdicts());
   const proposal = state.effectiveProposal || state.proposal;
   const words = { notChecked: t('notChecked') };
-  return buildScenarioList({ scenarios: scenariosNow(), nodes: state.nodes, edges: state.edges, proposal, verdicts, seen: ui.seen, words });
+  const byId = new Map(state.nodes.map((n) => [n.id, n]));
+  const hidden = (id) => byId.has(id) && layersHiding(byId.get(id)).length > 0;
+  return buildScenarioList({ scenarios: scenariosNow(), nodes: state.nodes, edges: state.edges, proposal, verdicts, seen: ui.seen, words, hidden });
 }
 
 /** What opening a proposal says: "Opened Checkout: 6 changes, 3 scenarios for 2 personas." */
@@ -106,7 +141,7 @@ function stepHtml(sc, step, group, total) {
   const mark = step.mark ? `<span class="hx-step-mark"><span class="hx-mark-dot hx-mark-dot--${step.mark}" data-corn="mark-dot"${markStateAttr(step.mark)} aria-hidden="true"></span>${escHtml(step.markWord)}</span>` : '';
   const who = step.actorLabel ? `<span class="hx-step-who">As ${escHtml(step.actorLabel)}</span>` : '';
   return `<li><button type="button" class="hx-step" data-corn="step" data-action="scenario-step" data-scenario-index="${sc.index}" data-step-index="${step.index}" data-focus-key="st:${group.key}:${sc.key}:${step.index}" aria-label="${escHtml(stepSentence(step, total))}"${current ? ' aria-current="step"' : ''}>`
-    + `<span class="hx-step-n" aria-hidden="true">${step.number}</span><span class="hx-step-body"><span class="hx-step-line">${who}<span class="hx-step-where">${escHtml(step.where)}</span>${mark}</span>`
+    + `<span class="hx-step-n" aria-hidden="true">${step.number}</span><span class="hx-step-body"><span class="hx-step-line">${who}<span class="hx-step-where">${escHtml(step.where)}</span>${mark}${step.layerOff ? '<span class="hx-step-off">Layer off: shown when played</span>' : ''}</span>`
     + `<span class="hx-step-text">${escHtml(step.text)}</span></span>${pill}</button></li>`;
 }
 
@@ -115,8 +150,10 @@ function scenarioHtml(sc, group) {
   const stepsId = `rc-steps-${group.key}-${sc.key}`;
   const tick = sc.seen ? `<span class="hx-sc-seen" data-seen="${sc.seen}">${sc.seen === 'played' ? '✓ Played' : '✓ Read'}</span>` : '';
   const done = sc.verdictSummary ? ` · ${escHtml(sc.verdictSummary)}` : '';
+  // its checks are asked when it is opened, but while another scenario plays the checks are that one's: say so rather than show steps with no verdict
+  const waits = open && playingOther(sc.id) && sc.steps.some((st) => st.actor) ? `<p class="hx-faint hx-rc-note hx-sc-waits" data-corn="notice">Not checked while another scenario plays. Close the player, or choose a step here to play this one.</p>` : '';
   return `<li class="hx-sc" data-open="${open}"><button type="button" class="hx-sc-row" data-corn="row" data-action="scenario-open" data-scenario-index="${sc.index}" data-focus-key="sc:${group.key}:${sc.key}" aria-expanded="${open}" aria-controls="${stepsId}">`
-    + `<span class="hx-sc-caret" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="hx-sc-main"><span class="hx-sc-title">${escHtml(sc.title)}</span><span class="hx-sc-meta">${escHtml(sc.summary)}${done}</span></span>${tick}</button>`
+    + `<span class="hx-sc-caret" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="hx-sc-main"><span class="hx-sc-title">${escHtml(sc.title)}</span><span class="hx-sc-meta">${escHtml(sc.summary)}${done}</span></span>${tick}</button>${waits}`
     + `<ol class="hx-steps" id="${stepsId}" data-corn="step-list" aria-label="${escHtml(t('steps'))}: ${escHtml(sc.title)}"${open ? '' : ' hidden'}>${open ? sc.steps.map((s) => stepHtml(sc, s, group, sc.steps.length)).join('') : ''}</ol></li>`;
 }
 
@@ -133,20 +170,22 @@ function listsHtml() {
   const rows = changeRows(state.nodes, state.edges, proposal);
   const list = model();
   const phone = isPhone();
-  const tab = ui.tab || (list.total ? 'scenarios' : 'changes');
+  // the phone's tab: the reviewer's last choice, or Scenarios when there are any; a proposal with none opens on its changes
+  if (ui.tabFor !== proposalKey()) { ui.tabFor = proposalKey(); ui.tabNow = list.total ? (ui.tab || 'scenarios') : 'changes'; }
+  const tab = ui.tabNow || 'changes';
   const personas = state.nodes.some((n) => n.type === 'persona');
 
   const tabs = `<div class="hx-rc-tabs" role="tablist" aria-label="Review" data-corn="tabs"${phone ? '' : ' hidden'}>`
     + `<button type="button" role="tab" id="rc-tab-changes" class="hx-rc-tab" data-corn="tab" data-action="review-tab" data-tab="changes" aria-selected="${tab === 'changes'}" aria-controls="rc-changes" tabindex="${tab === 'changes' ? 0 : -1}">${escHtml(t('changes'))} · ${rows.length}</button>`
-    + `<button type="button" role="tab" id="rc-tab-scenarios" class="hx-rc-tab" data-corn="tab" data-action="review-tab" data-tab="scenarios" aria-selected="${tab === 'scenarios'}" aria-controls="rc-scenarios" tabindex="${tab === 'scenarios' ? 0 : -1}">Scenarios · ${list.total}</button></div>`;
+    + `<button type="button" role="tab" id="rc-tab-scenarios" class="hx-rc-tab" data-corn="tab" data-action="review-tab" data-tab="scenarios" aria-selected="${tab === 'scenarios'}" aria-controls="rc-scenarios" tabindex="${tab === 'scenarios' ? 0 : -1}">${escHtml(t('scenarios'))} · ${list.total}</button></div>`;
 
-  const changes = `<section id="rc-changes" class="hx-rc-section" data-corn="change-list"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-changes"${tab === 'changes' ? '' : ' hidden'}` : ' aria-labelledby="rc-changes-h"'}>`
+  const changes = `<section id="rc-changes" class="hx-rc-section" data-corn="proposal-changes"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-changes"${tab === 'changes' ? '' : ' hidden'}` : ' aria-labelledby="rc-changes-h"'}>`
     + `<h3 id="rc-changes-h" class="hx-rc-h" tabindex="-1">${countHeading(t('changes'), rows.length)}</h3>`
     + (rows.length ? `<ul class="hx-change-list">${rows.map(changeRowHtml).join('')}</ul>` : '<p class="hx-faint hx-rc-empty">This proposal changes nothing on the map.</p>')
     + '</section>';
 
   let body;
-  if (!list.total) body = '<p class="hx-faint hx-rc-empty">This proposal has no scenarios: there is nothing to walk through, and the changes beside it are all it shows.</p>';
+  if (!list.total) body = '<p class="hx-faint hx-rc-empty">This proposal has no scenarios: there is nothing to walk through, and its changes are all it shows.</p>';
   else {
     body = list.groups.map(groupHtml).join('');
     if (!personas) body += `<p class="hx-faint hx-rc-note">This map has no personas (topology.personas.json), so every scenario is listed under ${escHtml(t('anyone'))}.</p>`;
@@ -195,10 +234,32 @@ export function renderReviewColumn() {
   placeColumn();
 }
 
+/**
+ * From 768px both lists share the column's height. The changes take what they need, up to 40% while the scenarios need the rest;
+ * when the scenarios are few, the changes take the room they leave (no gap under a short list while the changes scroll). Measured,
+ * because the split depends on how tall the scenario list is: the result is two CSS variables on the column.
+ */
+export function shareRoom() {
+  const col = $('review-column');
+  const lists = $('review-lists');
+  const sc = $('rc-scenarios');
+  if (!col || !lists || !sc || col.hidden || isPhone()) return;
+  const h = lists.clientHeight;
+  if (!h) return;
+  const gap = parseFloat(getComputedStyle(lists).rowGap) || 0;
+  const head = sc.querySelector('.hx-rc-h');
+  const body = sc.querySelector('.hx-rc-sbody');
+  const need = Math.ceil((head ? head.offsetHeight + (parseFloat(getComputedStyle(head).marginBottom) || 0) : 0) + (body ? body.scrollHeight : 0));
+  col.style.setProperty('--hx-scenarios-need', `${need}px`);
+  col.style.setProperty('--hx-changes-max', `${Math.floor(Math.max(0.4 * h, h - need - gap))}px`);
+}
+
 function repaint() {
   const lists = $('review-lists');
   const col = $('review-column');
   if (!lists || !col || !state.proposal) return;
+  // another proposal: nothing of the last one's list is open (two proposals may name a scenario alike)
+  if (ui.openFor !== proposalKey()) { ui.openFor = proposalKey(); if (!getPlayer()) { ui.open = null; ui.current = null; ui.lastStep = null; } }
   // a scenario that is no longer in the proposal (a what-if edit deleted it) is not open any more
   if (ui.open !== null && !scenariosNow().some((s) => s.id === ui.open)) ui.open = null;
   // an edit to the open scenario (what-if) plans its checks again: the verdicts are of the steps it has now
@@ -215,6 +276,7 @@ function repaint() {
     const again = [...lists.querySelectorAll('[data-focus-key]')].find((el) => el.getAttribute('data-focus-key') === key);
     if (again) again.focus();
   }
+  shareRoom();
 }
 
 // ---------------------------------------------------------------------------
@@ -235,8 +297,7 @@ function toggleScenario(sc) {
     if (!getPlayer()) closeChecks();
   } else {
     ui.open = sc.id;
-    refreshSeen();
-    ui.seen = writeSeen(storage(), ui.seenFor, sc.id, 'read');
+    markSeen(sc.id, 'read');
     if (!playingOther(sc.id)) openChecks(sc, () => repaint());
   }
   repaint();
@@ -245,12 +306,18 @@ function toggleScenario(sc) {
 /** A step was chosen: the player opens paused on it, the list stays open and the focus stays on the step (on a phone the sheet folds, so the player takes it) */
 function chooseStep(sc, index) {
   ui.open = sc.id;
+  // Under 1360px the column, the node panel and the player bar do not fit side by side: the node panel closes, the player takes its room
+  const drawer = $('spec-drawer');
+  const stage = state.canvas && state.canvas.parentElement;
+  if (!isPhone() && drawer && drawer.classList.contains('drawer-open') && stage && stage.clientWidth < PLAYER_BESIDE_PANEL) closeDrawer();
   playScenario(sc, { autoplay: false, step: index, focus: isPhone() });
   repaint();
 }
 
 function showTab(tab, { focus = false } = {}) {
   ui.tab = tab;
+  ui.tabNow = tab;
+  ui.tabFor = proposalKey();
   try { storage()?.setItem(TAB_KEY, tab); } catch { /* the choice is a convenience */ }
   repaint();
   if (focus) $(`rc-tab-${tab}`)?.focus();
@@ -288,8 +355,10 @@ function onKey(e) {
 /** Called with each change of the player: the step it is on (null when closed), whether it reached the end */
 function onPlayer(snap) {
   if (!snap) {
-    // closed: the list keeps the scenario open, without a current step
-    if (ui.current) { ui.current = null; repaint(); }
+    // closed: the list keeps the scenario open, without a current step, and its steps keep their verdicts (the checks are the list's again)
+    const sc = ui.open !== null && state.proposal && ui.openFor === proposalKey() ? scenariosNow().find((s) => s.id === ui.open) : null;
+    if (sc) openChecks(sc, () => repaint());
+    if (ui.current || sc) { ui.current = null; repaint(); }
     return;
   }
   const scenarios = scenariosNow();
@@ -298,7 +367,7 @@ function onPlayer(snap) {
   ui.lastStep = next;
   if (snap.done) {
     refreshSeen();
-    if (!ui.seen.played.includes(snap.id)) ui.seen = writeSeen(storage(), ui.seenFor, snap.id, 'played');
+    if (!ui.seen.played.includes(snap.id)) markSeen(snap.id, 'played');
   }
   const same = ui.current && ui.current.id === next.id && ui.current.step === next.step;
   ui.current = next;
@@ -338,10 +407,14 @@ export function initReviewColumn() {
   started = true;
   try { const saved = storage()?.getItem(TAB_KEY); if (saved === 'changes' || saved === 'scenarios') ui.tab = saved; } catch { /* no remembered tab */ }
   onPlayerChange(onPlayer);
+  onLayersChange(() => { if (state.proposal) repaint(); }); // a step's "Layer off" follows the Layers menu
   const bar = $('proposal-bar');
   if (bar && typeof ResizeObserver === 'function') new ResizeObserver(() => { placeColumn(); }).observe(bar);
+  const col = $('review-column');
+  if (col && typeof ResizeObserver === 'function') new ResizeObserver(() => shareRoom()).observe(col); // the window's height changed
   setCloseFocus(stepToFocus);
   setNextScenario(nextScenarioAfter);
+  setKeepChecksOnClose((id) => ui.open === id && !!state.proposal);
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     const mq = window.matchMedia(PHONE_QUERY);
     if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (state.proposal) renderReviewColumn(); });
@@ -351,7 +424,7 @@ export function initReviewColumn() {
 
 /** For tests: forget what the column remembered */
 export function resetReviewColumnForTests() {
-  Object.assign(ui, { checks: 0, open: null, tab: null, head: '', current: null, lastStep: null, seen: { played: [], read: [] }, seenFor: '' });
+  Object.assign(ui, { checks: 0, open: null, tab: null, tabNow: null, tabFor: '', openFor: '', head: '', headFor: '', current: null, lastStep: null, seen: { played: [], read: [] }, seenFor: '', pending: [] });
   wiredRoot = null;
   started = false;
 }

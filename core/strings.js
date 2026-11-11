@@ -36,6 +36,7 @@ export const STRINGS = Object.freeze({
   // The review column and the scenario player
   changes: 'Changes',
   personasAndScenarios: 'Personas and scenarios',
+  scenarios: 'Scenarios',
   anyone: 'Anyone',
   notInAnyScenario: 'Not in any scenario',
   steps: 'Steps',

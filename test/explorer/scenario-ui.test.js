@@ -460,6 +460,51 @@ describe('the camera', () => {
     expect(state.camera.y).toBeCloseTo((600 - 108) / 2 - 2005, 5); // centred in what the bar leaves (a node's label hangs below it: 5 px of that)
   });
 
+  it('follows the step again when the bar grows after framing it (a check\'s line arrives), unless the viewer took hold of the map', () => {
+    const watchers = [];
+    vi.stubGlobal('ResizeObserver', class { constructor(fn) { this.fn = fn; this.els = []; watchers.push(this); } observe(el) { this.els.push(el); } disconnect() { this.gone = true; this.els = []; } });
+    const grew = () => watchers.filter((w) => w.els.includes(bar())).forEach((w) => w.fn());
+    const rect = (top        , bottom        ) => () => ({ top, bottom, left: 0, right: 800, width: 800, height: bottom - top, x: 0, y: top });
+    state.canvas.getBoundingClientRect = rect(0, 600);
+    playScenario(scenario(), { autoplay: false });
+    let h = 80;
+    Object.defineProperty(bar(), 'offsetHeight', { get: () => h, configurable: true });
+    bar().getBoundingClientRect = () => rect(600 - h, 600)();
+    click('scenario-next'); click('scenario-next'); click('scenario-next'); // the far node, framed above an 80px bar
+    for (let t = 16; t < 3000 && wantsFrames(); t += 16) tickScenario(t);
+    const y = () => state.camera.y + 2000 * state.camera.zoom;
+    expect(y()).toBeCloseTo((600 - 88) / 2 - 5, 5);
+    h = 300; // the bar grew: the step would be under it
+    grew();
+    for (let t = 4000; t < 7000 && wantsFrames(); t += 16) tickScenario(t);
+    expect(y()).toBeCloseTo((600 - 308) / 2 - 5, 5);
+    // once the viewer has moved the map, a change of the bar leaves the camera to them
+    state.canvas.dispatchEvent(new Event('pointerdown'));
+    h = 120;
+    grew();
+    expect(wantsFrames()).toBe(false);
+    clearScenario();
+    expect(watchers.filter((w) => !w.gone && w.els.length)).toHaveLength(0);
+  });
+
+  it('turns on the layer of a step that is on a layer that is off, says so once, and goes to it (#212)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    state.nodes.push({ id: 'tbl', type: 'table', x: 3000, y: 2000, r: 20, color: '#fff', label: 'orders' });
+    state.activeLayers = { ...(state.activeLayers || {}), table: false };
+    const rect = (top        , bottom        ) => () => ({ top, bottom, left: 0, right: 800, width: 800, height: bottom - top, x: 0, y: top });
+    state.canvas.getBoundingClientRect = rect(0, 600);
+    playScenario(scenario({ steps: [{ node: 'a', text: 'Opens.' }, { node: 'tbl', text: 'The row is read.' }] }), { autoplay: false });
+    expect(state.activeLayers.table).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(live.textContent).toBe('Turned on Tables to show this scenario\'s steps.');
+    click('scenario-next');
+    for (let t = 16; t < 3000 && wantsFrames(); t += 16) tickScenario(t);
+    expect(state.camera.x + 3000 * state.camera.zoom).toBeCloseTo(400, 0); // the camera went to it
+    live.remove();
+  });
+
   it('is the user\'s again as soon as they take hold of the map', () => {
     playScenario(scenario(), { autoplay: false });
     click('scenario-next'); click('scenario-next'); click('scenario-next');

@@ -110,6 +110,8 @@ function stepRows(scenario, ctx) {
       if (n && n.mark && n.mark !== 'none') mark = n.mark;
     }
     const v = ctx.verdicts ? stepVerdictWords(ctx.verdicts[i], ctx.words) : null;
+    // a node it names is on a layer that is off (#212): the list says so; playing the scenario turns the layer on
+    const layerOff = !!ctx.hidden && touched.some((k) => k.startsWith('node:') && ctx.hidden(k.slice(5)));
     return {
       index: i,
       number: i + 1,
@@ -120,6 +122,7 @@ function stepRows(scenario, ctx) {
       markWord: mark ? MARK_WORDS[mark] || '' : '',
       text: String((step && step.text) ?? ''),
       verdict: actor ? v : null,
+      layerOff,
       touched,
     };
   });
@@ -127,7 +130,7 @@ function stepRows(scenario, ctx) {
 
 /** The sentence a screen reader gets for a step: "Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed." */
 export function stepSentence(step, total) {
-  const where = [step.where, step.markWord].filter(Boolean).join(', ');
+  const where = [step.where, step.markWord, step.layerOff ? 'on a layer that is off' : ''].filter(Boolean).join(', ');
   const head = `Step ${step.number} of ${total}${step.actorLabel ? `, as ${step.actorLabel}` : ''}${where ? `: ${where}` : ''}.`;
   return [head, step.text, step.verdict ? `${step.verdict.words}${/[.!?…]$/.test(step.verdict.words) ? '' : '.'}` : ''].filter(Boolean).join(' ');
 }
@@ -176,6 +179,7 @@ function verdictSummary(rows) {
  * @param {Map<string, any[]> | null} [input.verdicts] scenario id -> its steps' check-model verdicts, for the scenarios that were checked
  * @param {{ played?: string[], read?: string[] } | null} [input.seen] what this browser has seen
  * @param {{ notChecked?: string }} [input.words] the project's own words (`strings`)
+ * @param {((nodeId: string) => boolean) | null} [input.hidden] whether a node is on a layer that is off (#212)
  * @returns {{
  *   total: number,
  *   personaCount: number,
@@ -185,7 +189,7 @@ function verdictSummary(rows) {
  *   playedLine: string,
  * }}
  */
-export function buildScenarioList({ scenarios, nodes, edges, proposal = null, verdicts = null, seen = null, words = {} }) {
+export function buildScenarioList({ scenarios, nodes, edges, proposal = null, verdicts = null, seen = null, words = {}, hidden = null }) {
   const list = asList(scenarios);
   const personas = nodes.filter((n) => n.type === 'persona');
   const byPersona = new Map(personas.map((n) => [personaId(n), n]));
@@ -198,7 +202,7 @@ export function buildScenarioList({ scenarios, nodes, edges, proposal = null, ve
 
   const built = list.map((s, index) => {
     const checked = verdicts && verdicts.get(s.id);
-    const steps = stepRows(s, { nodes, edges, changeKeys, verdicts: checked || null, words, label, personaLabel });
+    const steps = stepRows(s, { nodes, edges, changeKeys, verdicts: checked || null, words, label, personaLabel, hidden });
     const walked = new Set(steps.flatMap((st) => st.touched).filter((k) => changeKeys.has(k)));
     const count = steps.length;
     const parts = [plural(count, 'step')];
@@ -285,10 +289,11 @@ export function readSeen(storage, key) {
  * @param {string} key
  * @param {string} scenarioId
  * @param {'read' | 'played'} how
+ * @param {{ played: string[], read: string[] } | null} [current] the record to add to, in place of the stored one (a record held in memory, with no storage)
  * @returns {{ played: string[], read: string[] }} the record now, kept or not
  */
-export function writeSeen(storage, key, scenarioId, how) {
-  const now = readSeen(storage, key);
+export function writeSeen(storage, key, scenarioId, how, current = null) {
+  const now = current ? { played: [...asList(current.played)], read: [...asList(current.read)] } : readSeen(storage, key);
   const id = String(scenarioId);
   if (how === 'played') { if (!now.played.includes(id)) now.played.push(id); now.read = now.read.filter((x) => x !== id); } else if (!now.read.includes(id) && !now.played.includes(id)) now.read.push(id);
   try { if (storage) storage.setItem(key, JSON.stringify(now)); } catch { /* storage blocked or full: it counts for this visit only */ }
