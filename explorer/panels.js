@@ -19,6 +19,7 @@ import { t } from './strings.js';
 import { fileUrl } from './file-url.js';
 import { capped, toggleCapped } from './capped.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
+import { sayResult, clearResult, showResultIn, RESULT_MS } from './feedback.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -292,15 +293,20 @@ export function closeDrawer() {
   render();
 }
 
-/** Copies the selected node as JSON; the button says so for a moment */
+let copyTimer = 0;
+/** Copies the selected node as JSON; the result is said under the button and to a screen reader, and stays a few seconds */
 export async function copySpec(button) {
   if (!state.selectedNode) return;
   const text = JSON.stringify({ node: state.selectedNode }, null, 2);
+  clearTimeout(copyTimer);
+  clearResult('copy-spec');
+  const where = $('copy-spec-result');
   try {
     await navigator.clipboard.writeText(text);
-    button.textContent = 'Copied ✓';
+    sayResult('copy-spec', `Copied the spec of ${state.selectedNode.label || state.selectedNode.id} to the clipboard.`, true);
   } catch {
-    button.textContent = 'Copy blocked';
+    sayResult('copy-spec', 'The browser did not allow copying, so nothing was copied. Allow clipboard access for this page, then press Copy Spec again.', false);
   }
-  setTimeout(() => { button.textContent = t('copySpec'); }, 1500);
+  showResultIn(where, 'copy-spec');
+  copyTimer = setTimeout(() => { clearResult('copy-spec'); showResultIn(where, 'copy-spec'); }, RESULT_MS);
 }

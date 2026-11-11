@@ -91,7 +91,11 @@ describe('the words', () => {
     expect(errorWords(429, { error: 'GitHub asked cornfield to slow down; try again in 40 seconds.' })).toBe('GitHub asked cornfield to slow down; try again in 40 seconds.');
     expect(errorWords(401, { ok: false, error: 'Sign in first.' })).toMatch(/^Your sign-in has ended/);
     expect(errorWords(null, null)).toMatch(/could not be reached/);
-    expect(errorWords(500, null)).toBe('cornfield answered 500 for the forge.');
+    expect(errorWords(500, null)).toBe('The server had a problem (error 500). Try again in a minute.');
+    expect(errorWords(200, null)).toBe('cornfield sent an answer this page could not read. Try again.'); // never reads as success
+    expect(errorWords(404, null, { what: 'the issues' })).toBe('Could not load the issues. It was not found. It may have been removed. Try again.');
+    expect(errorWords(null, null, { offline: true })).toBe('You are offline.'); // not the server's fault
+    expect(errorWords(null, null, { offline: true, what: 'the runs' })).toBe('Could not load the runs. You are offline.');
   });
 });
 
@@ -230,10 +234,12 @@ describe('actions: why not, what is confirmed, what is said', () => {
     expect(mergeBlock(detail({}, [check('success'), check('neutral'), check('skipped')]))).toBe(null);
     expect(mergeBlock({ ...detail(), pull: pull(12, { state: 'merged' }) })).toBe('It has landed already.');
     expect(mergeBlock({ ...detail(), pull: pull(12, { state: 'closed' }) })).toBe('It is closed, so it cannot be landed.');
-    expect(mergeBlock({ ...detail(), pull: pull(12, { draft: true }) })).toBe('It is a draft: mark it ready on the forge first.');
-    expect(mergeBlock(detail({}, []))).toBe('It has no checks, so nothing says it works.');
+    expect(mergeBlock({ ...detail(), pull: pull(12, { draft: true }) })).toBe('It is a draft. Next: mark it ready for review on the forge, then press Refresh here.');
+    expect(mergeBlock(detail({}, []))).toBe('It has no checks, so nothing says it works. Next: wait for the forge to start them, then press Refresh.');
     expect(mergeBlock(detail({}, [check('failure', { name: 'lint' }), check('running', { name: 'test' }), check('queued', { name: 'build' }), check('cancelled', { name: 'e2e' })])))
-      .toBe("Can't land yet: lint failed, test is still running, build is waiting to run, e2e was cancelled.");
+      .toBe("Can't land yet: lint failed, test is still running, build is waiting to run, e2e was cancelled. Next: re-run lint on the forge, then wait for test to finish, then wait for build to start and finish, then re-run e2e on the forge, then press Refresh.");
+    // a failed check the forge lets cornfield re-run says "below": its Re-run button is further down
+    expect(mergeBlock(detail({}, [check('failure', { name: 'lint', canRerun: true })]))).toBe("Can't land yet: lint failed. Next: re-run lint below, then press Refresh.");
     expect(mergeBlock(detail({ stale: 'GitHub could not be reached.' }))).toBe('This is an older answer from the forge: refresh before landing it.');
   });
 

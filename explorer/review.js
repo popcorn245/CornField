@@ -30,6 +30,7 @@ import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
 import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
 import { t } from './strings.js';
+import { isOffline, notSentWords } from './connection.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,6 +41,7 @@ const ui = {
   key: null, // `${source}/${slug}` of the proposal the review below belongs to
   reviewable: false, // whether it is on a spec PR
   review: null, // { verdict, at } | null: the last review of it
+  loadFailed: false, // the past reviews could not be read: the bar must not look as if there were none
   busy: false,
   noting: false, // the note field is open (Send back was pressed)
   message: '', // an inline refusal or failure
@@ -77,6 +79,7 @@ function mount() {
           <button type="button" class="hx-btn hx-btn--quiet" data-review-cancel data-corn-kind="quiet">Cancel</button>
         </div>
       </div>
+      <p class="hx-review-msg" data-review-loadfail role="alert" hidden data-corn="message" data-corn-state="failure"><span data-review-loadfail-text></span> <button type="button" class="hx-btn hx-btn--quiet" data-review-retry data-corn-kind="quiet">Retry</button></p>
       <p class="hx-review-msg" data-review-msg role="alert" hidden></p>
       <p class="hx-review-line" data-review-hint role="status" hidden></p>
 `;
@@ -99,6 +102,10 @@ function paint() {
   const status = q('[data-review-status]');
   status.textContent = reviewWords(ui.review, now());
   status.hidden = !status.textContent;
+  // A failed read of the past reviews says so: an approved proposal must not look as if nobody had reviewed it
+  const failed = q('[data-review-loadfail]');
+  failed.hidden = !ui.loadFailed;
+  q('[data-review-loadfail-text]').textContent = ui.loadFailed ? `Could not load this proposal's reviews.${isOffline() ? ' You are offline.' : ''} It may already be approved or sent back; try again before you decide.` : '';
   for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) btn.disabled = ui.busy || !ui.reviewable;
   const approve = button('approved');
   if (approve) approve.textContent = t('approve');
@@ -146,6 +153,7 @@ function onBar(open) {
   ui.key = key;
   ui.reviewable = !!key && isReviewable(state.proposalSource);
   ui.review = null;
+  ui.loadFailed = false;
   ui.busy = false;
   ui.noting = false;
   ui.message = ui.hint = '';
@@ -159,17 +167,24 @@ function onBar(open) {
 async function loadReview(key) {
   try {
     const res = await fetch(reviewUrl(), { cache: 'no-store' });
-    if (!res.ok) return;
+    if (key !== ui.key) return; // another proposal has opened since
+    if (res.status === 404) { ui.loadFailed = false; paint(); return; } // none yet: the server says so with a 404
+    if (!res.ok) throw new Error(`The server answered ${res.status}.`);
     const found = await res.json();
-    if (key !== ui.key || !found || typeof found.verdict !== 'string') return; // none, or another proposal has opened since
-    ui.review = { verdict: found.verdict, at: found.at };
+    if (key !== ui.key) return;
+    ui.loadFailed = false;
+    if (found && typeof found.verdict === 'string') ui.review = { verdict: found.verdict, at: found.at };
     paint();
-  } catch { /* the server is not there: no review shown */ }
+  } catch {
+    // Not "no review": the read failed, so the bar says it could not look (with Retry), and the buttons stay as they were
+    if (key === ui.key) { ui.loadFailed = true; paint(); }
+  }
 }
 
 function onClick(e) {
   if (ui.busy || !e.target.closest) return;
   if (e.target.closest('[data-review-cancel]')) { closeNote(); return; }
+  if (e.target.closest('[data-review-retry]')) { ui.loadFailed = false; paint(); loadReview(ui.key); return; }
   const btn = e.target.closest('[data-review]');
   if (!btn || btn.disabled) return;
   if (btn.dataset.review === 'notes' && !ui.noting) openNote(); // the first press opens the field, the second sends
@@ -203,8 +218,18 @@ export async function sendReview(verdict) {
   const key = ui.key;
   const body = reviewBody(verdict, note, getEdits());
   let saved;
+  const what = verdict === 'approved' ? 'Your approval' : 'Your send back';
+  let res;
   try {
-    const res = await fetch(reviewUrl(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    res = await fetch(reviewUrl(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch {
+    // No answer at all: offline, or the server is not there. Said so, not as a server's error; the note and the edits are kept, and it says it was not sent
+    ui.busy = false;
+    ui.message = notSentWords(what);
+    paint();
+    return false;
+  }
+  try {
     let answer = null;
     try { answer = await res.json(); } catch { /* no body */ }
     if (!res.ok) throw new Error((answer && answer.error) || `The server answered ${res.status}.`);
@@ -254,5 +279,5 @@ export function resetReviewForTests(clock = () => Date.now()) {
   wired = false;
   root = null;
   now = clock;
-  Object.assign(ui, { key: null, reviewable: false, review: null, busy: false, noting: false, message: '', hint: '' });
+  Object.assign(ui, { key: null, reviewable: false, review: null, loadFailed: false, busy: false, noting: false, message: '', hint: '' });
 }

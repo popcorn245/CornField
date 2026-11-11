@@ -32,6 +32,7 @@ import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/pro
 import { reviewWords } from './review-model.js';
 import { collapseSheet } from './sheets.js';
 import { t } from './strings.js';
+import { isOffline } from './connection.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -72,10 +73,12 @@ export function onProposalListing(fn) {
 /** Asks the server for the proposals it can serve */
 export async function loadProposalList() {
   try {
-    const res = await fetch('/proposals', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`GET /proposals answered ${res.status}`);
-    const body = await res.json();
-    if (!Array.isArray(body)) throw new Error('GET /proposals did not answer with a list');
+    let res;
+    try { res = await fetch('/proposals', { cache: 'no-store' }); } catch { throw new Error(isOffline() ? 'You are offline.' : 'cornfield could not be reached. Check that it is still running.'); }
+    if (!res.ok) throw new Error(`The server could not list them (error ${res.status}).`);
+    let body;
+    try { body = await res.json(); } catch { throw new Error('cornfield sent a list this page could not read.'); }
+    if (!Array.isArray(body)) throw new Error('cornfield sent something that is not a list of proposals.');
     listing = body;
     listingProblem = null;
     const said = res.headers.get('X-Proposals-Forge-Error');
@@ -83,7 +86,7 @@ export async function loadProposalList() {
   } catch (err) {
     listing = null;
     forgeProblem = null;
-    listingProblem = err.message || String(err);
+    listingProblem = err.message || 'cornfield did not answer.'; // always a plain sentence made above, never a parser's or a runtime's own words
   }
   listingAt = Date.now();
   renderMenu();
@@ -99,18 +102,19 @@ export async function loadProposalList() {
 export async function openProposal(slug, source = null) {
   setMessage(`Opening ${slug} …`);
   try {
-    const res = await fetch(`/proposals/${encodeURIComponent(slug)}.json${source ? `?source=${encodeURIComponent(source)}` : ''}`, { cache: 'no-store' });
+    let res;
+    try { res = await fetch(`/proposals/${encodeURIComponent(slug)}.json${source ? `?source=${encodeURIComponent(source)}` : ''}`, { cache: 'no-store' }); } catch { throw new Error(isOffline() ? `${slug} could not be opened: you are offline.` : `${slug} could not be opened: cornfield could not be reached.`); }
     if (!res.ok) {
       let why = '';
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      throw new Error(res.status === 404 ? `No proposal called ${slug}${source ? ` in ${source}` : ''}.` : why || `The server answered ${res.status}.`);
+      throw new Error(res.status === 404 ? `No proposal called ${slug}${source ? ` in ${source}` : ''}.` : `${slug} could not be opened: ${why || `the server answered ${res.status}.`}`);
     }
     const found = res.headers.get('X-Proposal-Source');
     showProposal(await res.json(), { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
-    setMessage(err.message || String(err), true);
+    setMessage(err.message || `${slug} could not be opened.`, true, () => openProposal(slug, source));
     return false;
   }
 }
@@ -229,7 +233,7 @@ function syncAddress() {
 // ---------------------------------------------------------------------------
 
 /** One line in the bar instead of a proposal: while one opens, or why it did not */
-function setMessage(text, isError = false) {
+function setMessage(text, isError = false, retry = null) {
   const bar = $('proposal-bar');
   if (!bar) return;
   bar.hidden = false;
@@ -238,6 +242,19 @@ function setMessage(text, isError = false) {
   const msg = $('proposal-message');
   msg.hidden = false;
   msg.textContent = text;
+  // A proposal that failed to open can be asked for again, or let go of: the bar has nothing else to press
+  if (isError && retry) {
+    for (const [label, act] of [['Retry', retry], ['Close', closeProposal]]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hx-btn hx-btn--quiet';
+      b.dataset.cornKind = 'quiet';
+      b.dataset.proposalErrorAction = label.toLowerCase();
+      b.textContent = label;
+      b.addEventListener('click', () => act());
+      msg.append(' ', b);
+    }
+  }
 }
 
 /** The problems a proposal has, as the bar lists them (at most `max`, then "and N more") */

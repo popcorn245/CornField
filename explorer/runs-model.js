@@ -7,6 +7,7 @@
  */
 
 import { relativeTime } from './review-model.js';
+import { RUN_STATES } from './corn-state.js';
 
 export const RUNS_URL = '/api/agent-runs';
 export const runsUrl = (follow) => (follow ? `${RUNS_URL}?follow=1` : RUNS_URL);
@@ -41,9 +42,29 @@ export function statusWords(run) {
   return words[run.status] || run.status;
 }
 
-/** The colour class (`hx-forge-state--<tone>`) of a run's state: done and merged are green, failed red, a run that is waiting on someone or has gone quiet amber, the rest in motion */
-export const RUN_TONE = Object.freeze({ done: 'success', merged: 'success', failed: 'failure', quiet: 'queued', 'stop-requested': 'queued', waiting: 'queued' });
-export const runTone = (run) => RUN_TONE[run.status] || 'running';
+/**
+ * The tone of a run's state (the class `hx-forge-state--<tone>`, and the public `data-corn-state` through corn-state.js): each of the seven
+ * states of a run is its own, so none is told from another by colour alone. A run that went quiet waits on someone; one asked to stop is no
+ * longer under way; merged is done.
+ */
+export const RUN_TONE = Object.freeze({ merged: 'done', closed: 'stopped', quiet: 'waiting', 'stop-requested': 'stopped' });
+export const runTone = (run) => RUN_TONE[run.status] || (RUN_STATES.includes(run.status) ? run.status : 'working');
+
+/** What a run is called where a person has to pick it out: what the card shows ("code on issue #5, profile claude, asked by maintainer-one"), never its id; `nowMs` adds how long ago it was asked, to tell two alike apart */
+export function runName(run, nowMs) {
+  const when = nowMs != null && run.requestedAt ? relativeTime(run.requestedAt, nowMs) : '';
+  return [`${run.kind} on ${aboutWords(run.refs)}`, run.profile && `profile ${run.profile}`, run.requestedBy && `asked by ${run.requestedBy}`, when].filter(Boolean).join(', ');
+}
+
+/** Cost with its unit and two decimals ("$1.45"); '' when the runner reported none. The runner's currency is not sent: the unit is the dollar sign, and the API keeps the raw number */
+export function formatCost(n) {
+  return typeof n === 'number' && Number.isFinite(n) ? `$${n.toFixed(2)}` : '';
+}
+
+/** Tokens with thousands separators and the word ("47,000 tokens"); '' when none were reported */
+export function formatTokens(n) {
+  return typeof n === 'number' && Number.isFinite(n) ? `${n.toLocaleString('en-US')} ${n === 1 ? 'token' : 'tokens'}` : '';
+}
 
 /**
  * The run to show on the row of a thread (issue #104): the run whose conversation the thread is (`thread.number`, which the server fills in;
@@ -68,10 +89,10 @@ export function runOnPull(runs, number) {
 }
 
 /** A pull request's run in one line: who is running it, its state, how long ago it was asked for, and the cost the runner reported ("bucket-bot · Working · asked 12 min ago · cost 0.84") */
-export function pullRunWords(run, nowMs) {
+export function pullRunWords(run, nowMs, { state = true } = {}) {
   const who = (run.report && run.report.by) || (run.pull && run.pull.by) || run.requestedBy;
   const when = relativeTime(run.requestedAt, nowMs);
-  return [who, statusWords(run), when && `asked ${when}`, run.report && run.report.cost != null && `cost ${run.report.cost}`].filter(Boolean).join(' · ');
+  return [who, state && statusWords(run), when && `asked ${when}`, run.report && run.report.cost != null && `cost ${formatCost(run.report.cost)}`].filter(Boolean).join(' · ');
 }
 
 /** What a thread's row says of its run, in a few words: "Run: Working" (more than one run on it: "Run: Working (+1)") */
@@ -100,11 +121,11 @@ export function runMeta(run, nowMs) {
   const parts = [`asked ${relativeTime(run.requestedAt, nowMs)} by ${run.requestedBy}${run.byHand ? ' (by hand)' : ''}`];
   if (run.profile) parts.push(`profile ${run.profile}`);
   const l = run.limits || {};
-  const limits = [l.minutes != null && `${l.minutes} min`, l.turns != null && `${l.turns} turns`, l.cost != null && `cost ${l.cost}`].filter(Boolean);
+  const limits = [l.minutes != null && `${l.minutes} min`, l.turns != null && `${l.turns} turns`, l.cost != null && `cost ${formatCost(l.cost)}`].filter(Boolean);
   if (limits.length) parts.push(`limits ${limits.join(', ')}`);
   const r = run.report;
   if (r) {
-    const said = [r.tokens != null && `${r.tokens} tokens`, r.cost != null && `cost ${r.cost}`].filter(Boolean);
+    const said = [r.tokens != null && formatTokens(r.tokens), r.cost != null && `cost ${formatCost(r.cost)}`].filter(Boolean);
     if (said.length) parts.push(`reported ${said.join(', ')}`);
   }
   if (run.checks && run.checks !== 'none') parts.push(`checks ${run.checks === 'success' ? 'passing' : run.checks === 'failure' ? 'failing' : 'running'}`);
@@ -169,9 +190,9 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
-/** "1200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
+/** "1,200 tokens, cost $0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
 function saidWords(t) {
-  return [t.tokens != null && `${t.tokens} tokens`, typeof t.cost === 'number' && `cost ${t.cost.toFixed(2)}`].filter(Boolean).join(', ');
+  return [t.tokens != null && formatTokens(t.tokens), typeof t.cost === 'number' && `cost ${formatCost(t.cost)}`].filter(Boolean).join(', ');
 }
 
 /**
@@ -349,14 +370,14 @@ export function limitRows(run) {
   const l = run.limits || {};
   const r = run.report || {};
   const rows = [];
-  const add = (name, limit, reported) => {
+  const add = (name, limit, reported, show = String) => {
     if (limit == null && reported == null) return;
-    rows.push({ name, limit: limit == null ? 'no limit asked' : String(limit), reported: reported == null ? 'not reported' : String(reported) });
+    rows.push({ name, limit: limit == null ? 'no limit asked' : show(limit), reported: reported == null ? 'not reported' : show(reported) });
   };
   add('Minutes', l.minutes, null);
   add('Turns', l.turns, null);
-  add('Cost', l.cost, r.cost);
-  add('Tokens', null, r.tokens);
+  add('Cost', l.cost, r.cost, formatCost);
+  add('Tokens', null, r.tokens, (n) => n.toLocaleString('en-US'));
   return rows;
 }
 
@@ -437,14 +458,14 @@ export function changeWords(before, after) {
   const out = [];
   for (const run of after) {
     const old = was.get(run.runId);
-    if (!old) { out.push(`New run ${run.runId}: ${run.kind} on ${aboutWords(run.refs)}, ${statusWords(run).toLowerCase()}`); continue; }
-    if (old.status !== run.status) out.push(`Run ${run.runId} is now ${statusWords(run).toLowerCase()}`);
+    if (!old) { out.push(`New run: ${runName(run)}, ${statusWords(run).toLowerCase()}`); continue; }
+    if (old.status !== run.status) out.push(`Run ${runName(run)} is now ${statusWords(run).toLowerCase()}`);
     const was2 = new Set(old.open ? old.collidesWith || [] : []);
     const now2 = new Set(run.open ? run.collidesWith || [] : []);
     const added = [...now2].filter((id) => !was2.has(id));
     const gone = [...was2].filter((id) => !now2.has(id));
-    if (added.length) out.push(`Run ${run.runId} now collides with ${listWords(added)}`);
-    if (gone.length && !now2.size) out.push(`Run ${run.runId} no longer collides`);
+    if (added.length) out.push(`Run ${runName(run)} now collides with ${listWords(added.map((id) => { const other = after.find((r) => r.runId === id); return other ? runName(other) : 'another run'; }))}`);
+    if (gone.length && !now2.size) out.push(`Run ${runName(run)} no longer collides`);
   }
   return out;
 }
