@@ -417,6 +417,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
 | `live-chip`, `live-menu` | the live layer's chip and its dropdown |
 | `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
+| `search-status` | the line under a search field that says "No match for …" (a polite live region, empty while there is a match) |
 | `layout-toggle` | the Freeform layout switch in the account menu |
 | `theme-toggle`, `theme-picker` | the System / Dark / Light segment, the named-theme menu (both in the account menu) |
 
@@ -494,6 +495,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `proposals` | Proposals |
 | `issuesAndPrs` | Work |
 | `searchPlaceholder` | Search... |
+| `searchNoMatch` | No match for |
 | `signOut` | Sign out |
 | `poweredBy` | powered by cornfield |
 | `before` | Before |

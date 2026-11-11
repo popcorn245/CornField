@@ -59,3 +59,28 @@ export function pinchCamera(start, dist, mid, min = ZOOM_MIN) {
   const wy = (start.mid.y - start.y) / start.zoom;
   return { x: mid.x - wx * zoom, y: mid.y - wy * zoom, zoom };
 }
+
+/**
+ * The camera panned (never zoomed) so a world point is inside `box` (screen px), or null when it already is. A point
+ * outside is put in the middle of the box, on the axis it is outside of. `pad` is the room it needs from the edge
+ * (its disc and a little more); a box smaller than twice that is the centre only.
+ * @param {Camera} camera
+ * @param {{ x: number, y: number }} point world position
+ * @param {{ left: number, top: number, right: number, bottom: number }} box the part of the screen that shows the map
+ * @param {number} [pad]
+ * @returns {Camera|null}
+ */
+export function panIntoView(camera, point, box, pad = 0) {
+  const sx = camera.x + point.x * camera.zoom;
+  const sy = camera.y + point.y * camera.zoom;
+  const px = Math.min(pad, (box.right - box.left) / 2);
+  const py = Math.min(pad, (box.bottom - box.top) / 2);
+  const outX = sx < box.left + px || sx > box.right - px;
+  const outY = sy < box.top + py || sy > box.bottom - py;
+  if (!outX && !outY) return null;
+  return {
+    x: outX ? (box.left + box.right) / 2 - point.x * camera.zoom : camera.x,
+    y: outY ? (box.top + box.bottom) / 2 - point.y * camera.zoom : camera.y,
+    zoom: camera.zoom,
+  };
+}
