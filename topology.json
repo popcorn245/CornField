@@ -7700,7 +7700,13 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T19:10:41.509Z"
+  "updatedAt": "2026-11-11T20:51:57.533Z"
 }
