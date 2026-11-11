@@ -1312,7 +1312,8 @@ function draw(panel) {
   const empty = (words) => `<li class="hx-forge-empty hx-faint" data-corn="empty">${escHtml(words)}</li>`;
   rows.setAttribute('aria-busy', String(!!ui.loading && !list));
   // A list that is being read holds its height with rows of the right size, so nothing jumps when the data comes
-  // (On Runs the list sits under the runs, whose height is not known yet: rows held there would jump when the runs arrive, so they wait.)
+  // (On Runs the list sits under the runs, whose height is not known yet: rows held there would jump when the runs arrive, so they wait. They
+  // are drawn with the work's answer all the same, which loadWork paints only once the runs are read too, failed or not.)
   if (!list) rows.innerHTML = ui.loading && !(work && !(ui.runs && ui.runs.data)) ? loadingRowsHtml(4) : '';
   else if (specs) {
     const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
@@ -1350,7 +1351,7 @@ function paintRuns() {
   if (!failed && ui.runNote && ui.runNote.ok) note.dataset.cornState = 'success'; else delete note.dataset.cornState;
   setNotice(note, words, !!failed);
   paintRunner('forge-runs-runner', data);
-  const waiting = !data && !!ui.loading; // the runner line and the totals hold their place while the runs load
+  const waiting = !data && !failed && !!ui.loading; // the runner line and the totals hold their place while the runs load (not beside a failure)
   if (waiting) { const r = $('forge-runs-runner'); r.hidden = false; r.innerHTML = loadingLinesHtml(1); }
   const trig = $('forge-runs-trigger');
   if (trig) {

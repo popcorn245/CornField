@@ -68,6 +68,7 @@ const proposal = (slug, source, extra = {}) => ({ slug, title: `Title of ${slug}
 /** A fake server. `opts`: runs, proposals, issues (items or a status), hang (urls that never answer), fail (url -> { status, body } or 'down') */
 function fakeServer(opts = {}) {
   const calls = [];
+  const held = {}; // requests held by `hang`, by path: `release` answers them (with an empty work answer; only /api/forge/work is released)
   let runs = opts.runs ?? SEVEN;
   const json = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
   vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
@@ -77,7 +78,7 @@ function fakeServer(opts = {}) {
     if (failure === 'down') throw new TypeError('Failed to fetch');
     if (failure === 'badjson') return { ok: true, status: 200, headers: new Headers(), json: async () => { throw new SyntaxError('Unterminated string in JSON at position 25'); } };
     if (failure) return json(failure.status, failure.body);
-    if (opts.hang && opts.hang.includes(u.pathname)) return new Promise(() => {});
+    if (opts.hang && opts.hang.includes(u.pathname)) return new Promise((resolve) => { (held[u.pathname] ||= []).push(() => resolve(json(200, { ok: true, at: '2026-11-05T11:58:00Z', rate: '', pulls: [], issues: [], branches: [], specs: [], agents: {} }))); });
     if (init.method === 'POST' && /\/answer$/.test(u.pathname)) {
       const sent = JSON.parse(init.body);
       runs = runs.map((r) => (u.pathname.includes(r.runId) ? { ...r, answer: { ...sent, at: '2026-11-05T11:58:00Z', by: 'maintainer-one' } } : r));
@@ -96,7 +97,7 @@ function fakeServer(opts = {}) {
     if (u.pathname === '/proposals') return json(200, opts.proposals ?? []);
     return json(404, { ok: false, error: 'No such thing.', code: 'not-found' });
   }));
-  return { calls, urls: () => calls.map((c) => c.url), setRuns: (r) => { runs = r; } };
+  return { calls, urls: () => calls.map((c) => c.url), setRuns: (r) => { runs = r; }, release: (p) => { opts.hang = opts.hang.filter((h) => h !== p); (held[p] || []).splice(0).forEach((f) => f()); } };
 }
 
 function mount(clock = () => NOW) {
@@ -634,6 +635,25 @@ describe('loading and empty lists (F44)', () => {
     // the placeholder line is one meta line, like the line it stands for
     expect(loadingLinesHtml(2).match(/hx-forge-meta hx-forge-skeleton-line/g)).toHaveLength(2);
     expect(css).toMatch(/\.hx-forge-skeleton-line > span \{[^}]*height: 10px/);
+  });
+
+  it('holds no runner or totals lines beside a failed runs read, and the grouped work still comes with its answer (F44)', async () => {
+    const server = fakeServer({ fail: { '/api/agent-runs': { status: 502, body: { ok: false, error: 'cornfield could not read its runs.' } } }, hang: ['/api/forge/work'] });
+    mount();
+    openForge({ tab: 'work' });
+    await settle(); // the runs read fails; the work is still being read
+    click(q('[data-action="refresh-forge"]')); // read again: drawn while the work and the runs are being read, after a failed runs read
+    await settle();
+    expect($('forge-runs-note').textContent).toMatch(/^Could not load the runs\./);
+    expect(q('#forge-runs-note [data-action="retry-forge"]')).not.toBe(null);
+    expect(qa('#forge-runs-runner [data-corn="skeleton"], #forge-runs-totals [data-corn="skeleton"]')).toHaveLength(0);
+    expect($('forge-runs-totals').hidden).toBe(true);
+    // the work answers: its rows are drawn under the failure line, which keeps its Retry
+    server.release('/api/forge/work');
+    await settle();
+    expect(qa('#forge-list [data-corn="empty"]')).toHaveLength(1);
+    expect(qa('#forge-list .hx-forge-skeleton')).toHaveLength(0);
+    expect(q('#forge-runs-note [data-action="retry-forge"]')).not.toBe(null);
   });
 
   it('keeps a width for each tab\'s count before it is read, so the tabs do not move (F44)', async () => {
