@@ -54,6 +54,21 @@ export function closeLegendMenu() {
   setLegendMenu(false);
 }
 
+/**
+ * A click anywhere on the page: runs its action (`act`), then closes the Layers menu if the click was outside it. Whether it was inside is
+ * read BEFORE the action: a row's action draws the rows again, the clicked node is then out of the page, and asking afterwards would take a
+ * click on a row for a click outside the menu (main.js's document click handler).
+ * @param {EventTarget | null} target the click's target
+ * @param {() => void} act
+ */
+export function clickWithLegendMenu(target, act) {
+  const menu = document.getElementById('legend-dropdown');
+  const btn = document.getElementById('legend-toggle-btn');
+  const inside = !!menu && target instanceof Node && (menu.contains(target) || (!!btn && btn.contains(target)));
+  act();
+  if (menu && !menu.hidden && !inside) closeLegendMenu();
+}
+
 // ---------------------------------------------------------------------------
 //  The rows (spec 0009 D1, D3, D8)
 // ---------------------------------------------------------------------------
@@ -70,8 +85,14 @@ function projectColor(layer) {
   const set = getMapStyle().values[groupToken(layer.key)];
   if (set) return set;
   const first = state.nodes.find((n) => rowKeyOf(state, n) === layer.key);
-  return first ? first.color : '#94a3b8';
+  return first ? first.color : NO_COLOR;
 }
+
+const NO_COLOR = '#94a3b8';
+/** A colour as the dot's style may hold it: a hex or an rgb()/rgba() of numbers, else the plain grey. A node's colour is the map's data
+ * (a proposal can set it), so it is checked before it reaches a style attribute, and escaped there all the same */
+const SWATCH_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\))$/i;
+const swatch = (c) => (typeof c === 'string' && SWATCH_RE.test(c.trim()) ? c.trim() : NO_COLOR);
 
 /**
  * The rows: the project layers that hold a node, then the starting ones in their usual order (`layers.order` first of all), and one more
@@ -161,7 +182,7 @@ export function setProjectLayers(raw) {
 const openKinds = new Set();
 
 /** "1 link", "3 in flight", else the number */
-const UNIT = { flow: (n) => `${n} ${n === 1 ? 'link' : 'links'}`, runs: (n) => `${n} in flight` };
+const UNIT = Object.assign(Object.create(null), { flow: (n) => `${n} ${n === 1 ? 'link' : 'links'}`, runs: (n) => `${n} in flight` });
 
 /** The finer kinds of each row: `{ key: [{ kind, letters, n }] }`, by name, from the nodes the row holds (an outside node's kind is its layer, not a finer one) */
 function kindsByRow(rowOf) {
@@ -210,8 +231,9 @@ export function renderLayerToggles() {
 
   // Nodes by row. Data Flow has no nodes of its own: it counts its links, and says so; Runs in flight counts runs
   const rowOf = (n) => rowKeyOf(state, n);
-  const counts = {};
-  const byProposal = {};
+  // Keyed by layer key: a project's key may be any word, "constructor" too, so these have no prototype to read through
+  const counts = Object.create(null);
+  const byProposal = Object.create(null);
   state.nodes.forEach((n) => {
     const key = rowOf(n);
     if (!key) return;
@@ -225,7 +247,7 @@ export function renderLayerToggles() {
 
   const row = (layer) => {
     const on = isOn(layer.key);
-    const color = themed(layer.color, state.theme); // the dot is the colour the map draws on this ground
+    const color = escHtml(swatch(themed(swatch(layer.color), state.theme))); // the dot is the colour the map draws on this ground
     const shown = byProposal[layer.key] ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">+${byProposal[layer.key]} shown by the proposal</span>` : '';
     return `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">

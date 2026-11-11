@@ -32,6 +32,11 @@ export const lettersOfKey = (key) => key.slice(KEY_PREFIX.length);
 export const showsLetters = (node, zoom) => !!node.letters && !node.icon && node.r * 2 * zoom >= LETTER_MIN_PX;
 
 const images = new Map();
+/** The most letter images made (and so WebGL textures, one each): a map's kinds are its own data, so the count is held, not trusted. A kind
+ * past it draws as a plain node, as one with no letters does */
+export const MAX_LETTER_IMAGES = 128;
+/** Lets the images go (a test starts afresh with it) */
+export const forgetLetterImages = () => images.clear();
 
 /**
  * The image of some letters, made once (null where there is no canvas to draw one on, as in a test without a browser).
@@ -41,6 +46,7 @@ const images = new Map();
 export function letterImage(letters) {
   if (typeof letters !== 'string' || !letters) return null;
   if (images.has(letters)) return images.get(letters);
+  if (images.size >= MAX_LETTER_IMAGES) return null;
   let image = null;
   try {
     const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(SIDE, SIDE) : typeof document !== 'undefined' ? Object.assign(document.createElement('canvas'), { width: SIDE, height: SIDE }) : null;

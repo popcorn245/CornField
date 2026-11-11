@@ -28,7 +28,7 @@ import { updateSearchStatus } from './search-status.js';
 import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
-import { closeLegendMenu, setProjectLayers, toggleAllLayers, toggleLayer, toggleLayerKinds, toggleLegendMenu } from './layers.js';
+import { clickWithLegendMenu, setProjectLayers, toggleAllLayers, toggleLayer, toggleLayerKinds, toggleLegendMenu } from './layers.js';
 import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
@@ -151,19 +151,14 @@ const ACTIONS = {
   'set-theme': (el) => setThemeChoice(el.dataset.choice),
 };
 
-document.addEventListener('click', (e) => {
-  // Whether the click was inside the Layers menu is read before the action runs: a row's action draws the rows again, and the node
-  // that was clicked is then out of the page, so asking afterwards would take a click on a row for a click outside the menu
-  const menu = $('legend-dropdown');
-  const inside = !!menu && (menu.contains(e.target) || $('legend-toggle-btn').contains(e.target));
+// Any click outside the Layers menu closes it; a click on one of its rows does not (layers.js clickWithLegendMenu reads which before the action)
+document.addEventListener('click', (e) => clickWithLegendMenu(e.target, () => {
   const target = e.target.closest('[data-action]');
   if (target) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   }
-  // Any click outside the Layers menu closes it
-  if (menu && !menu.hidden && !inside) closeLegendMenu();
-});
+}));
 
 // ---------------------------------------------------------------------------
 //  /?bench=1: the scripted pan-and-zoom of bench.js on the map as loaded

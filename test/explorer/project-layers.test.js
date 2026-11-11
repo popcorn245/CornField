@@ -16,7 +16,7 @@ import { state } from '../../explorer/state.js';
 // @ts-expect-error plain JS modules, no declarations
 import { isNodeVisible, buildScene } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
-import { LAYER_DEFS, renderLayerToggles, setProjectLayers, toggleLayer, toggleAllLayers, toggleLayerKinds } from '../../explorer/layers.js';
+import { LAYER_DEFS, clickWithLegendMenu, renderLayerToggles, setProjectLayers, toggleLayer, toggleAllLayers, toggleLayerKinds } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { externalLayer } from '../../explorer/cloud-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -208,6 +208,18 @@ describe('the menu with project layers', () => {
     expect(h.textContent).toBe('Overlays');
     expect(h.nextElementSibling.dataset.layer).toBe('runs');
   });
+  it('stays open after a click on a row, though the row is drawn again; a click outside closes it', () => {
+    open({ add });
+    const menu = $('legend-dropdown');
+    menu.hidden = false;
+    const name = row('page').querySelector('.hx-toggle-name'); // what a pointer lands on
+    clickWithLegendMenu(name, () => toggleLayer('page', { viewer: true }));
+    expect(name.isConnected).toBe(false); // the row it was in has been replaced
+    expect(row('page').getAttribute('aria-pressed')).toBe('false');
+    expect(menu.hidden).toBe(false);
+    clickWithLegendMenu($('graph-canvas') || document.body, () => {});
+    expect(menu.hidden).toBe(true);
+  });
   it('has the All and None buttons with their hooks, and they stay at the head of the menu while the rows scroll', () => {
     open({ add });
     expect(document.querySelector('[data-corn="layers-all"]').textContent).toBe('All');
@@ -327,6 +339,23 @@ describe('a hostile config cannot reach markup, a style or a selector', () => {
       expect(r.getAttribute('title')).toBe(label.trim());
       expect(document.querySelector('#layer-toggles-container img, #layer-toggles-container script, #layer-toggles-container b')).toBeNull();
       expect(r.querySelectorAll('*').length).toBeLessThan(12);
+    }
+  });
+  it('a key that is a name every object has ("constructor") is a layer like any other: its count is a count, with no note', () => {
+    Object.assign(state, { nodes, edges: [], theme: 'dark', view: 'orbit', runsMap: null, proposal: null });
+    setProjectLayers({ add: [{ key: 'constructor', label: 'Builders', match: { type: 'service' } }] });
+    expect(state.projectLayers.map((l) => l.key)).toEqual(['constructor']);
+    expect(countOf('constructor')).toBe('1');
+    expect(row('constructor').querySelector('[data-corn="layer-note"]')).toBeNull();
+    expect(row('constructor').textContent).not.toContain('function');
+  });
+  it('a node colour that is not a colour never reaches the dot\'s style (a project layer\'s dot is its first node\'s colour)', () => {
+    for (const theme of ['dark', 'light']) {
+      const odd = [node('root', 'root'), node('a', 'service', { kind: 'timer', color: 'red" onmouseover="alert(1)" data-x="' })];
+      Object.assign(state, { nodes: odd, edges: [], theme, view: 'orbit', runsMap: null, proposal: null });
+      setProjectLayers({ add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] });
+      expect(document.querySelector('#layer-toggles-container [onmouseover]'), theme).toBeNull();
+      expect(row('ok').querySelector('[data-corn="swatch"]').getAttribute('style')).toContain('#94a3b8'.slice(0, theme === 'dark' ? 7 : 1));
     }
   });
   it('a label with a line break is refused whole', () => {

@@ -8,7 +8,7 @@ import { fakeGl, fakeCanvas, callsOf, recordingCtx } from './fake-gl.js';
 // @ts-expect-error plain JS modules, no declarations
 import { buildScene } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
-import { LETTER_MIN_PX, LETTER_RATIO, letterImage, letterKey, showsLetters } from '../../explorer/kind-letters.js';
+import { LETTER_MIN_PX, LETTER_RATIO, MAX_LETTER_IMAGES, forgetLetterImages, letterImage, letterKey, showsLetters } from '../../explorer/kind-letters.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createCanvas2dRenderer } from '../../explorer/renderer-canvas2d.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -83,6 +83,16 @@ describe('when they are drawn', () => {
     expect(letterImage('zq')).toBe(a);
     expect(drawn.filter((d) => d[0] === 'fillText').map((d) => d[1])).toEqual(['zq']);
     expect(letterKey('j')).toBe('letters:j');
+  });
+  it('makes at most MAX_LETTER_IMAGES images (one WebGL texture each), however many kinds a map has', () => {
+    withCanvas();
+    forgetLetterImages();
+    const made = [];
+    for (let i = 0; i < MAX_LETTER_IMAGES + 40; i++) made.push(letterImage(`#${i}`));
+    expect(made.filter(Boolean).length).toBeLessThanOrEqual(MAX_LETTER_IMAGES);
+    expect(made.at(-1)).toBeNull();
+    expect(made[0]).toBe(letterImage('#0')); // one already made is still there
+    forgetLetterImages();
   });
 });
 

@@ -398,14 +398,14 @@ export function kindLetters(nodes) {
   const out = new Map();
   for (const [type, kinds] of byType) {
     const names = [...kinds].sort();
+    // Only the first two characters of a name are ever compared: read those once (a kind is the map's data, and may be long)
+    const heads = names.map((k) => [...k.slice(0, 4).toLowerCase()].slice(0, 2));
     const m = new Map();
-    for (const k of names) {
-      const chars = [...k.toLowerCase()];
-      const take = (len) => chars.slice(0, len).join('');
-      const others = names.filter((o) => o !== k).map((o) => [...o.toLowerCase()]);
-      const free = (len) => !others.some((o) => o.slice(0, len).join('') === take(len));
-      m.set(k, free(1) ? take(1) : take(2));
-    }
+    names.forEach((k, i) => {
+      const one = heads[i][0];
+      const shared = heads.some((h, j) => j !== i && h[0] === one);
+      m.set(k, shared ? heads[i].join('') : one);
+    });
     out.set(type, m);
   }
   return out;
