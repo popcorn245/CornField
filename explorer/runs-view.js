@@ -129,6 +129,14 @@ export function loadingRowsHtml(n = 3) {
   return Array.from({ length: n }, () => '<li class="hx-forge-skeleton" data-corn="skeleton" aria-hidden="true"><span></span><span></span></li>').join('');
 }
 
+/**
+ * Placeholder lines for the runner line and the totals above the runs while they load (issue #192): each is one `hx-forge-meta` line high, as the
+ * line it stands for, so the list under them does not move when the data arrives.
+ */
+export function loadingLinesHtml(n = 1) {
+  return Array.from({ length: n }, () => '<p class="hx-forge-meta hx-forge-skeleton-line" data-corn="skeleton" aria-hidden="true"><span></span></p>').join('');
+}
+
 /** One run */
 export function runHtml(ctx, run, all) {
   const lit = ctx.selected === run.runId;

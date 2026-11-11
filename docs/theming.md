@@ -205,7 +205,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-shadow-color` | the colour the phone sheet's shadow (below) is made from (light) |
 | `--corn-shadow-sheet` | a phone's bottom sheet's whole `box-shadow`, cast upward (`0 -8px 24px` of `--corn-shadow-color` by default). A flat brand gives it a hard offset, like `0 -4px 0 #1b1636` |
 | `--corn-glow` | the blur of a live dot's glow; `0px` for none (light) |
-| `--corn-scrim` | the backdrop behind a sheet or a dialog: the node panel's on a phone, a confirmation, Start an agent, Review tokens, the mockup window (light) |
+| `--corn-scrim` | the backdrop behind a dialog: a confirmation, Start an agent, Review tokens, the mockup window (light) |
 | `--corn-blur` | the glass blur amount (a length; `0px` for none) |
 | `--corn-mockup-ground` | the page behind a proposal's mockup image or frame (white, as a browser shows a page) |
 | **Text** | |
@@ -462,7 +462,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
-| `dock`, `sheet-handle`, `sheet-grip`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle and the bar drawn in it, the scrim behind the node panel on a phone |
+| `dock`, `sheet-handle`, `sheet-grip`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle and the bar drawn in it, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
 | `house-chip`, `house-more` | in the House view's bar: a floor, a person, Software or Cloud (the one that is on has `aria-pressed="true"`; Edit plan is one too), and a room's "+3 more" |
 | `hint`, `hint-icon`, `loading`, `error` | the hint at the map's corner and its icon (an SVG, so `[data-corn="hint-icon"]` can be hidden or given another picture), the loading line, the load-error box |
 
@@ -526,7 +526,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | Hook | What it is |
 |---|---|
 | `tabs`, `tab` | a row of tabs, one tab |
-| `count` | a number shown as data: a tab's count, a layer's count, the Work button's lit tag ("#21"), the step counter, a pull request's number in its detail. Takes `--corn-font-num` |
+| `count` | a number shown as data: a tab's count (empty, at least `2ch` wide, until it is read, so the tabs do not move), a layer's count, the Work button's lit tag ("#21"), the step counter, a pull request's number in its detail. Takes `--corn-font-num` |
 | `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
@@ -535,7 +535,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `state-icon` | the icon inside a run's or a check's `state-pill`: a shape for each state, drawn in the pill's colour |
 | `result` | what an action came to, under the control that was used (a run's Reply, Continue or Stop; Copy spec); it stays until the next action and is also announced |
 | `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
-| `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height); what a list says when it has nothing, and how to make something |
+| `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height), and the placeholder lines of the Runs tab's runner line and totals while the runs load; what a list says when it has nothing, and how to make something |
 | `field` | a labelled form field, its control inside |
 | `control` | a text field, a number field, a select, a check box or a text area: the control inside a `field`, or on its own. The search fields are `search-input` and the note on Send back is `review-note`; the named-theme menu is `theme-picker` |
 | `summary` | the line of a disclosure that opens and folds (the proposal's problems, "Its edges (3)") |
