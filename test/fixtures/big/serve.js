@@ -8,6 +8,9 @@
  *
  * The repo is generated (test/fixtures/big/make.js) into a folder under the OS temp dir (or `--dir <dir>`), then served by
  * cornfield's own server on 127.0.0.1, with no sign-in, so every route answers. Ctrl-C stops it. See README.md.
+ *
+ *   node test/fixtures/big/serve.js --forge --port 3403 [--runner offline]   the same, with sign-in against a fake GitHub: sign in as a maintainer
+ *     (open /auth/start), PRs, issues, threads, checks, a spec PR per rich proposal, and runs in every state (forge.js)
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -16,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../../../core/config.js';
 import { listen } from '../../../server/server.js';
 import { writeBig, configText, retroTheme } from './make.js';
+import { startForgeWorld, readRepoFiles, SIGN_IN_ENV, REPO, MAINTAINER } from './forge.js';
 
 export function parseFlags(argv) {
   const flags = {};
@@ -72,11 +76,27 @@ async function main() {
   const flags = parseFlags(process.argv.slice(2));
   const theme = flags.theme && flags.theme !== true ? flags.theme : null;
   const port = Number(flags.port || 3401);
-  const { repo, made, config } = await prepare({ theme, dir: flags.dir, repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, env: { CORNFIELD_PORT: String(port) } });
-  const { url } = await listen({ ...config, port });
-  console.log(`\n${flags.repo || flags.from ? 'Map' : 'Big map'}, ${config.theme ? 'themed' : 'default theme'}: ${made.topology.nodes.length} nodes, ${made.topology.edges.length} edges, repo ${repo}`);
+  const opts = { theme, dir: flags.dir, repo: flags.repo && flags.repo !== true ? flags.repo : null, from: flags.from && flags.from !== true ? flags.from : null, seed: flags.seed ? Number(flags.seed) : undefined, env: { CORNFIELD_PORT: String(port) } };
+  const { repo, made, config, data } = await prepare(opts);
+  let world = null;
+  let serverConfig = { ...config, port };
+  let env = process.env;
+  if (flags.forge) {
+    world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: port + 100, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
+    serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull' }, forge: { type: 'github', url: world.forge.url, repo: REPO }, publicUrl: `http://127.0.0.1:${port}` };
+    env = { ...process.env, ...SIGN_IN_ENV };
+  }
+  const { url } = await listen(serverConfig, { env });
+  console.log(`\n${flags.repo || flags.from ? 'Map' : 'Big map'}, ${config.theme && config.theme.css ? 'themed' : 'default theme'}${world ? ', signed-in states with a fake forge' : ''}: ${made.topology.nodes.length} nodes, ${made.topology.edges.length} edges, repo ${repo}`);
   console.log(`  ${url}/`);
   console.log(describe(made, url));
+  if (world) {
+    const first = world.specs[0];
+    console.log(`\n  Signed in as ${MAINTAINER} (a maintainer of ${REPO}, in the fake forge): open ${url}/auth/start once, or follow the sign-in page; it lands back on the map.`);
+    console.log(`  Signed out, cold open through the real sign-in page: ${url}/?proposal=${first.slug}&source=pull/${first.n}`);
+    console.log(`  Spec PRs (open one with ?proposal=<slug>&source=pull/<n>): ${world.specs.map((s) => `#${s.n} ${s.slug}`).join(', ')}`);
+    console.log(`  Runs in every state are in the Work panel, Runs tab. Runner: ${['offline', 'none'].includes(flags.runner) ? flags.runner.toUpperCase() : 'online'}; switch: curl ${world.forge.url}/__rig/runner?state=online|offline|none`);
+  }
   console.log('\nCtrl-C stops it.\n');
 }
 

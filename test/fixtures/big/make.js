@@ -29,6 +29,8 @@ export const COUNTS = Object.freeze({ page: 445, table: 114, container: 73, serv
 export const NODE_TOTAL = 922;
 export const EDGE_TOTAL = 3632;
 export const PROPOSAL_COUNT = 70;
+/** The mix of edges of a real map of this size (ownership counts the dashed usage lines), summing to EDGE_TOTAL */
+export const EDGE_MIX = Object.freeze({ own: 1674, reads: 782, writes: 415, calls: 305, uses: 239, 'runs-on': 61, flow: 59, extends: 57, triggers: 35, delivers: 5 });
 
 // ---------------------------------------------------------------------------
 //  Seeded randomness
@@ -151,13 +153,13 @@ const CLOUD = [
 ];
 
 const SERVICES = {
-  job: ['nightly-digest', 'invoice-reminder', 'stale-cart-sweeper', 'ledger-rollup', 'thumbnail-render', 'search-reindex', 'export-builder', 'reconcile-ledger-entries-with-bank-statements-nightly'],
+  job: ['nightly-digest', 'invoice-reminder', 'stale-cart-sweeper', 'ledger-rollup', 'thumbnail-render', 'search-reindex', 'export-builder', 'reconcile-ledger-with-bank-nightly'],
   client: ['geocoder', 'mailer', 'sms-gateway', 'payments-client', 'tax-client', 'shipping-rates', 'address-lookup', 'pdf-renderer'],
   dispatch: ['order-dispatch', 'notification-dispatch', 'webhook-dispatch', 'email-dispatch', 'push-dispatch', 'label-dispatch', 'task-dispatch', 'shipment-dispatch'],
   hook: ['on-order-paid', 'on-user-created', 'on-refund-issued', 'on-ticket-closed', 'on-stock-low', 'on-plan-changed', 'on-return-received', 'on-review-posted'],
   webhook: ['stripe-events', 'github-events', 'shipping-events', 'chat-events', 'calendar-events', 'files-events', 'sms-status'],
   timer: ['token-expiry', 'session-cleanup', 'trial-ending', 'cache-warmer', 'heartbeat', 'rate-limit-reset', 'quota-reset'],
-  camera: ['porch-snapshots', 'dock-motion', 'shelf-timelapse', 'door-events', 'lobby-stream'],
+  effects: ['theme-effects', 'sound-effects', 'particle-effects', 'haptic-effects', 'confetti-effects'],
   scheduler: ['cron-scheduler', 'queue-scheduler', 'report-scheduler', 'backup-scheduler', 'release-scheduler', 'campaign-scheduler', 'shift-scheduler'],
 };
 
@@ -172,9 +174,9 @@ const PERSONAS = [['shopper', 'Shopper', 'member', 'Buys things and returns some
 const STACK_NAMES = ['edge', 'core', 'storefront', 'billing', 'catalog', 'support', 'content', 'identity', 'logistics', 'marketing', 'analytics', 'people', 'devices', 'ops'];
 const CONTAINER_KINDS = [['web', 'node:22-alpine', [3000]], ['api', 'node:22-alpine', [3245]], ['worker', 'node:22-alpine', []], ['db', 'postgres:16', [5432]], ['cache', 'redis:7', [6379]], ['proxy', 'caddy:2', [80, 443]], ['queue', 'rabbitmq:3', [5672]], ['search', 'getmeili/meilisearch:v1', [7700]], ['mailer', 'mailhog/mailhog', [8025]], ['metrics', 'prom/prometheus', [9090]], ['storage', 'minio/minio', [9000]], ['cron', 'node:22-alpine', []]];
 
-const PAGE_FRONT = [['/{R}', 'The {R} list.'], ['/{R}/:id', 'One of the {R}, in full.'], ['/{R}/new', 'A form to add to the {R}.'], ['/{R}/:id/edit', 'Change one of the {R}.'], ['/{R}/:id/{S}', 'The {S} of one of the {R}.'], ['/{R}/:id/{S}/:sid', 'One of the {S} of one of the {R}.'], ['/{R}/search', 'Search the {R}.'], ['/{R}/:id/{S}/:sid/edit', 'Change one of the {S} of one of the {R}.'], ['/account/{R}', 'Your own {R}.'], ['/{R}/export', 'Download the {R} as a file.']];
-const PAGE_API = [['/api/v1/{R}', 'GET · POST: list and add {R}.', ['GET', 'POST']], ['/api/v1/{R}/:id', 'GET · PATCH · DELETE: one of the {R}.', ['GET', 'PATCH', 'DELETE']], ['/api/v1/{R}/:id/{S}', 'GET: the {S} of one of the {R}.', ['GET']], ['/api/v1/{R}/bulk', 'POST: change many {R} at once.', ['POST']], ['/api/v2/{R}/:id/{S}/:sid', 'GET · PUT: one of the {S} of one of the {R}.', ['GET', 'PUT']], ['/api/v1/{R}/search', 'GET: search the {R}.', ['GET']], ['/api/v1/{R}/:id/events', 'GET: what happened to one of the {R}.', ['GET']]];
-const STATIC_FRONT = [['/', 'The front page.'], ['/login', 'Sign in.'], ['/search', 'Search everything.'], ['/settings', 'Your settings.'], ['/about', 'What this is.'], ['/settings/notifications/preferences/email-digest/:digestId/schedule', 'When the weekly digest is sent, and to whom, with the per-channel overrides.']];
+const PAGE_FRONT = [['/{R}/:id/overview', 'One of the {R}, in full.'], ['/{R}/:id/edit', 'Change one of the {R}.'], ['/{R}', 'The {R} list.'], ['/{R}/new', 'A form to add to the {R}.'], ['/{R}/:id/{S}', 'The {S} of one of the {R}.'], ['/{R}/:id/{S}/:sid', 'One of the {S} of one of the {R}.'], ['/{R}/search', 'Search the {R}.'], ['/{R}/:id/{S}/:sid/edit', 'Change one of the {S} of one of the {R}.'], ['/account/{R}', 'Your own {R}.'], ['/{R}/export', 'Download the {R} as a file.']];
+const PAGE_API = [['/api/v1/{R}/:id', 'GET · PATCH · DELETE: one of the {R}.', ['GET', 'PATCH', 'DELETE']], ['/api/v1/{R}', 'GET · POST: list and add {R}.', ['GET', 'POST']], ['/api/v1/{R}/:id/{S}', 'GET: the {S} of one of the {R}.', ['GET']], ['/api/v1/{R}/bulk', 'POST: change many {R} at once.', ['POST']], ['/api/v2/{R}/:id/{S}/:sid', 'GET · PUT: one of the {S} of one of the {R}.', ['GET', 'PUT']], ['/api/v1/{R}/search', 'GET: search the {R}.', ['GET']], ['/api/v1/{R}/:id/events', 'GET: what happened to one of the {R}.', ['GET']]];
+const STATIC_FRONT = [['/', 'The front page.'], ['/login', 'Sign in.'], ['/search', 'Search everything.'], ['/settings', 'Your settings.'], ['/about', 'What this is.'], ['/settings/notifications/digest/:digestId', 'When the weekly digest is sent, and to whom, with the per-channel overrides.']];
 
 // ---------------------------------------------------------------------------
 //  The map
@@ -304,7 +306,7 @@ export function buildTopology(seed = SEED) {
       : s.kind === 'timer' ? { triggers: [`every ${[5, 15, 30, 60][R.int(4)]} minutes`] }
         : s.kind === 'scheduler' ? { triggers: ['a cron entry per job'] }
           : s.kind === 'webhook' ? { triggers: ['an outside system posts to us'] } : {};
-    node({ id, label: s.name, type: 'service', kind: s.kind, file: `apps/${app.slug}/src/${s.kind}s/${s.name.slice(0, 40)}.js`, ...extra, ...(R.chance(0.9) ? { desc: `${s.kind === 'job' ? 'Runs on a schedule' : s.kind === 'client' ? 'Talks to an outside service' : s.kind === 'dispatch' ? 'Sends work out' : s.kind === 'hook' ? 'Runs when a row changes' : s.kind === 'webhook' ? 'Receives pushes' : s.kind === 'timer' ? 'Runs on an interval' : s.kind === 'camera' ? 'Reads a camera' : 'Starts other services'}: ${humanize(s.name)}.` } : {}) });
+    node({ id, label: s.name, type: 'service', kind: s.kind, file: `apps/${app.slug}/src/${s.kind}s/${s.name.slice(0, 40)}.js`, ...extra, ...(R.chance(0.9) ? { desc: `${s.kind === 'job' ? 'Runs on a schedule' : s.kind === 'client' ? 'Talks to an outside service' : s.kind === 'dispatch' ? 'Sends work out' : s.kind === 'hook' ? 'Runs when a row changes' : s.kind === 'webhook' ? 'Receives pushes' : s.kind === 'timer' ? 'Runs on an interval' : s.kind === 'effects' ? 'Plays effects' : 'Starts other services'}: ${humanize(s.name)}.` } : {}) });
     own(app.id, id);
     services.push({ id, kind: s.kind, name: s.name, app });
   });
@@ -317,7 +319,7 @@ export function buildTopology(seed = SEED) {
     const target = counts[ai];
     const made = new Set();
     const add = (label, desc, extra = {}) => {
-      if (made.has(label) || made.size >= target) return false;
+      if (label.length > 45 || made.has(label) || made.size >= target) return false;
       made.add(label);
       const id = `page-${app.slug}-${slug(label)}`.slice(0, 100);
       const n = { id: byId.has(id) ? `${id}-${made.size}` : id, label, type: 'page', ...extra, desc: undefined };
@@ -426,7 +428,6 @@ export function buildTopology(seed = SEED) {
       const tgt = R.pick(cloudIds);
       addEdge({ from: s.id, to: tgt, kind: 'calls', status: 'live', label: R.pick(['sends the request', 'posts the payload', 'fetches the record', 'uploads the file']), ...(R.chance(0.25) ? { when: R.pick(['run', 'deploy', 'renew']) } : {}) });
     }
-    if (s.kind === 'camera') addEdge({ from: s.id, to: R.pick(stacks.find((x) => x.name === 'devices').containers), kind: 'calls', status: 'live', label: 'reads the stream' });
     if (R.chance(0.4)) addEdge({ from: s.id, to: R.pick(services).id, kind: 'calls', status: 'live', label: 'hands work on' });
     if (s.kind === 'job' || s.kind === 'dispatch') addEdge({ from: 'store-queue', to: s.id, kind: 'triggers', status: 'live', label: 'a message is queued' });
     if (s.kind === 'hook') addEdge({ from: 'store-queue', to: s.id, kind: 'triggers', status: 'live', label: 'a change was published' });
@@ -495,23 +496,42 @@ export function buildTopology(seed = SEED) {
   addEdge({ from: 'app-api-ops', to: 'store-logs', kind: 'flow', flow: 'trigger', status: 'live', label: 'ships its logs' });
   addEdge({ from: 'tool-release', to: 'tool-deploy', kind: 'flow', flow: 'model', status: 'live', label: 'the release is deployed' });
 
-  const mandatory = edges.length;
-  if (mandatory > EDGE_TOTAL) throw new Error(`the structure alone has ${mandatory} edges, over ${EDGE_TOTAL}`);
-
-  // ---- top up to the exact count with realistic extras: pages that use molecules, read more tables, call services
-  const molecules = MOLECULES.map((m) => `molecule-${m}`);
-  const fillers = [
-    () => { const p = R.pick(pages); return addEdge({ from: p.id, to: R.pick(molecules), dashed: true, label: 'uses' }); },
-    () => { const p = R.pick(pages.filter((x) => x.app.kind !== 'api')); return addEdge({ from: tableId(R.pick(allTables)), to: p.id, kind: 'reads', status: 'live', keys: [`${R.pick(allTables)}/*`], label: 'also shown here' }); },
-    () => { const p = R.pick(pages.filter((x) => x.app.kind === 'api')); const t = R.pick(tablesOfDomain[p.app.domains[0]]); return addEdge({ from: p.id, to: tableId(t), kind: 'writes', status: 'live', label: `${t}.update` }); },
-    () => { const p = R.pick(pages); return addEdge({ from: p.id, to: R.pick(services).id, kind: 'calls', status: 'live', label: 'calls' }); },
-    () => { const p = R.pick(pages.filter((x) => x.app.kind !== 'api')); return addEdge({ from: p.id, to: R.pick(cloudIds), kind: 'calls', status: 'live', label: 'the browser asks it', ...(R.chance(0.3) ? { when: 'run' } : {}) }); },
-  ];
-  let guard = 0;
-  while (edges.length < EDGE_TOTAL) {
-    fillers[guard % fillers.length]();
-    if (++guard > 200000) throw new Error('could not reach the edge count');
+  // ---- shape the mix to a real map's: trim the kinds that run over, fill the ones that run under, to the exact count of each
+  const cat = (e) => e.kind || 'own';
+  const tally = () => { const c = {}; for (const e of edges) c[cat(e)] = (c[cat(e)] || 0) + 1; return c; };
+  const trimmable = (c, e) => (c === 'own' ? e.dashed : c === 'calls' ? typeOf(e.from) !== 'service' : c === 'runs-on' ? typeOf(e.from) !== 'machine' : c === 'delivers' ? typeOf(e.from) !== 'device' : c === 'extends' ? false : true);
+  for (const c of Object.keys(EDGE_MIX)) {
+    let over = (tally()[c] || 0) - EDGE_MIX[c];
+    if (over <= 0) continue;
+    const pool = R.shuffle(edges.filter((e) => cat(e) === c && trimmable(c, e)));
+    for (const e of pool) { if (over <= 0) break; edges.splice(edges.indexOf(e), 1); seen.delete(`${e.from}|${e.to}|${e.kind || (e.dashed ? 'dashed' : 'own')}|${e.flow || ''}`); over--; }
   }
+  const molecules = MOLECULES.map((m) => `molecule-${m}`);
+  const atomIds = ATOMS.map((a) => `atom-${a}`);
+  const coreIds = CORES.map((c) => `core-${c[0]}`);
+  const pkgIds = PKGS.map((k) => `pkg-${k}`);
+  const tokenIds = TOKENS.map((t) => `token-${t}`);
+  const frontPages = pages.filter((x) => x.app.kind !== 'api');
+  const apiPages = pages.filter((x) => x.app.kind === 'api');
+  const fillers = {
+    own: () => { const p = R.pick(pages); const r = R.next(); return addEdge({ from: p.id, to: r < 0.5 ? R.pick(molecules) : r < 0.85 ? R.pick(atomIds) : r < 0.95 ? R.pick(coreIds) : R.pick(pkgIds), dashed: true, label: 'uses' }); },
+    reads: () => { const p = R.pick(frontPages); const t = R.pick(allTables); return addEdge({ from: tableId(t), to: p.id, kind: 'reads', status: 'live', keys: [`${t}/*`], label: 'also shown here' }); },
+    writes: () => { const p = R.pick(R.chance(0.7) ? frontPages : apiPages); const t = R.pick(allTables); return addEdge({ from: p.id, to: tableId(t), kind: 'writes', status: 'live', label: `${t}.update` }); },
+    uses: () => { const from = R.pick([...molecules, ...atomIds, ...frontApps.map((a) => a.id), ...coreIds]); const t = R.pick(TOKENS); return addEdge({ from, to: `token-${t}`, kind: 'uses', vars: [`--big-${t}-md`], label: 'reads the vars' }); },
+    extends: () => addEdge({ from: R.pick([...molecules, ...atomIds]), to: R.pick(coreIds), kind: 'extends', label: 'extends' }),
+    calls: () => { const p = R.pick(pages); return addEdge({ from: p.id, to: R.pick(services).id, kind: 'calls', status: 'live', label: 'calls' }); },
+    triggers: () => addEdge({ from: 'store-queue', to: R.pick(services).id, kind: 'triggers', status: 'live', label: 'a message is queued' }),
+    flow: () => addEdge({ from: R.pick(frontApps).id, to: R.pick(apiApps).id, kind: 'flow', flow: 'api', status: 'live', label: 'the pages call the API' }),
+    delivers: () => addEdge({ from: R.pick(cloudIds), to: R.pick(apiPages).id, kind: 'delivers', status: 'live', label: 'the outside system pushes' }),
+    'runs-on': () => addEdge({ from: R.pick(['pkg-queue', 'pkg-testing', 'pkg-pdf', 'pkg-cache', 'pkg-logger']), to: R.pick(machines)[0] ? `machine-${R.pick(machines)[0]}` : 'machine-rack-1', kind: 'runs-on', label: 'the worker runs here' }),
+  };
+  for (const c of Object.keys(EDGE_MIX)) {
+    let guard = 0;
+    while ((tally()[c] || 0) < EDGE_MIX[c]) { fillers[c](); if (++guard > 400000) throw new Error(`could not reach ${EDGE_MIX[c]} ${c} edges`); }
+  }
+  const mix = tally();
+  for (const c of Object.keys(EDGE_MIX)) if (mix[c] !== EDGE_MIX[c]) throw new Error(`edges of ${c}: ${mix[c]}, not ${EDGE_MIX[c]}`);
+  if (edges.length !== EDGE_TOTAL) throw new Error(`edges: ${edges.length}, not ${EDGE_TOTAL}`);
   if (containerTotal !== COUNTS.container) throw new Error(`containers: ${containerTotal}`);
   return { version: '1.0.0', nodes, edges, cloudFile, apps: apps.map((a) => a.id), services: services.map((s) => s.id), pages: pages.map((p) => ({ id: p.id, app: p.app.id, label: p.label })), stacks: stacks.map((s) => s.id) };
 }
