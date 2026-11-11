@@ -7806,7 +7806,13 @@
       "to": "core-core-color",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T20:54:26.099Z"
+  "updatedAt": "2026-11-11T21:15:07.075Z"
 }
