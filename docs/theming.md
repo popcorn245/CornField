@@ -394,13 +394,15 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`, and so is a proposal only in a checkout or a worktree, the Specs tab's "Local") | `state-pill` |
 | `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`) | `run`, `state-pill` |
 | `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped (a run asked to stop is `stopped` too); a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
 | `queued`, `running` | a check or deploy that has not started, and one under way (a run is never either: it has the four above) | `state-pill` |
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
 
 A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` is only ever a run; `failure` is only ever a result.
+
+**Changed for a theme that styles runs.** Before this release a run's `data-corn-state` was `queued` (asked for, or picked up by a runner) or `running` (being worked on). It is now `requested`, `claimed` or `working`: a rule on `[data-corn="run"][data-corn-state="queued"]` or a run's `state-pill` with `queued` becomes `requested` and `claimed`, and `running` becomes `working`. `queued` and `running` still mean a check or a deploy, so a rule that styled those keeps working. The seven run states also have colour tokens (`--corn-run-<state>`): setting those is simpler than a selector per state.
 
 **A state is never told by colour alone.** A run's or a check's pill says the state in a word and draws a `state-icon` inside it, a shape of its own: a dashed ring (requested, queued), a ring with a dot (claimed), an arc that turns (working, running), a warning triangle (waiting, solid and heavier than the rest, since it needs the maintainer), a tick (done, success), a cross (failed, failure), a square that does not move (stopped), a dash (skipped) and a slashed ring (cancelled). A theme may restyle the icon (`[data-corn="state-icon"]`) or hide it, but the word stays. A button is never drawn as a pill: a pill is a status, and a button has a square corner.
 
