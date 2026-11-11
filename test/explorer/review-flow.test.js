@@ -24,7 +24,7 @@ import { initReview, resetReviewForTests } from '../../explorer/review.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, visibleMapRect } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
-import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FIT_ZOOM_MIN } from '../../explorer/camera.js';
+import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MIN } from '../../explorer/camera.js';
 // @ts-expect-error plain JS modules, no declarations
 import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
 
@@ -154,7 +154,7 @@ describe('F06 the camera on open: the changed nodes, in the part of the map noth
   it('never goes below the lowest zoom a fit goes to; a change wider than that is framed where most of it is, not on the ground between', () => {
     $('proposal-bar').getBoundingClientRect = rect(48, 640) ; // a tall bar: the map left is a strip, too short for the whole change at the floor
     open(robot({ nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'app-a' }], remove: [{ id: 'page-old' }, { id: 'far-1' }] } }));
-    expect(state.camera.zoom).toBeGreaterThanOrEqual(FIT_ZOOM_MIN);
+    expect(state.camera.zoom).toBeGreaterThanOrEqual(FRAME_ZOOM_MIN); // readable group, not a speck: the map's own floor is lower
     const r = visibleMapRect();
     const all = changed();
     const group = largestGroup(all, r, { padding: 40 });

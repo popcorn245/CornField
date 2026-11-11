@@ -2018,6 +2018,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "The 0.34 design review (docs/reviews/0.34-design-review.md)."
+    },
+    {
+      "id": "core-explorer-search-status",
+      "label": "search-status.js",
+      "type": "core",
+      "file": "explorer/search-status.js",
+      "summary": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24). (explorer/search-status.js)"
+    },
+    {
+      "id": "core-server-compress",
+      "label": "compress.js",
+      "type": "core",
+      "file": "server/compress.js",
+      "summary": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or… (server/compress.js)"
     }
   ],
   "edges": [
@@ -6436,6 +6456,50 @@
       "to": "page-doc-docs-reviews-0-34-design-review"
     },
     {
+      "from": "pkg-explorer",
+      "to": "core-explorer-search-status"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-compress"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-search-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search-status",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proxy",
+      "to": "core-server-compress",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-compress",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "core-explorer-proposal",
       "to": "core-explorer-camera",
       "dashed": true,
@@ -6454,5 +6518,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T08:57:20.800Z"
+  "updatedAt": "2026-11-11T09:17:23.347Z"
 }

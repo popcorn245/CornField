@@ -19,8 +19,8 @@
  */
 
 import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
-import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld } from './render.js';
-import { frameNodes, largestGroup, READ_ZOOM } from './camera.js';
+import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld, getMinZoom } from './render.js';
+import { frameNodes, largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from './camera.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
 import { edgePoint, looksFor } from './scene.js';
@@ -223,15 +223,17 @@ function swapMap(nodes, edges) {
 /**
  * Frames what the proposal changes (nodes added, changed or removed, and both ends of a changed edge; not what they connect to) in the part of the
  * map nothing covers (the bar, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
- * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than the lowest zoom shows,
- * the biggest part of it that fits is framed. A proposal that changes nothing drawn shows the whole map.
+ * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than FRAME_ZOOM_MIN shows,
+ * the biggest part of it that fits there is framed, not the whole at a zoom where it is a speck (the change list reaches the rest). A proposal that changes nothing drawn shows the whole map.
  */
 function fitToChange() {
   const { touched } = touchedIds(state.nodes, viewEdges());
   const items = state.nodes.filter((n) => touched.has(n.id) && isNodeVisible(n));
   const rect = visibleMapRect();
-  const opts = { padding: fitPadding(), maxZoom: 1 };
-  const cam = items.length ? frameNodes(largestGroup(items, rect, opts), rect, opts) : null;
+  const opts = { padding: fitPadding(), maxZoom: 1, minZoom: getMinZoom() };
+  // The whole change when it fits at FRAME_ZOOM_MIN or closer; else the biggest part of it that does (camera.js)
+  const group = largestGroup(items, rect, { ...opts, minZoom: Math.max(opts.minZoom, FRAME_ZOOM_MIN) });
+  const cam = items.length ? frameNodes(group, rect, opts) : null;
   if (!cam) { fitGraphToViewport(fitPadding()); return; }
   Object.assign(state.camera, cam);
   render();
@@ -410,7 +412,7 @@ function focusChange(kind, key) {
   if (kind === 'edge') showEdgePanel(item);
   else selectNode(item);
   // The panel is open now, so what it covers is known
-  const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom) });
+  const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
   if (cam) Object.assign(state.camera, cam);
   render();
 }

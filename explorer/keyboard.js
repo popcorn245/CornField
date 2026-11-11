@@ -18,7 +18,7 @@
  */
 
 import { state, touchScene } from './state.js';
-import { render, fitGraphToViewport, fitPadding, isNodeVisible } from './render.js';
+import { render, fitGraphToViewport, fitPadding, isNodeVisible, getMinZoom } from './render.js';
 import { zoomAbout } from './camera.js';
 import { selectNode, closeDrawer } from './panels.js';
 import { saveFreeformPositions } from './layout.js';
@@ -99,7 +99,7 @@ function onMapKey(e) {
       render();
       break;
     case 'zoom':
-      Object.assign(camera, zoomAbout(camera, action.factor, width / 2, height / 2));
+      Object.assign(camera, zoomAbout(camera, action.factor, width / 2, height / 2, getMinZoom()));
       render();
       announce(K.zoomWords(camera.zoom));
       break;

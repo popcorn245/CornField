@@ -10,7 +10,7 @@ import {
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario.js';
 // @ts-expect-error plain JS modules, no declarations
-import { FIT_ZOOM_MIN, READ_ZOOM } from '../../explorer/camera.js';
+import { ZOOM_MIN, READ_ZOOM, allInside } from '../../explorer/camera.js';
 
 const scenario = (extra         = {}) => ({
   id: 'save-a-meal',
@@ -460,9 +460,12 @@ describe('the camera', () => {
     expect(screenX(2500)).toBeLessThanOrEqual(1000);
   });
 
-  it('never zooms out below the lowest zoom a fit goes to (0.18, as before)', () => {
-    expect(FIT_ZOOM_MIN).toBe(0.18);
-    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(FIT_ZOOM_MIN);
+  it('never zooms out below the floor it is given (the map\'s, render.js getMinZoom), and with a low enough one fits the long edge', () => {
+    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(ZOOM_MIN);
+    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes, 60, 0.18).zoom).toBe(0.18);
+    const low = cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes, 60, 0.001);
+    expect(low.zoom).toBeGreaterThan(0.001);
+    expect(allInside([nodes.get('huge1'), nodes.get('huge2')], low, { x: 0, y: 0, ...view })).toBe(true);
   });
 
   it('zooms IN to a node step: at a zoom where its label reads (about 11px), not at the overview\'s', () => {

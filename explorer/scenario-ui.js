@@ -24,7 +24,7 @@
  */
 
 import { state, touchScene, onSceneTouch } from './state.js';
-import { render, ensureFlowLoop, addFrameClient, isNodeVisible } from './render.js';
+import { render, ensureFlowLoop, addFrameClient, isNodeVisible, getMinZoom } from './render.js';
 import { flowReduceMotion } from './flows.js';
 import { registerSheet, unregisterSheet, collapseAllSheets, visibleMapRect, onCoveredChange } from './sheets.js';
 import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from './scenario.js';
@@ -175,7 +175,7 @@ function followStep(snap) {
   state.nodes.forEach((n) => { if (isNodeVisible(n)) visible.set(n.id, n); });
   // The step must be in the part of the map nothing covers: not under the proposal bar, the node panel, the player or (on a phone) the sheets
   const rect = visibleMapRect();
-  const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, rect, visible);
+  const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, rect, visible, 60, getMinZoom());
   if (!target) return;
   if (flowReduceMotion) { Object.assign(state.camera, target); glide = null; render(); return; } // reduced motion: jump, do not fly
   glide = { to: target, last: null };

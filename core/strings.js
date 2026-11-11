@@ -19,6 +19,7 @@ export const STRINGS = Object.freeze({
   proposals: 'Proposals',
   issuesAndPrs: 'Work',
   searchPlaceholder: 'Search...',
+  searchNoMatch: 'No match for',
   signOut: 'Sign out',
   poweredBy: 'powered by cornfield',
   // The proposal bar and the review
