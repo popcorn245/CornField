@@ -109,3 +109,13 @@ describe('a theme token still beats a node\'s own colour, good, bad or missing (
     expect(M.styledScene(s, style({ '--corn-map-node-table': '#abcdef', '--corn-map-kind-table-audit': '#fedcba' })).nodes[0].color).toBe('#fedcba');
   });
 });
+
+describe('a bad colour changes the fill only', () => {
+  it('the node keeps its type\'s silhouette, reach and glyph (spec 0008 D8)', () => {
+    for (const type of ['table', 'service', 'app', 'store']) {
+      const good = buildScene({ nodes: [{ id: 'n', type, x: 0, y: 0, r: 20, label: 'n', color: NODE_THEMES[type].color }], edges: [], view: 'orbit', flow: null, rings: { rings: [], clusters: [] }, selectedNode: null, searchQuery: '', isFreeform: false, activeLayers: { [type]: true }, scenario: null, sceneVersion: 1, theme: 'dark' }).nodes[0];
+      const bad = buildScene({ nodes: [{ id: 'n', type, x: 0, y: 0, r: 20, label: 'n', color: '#12345' }], edges: [], view: 'orbit', flow: null, rings: { rings: [], clusters: [] }, selectedNode: null, searchQuery: '', isFreeform: false, activeLayers: { [type]: true }, scenario: null, sceneVersion: 1, theme: 'dark' }).nodes[0];
+      expect(bad).toEqual(good);
+    }
+  });
+});

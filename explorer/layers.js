@@ -10,6 +10,7 @@ import { state, touchScene, escHtml } from './state.js';
 import { render, ensureFlowLoop, isNodeVisible } from './render.js';
 import { renderFlowLegend } from './flows.js';
 import { WHEN_STYLES } from './cloud-model.js';
+import { edgeKeyHtml, keySwatch } from './edge-key.js';
 import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
 import { NODE_THEMES } from '../core/schema.js';
@@ -321,7 +322,14 @@ export function renderLayerToggles() {
     if (again && typeof again.focus === 'function') again.focus({ preventScroll: true });
   }
   renderFlowLegend();
+  renderEdgeKey();
   renderCloudLegend();
+}
+
+/** The Key (spec 0008 D7): each kind of line as the map draws it (edge-key.js) */
+export function renderEdgeKey() {
+  const el = document.getElementById('edge-key');
+  if (el) el.innerHTML = edgeKeyHtml();
 }
 
 /** What a call into a cloud node looks like for its `when` (spec 0031 section 6), while the Cloud layer is on */
@@ -332,7 +340,7 @@ export function renderCloudLegend() {
   el.hidden = false;
   el.innerHTML = `
     <div class="hx-menu-title" data-corn="menu-title"><span>Cloud: when an outage bites</span></div>
-    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch"><span data-corn="swatch" class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
+    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch hx-legend-swatch--wide hx-swatch-when--${when}">${keySwatch({ end: 'triangle', ticks: s.ticks })}</span><span>${s.legend}</span></div>`).join('')}
     <div class="hx-legend-row"><span class="hx-legend-swatch"></span><span class="hx-faint"><span class="hx-cloud-browser">(browser)</span> the visitor's browser makes the call, not our server</span></div>`;
 }
 

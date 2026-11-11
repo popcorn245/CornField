@@ -14,6 +14,7 @@
  */
 
 import { FONT_NODE } from './scene.js';
+import { INK_DARK, INK_LIGHT, inkFor } from './glyphs.js';
 
 /** A node is at least this many px across (on screen) before its letters are drawn: smaller, they are a smudge */
 export const LETTER_MIN_PX = 14;
@@ -43,9 +44,10 @@ export const forgetLetterImages = () => images.clear();
  * @param {string} letters one or two characters
  * @returns {CanvasImageSource | null}
  */
-export function letterImage(letters) {
+export function letterImage(letters, ink = null) {
   if (typeof letters !== 'string' || !letters) return null;
-  if (images.has(letters)) return images.get(letters);
+  const cacheKey = `${typeof ink === 'string' ? ink : ''}|${letters}`;
+  if (images.has(cacheKey)) return images.get(cacheKey);
   if (images.size >= MAX_LETTER_IMAGES) return null;
   let image = null;
   try {
@@ -58,13 +60,15 @@ export function letterImage(letters) {
       ctx.textBaseline = 'middle';
       ctx.lineJoin = 'round';
       ctx.lineWidth = 10;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+      // dark ink under a light outline by default; a theme's `--corn-map-glyph` is the ink, under the outline of the opposite tone
+      const fill = typeof ink === 'string' ? ink : INK_DARK;
+      ctx.strokeStyle = inkFor(fill) === INK_LIGHT ? 'rgba(11, 18, 32, 0.92)' : 'rgba(255, 255, 255, 0.92)';
       ctx.strokeText(letters, SIDE / 2, SIDE / 2 + 3);
-      ctx.fillStyle = '#0b1220';
+      ctx.fillStyle = fill;
       ctx.fillText(letters, SIDE / 2, SIDE / 2 + 3);
       image = canvas;
     }
   } catch { image = null; }
-  images.set(letters, image);
+  images.set(cacheKey, image);
   return image;
 }

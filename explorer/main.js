@@ -46,7 +46,7 @@ import { initLive } from './live.js';
 import { initHouse } from './house.js';
 import { houseOffered } from './house-model.js';
 import { initChecks } from './check.js';
-import { initKeyboard } from './keyboard.js';
+import { frameThem, initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
@@ -128,7 +128,8 @@ const ACTIONS = {
   'close-drawer': () => closeDrawer(),
   'copy-spec': (el) => copySpec(el),
   'start-run': () => startRun(),
-  'select-node': (el) => selectNode(nodeById(el.dataset.id)),
+  'select-node': (el) => selectNode(nodeById(el.dataset.id), { frame: true }), // a link or a list row: the camera follows (spec 0008 D6)
+  'frame-selection': () => frameThem(),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),
   'set-theme': (el) => setThemeChoice(el.dataset.choice),

@@ -90,6 +90,8 @@ export const STRINGS = Object.freeze({
   openRoute: 'Open route',
   startRun: 'Start a run',
   copySpec: 'Copy Spec',
+  frame: 'Frame them',
+  throughChildren: "Include its children's lines",
   // The hint, loading and errors
   hintInspect: 'Click a node to see what it is',
   hintInspectTouch: 'Tap a node to see what it is',

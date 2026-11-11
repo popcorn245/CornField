@@ -22,6 +22,14 @@ describe('mapKeyAction', () => {
     expect(mapKeyAction('0')).toEqual({ type: 'fit' });
   });
 
+  it('F frames the selection, and is left alone with none (spec 0008 D6)', () => {
+    expect(mapKeyAction('f', { selected: true })).toEqual({ type: 'frame' });
+    expect(mapKeyAction('F', { selected: true })).toEqual({ type: 'frame' });
+    expect(mapKeyAction('f')).toBeNull();
+    expect(mapKeyAction('f', { selected: true, ctrl: true })).toBeNull();
+    expect(MAP_KEYS.some(([k]) => k === 'F')).toBe(true);
+  });
+
   it('steps with N, P, ] and [, jumps with Home and End', () => {
     for (const k of ['n', 'N', ']']) expect(mapKeyAction(k)).toEqual({ type: 'step', by: 1 });
     for (const k of ['p', 'P', '[']) expect(mapKeyAction(k)).toEqual({ type: 'step', by: -1 });

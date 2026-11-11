@@ -25,6 +25,7 @@ import { saveFreeformPositions } from './layout.js';
 import { closeLegendMenu } from './layers.js';
 import * as K from './keyboard-model.js';
 import { searchActive, stepMatch } from './search.js';
+import { frameSelection, litNodes } from './selection-view.js';
 
 const $ = (id) => document.getElementById(id);
 let wired = false;
@@ -63,9 +64,17 @@ export function centreOn(node) {
 
 function land(node, order) {
   if (!node) { announce('No nodes are shown. Turn a layer on in the Layers menu.'); return; }
-  selectNode(node);
-  centreOn(node);
+  selectNode(node, { frame: true }); // the keyboard's selection frames the node and what it lights (spec 0008 D6)
   announce(K.describeNode(node, order.length, order.indexOf(node)));
+}
+
+/** "Frame them" and the `F` key: the camera goes to the selected node and what it lights, and a screen reader is told how many that is */
+export function frameThem() {
+  if (!state.selectedNode) return;
+  const target = frameSelection();
+  if (!target) return;
+  const connected = Math.max(0, litNodes().length - 1);
+  announce(target.framed ? `Framed ${state.selectedNode.label} and ${connected} connected` : `${state.selectedNode.label} centred: ${connected} connected, too spread out to frame together`);
 }
 
 /** Into the open panel: its title takes the focus, so a screen reader starts there and Tab goes on into it */
@@ -123,6 +132,9 @@ function onMapKey(e) {
       land(action.type === 'first' ? order[0] : order[order.length - 1], order);
       break;
     }
+    case 'frame':
+      frameThem();
+      break;
     case 'open':
       focusPanel();
       break;

@@ -48,7 +48,11 @@
  * @property {string} group        the node's layer in the Layers menu (`app`, `cloud`, `web`, `house`, ...): the node's group for the map tokens
  * @property {number} x            world centre
  * @property {number} y
- * @property {number} r            world radius of the filled circle
+ * @property {number} r            world radius of the node: the circle's, or the silhouette's circumscribing one
+ * @property {'circle'|'rounded-square'|'hexagon'|'square'|'diamond'} shape  the silhouette (core/schema.js `NODE_SHAPES`)
+ * @property {number} [hitR]       world radius of the disc a click or tap hits: `r` times how far the silhouette reaches (SHAPE_REACH)
+ * @property {string} [glyph]      the type whose built-in glyph the node shows (glyphs.js), when the type has one
+ * @property {string} [letters]    a finer kind's letters (kind-letters.js)
  * @property {string} color        fill, and the glow colour
  * @property {number} alpha        0..1 for everything of this node (halo, circle, core, label): 1, or 0.07 when dimmed by the focus
  * @property {number} glow         blur radius in px in `color`; 0 = none (the dimmed ones, with no glow)
@@ -91,12 +95,14 @@
  * @property {string} color        stroke
  * @property {number} width        px in world units
  * @property {number} alpha        0..1 for the whole edge (line, arrowhead, packet)
- * @property {number[]|null} dash  dash pattern, or null for solid
+ * @property {number[]|null} dash  dash pattern, or null for solid: PROPOSED_DASH for a proposed edge, USAGE_DASH (dots) for a usage link, nothing else
+ * @property {0|1|2} ticks         tick marks across the middle: a call that breaks at the next deploy (1) or renewal (2); 0 for every other edge
+ * @property {'triangle'|'chevron'|'bar'|'diamond'|null} end  the mark at the target (END_MARKS); null for an ownership or usage link
  * @property {{cx:number, cy:number}|null} curve  control point of the quadratic from (x1,y1) to (x2,y2), or null for a straight line
- * @property {boolean} arrow       an arrowhead at (x2,y2), pointing along (x2-cx, y2-cy); `ARROW` has its size
+ * @property {boolean} arrow       the edge has an end mark at (x2,y2), pointing along (x2-cx, y2-cy); `end` says which and `ARROW` has its size
  * @property {number} glow         blur px; 0 = none
  * @property {string|null} glowColor
- * @property {{text:string, x:number, y:number, color:string, italic:boolean}|null} label  drawn centred, for the selection's edges only
+ * @property {{text:string, x:number, y:number, color:string, italic:boolean}|null} label  the kind's word, centred at the edge's middle, for the lit edges only (labels.js places it below the node labels)
  * @property {ScenePacket|null} packet
  * @property {Mark} mark
  * @property {boolean} live        the edge came from the live layer (an ownership in the house, a phone under its persona, a dashed placement)
@@ -164,14 +170,16 @@ import { flowStyleOf } from './flows.js';
 import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-model.js';
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';
-import { externalLayer, whenDash } from './cloud-model.js';
+import { externalLayer, whenTicks } from './cloud-model.js';
 import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
+import { NODE_THEMES, shapeOf } from '../core/schema.js';
+import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
 import { nodeColor } from './css-color.js';
-import { NODE_THEMES } from '../core/schema.js';
+import { activeSubgraph, kindEdgeWord } from './selection-model.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
@@ -193,9 +201,32 @@ export const CORE_COLOR = '#ffffff';
 export const DIM_ALPHA = 0.07;
 /** The outline drawn under a label so it reads over the lines */
 export const LABEL_OUTLINE = { node: { color: 'rgba(9, 13, 22, 0.85)', width: 3.5 }, edge: { color: 'rgba(9, 13, 22, 0.9)', width: 3 } };
+/** Kept for themes and tests that name it; the words on lit edges are drawn at the label minimum (labels.js) */
 export const EDGE_LABEL_SIZE = 10;
-/** An arrowhead: two barbs `length` back from the tip, `spread` radians either side of the line */
+/** An arrowhead: two barbs `length` back from the tip, `spread` radians either side of the line (a chevron has the same barbs, open) */
 export const ARROW = { length: 9, spread: 0.45 };
+/**
+ * What each kind of edge ends in at its target (spec 0008 D7), one mark per family: an open chevron for data, a filled triangle for a
+ * service, a bar across the line for a place, an open diamond for a token. Ownership and usage links have none. A dashed edge (proposed)
+ * keeps its kind's own mark. `triangle` is the arrowhead renderers have always drawn.
+ */
+export const END_MARKS = Object.freeze({ flow: 'chevron', reads: 'chevron', writes: 'chevron', calls: 'triangle', triggers: 'triangle', delivers: 'triangle', 'runs-on': 'bar', uses: 'diamond', extends: 'diamond' });
+/** The shapes of the end marks and the ticks, in world units (the renderers draw them, the legend mirrors them): stroke width, a bar's and a tick's half length, a diamond's half length and half width */
+export const END_SHAPES = Object.freeze({ strokeWidth: 1.8, barHalf: 5, diamondHalf: 6, diamondAcross: 4.5, tickHalf: 4, tickWidth: 1.6, tickGap: 6 });
+/** The sizes of the silhouettes, as fractions of a node's radius: a rounded square's half side and corner, a hexagon's inradius, a square's half side and corner, a diamond's half diagonal (both renderers draw them) */
+export const SHAPE_SIZES = Object.freeze({ roundedHalf: 0.9, roundedCorner: 0.3, hexInradius: 0.9, squareHalf: 0.86, squareCorner: 0.12, diamondHalf: 1.15 });
+/** How far each silhouette reaches from its centre, as a fraction of the node's radius: a click or tap on a square's corner or a diamond's point is on the node (spatial.js hit-tests a disc this wide) */
+export const SHAPE_REACH = Object.freeze({
+  circle: 1,
+  'rounded-square': (SHAPE_SIZES.roundedHalf - SHAPE_SIZES.roundedCorner) * Math.SQRT2 + SHAPE_SIZES.roundedCorner,
+  hexagon: SHAPE_SIZES.hexInradius / Math.cos(Math.PI / 6),
+  square: (SHAPE_SIZES.squareHalf - SHAPE_SIZES.squareCorner) * Math.SQRT2 + SHAPE_SIZES.squareCorner,
+  diamond: SHAPE_SIZES.diamondHalf,
+});
+/** The dash a proposed edge is drawn with: the one dashed thing on the map (a usage link is dotted, a `when` is told by ticks) */
+export const PROPOSED_DASH = Object.freeze([7, 5]);
+/** The dash of a usage link: dots */
+export const USAGE_DASH = Object.freeze([1.5, 4]);
 /** Look of each halo: a filled disc (`fillR` past the node radius) and a ring (`ringR` past it) */
 export const HALO = {
   selected: { fill: 'rgba(99, 102, 241, 0.55)', fillR: 8, ring: '#818cf8', ringR: 13, ringWidth: 1.5 },
@@ -273,40 +304,14 @@ export function layerShows(state, node) {
 const viewEdgesOf = (state) => (state.view === 'dataflow' && state.flow ? state.flow.edges : state.view === 'house' ? houseViewEdges(state) : state.edges);
 
 /**
- * The focus subgraph: the selected node, its children and every path through them
+ * The focus subgraph (spec 0008 D5): the selected node and every node one edge away, of any kind; `throughChildren` adds its
+ * children's neighbours, `kind` keeps one kind of line. selection-model.js has the rule.
  * @param {{id:string}|null} selected
  * @param {object[]} edges the edges to walk
+ * @param {{throughChildren?: boolean, kind?: string|null}} [opts]
  */
-export function getActiveSubgraph(selected, edges) {
-  if (!selected) return null;
-
-  const connectedNodeIds = new Set([selected.id]);
-  const connectedEdgeKeys = new Set();
-  const key = (e) => `${e.from}->${e.to}`;
-  const owns = (e) => !e.dashed && !e.kind;
-
-  // Direct children (ownership edges out) and the direct parent (ownership edge in)
-  const childIds = new Set();
-  edges.forEach((e) => {
-    if (owns(e) && e.from === selected.id) { childIds.add(e.to); connectedNodeIds.add(e.to); connectedEdgeKeys.add(key(e)); }
-    if (owns(e) && e.to === selected.id) { connectedNodeIds.add(e.from); connectedEdgeKeys.add(key(e)); }
-  });
-
-  // Everything connected to the selected node or to any of its children
-  const focusCore = new Set([selected.id, ...childIds]);
-  edges.forEach((e) => {
-    if (focusCore.has(e.from)) { connectedNodeIds.add(e.to); connectedEdgeKeys.add(key(e)); }
-    if (focusCore.has(e.to)) { connectedNodeIds.add(e.from); connectedEdgeKeys.add(key(e)); }
-  });
-  // And the edges between connected nodes that touch the focus
-  edges.forEach((e) => {
-    if (connectedNodeIds.has(e.from) && connectedNodeIds.has(e.to)
-      && (focusCore.has(e.from) || focusCore.has(e.to) || e.from === selected.id || e.to === selected.id)) {
-      connectedEdgeKeys.add(key(e));
-    }
-  });
-
-  return { connectedNodeIds, connectedEdgeKeys, childIds, selectedId: selected.id };
+export function getActiveSubgraph(selected, edges, opts) {
+  return activeSubgraph(selected, edges, opts);
 }
 
 /**
@@ -395,12 +400,12 @@ function flowEdge(edge, source, target, subgraph, preset, reduceMotion) {
   const { a, b, c } = flowGeometry(edge, source, target);
   const focused = !!subgraph && connected;
 
-  // Labels only for the selection: a flow's own node, or for a table's edges (which converge) their page
-  const pageEnd = edge.kind === 'reads' ? edge.to : edge.from;
+  // A lit edge says its kind at its middle ("reads", "calls": spec 0008 D7); the label layer places the words below the node labels (labels.js)
+  const kind = edgeKind(edge);
   let label = null;
-  if (edge.label && subgraph && connected && (!isData || subgraph.selectedId === pageEnd)) {
+  if (subgraph && connected) {
     const m = quadPoint(a, c, b, 0.5);
-    label = { text: edge.label, x: m.x, y: m.y - 6, color: style.color, italic: proposed };
+    label = { text: edge.count !== undefined && edge.label ? edge.label : kindEdgeWord(kind), x: m.x, y: m.y, color: style.color, italic: proposed }; // the House's rolled-up lines say how many calls they stand for
   }
 
   // A packet moving along the flow: reads travel back, writes travel out
@@ -416,9 +421,11 @@ function flowEdge(edge, source, target, subgraph, preset, reduceMotion) {
     color: style.color,
     width: focused ? 2.4 : preset && !isData ? 2 : 1.6,
     alpha: subgraph ? (connected ? 1 : 0.04) : preset ? (isData ? 0.2 : 0.65) : isData ? 0.12 : 0.45,
-    dash: proposed ? [7, 5] : whenDash(edge), // a call into a cloud node: dashed when it bites at the next deploy, dotted at the next renewal (spec 0031)
+    dash: proposed ? PROPOSED_DASH : null, // a dash means "proposed" and nothing else (spec 0008 D7)
+    ticks: whenTicks(edge), // a call into a cloud node: one tick at the middle when it bites at the next deploy, two at the next renewal (spec 0031)
     curve: { cx: c.x, cy: c.y },
     arrow: true,
+    end: Object.hasOwn(END_MARKS, kind) ? END_MARKS[kind] : 'triangle',
     glow: focused ? 8 : 0,
     glowColor: focused ? style.color : null,
     label, packet, mark: 'none', live: !!edge.live,
@@ -431,20 +438,20 @@ function linkEdge(edge, source, target, subgraph) {
   let color, width, dash = null, glow = 0, glowColor = null;
   if (subgraph) {
     if (connected) {
-      if (edge.dashed) { color = '#818cf8'; width = 2.0; glow = 8; glowColor = 'rgba(129, 140, 248, 0.7)'; dash = [5, 4]; }
+      if (edge.dashed) { color = '#818cf8'; width = 2.0; glow = 8; glowColor = 'rgba(129, 140, 248, 0.7)'; dash = USAGE_DASH; }
       else { color = '#ffffff'; width = 2.4; glow = 10; glowColor = 'rgba(255, 255, 255, 0.8)'; }
     } else {
-      color = 'rgba(255, 255, 255, 0.02)'; width = 0.8; dash = edge.dashed ? [4, 4] : null;
+      color = 'rgba(255, 255, 255, 0.02)'; width = 0.8; dash = edge.dashed ? USAGE_DASH : null;
     }
   } else if (edge.dashed) {
-    color = 'rgba(129, 140, 248, 0.35)'; width = 1.2; dash = [4, 4];
+    color = 'rgba(129, 140, 248, 0.35)'; width = 1.2; dash = USAGE_DASH;
   } else {
     color = 'rgba(255, 255, 255, 0.16)'; width = 1.4;
   }
   return {
     key: edgeKeyOf(edge), from: edge.from, to: edge.to, kind: edgeKind(edge),
     x1: source.x, y1: source.y, x2: target.x, y2: target.y, r1: source.r, r2: target.r,
-    color, width, alpha: 1, dash, curve: null, arrow: false, glow, glowColor, label: null, packet: null, mark: 'none', live: !!edge.live,
+    color, width, alpha: 1, dash, ticks: 0, curve: null, arrow: false, end: null, glow, glowColor, label: null, packet: null, mark: 'none', live: !!edge.live,
   };
 }
 
@@ -583,6 +590,9 @@ function buildNodes(state, subgraph) {
       id: node.id, type: shown.type, group: groupOf(shown),
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
+      shape: shapeOf(shown.type), // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
+      hitR: shown.r * SHAPE_REACH[shapeOf(shown.type)], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
+      ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: fillOfNode(shown),
       alpha,
@@ -707,7 +717,7 @@ export function emphasiseScenario(scene, scn, opts = {}) {
  */
 export function buildScene(state, opts = {}) {
   const preset = state.view === 'dataflow';
-  const subgraph = state.scenario ? scenarioSubgraph(state) : state.selectedNode ? getActiveSubgraph(state.selectedNode, viewEdgesOf(state)) : null;
+  const subgraph = state.scenario ? scenarioSubgraph(state) : state.selectedNode ? getActiveSubgraph(state.selectedNode, viewEdgesOf(state), { throughChildren: !!state.throughChildren, kind: state.selectedKind || null }) : null;
 
   const lanes = preset && state.flow ? buildLanes(state.flow) : [];
   const rings = !(preset && state.flow) && !state.isFreeform ? buildRings(state) : [];
