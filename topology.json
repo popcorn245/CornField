@@ -2008,6 +2008,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
+    },
+    {
+      "id": "page-doc-docs-specs-0008-reading-a-big-map",
+      "type": "page",
+      "label": "/docs/specs/0008-reading-a-big-map",
+      "file": "docs/specs/0008-reading-a-big-map.md",
+      "summary": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
     }
   ],
   "edges": [
@@ -6420,7 +6430,16 @@
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map"
+    },
+    {
+      "from": "page-doc-docs-specs-0008-reading-a-big-map",
+      "to": "page-doc-docs-accessibility",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T22:00:49.574Z"
+  "updatedAt": "2026-11-11T08:15:47.333Z"
 }
