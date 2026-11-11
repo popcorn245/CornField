@@ -67,7 +67,7 @@ function fakeServer(opts                                                        
     return json(404, { error: 'unexpected' });
   });
   vi.stubGlobal('fetch', mock);
-  return { calls, mock, puts: () => calls.filter((c) => c.method === 'PUT'), api: () => calls.filter((c) => c.url.startsWith('/api/')) };
+  return { calls, mock, puts: () => calls.filter((c) => c.method === 'PUT'), api: () => calls.filter((c) => c.url.startsWith('/api/v1/')) };
 }
 
 const $ = (id        ) => document.getElementById(id)               ;
@@ -344,6 +344,21 @@ describe('the time', () => {
     expect(status()).toBe('Approved 2 hours ago');
   });
 
+  it('says the verdict once: the time ticks beside the live region, which is not rewritten while the verdict stays', async () => {
+    fakeServer({ review: { version: 1, verdict: 'approved', note: '', edits: [], at: new Date(T0 - 3 * 60_000).toISOString() } });
+    open();
+    await settle();
+    const live = q('#review [data-review-status] [role=status]');
+    expect(live.textContent).toBe('Approved');
+    expect(q('#review [data-review-status]').getAttribute('role')).toBeNull(); // the line itself is not live: its time is not said again
+    const mo = new MutationObserver(() => {});
+    mo.observe(live, { subtree: true, childList: true, characterData: true });
+    for (const later of [1, 2, 60]) { clock = T0 + later * 60_000; renderBar(); }
+    expect(status()).toBe('Approved 1 hour ago');
+    expect(mo.takeRecords()).toHaveLength(0);
+    mo.disconnect();
+  });
+
   it('shows nothing when there is no review yet, or the hub has no answer', async () => {
     fakeServer({ review: null });
     open();
@@ -428,12 +443,12 @@ describe('when the server says no', () => {
     const s = fakeServer();
     open();
     click(approveBtn());
-    expect(approveBtn().disabled).toBe(true);
-    expect(sendBackBtn().disabled).toBe(true);
+    expect(approveBtn().getAttribute('aria-disabled')).toBe('true'); // not `disabled`: the pressed button keeps the focus while it posts
+    expect(sendBackBtn().getAttribute('aria-disabled')).toBe('true');
     click(approveBtn());
     await settle();
     expect(s.puts()).toHaveLength(1);
-    expect(approveBtn().disabled).toBe(false);
+    expect(approveBtn().getAttribute('aria-disabled')).toBeNull();
   });
 });
 

@@ -101,11 +101,12 @@ export function touchedIds(nodes, edges) {
 // ---------------------------------------------------------------------------
 
 /**
- * "3 added · 1 changed · 1 removed": zero counts are left out; nothing at all reads "No changes".
+ * "4 nodes, 2 edges added · 1 node changed" (the bar's words, without the scenarios), or "3 added · 1 changed" for counts
+ * without the split: zero counts are left out; nothing at all reads "No changes".
  * @param {{added?:number, changed?:number, removed?:number}} counts `summarize(proposal)`
  */
 export function chipText(counts) {
-  const parts = MARKS.filter((m) => (counts?.[m] || 0) > 0).map((m) => `${counts[m]} ${m}`);
+  const parts = barCounts({ ...counts, scenarios: 0 }).filter((c) => c.mark).map((c) => c.text.replace(/^\+/, ''));
   return parts.length ? parts.join(' · ') : 'No changes';
 }
 
@@ -117,10 +118,33 @@ export function chipText(counts) {
  */
 export function barCounts(counts) {
   const n = (k) => counts?.[k] || 0;
-  const parts = MARKS.filter((m) => n(m) > 0).map((m) => ({ mark: m, text: `${m === 'added' ? '+' : ''}${n(m)} ${m}` }));
+  // with the split (`summarize` gives it) the chip says what it counts: "4 nodes, 2 edges added"; without, the bare number
+  const unit = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+  const what = (m) => {
+    const ns = counts?.nodes?.[m] || 0;
+    const es = counts?.edges?.[m] || 0;
+    if (!counts?.nodes || ns + es !== n(m)) return `${m === 'added' ? '+' : ''}${n(m)} ${m}`;
+    return `${[ns && unit(ns, 'node'), es && unit(es, 'edge')].filter(Boolean).join(', ')} ${m}`;
+  };
+  const parts = MARKS.filter((m) => n(m) > 0).map((m) => ({ mark: m, text: what(m) }));
   if (n('scenarios') > 0) parts.push({ mark: null, text: `${n('scenarios')} ${n('scenarios') === 1 ? 'scenario' : 'scenarios'}` });
   return parts.length ? parts : [{ mark: null, text: 'No changes' }];
 }
+
+/** What a screen reader hears when a view is picked: "Diff view" */
+export const viewWords = (view) => `${view === 'before' ? 'Before' : view === 'after' ? 'After' : 'Diff'} view`;
+
+/**
+ * What it hears when a proposal has loaded: its title and counts, and the view it is in
+ * ("Proposal Alerts: 4 nodes and 2 edges added, 1 node changed, 3 scenarios. Diff view.": in speech a comma would split a part in two).
+ * @param {string} title
+ * @param {object} counts `summarize(proposal)`
+ * @param {'before'|'diff'|'after'} view
+ */
+export const openedWords = (title, counts, view) => `Proposal ${title}: ${barCounts(counts).map((c) => c.text.replace(/^\+/, '').replace(', ', ' and ')).join(', ')}. ${viewWords(view)}.`;
+
+/** What a click on a change row did: the node (or edge) the camera went to, and what the proposal does to it */
+export const jumpWords = (markWord, name) => `${name}, ${String(markWord).toLowerCase()}. The map is on it.`;
 
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -232,6 +256,117 @@ export function specRowHtml(entry, { current = null } = {}) {
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" aria-pressed="${mine}" data-corn="row">`
     + `<span class="hx-forge-line">${head}<span class="hx-forge-state hx-forge-state--${state === 'Draft' ? 'draft' : state === 'Open' ? 'open' : 'neutral'}" data-corn="state-pill"${tone}>${state}</span></span>`
     + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button></li>`;
+}
+
+// ---------------------------------------------------------------------------
+//  Which copy is open: the chip on the bar, and a link that finds nothing
+// ---------------------------------------------------------------------------
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The checks on a PR's head in words, for the bar's source chip: "no checks", "1 check running", "2 checks failed, 1 check running",
+ * "all 3 checks passed". Failed first, then cancelled, then the ones still going.
+ * @param {{ state: string }[]} checks
+ */
+export function checksLine(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) return 'no checks';
+  const n = (states) => checks.filter((c) => states.includes(c.state)).length;
+  const failed = n(['failure']);
+  const cancelled = n(['cancelled']);
+  const waiting = n(['running', 'queued']);
+  const parts = [];
+  if (failed) parts.push(`${plural(failed, 'check')} failed`);
+  if (cancelled) parts.push(`${plural(cancelled, 'check')} cancelled`);
+  if (waiting) parts.push(`${plural(waiting, 'check')} running`);
+  if (parts.length) return parts.join(', ');
+  return checks.length === 1 ? '1 check passed' : `all ${checks.length} checks passed`;
+}
+
+/** `pull/<n>` to n, or null (the same shape the server reads, server/proposal-pulls.js) */
+export function pullNumberOf(source) {
+  const m = typeof source === 'string' ? /^pull\/([1-9]\d{0,8})$/.exec(source) : null;
+  return m ? Number(m[1]) : null;
+}
+
+/** Where a source is, in words: "PR #21", "the checkout", "worktree <name>" */
+export function sourceWhere(source) {
+  const n = pullNumberOf(source);
+  if (n) return `PR #${n}`;
+  if (!source || source === 'checkout') return 'the checkout';
+  return `worktree ${source}`;
+}
+
+/**
+ * What the bar's source chip says of the copy under review. A spec PR's copy: "PR #24 · draft · 1 check running" (the state and the checks
+ * are left out until known: `pull` is the listing's entry, `checks` the PR's checks, or null when they could not be read). A copy in the checkout
+ * or a worktree: "Local draft · in the checkout". `href` is the PR's address when it has one (the caller checks the scheme). `state` is the
+ * public `data-corn-state` of the copy (docs/theming.md): the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy (a
+ * branch with no pull request yet is `draft`); '' while the PR is not known yet.
+ * @param {string|null} source `pull/<n>`, `checkout` or a worktree's name
+ * @param {{ draft?: boolean, url?: string, state?: string }|null} [pull]
+ * @param {{ state: string }[]|null} [checks]
+ * @returns {{ text: string, href: string|null, state: ''|'open'|'draft'|'merged'|'closed', label: string }}
+ */
+export function sourceChip(source, pull = null, checks = null) {
+  const n = pullNumberOf(source);
+  if (!n) {
+    const where = !source || source === 'checkout' ? 'in the checkout' : `in worktree ${source}`;
+    return { text: `Local draft \u00b7 ${where}`, href: null, state: 'draft', label: `This is a local draft, ${where}, not a pull request` };
+  }
+  const parts = [`PR #${n}`];
+  const state = !pull ? '' : pull.state === 'merged' || pull.state === 'closed' ? pull.state : typeof pull.draft === 'boolean' ? (pull.draft ? 'draft' : 'open') : '';
+  if (state) parts.push(state);
+  if (Array.isArray(checks)) parts.push(checksLine(checks));
+  return {
+    text: parts.join(' \u00b7 '),
+    href: pull && typeof pull.url === 'string' ? pull.url : null,
+    state,
+    label: `Reviewing spec pull request: ${parts.join(', ')}`,
+  };
+}
+
+/**
+ * What to say when a link names a proposal the server does not have: what was not found, said plainly. The place is named only when it is
+ * one: a PR number, the checkout, or a worktree the listing has (`sources`); anything else the link says is not repeated back.
+ * @param {string} slug (it passed the slug pattern)
+ * @param {string|null} source
+ * @param {Set<string>|null} [sources] the sources the listing knows, when it has been read
+ */
+export function notFoundWords(slug, source, sources = null) {
+  if (!source) return `There is no proposal called ${slug}.`;
+  if (pullNumberOf(source) || source === 'checkout' || (sources && sources.has(source) && SLUG.test(source))) return `There is no proposal called ${slug} in ${sourceWhere(source)}.`;
+  return `There is no proposal called ${slug}. This link's source is not a PR, the checkout or a worktree.`;
+}
+
+/**
+ * What to say when `?proposal=` holds something that is not a proposal's name (a typo, a cut-off link), or null when it is a name or absent.
+ * The value is shown as text, cut to 60 characters; the caller sets it with `textContent`.
+ * @param {string} search `location.search`
+ * @returns {string|null}
+ */
+export function malformedLinkWords(search) {
+  const params = new URLSearchParams(search || '');
+  if (!params.has('proposal')) return null;
+  const raw = params.get('proposal') || '';
+  if (SLUG.test(raw)) return null;
+  const shown = raw.length > 60 ? `${raw.slice(0, 59)}\u2026` : raw;
+  return shown.trim() ? `This link does not name a proposal: \u201c${shown}\u201d is not a proposal's name.` : 'This link does not name a proposal.';
+}
+
+/**
+ * The ways on from a link that found nothing: the same slug under another source, from the listing (a spec PR's copy before a local one),
+ * each as `{ slug, source, label }`. The Specs list is offered by the caller, always.
+ * @param {{ slug: string, source: string, error?: string, pull?: object }[]|null} listing
+ * @param {string} slug
+ * @param {string|null} source the one that was asked for (left out)
+ */
+export function otherCopies(listing, slug, source) {
+  if (!Array.isArray(listing)) return [];
+  return listing
+    .filter((e) => e && e.slug === slug && e.source !== source && !e.error)
+    .sort((a, b) => (pullNumberOf(b.source) ? 1 : 0) - (pullNumberOf(a.source) ? 1 : 0))
+    .map((e) => ({ slug: e.slug, source: e.source, label: pullNumberOf(e.source) ? `Open the copy in PR #${pullNumberOf(e.source)}${e.pull && e.pull.draft ? ' (draft)' : ''}` : `Open the copy ${e.source === 'checkout' ? 'in the checkout' : `in worktree ${e.source}`}` }));
 }
 
 // ---------------------------------------------------------------------------

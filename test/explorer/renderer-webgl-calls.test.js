@@ -141,7 +141,7 @@ describe('createWebglRenderer', () => {
     expect(at('added')).toEqual([MARK.added.ringR, MARK.added.ringWidth, ...MARK.added.ringDash]);
     expect(at('changed')).toEqual([MARK.changed.ringR, 2.5, 0, 0]);
     expect(at('removed')).toEqual([MARK.removed.ringR, 2, 0, 0]);
-    expect(at('edit')).toEqual([MARK.edit.ringR, 2.5, 0, 0]);
+    expect(at('edit')).toEqual([MARK.edit.ringR, 3, ...MARK.edit.ringDash]);
     r.draw(small(), camera({ zoom: 0.2 }), 1);
     expect(callsOf(gl, 'uniform4fv').filter((c) => c[1].uniform === 'u_markGeom').length).toBe(1); // a zoom is the shader's business
   });

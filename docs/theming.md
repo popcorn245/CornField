@@ -56,6 +56,8 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 | `--corn-added-text`, the current proposal's border | `--corn-added` 12%, `--corn-surface-1` |
 | `--corn-ok`, a layer's tick; `--corn-ok`, `--corn-edit-text`, `--corn-bad`, `--corn-warn`, `--corn-text-3`, a run or PR state pill's border (its text colour) | `--corn-surface-2`, `--corn-surface-3` |
 
+**The map's diff marks and dimmed labels.** `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed` and `--corn-map-edit` (or the default look behind `auto`), and `--corn-map-label` as a label a diff dims is drawn (60% opacity: de-emphasised, never hidden), are each read at **3:1** against the page ground, against each glow of `--corn-ground-image` at its strongest and against all the glows laid over each other: the darkest and the lightest ground the map shows. A mark that fades is read at the opacity it is drawn at (a removed mark's edge is 77% opaque, a what-if edit's removal too), so a pale `--corn-map-removed` fails even though it would pass solid. The dots of the four marks (`--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit`) are read at 3:1 on the ground too. A finding reads: `named theme "night" (light): --corn-map-removed (the removed mark on the map, drawn at 77% opacity) (#f3b4b4) on --corn-ground over the ground image (#dfdfea) is 1.37:1, below 3:1 (the UI minimum).` Node fills are not part of this check.
+
 The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
 
 **What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
@@ -212,7 +214,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
 | `--corn-ok-soft` | the same for ok, as a tinted background |
 | **Diff** (shared with the map) | |
-| `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the light values are [theme-model.js](../explorer/theme-model.js) `lightColor` of the dark ones, so the legend matches the map (light) |
+| `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the defaults of the map's marks (`explorer/diff-marks.js`), chosen so every one is 3:1 over the darkest and lightest ground the map draws, in both levels, at the opacity it is drawn at; the legend matches the map (light) |
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
 | **Category hues** (never status) | |
 | `--corn-hue-orange`, `--corn-hue-fuchsia`, `--corn-hue-pink`, `--corn-hue-lime` | the data-flow preset, ROM, variables, the House view (light) |
@@ -306,6 +308,7 @@ There are 62 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-map-label` | the colour of a node's label (its fade outside the focus is kept). `auto`: near-white on the dark ground, near-black on the light one |
 | `--corn-map-label-halo` | the outline drawn under every label on the map (a node's, an edge's) so it reads over the lines, used as written (give it an alpha to soften it). `auto`: the ground's own colour, slightly translucent |
 | `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed`, `--corn-map-edit` | the diff on the map: a proposal's ring on a node and its line on an edge, and a what-if edit's. The legend and the panel's dots follow them. `auto`: `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit` as the map has always drawn them |
+| | **The four marks differ without colour**: added is a dashed ring, changed a solid ring, removed a faded ring with the label struck through, and a what-if edit a dotted ring (the shape is not themeable, only the colour is). Do not give two of the marks one colour a viewer cannot tell apart, and keep each at 3:1 over your ground: `cornfield validate` checks the four, and a label a diff dims, over the ground and every glow of `--corn-ground-image` (below). |
 | `--corn-map-selected`, `--corn-map-match` | the halo of the selected node, and of a node a search finds (its disc is the same colour, translucent) |
 | `--corn-map-lit` | the straight links the focus lights: the selection's own lines, and the step of a walk (a data-flow edge keeps its flow's colour: `--corn-map-edge-flow`) |
 | `--corn-map-collision` | the dashed ring and tag of a node two open agent runs both change (a mark over the map, so a stylesheet reads it; `--corn-warn` by default) |
@@ -392,7 +395,7 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill`, `proposal-source` |
 | `queued`, `running`, `waiting` | not started yet; under way; waiting on a person (or gone quiet) | `run`, `state-pill` |
 | `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped; a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
@@ -442,6 +445,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar` | the open proposal's bar |
+| `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 
@@ -507,6 +511,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `sendBackWithNote` | Send back with this note |
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
+| `openSpecsList` | Open the Specs list |
 | `tabSpecs` | Specs |
 | `tabPulls` | PRs |
 | `tabIssues` | Issues |

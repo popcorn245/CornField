@@ -74,9 +74,9 @@
           <div id="proposal-legend" class="hx-menu-section" hidden>
             <div class="hx-menu-title"><span>Proposal marks</span></div>
             <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added"></span><span>Added: dashed ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: amber ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: red, faded, label struck through</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: violet</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: solid ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: faded ring, label struck through</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: dotted ring</span></div>
           </div>
 
           <div class="hx-menu-section">
@@ -195,9 +195,11 @@
     <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Play, Edit, Send back, Approve, ⋯ (proposal.js, review.js, whatif.js, scenario-ui.js) -->
     <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
       <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
+      <div id="proposal-ways" class="hx-proposal-ways" role="group" aria-label="Ways on" data-corn="proposal-ways" hidden></div>
       <div id="proposal-body">
         <div class="hx-proposal-head" role="group" aria-label="Proposal actions">
           <strong id="proposal-title" class="hx-proposal-name"></strong>
+          <a id="proposal-source" class="hx-proposal-source" data-corn="proposal-source" hidden></a>
           <div class="hx-proposal-counts">
             <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
             <button type="button" id="proposal-mode" class="hx-proposal-mode" data-action="toggle-proposal-mode" data-peek-ok aria-expanded="false" aria-controls="proposal-seg" title="Before, Diff or After"></button>

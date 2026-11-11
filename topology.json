@@ -2040,6 +2040,26 @@
       "desc": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or… (server/compress.js)"
     },
     {
+      "id": "core-explorer-diff-marks",
+      "label": "diff-marks.js",
+      "type": "core",
+      "file": "explorer/diff-marks.js",
+      "summary": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list. (explorer/diff-marks.js)"
+    },
+    {
+      "id": "core-explorer-focusables",
+      "label": "focusables.js",
+      "type": "core",
+      "file": "explorer/focusables.js",
+      "summary": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window). (explorer/focusables.js)"
+    },
+    {
       "id": "page-doc-docs-specs-0008-reading-a-big-map",
       "type": "page",
       "label": "/docs/specs/0008-reading-a-big-map",
@@ -2047,7 +2067,7 @@
       "summary": "Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes)",
       "r": 18,
       "color": "#38bdf8",
-      "desc": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
+      "desc": "Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
     },
     {
       "id": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
@@ -6182,11 +6202,6 @@
     },
     {
       "from": "page-doc-docs-theming",
-      "to": "core-explorer-theme-model",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-theming",
       "to": "page-doc-docs-config",
       "dashed": true
     },
@@ -6530,6 +6545,103 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-diff-marks"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-focusables"
+    },
+    {
+      "from": "pkg-core",
+      "to": "pkg-explorer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-tokens",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme-model",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "core-explorer-focusables",
+      "dashed": true
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0008-reading-a-big-map"
     },
@@ -6572,5 +6684,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T09:21:07.821Z"
+  "updatedAt": "2026-11-11T10:07:32.031Z"
 }

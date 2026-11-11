@@ -70,6 +70,7 @@ import { state, nodeById, escHtml, touchScene, onSceneTouch } from './state.js';
 import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
+import { trapTab } from './focusables.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
@@ -88,7 +89,7 @@ import {
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 import { cornStateAttr } from './corn-state.js';
-import { proposalListing, onProposalListing, loadProposalList } from './proposal.js';
+import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
 import { specRowHtml } from './proposal-model.js';
 import { t } from './strings.js';
 
@@ -1584,13 +1585,7 @@ function onConfirmKey(e) {
     if (!ui.busy) closeConfirm();
     return;
   }
-  if (e.key !== 'Tab') return;
-  const buttons = [...confirmEl().querySelectorAll('button:not([disabled])')];
-  if (!buttons.length) { e.preventDefault(); return; }
-  const at = buttons.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1) : (at === -1 || at === buttons.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  buttons[next].focus();
+  trapTab(e, confirmEl());
 }
 
 function onConfirmClick(e) {
@@ -1784,13 +1779,7 @@ function onAgentKey(e) {
     if (!ui.agent || !ui.agent.posting) closeAgent();
     return;
   }
-  if (e.key !== 'Tab') return;
-  const fields = [...agentEl().querySelectorAll('select, textarea, input, button')].filter((el) => !el.disabled && !el.closest('[hidden]'));
-  if (!fields.length) { e.preventDefault(); return; }
-  const at = fields.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? fields.length - 1 : at - 1) : (at === -1 || at === fields.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  fields[next].focus();
+  trapTab(e, agentEl());
 }
 
 function onAgentClick(e) {
@@ -2213,6 +2202,7 @@ export function initForgePanel(config, opts = {}) {
   const panel = $('forge-panel');
   if (!config || !config.forge || !config.signIn || !panel) return false;
   ui.config = config;
+  proposalHooks.openSpecs = () => openForge({ tab: 'specs' }); // a bad proposal link's way on
   if (opts.clock) now = opts.clock;
   for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
   panel.hidden = false;
