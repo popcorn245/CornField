@@ -561,7 +561,6 @@ describe('landing on approval', () => {
       await boot();
       await approveByButton();
       await until('waiting', () => timer.waiting().length === 1);
-      world.comments.length = 0; // the first approval's comment was deleted on the forge, so the version is open to approve again
       await approveByButton({ note: 'again' });
       await until('waiting again', () => timer.waiting().length === 1 && audit('landing').length === 2);
       expect(landings()).toHaveLength(1);

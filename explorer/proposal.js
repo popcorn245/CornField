@@ -123,7 +123,8 @@ export async function openProposal(slug, source = null) {
     const found = res.headers.get('X-Proposal-Source');
     let item;
     try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
-    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
+    const sha256 = res.headers.get('X-Proposal-Sha256'); // the version on screen: a review names it, so a push since is refused, not approved unseen
+    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true, sha256 });
     // said once, here: a proposal opens on a person's asking, never on a background refresh
     announce(reviewOpenedLine($('proposal-title').textContent));
     return true;
@@ -149,14 +150,16 @@ let openToken = 0;
 /**
  * Puts a parsed proposal on the map. The map's nodes and edges become `applyProposal(base, proposal)`.
  * @param {object} proposal
- * @param {{slug?: string|null, source?: string|null, pinSource?: boolean, view?: 'before'|'diff'|'after', fit?: boolean}} [opts]
+ * @param {{slug?: string|null, source?: string|null, pinSource?: boolean, view?: 'before'|'diff'|'after', fit?: boolean, sha256?: string|null}} [opts]
+ *   `sha256`: the file's SHA-256 as the server sent it (X-Proposal-Sha256): a review names it (spec 0007)
  *   `fit`: fit the camera to what the proposal touches and what it connects to (default true).
  *   `pinSource`: put `&source=` in the address (it was asked for by name; otherwise `/?proposal=<slug>` finds the same one)
  */
-export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true } = {}) {
+export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true, sha256 = null } = {}) {
   state.proposal = proposal;
   state.proposalSlug = slug;
   state.proposalSource = source;
+  state.proposalSha256 = typeof sha256 === 'string' && /^[0-9a-f]{64}$/.test(sha256) ? sha256 : null;
   pinnedSource = pinSource;
   if (view) state.proposalView = view;
   else if (!PROPOSAL_VIEWS.includes(state.proposalView)) state.proposalView = 'diff';
@@ -199,6 +202,7 @@ export function closeProposal() {
   state.effectiveProposal = null;
   state.proposalSlug = null;
   state.proposalSource = null;
+  state.proposalSha256 = null;
   state.proposalErrors = [];
   swapMap(state.baseNodes.map((n) => ({ ...n })), state.baseEdges);
   fitGraphToViewport(fitPadding());

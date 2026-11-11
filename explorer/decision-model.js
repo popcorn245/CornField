@@ -6,7 +6,7 @@
  * review.js is the half that touches the page; the words and the choices are here so each row of the spec's two tables is a test.
  *
  * The facts come from `GET /proposals/<slug>/decision` (server/decision.js): `{ pull: { number, draft, head }, checks: { total, passed, running,
- * failed: [names] } | null, lands, landing, run: null | { kind, transport, runner, lastSeen } }`. Everything in them from the forge (names) is text,
+ * failed: [names] } | null, lands, landing, run: null | { kind, transport, runner, lastSeen, open, fired } }`. Everything in them from the forge (names) is text,
  * and it only ever becomes text: this module builds strings, never markup. The server decides; these words are a courtesy before the click.
  *
  *   decide(input)            { line, approve: 'allowed' | 'asks' | 'done' | 'refused' | 'reading', reasons, ask, askButton }
@@ -56,7 +56,11 @@ const failedWords = (names) => `${nameList(names)} failed`;
 export function runWords(run, nowMs) {
   if (!run) return '';
   const kind = ['code', 'summary', 'brief', 'proposal'].includes(run.kind) ? run.kind : 'code';
-  const asked = `Then ${kind === 'code' ? 'a code run' : `a ${kind} run`} is asked for.`;
+  const what = kind === 'code' ? 'a code run' : `a ${kind} run`;
+  // The trigger skips a run while one is open on the PR or the proposal, and asks once per head: the line must not promise one
+  if (run.open) return `No new run is asked for: ${typeof run.open === 'string' ? `run ${oneLine(run.open).slice(0, 40)} is` : 'one is'} still open on it.`;
+  if (run.fired) return `No new run is asked for: ${what} was asked for at this head already.`;
+  const asked = `Then ${what} is asked for.`;
   if (run.transport !== 'pull') return `${asked} The request is posted for your runner.`;
   if (run.runner === 'online') return `${asked} A runner is online.`;
   const seen = typeof run.lastSeen === 'string' ? Date.parse(run.lastSeen) : NaN;
@@ -91,6 +95,12 @@ function pullWords(facts) {
   }
   if (checks && !checks.passed) return lands ? `${head} It will not land: no check has passed.` : `${head} It does not land it.`; // all skipped or neutral
   return lands ? `Approve posts an approval on PR #${n} and lands it.` : `${head} It does not land it.`;
+}
+
+/** The line while Approve reads Approved: what stands, and what makes it live again */
+function doneWords(n, facts) {
+  const landing = facts && facts.landing ? ' Its landing waits for the checks.' : '';
+  return `An approval of this version of PR #${n} stands.${landing} A push makes Approve live again.`;
 }
 
 /**
@@ -151,7 +161,8 @@ export function decide({ source, facts, factsState, review = null, edits = 0, fo
   const reasons = askReasons({ facts, edits, form });
   const run = facts.run ? runWords(facts.run, now) : '';
   const line = tail(pullWords(facts), run, editsWords(edits), played);
-  if (done) return { line, approve: 'done', reasons, ask: '' };
+  // Approve does nothing now (an approval of this version stands): the line says that, not what a press would post
+  if (done) return { line: tail(doneWords(n, facts), played), approve: 'done', reasons, ask: '' };
   return { line, approve: reasons.length ? 'asks' : 'allowed', reasons, ask: askWords(reasons) };
 }
 
@@ -211,6 +222,7 @@ export function holdCancelledWords(verdict, why) {
     hidden: `${what} was stopped: this tab was hidden.`,
     offline: `${what} was stopped: you are offline.`,
     edits: `${what} was stopped: your edits changed.`,
+    pushed: `${what} was stopped: the PR was pushed to while it was held, so it is not what you looked at. Look again before you decide.`,
   }[why] || `${what} was stopped.`;
   return `${because} Nothing was sent.`;
 }

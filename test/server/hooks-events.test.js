@@ -285,8 +285,8 @@ describe('event hooks', () => {
   });
 
   const post = (target, body, { method = 'POST', port = srv.port, as = cookie } = {}) => {
-    // The PR is seeded with an approval of its head (the pipeline's tests need it); a standing approval is not posted again (spec 0007 D3), so an
-    // approval from the button starts from a PR with none,
+    // The PR is seeded with maintainer-one's approval of its head (the pipeline's tests need it). The same approval again by the same person is a
+    // repeat, answered with the one that stands and posting nothing, firing nothing (spec 0007), so an approval from the button starts from a PR with none
     if (method === 'PUT' && target === REVIEW && body.verdict === 'approved' && world.comments[40]?.length === 1) world.comments[40] = [];
     const text = JSON.stringify(body);
     return raw(port, method, target, {

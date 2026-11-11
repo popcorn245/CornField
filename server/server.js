@@ -325,6 +325,15 @@ export function createCornfieldServer(config, opts = {}) {
   }
   // Agent runs (server/agent-runs.js) need a signed-in maintainer to ask as and a forge to ask on; the runs are followed on the spec poll's tick
   const runs = config.forge && auth.enabled && hasAdapter(config.forge.type) ? createRuns({ config, where, auth, hooks, now: opts.now, onAsk: () => specPoll?.start() }) : null;
+  // Whether an approval now would ask for a run at all (server/triggers.js): not while a run is open on the PR or the proposal (`run-open`), and
+  // not twice for one head (the trigger fires once per head). The line above Approve says so instead of promising a run that will be skipped
+  if (decisionFacts.run && runs) {
+    decisionFacts.run.already = async (n, slug, headSha) => {
+      const open = await runs.openOn({ number: n, refs: { proposal: slug } });
+      const fired = !!(await auth.store()).prepare('SELECT 1 FROM thread_seen WHERE repo = ? AND issue = ? AND comment = ?').get(config.forge.repo, n, `trigger:spec.approved:${headSha ?? ''}`);
+      return { open: open || null, fired };
+    };
+  }
   // Push and pull need the same two things a request on the forge does (a maintainer's sign-in to ask as, a forge to check against), and push needs the hook that delivers it
   const transport = config.agents?.transport ?? 'forge';
   if (transport !== 'forge' && !runs) throw new Error(`agents.transport is "${transport}", which needs sign-in and a forge to ask as a maintainer and to check them: set them up (docs/sign-in.md, docs/config.md#forge).`);

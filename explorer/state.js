@@ -107,6 +107,8 @@ export const state = {
   proposal: null,
   proposalView: 'diff',
   proposalSource: null,
+  /** The open proposal's file as the server sent it, its SHA-256 (X-Proposal-Sha256), or null: a review names it, so a push since is refused (spec 0007) */
+  proposalSha256: null,
   proposalSlug: null,
   proposalErrors: [],
   /** Where each of the open proposal's mockups stands with the review, by position: 'approved' | 'changed' | 'unreviewed' | 'missing' (mockups.js; none read yet is empty) */

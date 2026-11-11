@@ -608,3 +608,89 @@ describe('seeing the proposal without your edits, and counting them apart (D5)',
     expect(document.getElementById('map-announcer')?.textContent || '').toMatch(/\/extra/);
   });
 });
+
+describe('what posts is what was on screen at the press (the lead review of spec 0007)', () => {
+  const dbl = (el) => {
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }));
+  };
+  it('the review names the version and the head it was about, so the server can refuse a push it was not shown', async () => {
+    const s = fakeServer();
+    showProposal(robot(), { slug: '0013-meals', source: 'pull/23', view: 'diff', fit: true, sha256: 'f'.repeat(64) });
+    await settle();
+    pressApprove();
+    await advance(HOLD_MS);
+    expect(s.puts()).toHaveLength(1);
+    expect(s.puts()[0].body).toMatchObject({ verdict: 'approved', sha256: 'f'.repeat(64), headSha: 'a'.repeat(40) });
+  });
+  it('a push during the hold (the head moved) sends nothing and says so', async () => {
+    const s = await openAndRead();
+    pressApprove();
+    s.world.next.push(facts({ pull: { number: 23, draft: false, head: 'b'.repeat(40) } }));
+    await advance(HOLD_MS);
+    expect(s.puts()).toEqual([]);
+    expect(msg().textContent).toMatch(/the PR was pushed to while it was held.*Nothing was sent\.$/);
+    expect(document.activeElement).toBe(approveBtn());
+  });
+  it('a double click is one press: it holds once and sends once, and its second click never lands on Undo', async () => {
+    const s = await openAndRead();
+    dbl(approveBtn());
+    expect(approveBtn().dataset.holding).toBe('true');
+    undoBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 })); // a second click that reached Undo undoes nothing
+    expect(approveBtn().dataset.holding).toBe('true');
+    expect(undoBtn().nextElementSibling).toBe(approveBtn()); // Undo sits before Approve, so Approve keeps its place under the pointer
+    await advance(HOLD_MS);
+    expect(s.puts()).toHaveLength(1);
+  });
+  it('a double click on a state that asks only asks: its second click is not "Approve anyway"', async () => {
+    const s = await openAndRead(facts({ pull: { number: 23, draft: true, head: 'a'.repeat(40) } }));
+    dbl(approveBtn());
+    expect(askEl().hidden).toBe(false);
+    expect(approveBtn().dataset.holding).toBe('false');
+    await advance(HOLD_MS);
+    expect(s.puts()).toEqual([]);
+  });
+  it('Enter held down is one press: its repeats neither answer the question it asked nor undo a hold', async () => {
+    const s = await openAndRead(facts({ pull: { number: 23, draft: true, head: 'a'.repeat(40) } }));
+    pressApprove();
+    expect(askEl().hidden).toBe(false);
+    const repeat = new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true });
+    approveBtn().dispatchEvent(repeat);
+    expect(repeat.defaultPrevented).toBe(true); // a button's click comes from its keydown: prevented, there is no click
+    expect(approveBtn().dataset.holding).toBe('false');
+    await advance(HOLD_MS);
+    expect(s.puts()).toEqual([]);
+  });
+  it('the same approval standing already (another tab) is not posted again, and the page says nothing new was posted', async () => {
+    const s = await openAndRead();
+    s.world.put = null;
+    const mock = /** @type {any} */ (globalThis.fetch);
+    const inner = mock.getMockImplementation();
+    mock.mockImplementation(async (url, init = {}) => {
+      if ((init.method || 'GET') === 'PUT') { s.calls.push({ method: 'PUT', url, body: JSON.parse(String(init.body)) }); return { ok: true, status: 200, redirected: false, headers: new Headers(), json: async () => ({ version: 1, verdict: 'approved', note: '', edits: [], at: new Date(T0 - 60_000).toISOString(), by: 'maintainer-one', posted: false }) }; }
+      return inner(url, init);
+    });
+    pressApprove();
+    await advance(HOLD_MS);
+    expect(hint().textContent).toBe('It was approved already by maintainer-one; nothing new was posted.');
+    expect(approveBtn().textContent.trim()).toBe('Approved');
+  });
+  it('a note typed for Send back is kept for this tab: a reload during the hold does not lose it, and a send forgets it', async () => {
+    let s = await openAndRead();
+    typeNote('Split the page.');
+    click(sendBackBtn());
+    expect(sendBackBtn().dataset.holding).toBe('true');
+    const kept = Object.keys(sessionStorage).find((k) => k.startsWith('cornfield.reviewNote.'));
+    expect(kept && sessionStorage.getItem(kept)).toBe('Split the page.');
+    // the reload: the page starts again, the tab's storage stays
+    await mount();
+    sessionStorage.setItem(/** @type {string} */ (kept), 'Split the page.');
+    s = await openAndRead();
+    expect(noteOpen()).toBe(true);
+    expect(noteBox().value).toBe('Split the page.');
+    expect(s.puts()).toEqual([]); // kept, never sent by itself
+    await send(sendBackBtn());
+    expect(s.puts()).toHaveLength(1);
+    expect(sessionStorage.getItem(/** @type {string} */ (kept))).toBeNull();
+  });
+});

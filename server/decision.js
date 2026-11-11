@@ -6,7 +6,7 @@
  * the server's own checks (server/submit-review.js) are the rule whatever the page does with it.
  *
  *   { pull: { number, draft, head }, checks: { total, passed, running, failed: [names] } | null,
- *     lands: boolean, landing: { by, since } | null, run: null | { kind, transport, runner, lastSeen, quietAfterMs } }
+ *     lands: boolean, landing: { by, since } | null, run: null | { kind, transport, runner, lastSeen, quietAfterMs, open, fired } }
  *
  * - `pull`: the PR, read from the forge. A PR that is not open, or that does not hold the proposal, is 404.
  * - `checks`: the checks on the PR's head, counted: `passed` is the ones that finished green (`success`), `running` the queued and running,
@@ -14,11 +14,13 @@
  *   could not list them (the pull is still answered; the line then says it could not read them).
  * - `lands`: `proposals.approveLands` is on; `landing`: a landing is waiting on this PR now (Cancel landing, spec 0007 D3).
  * - `run`: what an approval would ask for, from `agents.on['spec.approved']`, or null. `runner` is `online`, `quiet` (it polled once, not within
- *   the window) or `never` on the pull transport (the only one with runners that ask), and null on the forge and push transports.
+ *   the window) or `never` on the pull transport (the only one with runners that ask), and null on the forge and push transports. `open` is the
+ *   id of a run already open on the PR or the proposal, and `fired` says the trigger already asked for a run at this head: either way an approval
+ *   now asks for none (the trigger skips it), and the line says so.
  *
  * **What it costs** (the idle-cost rule): the page asks when a proposal with a PR opens, every 30 s while it is open and the tab is visible, when
- * the window gets focus and at the end of the hold. Each read is two forge calls (the PR and its checks; the PR's files are kept by head sha like
- * the Specs list's). The answer is kept `FRESH_MS` for the whole server, so two tabs read the forge once; a read asked `fresh` (the end of the
+ * the window gets focus and at the end of the hold. Each read is the PR and its checks: two forge calls on Forgejo, three on GitHub (the check runs
+ * and the commit status are two calls there), so about 30 in five minutes for one visible tab; the PR's files are kept by head sha like the Specs list's. The answer is kept `FRESH_MS` for the whole server, so two tabs read the forge once; a read asked `fresh` (the end of the
  * hold, where a stale answer could let a decision through) skips the kept one and replaces it. A review posted from cornfield forgets it.
  */
 
@@ -80,7 +82,8 @@ export function countChecks(checks) {
  * @param {{ proposals: string }} where
  * @param {{ slug: string, n: number, fresh?: boolean, now?: () => number,
  *   lands?: boolean, landing?: (n: number) => ({ by: string, since: string } | null) | null,
- *   run?: null | { kind: string, transport: string, presence: () => Promise<null | { online: boolean, lastSeen: string | null, quietAfterMs: number }> } }} opts
+ *   run?: null | { kind: string, transport: string, presence: () => Promise<null | { online: boolean, lastSeen: string | null, quietAfterMs: number }>,
+ *     already?: (n: number, slug: string, headSha: string) => Promise<{ open: string | null, fired: boolean }> } }} opts
  * @returns {Promise<object>} the answer; throws a ForgeError (`not-found` when the PR is not open or does not hold the proposal)
  */
 export async function readDecision(forge, where, { slug, n, fresh = false, now = Date.now, lands = false, landing = null, run = null }) {
@@ -93,7 +96,11 @@ export async function readDecision(forge, where, { slug, n, fresh = false, now =
   }
   let runOut = null;
   if (run) {
-    runOut = { kind: run.kind, transport: run.transport, runner: null, lastSeen: null, quietAfterMs: null };
+    runOut = { kind: run.kind, transport: run.transport, runner: null, lastSeen: null, quietAfterMs: null, open: null, fired: false };
+    // An approval asks for no new run while one is open on the PR or the proposal, or when one was asked for at this head already (server/triggers.js)
+    if (typeof run.already === 'function') {
+      try { Object.assign(runOut, await run.already(n, slug, pull.head.sha)); } catch { /* not known: the line says a run is asked for, as the config does */ }
+    }
     if (run.transport === 'pull') {
       const seen = await run.presence();
       if (seen) Object.assign(runOut, { runner: seen.online ? 'online' : seen.lastSeen ? 'quiet' : 'never', lastSeen: seen.lastSeen, quietAfterMs: seen.quietAfterMs });

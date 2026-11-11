@@ -9,8 +9,9 @@
  *   - for the signed-in maintainer only; a proposal not on a PR, a closed PR, or a PR that does not hold the proposal is 404
  *   - what the forge says is text: names are handed over as data, never trusted by the server for a decision
  *   - what it costs: two forge calls a read, kept for every tab, skipped by `fresh=1`, forgotten by a review; a failed read is not kept
- *   - the checks that make the page's courtesy a rule: a standing approval of a version is not posted again (409), a maintainer who is not
- *     one now is refused in words, nothing posts without a sign-in
+ *   - the checks that make the page's courtesy a rule: the same approval again is answered with the one that stands and posts nothing (unless a
+ *     landing it began is over), a version or a head the page was not shown is 409, a maintainer who is not one now is refused in words,
+ *     nothing posts without a sign-in
  * No real forge, app or token.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
@@ -205,7 +206,7 @@ describe('the facts of a decision', () => {
 
     it('a trigger on approval says what run it asks for; the forge and push transports have no runner to ask about', async () => {
       await boot({ on: { 'spec.approved': { kind: 'code', profile: 'claude' } } });
-      expect((await decision()).run).toEqual({ kind: 'code', transport: 'forge', runner: null, lastSeen: null, quietAfterMs: null });
+      expect((await decision()).run).toEqual({ kind: 'code', transport: 'forge', runner: null, lastSeen: null, quietAfterMs: null, open: null, fired: false });
     });
 
     it('on the pull transport the runner is never seen, quiet, or online (the window is its own)', async () => {
@@ -219,6 +220,15 @@ describe('the facts of a decision', () => {
       runnerToken(30_000);
       clock += FRESH_MS + 1;
       expect((await decision()).run.runner).toBe('online');
+    });
+
+    it('says when an approval would ask for no new run: the trigger asks once per head, and not while a run is open', async () => {
+      await boot({ on: { 'spec.approved': { kind: 'code', profile: 'claude' } } });
+      expect((await decision()).run).toMatchObject({ open: null, fired: false });
+      expect((await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] })).status).toBe(200);
+      let got = await decision('&fresh=1');
+      for (let i = 0; i < 100 && !got.run.fired; i++) { await new Promise((r) => setTimeout(r, 20)); got = await decision('&fresh=1'); }
+      expect(got.run.fired).toBe(true);
     });
 
     it('a landing that waits on this PR is handed over, so Cancel landing can be shown', async () => {
@@ -319,14 +329,79 @@ describe('the facts of a decision', () => {
   });
 
   describe('what the server refuses, whatever the page asked', () => {
-    it('an approval of a version that already stands approved is 409 and posts nothing (a second tab, a double press)', async () => {
+    it('the same approval again, by the same maintainer, of the same version, is answered with the one that stands: 200, nothing posted (a second tab, a retried send)', async () => {
       await boot();
       const first = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] });
       expect(first.status, first.text).toBe(200);
+      expect(first.json.posted).toBeUndefined();
       clock += 60_000;
       const second = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] });
-      expect(second.status).toBe(409);
-      expect(second.json.error).toMatch(/already approved at this head/);
+      expect(second.status, second.text).toBe(200);
+      expect(second.json).toMatchObject({ verdict: 'approved', posted: false, by: 'maintainer-one', comment: { id: first.json.comment.id } });
+      expect(world.posted).toHaveLength(1);
+      // the button reads Approved: approving again would do nothing
+      expect((await page('GET', REVIEW)).json).toMatchObject({ verdict: 'approved', current: true });
+    });
+
+    it('an approval that says something new (another note, other edits) is posted, as before', async () => {
+      await boot();
+      expect((await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] })).status).toBe(200);
+      clock += 60_000;
+      const again = await page('PUT', REVIEW, { verdict: 'approved', note: 'And keep the old export.', edits: [] });
+      expect(again.status, again.text).toBe(200);
+      expect(again.json.posted).toBeUndefined();
+      expect(world.posted).toHaveLength(2);
+    });
+
+    it('with landing on approval, the same approval again is a repeat only while its landing waits at this head; once that landing is over it is posted, so approving again lands again', async () => {
+      world.checks = [check('validate', 'in_progress', null)];
+      await boot({ lands: true });
+      expect((await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] })).status).toBe(200);
+      let got = await decision('&fresh=1');
+      for (let i = 0; i < 100 && !got.landing; i++) { await new Promise((r) => setTimeout(r, 20)); got = await decision('&fresh=1'); }
+      expect(got.landing).not.toBeNull();
+      clock += 60_000;
+      const repeat = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] });
+      expect(repeat.json.posted).toBe(false);
+      expect(world.posted).toHaveLength(1);
+      // the maintainer cancels the landing: the approval stands, and approving again begins a landing again
+      const cancel = await page('POST', '/api/forge/pulls/40/landing/cancel', {});
+      expect(cancel.status, cancel.text).toBe(200);
+      expect((await page('GET', REVIEW)).json).toMatchObject({ verdict: 'approved', current: false });
+      clock += 60_000;
+      const again = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [] });
+      expect(again.status, again.text).toBe(200);
+      expect(again.json.posted).toBeUndefined();
+      expect(world.posted.filter((c) => /cornfield-review/.test(c.body))).toHaveLength(2);
+    });
+
+    it('what the page was shown is what is approved: a file changed since it was served (sha256), or a head pushed since (headSha), is 409 and posts nothing', async () => {
+      await boot();
+      const served = await page('GET', `/proposals/${SLUG}.json?source=pull%2F40`);
+      expect(served.status, served.text).toBe(200);
+      const sha256 = served.headers['x-proposal-sha256'];
+      expect(sha256).toMatch(/^[0-9a-f]{64}$/);
+      // the agent pushes a change to the file during the hold
+      world.text = proposalOf('Meals, changed');
+      world.pull.head.sha = `${'c'.repeat(39)}3`;
+      clock += FRESH_MS + 1;
+      const stale = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [], sha256, headSha: HEAD });
+      expect(stale.status).toBe(409);
+      expect(stale.json.error).toMatch(/has changed since you read it/);
+      // a push that leaves the file as it was: the head the page saw is not the head now
+      clock += 60_000;
+      const served2 = await page('GET', `/proposals/${SLUG}.json?source=pull%2F40`);
+      world.pull.head.sha = `${'d'.repeat(39)}4`;
+      const moved = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [], sha256: served2.headers['x-proposal-sha256'], headSha: `${'c'.repeat(39)}3` });
+      expect(moved.status).toBe(409);
+      expect(moved.json.error).toMatch(/was pushed to since you looked/);
+      expect(world.posted).toEqual([]);
+      // what is on screen now posts; a head that is not a commit's SHA is 400
+      clock += 60_000;
+      expect((await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [], headSha: 'not-a-sha' })).status).toBe(400);
+      clock += 60_000;
+      const now = await page('PUT', REVIEW, { verdict: 'approved', note: '', edits: [], sha256: served2.headers['x-proposal-sha256'], headSha: `${'d'.repeat(39)}4` });
+      expect(now.status, now.text).toBe(200);
       expect(world.posted).toHaveLength(1);
     });
 

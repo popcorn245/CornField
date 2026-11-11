@@ -1436,7 +1436,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-proposal-actions .hx-btn[data-holding="true"] { opacity: 1; font-variant-numeric: tabular-nums; }
 .hx-review-undo[hidden] { display: none; }
 @media (max-width: 767px) {
-  .hx-review-undo { min-height: 44px; min-width: 44px; }
+  .hx-review-undo { min-height: 44px; min-width: 44px; order: 1; grid-column: 1 / -1; } /* a row of its own under Send back and Approve: never where the finger that pressed is */
   .hx-review-landing .hx-btn { min-height: 44px; }
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-decision-line { display: none; } /* the note's sheet shows the send back line under the note, not Approve's */
 }

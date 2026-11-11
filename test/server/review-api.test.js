@@ -283,7 +283,9 @@ describe('the review API', () => {
       const { secret } = await mint();
       const viaApi = await call(secret, approve({ note: 'Same.' }));
       expect(viaApi.status, viaApi.text).toBe(200);
-      world.comments.length = 0; // the first approval's comment was deleted on the forge: this version stands approved no more, so it is open to approve again (a standing one is refused, spec 0007 D3)
+      // The same approval again by the same person would be a repeat (answered with the one that stands, nothing posted: spec 0007); the first
+      // comment is taken off the PR so the button posts its own, and the two can be compared
+      world.comments.length = 0;
       clock += 60_000;
       const viaButton = await page('PUT', `/proposals/${SLUG}/review?source=pull%2F40`, { verdict: 'approved', note: 'Same.', edits: [] });
       expect(viaButton.status, viaButton.text).toBe(200);
@@ -476,7 +478,6 @@ describe('the review API', () => {
     it('asks the forge now whether the owner still maintains the repo: a demoted owner is refused (403), and the token is revoked for good', async () => {
       const { secret } = await mint();
       expect((await call(secret, approve())).status).toBe(200);
-      world.comments.length = 0; // the first approval's comment was deleted on the forge: this version stands approved no more, so it is open to approve again (a standing one is refused, spec 0007 D3)
       clock += 60_000;
       world.demoted.add('maintainer-one');
       const res = await call(secret, approve());
@@ -523,7 +524,6 @@ describe('the review API', () => {
       expect(Number(again.headers['retry-after'])).toBeGreaterThanOrEqual(1);
       expect(world.posted).toHaveLength(1);
       expect(reviewRows().at(-1)).toMatchObject({ status: 429 });
-      world.comments.length = 0; // (see above: only the cooldown is under test)
       clock += COOLDOWN_MS + 1;
       expect((await call(secret, approve())).status).toBe(200);
     });

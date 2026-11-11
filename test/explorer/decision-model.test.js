@@ -72,6 +72,9 @@ describe('the line above Approve (D1)', () => {
     it('with the runner quiet: how long, and that the run will wait', () => {
       expect(runWords({ kind: 'code', transport: 'pull', runner: 'quiet', lastSeen: ago(2 * H) }, NOW)).toBe('Then a code run is asked for. No runner has polled for 2 h: the run will wait.');
       expect(runWords({ kind: 'code', transport: 'pull', runner: 'quiet', lastSeen: ago(5 * 60_000) }, NOW)).toContain('for 5 min:');
+      // an approval now asks for no new run: one is open on the PR or the proposal, or one was asked for at this head (the trigger skips it)
+      expect(runWords({ kind: 'code', transport: 'pull', runner: 'online', open: 'run-01ABC' }, NOW)).toBe('No new run is asked for: run run-01ABC is still open on it.');
+      expect(runWords({ kind: 'code', transport: 'forge', runner: null, fired: true }, NOW)).toBe('No new run is asked for: a code run was asked for at this head already.');
     });
     it('with no runner ever seen', () => {
       expect(runWords({ kind: 'code', transport: 'pull', runner: 'never', lastSeen: null }, NOW)).toBe('Then a code run is asked for. No runner has polled yet: the run will wait.');
@@ -158,6 +161,8 @@ describe('when Approve allows, asks, or is refused (D2)', () => {
   });
   it('already approved at this head: done, and a stale approval is not', () => {
     expect(line(facts(), { review: { verdict: 'approved', current: true } }).approve).toBe('done');
+    expect(line(facts(), { review: { verdict: 'approved', current: true } }).line).toBe('An approval of this version of PR #23 stands. A push makes Approve live again.');
+    expect(line(facts({ landing: { by: 'm', since: 'x' } }), { review: { verdict: 'approved', current: true } }).line).toBe('An approval of this version of PR #23 stands. Its landing waits for the checks. A push makes Approve live again.');
     expect(line(facts(), { review: { verdict: 'approved', current: false } }).approve).toBe('allowed');
     expect(line(facts(), { review: { verdict: 'notes' } }).approve).toBe('allowed');
     // reading again after the push: the approval no longer stands, and the facts say what to do now

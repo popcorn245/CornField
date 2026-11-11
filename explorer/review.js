@@ -27,8 +27,10 @@
  * opens, every `FACTS_MS` while it is open and the tab is visible, when the window gets focus, and at the end of the hold; the words and the choices are
  * decision-model.js. Four states ask first, in place (the line becomes the question, the button "Approve anyway", Escape takes it back); a press then
  * starts a hold of `HOLD_MS` with Undo (focus on it) before anything leaves the page, and the end of the hold reads the facts once more. Closing the
- * proposal, opening another, hiding the tab, going offline, changing the edits, Undo and Escape each stop it, and say so. The server is the rule:
- * it refuses an approval that stands already, a maintainer who is one no longer and a missing sign-in, whatever this page did.
+ * proposal, opening another, hiding the tab, going offline, changing the edits, a push seen at the end of the hold, Undo and Escape each stop it, and
+ * say so. What is sent is what was on screen at the press, with the version it was about (`sha256`, `headSha`). The server is the rule: it refuses a
+ * version or a head the page was not shown (409), a maintainer who is one no longer (403) and a missing sign-in (401), and answers a repeat of an
+ * approval that stands with that one, posting nothing, whatever this page did.
  */
 
 import { state } from './state.js';
@@ -132,11 +134,17 @@ function mount() {
         undo.dataset.cornKind = 'secondary';
         undo.hidden = true;
         undo.textContent = t('undo');
-        actions.append(undo);
+        // Before Approve, not after it: Approve keeps its place under the pointer, so the second click of a double click lands on the held
+        // button (which ignores it), never on Undo; on a phone Undo takes a row of its own under the two (explorer.css)
+        const approve = actions.querySelector('[data-review="approved"]');
+        if (approve) approve.before(undo); else actions.append(undo);
       }
     } else body.prepend(root);
     ($('review-decision') || $('proposal-bar') || root).addEventListener('click', onClick);
-    root.addEventListener('input', () => { if (ui.message) { ui.message = ''; paint(); } });
+    root.addEventListener('input', (e) => {
+      if (e.target && e.target.id === 'review-note') keepNote(ui.key, e.target.value);
+      if (ui.message) { ui.message = ''; paint(); }
+    });
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.noting && !ui.asking && !ui.hold) { e.stopPropagation(); closeNote(); } });
   }
   return root;
@@ -259,6 +267,7 @@ function closeNote() {
   ui.asking = null;
   ui.message = '';
   q('#review-note').value = '';
+  forgetNote(ui.key);
   paint();
   const sendBack = button('notes');
   if (sendBack) sendBack.focus();
@@ -283,7 +292,10 @@ function onBar(open) {
   ui.factsState = ui.reviewable ? 'loading' : 'ready';
   ui.message = ui.hint = '';
   const note = q('#review-note');
-  if (note) note.value = '';
+  // A note typed for Send back and not sent survives a reload or a way back to this proposal (in this tab only); it is never sent by itself
+  const kept = key && ui.reviewable ? keptNote(key) : '';
+  if (note) note.value = kept;
+  if (kept) ui.noting = true;
   paint();
   if (key && ui.reviewable) { loadReview(key); loadFacts(); }
 }
@@ -313,6 +325,23 @@ export async function loadFacts({ fresh = false } = {}) {
   // A push since the review was read: what stood is not what stands, so it is read again ("a push makes it live again")
   if (head && before && head !== before) loadReview(key);
   paint();
+}
+
+// ---------------------------------------------------------------------------
+//  The note, kept for this tab (a reload during a hold, or by mistake, does not lose what was typed)
+// ---------------------------------------------------------------------------
+
+const NOTE_KEY = 'cornfield.reviewNote.';
+function keepNote(key, text) {
+  if (!key) return;
+  try { if (text && text.trim()) sessionStorage.setItem(NOTE_KEY + key, text.slice(0, 20000)); else sessionStorage.removeItem(NOTE_KEY + key); } catch { /* storage off: nothing kept */ }
+}
+function keptNote(key) {
+  try { return sessionStorage.getItem(NOTE_KEY + key) || ''; } catch { return ''; }
+}
+function forgetNote(key) {
+  if (!key) return;
+  try { sessionStorage.removeItem(NOTE_KEY + key); } catch { /* storage off */ }
 }
 
 /** The read repeats while a proposal with a PR is open and the tab is visible: nothing when hidden or with none open */
@@ -361,6 +390,9 @@ async function loadReview(key) {
 
 function onClick(e) {
   if (!e.target.closest) return;
+  // The second click of a double click (or a double tap) is not a second decision: it must not answer the question the first one asked, nor undo
+  // the hold it started (keyboard presses have a detail of 0)
+  if (e.detail > 1 && e.target.closest('[data-review], [data-review-undo]')) return;
   if (e.target.closest('[data-review-undo]')) { if (ui.hold) stopHold('undo'); return; }
   if (ui.hold || ui.busy) return; // a double press: the first one is being held or sent, a second starts nothing
   if (e.target.closest('[data-review-cancel-landing]')) { cancelLanding(); return; }
@@ -412,7 +444,11 @@ function press(verdict) {
 
 /** Starts the hold: what was on screen at the press is what will be sent; nothing leaves the page until it ends */
 function startHold(verdict, answered) {
-  const body = reviewBody(verdict, verdict === 'notes' ? q('#review-note').value : '', getEdits());
+  // What was on screen at the press, and only that, is sent: the note, the edits, and which version they were about (the proposal file's SHA-256 and
+  // the PR's head commit). The server refuses (409) a review whose version or head is not the PR's any more, so a push during the hold, or before
+  // the press on a page opened earlier, is never approved unseen
+  const shown = { ...(state.proposalSha256 ? { sha256: state.proposalSha256 } : {}), ...(ui.facts && ui.facts.pull && ui.facts.pull.head ? { headSha: ui.facts.pull.head } : {}) };
+  const body = { ...reviewBody(verdict, verdict === 'notes' ? q('#review-note').value : '', getEdits()), ...shown };
   ui.asking = null;
   const hold = { verdict, body, answered, left: HOLD_MS / 1000, tick: null, end: null };
   ui.hold = hold;
@@ -452,6 +488,9 @@ async function endHold(hold) {
   const key = ui.key;
   if (hold.verdict === 'approved' && ui.reviewable) await loadFacts({ fresh: true });
   if (ui.hold !== hold || key !== ui.key) return; // undone, or another proposal opened, while the facts were read
+  // Pushed to during the hold: what was looked at is not the PR any more. Nothing is sent (the server would refuse it as well) and the page says so
+  const headNow = ui.facts && ui.facts.pull ? ui.facts.pull.head : null;
+  if (hold.verdict === 'approved' && hold.body.headSha && headNow && headNow !== hold.body.headSha) { stopHold('pushed'); return; }
   if (hold.verdict === 'approved') {
     const fresh = newReasons(askReasons({ facts: ui.facts, edits: hold.body.edits.length, form: openFormInfo() }), hold.answered);
     if (fresh.length) {
@@ -463,6 +502,8 @@ async function endHold(hold) {
     }
   }
   ui.hold = null;
+  const live = q('[data-review-hold-live]');
+  if (live) live.textContent = ''; // the hold is over: what happened is said by the status line (or the refusal), not by "Approving in 5 seconds"
   await sendReview(hold.verdict, { body: hold.body });
 }
 
@@ -536,14 +577,17 @@ export async function sendReview(verdict, frozen = {}) {
     ui.busy = false;
     ui.message = refusalWords(err.status || res.status, err.message);
     paint();
-    // Refused because it stands already (a second tab): the bar is brought up to date, so Approve reads Approved
-    if (res.status === 409 && key === ui.key) { loadReview(key); loadFacts({ fresh: true }); }
+    // Refused because something changed (a push: 409) or another tab sent one just now (429): the bar is brought up to date
+    if ((res.status === 409 || res.status === 429) && key === ui.key) { loadReview(key); loadFacts({ fresh: true }); }
     return false;
   }
   ui.busy = false;
   if (key !== ui.key) return true; // another proposal opened while it was being saved: it is saved, the bar is not this one's any more
   ui.review = { verdict: saved.verdict, at: saved.at, current: saved.verdict === 'approved' };
   ui.hint = verdict === 'approved' ? editsHint(verdict, body.edits.length) : '';
+  // The same approval stood already (another tab, or a send that was retried): the server posted nothing, and the page says so
+  if (saved.posted === false) ui.hint = `It was approved already${saved.by ? ` by ${saved.by}` : ''}; nothing new was posted.`;
+  forgetNote(key);
   if (verdict === 'notes' && sentLines.length) ui.sent = { key: `${saved.at}`, lines: sentLines };
   noteEl.value = '';
   const wasNoting = ui.noting;
@@ -565,8 +609,10 @@ export async function sendReview(verdict, frozen = {}) {
 //  Wiring
 // ---------------------------------------------------------------------------
 
-/** Escape takes an open question back, or ends a hold, before anything else on the page hears it */
+/** Escape takes an open question back, or ends a hold, before anything else on the page hears it; a held key's repeats do nothing here */
 function onEscape(e) {
+  // A key held down repeats: its repeats are not more decisions (Enter held on Approve would answer its own question, then undo the hold)
+  if (e.repeat && (e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest && e.target.closest('#review-decision [data-review], #review-decision [data-review-undo]')) { e.preventDefault(); e.stopPropagation(); return; }
   if (e.key !== 'Escape' || !ui.key) return;
   if (ui.hold) { e.stopPropagation(); e.preventDefault(); stopHold('escape'); return; }
   if (ui.asking) { e.stopPropagation(); e.preventDefault(); ui.asking = null; paint(); }
@@ -635,5 +681,6 @@ export function resetReviewForTests(clock = () => Date.now()) {
   wired = false;
   root = null;
   now = clock;
+  try { for (const k of Object.keys(sessionStorage)) if (k.startsWith(NOTE_KEY)) sessionStorage.removeItem(k); } catch { /* none */ }
   Object.assign(ui, { key: null, reviewable: false, review: null, loadFailed: false, busy: false, noting: false, message: '', hint: '', facts: null, factsState: 'loading', factsAt: 0, asking: null, hold: null, sent: null });
 }
