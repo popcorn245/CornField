@@ -74,6 +74,7 @@ A field above the list filters titles, slugs and summaries as you type; each gro
 - **One expanded at a time.** Expanding one folds the other to a **stub**: one 44 px row with its title and its badge. Tapping the stub swaps them.
 - **The map keeps at least 35% of the screen** (296 px at 844) in every state: an expanded sheet's height is capped to keep it. Review peek and Work peek leave 481 px (57%); Work expanded with the review as a stub leaves 296 px, against 90 px today.
 - **The hint hides** while any sheet is expanded; Layers and Fit stay, in their one row.
+- **The selected node stays in the 35%.** Today the backdrop of an expanded sheet blurs and dims the map, the selected node with it; that stays open as [#180](https://github.com/popcorn245/CornField/issues/180), and its fix must keep the node sharp and in the part of the map left showing.
 - **Getting back:** tap the map or the handle to fold the expanded sheet to peek; ✕ closes a sheet; `Escape` folds, then closes.
 - **Rejected:** Work as a full-screen page (it hides the map the review is about); three sheets at once (proposal and node already leave 60.4%, Work on top 10.6%); Work opening expanded (the 33.4% the review measured).
 

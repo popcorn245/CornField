@@ -2044,7 +2044,7 @@
       "type": "page",
       "label": "/docs/specs/0008-reading-a-big-map",
       "file": "docs/specs/0008-reading-a-big-map.md",
-      "summary": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes)",
+      "summary": "Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes)",
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0008: reading a big map (labels, search, selection, edge kinds, type shapes) (docs/specs/0008-reading-a-big-map.md)."
@@ -6572,5 +6572,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T09:17:01.787Z"
+  "updatedAt": "2026-11-11T09:21:07.821Z"
 }
