@@ -73,11 +73,12 @@ export function actorsOf(scenario) {
  * @param {{ state: string, mismatch?: boolean, expect?: string, reason?: string, why?: string } | null | undefined} v a check-model Verdict
  * @returns {{ words: string, state: 'success' | 'failure' | '', tone: string } | null}
  */
-export function stepVerdictWords(v) {
+export function stepVerdictWords(v, words = {}) {
+  const notChecked = words.notChecked || 'Not checked';
   if (!v || v.state === 'none') return null;
   if (v.state === 'pending') return { words: 'Checking…', state: '', tone: 'pending' };
-  if (v.state === 'unchecked') return { words: `Not checked: ${v.why || 'nothing to ask'}`, state: '', tone: 'unchecked' };
-  if (v.state === 'unavailable') return { words: `Not checked: the checker did not answer${v.why ? ` (${v.why})` : ''}`, state: '', tone: 'unavailable' };
+  if (v.state === 'unchecked') return { words: `${notChecked}: ${v.why || 'nothing to ask'}`, state: '', tone: 'unchecked' };
+  if (v.state === 'unavailable') return { words: `${notChecked}: the checker did not answer${v.why ? ` (${v.why})` : ''}`, state: '', tone: 'unavailable' };
   if (v.mismatch) {
     const words = v.state === 'refused' ? `Expected allowed, was refused${v.reason ? `: ${v.reason}` : ''}` : 'Expected refused, was allowed';
     return { words, state: 'failure', tone: 'mismatch' };
@@ -89,7 +90,7 @@ export function stepVerdictWords(v) {
 /**
  * The scenario's steps as rows: number, who acts, the node it touches, the node's mark, the text and the verdict.
  * @param {object} scenario
- * @param {{ nodes: any[], edges: any[], changeKeys: Set<string>, verdicts?: any[] | null, label: (id: string) => string, personaLabel: (id: string) => string }} ctx
+ * @param {{ nodes: any[], edges: any[], changeKeys: Set<string>, verdicts?: any[] | null, words?: { notChecked?: string }, label: (id: string) => string, personaLabel: (id: string) => string }} ctx
  */
 function stepRows(scenario, ctx) {
   return asList(scenario.steps).map((step, i) => {
@@ -108,7 +109,7 @@ function stepRows(scenario, ctx) {
       const n = ctx.nodes.find((x) => x.id === step.node);
       if (n && n.mark && n.mark !== 'none') mark = n.mark;
     }
-    const v = ctx.verdicts ? stepVerdictWords(ctx.verdicts[i]) : null;
+    const v = ctx.verdicts ? stepVerdictWords(ctx.verdicts[i], ctx.words) : null;
     return {
       index: i,
       number: i + 1,
@@ -147,6 +148,7 @@ function verdictSummary(rows) {
  * @param {object | null} [input.proposal] for the list of changes it counts "walks 3 of 9 changes" against
  * @param {Map<string, any[]> | null} [input.verdicts] scenario id -> its steps' check-model verdicts, for the scenarios that were checked
  * @param {{ played?: string[], read?: string[] } | null} [input.seen] what this browser has seen
+ * @param {{ notChecked?: string }} [input.words] the project's own words (`strings`)
  * @returns {{
  *   total: number,
  *   personaCount: number,
@@ -156,7 +158,7 @@ function verdictSummary(rows) {
  *   playedLine: string,
  * }}
  */
-export function buildScenarioList({ scenarios, nodes, edges, proposal = null, verdicts = null, seen = null }) {
+export function buildScenarioList({ scenarios, nodes, edges, proposal = null, verdicts = null, seen = null, words = {} }) {
   const list = asList(scenarios);
   const personas = nodes.filter((n) => n.type === 'persona');
   const byPersona = new Map(personas.map((n) => [personaId(n), n]));
@@ -169,7 +171,7 @@ export function buildScenarioList({ scenarios, nodes, edges, proposal = null, ve
 
   const built = list.map((s, index) => {
     const checked = verdicts && verdicts.get(s.id);
-    const steps = stepRows(s, { nodes, edges, changeKeys, verdicts: checked || null, label, personaLabel });
+    const steps = stepRows(s, { nodes, edges, changeKeys, verdicts: checked || null, words, label, personaLabel });
     const walked = new Set(steps.flatMap((st) => st.touched).filter((k) => changeKeys.has(k)));
     const count = steps.length;
     const parts = [plural(count, 'step')];

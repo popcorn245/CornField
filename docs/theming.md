@@ -487,14 +487,19 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `run-actions`, `run-totals` | the buttons of a run card (Light on the map, Timeline, Stop, Reply and the rest: each has a `data-corn-kind`), the totals of what the runners reported |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar`, `proposal-head` | the open proposal's bar, and its toolbar row |
-| `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name, the counts button ("5 nodes, 6 edges added …": it opens the list of changes, `aria-expanded`), and on a phone the button that shows Before / Diff / After (it says which is on) |
+| `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name (an `h2`), the counts ("5 nodes, 6 edges added · 5 scenarios": its parts are `quiet` buttons that take the focus to the Changes or the Scenarios section of the review column; on a phone they move its switch), and on a phone the button that shows Before / Diff / After (it says which is on) |
 | `compare`, `compare-option` | the Before / Diff / After group and one of its options (the chosen one has `aria-pressed="true"`) |
-| `proposal-menu`, `proposal-errors`, `proposal-changes` | the bar's ⋯ menu, the folded list of problems with the file, the list of changes behind the counts (each change is a `row`) |
-| `scenario-list`, `whatif-toolbar` | the list of scenarios behind Play (each is a `row`), the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
+| `proposal-menu`, `proposal-errors` | the bar's ⋯ menu, the folded list of problems with the file |
+| `whatif-toolbar` | the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
+| `review-column` | the review column, open with the proposal: docked on the left of the map under the bar from 768px (400px wide, 320px under 1024px), and on a phone the expanded proposal sheet's body. It holds the two lists and the decision. Rules that place it should leave its `top`, `bottom` and `left` alone: the map is framed into what it leaves free |
+| `change-list`, `scenario-list` | the review column's two sections, each with its heading (`h3`) and its list: Changes (each change is a `row`, a button) and Personas and scenarios |
+| `persona-group` | one persona's `h4` ("Adult · 1 scenario") and the scenarios that apply to it, one `row` each (a disclosure: `aria-expanded`); the last group is Anyone, the scenarios that name no persona |
+| `step-list`, `step` | an opened scenario's numbered list of steps, and one step (a button: who acts, the node, its mark, the text and its verdict; the one the player is on has `aria-current="step"`). Its verdict is a `state-pill` |
+| `decision` | the column's foot, a group: Send back and Approve and the review status above them (`review-bar`); spec 0007 puts the line that says what Approve does there |
 | `mark-dot` | the dot in front of a change or a count and in a legend; `data-corn-state` is `added`, `changed`, `removed` or `edit` |
 | `step-number` | in the What-if editor, the number of a scenario's step (it shows that step on the map) |
 | `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
-| `review-bar`, `review-label`, `review-note`, `whatif`, `whatif-panel`, `whatif-node` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the note's label, the note's text field, the what-if editor (behind Edit), one of its panels (the form to add a node or an edge, the list of edits, the steps), and its editor for the selected node in the node panel |
+| `review-bar`, `review-label`, `review-note`, `whatif`, `whatif-panel`, `whatif-node` | the review part, in the `decision` (the status line and the note that opens on Send back, above Send back and Approve), and in the proposal bar, the note's label, the note's text field, the what-if editor (behind Edit), one of its panels (the form to add a node or an edge, the list of edits, the steps), and its editor for the selected node in the node panel |
 | `scenario-player`, `scenario-check`, `scenario-track`, `scenario-fill` | the scenario player, the line that says whether a step was allowed, and the progress bar with its fill (`style="width"`) |
 
 ### The sign-in pages
@@ -525,13 +530,13 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 
 | Hook | What it is |
 |---|---|
-| `tabs`, `tab` | a row of tabs, one tab |
+| `tabs`, `tab` | a row of tabs, one tab: the Work panel's, and the review column's phone switch (Changes · 6 \| Scenarios · 3; `role="tablist"`, `aria-selected`) |
 | `count` | a number shown as data: a tab's count (empty, at least `2ch` wide, until it is read, so the tabs do not move), a layer's count, the Work button's lit tag ("#21"), the step counter, a pull request's number in its detail. Takes `--corn-font-num` |
-| `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
+| `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario in the review column; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
 | `badge` | a badge: the node panel's kind (type · host), the "Agent" mark |
-| `state-pill` | a state word (`data-corn-state`) |
+| `state-pill` | a state word (`data-corn-state`); a scenario step's verdict in the review column carries `success` (allowed, or refused as expected) or `failure` (refused, or not as expected), and none when it was not checked: its words always say which |
 | `state-icon` | the icon inside a run's or a check's `state-pill`: a shape for each state, drawn in the pill's colour |
 | `result` | what an action came to, under the control that was used (a run's Reply, Continue or Stop; Copy spec); it stays until the next action and is also announced |
 | `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
@@ -557,7 +562,7 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 
 **The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
-Only labels a brand would want to voice are keys (about forty). Sentences of help text, status lines and the forge's own errors stay as they are.
+Only labels a brand would want to voice are keys (about fifty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
 <!-- strings:start -->
 | Key | Default |
@@ -581,6 +586,18 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
 | `openSpecsList` | Open the Specs list |
+| `changes` | Changes |
+| `personasAndScenarios` | Personas and scenarios |
+| `anyone` | Anyone |
+| `notInAnyScenario` | Not in any scenario |
+| `steps` | Steps |
+| `previousStep` | Previous |
+| `nextStep` | Next |
+| `pause` | Pause |
+| `play` | Play |
+| `playAgain` | Play again |
+| `nextScenario` | Next scenario |
+| `notChecked` | Not checked |
 | `tabSpecs` | Specs |
 | `tabPulls` | PRs |
 | `tabIssues` | Issues |

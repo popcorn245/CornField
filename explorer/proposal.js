@@ -27,9 +27,10 @@ import { edgePoint, looksFor } from './scene.js';
 import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
 import {
-  PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, openedWords, jumpWords,
+  PROPOSAL_VIEWS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, jumpWords,
   sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
 } from './proposal-model.js';
+import { renderReviewColumn, reviewOpenedLine, showSection, setPullHead } from './review-column.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
 import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
@@ -122,7 +123,7 @@ export async function openProposal(slug, source = null) {
     try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
     showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
     // said once, here: a proposal opens on a person's asking, never on a background refresh
-    announce(openedWords($('proposal-title').textContent, summarize(state.proposal), state.proposalView));
+    announce(reviewOpenedLine($('proposal-title').textContent));
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
@@ -234,7 +235,7 @@ function swapMap(nodes, edges) {
 
 /**
  * Frames what the proposal changes (nodes added, changed or removed, and both ends of a changed edge; not what they connect to) in the part of the
- * map nothing covers (the bar, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
+ * map nothing covers (the bar, the review column, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
  * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than FRAME_ZOOM_MIN shows,
  * the biggest part of it that fits there is framed, not the whole at a zoom where it is a speck (the change list reaches the rest). A proposal that changes nothing drawn shows the whole map.
  */
@@ -325,6 +326,7 @@ async function loadPullInfo(n) {
     const res = await fetch(`/api/forge/pulls/${n}`);
     const body = res.ok ? await res.json() : null;
     if (body && body.ok !== false && body.pull) pullInfo.set(n, { pull: body.pull, checks: Array.isArray(body.checks) ? body.checks : null });
+    if (body && body.pull && pullNumberOf(state.proposalSource) === n) setPullHead(body.pull.head && typeof body.pull.head.sha === 'string' ? body.pull.head.sha : ''); // what was seen is kept per PR head
   } catch { /* no forge, or not signed in: the chip keeps what it has */ }
   if (state.proposal && pullNumberOf(state.proposalSource) === n) paintSource();
 }
@@ -356,14 +358,18 @@ export function renderBar() {
   paintSource();
   const summary = $('proposal-summary');
   summary.textContent = (p && typeof p.summary === 'string' && p.summary) || '';
-  const title = $('proposal-title');
-  title.title = summary.textContent; // the toolbar stays one row: the summary is the title's tooltip, and shows above the list of changes
-  summary.hidden = !summary.textContent || $('proposal-changes').hidden;
+  summary.hidden = !summary.textContent;
+  $('proposal-title').title = summary.textContent; // the bar stays one row: the summary is also the title's tooltip, and leads the review column
 
   const counts = summarize(p);
   const chip = $('proposal-chip');
-  chip.innerHTML = barCounts(counts).map((c) => `${c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" data-corn="mark-dot"${markStateAttr(c.mark)} aria-hidden="true"></span>` : ''}${escHtml(c.text)}`).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
-  chip.title = 'Click for the list of changes.';
+  // The counts name their lists: the changes part shows the Changes section, "5 scenarios" the Scenarios section (the review column, review-column.js)
+  const parts = barCounts(counts);
+  chip.innerHTML = parts.map((c) => {
+    const dot = c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" data-corn="mark-dot"${markStateAttr(c.mark)} aria-hidden="true"></span>` : '';
+    if (!c.mark && /scenarios?$/.test(c.text)) return `<button type="button" class="hx-proposal-count" data-action="review-show-scenarios" data-corn-kind="quiet" title="Show the personas and their scenarios">${escHtml(c.text)}</button>`;
+    return `<button type="button" class="hx-proposal-count" data-action="review-show-changes" data-corn-kind="quiet" title="Show the list of changes">${dot}${escHtml(c.text)}</button>`;
+  }).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
   $('proposal-mode').textContent = t(state.proposalView);
 
   for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
@@ -379,40 +385,12 @@ export function renderBar() {
     $('proposal-errors-count').textContent = `${plural(errors.length, 'problem')} in this proposal`;
     $('proposal-errors-list').innerHTML = problemsHtml(errors);
   }
-  renderChanges();
+  renderReviewColumn();
   if (hooks.bar) hooks.bar(true);
 }
 
-/** The list behind the chip: every marked node and edge, one row each, to pick one without finding it on the map */
-function renderChanges() {
-  const list = $('proposal-changes');
-  if (!list) return;
-  // The ownership edge a `parent` adds, and the edges of a removed node, are consequences: the list holds what the proposal says
-  const said = new Set(['add', 'change', 'remove'].flatMap((op) => asList((state.effectiveProposal || state.proposal)?.edges?.[op]).map(edgeKey)));
-  const rows = [];
-  for (const mark of [...MARKS, 'edit']) {
-    for (const n of state.nodes.filter((x) => x.mark === mark)) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="node" data-key="${escHtml(n.id)}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark-dot"${markStateAttr(mark)}></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(n.label)}</span><span class="hx-faint">${escHtml(n.type)}</span></button>`);
-    }
-    for (const e of state.edges.filter((x) => x.mark === mark && said.has(edgeKey(x)))) {
-      rows.push(`<button type="button" class="hx-change-row" data-action="proposal-focus" data-kind="edge" data-key="${escHtml(edgeKey(e))}" data-corn="row"><span class="hx-mark-dot hx-mark-dot--${mark}" data-corn="mark-dot"${markStateAttr(mark)}></span><span class="hx-change-what">${escHtml(MARK_WORDS[mark])}</span><span class="hx-name">${escHtml(nameOf(e.from))} → ${escHtml(nameOf(e.to))}</span><span class="hx-faint">${escHtml(e.kind || 'ownership')}</span></button>`);
-    }
-  }
-  list.innerHTML = rows.join('') || '<p class="hx-faint">This proposal changes nothing on the map.</p>';
-}
-
-function toggleChanges(refocus = false) {
-  const list = $('proposal-changes');
-  if (!list) return;
-  list.hidden = !list.hidden;
-  $('proposal-summary').hidden = list.hidden || !$('proposal-summary').textContent;
-  $('proposal-chip').setAttribute('aria-expanded', String(!list.hidden));
-  // The list sits after the toolbar's buttons in the page, so focus goes into it when it opens (its first row), and back to the chip when it closes by Escape
-  if (!list.hidden) { if (!isPhone()) list.querySelector('button')?.focus(); } else if (refocus) $('proposal-chip').focus();
-}
-
 /**
- * Picks a row of the changes list: select it, centre it in the part of the map the open list, the node panel and (on a phone) the sheets leave free,
+ * Picks a row of the changes list: select it, centre it in the part of the map the review column, the node panel and (on a phone) the sheets leave free,
  * at a zoom where its label reads, and make sure the current view shows it
  */
 function focusChange(kind, key) {
@@ -628,7 +606,8 @@ const ACTIONS = {
   'proposal-view': (el) => { setProposalView(el.dataset.view); toggleMode(false); },
   'toggle-proposal-mode': () => toggleMode(),
   'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),
-  'toggle-proposal-changes': () => toggleChanges(),
+  'review-show-changes': () => showSection('changes'),
+  'review-show-scenarios': () => showSection('scenarios'),
   'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'retry' ? retryOpen(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'close' ? closeAfterFailure() : openSpecs()),
   'proposal-focus': (el) => focusChange(el.dataset.kind, el.dataset.key),
 };
@@ -669,51 +648,6 @@ function openSpecs() {
 function onKey(e) {
   if (e.key === 'Escape' && menuOpen()) closeMenu();
   onMoreKey(e);
-  // Escape inside the list of changes folds it back onto its chip
-  const list = $('proposal-changes');
-  if (e.key === 'Escape' && !e.defaultPrevented && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); toggleChanges(true); }
-  if (e.key === 'Tab' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) tabThroughList(e);
-}
-
-/** The lists the toolbar opens, each after the button that opens it: the changes (the counts) and the scenarios (Play) */
-const OPENERS = [['proposal-chip', 'proposal-changes'], ['proposal-play', 'proposal-scenarios']];
-const TABBABLE = 'button, a[href], input, select, textarea, summary, [tabindex]';
-const canTab = (el) => el.tabIndex >= 0 && !el.disabled && !el.closest('[hidden]') && (typeof el.checkVisibility !== 'function' || el.checkVisibility());
-const tabbables = (root) => [...root.querySelectorAll(TABBABLE)].filter(canTab);
-
-/**
- * An open list sits in the page under the whole toolbar, so Tab would reach it only after Approve and ⋯ (WCAG 2.4.3). The bar's Tab order is
- * the page's with each open list moved to right after the button that opened it: Tab goes from the button into the list, from its last row on
- * to the toolbar's next control, and Shift+Tab the same way back. Where that order and the page's agree, the browser moves the focus itself.
- */
-function tabThroughList(e) {
-  const bar = $('proposal-bar');
-  if (!bar || bar.hidden) return;
-  const open = OPENERS.map(([b, l]) => [$(b), $(l)]).filter(([btn, list]) => btn && list && !list.hidden && bar.contains(list) && canTab(btn));
-  if (!open.length) return;
-  const all = tabbables(bar);
-  let order = all.filter((el) => !open.some(([, list]) => list.contains(el)));
-  for (const [btn, list] of open) {
-    const at = order.indexOf(btn);
-    if (at >= 0) order = [...order.slice(0, at + 1), ...all.filter((el) => list.contains(el)), ...order.slice(at + 1)];
-  }
-  const active = document.activeElement;
-  let to = null;
-  if (active && bar.contains(active)) {
-    const i = order.indexOf(active);
-    if (i < 0) return;
-    const next = order[i + (e.shiftKey ? -1 : 1)];
-    const natural = all[all.indexOf(active) + (e.shiftKey ? -1 : 1)];
-    if (next === natural) return;
-    if (next) to = next;
-    else if (!e.shiftKey) to = tabbables(document).find((el) => !bar.contains(el) && (bar.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) || null; // out of the bar, past the list's rows
-  } else if (e.shiftKey && active) {
-    // Coming back into the bar from after it: its last control in this order, not the last row of a list
-    const page = tabbables(document);
-    const prev = page[page.indexOf(active) - 1];
-    if (prev && bar.contains(prev) && prev !== order[order.length - 1]) to = order[order.length - 1];
-  }
-  if (to) { e.preventDefault(); to.focus(); }
 }
 
 /** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
@@ -752,7 +686,7 @@ export async function initProposals() {
     return false;
   }
   const ok = await openProposal(asked.slug, asked.source);
-  if (ok && asked.view) { setProposalView(asked.view, { quiet: true }); announce(openedWords($('proposal-title').textContent, summarize(state.proposal), state.proposalView)); }
+  if (ok && asked.view) { setProposalView(asked.view, { quiet: true }); announce(`${reviewOpenedLine($('proposal-title').textContent)} ${viewWords(state.proposalView)}.`); }
   return ok;
 }
 

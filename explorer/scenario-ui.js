@@ -14,16 +14,15 @@
  * scenario costs nothing, a hidden tab stops the loop, and under prefers-reduced-motion the steps
  * still change but the packet does not travel and the camera jumps.
  *
- * The scenario list: a `Scenarios · N` disclosure that appears whenever `state.proposal.scenarios`
- * is not empty (TOPO-09 sets `state.proposal`; this follows it through `onSceneTouch`). It sits as
- * a row inside the proposal bar, and at the stage's corner when there is no bar.
+ * The scenario list is the review column's (review-column.js): this module plays what it hands over and tells it where the
+ * player is (`onPlayerChange`), so the list can follow.
  *
  * On a phone (sheets.js, TOPO-18) the bar is a bottom sheet in `#sheet-dock`: a peek (title, step
  * counter and text) until expanded, and the camera follows a step into the part of the map the
  * sheets leave free.
  */
 
-import { state, touchScene, onSceneTouch } from './state.js';
+import { state, touchScene } from './state.js';
 import { render, ensureFlowLoop, addFrameClient, isNodeVisible, getMinZoom } from './render.js';
 import { flowReduceMotion } from './flows.js';
 import { registerSheet, unregisterSheet, collapseAllSheets, visibleMapRect, onCoveredChange } from './sheets.js';
@@ -43,7 +42,6 @@ let player = null;
 let bar = null;
 let signature = '';
 let glide = null; // { to: {x, y, zoom}, last: nowMs|null }
-let list = null;
 
 const $stage = () => (state.canvas ? state.canvas.parentElement : null);
 
@@ -54,39 +52,39 @@ const $stage = () => (state.canvas ? state.canvas.parentElement : null);
 /**
  * Plays a scenario on the map, replacing any that is playing.
  * @param {import('./scenario.js').Scenario} scenario
- * @param {{ autoplay?: boolean, stepMs?: number | 'manual' }} [opts] `autoplay` false opens it paused on the first step;
- *   `stepMs` is a speed for this scenario in place of the viewer's saved one
+ * @param {{ autoplay?: boolean, stepMs?: number | 'manual', step?: number, focus?: boolean }} [opts] `autoplay` false opens it paused on the first step;
+ *   `step` opens it on that step (paused); `stepMs` is a speed for this scenario in place of the viewer's saved one;
+ *   `focus` false leaves the keyboard focus where it is (the review column's step list keeps it)
  * @returns {ReturnType<typeof createPlayer>} the player, for a caller that wants to drive it
  */
 export function playScenario(scenario, opts = {}) {
   const opener = openerOf();
-  const takeFocus = isKeyboardish(); // checked now: the list row that was pressed goes with the list
-  clearScenario();
+  const takeFocus = isKeyboardish() && opts.focus !== false; // checked now: whatever was pressed may go with the markup
+  clearScenario({ keepChecks: true });
   returnTo = opener;
   const speed = opts.stepMs ?? readSpeed();
   player = createPlayer(scenario, { stepMs: speed, maxFrameMs: MAX_FRAME_MS });
+  if (Number.isFinite(opts.step) && opts.step > 0) player.goTo(opts.step);
   showBar(speed);
-  openChecks(scenario, () => { sync(); render(); }); // PHY-10: one batch of permission checks for the scenario (check.js)
+  openChecks(scenario, () => { sync(); render(); }); // PHY-10: one batch of permission checks for the scenario (check.js); the same scenario already open in the list keeps its answers
   showOutageLayers(scenario);
-  if (opts.autoplay !== false) player.play();
+  if (opts.autoplay !== false && !(opts.step > 0)) player.play();
   sync(true);
   render();
   ensureFlowLoop();
-  // Whatever started it (a row of the list, which goes) is gone: focus goes to the player's play and pause button, the first control of what opened
-  if (opts.focus !== false && bar && takeFocus) {
+  // Whatever started it may be gone: focus goes to the player's play and pause button, the first control of what opened
+  if (takeFocus && bar) {
     const toggle = bar.querySelector('[data-action=scenario-toggle]');
     if (toggle && !toggle.disabled) toggle.focus(); else bar.querySelector('[data-action=scenario-next]')?.focus();
   }
   return player;
 }
 
-/** What had the focus when a scenario started, to give it back when the scenario closes: the toolbar's Play button when the start came from it or its list */
+/** What had the focus when a scenario started, to give it back when the scenario closes (a control of another panel, say) */
 let returnTo = null;
 function openerOf() {
   const active = document.activeElement;
-  const play = document.getElementById('proposal-play');
-  if (active && active !== document.body && (active === play || active.closest?.('#proposal-scenarios'))) return play;
-  if (active && active !== document.body && !active.closest?.('.hx-player') && active !== state.canvas) return active;
+  if (active && active !== document.body && !active.closest?.('.hx-player') && !active.closest?.('#review-column') && active !== state.canvas) return active;
   return null;
 }
 
@@ -96,7 +94,19 @@ function isKeyboardish() {
   return !!active && active !== document.body && !typingIn(active);
 }
 
-/** Closing the player by the viewer's own act: the focus goes back to what started it (Play), else to Play, else to the map (on a phone Play is folded away in the peek) */
+/** Who knows where the focus goes when the player closes: the review column's step list (review-column.js) gives the step the player was on */
+let closeFocus = null;
+export function setCloseFocus(fn) { closeFocus = typeof fn === 'function' ? fn : null; }
+
+/** Who is told when the player moves: `fn(snapshot)` on each change of step, play state or answer, and `fn(null)` when it closes */
+const playerListeners = new Set();
+export function onPlayerChange(fn) {
+  playerListeners.add(fn);
+  return () => playerListeners.delete(fn);
+}
+const notify = (snap) => { for (const fn of playerListeners) fn(snap); };
+
+/** Closing the player by the viewer's own act: the focus goes back to the step it was on in the list, else to what started it, else to the map */
 function giveFocusBack() {
   const to = returnTo;
   returnTo = null;
@@ -105,7 +115,7 @@ function giveFocusBack() {
     el.focus();
     return document.activeElement === el; // a control the stylesheet hides takes no focus
   };
-  if (took(to) || took(document.getElementById('proposal-play'))) return;
+  if (took(closeFocus && closeFocus()) || took(to)) return;
   took(state.canvas);
 }
 
@@ -129,15 +139,16 @@ export function playOutage(id) {
 /** The player of the scenario on the map, or null */
 export const getPlayer = () => player;
 
-/** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view) */
-export function clearScenario() {
+/** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view). `keepChecks` while another scenario is about to start */
+export function clearScenario({ keepChecks = false } = {}) {
+  const had = !!player || !!state.scenario;
   player = null;
   glide = null;
   signature = '';
   state.scenario = null;
-  closeChecks();
+  if (!keepChecks) closeChecks();
   if (bar) { unregisterSheet('player'); bar.remove(); bar = null; }
-  refreshList();
+  if (had && !keepChecks) notify(null);
 }
 
 /** Ends the scenario and redraws the map without it */
@@ -165,6 +176,7 @@ function sync(force = false) {
     if (stepChanged) followStep(snap);
   }
   updateBar(snap);
+  if (changed) notify({ id: snap.id, index: snap.index, total: snap.total, done: snap.done, playing: snap.playing, checks: checksVersion() });
   return changed;
 }
 
@@ -314,9 +326,9 @@ function typingIn(target) {
 function onKeydown(e) {
   if (e.key === 'Escape' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) {
     if (player && !typingIn(e.target) && !otherPopupOpen()) { e.preventDefault(); stopScenario(); return; } // Escape closes the scenario; focus goes back to Play
-    if (!player && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); closeList(true); return; }
   }
   if (!player || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+  if ((e.key === ' ' || e.code === 'Space') && e.target.closest?.('#review-column')) return; // Space on a step or a row presses it
   const action = e.key === ' ' || e.code === 'Space' ? 'scenario-toggle' : e.key === 'ArrowLeft' ? 'scenario-prev' : e.key === 'ArrowRight' ? 'scenario-next' : null;
   if (!action) return;
   e.preventDefault(); // space on a focused button would press it as well
@@ -331,98 +343,6 @@ function otherPopupOpen() {
 /** Some browsers press a focused button on the key's release, so a space the player took must not reach it */
 function onKeyup(e) {
   if (player && (e.key === ' ' || e.code === 'Space') && !typingIn(e.target)) e.preventDefault();
-}
-
-// ---------------------------------------------------------------------------
-//  The scenario list
-// ---------------------------------------------------------------------------
-/** The open proposal's scenarios, with the maintainer's what-if edits in (`state.effectiveProposal`) when there are any */
-const proposalScenarios = () => {
-  const p = state.effectiveProposal || state.proposal;
-  return p && Array.isArray(p.scenarios) ? p.scenarios : [];
-};
-
-/**
- * Where the list goes: a row of the open proposal's bar, under its title row, so the list
- * opens in the bar's own flow and the bar grows to hold it (as a second box at the stage's corner
- * it opened underneath the bar and was covered). Without a bar it is a box at the stage's corner.
- */
-function mountList() {
-  const body = document.getElementById('proposal-body');
-  const stage = $stage();
-  if (!body) {
-    if (stage && list.parentElement !== stage) stage.appendChild(list);
-  } else if (list.parentElement !== body) {
-    const summary = document.getElementById('proposal-summary');
-    if (summary && summary.parentElement === body) body.insertBefore(list, summary);
-    else body.appendChild(list);
-  }
-}
-
-const wiredPlay = new WeakSet();
-
-/** The toolbar's Play button: shown while the open proposal has scenarios and none plays; with one it plays it, with several it opens the list */
-function paintPlay(show) {
-  const btn = document.getElementById('proposal-play');
-  if (!btn) return;
-  btn.hidden = !show;
-  // with one scenario Play plays it, so it expands nothing
-  if (proposalScenarios().length > 1) btn.setAttribute('aria-expanded', String(!!list && !list.hidden)); else btn.removeAttribute('aria-expanded');
-  if (wiredPlay.has(btn)) return;
-  wiredPlay.add(btn);
-  btn.addEventListener('click', () => {
-    const scenarios = proposalScenarios();
-    if (scenarios.length === 1) playScenario(scenarios[0]);
-    else if (list) {
-      if (list.hidden) { list.hidden = false; btn.setAttribute('aria-expanded', 'true'); list.querySelector('button')?.focus(); } // the first row of what opened
-      else closeList(false);
-    }
-  });
-}
-
-/** Folds the scenario list back onto Play; `refocus` gives Play the focus (Escape from inside the list) */
-function closeList(refocus) {
-  if (list) list.hidden = true;
-  const btn = document.getElementById('proposal-play');
-  if (!btn) return;
-  btn.setAttribute('aria-expanded', 'false');
-  if (refocus) btn.focus();
-}
-
-/** Shows or hides the Play button and its list to match the open proposal's scenarios (and hides them while one plays: the player is the control then) */
-export function refreshList() {
-  const stage = $stage();
-  const scenarios = proposalScenarios();
-  const show = !!stage && scenarios.length > 0 && !player;
-  if (!show) { if (list) { list.remove(); list = null; } paintPlay(false); return; }
-  const key = scenarios.map((s) => `${s.id}\u0000${s.title}\u0000${(s.steps || []).length}`).join('\u0001');
-  if (list && list.dataset.key === key) { mountList(); paintPlay(true); return; }
-  const wasOpen = !!list && !list.hidden;
-  if (list) list.remove();
-  list = document.createElement('div');
-  list.id = 'proposal-scenarios';
-  list.className = 'hx-scenarios glass';
-  list.dataset.corn = 'scenario-list';
-  list.dataset.key = key;
-  list.hidden = !!document.getElementById('proposal-play') && (!wasOpen || scenarios.length < 2); // behind Play when the toolbar has one
-  scenarios.forEach((s) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'hx-scenarios-item';
-    button.dataset.corn = 'row';
-    button.dataset.scenario = s.id;
-    const steps = (s.steps || []).length;
-    button.textContent = `${s.title} · ${steps} ${steps === 1 ? 'step' : 'steps'}`;
-    list.appendChild(button);
-  });
-  list.addEventListener('click', (e) => {
-    const button = e.target.closest('[data-scenario]');
-    if (!button) return;
-    const scenario = proposalScenarios().find((s) => s.id === button.dataset.scenario);
-    if (scenario) playScenario(scenario);
-  });
-  mountList();
-  paintPlay(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -474,10 +394,8 @@ export function initScenarioUi() {
   wired = true;
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('keyup', onKeyup);
-  onSceneTouch(refreshList);
   // A sheet that opened or closed changes what the map shows: keep the step in view
   onCoveredChange(() => { if (player && state.scenario) followStep(player.snapshot()); });
   // Taking hold of the map (a drag, the wheel, a pinch) ends the camera's glide: the camera is theirs
   for (const type of ['pointerdown', 'wheel', 'touchstart', 'mousedown']) document.addEventListener(type, (e) => { if (e.target === state.canvas) glide = null; }, { passive: true, capture: true });
-  refreshList();
 }

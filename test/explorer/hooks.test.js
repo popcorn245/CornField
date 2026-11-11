@@ -211,9 +211,8 @@ describe('the parts 0.35 added hooks to', () => {
     });
   }
 
-  it('gives Send back, Play and Edit a kind (secondary), and the run actions theirs', () => {
+  it('gives Send back and Edit a kind (secondary), and the run actions theirs', () => {
     expect(source).toMatch(/data-corn-kind="secondary"[^>]*data-review="notes"|data-review="notes"[^>]*data-corn-kind="secondary"/);
-    expect(source).toMatch(/id="proposal-play"[^>]*data-corn-kind="secondary"|data-corn-kind="secondary"[^>]*id="proposal-play"/);
     expect(source).toMatch(/id="proposal-edit"[^>]*data-corn-kind="secondary"|data-corn-kind="secondary"[^>]*id="proposal-edit"/);
     expect(fs.readFileSync(path.join(EXPLORER, 'runs-view.js'), 'utf8').match(/data-corn-kind="secondary"/g).length).toBeGreaterThanOrEqual(7);
   });
@@ -301,16 +300,17 @@ describe('the mounted page', () => {
     expect(hook('account-menu').contains(hook('account-row'))).toBe(true);
   });
 
-  it('has the proposal bar\'s toolbar in full: name, counts, Before / Diff / After, Play, Edit, Send back, Approve', () => {
+  it('has the proposal bar\'s toolbar in full (name, counts, Before / Diff / After, Edit) and the review column\'s decision (Send back, Approve)', () => {
     const bar = hook('proposal-bar');
     for (const name of ['proposal-title', 'proposal-counts', 'proposal-mode', 'compare']) expect(bar.contains(hook(name)), name).toBe(true);
     const options = [...hook('compare').querySelectorAll('[data-corn="compare-option"]')];
     expect(options.map((o) => o.getAttribute('data-view'))).toEqual(['before', 'diff', 'after']);
     expect(options.map((o) => o.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
-    expect(bar.querySelector('#proposal-play').getAttribute('data-corn-kind')).toBe('secondary');
     expect(bar.querySelector('#proposal-edit').getAttribute('data-corn-kind')).toBe('secondary');
-    expect(bar.querySelector('[data-review="notes"]').getAttribute('data-corn-kind')).toBe('secondary');
-    expect(bar.querySelector('[data-review="approved"]').getAttribute('data-corn-kind')).toBe('approve');
+    const column = hook('review-column');
+    expect(column.querySelector('[data-corn="decision"]').getAttribute('role')).toBe('group');
+    expect(column.querySelector('[data-review="notes"]').getAttribute('data-corn-kind')).toBe('secondary');
+    expect(column.querySelector('[data-review="approved"]').getAttribute('data-corn-kind')).toBe('approve');
   });
 
   it('has the Work panel\'s Filter chip and its fields, and the node panel\'s diff pill', () => {

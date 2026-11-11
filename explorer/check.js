@@ -47,11 +47,16 @@ const namesActor = (scenario) => !!scenario && (!!scenario.actor || (Array.isArr
  * @param {() => void} onChange called when an answer arrives or the As menu moved (scenario-ui.js syncs and redraws)
  */
 export function openChecks(scenario, onChange = () => {}) {
+  // the scenario that is already being checked (opened in the list, now played): its answers stay, only who is told changes
+  if (current && current.scenario && scenario && current.scenario.id === scenario.id) { current.onChange = onChange; replan(scenario); return; }
   closeChecks();
   current = { scenario: null, as: null, nodes: null, plan: null, answer: { status: 'idle' }, controller: null, onChange };
   if (namesActor(scenario) && state.activeLayers.persona !== true) toggleLayer('persona');
   replan(scenario);
 }
+
+/** The id of the scenario being checked (a player's or the list's), or null */
+export const checkedScenarioId = () => (current && current.scenario ? current.scenario.id : null);
 
 /** The scenario closed: nothing more is asked or shown */
 export function closeChecks() {

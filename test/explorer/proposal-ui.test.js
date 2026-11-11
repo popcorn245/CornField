@@ -21,6 +21,8 @@ import { initProposals, openProposal, closeProposal, setProposalView, loadPropos
 import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, sheetState, measureCovered } from '../../explorer/sheets.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
 
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -78,6 +80,7 @@ let started = false;
 /** Where the plain map put each base node (x, y, r), before any proposal */
 let plainAt                           = {};
 async function mount(search = '') {
+  resetReviewColumnForTests();
   document.body.innerHTML = body;
   const ctx      = new Proxy({}, { get: (_t, key        ) => (key === 'measureText' ? (t        ) => ({ width: t.length * 6 }) : () => {}), set: () => true });
   const canvas      = document.getElementById('graph-canvas');
@@ -97,6 +100,7 @@ async function mount(search = '') {
   setMap(state.baseNodes.map((n     ) => ({ ...n })), state.baseEdges);
   plainAt = Object.fromEntries(state.nodes.map((n     ) => [n.id, [n.x, n.y, n.r]]));
   history.replaceState(null, '', `/${search}`);
+  initReviewColumn();
   const ok = await initProposals();
   started = true;
   return ok;
@@ -339,12 +343,11 @@ describe('the bar', () => {
     expect(html).toContain('and 4 more');
   });
 
-  it('lists every change behind the chip, and picks one', async () => {
+  it('lists every change in the review column the moment it opens, and picks one', async () => {
     fakeHub(LISTING, { '0013-meals': good });
     await mount('?proposal=0013-meals');
-    expect($('proposal-changes').hidden).toBe(true);
-    click($('proposal-chip'));
-    expect($('proposal-changes').hidden).toBe(false);
+    expect($('review-column').hidden).toBe(false);
+    expect($('rc-changes').getAttribute('data-corn')).toBe('change-list');
     const rows = [...document.querySelectorAll('.hx-change-row')]                 ;
     expect(rows).toHaveLength(4); // 1 added node + 1 added edge + 1 changed + 1 removed; the ownership edge is a consequence
     expect(rows.map((r) => r.querySelector('.hx-change-what') .textContent)).toEqual(['Added', 'Added', 'Changed', 'Removed']);
@@ -580,13 +583,21 @@ describe('on a phone: bottom sheets', () => {
     expect(sheetState('proposal')).toBe('peek'); // the next proposal opens as a peek again
   });
 
-  it('expands on a tap on the counts in the peek instead of opening the list, and opens the list when expanded', async () => {
-    await mountSheets();
-    click($('proposal-chip'));
+  it('expands on a tap on the counts in the peek, and a tap on a count when expanded moves the switch to its list', async () => {
+    phone();
+    fakeHub(LISTING, { '0013-meals': { ...good, scenarios: [{ id: 'eat', title: 'Plan a meal', steps: [{ node: 'page-new', text: 'Open it.' }] }] } });
+    await mount('?proposal=0013-meals');
+    initSheets();
+    state.coveredBottom = 0;
+    click(document.querySelector('[data-action="review-show-changes"]') );
     expect($('proposal-bar').dataset.sheetState).toBe('expanded');
-    expect($('proposal-changes').hidden).toBe(true);
-    click($('proposal-chip'));
-    expect($('proposal-changes').hidden).toBe(false);
+    click(document.querySelector('[data-action="review-show-scenarios"]') );
+    expect($('rc-tab-scenarios').getAttribute('aria-selected')).toBe('true');
+    expect($('rc-scenarios').hidden).toBe(false);
+    expect($('rc-changes').hidden).toBe(true);
+    click(document.querySelector('[data-action="review-show-changes"]') );
+    expect($('rc-tab-changes').getAttribute('aria-selected')).toBe('true');
+    expect($('rc-changes').hidden).toBe(false);
   });
 
   it('still closes the proposal from the peek', async () => {
@@ -659,18 +670,22 @@ describe('the toolbar', () => {
   const key = (el         , k        ) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
   const open = async () => { fakeHub(LISTING, { '0013-meals': good }); await mount('?proposal=0013-meals'); };
 
-  it('is a named group: the title, the counts, Before / Diff / After, Play, Edit, Send back, Approve and ⋯, in that order', async () => {
+  it('is a named group: the title, the counts, Before / Diff / After, Edit and ⋯, in that order; Send back and Approve are the review column\'s foot', async () => {
     await open();
     const head = document.querySelector('.hx-proposal-head')             ;
     expect(head.getAttribute('role')).toBe('group');
     expect(head.getAttribute('aria-label')).toBeTruthy();
-    const order = ['proposal-title', 'proposal-chip', 'proposal-seg', 'proposal-play', 'proposal-edit'].map((id) => $(id));
+    const order = ['proposal-title', 'proposal-chip', 'proposal-seg', 'proposal-edit', 'proposal-more'].map((id) => $(id));
     order.forEach((el, i) => { if (i) expect(order[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); });
-    const sendBack = head.querySelector('[data-review="notes"]')             ;
-    const approve = head.querySelector('[data-review="approved"]')             ;
-    expect($('proposal-edit').compareDocumentPosition(sendBack) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect($('proposal-play')).toBeNull(); // the scenarios are in the column, not behind Play
+    expect($('proposal-title').tagName).toBe('H2');
+    const foot = $('review-decision');
+    expect(foot.getAttribute('data-corn')).toBe('decision');
+    expect(foot.getAttribute('role')).toBe('group');
+    const sendBack = foot.querySelector('[data-review="notes"]')             ;
+    const approve = foot.querySelector('[data-review="approved"]')             ;
+    expect($('proposal-more').compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(sendBack.compareDocumentPosition(approve) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(approve.compareDocumentPosition($('proposal-more')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect($('proposal-seg').getAttribute('aria-label')).toBe('Compare');
   });
 
@@ -727,9 +742,9 @@ describe('what a screen reader is told (F18)', () => {
   const said = async () => { await new Promise((r) => setTimeout(r, 50)); return $('map-announcer').textContent; };
   const open = async (search = '?proposal=0013-meals') => { fakeHub(LISTING, { '0013-meals': good }); await mount(search); };
 
-  it('says the proposal\'s title and counts, and the view, when a link has loaded it, once', async () => {
+  it('says "Opened <title>: N changes" when a link has loaded it, once', async () => {
     await open();
-    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. Diff view.');
+    expect(await said()).toBe('Opened Meals: 4 changes.');
   });
 
   it('says the view on a switch, and the same switch again says nothing new', async () => {
@@ -754,6 +769,6 @@ describe('what a screen reader is told (F18)', () => {
 
   it('says only the opening for a link that also asks for a view', async () => {
     await open('?proposal=0013-meals&proposalView=after');
-    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. After view.');
+    expect(await said()).toBe('Opened Meals: 4 changes. After view.');
   });
 });
