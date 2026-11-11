@@ -13,7 +13,7 @@
  */
 
 import { state, touchScene } from './state.js';
-import { render, getSpatialIndex, queueFrameWork, screenToWorld } from './render.js';
+import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom } from './render.js';
 import { saveFreeformPositions } from './layout.js';
 import { selectNode, closeDrawer } from './panels.js';
 import { hitTestScreen } from './spatial.js';
@@ -98,7 +98,7 @@ function onPointerDown(e) {
 /** One frame's worth of pointer movement: the pinch, the node being dragged, or the pan, from the latest position */
 function applyMoves() {
   if (pendingPinch && pinch) {
-    Object.assign(state.camera, pinchCamera(pinch, pendingPinch.dist, pendingPinch.mid));
+    Object.assign(state.camera, pinchCamera(pinch, pendingPinch.dist, pendingPinch.mid, getMinZoom()));
   }
   pendingPinch = null;
 
@@ -210,7 +210,7 @@ export function bindCanvasInput() {
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const p = getPointerPos(e);
-    Object.assign(state.camera, zoomAbout(state.camera, e.deltaY < 0 ? 1.12 : 0.88, p.x, p.y));
+    Object.assign(state.camera, zoomAbout(state.camera, e.deltaY < 0 ? 1.12 : 0.88, p.x, p.y, getMinZoom()));
     render(); // a camera change is cheap; the draw is one per frame however many wheel events arrive
   }, { passive: false });
 }

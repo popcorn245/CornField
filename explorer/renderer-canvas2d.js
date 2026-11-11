@@ -12,6 +12,8 @@ import { CORE_RATIO, ARROW, MARK_MIN_PX, looksFor, packetPoint } from './scene.j
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 
 const TAU = Math.PI * 2;
+/** A glow thinner than this on screen (px) is not drawn: zoomed out it is a fraction of a pixel, and costs a stroke or fill per edge and node */
+const GLOW_MIN_PX = 1.5;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
 
 // ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ function drawLanes(ctx, lanes) {
 // ---------------------------------------------------------------------------
 //  Edges
 // ---------------------------------------------------------------------------
-function drawEdge(ctx, edge, timeMs, zoom) {
+function drawEdge(ctx, edge, timeMs, zoom, withPacket = true) {
   ctx.save();
   ctx.globalAlpha = edge.alpha;
 
@@ -72,12 +74,18 @@ function drawEdge(ctx, edge, timeMs, zoom) {
   ctx.strokeStyle = edge.color;
   ctx.lineWidth = edge.mark && edge.mark !== 'none' ? Math.max(edge.width, MARK_MIN_PX.edge / zoom) : edge.width; // a proposal's marks stay visible zoomed out
   ctx.setLineDash(edge.dash || []);
-  if (edge.glow) {
-    ctx.shadowColor = edge.glowColor;
-    ctx.shadowBlur = edge.glow;
+  if (edge.glow && edge.glow * zoom >= GLOW_MIN_PX) {
+    // The glow is a wider, fainter stroke under the line, not `shadowBlur`: a blur per edge is a full-canvas blur
+    // pass each, and a selected hub lights ~900 edges (F30: 8 to 10 s a tap on a phone)
+    const line = ctx.lineWidth;
+    ctx.save();
+    ctx.globalAlpha = edge.alpha * 0.3;
+    ctx.strokeStyle = edge.glowColor || edge.color;
+    ctx.lineWidth = line + edge.glow * 0.6;
+    ctx.stroke();
+    ctx.restore();
   }
   ctx.stroke();
-  ctx.shadowBlur = 0;
   ctx.setLineDash([]);
 
   // Arrowhead along the curve's end tangent
@@ -95,15 +103,33 @@ function drawEdge(ctx, edge, timeMs, zoom) {
 
   // The edge's label (selection only) is the label layer's, not drawn here
 
-  if (edge.packet) {
-    const p = packetPoint(edge, timeMs);
+  if (withPacket && edge.packet) drawPacketIn(ctx, edge, timeMs, zoom);
+  ctx.restore();
+}
+
+/** The packet's dot: a soft disc under it for the glow (no `shadowBlur`: see drawEdge), then the dot */
+function drawPacketIn(ctx, edge, timeMs, zoom) {
+  const p = packetPoint(edge, timeMs);
+  const { packet } = edge;
+  if (packet.glow && packet.glow * zoom >= GLOW_MIN_PX) {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, edge.packet.radius, 0, TAU);
-    ctx.fillStyle = edge.packet.color;
-    ctx.shadowColor = edge.packet.glowColor;
-    ctx.shadowBlur = edge.packet.glow;
+    ctx.arc(p.x, p.y, packet.radius + packet.glow * 0.5, 0, TAU);
+    ctx.globalAlpha = edge.alpha * 0.3;
+    ctx.fillStyle = packet.glowColor || packet.color;
     ctx.fill();
+    ctx.globalAlpha = edge.alpha;
   }
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, packet.radius, 0, TAU);
+  ctx.fillStyle = packet.color;
+  ctx.fill();
+}
+
+/** A packet on its own (the layer cache below draws the edges' lines once and the packets every frame) */
+function drawPacket(ctx, edge, timeMs, zoom) {
+  ctx.save();
+  ctx.globalAlpha = edge.alpha;
+  drawPacketIn(ctx, edge, timeMs, zoom);
   ctx.restore();
 }
 
@@ -143,13 +169,18 @@ function drawNode(ctx, node, zoom, looks, style) {
 
   // The node circle, glowing, with a white core dot
   circle(ctx, node.x, node.y, node.r);
-  ctx.fillStyle = node.color;
-  if (node.glow) {
-    ctx.shadowColor = node.color;
-    ctx.shadowBlur = node.glow;
+  if (node.glow && node.glow * zoom >= GLOW_MIN_PX) {
+    // A soft disc behind the node, not `shadowBlur` (see drawEdge): one cheap fill instead of a blur pass
+    ctx.save();
+    ctx.globalAlpha = node.alpha * 0.28;
+    circle(ctx, node.x, node.y, node.r + node.glow * 0.7);
+    ctx.fillStyle = node.color;
+    ctx.fill();
+    ctx.restore();
+    circle(ctx, node.x, node.y, node.r);
   }
+  ctx.fillStyle = node.color;
   ctx.fill();
-  ctx.shadowBlur = 0;
   circle(ctx, node.x, node.y, node.r * CORE_RATIO);
   ctx.fillStyle = looks.core;
   ctx.fill();
@@ -186,6 +217,41 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
   const ctx = canvas.getContext('2d');
   let width = 0;
   let height = 0;
+  let ratio = 1;
+
+  // The still part of a frame (the background and every edge's line) is drawn once into `layer` and blitted while only
+  // the packets move: a hub's selection lights hundreds of packets, and redrawing thousands of lines on each frame is
+  // what made a tap take seconds on a phone (F30). Used only when the scene has packets and a canvas can be made.
+  let layer = null;
+  let layerCtx = null;
+  let layerFor = null; // what the layer shows: { scene, x, y, zoom, w, h }
+  const makeLayer = () => {
+    if (layer) return layer;
+    try {
+      layer = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(canvas.width || 1, canvas.height || 1)
+        : typeof document !== 'undefined' ? document.createElement('canvas') : null;
+      layerCtx = layer && layer.getContext ? layer.getContext('2d') : null;
+    } catch { layerCtx = null; }
+    if (!layerCtx) layer = null;
+    return layer;
+  };
+  const hasPacket = new WeakMap();
+  const packetsIn = (scene) => {
+    if (!hasPacket.has(scene)) hasPacket.set(scene, scene.edges.some((e) => e.packet));
+    return hasPacket.get(scene);
+  };
+
+  function drawStill(c, scene, camera) {
+    c.save();
+    c.translate(camera.x, camera.y);
+    c.scale(camera.zoom, camera.zoom);
+    const { decor } = scene;
+    if (decor.grid) drawGrid(c, decor.grid, camera, width, height);
+    if (decor.lanes.length) drawLanes(c, decor.lanes);
+    if (decor.rings.length) drawRings(c, decor.rings);
+    scene.edges.forEach((edge) => drawEdge(c, edge, 0, camera.zoom, false));
+    c.restore();
+  }
 
   return {
     kind: 'canvas2d',
@@ -193,15 +259,42 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
     resize(w, h, dpr) {
       width = w;
       height = h;
+      ratio = dpr;
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      layerFor = null;
+      if (layer) { layer.width = canvas.width; layer.height = canvas.height; layerCtx.setTransform(dpr, 0, 0, dpr, 0, 0); }
     },
 
     draw(drawn, camera, timeMs) {
       const style = styleOf();
       const scene = styledScene(drawn, style); // the map in the theme's colours (map-style.js); the scene itself when nothing is set
       ctx.clearRect(0, 0, width, height);
+
+      const looks = looksWith(looksFor(scene.theme), style); // the halos, mark rings and core for the scene's ground, in the theme's colours
+      if (packetsIn(scene) && makeLayer()) {
+        const same = layerFor && layerFor.scene === scene && layerFor.x === camera.x && layerFor.y === camera.y && layerFor.zoom === camera.zoom && layerFor.w === canvas.width && layerFor.h === canvas.height;
+        if (!same) {
+          if (layer.width !== canvas.width || layer.height !== canvas.height) { layer.width = canvas.width; layer.height = canvas.height; }
+          layerCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          layerCtx.clearRect(0, 0, width, height);
+          drawStill(layerCtx, scene, camera);
+          layerFor = { scene, x: camera.x, y: camera.y, zoom: camera.zoom, w: canvas.width, h: canvas.height };
+        }
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(layer, 0, 0);
+        ctx.restore();
+        ctx.save();
+        ctx.translate(camera.x, camera.y);
+        ctx.scale(camera.zoom, camera.zoom);
+        scene.edges.forEach((edge) => { if (edge.packet) drawPacket(ctx, edge, timeMs, camera.zoom); });
+        scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
+        ctx.restore();
+        return;
+      }
+
       ctx.save();
       ctx.translate(camera.x, camera.y);
       ctx.scale(camera.zoom, camera.zoom);
@@ -212,13 +305,12 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
       scene.edges.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
-      const looks = looksWith(looksFor(scene.theme), style); // the halos, mark rings and core for the scene's ground, in the theme's colours
       scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 
       ctx.restore();
     },
 
-    destroy() { /* a 2d context holds nothing to release */ },
+    destroy() { layer = null; layerCtx = null; layerFor = null; },
   };
 }

@@ -75,6 +75,7 @@ import { createLander } from './lander.js';
 import { createSpecPoll } from './spec-poll.js';
 import { createRunnerWatch } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
+import { compressResponse } from './compress.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
@@ -403,6 +404,7 @@ export function createCornfieldServer(config, opts = {}) {
   return server;
 
   async function answer(req, res) {
+    compressResponse(req, res); // text, JSON, JS, CSS and SVG go out gzipped or brotli'd when the browser accepts it
     res.setHeader('Content-Security-Policy', csp);
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Frame-Options', 'DENY');

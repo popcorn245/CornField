@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { spawn, spawnSync } from 'node:child_process';
 import { CORNFIELD, SAMPLE, freePort } from '../helpers.js';
 
@@ -57,6 +58,31 @@ describe('cornfield serve', () => {
       expect(res.status, p).toBe(200);
       expect(res.headers['access-control-allow-origin'], p).toBeUndefined();
     }
+  });
+
+  it('sends the map, the page, scripts and styles compressed when asked, with Vary and a working ETag (F31)', async () => {
+    for (const p of ['/topology.json', '/', '/explorer/main.js', '/explorer/explorer.css', '/cornfield/config.json']) {
+      const plain = await raw(port, 'GET', p, { 'Accept-Encoding': 'identity' });
+      const res = await new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port, path: p, headers: { 'Accept-Encoding': 'gzip' }, agent: false }, (r) => {
+          const chunks = [];
+          r.on('data', (c) => chunks.push(c));
+          r.on('end', () => resolve({ status: r.statusCode, headers: r.headers, raw: Buffer.concat(chunks) }));
+        }).on('error', reject);
+      });
+      expect(res.headers['content-encoding'], p).toBe('gzip');
+      expect(res.headers.vary, p).toMatch(/Accept-Encoding/i);
+      expect(zlib.gunzipSync(res.raw).toString('utf8'), p).toBe(plain.body);
+      expect(res.raw.length, p).toBeLessThan(Buffer.byteLength(plain.body));
+      expect(plain.headers['content-encoding'], p).toBeUndefined();
+    }
+    // the ETag is the same either way, and a matching one is a 304 with no body
+    const first = await raw(port, 'GET', '/explorer/main.js', { 'Accept-Encoding': 'gzip' });
+    const etag = first.headers.etag;
+    expect(etag).toBeTruthy();
+    const again = await raw(port, 'GET', '/explorer/main.js', { 'Accept-Encoding': 'gzip', 'If-None-Match': etag });
+    expect(again.status).toBe(304);
+    expect(again.body).toBe('');
   });
 
   it('puts a strict Content-Security-Policy on the page: this origin only, nothing inline but the import map', async () => {

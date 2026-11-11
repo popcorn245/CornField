@@ -2010,6 +2010,36 @@
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
     },
     {
+      "id": "page-doc-docs-reviews-0-34-design-review",
+      "type": "page",
+      "label": "/docs/reviews/0.34-design-review",
+      "file": "docs/reviews/0.34-design-review.md",
+      "summary": "The 0.34 design review",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The 0.34 design review (docs/reviews/0.34-design-review.md)."
+    },
+    {
+      "id": "core-explorer-search-status",
+      "label": "search-status.js",
+      "type": "core",
+      "file": "explorer/search-status.js",
+      "summary": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24). (explorer/search-status.js)"
+    },
+    {
+      "id": "core-server-compress",
+      "label": "compress.js",
+      "type": "core",
+      "file": "server/compress.js",
+      "summary": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or… (server/compress.js)"
+    },
+    {
       "id": "core-explorer-connection",
       "label": "connection.js",
       "type": "core",
@@ -6442,6 +6472,54 @@
       "label": "imports"
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-reviews-0-34-design-review"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-search-status"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-compress"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-search-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search-status",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proxy",
+      "to": "core-server-compress",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-compress",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-connection"
     },
@@ -6498,5 +6576,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T08:37:22.816Z"
+  "updatedAt": "2026-11-11T09:29:35.124Z"
 }
