@@ -68,6 +68,18 @@ describe('on a copy of the sample repo', () => {
     expect(res.status).toBe(0);
   });
 
+  it('warns, without failing, about a scenario that names no persona, and when the map has none (spec 0006 D3)', () => {
+    const file = path.join(root, 'docs/specs/proposals/0004-actorless.json');
+    const p = JSON.parse(fs.readFileSync(path.join(root, 'docs/specs/proposals/0002-checkout.json'), 'utf8'));
+    p.scenarios = [{ id: 'the-old-page-goes', title: 'The old page goes', steps: [{ node: p.nodes.change[0].id, text: 'It goes.' }] }];
+    fs.writeFileSync(file, JSON.stringify(p));
+    const res = run(['proposal', file, '--repo', root]);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Warning: scenarios[0] "the-old-page-goes" names no persona; it is listed under Anyone.');
+    expect(res.stdout.indexOf('Warning:')).toBeLessThan(res.stdout.indexOf('The proposal is valid.'));
+    fs.rmSync(file);
+  });
+
   it('reads a review from the PR, so it needs a slug and a token, and says so (test/server/reviews.test.js reads one)', () => {
     const env = { ...process.env, CORNFIELD_FORGE_TOKEN: '', GITHUB_TOKEN: '', GH_TOKEN: '' };
     const usage = run(['review', '--repo', root], { env });
@@ -84,6 +96,12 @@ describe('on cornfield itself (it maps itself)', () => {
     const res = run(['validate', '--repo', CORNFIELD]);
     expect(res.stdout + res.stderr).toMatch(/Valid/);
     expect(res.status).toBe(0);
+  });
+
+  it('has personas of its own, so its proposals can name one (spec 0006 D3)', () => {
+    const map = JSON.parse(fs.readFileSync(path.join(CORNFIELD, 'topology.json'), 'utf8'));
+    const ids = map.nodes.filter((n) => n.type === 'persona').map((n) => n.id).sort();
+    expect(ids).toEqual(['persona-agent', 'persona-guest', 'persona-maintainer', 'persona-reader']);
   });
 });
 

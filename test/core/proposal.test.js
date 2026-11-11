@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { validateProposal, applyProposal, proposalStatus, edgeKey, summarize, applyEdits } from '../../core/proposal.js';
+import { validateProposal, applyProposal, proposalStatus, edgeKey, summarize, applyEdits, personaWarnings } from '../../core/proposal.js';
 import { NODE_THEMES, EDGE_KINDS, FLOW_KINDS } from '../../core/schema.js';
 import * as cli from '../../core/index.js';
 import { CORNFIELD as ROOT, SAMPLE } from '../helpers.js';
@@ -918,5 +918,23 @@ describe('validateProposalFiles (what `cornfield validate` runs)', () => {
     fs.rmSync(path.join(dir, '0003-broken.json'));
     expect(cli.validateProposalFiles(topology, dir)).toEqual([]);
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('personaWarnings (spec 0006 D3)', () => {
+  const map = { nodes: [{ id: 'persona-admin', type: 'persona' }, { id: 'page-a', type: 'page' }] };
+  const sc = (over = {}) => ({ id: 'the-old-page-goes', title: 'T', steps: [{ node: 'page-a', text: 'x' }], ...over });
+  it('warns once for each scenario that names no actor, on the scenario or on any step', () => {
+    const p = { scenarios: [sc({ actor: 'admin' }), sc({ id: 'b', steps: [{ node: 'page-a', text: 'x', actor: 'admin' }] }), sc()] };
+    expect(personaWarnings(map, p)).toEqual(['Warning: scenarios[2] "the-old-page-goes" names no persona; it is listed under Anyone.']);
+  });
+  it('says one line when the map has no persona nodes at all, and counts personas the proposal adds', () => {
+    const none = { nodes: [{ id: 'page-a', type: 'page' }] };
+    expect(personaWarnings(none, { scenarios: [sc(), sc({ id: 'b' })] })).toEqual(['Warning: the map has no personas (topology.personas.json); every scenario is listed under Anyone.']);
+    expect(personaWarnings(none, { nodes: { add: [{ id: 'persona-x', type: 'persona' }] }, scenarios: [sc({ actor: 'x' })] })).toEqual([]);
+  });
+  it('is silent without scenarios', () => {
+    expect(personaWarnings(map, {})).toEqual([]);
+    expect(personaWarnings(map, null)).toEqual([]);
   });
 });

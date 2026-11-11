@@ -202,7 +202,7 @@ export function measureCovered() {
 /**
  * The part of the map nothing covers, in the canvas's own CSS px: what the camera should frame a node into.
  * On a phone the dock's sheets cover the bottom; from 768px the proposal bar covers the top (and the change list it grows to hold),
- * the node panel the right, the Work panel the left and the scenario player the bottom. Without a layout (no page) it is the whole canvas.
+ * the node panel the right, the Work panel and the review column the left and the scenario player the bottom. Without a layout (no page) it is the whole canvas.
  * @returns {{ x: number, y: number, width: number, height: number }}
  */
 export function visibleMapRect() {
@@ -218,6 +218,9 @@ export function visibleMapRect() {
     if (shown(drawer) && drawer.classList.contains('drawer-open')) covers.right = drawer.offsetWidth; // its width, not its box: it slides in
     const forge = $('forge-panel');
     if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
+    // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work panel's when both are open
+    const column = $('review-column');
+    if (shown(column)) covers.left = Math.max(covers.left, Math.max(0, column.getBoundingClientRect().right - c.left) + 8);
     const player = document.querySelector('.hx-player');
     if (shown(player)) covers.bottom = Math.max(0, c.bottom - player.getBoundingClientRect().top) + 8;
   }
@@ -263,7 +266,7 @@ export function unregisterSheet(id, redraw = true) {
 export function expandSheet(id) { syncShown(); if (model.expand(id)) apply(); } // what is open on the page is known first (a bar shown a moment ago)
 export function collapseSheet(id) { if (model.collapse(id)) apply(); }
 export function collapseAllSheets() { if (model.collapseAll()) apply(); }
-export function toggleSheet(id) { if (model.toggle(id)) apply(); }
+export function toggleSheet(id) { syncShown(); if (model.toggle(id)) apply(); } // the same: a bar shown since the last change is open
 
 // ---------------------------------------------------------------------------
 //  Taps and swipes
