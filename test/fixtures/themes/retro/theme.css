@@ -282,7 +282,8 @@
 [data-corn-kind="approve"],
 [data-corn-kind="danger"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
 [data-corn-kind]:active { transform: translate(2px, 2px); box-shadow: none; }
-[data-corn="state-pill"] { font-family: var(--corn-font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+/* State pills stay in the body face: in the pixel face at this size a C reads as an O ("OLAIMED") */
+[data-corn="state-pill"] { text-transform: uppercase; letter-spacing: 0.04em; }
 [data-corn="row"], [data-corn="run"] { box-shadow: var(--corn-shadow-sm); }
 [data-corn$="-dialog"] { box-shadow: var(--corn-shadow-lg); }
 /* The hint's hand becomes a pixel arrow; digits are tabular and heavier; the sign-in pages take the card's hard shadow */
