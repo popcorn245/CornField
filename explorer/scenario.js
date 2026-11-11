@@ -71,8 +71,6 @@ export function parseSpeed(raw) {
   if (!choice) return DEFAULT_STEP_MS;
   return choice.value === 'manual' ? 'manual' : Number(choice.value);
 }
-/** The zoom fit-to-screen never goes below (render.js `fitGraphToViewport`) */
-export const MIN_FIT_ZOOM = 0.18;
 
 /** How long a step plays: its own `ms` when that is a positive number, else `fallback` */
 export function stepDuration(step, fallback = DEFAULT_STEP_MS) {
@@ -227,7 +225,7 @@ export function createPlayer(scenario, opts = {}) {
  * Where the camera should go so a step is on screen and readable, or null when it already is (or the step points at something that
  * is not in the map). The step's node, or both ends of its edge, must be inside `viewport` (the part of the map nothing covers) at a zoom
  * where the label reads (READ_ZOOM, about 11px): a node step zooms in to it, an edge step fits both ends (and no closer than READ_ZOOM).
- * It never goes under the map's zoom limit (`ZOOM_MIN`, camera.js), so an edge too long for it is shown as close as the limit allows.
+ * It never goes under the lowest zoom a fit goes to (`FIT_ZOOM_MIN`, camera.js), so an edge too long for it is shown as close as that allows.
  * A step already shown well enough is left alone, so a walk does not wobble. A step's `at` is kept in view with it when it is on the map,
  * and ignored when it is not (a live id with no live layer).
  * @param {Step} step

@@ -10,7 +10,7 @@ import {
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario.js';
 // @ts-expect-error plain JS modules, no declarations
-import { ZOOM_MIN, READ_ZOOM } from '../../explorer/camera.js';
+import { FIT_ZOOM_MIN, READ_ZOOM } from '../../explorer/camera.js';
 
 const scenario = (extra         = {}) => ({
   id: 'save-a-meal',
@@ -460,8 +460,9 @@ describe('the camera', () => {
     expect(screenX(2500)).toBeLessThanOrEqual(1000);
   });
 
-  it('never zooms out below the map\'s own zoom limit', () => {
-    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(ZOOM_MIN);
+  it('never zooms out below the lowest zoom a fit goes to (0.18, as before)', () => {
+    expect(FIT_ZOOM_MIN).toBe(0.18);
+    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(FIT_ZOOM_MIN);
   });
 
   it('zooms IN to a node step: at a zoom where its label reads (about 11px), not at the overview\'s', () => {

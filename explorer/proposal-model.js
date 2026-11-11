@@ -276,38 +276,58 @@ export function sourceWhere(source) {
 /**
  * What the bar's source chip says of the copy under review. A spec PR's copy: "PR #24 · draft · 1 check running" (the state and the checks
  * are left out until known: `pull` is the listing's entry, `checks` the PR's checks, or null when they could not be read). A copy in the checkout
- * or a worktree: "Local draft · in the checkout". `href` is the PR's address when it has one (the caller checks the scheme).
+ * or a worktree: "Local draft · in the checkout". `href` is the PR's address when it has one (the caller checks the scheme). `state` is the
+ * public `data-corn-state` of the copy (docs/theming.md): the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy (a
+ * branch with no pull request yet is `draft`); '' while the PR is not known yet.
  * @param {string|null} source `pull/<n>`, `checkout` or a worktree's name
  * @param {{ draft?: boolean, url?: string, state?: string }|null} [pull]
  * @param {{ state: string }[]|null} [checks]
- * @returns {{ text: string, href: string|null, tone: 'draft'|'open'|'bad'|'local', label: string }}
+ * @returns {{ text: string, href: string|null, state: ''|'open'|'draft'|'merged'|'closed', label: string }}
  */
 export function sourceChip(source, pull = null, checks = null) {
   const n = pullNumberOf(source);
   if (!n) {
     const where = !source || source === 'checkout' ? 'in the checkout' : `in worktree ${source}`;
-    return { text: `Local draft \u00b7 ${where}`, href: null, tone: 'local', label: `This is a local draft, ${where}, not a pull request` };
+    return { text: `Local draft \u00b7 ${where}`, href: null, state: 'draft', label: `This is a local draft, ${where}, not a pull request` };
   }
   const parts = [`PR #${n}`];
-  if (pull && pull.state && pull.state !== 'open') parts.push(pull.state);
-  else if (pull && typeof pull.draft === 'boolean') parts.push(pull.draft ? 'draft' : 'open');
+  const state = !pull ? '' : pull.state === 'merged' || pull.state === 'closed' ? pull.state : typeof pull.draft === 'boolean' ? (pull.draft ? 'draft' : 'open') : '';
+  if (state) parts.push(state);
   if (Array.isArray(checks)) parts.push(checksLine(checks));
-  const failed = Array.isArray(checks) && checks.some((c) => c.state === 'failure');
   return {
     text: parts.join(' \u00b7 '),
     href: pull && typeof pull.url === 'string' ? pull.url : null,
-    tone: failed ? 'bad' : pull && pull.draft ? 'draft' : 'open',
+    state,
     label: `Reviewing spec pull request: ${parts.join(', ')}`,
   };
 }
 
 /**
- * What to say when a link names a proposal the server does not have: what was not found, said plainly.
- * @param {string} slug
+ * What to say when a link names a proposal the server does not have: what was not found, said plainly. The place is named only when it is
+ * one: a PR number, the checkout, or a worktree the listing has (`sources`); anything else the link says is not repeated back.
+ * @param {string} slug (it passed the slug pattern)
  * @param {string|null} source
+ * @param {Set<string>|null} [sources] the sources the listing knows, when it has been read
  */
-export function notFoundWords(slug, source) {
-  return source ? `There is no proposal called ${slug} in ${sourceWhere(source)}.` : `There is no proposal called ${slug}.`;
+export function notFoundWords(slug, source, sources = null) {
+  if (!source) return `There is no proposal called ${slug}.`;
+  if (pullNumberOf(source) || source === 'checkout' || (sources && sources.has(source) && SLUG.test(source))) return `There is no proposal called ${slug} in ${sourceWhere(source)}.`;
+  return `There is no proposal called ${slug}. This link's source is not a PR, the checkout or a worktree.`;
+}
+
+/**
+ * What to say when `?proposal=` holds something that is not a proposal's name (a typo, a cut-off link), or null when it is a name or absent.
+ * The value is shown as text, cut to 60 characters; the caller sets it with `textContent`.
+ * @param {string} search `location.search`
+ * @returns {string|null}
+ */
+export function malformedLinkWords(search) {
+  const params = new URLSearchParams(search || '');
+  if (!params.has('proposal')) return null;
+  const raw = params.get('proposal') || '';
+  if (SLUG.test(raw)) return null;
+  const shown = raw.length > 60 ? `${raw.slice(0, 59)}\u2026` : raw;
+  return shown.trim() ? `This link does not name a proposal: \u201c${shown}\u201d is not a proposal's name.` : 'This link does not name a proposal.';
 }
 
 /**

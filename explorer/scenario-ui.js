@@ -95,15 +95,17 @@ function isKeyboardish() {
   return !!active && active !== document.body && !typingIn(active);
 }
 
-/** Closing the player by the viewer's own act: the focus goes back to what started it (Play), else to the map */
+/** Closing the player by the viewer's own act: the focus goes back to what started it (Play), else to Play, else to the map (on a phone Play is folded away in the peek) */
 function giveFocusBack() {
   const to = returnTo;
   returnTo = null;
-  const ok = (el) => !!el && el.isConnected && !el.hidden && !el.disabled && !el.closest('[hidden]');
-  if (ok(to)) { to.focus(); return; }
-  const play = document.getElementById('proposal-play');
-  if (ok(play)) { play.focus(); return; }
-  if (state.canvas && typeof state.canvas.focus === 'function') state.canvas.focus();
+  const took = (el) => {
+    if (!el || !el.isConnected || el.hidden || el.disabled || el.closest('[hidden]')) return false;
+    el.focus();
+    return document.activeElement === el; // a control the stylesheet hides takes no focus
+  };
+  if (took(to) || took(document.getElementById('proposal-play'))) return;
+  took(state.canvas);
 }
 
 /**

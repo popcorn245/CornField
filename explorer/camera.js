@@ -58,6 +58,8 @@ export function pinchCamera(start, dist, mid) {
 
 /** The zoom at which a node's label is about 11px on screen (labels are 11px in world units from LABEL_ZOOM up, scene.js): where a step or a picked change is shown */
 export const READ_ZOOM = 1.0;
+/** The lowest zoom a fit goes to (the same floor as render.js `fitGraphToViewport`): framing a change never shows less than Fit would */
+export const FIT_ZOOM_MIN = 0.18;
 
 /**
  * The part of a `width` × `height` map that nothing covers, given what covers it from each side (px).
@@ -81,29 +83,36 @@ export function freeRect(width, height, covers = {}, minSize = 120) {
   return { x: left, y: top, width: Math.max(0, width - left - right), height: Math.max(0, height - top - bottom) };
 }
 
+/** The box a node needs on the map (world px): its disc, a little room round it and its label below */
+const boxOf = (n) => {
+  const r = n.r || 18;
+  return { left: n.x - r - 25, right: n.x + r + 25, top: n.y - r - 25, bottom: n.y + r + 35 };
+};
+const padFor = (padding, rect) => Math.min(padding, rect.width / 4, rect.height / 4);
+
 /**
  * The camera that shows `items` (nodes with `x`, `y` and maybe `r`) inside `rect`, with their labels (room below each) and `padding` px to spare.
  * The zoom is the largest that fits, between `minZoom` and `maxZoom`; when even `minZoom` does not fit, `minZoom` wins and the nodes
- * are centred (the fit never goes under the map's own zoom limit, whatever that is).
+ * are centred (the fit never goes under the floor it is given; see `largestGroup` for what to frame then).
  * @param {{ x: number, y: number, r?: number }[]} items
  * @param {{ x: number, y: number, width: number, height: number }} rect CSS px, in the canvas's own coordinates
  * @param {{ padding?: number, maxZoom?: number, minZoom?: number }} [opts]
  * @returns {Camera | null} null for no items
  */
-export function frameNodes(items, rect, { padding = 40, maxZoom = 1, minZoom = ZOOM_MIN } = {}) {
+export function frameNodes(items, rect, { padding = 40, maxZoom = 1, minZoom = FIT_ZOOM_MIN } = {}) {
   if (!items.length) return null;
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
   for (const n of items) {
-    const r = n.r || 18;
-    minX = Math.min(minX, n.x - r - 25);
-    maxX = Math.max(maxX, n.x + r + 25);
-    minY = Math.min(minY, n.y - r - 25);
-    maxY = Math.max(maxY, n.y + r + 35); // room for the label below
+    const b = boxOf(n);
+    minX = Math.min(minX, b.left);
+    maxX = Math.max(maxX, b.right);
+    minY = Math.min(minY, b.top);
+    maxY = Math.max(maxY, b.bottom);
   }
-  const pad = Math.min(padding, rect.width / 4, rect.height / 4);
+  const pad = padFor(padding, rect);
   const fit = Math.min((rect.width - pad * 2) / (maxX - minX), (rect.height - pad * 2) / (maxY - minY));
   const zoom = Math.max(minZoom, Math.min(maxZoom, fit));
   return { x: rect.x + rect.width / 2 - ((minX + maxX) / 2) * zoom, y: rect.y + rect.height / 2 - ((minY + maxY) / 2) * zoom, zoom };
@@ -116,4 +125,31 @@ export function allInside(items, camera, rect, margin = 0) {
     const sy = camera.y + n.y * camera.zoom;
     return sx >= rect.x + margin && sx <= rect.x + rect.width - margin && sy >= rect.y + margin && sy <= rect.y + rect.height - margin;
   });
+}
+
+/**
+ * The most of `items` that fit in `rect` together at `minZoom`: all of them when they fit, else the biggest group a window of that size
+ * holds (so a change spread wider than the lowest zoom shows is framed where most of it is, not on the empty ground between).
+ * @param {{ x: number, y: number, r?: number }[]} items
+ * @param {{ x: number, y: number, width: number, height: number }} rect
+ * @param {{ padding?: number, minZoom?: number }} [opts]
+ */
+export function largestGroup(items, rect, { padding = 40, minZoom = FIT_ZOOM_MIN } = {}) {
+  if (items.length < 2) return items;
+  const pad = padFor(padding, rect);
+  const w = (rect.width - pad * 2) / minZoom;
+  const h = (rect.height - pad * 2) / minZoom;
+  const boxes = items.map(boxOf);
+  const holds = (left, top) => items.filter((_, i) => boxes[i].left >= left && boxes[i].right <= left + w && boxes[i].top >= top && boxes[i].bottom <= top + h);
+  // Every window worth trying has its left edge on some node's box and its top edge on some node's (a big change: only each node's own corner)
+  const lefts = boxes.map((b) => b.left);
+  const tops = boxes.map((b) => b.top);
+  let best = [];
+  const pairs = items.length <= 120 ? lefts.flatMap((l) => tops.map((t) => [l, t])) : boxes.map((b) => [b.left, b.top]);
+  for (const [l, t] of pairs) {
+    if (best.length === items.length) break;
+    const got = holds(l, t);
+    if (got.length > best.length) best = got;
+  }
+  return best.length ? best : [items[0]];
 }

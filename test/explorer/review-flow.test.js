@@ -24,9 +24,9 @@ import { initReview, resetReviewForTests } from '../../explorer/review.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, visibleMapRect } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
-import { freeRect, frameNodes, allInside, READ_ZOOM, ZOOM_MIN } from '../../explorer/camera.js';
+import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FIT_ZOOM_MIN } from '../../explorer/camera.js';
 // @ts-expect-error plain JS modules, no declarations
-import { checksLine, sourceChip, notFoundWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
+import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
 const page = fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8');
@@ -151,9 +151,32 @@ describe('F06 the camera on open: the changed nodes, in the part of the map noth
     for (const n of state.nodes) expect(inRect(n, r), n.id).toBe(true);
   });
 
-  it('never goes below the map\'s zoom limit, whatever it is', () => {
-    open(robot({ nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'app-a' }], remove: [{ id: 'far-1' }, { id: 'far-2' }] } }));
-    expect(state.camera.zoom).toBeGreaterThanOrEqual(ZOOM_MIN);
+  it('never goes below the lowest zoom a fit goes to; a change wider than that is framed where most of it is, not on the ground between', () => {
+    $('proposal-bar').getBoundingClientRect = rect(48, 640) ; // a tall bar: the map left is a strip, too short for the whole change at the floor
+    open(robot({ nodes: { add: [{ id: 'page-meals', label: '/meals', type: 'page', parent: 'app-a' }], remove: [{ id: 'page-old' }, { id: 'far-1' }] } }));
+    expect(state.camera.zoom).toBeGreaterThanOrEqual(FIT_ZOOM_MIN);
+    const r = visibleMapRect();
+    const all = changed();
+    const group = largestGroup(all, r, { padding: 40 });
+    const shown = all.filter((n     ) => inRect(n, r));
+    expect(group.length).toBeLessThan(all.length); // they do not all fit
+    expect(group.length).toBeGreaterThan(1);
+    expect(shown.map((n     ) => n.id).sort()).toEqual(group.map((n     ) => n.id).sort()); // the biggest group is on screen, whole
+  });
+
+  it('leaves out a change on a layer that is off: the camera frames only what is drawn', () => {
+    $('proposal-bar').getBoundingClientRect = rect(48, 190) ;
+    state.activeLayers = { ...state.activeLayers, table: false };
+    try {
+      open();
+      const r = visibleMapRect();
+      for (const n of changed().filter((m     ) => m.type !== 'table')) expect(inRect(n, r), n.id).toBe(true);
+      const table = state.nodes.find((n     ) => n.id === 'table-t');
+      // framed without it: page-old, app-a and page-meals alone fill the rect, so the table (to their right) is not what sets the zoom
+      const only = frameNodes(changed().filter((m     ) => m.type !== 'table'), r, { padding: 40 });
+      expect(state.camera.zoom).toBeCloseTo(only.zoom, 5);
+      expect(table).toBeTruthy();
+    } finally { state.activeLayers = { ...state.activeLayers, table: true }; }
   });
 });
 
@@ -162,6 +185,15 @@ describe('the framing helpers', () => {
     expect(freeRect(1000, 700, { top: 100, right: 400 })).toEqual({ x: 0, y: 100, width: 600, height: 600 });
     const tiny = freeRect(1000, 200, { top: 150, bottom: 150 }, 120);
     expect(tiny.height).toBeGreaterThanOrEqual(120);
+  });
+
+  it('largestGroup keeps them all when they fit at the floor, and else the most a window that size holds', () => {
+    const r = { x: 0, y: 0, width: 1000, height: 700 };
+    const near = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 0, y: 300 }];
+    expect(largestGroup(near, r, { minZoom: 0.18 })).toEqual(near);
+    const spread = [...near, { x: 20000, y: 0 }, { x: 0, y: -20000 }];
+    expect(largestGroup(spread, r, { minZoom: 0.18 })).toEqual(near);
+    expect(largestGroup(spread, r, { minZoom: 0.01 })).toEqual(spread); // a lower floor holds them all
   });
 
   it('frameNodes centres the nodes in the rect, and zooms in no further than asked', () => {
@@ -202,13 +234,17 @@ describe('F08 the bar says which copy is under review', () => {
     expect(chip.dataset.corn).toBe('proposal-source');
     expect(chip.textContent).toBe('PR #24 · draft · 1 check running');
     expect(chip.getAttribute('href')).toBe('https://github.com/o/r/pull/24');
+    expect(chip.dataset.cornState).toBe('draft'); // the public state set (docs/theming.md), as on a state pill
+    expect(chip.hasAttribute('data-tone')).toBe(false);
   });
 
   it('says only what it knows until the forge answers, and never links a scheme that is not http(s)', async () => {
     fakeHub({ pull: { number: 25, draft: false, state: 'open', url: 'javascript:alert(1)' }, checks: [] });
     open(robot(), '0013-meals', 'pull/25');
     expect($('proposal-source').textContent).toBe('PR #25');
+    expect($('proposal-source').hasAttribute('data-corn-state')).toBe(false); // not known yet
     await settle();
+    expect($('proposal-source').dataset.cornState).toBe('open');
     expect($('proposal-source').textContent).toBe('PR #25 · open · no checks');
     expect($('proposal-source').hasAttribute('href')).toBe(false);
   });
@@ -217,6 +253,7 @@ describe('F08 the bar says which copy is under review', () => {
     open(robot(), '0013-meals', 'checkout');
     expect($('proposal-source').textContent).toBe('Local draft · in the checkout');
     expect($('proposal-source').hasAttribute('href')).toBe(false);
+    expect($('proposal-source').dataset.cornState).toBe('draft'); // a branch with no pull request yet is `draft`
     open(robot(), '0013-meals', 'topo-09');
     expect($('proposal-source').textContent).toBe('Local draft · in worktree topo-09');
   });
@@ -227,6 +264,7 @@ describe('F08 the bar says which copy is under review', () => {
     expect(checksLine([{ state: 'success' }, { state: 'success' }])).toBe('all 2 checks passed');
     expect(checksLine([{ state: 'failure' }, { state: 'failure' }, { state: 'running' }])).toBe('2 checks failed, 1 check running');
     expect(sourceChip('pull/7', { draft: false, url: 'https://x/7' }, []).text).toBe('PR #7 · open · no checks');
+    expect(sourceChip('pull/7', { state: 'merged', draft: false }, null)).toMatchObject({ text: 'PR #7 · merged', state: 'merged' });
     expect(pullNumberOf('pull/7')).toBe(7);
     expect(pullNumberOf('pull/0')).toBeNull();
     expect(pullNumberOf('checkout')).toBeNull();
@@ -234,17 +272,30 @@ describe('F08 the bar says which copy is under review', () => {
 });
 
 describe('F12 focus goes somewhere stated', () => {
-  it('Approve: the status line, which says it', async () => {
+  it('Approve: it keeps the focus, and the status line (a live region) says it once', async () => {
+    const s = fakeHub();
     open();
     const approve = q('[data-review="approved"]')                     ;
     approve.focus();
     click(approve);
     expect(approve.getAttribute('aria-disabled')).toBe('true'); // busy, but still the focused button (not `disabled`)
     expect(document.activeElement).toBe(approve);
+    click(approve); // pressed again while busy: nothing
     await settle();
+    expect(s.mock.calls.filter(([, init]     ) => init && init.method === 'PUT')).toHaveLength(1);
     const line = q('[data-review-status]')                     ;
     expect(line.textContent).toMatch(/Approved/);
-    expect(document.activeElement).toBe(line);
+    expect(line.getAttribute('role')).toBe('status');
+    expect(line.hasAttribute('tabindex')).toBe(false); // never focused: a focused live region is read twice
+    expect(document.activeElement).toBe(approve);
+  });
+
+  it('Approve from a tap that left the focus on the page: it goes to Approve, not nowhere', async () => {
+    open();
+    click(q('[data-review="approved"]'));
+    (document.activeElement               )?.blur?.();
+    await settle();
+    expect(document.activeElement).toBe(q('[data-review="approved"]'));
   });
 
   it('Send back with a note: back on the button that opened the note', async () => {
@@ -282,6 +333,44 @@ describe('F12 focus goes somewhere stated', () => {
     expect(document.activeElement).toBe($('proposal-play'));
   });
 
+  it('Tab order: an open list comes right after its button, then the toolbar goes on (WCAG 2.4.3)', () => {
+    open();
+    const tab = (shift = false) => {
+      const ev = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: shift, bubbles: true, cancelable: true });
+      document.activeElement .dispatchEvent(ev);
+      return ev.defaultPrevented;
+    };
+    // The change list, opened from the counts: its rows, then Before / Diff / After
+    click($('proposal-chip'));
+    const rows = [...document.querySelectorAll('#proposal-changes button')];
+    expect(document.activeElement).toBe(rows[0]);
+    expect(tab(true)).toBe(true);
+    expect(document.activeElement).toBe($('proposal-chip'));
+    expect(tab()).toBe(true);
+    expect(document.activeElement).toBe(rows[0]);
+    rows[rows.length - 1].focus();
+    expect(tab()).toBe(true);
+    const next = document.activeElement;
+    expect(next.closest('#proposal-changes')).toBeNull();
+    expect($('proposal-chip').compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(next.compareDocumentPosition(q('[data-review="approved"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // before Approve, not after it
+    expect(tab(true)).toBe(true);
+    expect(document.activeElement).toBe(rows[rows.length - 1]);
+    // The scenario list, opened from Play: its rows, then Edit
+    click($('proposal-play'));
+    const items = [...document.querySelectorAll('.hx-scenarios-item')];
+    expect(document.activeElement).toBe(items[0]);
+    items[items.length - 1].focus();
+    expect(tab()).toBe(true);
+    expect(document.activeElement).toBe($('proposal-edit'));
+    expect(tab(true)).toBe(true);
+    expect(document.activeElement).toBe(items[items.length - 1]);
+    // Past ⋯ the bar is left: the open lists' rows are not met again
+    $('proposal-more').focus();
+    tab();
+    expect(document.activeElement.closest?.('#proposal-changes, #proposal-scenarios') ?? null).toBeNull();
+  });
+
   it('Escape in the scenario list folds it back onto Play', () => {
     open();
     click($('proposal-play'));
@@ -289,6 +378,16 @@ describe('F12 focus goes somewhere stated', () => {
     expect(q('#proposal-scenarios').hidden).toBe(true);
     expect(document.activeElement).toBe($('proposal-play'));
     expect($('proposal-play').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('when Play cannot take the focus (a phone\'s peek folds it away), closing the player puts it on the map, not the page', () => {
+    open();
+    playScenario({ id: 's', title: 'S', steps: [{ node: 'root', text: 'a' }] }, { autoplay: false });
+    (q('[data-action=scenario-close]')                     ).focus();
+    const play = $('proposal-play');
+    play.focus = () => {}; // as a display: none button does
+    click(q('[data-action=scenario-close]'));
+    expect(document.activeElement).toBe(state.canvas);
   });
 
   it('closing the player with its own button gives the focus back to Play too', () => {
@@ -332,6 +431,7 @@ describe('F16 a link that finds nothing says what, and offers the ways on', () =
     const ways = [...document.querySelectorAll('#proposal-ways button')];
     expect(ways.map((b) => b.textContent)).toEqual(['Open the copy in PR #21', 'Open the copy in the checkout', 'Open the Specs list']);
     expect($('proposal-ways').hidden).toBe(false);
+    for (const b of ways) expect(b.hasAttribute('data-peek-ok'), b.textContent).toBe(true); // they act from a phone's peek, which keeps them
     click(ways[0]);
     await settle();
     expect(state.proposalSource).toBe('pull/21');
@@ -349,10 +449,38 @@ describe('F16 a link that finds nothing says what, and offers the ways on', () =
     expect(($('proposal-menu')               ).hidden).toBe(false);
   });
 
-  it('a source that is not a PR is said so, not echoed as a place', () => {
-    expect(notFoundWords('x', 'garbage')).toBe('There is no proposal called x in worktree garbage.');
+  it('a source that is not a PR, the checkout or a worktree the listing has is said so, and not echoed', async () => {
+    expect(notFoundWords('x', 'garbage')).toBe('There is no proposal called x. This link\'s source is not a PR, the checkout or a worktree.');
+    expect(notFoundWords('x', 'topo-09', new Set(['checkout', 'topo-09']))).toBe('There is no proposal called x in worktree topo-09.');
+    expect(notFoundWords('x', '<img src=x onerror=alert(1)>', new Set(['<img src=x onerror=alert(1)>']))).not.toMatch(/img/);
     expect(otherCopies(listing, '0100-flow', 'checkout').map((c) => c.source)).toEqual(['pull/21']);
     expect(otherCopies(null, 'x', null)).toEqual([]);
+    fakeHub({ listing });
+    expect(await openProposal('0100-flow', '<b>garbage</b>')).toBe(false);
+    expect($('proposal-message').textContent).not.toMatch(/garbage/);
+    expect($('proposal-bar').querySelector('b')).toBeNull();
+    expect([...document.querySelectorAll('#proposal-ways button')].map((b) => b.textContent)).toEqual(['Open the copy in PR #21', 'Open the copy in the checkout', 'Open the Specs list']);
+  });
+
+  it('#213 a link whose proposal is not a name says so, shows the value as text only, and offers the Specs list', async () => {
+    const evil = '<img src=x onerror="window.__pwned=1">';
+    history.replaceState(null, '', `/?proposal=${encodeURIComponent(evil)}&source=pull/21`);
+    const f = fakeHub({ listing });
+    expect(await initProposals()).toBe(false);
+    const msg = $('proposal-message');
+    expect(msg.hidden).toBe(false);
+    expect($('proposal-bar').hidden).toBe(false);
+    expect(msg.textContent).toBe(`This link does not name a proposal: \u201c${evil}\u201d is not a proposal's name.`);
+    expect(msg.children).toHaveLength(0); // text, not markup
+    expect($('proposal-bar').querySelector('img')).toBeNull();
+    expect([...document.querySelectorAll('#proposal-ways button')].map((b) => b.textContent)).toEqual(['Open the Specs list']);
+    expect($('proposal-bar').querySelector('a[href]')).toBeNull();
+    expect(f.mock.calls.some(([u]     ) => String(u).startsWith('/proposals/'))).toBe(false); // nothing is asked of the server for it
+    expect(malformedLinkWords('?proposal=')).toBe('This link does not name a proposal.');
+    expect(malformedLinkWords('?proposal=0100-ok')).toBeNull();
+    expect(malformedLinkWords('?other=1')).toBeNull();
+    expect(malformedLinkWords(`?proposal=${'a'.repeat(30)}%20${'b'.repeat(80)}`)).toMatch(/\u2026\u201d/); // a long value is cut
+    history.replaceState(null, '', '/');
   });
 });
 

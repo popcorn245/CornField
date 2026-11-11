@@ -20,7 +20,7 @@
 
 import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
 import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld } from './render.js';
-import { frameNodes, READ_ZOOM } from './camera.js';
+import { frameNodes, largestGroup, READ_ZOOM } from './camera.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
 import { edgePoint, looksFor } from './scene.js';
@@ -28,7 +28,7 @@ import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
 import {
   PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds,
-  sourceChip, pullNumberOf, notFoundWords, otherCopies,
+  sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
 } from './proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
@@ -120,14 +120,15 @@ export async function openProposal(slug, source = null) {
     setMessage(err.message || String(err), true, err.notFound ? [specsWay()] : []);
     if (err.notFound && token === openToken) {
       await loadProposalList();
-      if (token === openToken) setMessage(err.message, true, [...otherCopies(listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay()]);
+      const sources = new Set((Array.isArray(listing) ? listing : []).map((e) => e && e.source));
+      if (token === openToken) setMessage(notFoundWords(slug, source, sources), true, [...otherCopies(listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay()]);
     }
     return false;
   }
 }
 
 /** The way on every bad link offers: the list of specs */
-const specsWay = () => ({ label: 'Open the Specs list', way: 'specs' });
+const specsWay = () => ({ label: t('openSpecsList'), way: 'specs' });
 /** Which `openProposal` is the latest, so a slow answer never writes over a newer one */
 let openToken = 0;
 
@@ -221,12 +222,16 @@ function swapMap(nodes, edges) {
 
 /**
  * Frames what the proposal changes (nodes added, changed or removed, and both ends of a changed edge; not what they connect to) in the part of the
- * map nothing covers (the bar, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. A proposal that changes nothing shows the whole map.
+ * map nothing covers (the bar, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
+ * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than the lowest zoom shows,
+ * the biggest part of it that fits is framed. A proposal that changes nothing drawn shows the whole map.
  */
 function fitToChange() {
   const { touched } = touchedIds(state.nodes, viewEdges());
   const items = state.nodes.filter((n) => touched.has(n.id) && isNodeVisible(n));
-  const cam = items.length ? frameNodes(items, visibleMapRect(), { padding: fitPadding(), maxZoom: 1 }) : null;
+  const rect = visibleMapRect();
+  const opts = { padding: fitPadding(), maxZoom: 1 };
+  const cam = items.length ? frameNodes(largestGroup(items, rect, opts), rect, opts) : null;
   if (!cam) { fitGraphToViewport(fitPadding()); return; }
   Object.assign(state.camera, cam);
   render();
@@ -265,7 +270,7 @@ function setMessage(text, isError = false, ways = []) {
   const box = $('proposal-ways');
   if (!box) return;
   box.hidden = ways.length === 0;
-  box.innerHTML = ways.map((w) => `<button type="button" class="hx-btn" data-action="proposal-way" data-way="${escHtml(w.way)}"${w.slug ? ` data-slug="${escHtml(w.slug)}"` : ''}${w.source ? ` data-source="${escHtml(w.source)}"` : ''} data-corn-kind="quiet">${escHtml(w.label)}</button>`).join('');
+  box.innerHTML = ways.map((w) => `<button type="button" class="hx-btn" data-action="proposal-way" data-way="${escHtml(w.way)}"${w.slug ? ` data-slug="${escHtml(w.slug)}"` : ''}${w.source ? ` data-source="${escHtml(w.source)}"` : ''} data-peek-ok data-corn-kind="quiet">${escHtml(w.label)}</button>`).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +296,7 @@ function paintSource() {
   const entry = n && Array.isArray(listing) ? listing.find((e) => e.slug === state.proposalSlug && e.source === source) : null;
   const words = sourceChip(source, (known && known.pull) || (entry && entry.pull) || null, known ? known.checks : null);
   chip.textContent = words.text;
-  chip.dataset.tone = words.tone;
+  if (words.state) chip.dataset.cornState = words.state; else delete chip.dataset.cornState;
   const href = safeHref(words.href);
   if (href) { chip.setAttribute('href', href); chip.setAttribute('target', '_blank'); chip.setAttribute('rel', 'noreferrer'); chip.title = 'Open this pull request'; } else {
     chip.removeAttribute('href'); chip.removeAttribute('target'); chip.removeAttribute('rel'); chip.title = words.label;
@@ -636,6 +641,48 @@ function onKey(e) {
   // Escape inside the list of changes folds it back onto its chip
   const list = $('proposal-changes');
   if (e.key === 'Escape' && !e.defaultPrevented && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); toggleChanges(true); }
+  if (e.key === 'Tab' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) tabThroughList(e);
+}
+
+/** The lists the toolbar opens, each after the button that opens it: the changes (the counts) and the scenarios (Play) */
+const OPENERS = [['proposal-chip', 'proposal-changes'], ['proposal-play', 'proposal-scenarios']];
+const TABBABLE = 'button, a[href], input, select, textarea, summary, [tabindex]';
+const canTab = (el) => el.tabIndex >= 0 && !el.disabled && !el.closest('[hidden]') && (typeof el.checkVisibility !== 'function' || el.checkVisibility());
+const tabbables = (root) => [...root.querySelectorAll(TABBABLE)].filter(canTab);
+
+/**
+ * An open list sits in the page under the whole toolbar, so Tab would reach it only after Approve and ⋯ (WCAG 2.4.3). The bar's Tab order is
+ * the page's with each open list moved to right after the button that opened it: Tab goes from the button into the list, from its last row on
+ * to the toolbar's next control, and Shift+Tab the same way back. Where that order and the page's agree, the browser moves the focus itself.
+ */
+function tabThroughList(e) {
+  const bar = $('proposal-bar');
+  if (!bar || bar.hidden) return;
+  const open = OPENERS.map(([b, l]) => [$(b), $(l)]).filter(([btn, list]) => btn && list && !list.hidden && bar.contains(list) && canTab(btn));
+  if (!open.length) return;
+  const all = tabbables(bar);
+  let order = all.filter((el) => !open.some(([, list]) => list.contains(el)));
+  for (const [btn, list] of open) {
+    const at = order.indexOf(btn);
+    if (at >= 0) order = [...order.slice(0, at + 1), ...all.filter((el) => list.contains(el)), ...order.slice(at + 1)];
+  }
+  const active = document.activeElement;
+  let to = null;
+  if (active && bar.contains(active)) {
+    const i = order.indexOf(active);
+    if (i < 0) return;
+    const next = order[i + (e.shiftKey ? -1 : 1)];
+    const natural = all[all.indexOf(active) + (e.shiftKey ? -1 : 1)];
+    if (next === natural) return;
+    if (next) to = next;
+    else if (!e.shiftKey) to = tabbables(document).find((el) => !bar.contains(el) && (bar.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) || null; // out of the bar, past the list's rows
+  } else if (e.shiftKey && active) {
+    // Coming back into the bar from after it: its last control in this order, not the last row of a list
+    const page = tabbables(document);
+    const prev = page[page.indexOf(active) - 1];
+    if (prev && bar.contains(prev) && prev !== order[order.length - 1]) to = order[order.length - 1];
+  }
+  if (to) { e.preventDefault(); to.focus(); }
 }
 
 /** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
@@ -667,7 +714,12 @@ export async function initProposals() {
   renderBar();
 
   const asked = parseProposalQuery(location.search);
-  if (!asked) return false;
+  if (!asked) {
+    // A link whose `proposal` is not a proposal's name: said plainly (the value as text, never markup or a link), with the Specs list
+    const bad = malformedLinkWords(location.search);
+    if (bad) setMessage(bad, true, [specsWay()]);
+    return false;
+  }
   const ok = await openProposal(asked.slug, asked.source);
   if (ok && asked.view) setProposalView(asked.view);
   return ok;

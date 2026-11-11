@@ -69,7 +69,7 @@ function mount() {
     root.className = 'hx-review';
     root.dataset.corn = 'review-bar';
     root.innerHTML = `
-      <p class="hx-review-status" data-review-status role="status" tabindex="-1" hidden></p>
+      <p class="hx-review-status" data-review-status role="status" hidden></p>
       <div class="hx-review-form" id="review-form" data-review-form hidden>
         <label class="hx-review-label" for="review-note"></label>
         <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
@@ -232,11 +232,11 @@ export async function sendReview(verdict) {
   const wasNoting = ui.noting;
   ui.noting = false;
   paint();
-  // The buttons were busy while it posted: focus is where it was (they are not `disabled`), and when it is lost it goes somewhere stated.
-  // Approve: the status line, which now says it. Send back: the button that opened the note.
+  // The buttons were busy while it posted, not `disabled`, so the focus stayed where it was. Approve keeps it (the status line, a live region,
+  // says "Approved" once; moving the focus onto it would say it twice); when it was lost it goes back to Approve. Send back: the button that opened the note.
   const lost = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
-  if (verdict === 'approved') { if (lost || document.activeElement === button('approved')) { const line = q('[data-review-status]'); if (line && !line.hidden) line.focus(); } }
-  else if (wasNoting) { const sendBack = button('notes'); if (sendBack) sendBack.focus(); }
+  if (verdict === 'approved') { if (lost) button('approved')?.focus(); }
+  else if (wasNoting || lost) button('notes')?.focus();
   refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;
