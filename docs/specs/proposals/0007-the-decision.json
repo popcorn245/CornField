@@ -6,30 +6,6 @@
   "nodes": {
     "add": [
       {
-        "id": "store-personas",
-        "label": "Personas file",
-        "type": "store",
-        "parent": "root",
-        "file": "topology.personas.json",
-        "desc": "cornfield's own personas: the archetypes its scenarios act as (spec 0006 adds them; whichever lands first)."
-      },
-      {
-        "id": "persona-maintainer",
-        "label": "Maintainer",
-        "type": "persona",
-        "parent": "store-personas",
-        "role": "maintainer",
-        "desc": "Persona Maintainer: role maintainer. Reads and approves every spec, mostly at a desk, sometimes on a phone."
-      },
-      {
-        "id": "persona-agent",
-        "label": "Agent",
-        "type": "persona",
-        "parent": "store-personas",
-        "role": "agent",
-        "desc": "Persona Agent: role agent. The account a drafting agent or a runner pushes and comments as."
-      },
-      {
         "id": "core-explorer-decision-model",
         "label": "decision-model.js",
         "type": "core",

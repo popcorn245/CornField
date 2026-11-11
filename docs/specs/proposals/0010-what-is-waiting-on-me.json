@@ -5,8 +5,7 @@
   "summary": "One number, specs to decide plus runs waiting on an answer, on the Work button, the tabs and the tab title; the Specs list grouped by who must act with a review state on each row and a search field; runs grouped as needs you, in motion and finished; a proposal's bar says when a run waits on it; on a phone at most two sheets, one expanded, and the map keeps 35%. The persona node is an archetype for the scenarios, not something to build.",
   "nodes": {
     "add": [
-      { "id": "core-explorer-waiting-model", "label": "waiting-model.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/waiting-model.js", "desc": "Pure: which specs are to decide and which runs need an answer, the one number, the Specs groups (to decide, with the agent, approved, drafts) and the run groups (needs you, in motion, finished)." },
-      { "id": "persona-maintainer", "label": "Maintainer", "type": "persona", "parent": "root", "desc": "An archetype: the one maintainer who decides specs and answers runs, at a desk or on a phone. Never a real person." }
+      { "id": "core-explorer-waiting-model", "label": "waiting-model.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/waiting-model.js", "desc": "Pure: which specs are to decide and which runs need an answer, the one number, the Specs groups (to decide, with the agent, approved, drafts) and the run groups (needs you, in motion, finished)." }
     ],
     "change": [
       { "id": "core-server-proposal-pulls", "set": { "desc": "Lists the proposals of open spec PRs, each with its review state (verdict, by, at, whether it covers the current file), kept by PR head." }, "why": "a row says only Local, Open or Draft, never whether it was approved or sent back (#184)" },

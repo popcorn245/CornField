@@ -2178,6 +2178,55 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
+    },
+    {
+      "id": "store-personas",
+      "label": "Personas file",
+      "type": "store",
+      "file": "topology.personas.json",
+      "r": 20,
+      "color": "#fb923c",
+      "desc": "Personas file (topology.personas.json)."
+    },
+    {
+      "id": "persona-maintainer",
+      "label": "Maintainer",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Maintainer: role maintainer, any groups. Reads and approves every spec, mostly at a desk, sometimes on a phone.",
+      "role": "maintainer",
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-reader",
+      "label": "Reader",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Reader: role reader, any groups. Signed in with the forge, but does not maintain the repo.",
+      "role": "reader",
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-agent",
+      "label": "Agent",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Agent: role agent, any groups. The account a drafting agent or a runner pushes and comments as.",
+      "role": "agent",
+      "r": 22,
+      "color": "#fb7185"
+    },
+    {
+      "id": "persona-guest",
+      "label": "Guest (no account)",
+      "type": "persona",
+      "file": "topology.personas.json",
+      "desc": "Persona Guest (no account): no account. Someone who opens a link to the dashboard without signing in.",
+      "account": false,
+      "r": 22,
+      "color": "#fb7185"
     }
   ],
   "edges": [
@@ -7031,7 +7080,27 @@
       "from": "page-doc-docs-specs-0007-the-decision",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas",
       "dashed": true
+    },
+    {
+      "from": "root",
+      "to": "store-personas"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-maintainer"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-reader"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-agent"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-guest"
     }
   ],
-  "updatedAt": "2026-11-11T17:10:31.941Z"
+  "updatedAt": "2026-11-11T17:17:50.711Z"
 }

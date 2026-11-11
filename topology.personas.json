@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "personas": [
+    { "id": "maintainer", "label": "Maintainer", "role": "maintainer", "desc": "Reads and approves every spec, mostly at a desk, sometimes on a phone." },
+    { "id": "reader", "label": "Reader", "role": "reader", "desc": "Signed in with the forge, but does not maintain the repo." },
+    { "id": "agent", "label": "Agent", "role": "agent", "desc": "The account a drafting agent or a runner pushes and comments as." },
+    { "id": "guest", "label": "Guest (no account)", "account": false, "desc": "Someone who opens a link to the dashboard without signing in." }
+  ]
+}

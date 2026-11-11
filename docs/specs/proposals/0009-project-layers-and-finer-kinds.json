@@ -5,8 +5,7 @@
   "summary": "A project adds its own layers in cornfield.config.js as data (add, off, order; a match on type, kind, parent and field values), each node in exactly one layer, refused by name when wrong; a node's finer kind shows as letters in its core, in the legend, the badge and search, and a theme colours or gives an icon to a kind or a project layer. The persona node is an archetype for the scenarios, not something to build.",
   "nodes": {
     "add": [
-      { "id": "core-core-layers", "label": "layers.js", "type": "core", "parent": "pkg-core", "file": "core/layers.js", "desc": "Pure: the layers config's checks and the matcher. The starting layers as entries of the same shape, and which one layer each node is in: the first project layer that takes it, else its starting layer." },
-      { "id": "persona-maintainer", "label": "Maintainer", "type": "persona", "parent": "root", "desc": "An archetype: the one maintainer who configures the repo and decides specs. Never a real person." }
+      { "id": "core-core-layers", "label": "layers.js", "type": "core", "parent": "pkg-core", "file": "core/layers.js", "desc": "Pure: the layers config's checks and the matcher. The starting layers as entries of the same shape, and which one layer each node is in: the first project layer that takes it, else its starting layer." }
     ],
     "change": [
       { "id": "core-core-config", "set": { "desc": "Reads and checks cornfield.config.js, now with layers: { add, off, order }, refused by name when wrong." }, "why": "a project cannot add its own layers; the config refuses the key (#150)" },
