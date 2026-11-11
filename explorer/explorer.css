@@ -1028,3 +1028,12 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 @media (prefers-reduced-motion: reduce) {
   .hx-drawer, .hx-forge, .hx-input, .hx-btn, .hx-dot, .hx-sheet, .hx-menu, .hx-dock > .hx-sheet { transition: none; animation: none; }
 }
+
+/* Search with no match (F24): one line under the field, a polite live region. Empty it takes no room. */
+.hx-search { position: relative; }
+.hx-search-status { position: absolute; top: calc(100% + var(--corn-space-2)); left: 0; right: 0; z-index: 40; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text); font-size: var(--corn-text-sm); overflow-wrap: anywhere; }
+.hx-search-status:empty { display: none; }
+.hx-mobile-search .hx-search-status { top: calc(100% - var(--corn-space-1)); left: var(--corn-space-3); right: var(--corn-space-3); }
+
+/* The node panel's facts break at word boundaries only (F60): "hook" is never "hoo / k". A long path or name still wraps, at its slashes and dashes, and only as a last resort anywhere. */
+.hx-fact-v { overflow-wrap: break-word; word-break: normal; }

@@ -53,10 +53,11 @@ describe('the header, left to right', () => {
   it('says how many layers are on, on the Layers chip, and keeps the name its own words', () => {
     renderLayerToggles();
     const chip = $('legend-toggle-btn');
-    expect(chip.textContent).toBe(`Layers · ${LAYER_DEFS.length} of ${LAYER_DEFS.length}`);
+    const layers = LAYER_DEFS.filter((l) => !l.overlay).length; // an overlay (Runs in flight) is not a layer: F59
+    expect(chip.textContent).toBe(`Layers · ${layers} of ${layers}`);
     state.activeLayers = { app: false, pkg: false, page: false };
     renderLayerToggles();
-    expect(chip.textContent).toBe(`Layers · ${LAYER_DEFS.length - 3} of ${LAYER_DEFS.length}`);
+    expect(chip.textContent).toBe(`Layers · ${layers - 3} of ${layers}`);
     expect(chip.hasAttribute('aria-label')).toBe(false); // named by what it says
     expect(chip.getAttribute('aria-controls')).toBe('legend-dropdown');
   });

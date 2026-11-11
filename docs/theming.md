@@ -271,7 +271,7 @@ The map canvas is drawn from tokens too. Its renderers (WebGL, and the Canvas 2D
 
 - **`auto` is the default, and it is today's map.** A node is drawn in its own colour from the topology (deepened for the light ground, as it always was); every line, halo and mark keeps the colour it had. A theme that sets nothing changes nothing.
 - **A colour replaces it, as written.** Both themes read the same token, so a theme sets the light ground's colour too, under `:root[data-theme="light"]` (or `@media (prefers-color-scheme: light)`).
-- **A kind beats its group.** A node's *kind* is its type (`app`, `table`, ...). Its *group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`. Only the fill goes by kind and group; the outline and the label are one colour for the whole map.
+- **A kind beats its group.** A node's *kind* is its type (`app`, `table`, ...). Its *group* is its layer in the Layers menu: the same name for most, except that the rooms and floors are `house` and an outside system is `cloud` or `web`. `--corn-map-node-table` wins over `--corn-map-group-table`. Only the fill goes by kind and group; the outline and the label are one colour for the whole map. Each row of the Layers menu carries its layer's key as `data-layer` (`app`, `page`, `core`, `store`, `cloud`, `web`, `house`, `flow`, `runs`, ...): every node type on the map has a row, `core` and `store` included (a store also needs Data Flow on, and core Packages or Atoms), and a type cornfield has no row for gets one under its own name.
 - **An outline is off until you set one.** `--corn-map-stroke` draws a ring just inside every node's edge, `--corn-map-stroke-width` thick. `--corn-map-label` keeps the label's own fade: a node the focus dims stays dim.
 - **Colours that mean something stay.** A node or an edge an outage, a permission check or a selected pull request colours (red, amber, green) keeps that colour; the map tokens style what is otherwise drawn in the node's or the line's own colour.
 - **Anything that is not a colour is `auto`.** A value is read as the browser reads a colour (`#e53e3e`, `rgb()`, `hsl()`, a name, `color-mix()`, `oklch()`), so a typo, a length or an empty value leaves that part of the map as it was rather than breaking it.
@@ -432,6 +432,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
 | `live-chip`, `live-menu` | the live layer's chip and its dropdown |
 | `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
+| `search-status` | the line under a search field that says "No match for …" (a polite live region, empty while there is a match) |
 | `layout-toggle` | the Freeform layout switch in the account menu |
 | `theme-toggle`, `theme-picker` | the System / Dark / Light segment, the named-theme menu (both in the account menu) |
 
@@ -523,6 +524,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `proposals` | Proposals |
 | `issuesAndPrs` | Work |
 | `searchPlaceholder` | Search... |
+| `searchNoMatch` | No match for |
 | `signOut` | Sign out |
 | `poweredBy` | powered by cornfield |
 | `before` | Before |

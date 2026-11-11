@@ -6,7 +6,7 @@
  * two layers by their kind (spec 0031): Cloud, and the Public web; the Cloud legend says what a call's `when` looks like.
  */
 
-import { state, touchScene } from './state.js';
+import { state, touchScene, escHtml } from './state.js';
 import { render, ensureFlowLoop } from './render.js';
 import { renderFlowLegend } from './flows.js';
 import { layerOf } from './live-model.js';
@@ -23,6 +23,8 @@ export const LAYER_DEFS = [
   { key: 'token', label: 'Design Tokens', color: '#ec4899', desc: 'Pollen CSS' },
   { key: 'tool', label: 'Dev Tools', color: '#f43f5e', desc: 'Utilities' },
   { key: 'flow', label: 'Data Flow', color: '#fb923c', desc: 'Tiers & sync' },
+  { key: 'core', label: 'Core', color: '#14b8a6', desc: 'The shared core: what the apps and packages are built on. Shows with Packages or Atoms' },
+  { key: 'store', label: 'Stores', color: '#fb923c', desc: 'Storage tiers and the ends of the data flows. Shows with Data Flow' },
   { key: 'table', label: 'Tables', color: '#fde047', desc: 'SQLite tables, reads & writes' },
   { key: 'rom', label: 'ROM', color: '#f0abfc', desc: 'Render on Mutation' },
   { key: 'service', label: 'Services', color: '#84cc16', desc: 'API jobs, webhooks and hooks' },
@@ -62,12 +64,32 @@ export function closeLegendMenu() {
   setLegendMenu(false);
 }
 
-/** The chip says how many layers are on: " · 13 of 20" */
+/** The key of the row a node is under (the Layers menu has a row for every type on the map) */
+const rowKey = (n) => (n.type === 'external' ? externalLayer(n) : layerOf(n.type));
+
+/**
+ * The rows: the defined ones, and one more for any node type on this map that none of them covers (a type a plugin or
+ * a newer sync adds), so every type present can be turned off. `root` is always shown and has no row.
+ */
+function layerRows() {
+  const known = new Set(LAYER_DEFS.map((l) => l.key));
+  const extra = [];
+  state.nodes.forEach((n) => {
+    const key = rowKey(n);
+    if (key === 'root' || known.has(key)) return;
+    known.add(key);
+    extra.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: '#94a3b8', desc: `Nodes of the type ${key}` });
+  });
+  return [...LAYER_DEFS, ...extra];
+}
+
+/** The chip says how many layers are on: " · 13 of 20". An overlay (Runs in flight) is not a layer: it is not counted */
 function paintCount() {
   const el = document.getElementById('layers-count');
   if (!el) return;
-  const on = LAYER_DEFS.filter((l) => state.activeLayers[l.key] !== false).length;
-  el.textContent = ` · ${on} of ${LAYER_DEFS.length}`;
+  const layers = layerRows().filter((l) => !l.overlay);
+  const on = layers.filter((l) => state.activeLayers[l.key] !== false).length;
+  el.textContent = ` · ${on} of ${layers.length}`;
 }
 
 export function renderLayerToggles() {
@@ -75,22 +97,24 @@ export function renderLayerToggles() {
   const container = document.getElementById('layer-toggles-container');
   if (!container) return;
 
+  // Nodes by row. Data Flow has no nodes of its own: it counts its links, and says so; Runs in flight counts runs
   const counts = {};
-  state.nodes.forEach((n) => { const key = n.type === 'external' ? externalLayer(n) : layerOf(n.type); counts[key] = (counts[key] || 0) + 1; });
+  state.nodes.forEach((n) => { const key = rowKey(n); counts[key] = (counts[key] || 0) + 1; });
   counts.flow = state.edges.filter((e) => e.kind === 'flow').length;
   counts.runs = state.runsMap ? state.runsMap.flight.size : 0;
+  const unit = { flow: (n) => `${n} ${n === 1 ? 'link' : 'links'}`, runs: (n) => `${n} in flight` };
 
-  container.innerHTML = LAYER_DEFS.map((layer) => {
+  container.innerHTML = layerRows().map((layer) => {
     const on = state.activeLayers[layer.key] !== false;
     const color = themed(layer.color, state.theme); // the dot is the colour the map draws on this ground
     return `
-      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${layer.key}" aria-pressed="${on}" title="${layer.desc}" data-corn="row">
+      <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">
         <span class="hx-toggle-label">
           <span class="hx-dot" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
-          <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
+          <span class="hx-toggle-name">${escHtml(layer.label)}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">
-          <span class="hx-count" data-corn="count">${counts[layer.key] || 0}</span>
+          <span class="hx-count" data-corn="count">${(unit[layer.key] || String)(counts[layer.key] || 0)}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
       </button>`;

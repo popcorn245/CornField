@@ -366,7 +366,8 @@ describe('the Canvas 2D renderer', () => {
     for (const scene of [dark(), light()]) {
       const log = draw(scene, style);
       expect(fills(log)).toContain('#e53e3e');
-      expect(fills(log).filter((f) => f === '#e53e3e').length).toBe(1);
+      // the node, and its glow's soft disc when it glows (a halo in its own colour: renderer-canvas2d.js, no shadowBlur)
+      expect(fills(log).filter((f) => f === '#e53e3e').length).toBe(scene.nodes.some((n) => n.glow) ? 2 : 1);
     }
     expect(fills(draw(light(), styleOf()))).toContain(lightColor('#336699'));
   });

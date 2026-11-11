@@ -12,7 +12,8 @@ import { flowSummary } from './flows.js';
 import { clearScenario } from './scenario-ui.js';
 import { kindOfMark, fieldRows, MARK_WORDS } from './proposal-model.js';
 import { nodeMockupsHtml } from './mockups-model.js';
-import { collapseSheet } from './sheets.js';
+import { collapseSheet, isPhone, measureCovered, onCoveredChange } from './sheets.js';
+import { panIntoView } from './camera.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
 import { t } from './strings.js';
@@ -95,7 +96,9 @@ function dataSummary(node) {
   }
   if (node.type === 'service') {
     const row = (e, side) => `${nm(e[side])}${e.label && e.label !== 'imports' ? ` · ${escHtml(e.label)}` : ''}`;
-    return section('Kind:', [line(`${code(node.kind)}${node.summary ? `<div class="hx-faint">${escHtml(node.summary)}</div>` : ''}`)])
+    // The summary is the first sentence of the description above: shown again only when the description does not hold it
+    const again = node.summary && !String(node.desc || '').includes(node.summary);
+    return section('Kind:', [line(`${code(node.kind)}${again ? `<div class="hx-faint">${escHtml(node.summary)}</div>` : ''}`)])
       + section('Started by:', [...(node.triggers || []).map((t) => line(escHtml(t))), ...edgesOf('triggers', 'to', node.id).map((e) => line(row(e, 'from')))])
       + section('Jobs:', (node.jobs || []).map((j) => line(`${code(j.name)} · cron ${code(j.cron)}`)))
       + section('Runs:', edgesOf('triggers', 'from', node.id).map((e) => line(row(e, 'to'))))
@@ -274,7 +277,23 @@ export async function selectNode(node) {
   $('spec-drawer').classList.add('drawer-open');
   $('spec-drawer').inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
   $('drawer-backdrop').hidden = false;
+  keepSelectedInView();
 }
+
+/**
+ * On a phone the node's sheet covers the bottom of the map (sheets.js): when the selected node is under it, or
+ * gets covered as the sheet expands, pan the map (never zoom it) so the node is in the part still showing (F32)
+ */
+export function keepSelectedInView() {
+  const node = state.selectedNode;
+  if (!node || !state.width || !isPhone()) return;
+  const covered = measureCovered();
+  const next = panIntoView(state.camera, node, { left: 0, top: 0, right: state.width, bottom: state.height - covered }, node.r * state.camera.zoom + 16);
+  if (!next) return;
+  Object.assign(state.camera, next);
+  render();
+}
+onCoveredChange(() => keepSelectedInView());
 
 /** Start a run: the Start dialog of the Work panel, on the proposal that is open */
 export function startRun() {

@@ -24,6 +24,7 @@
  */
 
 import { state, nodeById, touchScene } from './state.js';
+import { updateSearchStatus } from './search-status.js';
 import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
@@ -99,6 +100,9 @@ function handleSearch(value) {
       state.camera.x = state.width / 2 - found.x * state.camera.zoom;
       state.camera.y = state.height / 2 - found.y * state.camera.zoom;
     }
+    updateSearchStatus(state.searchQuery, !!found);
+  } else {
+    updateSearchStatus('', false);
   }
   render();
 }
