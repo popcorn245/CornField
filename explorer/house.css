@@ -34,7 +34,7 @@
 .hx-house-people[hidden] { display: none; }
 .hx-house-chip { min-height: 28px; padding: var(--corn-space-1) var(--corn-space-4); border: var(--corn-border) solid color-mix(in srgb, var(--corn-text-3) 25%, transparent); border-radius: var(--corn-radius-pill); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text-2); font-weight: 600; font-size: var(--corn-text-sm); line-height: 1.2; font-family: inherit; cursor: pointer; white-space: nowrap; }
 .hx-house-chip:hover { border-color: color-mix(in srgb, var(--corn-hue-lime) 50%, transparent); color: var(--corn-text); }
-.hx-house-chip:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: 2px; }
+.hx-house-chip:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 .hx-house-chip[aria-pressed="true"] { background: var(--corn-hue-lime); border-color: var(--corn-hue-lime); color: var(--corn-ground); }
 .hx-house-chip--person { border-color: color-mix(in srgb, var(--corn-hue-pink) 45%, transparent); }
 .hx-house-chip--software, .hx-house-chip--cloud { border-style: dashed; }

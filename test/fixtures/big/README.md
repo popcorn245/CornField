@@ -45,15 +45,10 @@ The real cornfield server runs with sign-in on, against a fake GitHub on loopbac
 
 ## What retro could not reach
 
-The retro theme uses only documented tokens and `data-corn` hooks. These parts of the explorer could not be restyled through them without fighting the CSS, so they are left as cornfield draws them:
+The retro theme uses only documented tokens and `data-corn` hooks, no `!important` and no `.hx-*` selector. Since 0.35 it reaches what used to be on this list: the map's label font (`--corn-map-font`), line width and glow (`--corn-map-edge-width`, `--corn-map-glow`), the sign-in, "ask a maintainer" and 401 pages (the theme is linked in; `[data-corn="auth-page"]`, `"auth-card"`, `"auth-brand"`), the hint's icon (`[data-corn="hint-icon"]`), digits in their own face (`--corn-font-num`, `[data-corn="count"]`; `--corn-mono` is code again) and the focus ring's offset (`--corn-focus-offset`). Still not reachable through tokens:
 
-1. **Map labels** are drawn on a canvas in a fixed stack (`FONT_NODE`, `FONT_EDGE` in `explorer/scene.js`), so Nunito and the pixel face never reach them. Needed: a `--corn-map-font` token.
-2. **Map line work and halos**: edge width, dash pattern, edge alpha, the soft glow around a node and the selection halo's size have no tokens (only colours, and the node outline). Needed: `--corn-map-edge-width`, `--corn-map-glow`.
-3. **The sign-in, "ask a maintainer" and 401 pages** (`server/auth.js`) carry their own inline style, no theme link, no tokens and no hook, so they stay in cornfield's look. Needed: the theme stylesheet linked in, and `[data-corn="auth-page"]`, `[data-corn="auth-card"]`.
-4. **Node shape**: nodes are circles in every theme (documented), so a square pixel node is not possible.
-5. **Glyphs that are text**: the hint's hand emoji is a character in the markup (`explorer/index.html`); a theme cannot swap it (it sits inside `[data-corn="hint"]` with no hook of its own). Needed: `[data-corn="hint-icon"]`.
-6. **Tab counts and run-card numbers** (`.hx-forge-count`, token and cost figures) are internal classes: digits cannot be set to tabular figures or the rounded face on their own. Needed: `[data-corn="count"]`.
-7. **Focus ring offset**: only the ring's width is a token. Needed: `--corn-focus-offset`.
-8. **The dark level's borders are lavender, not ink**: an ink border on deep indigo is not visible, so `--corn-line` is a light lavender in the dark level and ink only in the light level. A token for a different border colour per level is not needed; this is a choice, not a gap.
+1. **Map line work**: the dash pattern, edge alpha and the selection halo's size have no tokens (the colours, the node outline, the line width and the glow do).
+2. **Node shape**: nodes are circles in every theme (documented), so a square pixel node is not possible.
+3. **The dark level's borders are lavender, not ink**: an ink border on deep indigo is not visible, so `--corn-line` is a light lavender in the dark level and ink only in the light level. A token for a different border colour per level is not needed; this is a choice, not a gap.
 
 Contrast (`cornfield validate`, light and dark, the standard theme): passes, no errors and no warnings. Three pairs failed on the first draft and were darkened or lightened: light `--corn-hue-lime` on its 6% tint (4.49:1), dark `--corn-accent-text` and `--corn-bad` (`#ff8c98`) on `--corn-surface-3` (4.48:1).

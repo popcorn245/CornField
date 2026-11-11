@@ -90,7 +90,7 @@ export function renderLayerToggles() {
           <span class="hx-toggle-name">${layer.label}</span>${layer.live ? '<span class="hx-live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">
-          <span class="hx-count">${counts[layer.key] || 0}</span>
+          <span class="hx-count" data-corn="count">${counts[layer.key] || 0}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
       </button>`;

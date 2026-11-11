@@ -56,7 +56,16 @@ standard theme (dark, on a system set to light): --corn-text-2 (#cbd5e1) on --co
 | `--corn-added-text`, the current proposal's border | `--corn-added` 12%, `--corn-surface-1` |
 | `--corn-ok`, a layer's tick; `--corn-ok`, `--corn-edit-text`, `--corn-bad`, `--corn-warn`, `--corn-text-3`, a run or PR state pill's border (its text colour) | `--corn-surface-2`, `--corn-surface-3` |
 
-The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state); the pressed accent button's fill (its `--corn-accent-text` border carries the state); and the map, which is drawn on a canvas with its own colours.
+The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text and for the parts of the interface a person needs to see (1.4.11). No token pair is large text. Most UI tokens are text tokens too, so they are held to 4.5:1 where they are: a pair listed twice is checked once, at the higher minimum. Not checked, on purpose: `--corn-line` and `--corn-line-soft` (a divider or a quiet border is decoration, never the only sign of a state) and the pressed accent button's fill (its `--corn-accent-text` border carries the state). The map is checked in the next section.
+
+**The map's colours** are checked too, for light and dark, each against the ground (and its image) they are drawn on:
+
+- **A node's fill, 3:1.** For each node type, its fill is `--corn-map-node-<kind>`, else its group's `--corn-map-group-<group>`, else `auto`, which is the node's own colour from the topology (deepened for the light ground). A fill under 3:1 on the ground passes **only if the outline carries it**: `--corn-map-stroke` is set, wider than 0, and is itself 3:1 on the fill and on the ground. Otherwise the line names the token:
+  `standard theme (light): --corn-map-node-table (the fill of a table node; set --corn-map-stroke, an outline at 3:1 on the fill and on the ground, or a deeper fill) (#f2c500) on --corn-ground (#fdf3dc) is 1.49:1, below 3:1 (the UI minimum).`
+- **A label, 4.5:1.** `--corn-map-label` (or the map's own near-white or near-black at `auto`) on the ground, and on `--corn-map-label-halo` (the ground's own colour at `auto`).
+- Edge colours, the diff marks and the selection halo are not checked here.
+
+**What `validate` prints on a pass** is one line of what was held, so a pass is not a silence: `theme contrast: 218 pairs of the standard theme, in light and dark: all at or above their minimum (4.5:1 for text, 3:1 for the parts of the interface and the map's fills).` The default theme is held to the same rules: its ground image's glow was lowered in 0.35 (dark `rgba(66, 153, 225, 0.28)` to `0.2` and `rgba(229, 62, 62, 0.22)` to `0.16`; light `0.12` to `0.06` and `0.07` to `0.04`) because six light fills and two dark ones were 2.7 to 2.9:1 under the brightest point of it.
 
 **What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
 
@@ -68,7 +77,7 @@ An image in `--corn-ground-image` (`url()`) cannot be read and adds nothing; kee
 
 **Light and dark, and the system setting.** `theme-boot.js` always puts the viewer's light or dark on `<html data-theme>`, and a viewer can pick light on a dark system or dark on a light one. So each mode is resolved twice, with `prefers-color-scheme` the same and the other way, and the worse counts; a line from the second says "on a system set to …". This catches a theme that writes its light values on `:root` and its dark ones only in `@media (prefers-color-scheme: dark)`: a viewer who picks dark on a light system gets the light values on cornfield's dark ground.
 
-**How a theme is read.** A small resolver reads the stylesheets as text (no browser): custom properties in `:root`, `html`, `[data-theme="…"]` and `[data-theme-name="…"]` rules (with `:not()`), at the top level and inside `@media (prefers-color-scheme: light|dark)`. The cascade is the browser's: `!important`, then specificity, then source order. It follows `var(--x, fallback)` chains (a property that is unset or in a cycle has nothing to give, so the fallback is used) and reads colours written as `#rgb`, `#rrggbb` (with alpha), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax), `transparent`, the basic colour names and `color-mix(in srgb, A p%, B)` (premultiplied, as the browser mixes; shares under 100% lower the alpha). Tokens it does not know, like a `--corn-map-*` token, are ignored unless a pair above uses them.
+**How a theme is read.** A small resolver reads the stylesheets as text (no browser): custom properties in `:root`, `html`, `[data-theme="…"]` and `[data-theme-name="…"]` rules (with `:not()`), at the top level and inside `@media (prefers-color-scheme: light|dark)`. The cascade is the browser's: `!important`, then specificity, then source order. It follows `var(--x, fallback)` chains (a property that is unset or in a cycle has nothing to give, so the fallback is used) and reads colours written as `#rgb`, `#rrggbb` (with alpha), `rgb()`/`rgba()`, `hsl()`/`hsla()` (comma or space syntax), `transparent`, the basic colour names and `color-mix(in srgb, A p%, B)` (premultiplied, as the browser mixes; shares under 100% lower the alpha). Tokens it does not know are ignored unless a pair above or the map check uses them.
 
 **A token it cannot work out** is a **warning**, not an error: the pair was not checked. The line names the token and why:
 
@@ -191,9 +200,10 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-shadow` | a panel's whole `box-shadow`: the header's menus, the bars, the glass (light) |
 | `--corn-shadow-sm` | a small lift: a pressed button, the Open button (light) |
 | `--corn-shadow-lg` | a slide-over or a dialog: the node panel, the issues panel, a confirmation (light) |
-| `--corn-shadow-color` | the colour of the one shadow that is not one of the three: a phone sheet's, cast upward (light) |
+| `--corn-shadow-color` | the colour the phone sheet's shadow (below) is made from (light) |
+| `--corn-shadow-sheet` | a phone's bottom sheet's whole `box-shadow`, cast upward (`0 -8px 24px` of `--corn-shadow-color` by default). A flat brand gives it a hard offset, like `0 -4px 0 #1b1636` |
 | `--corn-glow` | the blur of a live dot's glow; `0px` for none (light) |
-| `--corn-scrim` | the backdrop behind a sheet or a dialog (light) |
+| `--corn-scrim` | the backdrop behind a sheet or a dialog: the node panel's on a phone, a confirmation, Start an agent, Review tokens, the mockup window (light) |
 | `--corn-blur` | the glass blur amount (a length; `0px` for none) |
 | `--corn-mockup-ground` | the page behind a proposal's mockup image or frame (white, as a browser shows a page) |
 | **Text** | |
@@ -223,7 +233,8 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | **Type** | |
 | `--corn-font` | the body family (the system's; nothing is fetched) |
 | `--corn-font-display` | headings and titles: the header's title, the panels' titles, the menus' headings (the body family unless set) |
-| `--corn-mono` | code, ids and numbers |
+| `--corn-mono` | code, file paths and ids: the code face. Numbers have their own, `--corn-font-num`; before 0.35 `--corn-mono` also set the digits, so a brand that set it to keep a pixel face off numbers can put the real monospace back |
+| `--corn-font-num` | numbers shown as data: the counts on the Work tabs and in the Layers menu, the "#21" of a pull request, the step counter, a count of changes. A pixel or display face misreads a 2, a 5 and an 8, so a brand sets a face with clear digits here. Those elements also take tabular figures (the digits are one width). Default: `--corn-font` |
 | `--corn-text-2xs` | 10px, mono code and small meta |
 | `--corn-text-xs` | 11px |
 | `--corn-text-sm` | 12px |
@@ -240,6 +251,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-border` | 1px, every border |
 | `--corn-border-strong` | 2px, an accent: a selection bar, a ring, a mark |
 | `--corn-focus-width` | 2px, the focus ring |
+| `--corn-focus-offset` | 2px, the gap between a control and its focus ring. A ring that sits inside its box (a Work tab, a sheet's handle, the map) is inset by the ring's width instead, so no scroll container cuts it, whatever the width and the offset |
 | **Spacing** (padding, gaps and margins are steps of this scale, or `calc()` over it) | |
 | `--corn-space` | 4px, the unit |
 | `--corn-space-1` | 4px (`--corn-space`) |
@@ -296,7 +308,7 @@ Dark and light, with a brand's own map (here each `--corn-map-*` is set in the l
 }
 ```
 
-There are 62 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kinds, the outline (colour and width), the label (colour and halo), and 8 states.
+There are 65 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kinds, the outline (colour and width), the label (colour and halo), 8 states, and three for type and line work: the label font, the line width and the glow.
 
 | Token | What it is |
 |---|---|
@@ -308,6 +320,9 @@ There are 62 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed`, `--corn-map-edit` | the diff on the map: a proposal's ring on a node and its line on an edge, and a what-if edit's. The legend and the panel's dots follow them. `auto`: `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit` as the map has always drawn them |
 | `--corn-map-selected`, `--corn-map-match` | the halo of the selected node, and of a node a search finds (its disc is the same colour, translucent) |
 | `--corn-map-lit` | the straight links the focus lights: the selection's own lines, and the step of a walk (a data-flow edge keeps its flow's colour: `--corn-map-edge-flow`) |
+| `--corn-map-font` | the font list of every label on the map, in the same stack form as `--corn-font` (`"Nunito", ui-rounded, sans-serif`). `auto` (the default) keeps the map's own stack. It is read with the other map tokens and drawn again when a web font in it has loaded. Only a plain list is taken: families by name or in quotes, up to eight and 200 characters; a value with a URL, a function, a semicolon, a brace or a backslash is `auto` |
+| `--corn-map-edge-width` | the width of an ordinary line, in map px (`1.6px` is today's flow line). Every line is scaled by this over 1.6, so the lines the focus lights and the diff marks stay heavier than the rest. `auto`: each line's own. A length from 0 to 12px |
+| `--corn-map-glow` | the soft glow round nodes, lines and moving dots, as a factor: `0` for none (a flat theme), `1` as it is drawn, up to `4`. `auto`: as drawn. A length other than `0px` is not a factor and is read as `auto` |
 | `--corn-map-collision` | the dashed ring and tag of a node two open agent runs both change (a mark over the map, so a stylesheet reads it; `--corn-warn` by default) |
 | **Edges by kind** | |
 | `--corn-map-edge-ownership` | a solid ownership line (parent to child) |
@@ -431,7 +446,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
 | `dock`, `sheet-handle`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle, the scrim behind the node panel on a phone |
-| `hint`, `loading`, `error` | the hint at the map's corner, the loading line, the load-error box |
+| `hint`, `hint-icon`, `loading`, `error` | the hint at the map's corner and its icon (an SVG, so `[data-corn="hint-icon"]` can be hidden or given another picture), the loading line, the load-error box |
 
 ### Panels and sheets
 
@@ -443,6 +458,19 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `proposal-bar` | the open proposal's bar |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
+
+### The sign-in pages
+
+The sign-in page, the "ask a maintainer" page (403), a sign-in that did not work and "your access could not be checked" are drawn by the server before anyone is in. They link `tokens.css`, a small `sign-in.css` of their own, the config's font stylesheets and theme file, and the stored Light, Dark or System choice (`theme-boot.js`), so the tokens and hooks of the rest of this page reach them too, and carry the brand's logo, wordmark and app name. Everything they load answers without a sign-in; nothing else does ([docs/sign-in.md](sign-in.md)).
+
+| Hook | What it is |
+|---|---|
+| `auth-page` | the page's `<body>` |
+| `auth-card` | the card in the middle (`data-corn-state="failure"` on a page about a problem) |
+| `auth-brand` | the logo and the wordmark or app name at the top of the card (`brand-logo` and `brand-wordmark` are inside it, as in the header) |
+| `auth-reason` | the line that says what a proposal link was for ("You followed a link to a proposed change"), there only when the link was to a proposal |
+
+The buttons carry `data-corn-kind` (`primary`: Sign in, Try again; `quiet`: Sign out).
 
 ### Dialogs
 
@@ -459,6 +487,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | Hook | What it is |
 |---|---|
 | `tabs`, `tab` | a row of tabs, one tab |
+| `count` | a number shown as data: a tab's count, a layer's count, the Work button's lit tag ("#21"), the step counter, a pull request's number in its detail. Takes `--corn-font-num` |
 | `row` | one entry of a list: a spec, pull request, issue, deploy or thread; a layer in the Layers menu; a proposal in the Proposals menu or on the Specs tab; a change in the open proposal; a scenario; a mockup; a review token |
 | `run` | an agent run's card (`data-corn-state`) |
 | `section` | a section of the node panel |
@@ -523,8 +552,10 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `openRoute` | Open route |
 | `startRun` | Start a run |
 | `copySpec` | Copy Spec |
-| `hintInspect` | Tap node to inspect live spec |
-| `hintDrag` | Drag nodes to move • Double-tap to inspect |
+| `hintInspect` | Click a node to see what it is |
+| `hintInspectTouch` | Tap a node to see what it is |
+| `hintDrag` | Drag nodes to move • Double-click to inspect |
+| `hintDragTouch` | Drag nodes to move • Double-tap to inspect |
 | `hintDataFlow` | Data flow: browser → servers → API → tables → services → outside |
 | `loading` | Loading topology.json … |
 | `errorTitle` | The map could not be loaded |

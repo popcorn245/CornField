@@ -47,7 +47,7 @@ const hooks = tableValues('## The hooks').filter((v, i, a) => a.indexOf(v) === i
 const kinds = tableValues('### Button kinds: `data-corn-kind`');
 const states = tableValues('### States: `data-corn-state`');
 
-const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), path.join(CORNFIELD, 'plugins/house/browser.js')];
+const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
 const source = SOURCES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 /** Every literal value written as `data-corn="x"` or `dataset.corn = 'x'` (the attribute, in markup and in script) */
 const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);

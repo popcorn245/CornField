@@ -2008,6 +2008,46 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
+    },
+    {
+      "id": "core-explorer-focus-room",
+      "label": "focus-room.js",
+      "type": "core",
+      "file": "explorer/focus-room.js",
+      "summary": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54). (explorer/focus-room.js)"
+    },
+    {
+      "id": "core-explorer-header-fit",
+      "label": "header-fit.js",
+      "type": "core",
+      "file": "explorer/header-fit.js",
+      "summary": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46). (explorer/header-fit.js)"
+    },
+    {
+      "id": "core-explorer-hint",
+      "label": "hint.js",
+      "type": "core",
+      "file": "explorer/hint.js",
+      "summary": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56). (explorer/hint.js)"
+    },
+    {
+      "id": "core-server-page-head",
+      "label": "page-head.js",
+      "type": "core",
+      "file": "server/page-head.js",
+      "summary": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`. (server/page-head.js)"
     }
   ],
   "edges": [
@@ -6344,12 +6384,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-view",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-server-server",
       "to": "core-core-strings",
       "dashed": true,
@@ -6420,7 +6454,129 @@
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-focus-room"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-header-fit"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-hint"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-page-head"
+    },
+    {
+      "from": "pkg-core",
+      "to": "pkg-explorer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-hint",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-hint",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-focus-room",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-header-fit",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-page-head",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-page-head",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-page-head",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-page-head",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-10T22:00:49.574Z"
+  "updatedAt": "2026-11-11T08:47:45.736Z"
 }

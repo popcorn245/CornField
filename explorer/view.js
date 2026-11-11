@@ -15,7 +15,7 @@ import { clearScenario } from './scenario-ui.js';
 import { measureParams } from './bench.js';
 import { mergeLive, placeLiveNodes } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
-import { t } from './strings.js';
+import { syncHint } from './hint.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -166,6 +166,5 @@ export function syncViewUi() {
   if (layersBtn) layersBtn.classList.toggle('hx-layers-chip--dim', preset);
   const note = $('layers-preset-note');
   if (note) note.hidden = !preset;
-  const badge = $('instruction-badge-text');
-  if (badge) badge.textContent = preset ? t('hintDataFlow') : (state.isFreeform ? t('hintDrag') : t('hintInspect'));
+  syncHint(); // the hint's words for this view and pointer, and whether it shows (hint.js)
 }

@@ -189,7 +189,7 @@ function showBar(speed) {
       <select class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
-    <p class="hx-player-text" aria-live="polite"><span class="hx-player-count"></span> · <span class="hx-player-step"></span></p>
+    <p class="hx-player-text" aria-live="polite"><span class="hx-player-count" data-corn="count"></span> · <span class="hx-player-step"></span></p>
     <div class="hx-player-controls">
       <button type="button" class="hx-btn" data-action="scenario-prev">◀ Previous</button>
       <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-corn-kind="primary"></button>

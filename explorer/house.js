@@ -49,11 +49,14 @@ const cfg = () => state.house || (state.house = newHouseState());
 
 /**
  * Starts the House view's machinery. Nothing is drawn until the view opens.
- * @param {{ floor?: { element?: string, render: (plan: object, floorId: string) => string, defaultPlan?: () => object, editUrl?: string | ((floorId: string) => string) } | null }} [opts]
+ * @param {{ offered?: boolean, floor?: { element?: string, render: (plan: object, floorId: string) => string, defaultPlan?: () => object, editUrl?: string | ((floorId: string) => string) } | null }} [opts]
  */
 export function initHouse(opts = {}) {
   hook = opts.floor || null;
   const c = cfg();
+  c.offered = opts.offered !== false;
+  const offer = $('preset-house-btn');
+  if (offer) offer.hidden = !c.offered; // nothing to show: the View switch is Map and Flow only
   c.defaultPlan = hook && typeof hook.defaultPlan === 'function' ? hook.defaultPlan() : null;
   c.phone = isPhone();
   mount();
@@ -68,7 +71,7 @@ export function initHouse(opts = {}) {
     }
     addFrameClient({ wants: () => false, tick: followCamera });
   }
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'house') openHouse();
+  if (c.offered && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'house') openHouse();
   syncHouse();
 }
 
