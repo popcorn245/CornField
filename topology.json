@@ -2160,6 +2160,26 @@
       "desc": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone) (docs/specs/0010-what-is-waiting-on-me.md)."
     },
     {
+      "id": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "type": "page",
+      "label": "/docs/specs/0006-scenarios-and-personas",
+      "file": "docs/specs/0006-scenarios-and-personas.md",
+      "summary": "Spec 0006: scenarios and personas in review",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0006: scenarios and personas in review (docs/specs/0006-scenarios-and-personas.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0007-the-decision",
+      "type": "page",
+      "label": "/docs/specs/0007-the-decision",
+      "file": "docs/specs/0007-the-decision.md",
+      "summary": "Spec 0007: the decision: what Approve and Send back do, and when",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
+    },
+    {
       "id": "core-core-layers",
       "label": "layers.js",
       "type": "core",
@@ -6999,6 +7019,44 @@
       "dashed": true
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0006-scenarios-and-personas"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0007-the-decision"
+    },
+    {
+      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "to": "page-doc-docs-specs-0007-the-decision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "dashed": true
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-layers"
     },
@@ -7125,5 +7183,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:37:58.294Z"
+  "updatedAt": "2026-11-11T17:46:53.176Z"
 }
