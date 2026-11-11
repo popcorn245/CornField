@@ -40,6 +40,10 @@ describe('the sign-in pages wear the theme and the brand', () => {
     fs.cpSync(SAMPLE, dir, { recursive: true });
     fs.mkdirSync(path.join(dir, 'tools', 'cornfield'), { recursive: true });
     for (const f of ['theme.css', 'logo.svg', 'wordmark.svg']) fs.copyFileSync(path.join(RETRO, f), path.join(dir, 'tools', 'cornfield', f));
+    // One image the theme names, and one beside it that it does not (a screenshot left in the folder)
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('not a real image')]);
+    for (const f of ['bg.png', 'private-shot.png']) fs.writeFileSync(path.join(dir, 'tools', 'cornfield', f), png);
+    fs.appendFileSync(path.join(dir, 'tools', 'cornfield', 'theme.css'), '\n[data-corn="auth-page"] { background-image: url(theme/assets/bg.png); }\n');
     const config = await loadConfig(dir, { env: { CORNFIELD_DATA: path.join(dir, '.data') } });
     const retro = JSON.parse(fs.readFileSync(path.join(RETRO, 'config.json'), 'utf8'));
     Object.assign(config, retro, { forge: { type: 'github', url: 'http://127.0.0.1:9', repo: 'acme/home' }, publicUrl: 'http://127.0.0.1:3350' });
@@ -85,6 +89,16 @@ describe('the sign-in pages wear the theme and the brand', () => {
     }
     // Everything else of the explorer, the data and the config stay behind the sign-in
     for (const p of ['/explorer/explorer.css', '/explorer/main.js', '/topology.json', '/cornfield/config.json', '/explorer/../server/auth.js']) {
+      expect([p, (await get(port, p)).status]).toEqual([p, 401]);
+    }
+  });
+
+  it('serves only the theme assets a theme file names in a url(), without a session; the rest of its folder stays behind the sign-in', async () => {
+    const named = await get(port, '/cornfield/theme/assets/bg.png');
+    expect(named.status).toBe(200);
+    expect(named.headers['content-type']).toBe('image/png');
+    // Beside the theme but not named by it, or not there at all: the same 401 either way, so nothing says what the folder holds
+    for (const p of ['/cornfield/theme/assets/private-shot.png', '/cornfield/theme/assets/logo.svg', '/cornfield/theme/assets/nothing.png', '/cornfield/theme/assets/BG.png', '/cornfield/theme/assets/bg.png/']) {
       expect([p, (await get(port, p)).status]).toEqual([p, 401]);
     }
   });

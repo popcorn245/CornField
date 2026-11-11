@@ -57,7 +57,7 @@ import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf,
 import { CLOUD_FILE } from '../core/cloud.js';
 import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, clientBrand, manifestOf } from '../core/brand.js';
 import { clientStrings } from '../core/strings.js';
-import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, fontOrigins, themeAssetFile, themeAssetPath } from '../core/theme.js';
+import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, cssUrls, fontOrigins, themeAssetFile, themeAssetPath, themeUrlTarget } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
@@ -115,6 +115,29 @@ function themeFilesOf(config) {
   const out = new Map();
   if (t.css) out.set('/cornfield/theme.css', t.css);
   for (const [n, rel] of Object.entries(t.names || {})) if (THEME_NAME.test(n)) out.set(`/cornfield/theme/${n}.css`, rel);
+  return out;
+}
+
+/**
+ * The assets the theme files themselves name in a `url()` (core/theme.js `themeUrlTarget`), as paths under THEME_ASSET_PREFIX: the only
+ * ones a visitor with no session is served. The theme's folder may hold other images (screenshots, drafts) that are not the look; those
+ * stay behind the sign-in. Read when asked, so an edited theme counts at once; a file that cannot be read names nothing.
+ * @param {object} config
+ * @param {Map<string, string>} themeFile themeFilesOf(config)
+ * @returns {Set<string>}
+ */
+function themeAssetsNamed(config, themeFile) {
+  const out = new Set();
+  for (const [servedAt, rel] of themeFile) {
+    try {
+      const file = inside(config.root, rel);
+      if (!file || fs.statSync(file).size > MAX_THEME_BYTES) continue;
+      for (const ref of cssUrls(fs.readFileSync(file, 'utf8'))) {
+        const target = themeUrlTarget(ref, servedAt);
+        if (target.asset) out.add(target.asset);
+      }
+    } catch { /* not there: it names nothing */ }
+  }
   return out;
 }
 
@@ -407,7 +430,8 @@ export function createCornfieldServer(config, opts = {}) {
     // session: a visitor sees the brand before they are in. Presentation files only, never data (docs/sign-in.md, "What answers without a session")
     if (auth.enabled && (req.method === 'GET' || req.method === 'HEAD')) {
       if (themeFile.has(reqPath)) return sendTheme(req, res, config, themeFile.get(reqPath), reqPath);
-      if (reqPath.startsWith(THEME_ASSET_PREFIX)) return sendThemeAsset(req, res, config, reqPath);
+      // Only an asset a theme file names in a url(): anything else beside the theme answers 401, as it would without a theme
+      if (reqPath.startsWith(THEME_ASSET_PREFIX) && themeAssetsNamed(config, themeFile).has(reqPath.slice(THEME_ASSET_PREFIX.length))) return sendThemeAsset(req, res, config, reqPath);
       if (brandFile.has(reqPath)) return sendBrand(req, res, config, brandFile.get(reqPath), reqPath);
       if (SIGN_IN_FILES.has(reqPath)) return sendFile(req, res, path.join(EXPLORER_DIR, path.basename(reqPath)), reqPath);
     }
