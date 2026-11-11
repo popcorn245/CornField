@@ -237,7 +237,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | **Type** | |
 | `--corn-font` | the body family (the system's; nothing is fetched) |
 | `--corn-font-display` | headings and titles: the header's title, the panels' titles, the menus' headings (the body family unless set) |
-| `--corn-mono` | code, file paths and ids: the code face. Numbers have their own, `--corn-font-num`; before 0.35 `--corn-mono` also set the digits, so a brand that set it to keep a pixel face off numbers can put the real monospace back |
+| `--corn-mono` | code, file paths and ids: the code face. Numbers have their own, `--corn-font-num`; before 0.36 `--corn-mono` also set the digits, so a brand that set it to keep a pixel face off numbers can put the real monospace back |
 | `--corn-font-num` | numbers shown as data: the counts on the Work tabs and in the Layers menu, the "#21" of a pull request, the step counter, a count of changes, a run's limits and what its runner reported (minutes, turns, cost, tokens). Costs and tokens inside a sentence (a run's meta line, the totals) keep the body face. A pixel or display face misreads a 2, a 5 and an 8, so a brand sets a face with clear digits here. Those elements also take tabular figures (the digits are one width). Default: `--corn-font` |
 | `--corn-text-2xs` | 10px, mono code and small meta |
 | `--corn-text-xs` | 11px |
