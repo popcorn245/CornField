@@ -163,7 +163,7 @@ import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-m
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenDash } from './cloud-model.js';
-import { projectLayerKey, shownByProposal } from './layer-model.js';
+import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
@@ -575,9 +575,15 @@ function buildNodes(state, subgraph) {
     if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
+    // A finer kind (spec 0009): its letters, drawn in the node's core by the renderers (kind-letters.js), and the project layer that takes the node
+    const letters = lettersOf(state, shown);
+    const layer = projectLayerKey(state, shown);
 
     out.push({
       id: node.id, type: shown.type, group: groupOf(shown),
+      ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
+      ...(letters ? { letters } : {}),
+      ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: shown.color,
       alpha,
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,

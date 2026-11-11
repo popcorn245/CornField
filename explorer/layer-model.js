@@ -12,7 +12,7 @@
  * The matching itself is core/layers.js (data only); this file only hands it the map's ownership line.
  */
 
-import { layerKeyOf, parentIndex, projectLayerOf } from '../core/layers.js';
+import { kindLetters, layerKeyOf, parentIndex, projectLayerOf } from '../core/layers.js';
 import { touchedIds } from './proposal-model.js';
 
 /** Asks the ownership line of the map the state holds, only when a layer matches by `parent` */
@@ -41,3 +41,19 @@ function touchedBy(state) {
 
 /** Whether the open proposal touches `node` (false with no proposal open) */
 export const shownByProposal = (state, node) => !!state.proposal && touchedBy(state).has(node.id);
+
+const lettersMemo = new WeakMap();
+/**
+ * The letters of the node's finer kind (core/layers.js `kindLetters`, over the whole map so two kinds of a type never share one), or ''.
+ * An outside node's kind is its layer (cloud or web), not a finer one.
+ */
+export function lettersOf(state, node) {
+  if (typeof node.kind !== 'string' || !node.kind || node.type === 'external') return '';
+  let hit = lettersMemo.get(state.nodes);
+  if (!hit || hit.n !== state.nodes.length) {
+    hit = { n: state.nodes.length, map: kindLetters(state.nodes) };
+    lettersMemo.set(state.nodes, hit);
+  }
+  const t = hit.map.get(node.type);
+  return (t && t.get(node.kind)) || '';
+}
