@@ -337,7 +337,7 @@
       "label": "labels.js",
       "type": "core",
       "file": "explorer/labels.js",
-      "summary": "The label overlay (spec 0012 A3, TOPO-05): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer.",
+      "summary": "The label overlay (spec 0012 A3, TOPO-05; spec 0008 D2): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The label overlay (spec 0012 A3, TOPO-05): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer. (explorer/labels.js)"
@@ -2024,7 +2024,7 @@
       "label": "search-status.js",
       "type": "core",
       "file": "explorer/search-status.js",
-      "summary": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24).",
+      "summary": "The polite live region by each search field (F24): what a screen reader hears of a search.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24). (explorer/search-status.js)"
@@ -2084,7 +2084,7 @@
       "label": "map-tokens.js",
       "type": "core",
       "file": "core/map-tokens.js",
-      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`.",
+      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow` and `--corn-map-label-min`.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`. (core/map-tokens.js)"
@@ -2178,6 +2178,46 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
+    },
+    {
+      "id": "core-explorer-cluster",
+      "label": "cluster.js",
+      "type": "core",
+      "file": "explorer/cluster.js",
+      "summary": "A cluster is a hub and what hangs under it (spec 0008 D1): an app and its pages, a store and its tables.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A cluster is a hub and what hangs under it (spec 0008 D1): an app and its pages, a store and its tables. (explorer/cluster.js)"
+    },
+    {
+      "id": "core-explorer-fly",
+      "label": "fly.js",
+      "type": "core",
+      "file": "explorer/fly.js",
+      "summary": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again. (explorer/fly.js)"
+    },
+    {
+      "id": "core-explorer-search-model",
+      "label": "search-model.js",
+      "type": "core",
+      "file": "explorer/search-model.js",
+      "summary": "What a search finds, in what order, and how it reads (spec 0008 D3 and D4).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a search finds, in what order, and how it reads (spec 0008 D3 and D4). (explorer/search-model.js)"
+    },
+    {
+      "id": "core-explorer-search",
+      "label": "search.js",
+      "type": "core",
+      "file": "explorer/search.js",
+      "summary": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field… (explorer/search.js)"
     }
   ],
   "edges": [
@@ -6593,12 +6633,6 @@
       "to": "core-server-compress"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-search-status",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-panels",
       "to": "core-explorer-camera",
       "dashed": true,
@@ -7031,7 +7065,137 @@
       "from": "page-doc-docs-specs-0007-the-decision",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-cluster"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-fly"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-search-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-search"
+    },
+    {
+      "from": "core-explorer-fly",
+      "to": "core-explorer-flows",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-fly",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-fly",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-cluster",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-search",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-search",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-search-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-search-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-search-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:10:31.941Z"
+  "updatedAt": "2026-11-11T17:44:18.198Z"
 }
