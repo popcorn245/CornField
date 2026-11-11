@@ -39,6 +39,17 @@ import { outageFor } from './outage-model.js';
 
 /** World units per floor viewBox unit */
 export const HOUSE_SCALE = 2;
+
+/** The node types only a house plan has: a floor and a room (a device can be derived from code, with no plan to put it on) */
+const HOUSE_ONLY_TYPES = ['floor', 'room'];
+/**
+ * Whether the House view is offered: the repo names a source that can answer for a house (`sources.house`, `live` or `devices`), or the
+ * map already holds a floor or a room. With neither there is no plan to draw (a device derived from code has nowhere to go), only an
+ * empty one, so the button is not there (CF review F47) and the view is not an error to explain.
+ * @param {boolean} hasSource
+ * @param {{ type?: string }[]} nodes
+ */
+export const houseOffered = (hasSource, nodes) => !!hasSource || (Array.isArray(nodes) && nodes.some((n) => HOUSE_ONLY_TYPES.includes(n.type)));
 /** The radius each kind of thing is drawn at in the House view: a machine a size larger than a device, a room small */
 export const HOUSE_SIZES = { room: 8, floor: 14, device: 13, machine: 20, persona: 18, phone: 11, stack: 16, container: 9, app: 11, pkg: 14, external: 12 };
 /** One slot of a room's grid (world units): room for a device and its label */

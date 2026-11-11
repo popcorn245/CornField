@@ -6,7 +6,7 @@
  * runs before every route the server answers:
  *
  *   no session               the sign-in page for a page, 401 for anything else
- *   a reader, not a maintainer   "this is the dev dashboard; ask a maintainer" for a page, 403 for anything else
+ *   a reader, not a maintainer   "this is for the people who look after the project; ask a maintainer" for a page, 403 for anything else
  *   a maintainer             the route
  *
  * The permission is asked of the forge when the session starts and, for a maintainer, again once it is 15 minutes
@@ -43,6 +43,8 @@ import { createForge as defaultCreateForge, isMaintainer, ForgeError } from './f
 import { githubApiUrl } from './forge-github.js';
 import { sameOrigin } from './proposals.js';
 import { revokeOwnerTokens } from './review-tokens.js';
+import { appNameOf, brandImages } from '../core/brand.js';
+import { brandHead, escapeHtml, themeHead, themeHtmlTag } from './page-head.js';
 
 /** How often a session's permission is asked of the forge again */
 export const RECHECK_MS = 15 * 60 * 1000;
@@ -236,35 +238,57 @@ function cookie(name, value, { maxAge, secure }) {
 //  Pages
 // ---------------------------------------------------------------------------
 
-const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/**
+ * The page chrome of the sign-in, "ask a maintainer", failed and 401 pages: what the explorer's own head carries, so a brand and a theme
+ * reach a visitor before they are in. The server's CSP already covers them (the same header on every response: nothing inline but style).
+ * `@param config` is the whole config; `appName` is the brand's name for the app, else "cornfield".
+ */
+function chromeOf(config) {
+  const brand = config.brand;
+  const images = Object.fromEntries(brandImages(brand).map((i) => [i.key, i.url]));
+  return {
+    title: config.title || 'cornfield',
+    appName: appNameOf(brand) || 'cornfield',
+    htmlTag: themeHtmlTag(config.theme || {}),
+    // No manifest link: the manifest is behind the sign-in, and a visitor has no session to fetch it with
+    head: [brandHead(brand, { manifest: false }), themeHead(config.theme || {})].filter(Boolean).join('\n'),
+    logo: images.logo || null,
+    wordmark: images.wordmark || null,
+  };
+}
 
-const STYLE = `
-  :root { color-scheme: light dark; --bg: #f8fafc; --fg: #0f172a; --muted: #475569; --card: #ffffff; --line: #e2e8f0; --accent: #0f766e; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #0b1120; --fg: #e2e8f0; --muted: #94a3b8; --card: #111827; --line: #1f2937; --accent: #2dd4bf; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 28px 24px; }
-  h1 { font-size: 20px; margin: 0 0 8px; }
-  p { margin: 0 0 16px; color: var(--muted); }
-  .button { display: inline-block; padding: 10px 16px; border-radius: 8px; border: 0; background: var(--accent); color: var(--card); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
-  .quiet { background: transparent; color: var(--accent); border: 1px solid var(--line); }
-  form { margin: 0; }
-`;
+/** The brand at the top of the card: the logo (or cornfield's mark), then the wordmark image or the app's name */
+function brandHtml(chrome) {
+  const mark = chrome.logo
+    ? `<img data-corn="brand-logo" src="${escapeHtml(chrome.logo)}" alt="">`
+    : '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><rect class="cf-mark-bg" x="3" y="3" width="18" height="18" rx="5" /><circle class="cf-mark-fg" cx="9" cy="10" r="2" /><circle class="cf-mark-fg" cx="15" cy="14" r="2" /><path class="cf-mark-line" d="M9 10l6 4" /></svg>';
+  const name = chrome.wordmark
+    ? `<img data-corn="brand-wordmark" src="${escapeHtml(chrome.wordmark)}" alt="${escapeHtml(chrome.appName)}">`
+    : `<span class="cf-app-name">${escapeHtml(chrome.appName)}</span>`;
+  return `<div data-corn="auth-brand">${mark}${name}</div>`;
+}
 
-/** One small page: a heading, words, and what can be done next. No script. */
-function pageHtml(title, heading, body) {
+/**
+ * One small page: the brand, a heading, words, and what can be done next. No script of its own; theme-boot.js (the explorer's, the same
+ * file) puts the viewer's Light, Dark or System choice on <html> before the first paint. `state` is "failure" for a page about a problem.
+ */
+function pageHtml(chrome, heading, body, state = '') {
   return `<!doctype html>
-<html lang="en">
+${chrome.htmlTag}
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(title)} · cornfield</title>
-<style>${STYLE}</style>
+<title>${escapeHtml(chrome.title === chrome.appName ? chrome.title : `${chrome.title} · ${chrome.appName}`)}</title>
+<link rel="stylesheet" href="/explorer/tokens.css" />
+<link rel="stylesheet" href="/explorer/sign-in.css" />
+${chrome.head}
+<script src="/explorer/theme-boot.js"></script>
 </head>
-<body>
-<main>
-<h1>${escapeHtml(heading)}</h1>
+<body data-corn="auth-page">
+<main data-corn="auth-card"${state ? ` data-corn-state="${state}"` : ''}>
+${brandHtml(chrome)}
+<h1>${heading}</h1>
 ${body}
 </main>
 </body>
@@ -272,7 +296,7 @@ ${body}
 `;
 }
 
-const signOutForm = '<form method="post" action="/auth/sign-out"><button class="button quiet" type="submit">Sign out</button></form>';
+const signOutForm = '<form method="post" action="/auth/sign-out"><button class="cf-button" data-corn-kind="quiet" type="submit">Sign out</button></form>';
 
 /** The longest way back a sign-in keeps (as it comes out, percent-encoded): it rides in the state cookie, which stays small */
 const RETURN_MAX = 1024;
@@ -308,26 +332,56 @@ const startHref = (returnTo) => {
   return `/auth/start${back && back !== '/' ? `?return=${encodeURIComponent(back)}` : ''}`;
 };
 
-/** The sign-in page; `returnTo` (checked by safeReturn) is where the sign-in ends, so a link followed signed out is followed after */
-export const signInPage = (title, forgeName, returnTo = null) => pageHtml(title, `Sign in to ${title}`, `
-<p>This is the dev dashboard. Sign in with ${escapeHtml(forgeName)} to see it; it is open to the repo's maintainers.</p>
-<a class="button" href="${escapeHtml(startHref(returnTo))}">Sign in with ${escapeHtml(forgeName)}</a>`);
+/** A proposal slug, as `?proposal=` names one (core/proposal.js: kebab case); at most 100 characters */
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * The proposal (and pull request) a way back leads to, for the line that says what the sign-in is for: only from a way back that
+ * safeReturn accepts, only a slug of the proposal shape and a `source=pull/<n>` of digits. What the page shows is the visitor's own link
+ * handed back, never a title read from the repo (a visitor who is not signed in learns nothing from the page they did not bring).
+ * @param {string | null} returnTo
+ * @returns {{ slug: string, pull: string | null } | null}
+ */
+export function proposalOf(returnTo) {
+  const back = safeReturn(returnTo);
+  if (!back) return null;
+  const params = new URL(back, 'http://cornfield.invalid').searchParams;
+  const slug = params.get('proposal');
+  if (!slug || slug.length > 100 || !SLUG.test(slug)) return null;
+  const pull = /^pull\/(\d{1,7})$/.exec(params.get('source') || '');
+  return { slug, pull: pull ? pull[1] : null };
+}
+
+/**
+ * The sign-in page; `returnTo` (checked by safeReturn) is where the sign-in ends, so a link followed signed out is followed after. When
+ * it is a proposal's link the page says so ("Sign in to review <slug>"): in words, escaped, and nothing that safeReturn refused.
+ */
+export const signInPage = (chrome, forgeName, returnTo = null) => {
+  const proposal = proposalOf(returnTo);
+  const heading = proposal ? `Sign in to review <code>${escapeHtml(proposal.slug)}</code>` : `Sign in to ${escapeHtml(chrome.title)}`;
+  const reason = proposal
+    ? `\n<p data-corn="auth-reason">You followed a link to a proposed change${proposal.pull ? ` (pull request #${proposal.pull})` : ''}. After you sign in you land on it.</p>`
+    : '';
+  return pageHtml(chrome, heading, `${reason}
+<p>${escapeHtml(chrome.title)} is a map of how this project fits together, and the place its changes are looked over before they are built. Sign in with your ${escapeHtml(forgeName)} account to open it; it is open to the people who look after the project.</p>
+<a class="cf-button" data-corn-kind="primary" href="${escapeHtml(startHref(returnTo))}">Sign in with ${escapeHtml(forgeName)}</a>`);
+};
 
 /** The one page a signed-in non-maintainer sees */
-export const askMaintainerPage = (title, login, repo) => pageHtml(title, 'This is the dev dashboard', `
-<p>You are signed in as ${escapeHtml(login)}, who does not maintain ${escapeHtml(repo)}. Only its maintainers can see the dashboard: ask a maintainer if you need something from it.</p>
+export const askMaintainerPage = (chrome, login, repo) => pageHtml(chrome, `${escapeHtml(chrome.title)} is for the people who look after the project`, `
+<p>You are signed in as ${escapeHtml(login)}, who does not maintain ${escapeHtml(repo)}. Only its maintainers can open this: ask one of them if you need something from it.</p>
 <p>Made a maintainer since? Sign out and sign in again.</p>
 ${signOutForm}`);
 
 /** A sign-in that did not work, and the way to try again (to the same place) */
-const failedPage = (title, words, returnTo = null) => pageHtml(title, 'Sign-in did not work', `
+const failedPage = (chrome, words, returnTo = null) => pageHtml(chrome, 'Sign-in did not work', `
 <p>${escapeHtml(words)}</p>
-<a class="button" href="${escapeHtml(startHref(returnTo))}">Try again</a>`);
+<a class="cf-button" data-corn-kind="primary" href="${escapeHtml(startHref(returnTo))}">Try again</a>`, 'failure');
 
 /** The forge could not be asked about a session's permission */
-const uncheckedPage = (title, words) => pageHtml(title, 'Your access could not be checked', `
+const uncheckedPage = (chrome, words) => pageHtml(chrome, 'Your access could not be checked', `
 <p>${escapeHtml(words)} Reload in a minute.</p>
-${signOutForm}`);
+${signOutForm}`, 'failure');
 
 // ---------------------------------------------------------------------------
 //  The guard
@@ -379,7 +433,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     };
   }
 
-  const title = config.title || 'cornfield';
+  const chrome = chromeOf(config);
   const { forge: forgeConfig, forgeName, clientId, clientSecret, publicUrl, secure } = settings;
   const sessionMs = settings.sessionDays * DAY_MS;
   const keys = keysOf(settings.sessionSecret);
@@ -725,7 +779,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     // (`/auth/callback?error=x`) cannot cancel one in progress
     const checked = checkState(req, url);
     // Try again goes back to the same place: the way back is known only from a state cookie that checked out
-    const fail = (words, clear = true) => send(res, 400, failedPage(title, words, checked.returnTo), clear ? { 'Set-Cookie': clearState } : {});
+    const fail = (words, clear = true) => send(res, 400, failedPage(chrome, words, checked.returnTo), clear ? { 'Set-Cookie': clearState } : {});
     if (checked.error) return fail(checked.error, false);
     if (url.searchParams.get('error')) return fail(url.searchParams.get('error') === 'access_denied' ? `The sign-in was cancelled on ${forgeName}.` : `${forgeName} did not sign you in.`);
     const code = url.searchParams.get('code');
@@ -772,7 +826,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const { session } = await currentSession(req);
       const back = safeReturn(url.searchParams.get('return'));
       if (session?.admin) return redirect(res, landAt(back));
-      return send(res, 200, req.method === 'HEAD' ? '' : signInPage(title, forgeName, back));
+      return send(res, 200, req.method === 'HEAD' ? '' : signInPage(chrome, forgeName, back));
     }
     if (reqPath === '/auth/start') return start(res, url);
     if (reqPath === '/auth/callback') return callback(req, res, url);
@@ -809,17 +863,17 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
       const { session, unchecked } = await currentSession(req);
       if (!session) {
         req.resume();
-        answer(req, res, reqPath, 401, signInPage(title, forgeName, `${url.pathname}${url.search}`), 'Sign in first.');
+        answer(req, res, reqPath, 401, signInPage(chrome, forgeName, `${url.pathname}${url.search}`), 'Sign in first.');
         return { done: true };
       }
       if (unchecked) {
         req.resume();
-        answer(req, res, reqPath, 503, uncheckedPage(title, unchecked), unchecked);
+        answer(req, res, reqPath, 503, uncheckedPage(chrome, unchecked), unchecked);
         return { done: true };
       }
       if (!session.admin) {
         req.resume();
-        answer(req, res, reqPath, 403, askMaintainerPage(title, session.login, forgeConfig.repo), 'This is the dev dashboard; ask a maintainer.');
+        answer(req, res, reqPath, 403, askMaintainerPage(chrome, session.login, forgeConfig.repo), 'Only maintainers can open this; ask one.');
         return { done: true };
       }
       return { done: false, session };

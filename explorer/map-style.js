@@ -13,6 +13,9 @@
  *   --corn-map-selected|match                 the halo of the selected node, and of a search hit
  *   --corn-map-lit                            the lines of the focus: the links the selection (or a walk's step) lights
  *   --corn-map-collision                      the collision mark of two runs on one node (a DOM mark: explorer.css reads it)
+ *   --corn-map-font                           the font list of every label on the map (a list of families, `auto` for the map's own)
+ *   --corn-map-edge-width                     the width of an ordinary line, in map px (`auto` keeps each line's own; the focus's and the marks' keep their proportion)
+ *   --corn-map-glow                           the soft glow round nodes, lines and packets: a factor (`0` none, `1` as drawn, `auto` as drawn)
  *
  * `auto` (the default of every one of them but the width and the collision) means "keep what the map draws without a theme": the
  * node's own colour from the topology, deepened for the light ground by theme-model.js, and every other colour as scene.js has
@@ -46,6 +49,17 @@ export const STROKE_WIDTH_TOKEN = '--corn-map-stroke-width';
 export const LABEL_TOKEN = '--corn-map-label';
 export const LABEL_HALO_TOKEN = '--corn-map-label-halo';
 export const COLLISION_TOKEN = '--corn-map-collision';
+export const FONT_TOKEN = '--corn-map-font';
+export const EDGE_WIDTH_TOKEN = '--corn-map-edge-width';
+export const GLOW_TOKEN = '--corn-map-glow';
+/** The width an ordinary line has with no theme (scene.js `flowEdge`): the `--corn-map-edge-width` scales every line by its ratio to this */
+export const BASE_EDGE_WIDTH = 1.6;
+/** The most a font list may hold: the families, and the characters */
+export const MAX_FONT_FAMILIES = 8;
+export const MAX_FONT_CHARS = 200;
+/** The widest a line may be set, and the largest glow factor: a typo cannot draw a map of paint */
+export const MAX_EDGE_WIDTH = 12;
+export const MAX_GLOW = 4;
 /** The width of an outline when the token is not a length (px, world units) */
 export const DEFAULT_STROKE_WIDTH = 1.5;
 /** An icon is drawn this many radii across (a square, so it fits inside the circle) */
@@ -70,7 +84,7 @@ export const MAP_COLOR_TOKENS = Object.freeze([
   ...MAP_STATES.map(stateToken),
 ]);
 /** Every map token */
-export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN];
+export const mapTokenNames = () => [...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, COLLISION_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN];
 
 // ---------------------------------------------------------------------------
 //  Reading a token
@@ -153,10 +167,56 @@ export function withAlphaOf(token, original) {
   return rgbaText(r, g, b, a * oa);
 }
 
+const GENERIC_FAMILY = /^(?:serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|emoji|math|fangsong)$/i;
+const SYSTEM_FONT_KEYWORD = /^(?:-apple-system|BlinkMacSystemFont)$/;
+
+/**
+ * A font list the canvas may be given, or null (`auto`, empty, or anything that is not a plain list of families). Each family is a name in
+ * quotes, or bare words (`Nunito`, `ui-rounded`, `sans-serif`); nothing that can carry a URL or script (no parentheses, slashes, colons,
+ * semicolons, braces, angle brackets, `@`, backslashes, `url`, `var`, `expression`) and no more than MAX_FONT_FAMILIES of them.
+ * Returned with each name quoted, so a name with a space is one family.
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+export function cssFontList(value) {
+  const s = typeof value === 'string' ? value.trim() : '';
+  if (!s || s.length > MAX_FONT_CHARS || s.toLowerCase() === 'auto') return null;
+  if (/[();:{}<>@\\/\u0000-\u001f\u007f]|\burl\b|\bvar\b|\bexpression\b|\bimport\b/i.test(s)) return null;
+  const parts = s.split(',').map((p) => p.trim());
+  if (parts.length > MAX_FONT_FAMILIES) return null;
+  const out = [];
+  for (const part of parts) {
+    const quoted = /^"([A-Za-z0-9 ._+-]{1,60})"$|^'([A-Za-z0-9 ._+-]{1,60})'$/.exec(part);
+    // A bare name may start with one hyphen (`-apple-system`, in cornfield's own --corn-font), never two (a custom property's name)
+    const name = quoted ? (quoted[1] ?? quoted[2]).trim() : /^-?[A-Za-z][A-Za-z0-9 _-]{0,59}$/.test(part) ? part.replace(/\s+/g, ' ') : null;
+    if (!name) return null;
+    // Generic families and the two system-font keywords stay bare (quoted, they would name a font called that); every other name is quoted
+    out.push(GENERIC_FAMILY.test(name) ? name.toLowerCase() : SYSTEM_FONT_KEYWORD.test(name) ? name : `"${name}"`);
+  }
+  return out.join(', ');
+}
+
+/** A length in px (`2px`, `2`) over 0 and at most max, or null for `auto` and anything else (a canvas ignores a line width of 0) */
+function pxOf(value, max) {
+  const m = /^\s*(\d*\.?\d+)(?:px)?\s*$/i.exec(String(value ?? ''));
+  const n = m ? parseFloat(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 && n <= max ? n : null;
+}
+
+/** The glow factor: a number (`0` for none, `1` as drawn, up to MAX_GLOW; `0px` reads as 0), or null for `auto` and anything else */
+function factorOf(value) {
+  const m = /^\s*(\d*\.?\d+)(px)?\s*$/i.exec(String(value ?? ''));
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (m[2] && n !== 0) return null; // a length is not a factor, only zero is the same in both
+  return Number.isFinite(n) && n >= 0 && n <= MAX_GLOW ? n : null;
+}
+
 /**
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
- * @returns {{values: Record<string, string>, strokeWidth: number}} `values` holds only the tokens that are a colour (not `auto`)
+ * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null}}
+ *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth` and `glow` are null at `auto` or when the value is not one
  */
 export function readMapTokens(read) {
   const values = {};
@@ -165,7 +225,13 @@ export function readMapTokens(read) {
     if (c) values[name] = c;
   }
   const w = parseFloat(String(read(STROKE_WIDTH_TOKEN) ?? ''));
-  return { values, strokeWidth: Number.isFinite(w) && w >= 0 ? w : DEFAULT_STROKE_WIDTH };
+  return {
+    values,
+    strokeWidth: Number.isFinite(w) && w >= 0 ? w : DEFAULT_STROKE_WIDTH,
+    font: cssFontList(read(FONT_TOKEN)),
+    edgeWidth: pxOf(read(EDGE_WIDTH_TOKEN), MAX_EDGE_WIDTH),
+    glow: factorOf(read(GLOW_TOKEN)),
+  };
 }
 
 /** A reader of the page's computed custom properties, or null where there is no page */
@@ -230,12 +296,16 @@ export function createIconStore(urls, { load = loadImage, onChange = () => {}, w
  * @property {number} version      changes whenever anything below does: a renderer draws again when it differs from the one it drew
  * @property {Record<string, string>} values  the tokens that are a colour, by name (those at `auto` are absent)
  * @property {number} strokeWidth  px, world units
+ * @property {string | null} font   the label font list (`--corn-map-font`), null at `auto`
+ * @property {number | null} edgeWidth  an ordinary line's width in px (`--corn-map-edge-width`), null at `auto`
+ * @property {number | null} glow   the glow factor (`--corn-map-glow`), null at `auto`
  * @property {ReturnType<typeof createIconStore> | null} icons
  * @property {boolean} pixelated   sample icons without smoothing
  * @property {boolean} plain       nothing to apply: no colour set, no icon loaded (the scene is drawn as it is)
  */
 
-let tokens = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH };
+const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null };
+let tokens = NO_TOKENS;
 let icons = null;
 let pixelated = false;
 let version = 0;
@@ -243,8 +313,8 @@ let current = compose();
 const listeners = new Set();
 
 function compose() {
-  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady());
-  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, icons, pixelated, plain });
+  const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null;
+  return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, icons, pixelated, plain });
 }
 
 function changed() {
@@ -269,12 +339,14 @@ export function onMapStyleChange(fn) {
 export function refreshMapStyle(read = pageReader()) {
   if (!read) return false;
   const next = readMapTokens(read);
-  const same = next.strokeWidth === tokens.strokeWidth
+  const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow
     && Object.keys(next.values).length === Object.keys(tokens.values).length
     && Object.entries(next.values).every(([k, v]) => tokens.values[k] === v);
   if (same) return false;
   tokens = next;
   changed();
+  // A web font the labels name is fetched when something asks for it, and a canvas does not wait for one: ask now, and draw again when it is in
+  try { if (next.font && typeof document !== 'undefined' && document.fonts && document.fonts.load) document.fonts.load(`12px ${next.font}`).catch(() => {}); } catch { /* no font loading here */ }
   return true;
 }
 
@@ -304,7 +376,7 @@ export function applyMapTheme(doc, theme, opts = {}) {
 
 /** Back to nothing set (for tests) */
 export function resetMapStyle() {
-  tokens = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH };
+  tokens = NO_TOKENS;
   icons = null;
   pixelated = false;
   changed();
@@ -332,6 +404,12 @@ export function watchMapStyle(doc) {
     if (media.addEventListener) { media.addEventListener('change', refresh); stops.push(() => media.removeEventListener('change', refresh)); }
     else if (media.addListener) { media.addListener(refresh); stops.push(() => media.removeListener(refresh)); }
   }
+  const fonts = doc.fonts;
+  if (fonts && fonts.addEventListener) {
+    const again = () => { if (tokens.font) changed(); }; // the label font arrived: the canvas draws again with it
+    fonts.addEventListener('loadingdone', again);
+    stops.push(() => fonts.removeEventListener('loadingdone', again));
+  }
   refresh();
   return () => stops.forEach((fn) => fn());
 }
@@ -342,20 +420,30 @@ export function watchMapStyle(doc) {
 
 const firstOf = (values, names) => { for (const n of names) if (values[n]) return values[n]; return null; };
 
-function styleEdge(e, values, painted) {
+/** A line's shape in the theme: its width scaled to `--corn-map-edge-width`, its glow and its packet's by `--corn-map-glow` (nothing at `auto`) */
+function shapeEdge(e, style) {
+  const scale = style.edgeWidth == null ? 1 : style.edgeWidth / BASE_EDGE_WIDTH;
+  const glow = style.glow == null ? 1 : style.glow;
+  if (scale === 1 && glow === 1) return e;
+  const out = { ...e, width: e.width * scale, glow: e.glow * glow };
+  if (e.packet) out.packet = { ...e.packet, glow: e.packet.glow * glow };
+  return out;
+}
+
+function styleEdge(e, style, painted) {
+  const { values } = style;
   if (e.mark && e.mark !== 'none') {
     const c = values[stateToken(e.mark)];
-    if (!c) return e;
-    return { ...e, color: c, glowColor: e.glowColor ? c : e.glowColor };
+    return shapeEdge(c ? { ...e, color: c, glowColor: e.glowColor ? c : e.glowColor } : e, style);
   }
-  if (painted.has(e.key)) return e;
+  if (painted.has(e.key)) return shapeEdge(e, style);
   const lit = !e.curve && e.glow > 0 && !e.arrow; // a straight link the focus lights
   const c = (lit && values[stateToken('lit')]) || values[edgeToken(e.kind)];
-  if (!c) return e;
+  if (!c) return shapeEdge(e, style);
   const out = { ...e, color: withAlphaOf(c, e.color) };
   if (e.glowColor) out.glowColor = withAlphaOf(c, e.glowColor);
   if (e.packet) out.packet = { ...e.packet, glowColor: withAlphaOf(c, e.packet.glowColor) };
-  return out;
+  return shapeEdge(out, style);
 }
 
 function compute(scene, style) {
@@ -366,15 +454,18 @@ function compute(scene, style) {
   const nodes = scene.nodes.map((n) => {
     const fill = !painted.nodes.has(n.id) && firstOf(values, [nodeToken(n.type), groupToken(n.group || n.type)]);
     const icon = style.icons && style.icons.get(n.type) ? n.type : null;
-    if (!fill && !label && !stroke && !icon) return n;
+    const glows = style.glow != null && style.glow !== 1 && n.glow > 0;
+    if (!fill && !label && !stroke && !icon && !glows) return n;
     const out = { ...n };
+    if (glows) out.glow = n.glow * style.glow;
     if (fill) out.color = fill;
     if (label) out.labelColor = withAlphaOf(label, n.labelColor);
     if (stroke && style.strokeWidth > 0) out.stroke = { color: stroke, width: style.strokeWidth };
     if (icon) out.icon = icon;
     return out;
   });
-  const out = { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, values, painted.edges)) };
+  const out = { ...scene, nodes, edges: scene.edges.map((e) => styleEdge(e, style, painted.edges)) };
+  if (style.font) out.labelFont = style.font; // every label's font list (labels.js reads `scene.labelFont`)
   const halo = values[LABEL_HALO_TOKEN];
   if (halo) { // the outline under the labels, at the widths it has (labels.js reads `scene.labelOutline` before the ground's own)
     const { node, edge } = looksFor(scene.theme).labelOutline;

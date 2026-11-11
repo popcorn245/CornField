@@ -2078,6 +2078,56 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
+    },
+    {
+      "id": "core-core-map-tokens",
+      "label": "map-tokens.js",
+      "type": "core",
+      "file": "core/map-tokens.js",
+      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`. (core/map-tokens.js)"
+    },
+    {
+      "id": "core-explorer-focus-room",
+      "label": "focus-room.js",
+      "type": "core",
+      "file": "explorer/focus-room.js",
+      "summary": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54). (explorer/focus-room.js)"
+    },
+    {
+      "id": "core-explorer-header-fit",
+      "label": "header-fit.js",
+      "type": "core",
+      "file": "explorer/header-fit.js",
+      "summary": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46). (explorer/header-fit.js)"
+    },
+    {
+      "id": "core-explorer-hint",
+      "label": "hint.js",
+      "type": "core",
+      "file": "explorer/hint.js",
+      "summary": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56). (explorer/hint.js)"
+    },
+    {
+      "id": "core-server-page-head",
+      "label": "page-head.js",
+      "type": "core",
+      "file": "server/page-head.js",
+      "summary": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`. (server/page-head.js)"
     }
   ],
   "edges": [
@@ -6409,12 +6459,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-view",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-server-server",
       "to": "core-core-strings",
       "dashed": true,
@@ -6686,7 +6730,139 @@
       "to": "core-explorer-corn-state",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-map-tokens"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-focus-room"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-header-fit"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-hint"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-page-head"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-core-contrast",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-map-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-hint",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-hint",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-focus-room",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-header-fit",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-page-head",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-page-head",
+      "to": "core-core-brand",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-page-head",
+      "to": "core-core-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-page-head",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-sign-in",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T10:02:17.615Z"
+  "updatedAt": "2026-11-11T10:17:17.701Z"
 }

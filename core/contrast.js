@@ -23,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
+import { NODE_THEMES } from './schema.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
@@ -479,6 +480,98 @@ function colorsIn(text, depth) {
   return out;
 }
 
+// ===========================================================================
+//  The map's colours (CF review F48): node fills and labels, against the ground
+//  Its own block: the pairs above are fixed lists, these depend on the tokens a theme sets (a kind, its group, the outline).
+// ===========================================================================
+
+/** The `--corn-map-group-*` a node type can sit in (explorer/scene.js `groupOf`): its own name, the house for a floor and a room, cloud or web for an outside system */
+const MAP_GROUPS_OF = (type) => (type === 'floor' || type === 'room' ? ['house'] : type === 'external' ? ['cloud', 'web'] : [type]);
+/** A node's outline and label are drawn on the map's own canvas: a fill under 3:1 needs the outline (WCAG 1.4.11) to be seen */
+export const MAP_FILL_MIN = MIN_UI;
+/** "a" or "an", for the type named after it (an atom, an app, a table) */
+const anOf = (word) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
+/** What a map colour token holds: a colour, `auto` (the map keeps its own), or a problem naming why it cannot be read */
+function mapToken(props, name) {
+  if (!props.has(name)) return { auto: true };
+  const raw = expand(`var(${name})`, props);
+  if ('problem' in raw) return { problem: raw.problem };
+  if (!raw.text.trim() || raw.text.trim().toLowerCase() === 'auto') return { auto: true };
+  const c = resolveColor(props, name);
+  return isColor(c) ? { color: c } : { problem: c.problem };
+}
+/** The worst ratio of a colour (composited over the ground) against each ground the page can show, with the colour it was worked out on */
+function worstOnGrounds(c, grounds) {
+  let worst = null;
+  for (const { color: ground, image } of grounds) {
+    const fg = over(c, ground);
+    const r = ratio(luminance(fg), luminance(ground));
+    if (!worst || r < worst.ratio) worst = { ratio: r, fgValue: toHex(fg), bgValue: toHex(ground), image };
+  }
+  return worst;
+}
+/**
+ * The map's pairs for one page state: for each node type, its fill (the kind's token, else its group's, else the node's own colour from
+ * core/schema.js, deepened for the light ground) against the ground; the outline carries a fill under 3:1 when it is itself 3:1 against
+ * the fill and the ground; the label colour against the ground and against its halo. Always the same findings in the same order
+ * (checkSheets lines the two system settings up by position).
+ */
+function mapFindings(props, theme, mode, grounds) {
+  const out = [];
+  if (!grounds.length) return out;
+  const base = { theme, mode };
+  const ground = grounds[0].color;
+  const stroke = mapToken(props, '--corn-map-stroke');
+  const widthText = props.has('--corn-map-stroke-width') ? substitute(props.get('--corn-map-stroke-width'), props) : '1.5px';
+  const strokeOn = isColor(stroke.color) && !(Number.parseFloat(widthText) === 0);
+  for (const type of Object.keys(NODE_THEMES)) {
+    for (const group of MAP_GROUPS_OF(type)) {
+      const names = [`--corn-map-node-${type}`, `--corn-map-group-${group}`];
+      let name = null;
+      let fill = null;
+      let problem = null;
+      for (const n of names) {
+        const t = mapToken(props, n);
+        if (t.problem) { name = n; problem = t.problem; break; }
+        if (t.color) { name = n; fill = t.color; break; }
+      }
+      const label = type === 'external' ? `${type}, in the ${group} group` : type;
+      if (problem) { out.push({ ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of ${anOf(label)} ${label} node`, problem }); continue; }
+      const own = !fill;
+      if (own) { name = names[0]; fill = readColor(mode === 'light' ? lightColor(NODE_THEMES[type].color) : NODE_THEMES[type].color); }
+      const shown = own ? `${name}, auto: the node's own colour` : name;
+      const f = worstOnGrounds(fill, grounds);
+      const finding = { ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of ${anOf(label)} ${label} node`, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) };
+      if (f.ratio >= MAP_FILL_MIN || !strokeOn) {
+        out.push(f.ratio >= MAP_FILL_MIN ? finding : { ...finding, fg: shown, use: `the fill of ${anOf(label)} ${label} node; set --corn-map-stroke, an outline at ${MAP_FILL_MIN}:1 on the fill and on the ground, or a deeper fill` });
+        continue;
+      }
+      // Under 3:1: acceptable only when the outline is itself 3:1 against both the fill and the ground
+      const onGround = worstOnGrounds(stroke.color, grounds);
+      const onFill = ratio(luminance(over(stroke.color, over(fill, ground))), luminance(over(fill, ground)));
+      const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(fill, ground)) };
+      out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of ${anOf(label)} ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
+    }
+  }
+  // Labels are text: the colour against the ground, and against the halo under it (the halo is the ground's own colour at `auto`)
+  const label = mapToken(props, '--corn-map-label');
+  const haloTok = mapToken(props, '--corn-map-label-halo');
+  const labelColor = label.color || (label.problem ? null : readColor(mode === 'light' ? lightColor('#f8fafc') : '#f8fafc'));
+  if (label.problem) out.push({ ...base, fg: '--corn-map-label', bg: GROUND, min: MIN_TEXT, kind: 'text', use: 'a node\'s label', problem: label.problem }, { ...base, fg: '--corn-map-label', bg: '--corn-map-label-halo', min: MIN_TEXT, kind: 'text', use: 'a node\'s label', problem: label.problem });
+  else {
+    const name = label.color ? '--corn-map-label' : '--corn-map-label (auto)';
+    const w = worstOnGrounds(labelColor, grounds);
+    out.push({ ...base, fg: name, bg: GROUND, min: MIN_TEXT, kind: 'text', use: 'a node\'s label on the ground', fgValue: w.fgValue, bgValue: w.bgValue, ratio: w.ratio, ...(w.image ? { groundImage: true } : {}) });
+    if (haloTok.problem) out.push({ ...base, fg: name, bg: '--corn-map-label-halo', min: MIN_TEXT, kind: 'text', use: 'a node\'s label on its halo', problem: haloTok.problem });
+    else {
+      const bg = haloTok.color ? over(haloTok.color, ground) : ground;
+      const fgc = over(labelColor, bg);
+      out.push({ ...base, fg: name, bg: '--corn-map-label-halo', min: MIN_TEXT, kind: 'text', use: 'a node\'s label on its halo', fgValue: toHex(fgc), bgValue: toHex(bg), ratio: ratio(luminance(fgc), luminance(bg)) });
+    }
+  }
+  return out;
+}
+
 /** Pair results for one page state: one per pair, the worst over the ground and the ground image */
 function checkState(props, theme, mode) {
   const out = [];
@@ -508,6 +601,7 @@ function checkState(props, theme, mode) {
     const { image, ...rest } = worst;
     out.push({ ...finding, ...rest, ...(image ? { groundImage: true } : {}) });
   }
+  out.push(...mapFindings(props, theme, mode, grounds)); // the map's node fills and labels (their block above)
   out.push(...diffMapFindings(props, theme, mode, grounds, isColor(g) ? over(g, canvas) : null));
   return out;
 }
@@ -594,7 +688,7 @@ export function checkSheets(themes) {
 /** The pairs under their minimum: { fails, unresolved } */
 export function contrastProblems(themes) {
   const all = checkSheets(themes);
-  return { fails: all.filter((f) => f.ratio !== undefined && f.ratio < f.min), unresolved: all.filter((f) => f.problem) };
+  return { fails: all.filter((f) => f.ratio !== undefined && f.ratio < f.min), unresolved: all.filter((f) => f.problem), total: all.length };
 }
 
 const fmt = (r) => `${(Math.floor(r * 100) / 100).toFixed(2)}:1`;
@@ -648,17 +742,26 @@ export function themesToCheck(config) {
   return themes;
 }
 
+/** The one line `validate` prints about the check (docs/theming.md#the-contrast-check): how many pairs, which themes, both levels, and what held */
+export function contrastSummary(themes, total, failed = 0, unchecked = 0) {
+  const named = themes.length - 1;
+  const what = `${total} pairs of the standard theme${named > 0 ? ` and ${named} named theme${named > 1 ? 's' : ''}` : ''}, in light and dark`;
+  const rest = [failed ? `${failed} under their minimum` : '', unchecked ? `${unchecked} that could not be worked out` : ''].filter(Boolean).join(', ');
+  return `theme contrast: ${what}: ${rest ? rest : `all at or above their minimum (${MIN_TEXT}:1 for text, ${MIN_UI}:1 for the parts of the interface and the map's fills)`}.`;
+}
+
 /**
  * The contrast check of a repo, for `cornfield validate`: every pair under its minimum is an error (a warning with
  * `theme.contrast: 'warn'`), and a pair that could not be worked out is a warning naming the token and why.
  * @param {{ root: string, theme?: { css?: string|null, names?: Record<string,string>, fonts?: string[], contrast?: string } }} config
- * @returns {{ errors: string[], warnings: string[] }}
+ * @returns {{ errors: string[], warnings: string[], summary?: string }} `summary`: the one line of what was checked (absent when there was nothing to read)
  */
 export function checkThemeContrast(config) {
   const themes = themesToCheck(config);
   if (!themes) return { errors: [], warnings: [] };
-  const { fails, unresolved } = contrastProblems(themes);
+  const { fails, unresolved, total } = contrastProblems(themes);
   const lines = fails.map((f) => `theme contrast: ${describeFinding(f)}`);
   const warnings = unresolved.map((f) => `theme contrast: ${describeFinding(f)}`);
-  return (config.theme || {}).contrast === 'warn' ? { errors: [], warnings: [...lines, ...warnings] } : { errors: lines, warnings };
+  const summary = contrastSummary(themes, total, fails.length, unresolved.length);
+  return (config.theme || {}).contrast === 'warn' ? { errors: [], warnings: [...lines, ...warnings], summary } : { errors: lines, warnings, summary };
 }

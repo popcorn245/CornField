@@ -1138,7 +1138,7 @@ function detailHtml() {
   const runSection = made
     ? `<h4 class="hx-forge-sub">Run</h4><p class="hx-forge-runline"${cornStateAttr(made.status)} data-corn="run">${runPillHtml({ esc: escHtml }, made, statusWords(made))} ${escHtml(pullRunWords(made, now(), { state: false }))}</p>`
     : '';
-  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span>#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
+  const meta = `<p class="hx-forge-meta hx-forge-dmeta"><span class="hx-forge-state hx-forge-state--${escHtml(pull.draft ? 'draft' : pull.state)}" data-corn="state-pill"${cornStateAttr(pull.draft ? 'draft' : pull.state)}>${escHtml(stateWords(pull))}</span> <span data-corn="count">#${escHtml(String(pull.number))}</span> <span>${escHtml(pull.head.ref)} → ${escHtml(pull.base.ref)}</span> <span>${escHtml(pull.author ? pull.author.login : 'someone')}</span> <span>${escHtml(relativeTime(pull.createdAt || pull.updatedAt, now()))}</span></p>`;
   return `${head(escHtml(pull.title), meta)}
     ${act}
     ${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}

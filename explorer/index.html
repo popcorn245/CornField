@@ -46,7 +46,7 @@
 
       <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left -->
       <div class="hx-menu-wrap hx-layers">
-        <button type="button" id="legend-toggle-btn" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" aria-controls="legend-dropdown" data-corn="layers-button"><span data-corn-string="layers">Layers</span><span id="layers-count" class="hx-layers-count"></span></button>
+        <button type="button" id="legend-toggle-btn" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" aria-controls="legend-dropdown" data-corn="layers-button"><span data-corn-string="layers">Layers</span><span id="layers-count" class="hx-layers-count" data-corn="count"></span></button>
 
         <!-- Interactive section toggles and the legend -->
         <div id="legend-dropdown" class="hx-menu glass" hidden data-corn="layers-menu">
@@ -122,7 +122,7 @@
       <!-- The Work toggle (explorer/forge-panel.js): opens the Work panel; shown only when the config names a forge -->
       <button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
         <span data-corn-string="issuesAndPrs">Work</span>
-        <span id="forge-btn-lit" class="hx-forge-lit" hidden></span>
+        <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
       </button>
 
       <!-- The one account menu (explorer/account-menu.js): who, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it -->
@@ -245,17 +245,17 @@
           <button type="button" class="hx-close" data-action="close-forge" aria-label="Close" data-corn-kind="icon">✕</button>
         </div>
         <div class="hx-forge-tabs" role="group" aria-label="Show" data-corn="tabs">
-          <button type="button" class="hx-forge-tab" data-forge-kind="specs" aria-pressed="true" title="The proposals: what a change would add, change and remove" data-corn="tab"><span data-corn-string="tabSpecs">Specs</span><span class="hx-forge-count" hidden></span></button>
-          <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="false" title="Pull requests" data-corn="tab"><span data-corn-string="tabPulls">PRs</span><span class="hx-forge-count" hidden></span></button>
-          <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false" data-corn="tab"><span data-corn-string="tabIssues">Issues</span><span class="hx-forge-count" hidden></span></button>
-          <button type="button" class="hx-forge-tab" data-forge-kind="threads" aria-pressed="false" title="Ideas and spec conversations, with the nodes they mention" data-corn="tab"><span data-corn-string="tabThreads">Threads</span><span class="hx-forge-count" hidden></span></button>
-          <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Agent runs, and the work grouped by issue and proposal with agent-made work marked" data-corn="tab"><span data-corn-string="tabRuns">Runs</span><span class="hx-forge-count" hidden></span></button>
-          <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false" data-corn="tab"><span data-corn-string="tabDeploys">Deploys</span><span class="hx-forge-count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="specs" aria-pressed="true" title="The proposals: what a change would add, change and remove" data-corn="tab"><span data-corn-string="tabSpecs">Specs</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="pulls" aria-pressed="false" title="Pull requests" data-corn="tab"><span data-corn-string="tabPulls">PRs</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="issues" aria-pressed="false" data-corn="tab"><span data-corn-string="tabIssues">Issues</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="threads" aria-pressed="false" title="Ideas and spec conversations, with the nodes they mention" data-corn="tab"><span data-corn-string="tabThreads">Threads</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Agent runs, and the work grouped by issue and proposal with agent-made work marked" data-corn="tab"><span data-corn-string="tabRuns">Runs</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+          <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false" data-corn="tab"><span data-corn-string="tabDeploys">Deploys</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
         </div>
         </div>
         <div id="forge-bar" class="hx-forge-bar">
           <p id="forge-status" class="hx-forge-status hx-faint"></p>
-          <button type="button" id="forge-filter-chip" class="hx-forge-chip" data-action="toggle-filters" aria-expanded="false" aria-controls="forge-filter-box" hidden>Filter<span class="hx-forge-count" hidden></span></button>
+          <button type="button" id="forge-filter-chip" class="hx-forge-chip" data-action="toggle-filters" aria-expanded="false" aria-controls="forge-filter-box" hidden>Filter<span class="hx-forge-count" data-corn="count" hidden></span></button>
         </div>
         <div id="forge-filter-box" class="hx-forge-controls" hidden>
           <div id="forge-work-filters" class="hx-forge-work-filters" hidden>
@@ -359,8 +359,8 @@
     </div>
 
     <div class="hx-hint glass" data-corn="hint">
-      <span class="hx-accent" aria-hidden="true">👆</span>
-      <span id="instruction-badge-text">Tap node to inspect live spec</span>
+      <span class="hx-accent hx-hint-icon" aria-hidden="true" data-corn="hint-icon"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" focusable="false"><path d="M3 2l9 4.2-4 1.4-1.4 4z" /></svg></span>
+      <span id="instruction-badge-text">Click a node to see what it is</span>
     </div>
 
     <!-- Loading and error states: a failed load never leaves a blank canvas -->

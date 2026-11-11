@@ -102,7 +102,7 @@ describe('explorer/plugins.js: the header', () => {
 describe('explorer/plugins.js: the sources a config names', () => {
   it('with none, the live layer has a source that says so, and there is no floor hook or checker', async () => {
     const out = await loadSources({ sources: { live: null, house: null } });
-    expect(out).toEqual({ liveSource: NO_SOURCE, floorRenderer: null, checker: null });
+    expect(out).toEqual({ houseSource: false, liveSource: NO_SOURCE, floorRenderer: null, checker: null }); // no house source: the House view is not offered
     await expect(NO_SOURCE.load()).rejects.toMatchObject({ reason: 'unavailable', hint: expect.stringMatching(/no live source is set/) });
   });
 
@@ -113,6 +113,7 @@ describe('explorer/plugins.js: the sources a config names', () => {
     })[url]);
     const out = await loadSources({ sources: { house: { module: '/plugins/house/browser.js', options: { file: 'h.json' } }, checker: { module: '/repo/tools/check.js', options: {} } } }, importer);
     expect(out.liveSource.name).toBe('house h.json');
+    expect(out.houseSource).toBe(true);
     expect(out.floorRenderer).toBeTruthy();
     expect(out.checker.name).toBe('mine');
   });
@@ -121,9 +122,13 @@ describe('explorer/plugins.js: the sources a config names', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const importer = vi.fn(async () => { throw new Error('404'); });
     const out = await loadSources({ sources: { live: { module: '/repo/gone.js' }, devices: { module: 'https://cdn.example.org/x.js' } } }, importer);
-    expect(out.liveSource).toBe(NO_SOURCE);
     expect(importer).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
+    // A named source that did not load is an error, not "none set", and House stays offered so it can say so
+    expect(out.liveSource).not.toBe(NO_SOURCE);
+    expect(out.houseSource).toBe(true);
+    await expect(out.liveSource.load()).rejects.toMatchObject({ reason: 'unavailable', hint: expect.stringMatching(/live source .* did not load/) });
+    await expect(out.liveSource.load()).rejects.not.toHaveProperty('notConfigured');
     warn.mockRestore();
   });
 

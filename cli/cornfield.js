@@ -106,7 +106,7 @@ async function sync(flags) {
 
 async function validate(flags) {
   const { config, derivers } = await setup(flags);
-  const { errors, warnings } = await validateRepo({ config, derivers });
+  const { errors, warnings, notes } = await validateRepo({ config, derivers });
   warnings.forEach((w) => console.warn(`  warning: ${w}`));
   if (errors.length) {
     console.error(`\nValidation failed with ${plural(errors.length, 'error')}:`);
@@ -114,7 +114,9 @@ async function validate(flags) {
     console.error('');
     return 1;
   }
-  console.log(`\nValid: the schema holds, ${config.topology} matches the code, and every proposal checks out.\n`);
+  console.log(`\nValid: the schema holds, ${config.topology} matches the code, and every proposal checks out.`);
+  (notes || []).forEach((n) => console.log(n));
+  console.log('');
   return 0;
 }
 

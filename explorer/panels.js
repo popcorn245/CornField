@@ -19,6 +19,7 @@ import { cloudPanelHtml } from './cloud-model.js';
 import { t } from './strings.js';
 import { fileUrl } from './file-url.js';
 import { capped, toggleCapped } from './capped.js';
+import { dismissHint } from './hint.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
 import { sayResult, clearResult, showResultIn, RESULT_MS } from './feedback.js';
 
@@ -226,6 +227,7 @@ export async function selectNode(node) {
   if (!node) return;
   const token = ++selectToken;
   clearScenario();
+  dismissHint(); // a node has been picked: the hint's job is done for this session
   state.selectedNode = node;
   state.selectedEdge = null;
   touchScene();

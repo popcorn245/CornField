@@ -44,7 +44,7 @@ let versions = 0;
 function styleOf(values = {}, extra = {}) {
   const v = {};
   for (const [k, c] of Object.entries(values)) v[k] = M.cssColor(c);
-  const plain = !Object.keys(v).length && !(extra.icons && extra.icons.anyReady());
+  const plain = !Object.keys(v).length && !(extra.icons && extra.icons.anyReady()) && !extra.font && extra.edgeWidth == null && extra.glow == null;
   return { version: ++versions, values: v, strokeWidth: M.DEFAULT_STROKE_WIDTH, icons: null, pixelated: false, plain, ...extra };
 }
 /** A reader of custom properties from a table, as getComputedStyle(...).getPropertyValue would give them */
@@ -57,8 +57,8 @@ describe('the tokens', () => {
     expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
     expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
-    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8);
-    expect(M.mapTokenNames()).toHaveLength(62);
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 3);
+    expect(M.mapTokenNames()).toHaveLength(65); // 62 colours, widths and marks, and the font, the edge width and the glow
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -88,9 +88,48 @@ describe('the tokens', () => {
 
   it('reads only the colour tokens that are set, and the width as a length', () => {
     const got = M.readMapTokens(reader({ '--corn-map-node-app': '#112233', '--corn-map-node-page': 'auto', '--corn-map-edge-flow': 'oops', '--corn-map-stroke-width': '3px' }));
-    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3 });
+    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null });
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': 'wide' })).strokeWidth).toBe(M.DEFAULT_STROKE_WIDTH);
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': '0' })).strokeWidth).toBe(0);
+  });
+});
+
+describe('the font, the edge width and the glow (CF review F51)', () => {
+  const read = (v) => M.readMapTokens(reader(v));
+
+  it('reads a font list as a list of families, and refuses anything that could carry script or a URL', () => {
+    expect(M.cssFontList('"Nunito", ui-rounded, sans-serif')).toBe('"Nunito", ui-rounded, sans-serif');
+    expect(M.cssFontList("Pixelify Sans, 'Courier New', monospace")).toBe('"Pixelify Sans", "Courier New", monospace');
+    // cornfield's own --corn-font, as a theme gets it from var(--corn-font): the system keywords stay bare
+    expect(M.cssFontList('system-ui, -apple-system, "Segoe UI", Roboto, sans-serif')).toBe('system-ui, -apple-system, "Segoe UI", "Roboto", sans-serif');
+    expect(M.cssFontList('BlinkMacSystemFont, sans-serif')).toBe('BlinkMacSystemFont, sans-serif');
+    expect(M.cssFontList('--x, sans-serif')).toBeNull();
+    for (const v of ['auto', ' AUTO ', '', '   ', undefined, 'url(https://evil.example/x.woff)', '"A"; background: url(x)', 'Nunito, var(--x)', 'a{b}', '"x"</style><script>', 'Nunito\\9', 'expression(alert(1))', '@import "x"', 'a/b', 'x:y', '12px Nunito', 'Nunito,', ',', 'x'.repeat(201), Array.from({ length: 9 }, (_, i) => `f${i}`).join(', ')]) {
+      expect(M.cssFontList(v), String(v)).toBeNull();
+    }
+  });
+
+  it('reads the edge width as a length in px and the glow as a factor, and auto, a typo or a wrong unit as nothing', () => {
+    expect(read({ '--corn-map-edge-width': '3px', '--corn-map-glow': '0' })).toMatchObject({ edgeWidth: 3, glow: 0 });
+    expect(read({ '--corn-map-edge-width': '2', '--corn-map-glow': '1.5' })).toMatchObject({ edgeWidth: 2, glow: 1.5 });
+    expect(read({ '--corn-map-glow': '0px' }).glow).toBe(0);
+    for (const v of ['auto', '', 'thick', '2em', '-1px', '0', '0px', '40px', '1e3']) expect(read({ '--corn-map-edge-width': v }).edgeWidth, v).toBeNull();
+    for (const v of ['auto', '', 'big', '8px', '-1', '99']) expect(read({ '--corn-map-glow': v }).glow, v).toBeNull();
+    expect(read({ '--corn-map-font': '"Nunito", sans-serif' }).font).toBe('"Nunito", sans-serif');
+    expect(read({ '--corn-map-font': 'url(x)' }).font).toBeNull();
+  });
+
+  it('draws nothing different at auto, and scales the line and the glow when set', () => {
+    const scene = dark();
+    expect(M.styledScene(scene, styleOf({}, { edgeWidth: null, glow: null, font: null }))).toBe(scene);
+    const out = M.styledScene(scene, styleOf({}, { edgeWidth: 3.2, glow: 0 }));
+    expect(out).not.toBe(scene);
+    scene.edges.forEach((e, i) => { expect(out.edges[i].width).toBeCloseTo(e.width * 2); expect(out.edges[i].glow).toBe(0); });
+    scene.nodes.forEach((n, i) => expect(out.nodes[i].glow).toBe(0));
+    const twice = M.styledScene(scene, styleOf({}, { glow: 2 }));
+    scene.nodes.forEach((n, i) => expect(twice.nodes[i].glow).toBe(n.glow * 2));
+    expect(M.styledScene(scene, styleOf({}, { font: '"Nunito", sans-serif' })).labelFont).toBe('"Nunito", sans-serif');
+    expect(M.styledScene(scene, styleOf({}, { glow: 1 })).labelFont).toBeUndefined();
   });
 });
 
