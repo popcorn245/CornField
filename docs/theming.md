@@ -63,9 +63,11 @@ The minimums are the WCAG 2.1 ones: **4.5:1** for text, **3:1** for large text a
 - **A node's fill, 3:1.** For each node type, its fill is `--corn-map-node-<kind>`, else its group's `--corn-map-group-<group>`, else `auto`, which is the node's own colour from the topology (deepened for the light ground). A fill under 3:1 on the ground passes **only if the outline carries it**: `--corn-map-stroke` is set, wider than 0, and is itself 3:1 on the fill and on the ground. Otherwise the line names the token:
   `standard theme (light): --corn-map-node-table (the fill of a table node; set --corn-map-stroke, an outline at 3:1 on the fill and on the ground, or a deeper fill) (#f2c500) on --corn-ground (#fdf3dc) is 1.49:1, below 3:1 (the UI minimum).`
 - **A label, 4.5:1.** `--corn-map-label` (or the map's own near-white or near-black at `auto`) on the ground, and on `--corn-map-label-halo` (the ground's own colour at `auto`).
-- Edge colours, the diff marks and the selection halo are not checked here.
+- Edge colours and the selection halo are not checked; the diff marks are, below.
 
 **What `validate` prints on a pass** is one line of what was held, so a pass is not a silence: `theme contrast: 218 pairs of the standard theme, in light and dark: all at or above their minimum (4.5:1 for text, 3:1 for the parts of the interface and the map's fills).` The default theme is held to the same rules: its ground image's glow was lowered in 0.35 (dark `rgba(66, 153, 225, 0.28)` to `0.2` and `rgba(229, 62, 62, 0.22)` to `0.16`; light `0.12` to `0.06` and `0.07` to `0.04`) because six light fills and two dark ones were 2.7 to 2.9:1 under the brightest point of it.
+
+**The map's diff marks and dimmed labels.** `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed` and `--corn-map-edit` (or the default look behind `auto`), and `--corn-map-label` as a label a diff dims is drawn (60% opacity: de-emphasised, never hidden), are each read at **3:1** against the page ground, against each glow of `--corn-ground-image` at its strongest and against all the glows laid over each other: the darkest and the lightest ground the map shows. A mark that fades is read at the opacity it is drawn at (a removed mark's edge is 77% opaque, a what-if edit's removal too), so a pale `--corn-map-removed` fails even though it would pass solid. The dots of the four marks (`--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit`) are read at 3:1 on the ground too. A finding reads: `named theme "night" (light): --corn-map-removed (the removed mark on the map, drawn at 77% opacity) (#f3b4b4) on --corn-ground over the ground image (#dfdfea) is 1.37:1, below 3:1 (the UI minimum).` Node fills are not part of this check.
 
 **What a colour sits on.** The page paints the ground, then `--corn-ground-image`, then the panels, then the text, and the check composites in that order:
 
@@ -221,8 +223,10 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
 | `--corn-ok-soft` | the same for ok, as a tinted background |
+| `--corn-run-requested`, `--corn-run-claimed`, `--corn-run-working`, `--corn-run-waiting`, `--corn-run-done`, `--corn-run-failed`, `--corn-run-stopped` | the seven states of an agent run, as the colour of its pill (its word, its icon and its border). They are aliases of the status colours above (requested is `--corn-text-3`, stopped `--corn-text-2`); set one to give a state its own. They are checked as text on every surface |
+| `--corn-run-waiting-ink` | the text and icon of the **waiting** pill, which is solid (a run that needs the maintainer stands out most); `--corn-ground` by default. Checked on `--corn-run-waiting` |
 | **Diff** (shared with the map) | |
-| `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the light values are [theme-model.js](../explorer/theme-model.js) `lightColor` of the dark ones, so the legend matches the map (light) |
+| `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the defaults of the map's marks (`explorer/diff-marks.js`), chosen so every one is 3:1 over the darkest and lightest ground the map draws, in both levels, at the opacity it is drawn at; the legend matches the map (light) |
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
 | **Category hues** (never status) | |
 | `--corn-hue-orange`, `--corn-hue-fuchsia`, `--corn-hue-pink`, `--corn-hue-lime` | the data-flow preset, ROM, variables, the House view (light) |
@@ -234,7 +238,7 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-font` | the body family (the system's; nothing is fetched) |
 | `--corn-font-display` | headings and titles: the header's title, the panels' titles, the menus' headings (the body family unless set) |
 | `--corn-mono` | code, file paths and ids: the code face. Numbers have their own, `--corn-font-num`; before 0.35 `--corn-mono` also set the digits, so a brand that set it to keep a pixel face off numbers can put the real monospace back |
-| `--corn-font-num` | numbers shown as data: the counts on the Work tabs and in the Layers menu, the "#21" of a pull request, the step counter, a count of changes. A pixel or display face misreads a 2, a 5 and an 8, so a brand sets a face with clear digits here. Those elements also take tabular figures (the digits are one width). Default: `--corn-font` |
+| `--corn-font-num` | numbers shown as data: the counts on the Work tabs and in the Layers menu, the "#21" of a pull request, the step counter, a count of changes, a run's limits and what its runner reported (minutes, turns, cost, tokens). Costs and tokens inside a sentence (a run's meta line, the totals) keep the body face. A pixel or display face misreads a 2, a 5 and an 8, so a brand sets a face with clear digits here. Those elements also take tabular figures (the digits are one width). Default: `--corn-font` |
 | `--corn-text-2xs` | 10px, mono code and small meta |
 | `--corn-text-xs` | 11px |
 | `--corn-text-sm` | 12px |
@@ -318,6 +322,7 @@ There are 65 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-map-label` | the colour of a node's label (its fade outside the focus is kept). `auto`: near-white on the dark ground, near-black on the light one |
 | `--corn-map-label-halo` | the outline drawn under every label on the map (a node's, an edge's) so it reads over the lines, used as written (give it an alpha to soften it). `auto`: the ground's own colour, slightly translucent |
 | `--corn-map-added`, `--corn-map-changed`, `--corn-map-removed`, `--corn-map-edit` | the diff on the map: a proposal's ring on a node and its line on an edge, and a what-if edit's. The legend and the panel's dots follow them. `auto`: `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit` as the map has always drawn them |
+| | **The four marks differ without colour**: added is a dashed ring, changed a solid ring, removed a faded ring with the label struck through, and a what-if edit a dotted ring (the shape is not themeable, only the colour is). Do not give two of the marks one colour a viewer cannot tell apart, and keep each at 3:1 over your ground: `cornfield validate` checks the four, and a label a diff dims, over the ground and every glow of `--corn-ground-image` (below). |
 | `--corn-map-selected`, `--corn-map-match` | the halo of the selected node, and of a node a search finds (its disc is the same colour, translucent) |
 | `--corn-map-lit` | the straight links the focus lights: the selection's own lines, and the step of a walk (a data-flow edge keeps its flow's colour: `--corn-map-edge-flow`) |
 | `--corn-map-font` | the font list of every label on the map, in the same stack form as `--corn-font` (`"Nunito", ui-rounded, sans-serif`). `auto` (the default) keeps the map's own stack. It is read with the other map tokens and drawn again when a web font in it has loaded. Only a plain list is taken: families by name or in quotes, up to eight and 200 characters; a value with a URL, a function, a semicolon, a brace or a backslash is `auto`. `var(--corn-font)` works (the system keywords `-apple-system` and `BlinkMacSystemFont` are kept). `validate` warns about a value the map cannot use |
@@ -407,12 +412,17 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill` |
-| `queued`, `running`, `waiting` | not started yet; under way; waiting on a person (or gone quiet) | `run`, `state-pill` |
-| `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped; a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`, and so is a proposal only in a checkout or a worktree, the Specs tab's "Local") | `state-pill`, `proposal-source` |
+| `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`) | `run`, `state-pill` |
+| `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped (a run asked to stop is `stopped` too); a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
+| `queued`, `running` | a check or deploy that has not started, and one under way (a run is never either: it has the four above) | `state-pill` |
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
 
 A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` is only ever a run; `failure` is only ever a result.
+
+**Changed for a theme that styles runs.** Before this release a run's `data-corn-state` was `queued` (asked for, or picked up by a runner) or `running` (being worked on). It is now `requested`, `claimed` or `working`: a rule on `[data-corn="run"][data-corn-state="queued"]` or a run's `state-pill` with `queued` becomes `requested` and `claimed`, and `running` becomes `working`. `queued` and `running` still mean a check or a deploy, so a rule that styled those keeps working. The seven run states also have colour tokens (`--corn-run-<state>`): setting those is simpler than a selector per state.
+
+**A state is never told by colour alone.** A run's or a check's pill says the state in a word and draws a `state-icon` inside it, a shape of its own: a dashed ring (requested, queued), a ring with a dot (claimed), an arc that turns (working, running), a warning triangle (waiting, solid and heavier than the rest, since it needs the maintainer), a tick (done, success), a cross (failed, failure), a square that does not move (stopped), a dash (skipped) and a slashed ring (cancelled). A theme may restyle the icon (`[data-corn="state-icon"]`) or hide it, but the word stays. A button is never drawn as a pill: a pill is a status, and a button has a square corner.
 
 ## The hooks
 
@@ -457,6 +467,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar` | the open proposal's bar |
+| `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 
@@ -494,6 +505,10 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `section` | a section of the node panel |
 | `badge` | a badge: the node panel's kind (type · host), the "Agent" mark |
 | `state-pill` | a state word (`data-corn-state`) |
+| `state-icon` | the icon inside a run's or a check's `state-pill`: a shape for each state, drawn in the pill's colour |
+| `result` | what an action came to, under the control that was used (a run's Reply, Continue or Stop; Copy spec); it stays until the next action and is also announced |
+| `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
+| `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height); what a list says when it has nothing, and how to make something |
 | `field` | a labelled form field, its control inside |
 | `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |
 
@@ -536,6 +551,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `sendBackWithNote` | Send back with this note |
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
+| `openSpecsList` | Open the Specs list |
 | `tabSpecs` | Specs |
 | `tabPulls` | PRs |
 | `tabIssues` | Issues |

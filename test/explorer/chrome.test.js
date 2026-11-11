@@ -230,7 +230,7 @@ describe('numbers have a hook and a face (F51)', () => {
   });
 
   it('sets numbers in --corn-font-num, with tabular figures', () => {
-    expect(css).toMatch(/\.hx-count, [^{]*\.hx-forge-count[^{]*\.hx-row-meta \{ font-family: var\(--corn-font-num\); font-variant-numeric: tabular-nums; \}/);
+    expect(css).toMatch(/\.hx-count, [^{]*\.hx-forge-count[^{]*\.hx-row-meta, \.hx-run-limits dd \{ font-family: var\(--corn-font-num\); font-variant-numeric: tabular-nums; \}/);
     // and no earlier rule still names the code face for them (it would only be overridden)
     for (const sel of ['.hx-count', '.hx-forge-lit', '.hx-ms']) expect(css, sel).not.toMatch(new RegExp(`\\n\\${sel} \\{[^}]*--corn-mono`));
   });
@@ -270,7 +270,7 @@ describe('what a flat brand reaches (F49) and what never clips or moves (F54, F5
   });
 
   it('stops the panels, sheets and menus sliding under reduced motion', () => {
-    const at = css.lastIndexOf('@media (prefers-reduced-motion: reduce)');
+    const at = css.indexOf('@media (prefers-reduced-motion: reduce)', css.indexOf('No panel, sheet or menu slides')); // the chrome contract's block, wherever other sections add theirs
     const block = css.slice(at, css.indexOf('\n}', at));
     for (const sel of ['.hx-drawer', '.hx-forge', '.hx-input', '.hx-menu', '.hx-sheet']) expect(block).toContain(sel);
     expect(block).toMatch(/transition: none;/);

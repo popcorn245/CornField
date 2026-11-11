@@ -282,12 +282,53 @@ describe('a brand theme resolves as a browser would', () => {
   });
 });
 
+describe('the diff marks and dimmed labels on the map (F19, F23)', () => {
+  const MAP = ['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-label'];
+  const run = (...extra) => checkSheets([{ theme: 'standard', sheets: [tokens, ...extra] }]).filter((f) => MAP.includes(f.fg));
+  const dot = (css) => checkSheets([{ theme: 'standard', sheets: [tokens, css] }]).filter((f) => /^--corn-(added|changed|removed|edit)$/.test(f.fg));
+
+  it('holds every mark and the dimmed label at 3:1 in light and dark by default, over the darkest and lightest ground', () => {
+    const found = run();
+    expect(found).toHaveLength(10);
+    for (const f of found) expect(f.ratio, describeFinding(f)).toBeGreaterThanOrEqual(3);
+    expect(found.some((f) => f.groundImage)).toBe(true); // the worst case is a glow, not the plain ground
+  });
+
+  it('holds the dots of the four marks (--corn-added|changed|removed|edit) at 3:1 on the ground too', () => {
+    const found = dot('');
+    expect(found).toHaveLength(8);
+    for (const f of found) expect(f.ratio, describeFinding(f)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('measures a mark at the opacity it is drawn at: a faded removed colour fails with a plain message', () => {
+    const faint = ':root, :root[data-theme="light"], :root[data-theme="dark"] { --corn-map-removed: #f3a6a6; }';
+    const fails = run(faint).filter((f) => f.ratio < f.min);
+    expect(fails.map((f) => f.fg)).toContain('--corn-map-removed');
+    const msg = describeFinding(fails.find((f) => f.mode === 'light' && f.fg === '--corn-map-removed'));
+    expect(msg).toMatch(/^standard theme \(light\): --corn-map-removed \(the removed mark on the map, drawn at 77% opacity\) \(#[0-9a-f]{6}\) on --corn-ground.* is \d\.\d\d:1, below 3:1/);
+  });
+
+  it('a solid colour that would pass is still too faint once it fades, and a deeper one passes', () => {
+    const ok = ':root, :root[data-theme="light"] { --corn-map-removed: #c00000; }';
+    expect(run(ok).filter((f) => f.mode === 'light' && f.fg === '--corn-map-removed' && f.ratio < f.min)).toEqual([]);
+  });
+
+  it('reads a theme\'s own label colour for the dimmed label, and says so when a colour cannot be read', () => {
+    const pale = ':root, :root[data-theme="light"] { --corn-map-label: #cccccc; }';
+    expect(run(pale).some((f) => f.mode === 'light' && f.fg === '--corn-map-label' && f.ratio < f.min)).toBe(true);
+    const odd = ':root { --corn-map-edit: oklch(60% 0.2 300); }';
+    const bad = run(odd).find((f) => f.fg === '--corn-map-edit' && f.problem);
+    expect(bad.problem).toMatch(/oklch\(\) is not a colour cornfield reads/);
+  });
+});
+
 describe('the default tokens', () => {
   const themes = [{ theme: 'standard', sheets: [tokens] }];
 
   it('resolve every pair, in light and dark, and every one passes, over the ground and its image', () => {
     const all = checkSheets(themes);
-    expect(all.filter((f) => !/^--corn-map-(node|group|stroke|label)/.test(f.fg)).length).toBe(contrastPairs().length * 2); // the map's own findings are counted in their describe below
+    // The fixed pairs, plus the map's four diff marks and a dimmed label (F19, F23); the node fills and labels are counted in their describe below
+    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5) * 2);
     const { fails, unresolved } = contrastProblems(themes);
     expect(fails.map(describeFinding)).toEqual([]);
     expect(unresolved.map(describeFinding)).toEqual([]);
@@ -374,7 +415,7 @@ describe('a brand theme that fails', () => {
     const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-text-2: oklch(70% 0.1 200); --corn-map-fill: auto; --corn-map-x: var(--corn-map-fill)}'] }]);
     expect(r.fails).toEqual([]);
     expect(r.unresolved.length).toBeGreaterThan(0);
-    expect(r.unresolved.every((f) => f.fg === '--corn-text-2')).toBe(true);
+    expect(r.unresolved.every((f) => f.fg === '--corn-text-2' || f.fg === '--corn-run-stopped')).toBe(true);
     expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: --corn-text-2 is "oklch\(70% 0\.1 200\)": oklch\(\) is not a colour cornfield reads/);
   });
 });

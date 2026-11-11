@@ -222,10 +222,23 @@ describe('/?proposal=<slug>', () => {
     fakeHub(LISTING, {});
     expect(await mount('?proposal=nope')).toBe(false);
     expect($('proposal-bar').hidden).toBe(false);
-    expect($('proposal-message').textContent).toContain('No proposal called nope');
+    expect($('proposal-message').textContent).toContain('There is no proposal called nope');
     expect($('proposal-body').hidden).toBe(true);
     expect(state.proposal).toBeNull();
     expect(state.nodes).toHaveLength(base.nodes.length);
+  });
+
+  it('names the proposal and never a parser\'s words when its file cannot be read, and Retry puts the focus somewhere stated (#185)', async () => {
+    fakeHub(LISTING, {});
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => { throw new SyntaxError('Unterminated string in JSON at position 14'); } })));
+    expect(await mount('?proposal=0013-meals')).toBe(false);
+    expect($('proposal-message').textContent).toMatch(/^0013-meals could not be opened: cornfield sent a file this page could not read\./);
+    expect($('proposal-message').textContent).not.toMatch(/JSON|position/);
+    const retry = $('proposal-ways').querySelector('[data-way="retry"]');
+    retry.focus();
+    retry.click();
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(document.activeElement).toBe($('proposal-ways').querySelector('[data-way="retry"]')); // failed again: the new Retry
   });
 
   it('ignores a slug that cannot be a file name without asking the hub', async () => {
@@ -241,7 +254,7 @@ describe('the bar', () => {
     await mount('?proposal=0013-meals');
     expect($('proposal-title').textContent).toBe('Meals');
     expect($('proposal-summary').textContent).toBe('Adds /meals.');
-    expect($('proposal-chip').textContent).toBe('+2 added · 1 changed · 1 removed');
+    expect($('proposal-chip').textContent).toBe('1 node, 1 edge added · 1 node changed · 1 node removed');
   });
 
   it('has Before, Diff and After, with Diff pressed first, and each click switches the picture and the pressed button', async () => {
@@ -658,7 +671,7 @@ describe('the toolbar', () => {
 
   it('counts what changes and the scenarios, and names the current mode on the mode button', async () => {
     await open();
-    expect($('proposal-chip').textContent).toMatch(/^\+\d+ added/);
+    expect($('proposal-chip').textContent).toMatch(/^\d+ nodes?(, \d+ edges?)? added/);
     setProposalView('after');
     expect($('proposal-mode').textContent).toBe('After');
     click($('proposal-mode'));
@@ -702,5 +715,40 @@ describe('the toolbar', () => {
     click(document.querySelector('#proposal-more-menu [data-action="close-proposal"]') );
     expect($('proposal-bar').hidden).toBe(true);
     expect($('proposal-more-menu').hidden).toBe(true);
+  });
+});
+
+describe('what a screen reader is told (F18)', () => {
+  const said = async () => { await new Promise((r) => setTimeout(r, 50)); return $('map-announcer').textContent; };
+  const open = async (search = '?proposal=0013-meals') => { fakeHub(LISTING, { '0013-meals': good }); await mount(search); };
+
+  it('says the proposal\'s title and counts, and the view, when a link has loaded it, once', async () => {
+    await open();
+    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. Diff view.');
+  });
+
+  it('says the view on a switch, and the same switch again says nothing new', async () => {
+    await open();
+    await said();
+    setProposalView('after');
+    expect(await said()).toBe('After view');
+    $('map-announcer').textContent = '';
+    setProposalView('after');
+    expect(await said()).toBe('');
+    setProposalView('before');
+    expect(await said()).toBe('Before view');
+  });
+
+  it('says what a change row jumped to', async () => {
+    await open();
+    await said();
+    const row = [...document.querySelectorAll('.hx-change-row')].find((r) => /removed/i.test(r.textContent));
+    click(row);
+    expect(await said()).toBe('page-old, removed. The map is on it.');
+  });
+
+  it('says only the opening for a link that also asks for a view', async () => {
+    await open('?proposal=0013-meals&proposalView=after');
+    expect(await said()).toBe('Proposal Meals: 1 node and 1 edge added, 1 node changed, 1 node removed. After view.');
   });
 });

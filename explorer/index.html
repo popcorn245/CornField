@@ -74,9 +74,9 @@
           <div id="proposal-legend" class="hx-menu-section" hidden>
             <div class="hx-menu-title"><span>Proposal marks</span></div>
             <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added"></span><span>Added: dashed ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: amber ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: red, faded, label struck through</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: violet</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed"></span><span>Changed: solid ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed"></span><span>Removed: faded ring, label struck through</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit"></span><span>Your edit: dotted ring</span></div>
           </div>
 
           <div class="hx-menu-section">
@@ -195,9 +195,11 @@
     <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Play, Edit, Send back, Approve, ⋯ (proposal.js, review.js, whatif.js, scenario-ui.js) -->
     <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
       <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
+      <div id="proposal-ways" class="hx-proposal-ways" role="group" aria-label="Ways on" data-corn="proposal-ways" hidden></div>
       <div id="proposal-body">
         <div class="hx-proposal-head" role="group" aria-label="Proposal actions">
           <strong id="proposal-title" class="hx-proposal-name"></strong>
+          <a id="proposal-source" class="hx-proposal-source" data-corn="proposal-source" hidden></a>
           <div class="hx-proposal-counts">
             <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
             <button type="button" id="proposal-mode" class="hx-proposal-mode" data-action="toggle-proposal-mode" data-peek-ok aria-expanded="false" aria-controls="proposal-seg" title="Before, Diff or After"></button>
@@ -233,8 +235,10 @@
     </section>
 
     <!-- The Work panel (forge-panel.js): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop. A slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) -->
+    <p id="offline-banner" class="hx-offline" data-corn="notice" hidden></p>
     <aside id="forge-panel" class="hx-forge glass" aria-label="Work" inert hidden data-corn="work-panel">
       <div class="hx-forge-body" data-corn="forge-panel">
+        <div class="hx-forge-top" data-corn="work-top">
         <div class="hx-forge-head">
           <h2 id="forge-title" class="hx-drawer-title" tabindex="-1">Work</h2>
           <button type="button" class="hx-btn hx-btn--quiet" data-action="refresh-forge" title="Ask the forge again" data-corn-kind="quiet">Refresh</button>
@@ -247,6 +251,7 @@
           <button type="button" class="hx-forge-tab" data-forge-kind="threads" aria-pressed="false" title="Ideas and spec conversations, with the nodes they mention" data-corn="tab"><span data-corn-string="tabThreads">Threads</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
           <button type="button" class="hx-forge-tab" data-forge-kind="work" aria-pressed="false" title="Agent runs, and the work grouped by issue and proposal with agent-made work marked" data-corn="tab"><span data-corn-string="tabRuns">Runs</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
           <button type="button" class="hx-forge-tab" data-forge-kind="deploys" aria-pressed="false" data-corn="tab"><span data-corn-string="tabDeploys">Deploys</span><span class="hx-forge-count" data-corn="count" hidden></span></button>
+        </div>
         </div>
         <div id="forge-bar" class="hx-forge-bar">
           <p id="forge-status" class="hx-forge-status hx-faint"></p>
@@ -348,6 +353,7 @@
         <a id="drawer-open-btn" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open route ↗</a>
         <button type="button" id="drawer-run-btn" class="hx-btn hx-foot-btn" data-action="start-run" data-corn-string="startRun" hidden>Start a run</button>
         <button type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>
+        <p id="copy-spec-result" class="hx-forge-result" data-corn="result" hidden></p>
       </div>
     </aside>
     </div>

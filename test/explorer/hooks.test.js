@@ -212,11 +212,11 @@ describe('markup made by script', () => {
     const host = document.createElement('ul');
     host.innerHTML = runsHtml(ctx, [run]);
     const card = host.querySelector('[data-corn="run"]');
-    expect(card.getAttribute('data-corn-state')).toBe('running');
-    expect(card.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('running');
+    expect(card.getAttribute('data-corn-state')).toBe('working');
+    expect(card.querySelector('[data-corn="state-pill"]').getAttribute('data-corn-state')).toBe('working');
     expect(card.querySelector('[data-forge-stop]').getAttribute('data-corn-kind')).toBe('danger');
     host.innerHTML = runsHtml(ctx, [{ ...run, status: 'failed', open: false }, { ...run, runId: 'r2', status: 'requested' }]);
-    expect([...host.querySelectorAll('[data-corn="run"]')].map((r) => r.getAttribute('data-corn-state')).sort()).toEqual(['failed', 'queued']);
+    expect([...host.querySelectorAll('[data-corn="run"]')].map((r) => r.getAttribute('data-corn-state')).sort()).toEqual(['failed', 'requested']);
   });
 
   it('maps every internal word onto the documented states, and nothing else', () => {

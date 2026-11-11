@@ -159,10 +159,10 @@ describe('the Threads tab', () => {
     // the open run is the one shown, and the other on the same thread is counted
     expect(word(41).textContent).toBe('Run: Waiting (+1)');
     expect(word(41).dataset.threadRun).toBe('run-01JC8Z3Q5M7VXK2RT9N4B6HDE2');
-    expect(word(41).className).toContain('hx-forge-state--queued');
+    expect(word(41).className).toContain('hx-forge-state--waiting');
     expect(word(40).textContent).toBe('Run: Working');
     expect(word(42).textContent).toBe('Run: Failed');
-    expect(word(42).className).toContain('hx-forge-state--failure');
+    expect(word(42).className).toContain('hx-forge-state--failed');
   });
 
   it('is filtered by state and by a search over the title, number and author', async () => {
@@ -188,7 +188,7 @@ describe('the Threads tab', () => {
     fakeServer({ problem: 'The forge is away.' });
     mount();
     await openThreads();
-    expect($('forge-notice').textContent).toBe('Some threads could not all be read: The forge is away.');
+    expect($('forge-notice').textContent).toBe('Some threads could not all be read: The forge is away. Retry');
   });
 
   it('is off, and asks nothing about threads, when the config says threads: false', async () => {

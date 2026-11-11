@@ -149,7 +149,7 @@ export function errorFor(forge, status, body, rate, what) {
   if (status >= 300 && status < 400) return new ForgeError(`${forge} says ${what} has moved; check forge.repo in cornfield.config.js.`, { ...at, code: 'not-found' });
   if (status === 401) return new ForgeError(`${forge} did not accept the sign-in; sign in again.`, { ...at, code: 'unauthorized' });
   if (status === 403) return new ForgeError(`${forge} does not let this sign-in do that to ${what}.${theirs}`, { ...at, code: 'forbidden' });
-  if (status === 404) return new ForgeError(`${forge} has no ${what}, or this sign-in cannot see it.`, { ...at, code: 'not-found' });
+  if (status === 404) return new ForgeError(`${forge} could not find ${what}, or this sign-in cannot see it.`, { ...at, code: 'not-found' });
   if (status === 405 || status === 409) return new ForgeError(`${forge} refused: ${what} cannot be changed that way now.${theirs}`, { ...at, code: 'conflict' });
   if (status === 400 || status === 422) return new ForgeError(`${forge} did not accept the request for ${what}.${theirs}`, { ...at, code: 'invalid' });
   return new ForgeError(`${forge} could not answer for ${what} (HTTP ${status}); try again in a minute.`, { ...at, code: 'unavailable' });

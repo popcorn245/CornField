@@ -23,7 +23,7 @@ describe('applyBranding with a brand', () => {
     const b = button();
     expect(b.tagName).toBe('BUTTON');
     expect(b.getAttribute('data-action')).toBe('reset-view');
-    expect(b.getAttribute('aria-label')).toBe('cornfield: reset the view');
+    expect(b.getAttribute('aria-label')).toBe('Acme home: reset the view');
     const logo = b.querySelector('img[data-corn="brand-logo"]');
     expect(logo.getAttribute('src')).toBe('/cornfield/brand/logo.svg');
     expect(logo.getAttribute('alt')).toBe('');
@@ -38,7 +38,7 @@ describe('applyBranding with a brand', () => {
     expect(word.getAttribute('src')).toBe('/cornfield/brand/wordmark.png');
     expect(word.getAttribute('alt')).toBe('Acme home');
     expect(title.textContent).toBe('');
-    expect(button().getAttribute('aria-label')).toBe('Acme: reset the view');
+    expect(button().getAttribute('aria-label')).toBe('Acme home: reset the view');
     expect(document.getElementById('cf-heading').textContent).toBe('Acme: the map');
     expect(button().querySelectorAll('img')).toHaveLength(2);
   });
@@ -47,7 +47,7 @@ describe('applyBranding with a brand', () => {
     applyBranding(document, { title: 'Acme home', links: [], signIn: false, brand: { ...BRAND, logo: null, wordmark: null } });
     expect(document.getElementById('cf-title').textContent).toBe('Acme home');
     expect(document.getElementById('cf-heading').textContent).toBe('Acme: the map');
-    expect(button().getAttribute('aria-label')).toBe('Acme: reset the view');
+    expect(button().getAttribute('aria-label')).toBe('Acme home: reset the view');
     expect(button().querySelector('.hx-mark')).not.toBeNull();
   });
 
@@ -72,10 +72,24 @@ describe('applyBranding with a brand', () => {
   });
 });
 
+describe('the brand button\'s name (2.5.3)', () => {
+  const startsWithVisible = () => button().getAttribute('aria-label').startsWith(document.getElementById('cf-title').textContent.trim());
+  it('starts with the visible title, with or without a brand', () => {
+    applyBranding(document, { title: 'Big map', links: [], signIn: false, brand: null });
+    expect(startsWithVisible()).toBe(true);
+    applyBranding(document, { title: 'Big map', links: [], signIn: false, brand: { ...BRAND, logo: null, wordmark: null } });
+    expect(startsWithVisible()).toBe(true);
+  });
+  it('keeps the static name when the config has no title', () => {
+    applyBranding(document, { links: [], signIn: false, brand: null });
+    expect(button().getAttribute('aria-label')).toBe('cornfield: reset the view');
+  });
+});
+
 describe('applyBranding without a brand', () => {
   it('leaves the mark, the name and the links as they were, and the footer is plain text, with no link', () => {
     applyBranding(document, { title: 'Acme home', links: [], signIn: false, brand: null });
-    expect(button().getAttribute('aria-label')).toBe('cornfield: reset the view');
+    expect(button().getAttribute('aria-label')).toBe('Acme home: reset the view'); // 2.5.3: the name starts with the visible text
     expect(button().querySelector('.hx-mark')).not.toBeNull();
     expect(button().querySelector('img')).toBeNull();
     expect(document.getElementById('cf-links').innerHTML).toBe('');

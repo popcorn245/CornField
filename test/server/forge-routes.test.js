@@ -237,7 +237,7 @@ describe('the forge routes', () => {
     expect(limited.json).toEqual({ ok: false, error: 'GitHub asked cornfield to slow down; try again in 40 seconds.', code: 'rate-limited' });
     const missing = await raw(srv.port, 'GET', '/api/forge/pulls/999', { cookie });
     expect(missing.status).toBe(404);
-    expect(missing.json.error).toBe('GitHub has no pull request #999 in owner/name, or this sign-in cannot see it.');
+    expect(missing.json.error).toBe('GitHub could not find pull request #999 in owner/name, or this sign-in cannot see it.');
     state.override['GET /api/v3/repos/owner/name/pulls/13'] = () => ({ status: 500, body: { message: 'boom' } });
     const down = await raw(srv.port, 'GET', '/api/forge/pulls/13', { cookie });
     expect(down.status).toBe(502);

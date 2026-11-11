@@ -428,8 +428,8 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-legend-row .hx-mark-dot, .hx-change-row .hx-mark-dot { margin-right: 0; }
 .hx-mark-dot--added { border-color: var(--corn-added); border-style: dashed; }
 .hx-mark-dot--changed { border-color: var(--corn-changed); }
-.hx-mark-dot--removed { border-color: var(--corn-removed); background: color-mix(in srgb, var(--corn-removed) 25%, transparent); opacity: 0.7; }
-.hx-mark-dot--edit { border-color: var(--corn-edit); }
+.hx-mark-dot--removed { border-color: var(--corn-removed); background: color-mix(in srgb, var(--corn-removed) 25%, transparent); }
+.hx-mark-dot--edit { border-color: var(--corn-edit); border-style: dotted; } /* a dotted ring: not the changed mark's solid one, with or without colour */
 
 /* The panel's proposal block: why, and what changes */
 .hx-proposal-sec { padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left-width: var(--corn-border-strong); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); margin: 0 0 var(--corn-space-2); font-family: var(--corn-font); }
@@ -625,15 +625,16 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 
   /* The proposal bar */
   .hx-proposal-bar { max-height: 50dvh; overflow-y: auto; padding: 0 var(--corn-space-4) var(--corn-space-3); }
-  .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-body),
+  .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-ways):not(#proposal-body),
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head),
-  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu, .hx-review) { display: none; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu) { display: none; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]) { display: none; } /* the peek keeps the reason Approve is off, and a refusal */
   .hx-proposal-bar[data-sheet-state="expanded"] .hx-scenarios, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-changes, .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
   /* The scenario player: the title, then the step counter and its text on two lines */
   .hx-player { max-height: 50dvh; overflow: hidden; gap: var(--corn-space-2); padding: 0 var(--corn-space-4) var(--corn-space-4); --sheet-pb: var(--corn-space-4); }
   .hx-player[data-sheet-state="expanded"] { overflow-y: auto; }
-  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-head):not(.hx-player-text):not(.hx-player-track) { display: none; }
+  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-head):not(.hx-player-text):not(.hx-player-controls):not(.hx-player-track) { display: none; } /* Previous, Pause and Next stay in the peek */
   .hx-player[data-sheet-state="peek"] .hx-player-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; min-height: 0; overflow: hidden; font-size: var(--corn-text-md); }
 
   /* The node panel: its title and type until expanded */
@@ -737,7 +738,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-forge:not(.forge-open) { display: none; }
   .hx-forge { max-height: 60dvh; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-body { flex: none; padding: 0 var(--corn-space-5) var(--corn-space-3); gap: var(--corn-space-1); overflow: hidden; }
-  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-head):not(#forge-bar), .hx-forge[data-sheet-state="peek"] #forge-filter-chip { display: none; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-top):not(#forge-bar), .hx-forge[data-sheet-state="peek"] #forge-filter-chip, .hx-forge[data-sheet-state="peek"] .hx-forge-tabs { display: none; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-head { padding-bottom: 0; border-bottom: 0; }
   .hx-forge[data-sheet-state="peek"] .hx-forge-head .hx-btn { display: none; }
 }
@@ -838,7 +839,9 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-tokens-form { display: grid; grid-template-columns: 1fr 5rem; gap: var(--corn-space-3); align-items: end; }
 .hx-tokens-form .hx-btn { grid-column: 1 / -1; justify-self: start; }
 .hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--corn-space-1); padding-left: calc(var(--hx-forge-status-w) + var(--corn-space-2)); }
-.hx-forge-node { padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+/* A node button is a button (a square corner, a filled face, an arrow), never a state pill */
+.hx-forge-node { padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-3); color: var(--corn-text); font-size: var(--corn-text-xs); }
+.hx-forge-node::after { content: ' \2192'; }
 .hx-forge-node:hover { background: var(--corn-surface-3); }
 .hx-forge-work-filters { display: flex; flex-wrap: wrap; gap: var(--corn-space-2) var(--corn-space-4); }
 .hx-forge-work-filters[hidden], .hx-forge-filters[hidden] { display: none; }
@@ -876,7 +879,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-forge-cta .hx-btn--approve { flex: 1; }
 .hx-forge-cta .hx-btn[disabled] { background: var(--corn-surface-3); border-color: var(--corn-line); color: var(--corn-text-3); box-shadow: none; cursor: default; }
 .hx-forge-open { text-decoration: none; color: var(--corn-text-2); }
-.hx-forge-runline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); padding: var(--corn-space-2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); }
+.hx-forge-runline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); margin: 0; color: var(--corn-text-2); } /* a line of text with a state pill, not a box: it is not a control */
 /* The foot of a list: Release notes … on PRs, New idea on Specs and Threads */
 .hx-forge-foot { display: flex; flex-direction: column; gap: var(--corn-space-3); margin-top: auto; padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
 .hx-forge-foot > .hx-btn { align-self: flex-start; }
@@ -1019,7 +1022,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* The Work tabs scroll sideways: a tab brought into view stops short of the edge by the strip's own padding */
 .hx-forge-tabs { scroll-padding-inline: var(--corn-space-4); }
 /* Numbers shown as data take the number face (a brand sets --corn-font-num; digits in a pixel face misread) */
-.hx-count, .hx-layers-count, .hx-forge-count, .hx-forge-lit, .hx-player-count, .hx-ms, .hx-row-meta { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+.hx-count, .hx-layers-count, .hx-forge-count, .hx-forge-lit, .hx-player-count, .hx-ms, .hx-row-meta, .hx-run-limits dd { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
 /* Windows high contrast (forced colours) repaints backgrounds, which would leave a masked icon the colour of the page: draw it in the text colour */
 @media (forced-colors: active) {
   .hx-mobile-search::before, .hx-proposal-mode::after { background: CanvasText; }
@@ -1027,6 +1030,45 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* No panel, sheet or menu slides, and nothing fades or grows, for a viewer who asked for less motion */
 @media (prefers-reduced-motion: reduce) {
   .hx-drawer, .hx-forge, .hx-input, .hx-btn, .hx-dot, .hx-sheet, .hx-menu, .hx-dock > .hx-sheet { transition: none; animation: none; }
+}
+
+/* ---- the review flow, 0.34 design review (explorer/proposal.js, review.js, scenario-ui.js) -----------------------------
+   F08 the source chip on the bar; F11 the player's controls in a phone peek; F14 the note above the keyboard; F15 the reason
+   Approve is off in a peek; F16 the ways on from a bad link; F21 reflow at 400% zoom and with text spacing raised. */
+.hx-proposal-source { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-xs); line-height: 1.4; text-decoration: none; overflow-wrap: anywhere; }
+.hx-proposal-source[hidden] { display: none; }
+a.hx-proposal-source { min-height: 24px; } /* a link: at least the WCAG 2.5.8 target (44px on a phone, below) */
+a.hx-proposal-source:hover { color: var(--corn-text); text-decoration: underline; }
+a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-proposal-source[data-corn-state="draft"] { border-color: color-mix(in srgb, var(--corn-changed) 50%, transparent); }
+.hx-proposal-ways { display: flex; flex-wrap: wrap; gap: var(--corn-space-2) var(--corn-space-3); margin-top: var(--corn-space-3); }
+.hx-proposal-ways[hidden] { display: none; }
+.hx-proposal-ways .hx-btn { height: auto; min-height: 32px; padding: var(--corn-space-1) var(--corn-space-4); white-space: normal; text-align: left; }
+.hx-btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; } /* a review being posted: the button keeps the focus */
+
+@media (max-width: 767px) {
+  .hx-proposal-source { grid-column: 1 / -1; order: 1; justify-self: start; }
+  .hx-player-controls .hx-btn { min-height: 44px; padding: 0 var(--corn-space-2); white-space: nowrap; }
+  .hx-proposal-ways .hx-btn, a.hx-proposal-source { min-height: 44px; } /* targets a thumb can hit */
+  .hx-proposal-source { padding: 0; border: 0; border-radius: 0; background: none; } /* a line of the sheet, not a pill 44px tall */
+  a.hx-proposal-source { text-decoration: underline; text-underline-offset: 3px; }
+  .hx-player-controls { gap: var(--corn-space-2); }
+  /* While a scenario plays the proposal sheet folds to its title and counts: the player needs the room */
+  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-actions { display: none; }
+  /* The note open: the field, Cancel and the send button are all there is, so all of them stay above the keyboard */
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line) { display: none; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions { order: 4; grid-template-columns: 1fr; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions .hx-btn--approve { display: none; }
+  /* Reflow: nothing is wider than the sheet, and long words and counts wrap instead of being cut */
+  .hx-proposal-bar { overflow-x: hidden; overflow-wrap: anywhere; }
+  .hx-proposal-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .hx-proposal-chip { flex-wrap: wrap; max-width: 100%; white-space: normal; text-align: left; }
+  .hx-proposal-counts { min-width: 0; }
+}
+/* A short window (400% zoom is 225px tall): an open sheet may take the window, and the node panel's title wraps */
+@media (max-width: 767px) and (max-height: 480px) {
+  .hx-proposal-bar[data-sheet-state="expanded"], .hx-player[data-sheet-state="expanded"] { max-height: calc(100dvh - var(--corn-space-3)); }
+  .hx-drawer[data-sheet-state="peek"] .hx-drawer-title { overflow: visible; text-overflow: clip; white-space: normal; }
 }
 
 /* Search with no match (F24): one line under the field, a polite live region. Empty it takes no room. */
@@ -1037,3 +1079,74 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 
 /* The node panel's facts break at word boundaries only (F60): "hook" is never "hoo / k". A long path or name still wraps, at its slashes and dashes, and only as a last resort anywhere. */
 .hx-fact-v { overflow-wrap: break-word; word-break: normal; }
+
+/* ---------------------------------------------------------------------------
+   Target sizes (0.34 review, F57): a thumb target is 44x44 (hit area, the drawn size may be smaller), and a change row is
+   28px at a desk. Phone width or a coarse pointer. test/explorer/target-size.test.js holds this list.
+   --------------------------------------------------------------------------- */
+.hx-change-row { min-height: 28px; }
+.hx-run .hx-link { display: inline-flex; align-items: center; min-height: 24px; } /* a run card's links sit on lines 14px apart: 24px at a desk (WCAG 2.5.8) */
+@media (max-width: 767px), (pointer: coarse) {
+  .hx-change-row, .hx-toggle-row, .hx-textbtn, .hx-player-speed, .hx-player .hx-close,
+  .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select, .hx-mobile-search .hx-input { min-height: 44px; }
+  .hx-textbtn, .hx-player-speed, .hx-player .hx-close, .hx-confirm .hx-btn { min-width: 44px; }
+  .hx-proposal-chip { flex-wrap: wrap; white-space: normal; text-align: left; } /* the counts say what they count, so they are longer: they wrap rather than clip */
+  .hx-sheet-handle { height: 44px; } /* the grip is drawn the same; the button itself is 44px (a hit area stretched past it is clipped by the sheet above, and covers its title below) */
+  .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
+/* ==========================================================================
+   The Work panel's states, results, disabled controls, loading and empty lists, and its fixed top (the 0.34 design review)
+   ========================================================================== */
+
+/* A state is a word, an icon and a colour: the colour comes from a --corn-run-<state> token, the icon is a shape of its own (corn-state.js), and
+   the waiting pill is solid, since a run that waits needs the maintainer and should stand out most. A pill is never a button: it has no hover. */
+.hx-forge-state { display: inline-flex; align-items: center; gap: var(--corn-space-1); }
+.hx-state-icon { flex: none; width: 1em; height: 1em; }
+.hx-forge-state--requested { color: var(--corn-run-requested); }
+.hx-forge-state--claimed { color: var(--corn-run-claimed); }
+.hx-forge-state--working { color: var(--corn-run-working); }
+.hx-forge-state--waiting { color: var(--corn-run-waiting-ink); background: var(--corn-run-waiting); border-color: var(--corn-run-waiting); border-width: var(--corn-border-strong); }
+.hx-forge-state--done { color: var(--corn-run-done); }
+.hx-forge-state--failed { color: var(--corn-run-failed); }
+.hx-forge-state--stopped { color: var(--corn-run-stopped); }
+.hx-state-spin { transform-origin: 6px 6px; animation: hx-state-turn 1.2s linear infinite; }
+@keyframes hx-state-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .hx-state-spin { animation: none; } }
+
+/* What an action came to, by the control that was used: the words, and a mark that is not a colour */
+.hx-forge-result { margin: 0; padding: var(--corn-space-1) var(--corn-space-3); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); line-height: 1.5; overflow-wrap: anywhere; }
+.hx-forge-result[hidden] { display: none; }
+.hx-forge-result[data-corn-state="success"] { border-left-color: var(--corn-ok); }
+.hx-forge-result[data-corn-state="failure"] { border-left-color: var(--corn-bad); }
+.hx-forge-result[data-corn-state="success"]::before { content: '\2713  '; }
+.hx-forge-result[data-corn-state="failure"]::before { content: '\2715  '; }
+.hx-drawer-foot .hx-forge-result { flex-basis: 100%; }
+
+/* A disabled control looks disabled: no fill, a dashed edge, the quiet text colour and a cursor that says so */
+.hx-forge .hx-btn:disabled, .hx-forge-act:disabled, .hx-forge-cta .hx-btn[disabled] { background: none; border-style: dashed; color: var(--corn-text-3); box-shadow: none; cursor: not-allowed; }
+
+/* Retry, in a notice, sits at the end of the line */
+.hx-forge-notice .hx-btn { margin-left: var(--corn-space-2); }
+.hx-forge-runs .hx-forge-notice[hidden], .hx-forge-notice[hidden] { display: none; }
+
+/* A list that is being read holds its height: rows of a row's size, a quiet bar in each */
+.hx-forge-skeleton { display: flex; flex-direction: column; gap: var(--corn-space-2); min-height: 64px; padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius); list-style: none; }
+.hx-forge-skeleton > span { display: block; height: 10px; border-radius: var(--corn-radius-sm); background: var(--corn-surface-3); }
+.hx-forge-skeleton > span:last-child { width: 55%; }
+.hx-forge-empty { line-height: 1.5; }
+
+/* The panel's title row and tabs stay in place while a list scrolls; the body's padding is taken up by the top so nothing shows above it */
+.hx-forge-body { --hx-forge-pad: calc(var(--corn-space-5) + var(--corn-space-1)); --hx-forge-padx: var(--corn-space-5); }
+@media (min-width: 640px) { .hx-forge-body { --hx-forge-pad: var(--corn-space-6); --hx-forge-padx: calc(var(--corn-space-5) + var(--corn-space-1)); } }
+.hx-forge-top { position: sticky; top: calc(var(--hx-forge-pad) * -1); z-index: 3; display: flex; flex-direction: column; gap: var(--corn-space-4); margin: calc(var(--hx-forge-pad) * -1) calc(var(--hx-forge-padx) * -1) 0; padding: var(--hx-forge-pad) var(--hx-forge-padx) 0; background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); } /* opaque: the panel's surface over the ground, so a list scrolls under it without showing through */
+.hx-forge-top .hx-forge-tabs { margin: 0 calc(var(--hx-forge-padx) * -1); padding: 0 var(--hx-forge-padx); }
+/* Where the tabs run on past an edge (a phone), they fade out on that side: a mask (only its alpha counts, so any opaque token does), so it works on any surface and in any theme */
+.hx-forge-top .hx-forge-tabs { mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); }
+.hx-forge-top[data-more~="start"] { --hx-fade-l: calc(var(--corn-space-6) * 1.5); }
+.hx-forge-top[data-more~="end"] { --hx-fade-r: calc(var(--corn-space-6) * 1.5); }
+
+/* The page's one offline notice */
+.hx-offline { position: fixed; top: 64px; /* below the header */ left: 50%; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100% - 32px)); margin: 0; padding: var(--corn-space-2) var(--corn-space-4); border: var(--corn-border-strong) solid var(--corn-warn); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text); box-shadow: var(--corn-shadow); line-height: 1.5; }
+.hx-offline[hidden] { display: none; }
+.hx-offline[data-corn-state="success"] { border-color: var(--corn-ok); }

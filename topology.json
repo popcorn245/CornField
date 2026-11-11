@@ -2040,6 +2040,46 @@
       "desc": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or… (server/compress.js)"
     },
     {
+      "id": "core-explorer-diff-marks",
+      "label": "diff-marks.js",
+      "type": "core",
+      "file": "explorer/diff-marks.js",
+      "summary": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list. (explorer/diff-marks.js)"
+    },
+    {
+      "id": "core-explorer-focusables",
+      "label": "focusables.js",
+      "type": "core",
+      "file": "explorer/focusables.js",
+      "summary": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window). (explorer/focusables.js)"
+    },
+    {
+      "id": "core-explorer-connection",
+      "label": "connection.js",
+      "type": "core",
+      "file": "explorer/connection.js",
+      "summary": "Whether the browser is online, said once and in one place.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Whether the browser is online, said once and in one place. (explorer/connection.js)"
+    },
+    {
+      "id": "core-explorer-feedback",
+      "label": "feedback.js",
+      "type": "core",
+      "file": "explorer/feedback.js",
+      "summary": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
+    },
+    {
       "id": "core-core-map-tokens",
       "label": "map-tokens.js",
       "type": "core",
@@ -6202,11 +6242,6 @@
     },
     {
       "from": "page-doc-docs-theming",
-      "to": "core-explorer-theme-model",
-      "dashed": true
-    },
-    {
-      "from": "page-doc-docs-theming",
       "to": "page-doc-docs-config",
       "dashed": true
     },
@@ -6544,6 +6579,159 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-diff-marks"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-focusables"
+    },
+    {
+      "from": "pkg-core",
+      "to": "pkg-explorer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-tokens",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-theme-model",
+      "to": "core-explorer-diff-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-accessibility",
+      "to": "core-explorer-focusables",
+      "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-connection"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-feedback"
+    },
+    {
+      "from": "core-explorer-connection",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-feedback",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-core",
       "to": "core-core-map-tokens"
     },
@@ -6564,20 +6752,8 @@
       "to": "core-server-page-head"
     },
     {
-      "from": "pkg-core",
-      "to": "pkg-explorer",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-core-contrast",
       "to": "core-core-schema",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-core-contrast",
-      "to": "core-explorer-theme-model",
       "dashed": true,
       "label": "imports"
     },
@@ -6688,5 +6864,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T09:18:56.045Z"
+  "updatedAt": "2026-11-11T10:17:17.701Z"
 }

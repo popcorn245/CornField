@@ -107,6 +107,8 @@ const PROPOSALS = [
 const NOW = Date.parse('2026-10-19T12:00:00Z');
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
+/** The words of the notice line, without its Retry button */
+const notice = () => { const el = $('forge-notice').cloneNode(true); el.querySelector('button')?.remove(); return el.textContent.trim(); };
 const qa = (sel) => [...document.querySelectorAll(sel)];
 const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 const key = (el, k) => { const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }); el.dispatchEvent(e); return e; };
@@ -212,7 +214,7 @@ describe('opening and closing', () => {
     expect(q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
     expect(server.urls()).toContain('/proposals');
     expect(rows().map((r) => r.querySelector('.hx-forge-title').textContent)).toEqual(['Meals', 'Draft idea', 'Local only', '0016-broken']);
-    expect($('forge-status').textContent).toMatch(/^4 open specs, as of /);
+    expect($('forge-status').textContent).toMatch(/^4 proposals, as of /);
     expect(qa('[data-forge-kind] .hx-forge-count').map((c) => c.textContent)).toEqual(['4', '3', '3', '', '', '']);
     expect(await said()).toBe('4 specs shown');
     click(q('[data-forge-kind="pulls"]'));
@@ -350,6 +352,8 @@ describe('a pull request lights the map', () => {
     expect($('forge-btn-lit').textContent).toBe('#12');
     expect($('forge-btn').getAttribute('aria-label')).toBe('Work, pull request 12 selected');
     expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed.');
+    // the legend names only what is lit: no failing check, no "a test a failing check names" (#189)
+    expect(q('.hx-forge-key').textContent).toBe('a file this pull request changes ');
   });
 
   it('lists every file, one on no node too, each node with a button; and the checks with their words', async () => {
@@ -389,7 +393,7 @@ describe('a pull request lights the map', () => {
     expect(checks[1].querySelector('.hx-forge-lights').textContent).toBe('Names no test file, so lights nothing');
     expect(checks[2].querySelector('.hx-forge-lights')).toBe(null);
     expect(q('.hx-forge-sub').textContent).toBe('Checks: 2 failed, 1 still running');
-    expect(q('.hx-forge-key')).not.toBe(null);
+    expect(q('.hx-forge-key').textContent).toContain('a test a failing check names');
     expect(await said()).toMatch(/1 file, 1 on the map, 2 nodes lit\. 2 failed, 1 still running\.$/);
   });
 
@@ -469,9 +473,10 @@ describe('when the forge or the server cannot answer', () => {
     openForge({ tab: 'pulls' });
     await settle();
     expect($('forge-notice').hidden).toBe(false);
-    expect($('forge-notice').textContent).toBe('GitHub\'s limit for this sign-in is used up; it resets at 21:14 UTC (in about 6 minutes).');
+    expect(notice()).toBe('Could not load the pull requests. GitHub\'s limit for this sign-in is used up; it resets at 21:14 UTC (in about 6 minutes).');
+    expect(q('#forge-notice [data-action="retry-forge"]').textContent).toBe('Retry'); // every failure offers Retry
     expect(rows()).toHaveLength(0);
-    expect(await said()).toBe($('forge-notice').textContent);
+    expect(await said()).toBe(notice());
   });
 
   it('says an older answer is older, with why', async () => {
@@ -479,7 +484,7 @@ describe('when the forge or the server cannot answer', () => {
     mount();
     openForge({ tab: 'pulls' });
     await settle();
-    expect($('forge-notice').textContent).toBe('Showing an older answer. GitHub did not answer within 15 seconds; try again in a minute.');
+    expect(notice()).toBe('Showing an older answer. GitHub did not answer within 15 seconds; try again in a minute.');
     expect($('forge-status').textContent).toBe('3 of 3 pull requests, as of 3 hours ago');
     expect(rows()).toHaveLength(3);
   });
@@ -510,7 +515,7 @@ describe('when the forge or the server cannot answer', () => {
     click(q('[data-forge-pr="13"]'));
     await settle();
     expect(state.forgeLit).toBe(null);
-    expect(q('#forge-detail .hx-forge-notice').textContent).toBe('GitHub has no pull request #13 in owner/name, or this sign-in cannot see it.');
+    expect(q('#forge-detail .hx-forge-notice').textContent).toBe('Could not load pull request 13. GitHub has no pull request #13 in owner/name, or this sign-in cannot see it.');
   });
 
   it('Refresh asks again past the server\'s cache, the list and the selected pull request', async () => {
@@ -672,12 +677,12 @@ describe('the Agents tab', () => {
     closeForge({ restoreFocus: false });
     await open({ work: { ...WORK, specsProblem: 'GitHub did not answer.' } });
     expect($('forge-notice').hidden).toBe(false);
-    expect($('forge-notice').textContent).toBe('Spec pull requests could not all be read: GitHub did not answer.');
+    expect(notice()).toBe('Spec pull requests could not all be read: GitHub did not answer.');
   });
 
   it('says a failure in words, as the other tabs do', async () => {
     await open({ answers: { '/api/forge/work': { status: 502, body: { ok: false, error: 'GitHub did not answer.' } } } });
-    expect($('forge-notice').textContent).toBe('GitHub did not answer.');
+    expect(notice()).toBe('Could not load the work. GitHub did not answer.');
     expect(groups()).toHaveLength(0);
   });
 
@@ -718,7 +723,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await settle();
     expect(q('[data-forge-merge]')).toBe(null);
     expect(q('.hx-forge-cta .hx-btn--approve').disabled).toBe(true); // Land it, there and off, with its one line of why under it
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running.");
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe("Can't land yet: vitest test/server/auth.test.js failed, lint failed, build is still running. Next: re-run vitest test/server/auth.test.js below, then re-run lint on the forge, then wait for build to finish, then press Refresh.");
   });
 
   it('a draft says it is a draft', async () => {
@@ -726,7 +731,7 @@ describe('actions: landing a green pull request and re-running a failed check', 
     mount();
     await select(14);
     expect(q('[data-forge-merge]')).toBe(null);
-    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('It is a draft: mark it ready on the forge first.');
+    expect(q('.hx-forge-detail .hx-forge-why').textContent).toBe('It is a draft. Next: mark it ready for review on the forge, then press Refresh here.');
   });
 
   it('Land it opens a confirm dialog that shows exactly what will land, announced, with the focus on Cancel', async () => {
@@ -1088,7 +1093,7 @@ describe('deploys light the map', () => {
 
   it('says there are no deploys when the forge has none', async () => {
     await openDeploys({ deploys: [] });
-    expect(q('.hx-forge-empty').textContent).toBe('No deploys here.');
+    expect(q('.hx-forge-empty').textContent).toBe('No deploys to show. They appear here when a workflow runs on GitHub.');
   });
 
   it('on a phone it is the same sheet: a deploy selected lights the map, and its node button collapses the sheet', async () => {
@@ -1167,6 +1172,7 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     expect(draft.querySelector('.hx-forge-state').textContent).toBe('Draft');
     expect(draft.querySelector('.hx-forge-facts').textContent).toContain('−2');
     expect(local.querySelector('.hx-forge-state').textContent).toBe('Local');
+    expect(local.querySelector('.hx-forge-state').dataset.cornState).toBe('draft'); // every state-pill states its state (a proposal only in a checkout is a draft)
     expect(local.querySelector('.hx-forge-facts').textContent).toContain('in worktree w-1');
     expect(broken.querySelector('button')).toBe(null); // one that could not be read opens nothing, and says why
     expect(broken.textContent).toContain('It is not valid JSON.');

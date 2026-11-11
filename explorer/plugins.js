@@ -58,14 +58,22 @@ function brandImage(doc, src, kind, alt = '') {
   return img;
 }
 
+/** The brand button's name starts with what it shows (the title, or the wordmark's alt), so "click Big map" works (WCAG 2.5.3) */
+function nameBrandButton(doc) {
+  const button = doc.getElementById('cf-brand');
+  const text = doc.getElementById('cf-title');
+  if (!button || !text) return;
+  const img = text.querySelector && text.querySelector('img');
+  const shown = (text.textContent || '').trim() || (img && img.getAttribute('alt')) || '';
+  if (shown) button.setAttribute('aria-label', `${shown}: reset the view`);
+}
+
 /**
  * The repo's brand in the header (docs/config.md#brand): the logo takes the brand mark's place and the wordmark the title text, inside
  * the same button, so its accessible name stays. The header text stays the repo's own title; `appName` replaces "cornfield" where
  * cornfield names itself: the button's accessible name and the page's heading (the tab title and the manifest are the server's).
  */
 function applyBrand(doc, brand, title) {
-  const button = doc.getElementById('cf-brand');
-  if (button && brand.appName) button.setAttribute('aria-label', `${brand.appName}: reset the view`);
   const text = doc.getElementById('cf-title');
   if (brand.logo && typeof doc.createElement === 'function') {
     const mark = doc.getElementById('cf-mark');
@@ -115,6 +123,7 @@ export function applyBranding(doc, config) {
   const heading = doc.getElementById('cf-heading');
   if (heading && config.title) heading.textContent = `${config.title}: the map`;
   if (config.brand) applyBrand(doc, config.brand, config.title);
+  nameBrandButton(doc);
   initThemePicker(doc, config.theme);
   paintAccount(doc, config);
 }

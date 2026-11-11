@@ -24,14 +24,15 @@
  */
 
 import { state, touchScene, onSceneTouch } from './state.js';
-import { render, ensureFlowLoop, addFrameClient, isNodeVisible } from './render.js';
+import { render, ensureFlowLoop, addFrameClient, isNodeVisible, getMinZoom } from './render.js';
 import { flowReduceMotion } from './flows.js';
-import { registerSheet, unregisterSheet, collapseAllSheets, measureCovered, onCoveredChange } from './sheets.js';
+import { registerSheet, unregisterSheet, collapseAllSheets, visibleMapRect, onCoveredChange } from './sheets.js';
 import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from './scenario.js';
 import { edgeKey } from '../core/proposal.js';
 import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks } from './check.js';
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
 import { toggleLayer } from './layers.js';
+import { announce } from './keyboard.js';
 
 /** A frame that arrives later than this (a tab that was hidden) counts as this long */
 const MAX_FRAME_MS = 250;
@@ -58,7 +59,10 @@ const $stage = () => (state.canvas ? state.canvas.parentElement : null);
  * @returns {ReturnType<typeof createPlayer>} the player, for a caller that wants to drive it
  */
 export function playScenario(scenario, opts = {}) {
+  const opener = openerOf();
+  const takeFocus = isKeyboardish(); // checked now: the list row that was pressed goes with the list
   clearScenario();
+  returnTo = opener;
   const speed = opts.stepMs ?? readSpeed();
   player = createPlayer(scenario, { stepMs: speed, maxFrameMs: MAX_FRAME_MS });
   showBar(speed);
@@ -68,7 +72,41 @@ export function playScenario(scenario, opts = {}) {
   sync(true);
   render();
   ensureFlowLoop();
+  // Whatever started it (a row of the list, which goes) is gone: focus goes to the player's play and pause button, the first control of what opened
+  if (opts.focus !== false && bar && takeFocus) {
+    const toggle = bar.querySelector('[data-action=scenario-toggle]');
+    if (toggle && !toggle.disabled) toggle.focus(); else bar.querySelector('[data-action=scenario-next]')?.focus();
+  }
   return player;
+}
+
+/** What had the focus when a scenario started, to give it back when the scenario closes: the toolbar's Play button when the start came from it or its list */
+let returnTo = null;
+function openerOf() {
+  const active = document.activeElement;
+  const play = document.getElementById('proposal-play');
+  if (active && active !== document.body && (active === play || active.closest?.('#proposal-scenarios'))) return play;
+  if (active && active !== document.body && !active.closest?.('.hx-player') && active !== state.canvas) return active;
+  return null;
+}
+
+/** Whether the focus is on the page's controls (not on nothing, and not in a field): a scenario started by a script from outside takes none */
+function isKeyboardish() {
+  const active = document.activeElement;
+  return !!active && active !== document.body && !typingIn(active);
+}
+
+/** Closing the player by the viewer's own act: the focus goes back to what started it (Play), else to Play, else to the map (on a phone Play is folded away in the peek) */
+function giveFocusBack() {
+  const to = returnTo;
+  returnTo = null;
+  const took = (el) => {
+    if (!el || !el.isConnected || el.hidden || el.disabled || el.closest('[hidden]')) return false;
+    el.focus();
+    return document.activeElement === el; // a control the stylesheet hides takes no focus
+  };
+  if (took(to) || took(document.getElementById('proposal-play'))) return;
+  took(state.canvas);
 }
 
 /**
@@ -105,9 +143,12 @@ export function clearScenario() {
 /** Ends the scenario and redraws the map without it */
 export function stopScenario() {
   if (!player && !state.scenario) return;
+  const hadFocus = !!bar && bar.contains(document.activeElement);
   clearScenario();
   touchScene();
   render();
+  if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone
+  else returnTo = null;
 }
 
 /** Brings `state.scenario` up to date with the player; when a step, the play state or the step start moved, rebuilds the scene and follows the step with the camera */
@@ -133,13 +174,11 @@ function sync(force = false) {
 function followStep(snap) {
   const visible = new Map();
   state.nodes.forEach((n) => { if (isNodeVisible(n)) visible.set(n.id, n); });
-  // The bar covers the bottom of the map: a step behind it is as good as off screen. On a phone the sheets
-  // (the dock) cover it; the rest of the time it is the bar alone.
-  const sheets = measureCovered();
-  const covered = sheets > 0 ? sheets + 16 : bar ? bar.offsetHeight + 24 : 0;
-  const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, { width: state.width, height: Math.max(120, state.height - covered) }, visible);
+  // The step must be in the part of the map nothing covers: not under the proposal bar, the node panel, the player or (on a phone) the sheets
+  const rect = visibleMapRect();
+  const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, rect, visible, 60, getMinZoom());
   if (!target) return;
-  if (flowReduceMotion) { Object.assign(state.camera, target); glide = null; return; }
+  if (flowReduceMotion) { Object.assign(state.camera, target); glide = null; render(); return; } // reduced motion: jump, do not fly
   glide = { to: target, last: null };
   ensureFlowLoop();
 }
@@ -191,9 +230,9 @@ function showBar(speed) {
     </div>
     <p class="hx-player-text" aria-live="polite"><span class="hx-player-count" data-corn="count"></span> · <span class="hx-player-step"></span></p>
     <div class="hx-player-controls">
-      <button type="button" class="hx-btn" data-action="scenario-prev">◀ Previous</button>
-      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-corn-kind="primary"></button>
-      <button type="button" class="hx-btn" data-action="scenario-next">Next ▶</button>
+      <button type="button" class="hx-btn" data-action="scenario-prev" data-peek-ok>◀ Previous</button>
+      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
+      <button type="button" class="hx-btn" data-action="scenario-next" data-peek-ok>Next ▶</button>
     </div>
     <div class="hx-player-track" aria-hidden="true"><span class="hx-player-fill"></span></div>`;
   bar.addEventListener('click', (e) => {
@@ -234,6 +273,7 @@ function act(action) {
   if (action === 'scenario-toggle') {
     const s = player.snapshot();
     if (s.playing) player.pause(); else player.play();
+    announce(s.playing ? 'Paused' : s.done ? 'Playing again' : s.index > 0 || s.progress > 0 ? 'Resumed' : 'Playing');
   } else if (action === 'scenario-prev') player.prev();
   else if (action === 'scenario-next') player.next();
   else return;
@@ -246,9 +286,11 @@ let lastFill = -1;
 function updateBar(snap) {
   if (!bar) return;
   const q = (cls) => bar.querySelector(cls);
-  q('.hx-player-title').textContent = snap.title;
-  q('.hx-player-count').textContent = `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`;
-  q('.hx-player-step').textContent = snap.current.text;
+  // this runs every frame: a live region is written only when its words change, so a step is said once, not once a frame
+  const put = (cls, text) => { const el = q(cls); if (el.textContent !== text) el.textContent = text; };
+  put('.hx-player-title', snap.title);
+  put('.hx-player-count', `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`);
+  put('.hx-player-step', snap.current.text);
   const toggle = q('[data-action=scenario-toggle]');
   toggle.textContent = snap.playing ? 'Pause' : snap.done ? 'Play again' : 'Play';
   toggle.disabled = snap.total === 0 || snap.manual;
@@ -270,11 +312,20 @@ function typingIn(target) {
 }
 
 function onKeydown(e) {
+  if (e.key === 'Escape' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (player && !typingIn(e.target) && !otherPopupOpen()) { e.preventDefault(); stopScenario(); return; } // Escape closes the scenario; focus goes back to Play
+    if (!player && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); closeList(true); return; }
+  }
   if (!player || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
   const action = e.key === ' ' || e.code === 'Space' ? 'scenario-toggle' : e.key === 'ArrowLeft' ? 'scenario-prev' : e.key === 'ArrowRight' ? 'scenario-next' : null;
   if (!action) return;
   e.preventDefault(); // space on a focused button would press it as well
   act(action);
+}
+
+/** A menu or dialog that has its own Escape: the layers menu, the toolbar's ⋯ menu, a dialog */
+function otherPopupOpen() {
+  return !!document.querySelector('#legend-dropdown:not([hidden]), #proposal-more-menu:not([hidden]), [data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog');
 }
 
 /** Some browsers press a focused button on the key's release, so a space the player took must not reach it */
@@ -322,8 +373,20 @@ function paintPlay(show) {
   btn.addEventListener('click', () => {
     const scenarios = proposalScenarios();
     if (scenarios.length === 1) playScenario(scenarios[0]);
-    else if (list) { list.hidden = !list.hidden; btn.setAttribute('aria-expanded', String(!list.hidden)); }
+    else if (list) {
+      if (list.hidden) { list.hidden = false; btn.setAttribute('aria-expanded', 'true'); list.querySelector('button')?.focus(); } // the first row of what opened
+      else closeList(false);
+    }
   });
+}
+
+/** Folds the scenario list back onto Play; `refocus` gives Play the focus (Escape from inside the list) */
+function closeList(refocus) {
+  if (list) list.hidden = true;
+  const btn = document.getElementById('proposal-play');
+  if (!btn) return;
+  btn.setAttribute('aria-expanded', 'false');
+  if (refocus) btn.focus();
 }
 
 /** Shows or hides the Play button and its list to match the open proposal's scenarios (and hides them while one plays: the player is the control then) */

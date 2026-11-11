@@ -52,12 +52,22 @@
   --corn-bad: #fca5a5;
   --corn-info: #7dd3fc;
   --corn-ok-soft: color-mix(in srgb, var(--corn-ok) 15%, transparent);
+  /* An agent run's seven states, each its own colour for a theme to set (a pill also has a word and an icon, so none is told by colour alone).
+     They follow the status colours above in the light level too; a theme that sets one sets it for both levels, or leaves the alias. */
+  --corn-run-requested: var(--corn-text-3);
+  --corn-run-claimed: var(--corn-info);
+  --corn-run-working: var(--corn-info);
+  --corn-run-waiting: var(--corn-warn);
+  --corn-run-waiting-ink: var(--corn-ground);
+  --corn-run-done: var(--corn-ok);
+  --corn-run-failed: var(--corn-bad);
+  --corn-run-stopped: var(--corn-text-2);
 
   /* Diff: what a proposal adds, changes, removes and edits (the map draws the same four) */
   --corn-added: #2dd4bf;
   --corn-changed: #fbbf24;
-  --corn-removed: #f87171;
-  --corn-edit: #a78bfa;
+  --corn-removed: #fa9292;
+  --corn-edit: #b49cfb;
   /* The same as text: mixed toward the text colour, so it reads on either ground */
   --corn-added-text: color-mix(in srgb, var(--corn-added) 60%, var(--corn-text));
   --corn-edit-text: color-mix(in srgb, var(--corn-edit) 60%, var(--corn-text));
@@ -221,10 +231,10 @@
     --corn-bad: #b91c1c;
     --corn-info: #03679e;
 
-    --corn-added: #209a8b;
-    --corn-changed: #b28103;
-    --corn-removed: #f64c4c;
-    --corn-edit: #9472f9;
+    --corn-added: #197c6f;
+    --corn-changed: #8f6703;
+    --corn-removed: #e20b0b;
+    --corn-edit: #6839f6;
 
     --corn-hue-orange: #c2410c;
     --corn-hue-fuchsia: #a21caf;
@@ -270,10 +280,10 @@
   --corn-bad: #b91c1c;
   --corn-info: #03679e;
 
-  --corn-added: #209a8b;
-  --corn-changed: #b28103;
-  --corn-removed: #f64c4c;
-  --corn-edit: #9472f9;
+  --corn-added: #197c6f;
+  --corn-changed: #8f6703;
+  --corn-removed: #e20b0b;
+  --corn-edit: #6839f6;
 
   --corn-hue-orange: #c2410c;
   --corn-hue-fuchsia: #a21caf;

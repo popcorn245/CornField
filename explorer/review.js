@@ -28,8 +28,9 @@ import { expandSheet, isPhone } from './sheets.js';
 import { hooks } from './proposal.js';
 import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
-import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
+import { reviewParts, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
 import { t } from './strings.js';
+import { isOffline, notSentWords } from './connection.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,6 +41,7 @@ const ui = {
   key: null, // `${source}/${slug}` of the proposal the review below belongs to
   reviewable: false, // whether it is on a spec PR
   review: null, // { verdict, at } | null: the last review of it
+  loadFailed: false, // the past reviews could not be read: the bar must not look as if there were none
   busy: false,
   noting: false, // the note field is open (Send back was pressed)
   message: '', // an inline refusal or failure
@@ -69,7 +71,7 @@ function mount() {
     root.className = 'hx-review';
     root.dataset.corn = 'review-bar';
     root.innerHTML = `
-      <p class="hx-review-status" data-review-status role="status" hidden></p>
+      <p class="hx-review-status" data-review-status hidden><span data-review-verdict role="status"></span><span data-review-when></span></p>
       <div class="hx-review-form" id="review-form" data-review-form hidden>
         <label class="hx-review-label" for="review-note"></label>
         <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
@@ -77,8 +79,9 @@ function mount() {
           <button type="button" class="hx-btn hx-btn--quiet" data-review-cancel data-corn-kind="quiet">Cancel</button>
         </div>
       </div>
+      <p class="hx-review-msg" data-review-loadfail role="alert" hidden data-corn="message" data-corn-state="failure"><span data-review-loadfail-text></span> <button type="button" class="hx-btn hx-btn--quiet" data-review-retry data-corn-kind="quiet">Retry</button></p>
       <p class="hx-review-msg" data-review-msg role="alert" hidden></p>
-      <p class="hx-review-line" data-review-hint role="status" hidden></p>
+      <p class="hx-review-line" id="review-hint" data-review-hint role="status" hidden></p>
 `;
     // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
     q('.hx-review-label').textContent = t('reviewNoteLabel');
@@ -96,10 +99,24 @@ function mount() {
 /** Everything the review shows, from `ui` */
 function paint() {
   if (!root) return;
+  // Only the verdict is a live region, written when it changes: the time beside it ticks every TICK_MS and is never said again
   const status = q('[data-review-status]');
-  status.textContent = reviewWords(ui.review, now());
-  status.hidden = !status.textContent;
-  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) btn.disabled = ui.busy || !ui.reviewable;
+  const { verdict, when } = reviewParts(ui.review, now());
+  const said = q('[data-review-verdict]');
+  if (said.textContent !== verdict) said.textContent = verdict;
+  q('[data-review-when]').textContent = when ? ` ${when}` : '';
+  status.hidden = !verdict;
+  // A failed read of the past reviews says so: an approved proposal must not look as if nobody had reviewed it
+  const failed = q('[data-review-loadfail]');
+  failed.hidden = !ui.loadFailed;
+  q('[data-review-loadfail-text]').textContent = ui.loadFailed ? `Could not load this proposal's reviews.${isOffline() ? ' You are offline.' : ''} It may already be approved or sent back; try again before you decide.` : '';
+  // Off for good (not a spec PR's copy) is `disabled`, and the reason is the line next to it, which the buttons point at. While a review is being posted the button
+  // only says it is busy (`aria-disabled`): a `disabled` button drops the focus to the page.
+  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) {
+    btn.disabled = !ui.reviewable;
+    if (ui.busy) btn.setAttribute('aria-disabled', 'true'); else btn.removeAttribute('aria-disabled');
+    if (!ui.reviewable && ui.key) btn.setAttribute('aria-describedby', 'review-hint'); else btn.removeAttribute('aria-describedby');
+  }
   const approve = button('approved');
   if (approve) approve.textContent = t('approve');
   const sendBack = button('notes');
@@ -125,6 +142,9 @@ function openNote() {
   paint();
   if (isPhone()) expandSheet('proposal');
   q('#review-note').focus();
+  // On a phone the keyboard is about to take half the screen: the note and the button that sends it stay in view above it
+  const send = button('notes');
+  if (isPhone() && send && typeof send.scrollIntoView === 'function') send.scrollIntoView({ block: 'nearest' });
 }
 
 /** Cancel: the field closes, what was typed goes, and focus goes back to Send back */
@@ -146,6 +166,7 @@ function onBar(open) {
   ui.key = key;
   ui.reviewable = !!key && isReviewable(state.proposalSource);
   ui.review = null;
+  ui.loadFailed = false;
   ui.busy = false;
   ui.noting = false;
   ui.message = ui.hint = '';
@@ -156,20 +177,41 @@ function onBar(open) {
 }
 
 /** The latest admin review on the proposal's PR, as the server reads it from the comments (none yet is a 404) */
+/** The reviews were read: the failure line goes, and Retry, if it had the focus, hands it to the proposal's name (the status line is a live region: it says the review itself, and is not a place for the focus) */
+function readAgain() {
+  const retried = !!root && root.contains(document.activeElement) && document.activeElement.matches('[data-review-retry]');
+  ui.loadFailed = false;
+  paint();
+  const title = $('proposal-title');
+  if (!retried || !title) return;
+  title.tabIndex = -1;
+  title.focus();
+}
+
+function readOnline() {
+  if (ui.loadFailed && ui.key) loadReview(ui.key);
+}
+
 async function loadReview(key) {
   try {
     const res = await fetch(reviewUrl(), { cache: 'no-store' });
-    if (!res.ok) return;
+    if (key !== ui.key) return; // another proposal has opened since
+    if (res.status === 404) { readAgain(); return; } // none yet: the server says so with a 404
+    if (!res.ok) throw new Error(`The server answered ${res.status}.`);
     const found = await res.json();
-    if (key !== ui.key || !found || typeof found.verdict !== 'string') return; // none, or another proposal has opened since
-    ui.review = { verdict: found.verdict, at: found.at };
-    paint();
-  } catch { /* the server is not there: no review shown */ }
+    if (key !== ui.key) return;
+    if (found && typeof found.verdict === 'string') ui.review = { verdict: found.verdict, at: found.at };
+    readAgain();
+  } catch {
+    // Not "no review": the read failed, so the bar says it could not look (with Retry), and the buttons stay as they were
+    if (key === ui.key) { ui.loadFailed = true; paint(); }
+  }
 }
 
 function onClick(e) {
   if (ui.busy || !e.target.closest) return;
   if (e.target.closest('[data-review-cancel]')) { closeNote(); return; }
+  if (e.target.closest('[data-review-retry]')) { q('[data-review-loadfail-text]').textContent = 'Reading the reviews again …'; loadReview(ui.key); return; }
   const btn = e.target.closest('[data-review]');
   if (!btn || btn.disabled) return;
   if (btn.dataset.review === 'notes' && !ui.noting) openNote(); // the first press opens the field, the second sends
@@ -203,8 +245,18 @@ export async function sendReview(verdict) {
   const key = ui.key;
   const body = reviewBody(verdict, note, getEdits());
   let saved;
+  const what = verdict === 'approved' ? 'Your approval' : 'Your send back';
+  let res;
   try {
-    const res = await fetch(reviewUrl(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    res = await fetch(reviewUrl(), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch {
+    // No answer at all: offline, or the server is not there. Said so, not as a server's error; the note and the edits are kept, and it says it was not sent
+    ui.busy = false;
+    ui.message = notSentWords(what);
+    paint();
+    return false;
+  }
+  try {
     let answer = null;
     try { answer = await res.json(); } catch { /* no body */ }
     if (!res.ok) throw new Error((answer && answer.error) || `The server answered ${res.status}.`);
@@ -223,7 +275,11 @@ export async function sendReview(verdict) {
   const wasNoting = ui.noting;
   ui.noting = false;
   paint();
-  if (wasNoting && verdict === 'notes') { const sendBack = button('notes'); if (sendBack) sendBack.focus(); }
+  // The buttons were busy while it posted, not `disabled`, so the focus stayed where it was. Approve keeps it (the status line, a live region,
+  // says "Approved" once; moving the focus onto it would say it twice); when it was lost it goes back to Approve. Send back: the button that opened the note.
+  const lost = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
+  if (verdict === 'approved') { if (lost) button('approved')?.focus(); }
+  else if (wasNoting || lost) button('notes')?.focus();
   refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;
@@ -241,6 +297,8 @@ export function initReview() {
     if (barBefore) barBefore(open);
     onBar(open);
   };
+  // Back online after a failed read: the reviews are read again (the same function each time, so it is added once)
+  if (typeof window !== 'undefined') window.addEventListener('online', readOnline);
   // "3 minutes ago" moves on without the bar being drawn again
   timer = setInterval(() => { if (ui.review) paint(); }, TICK_MS);
   onBar(!!state.proposal);
@@ -254,5 +312,5 @@ export function resetReviewForTests(clock = () => Date.now()) {
   wired = false;
   root = null;
   now = clock;
-  Object.assign(ui, { key: null, reviewable: false, review: null, busy: false, noting: false, message: '', hint: '' });
+  Object.assign(ui, { key: null, reviewable: false, review: null, loadFailed: false, busy: false, noting: false, message: '', hint: '' });
 }
