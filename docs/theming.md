@@ -563,6 +563,9 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | Key | Default |
 |---|---|
 | `layers` | Layers |
+| `layersAll` | All |
+| `layersNone` | None |
+| `overlays` | Overlays |
 | `dataFlow` | Flow |
 | `house` | House |
 | `proposals` | Proposals |

@@ -28,7 +28,7 @@ import { updateSearchStatus } from './search-status.js';
 import { render, resize, fitGraphToViewport, fitPadding, isNodeVisible, setRenderer, getRenderer, ensureFlowLoop, renderNow, holdFrames } from './render.js';
 import { createRenderer } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './layout.js';
-import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from './layers.js';
+import { closeLegendMenu, setProjectLayers, toggleAllLayers, toggleLayer, toggleLayerKinds, toggleLegendMenu } from './layers.js';
 import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
@@ -125,9 +125,10 @@ const ACTIONS = {
   'reset-view': () => fitGraphToViewport(fitPadding()),
   'fit': () => fitGraphToViewport(fitPadding()),
   'toggle-layers-menu': () => toggleLegendMenu(),
-  'layers-all': () => toggleAllLayers(true),
-  'layers-none': () => toggleAllLayers(false),
-  'toggle-layer': (el) => toggleLayer(el.dataset.layer),
+  'layers-all': () => toggleAllLayers(true, { viewer: true }),
+  'layers-none': () => toggleAllLayers(false, { viewer: true }),
+  'toggle-layer': (el) => toggleLayer(el.dataset.layer, { viewer: true }),
+  'toggle-layer-kinds': (el) => toggleLayerKinds(el.dataset.layer),
   'toggle-freeform': () => toggleFreeformMode(),
   'reset-positions': () => resetFreeformPositions(),
   'preset-map': () => {
@@ -218,7 +219,7 @@ $('mobile-node-search').addEventListener('input', (e) => handleSearch(e.target.v
 resize();
 syncViewUi();
 // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyMapTheme(document, config.theme); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyMapTheme(document, config.theme); setProjectLayers(config.layers); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
 loadTopology().then(async (ok) => {
   if (!ok) return;
   // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

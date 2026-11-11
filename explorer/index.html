@@ -53,11 +53,12 @@
           <div class="hx-menu-title hx-menu-head" data-corn="menu-title">
             <span>Section Toggles</span>
             <span class="hx-menu-links">
-              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn-kind="quiet">All</button>
+              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="layers-all" data-corn-kind="quiet" data-corn-string="layersAll">All</button>
               <span class="hx-faint">•</span>
-              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn-kind="quiet">None</button>
+              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn="layers-none" data-corn-kind="quiet" data-corn-string="layersNone">None</button>
             </span>
           </div>
+          <div class="hx-menu-body">
           <p id="layers-preset-note" class="hx-note" data-corn="notice" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
           <div id="layer-toggles-container" class="hx-toggles"></div>
           <div id="flow-legend" hidden></div>
@@ -93,6 +94,7 @@
               <span class="hx-faint hx-mono">Usage &amp; Dependency</span>
             </div>
           </div>
+          </div><!-- .hx-menu-body: the rows scroll, the title with All and None stays (spec 0009 D8) -->
         </div>
       </div>
 

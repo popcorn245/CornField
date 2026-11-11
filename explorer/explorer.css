@@ -193,7 +193,6 @@ h1, h2, h3, p { margin: 0; }
   .hx-view-fit { position: absolute; top: calc(100% + var(--corn-space-4)); right: var(--corn-space-4); width: 44px; height: 44px; margin: 0; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); box-shadow: var(--corn-shadow); }
   .hx-header .hx-layers { position: absolute; top: calc(100% + var(--corn-space-4)); left: var(--corn-space-4); }
   .hx-layers-chip { height: 44px; padding: 0 var(--corn-space-5); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
-  .hx-layers .hx-menu { width: min(288px, calc(100vw - 24px)); }
   /* The live chip sits on the map too, left of Fit */
   .hx-header .hx-live { position: absolute; top: calc(100% + var(--corn-space-4)); right: calc(var(--corn-space-4) + var(--corn-space-3) + 44px); }
   .hx-work { height: 44px; min-width: 44px; justify-content: center; padding: 0 var(--corn-space-3); }
@@ -1155,3 +1154,25 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-offline { position: fixed; top: 64px; /* below the header */ left: 50%; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100% - 32px)); margin: 0; padding: var(--corn-space-2) var(--corn-space-4); border: var(--corn-border-strong) solid var(--corn-warn); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text); box-shadow: var(--corn-shadow); line-height: 1.5; }
 .hx-offline[hidden] { display: none; }
 .hx-offline[data-corn-state="success"] { border-color: var(--corn-ok); }
+
+/* ---------------------------------------------------------------------------
+   Project layers and finer kinds (spec 0009): the Layers menu holds its title (with All and None) while the rows scroll, the Overlays heading,
+   the "+N shown by the proposal" note and the kinds key under a row. Every colour is a token; a theme reaches each through its data-corn hook.
+   --------------------------------------------------------------------------- */
+.hx-layers .hx-menu { display: flex; flex-direction: column; overflow: hidden; }
+.hx-layers .hx-menu[hidden] { display: none; }
+.hx-layers .hx-menu-head { flex: none; }
+.hx-menu-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.hx-overlays { margin-top: var(--corn-space-3); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-layer-note { font-size: var(--corn-text-2xs); }
+.hx-kinds { padding: 0 var(--corn-space-3) var(--corn-space-1) var(--corn-space-5); }
+.hx-kinds-btn { display: inline-flex; align-items: center; gap: var(--corn-space-1); }
+.hx-kind-keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-kind-key { display: flex; align-items: center; gap: var(--corn-space-3); padding: calc(var(--corn-space-1) / 2) 0; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-kind-letter { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; padding: 0 var(--corn-space-1); border-radius: var(--corn-radius-xs); background: var(--corn-surface-3); color: var(--corn-text); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); font-weight: 700; }
+.hx-kind-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  /* On a phone the menu spans the screen, at most 70% of its height */
+  .hx-layers .hx-menu { position: fixed; top: calc(56px + var(--corn-space-4) + 44px + var(--corn-space-2)); left: 12px; right: 12px; width: auto; max-width: none; max-height: 70dvh; }
+  .hx-kinds-btn { min-height: 44px; }
+}

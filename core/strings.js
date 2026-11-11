@@ -14,6 +14,9 @@
 export const STRINGS = Object.freeze({
   // The header
   layers: 'Layers',
+  layersAll: 'All',
+  layersNone: 'None',
+  overlays: 'Overlays',
   dataFlow: 'Flow',
   house: 'House',
   proposals: 'Proposals',
