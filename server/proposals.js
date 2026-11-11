@@ -45,8 +45,10 @@ import path from 'node:path';
 import { findProposalFile, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
-import { REVIEW_LIMIT, latestReview, migrateStage1Reviews } from './reviews.js';
-import { submitReview, refusal } from './submit-review.js';
+import { REVIEW_LIMIT, latestReview, migrateStage1Reviews, proposalHash } from './reviews.js';
+import { submitReview, refusal, standsApproved, stillLanding } from './submit-review.js';
+import { hashPullMockups } from './mockups.js';
+import { readDecision } from './decision.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { serveMockups } from './mockups.js';
 
@@ -237,19 +239,38 @@ async function servePull(res, where, forgeFor, slug, source) {
   } catch (err) {
     return send(res, 422, { error: `Not valid JSON: ${err.message}` });
   }
-  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source) });
+  // The file's SHA-256 as served: the page sends it back with a review, so a push that changed the file since is refused, not approved unseen
+  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source), 'X-Proposal-Sha256': proposalHash(text) });
 }
 
 /** The words for a refusal of the forge: the status to answer with, and what to say */
 const forgeStatus = (err) => (err instanceof ForgeError ? (err.code === 'not-found' ? 404 : err.code === 'invalid' ? 400 : 502) : 500);
 
 /** GET /proposals/<slug>/review?source=pull/<n>: the latest admin comment's review, or 404 */
-async function getPullReview(res, where, forgeFor, slug, n) {
+async function getPullReview(res, where, forgeFor, slug, n, lander = null) {
   try {
     const forge = forgeFor();
-    if (!(await findPullProposal(forge, where, slug, n))) return send(res, 404, { error: 'No such proposal' });
+    const entry = await findPullProposal(forge, where, slug, n);
+    if (!entry) return send(res, 404, { error: 'No such proposal' });
     const found = await latestReview(forge, n, slug);
-    return found ? send(res, 200, found) : send(res, 404, { error: 'No review yet' });
+    if (!found) return send(res, 404, { error: 'No review yet' });
+    // An approval says whether approving again would do nothing (`current`): it is of the file and its mockups as the head holds them now and,
+    // with landing on approval, a landing waits at this head. The Approve button reads Approved only then (spec 0007 D2); a push that changes the
+    // proposal, or (with landing on approval) any push, a cancelled landing or one left open, makes it live again
+    const current = found.verdict === 'approved'
+      ? standsApproved(found, proposalHash(await readPullProposal(forge, where, entry)), await hashPullMockups(forge, where, entry)) && (!lander || stillLanding(lander, n, entry.sha))
+      : undefined;
+    return send(res, 200, current === undefined ? found : { ...found, current });
+  } catch (err) {
+    return send(res, forgeStatus(err), { error: forgeWords(err) });
+  }
+}
+
+/** GET /proposals/<slug>/decision?source=pull/<n>[&fresh=1]: the facts the line above Approve is made from (server/decision.js) */
+async function getDecision(res, where, forgeFor, signedIn, slug, n, fresh) {
+  try {
+    const answer = await readDecision(forgeFor(), where, { slug, n, fresh, now: signedIn.limits?.now, ...(signedIn.decision || {}) });
+    return send(res, 200, answer, { 'Cache-Control': 'no-store' });
   } catch (err) {
     return send(res, forgeStatus(err), { error: forgeWords(err) });
   }
@@ -276,11 +297,19 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
   }
   // What an approval covers is the server's to record, from the files themselves, never the page's word
   if (parsed !== null && typeof parsed === 'object' && ('mockups' in parsed || 'proposal' in parsed)) return send(res, 400, { error: 'What an approval covers (the proposal and its mockups) is recorded by the server; a review does not send it.' });
+  // What the page was shown (spec 0007): the proposal file's SHA-256 (`sha256`, from X-Proposal-Sha256) and the PR's head commit (`headSha`, from the
+  // decision's facts). Each is optional; named, a head that holds another is refused (409), so what posts is what was on screen at the press
+  let review = parsed;
+  let sha256 = null;
+  let headSha = null;
+  if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && ('sha256' in parsed || 'headSha' in parsed)) {
+    ({ sha256 = null, headSha = null, ...review } = parsed);
+  }
   try {
     // The checks and the post are submitReview's, shared with the review API (server/submit-review.js)
     const found = await submitReview({
       forge: forgeFor, where, repo: signedIn.repo, who: { login: signedIn.login, userId: signedIn.userId }, record: signedIn.record, limits: signedIn.limits, hooks: signedIn.hooks, lander: signedIn.lander,
-    }, { pull: n, slug, review: parsed });
+    }, { pull: n, slug, review, sha256, headSha });
     return send(res, 200, found);
   } catch (err) {
     const out = refusal(err);
@@ -304,6 +333,25 @@ async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
 export function serveProposals(req, res, reqPath, url, where, forgeFor = null, signedIn = null) {
   if (reqPath !== '/proposals' && !reqPath.startsWith('/proposals/')) return false;
 
+  // What Approve would do in this state (spec 0007 D1): read-only, for the signed-in maintainer, only for a proposal of a spec PR
+  const decision = /^\/proposals\/([^/]+)\/decision$/.exec(reqPath);
+  if (decision) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      req.resume();
+      send(res, 405, { error: 'The facts of a decision are read with GET' }, { Allow: 'GET, HEAD' });
+      return true;
+    }
+    const n = forgeFor && signedIn ? pullNumber(url.searchParams.get('source')) : null;
+    if (n === null || !forgeFor || !signedIn) {
+      send(res, 404, { error: 'A decision is about a spec PR: this proposal is not on one (or you are not signed in).' });
+      return true;
+    }
+    getDecision(res, where, forgeFor, signedIn, decision[1], n, url.searchParams.get('fresh') === '1').catch(() => {
+      if (!res.headersSent) send(res, 500, { error: 'The decision could not be read' });
+    });
+    return true;
+  }
+
   // The review of one proposal: a comment on its spec PR, the only thing here that can be written
   const review = /^\/proposals\/([^/]+)\/review$/.exec(reqPath);
   if (review) {
@@ -320,7 +368,7 @@ export function serveProposals(req, res, reqPath, url, where, forgeFor = null, s
       });
     } else if (req.method === 'GET' || req.method === 'HEAD') {
       if (n !== null && forgeFor) {
-        getPullReview(res, where, forgeFor, slug, n).catch(() => {
+        getPullReview(res, where, forgeFor, slug, n, signedIn?.lander ?? null).catch(() => {
           if (!res.headersSent) send(res, 500, { error: 'The review could not be read' });
         });
       } else {
@@ -389,5 +437,6 @@ async function serveFile(res, where, forgeFor, slug, source) {
   } catch (err) {
     return send(res, 422, { error: `Not valid JSON: ${err.message}` });
   }
-  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source) });
+  // The file's SHA-256 as served: the page sends it back with a review, so a push that changed the file since is refused, not approved unseen
+  return send(res, 200, text, { 'X-Proposal-Source': encodeURIComponent(entry.source), 'X-Proposal-Sha256': proposalHash(text) });
 }

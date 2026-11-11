@@ -541,3 +541,27 @@ export function pinLanes(flow, baseFlow) {
   flow.top = top;
   return true;
 }
+
+/**
+ * The reviewer's own what-if edits, counted apart from the proposal's (spec 0007 D5): "yours: +1 node, 1 step changed". Never added to the proposal's
+ * numbers, so the reviewer can still tell what the agent proposed. Empty for no edits.
+ * @param {{ op?: string }[]} edits the applied edits (whatif-model.js)
+ * @param {boolean} [hidden] My edits is off: the map does not show them
+ * @returns {string}
+ */
+export function yoursText(edits, hidden = false) {
+  const list = Array.isArray(edits) ? edits : [];
+  if (!list.length) return '';
+  const n = (ops) => list.filter((e) => e && ops.includes(e.op)).length;
+  const unit = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+  const parts = [];
+  if (n(['add-node'])) parts.push(`+${unit(n(['add-node']), 'node')}`);
+  if (n(['add-edge'])) parts.push(`+${unit(n(['add-edge']), 'edge')}`);
+  if (n(['remove-node'])) parts.push(`\u2212${unit(n(['remove-node']), 'node')}`);
+  if (n(['remove-edge'])) parts.push(`\u2212${unit(n(['remove-edge']), 'edge')}`);
+  const steps = n(['add-step', 'reword-step', 'delete-step', 'move-step']);
+  if (steps) parts.push(`${unit(steps, 'step')} changed`);
+  const rest = list.length - n(['add-node', 'add-edge', 'remove-node', 'remove-edge', 'add-step', 'reword-step', 'delete-step', 'move-step']);
+  if (rest > 0) parts.push(unit(rest, 'other edit'));
+  return `yours: ${parts.join(', ')}${hidden ? ' (hidden)' : ''}`;
+}

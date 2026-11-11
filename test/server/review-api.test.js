@@ -283,6 +283,9 @@ describe('the review API', () => {
       const { secret } = await mint();
       const viaApi = await call(secret, approve({ note: 'Same.' }));
       expect(viaApi.status, viaApi.text).toBe(200);
+      // The same approval again by the same person would be a repeat (answered with the one that stands, nothing posted: spec 0007); the first
+      // comment is taken off the PR so the button posts its own, and the two can be compared
+      world.comments.length = 0;
       clock += 60_000;
       const viaButton = await page('PUT', `/proposals/${SLUG}/review?source=pull%2F40`, { verdict: 'approved', note: 'Same.', edits: [] });
       expect(viaButton.status, viaButton.text).toBe(200);
@@ -479,7 +482,7 @@ describe('the review API', () => {
       world.demoted.add('maintainer-one');
       const res = await call(secret, approve());
       expect(res.status, res.text).toBe(403);
-      expect(res.json.error).toMatch(/not one now/);
+      expect(res.json.error).toMatch(/no longer maintains this repo/);
       expect(world.posted).toHaveLength(1);
       expect(rows().some((r) => r.action === 'token-revoke' && r.answer.revoked === 1 && r.request.reason === 'owner-not-maintainer')).toBe(true);
       // the owner is a maintainer again: the token stays revoked, and a new one is made

@@ -623,6 +623,35 @@ describe('whether a runner is online (issue #99)', () => {
     expect($('agent-start-runner').textContent).toBe('No runner has polled for 6 min: a queued run will wait');
   });
 
+  it('while no runner is online the Runs tab shows a notice at the top, the Work button a dot, and Ask the runner reads Queue it (issue #183)', async () => {
+    fakeServer({ presence: presence(360) });
+    mount();
+    await openAgents();
+    const runner = $('forge-runs-runner');
+    expect(runner.dataset.corn).toBe('notice');
+    expect(runner.dataset.cornState).toBe('waiting');
+    expect(runner.compareDocumentPosition($('forge-runs-status')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // above the status line, not a faint line under it
+    expect($('forge-btn-dot').hidden).toBe(false);
+    expect($('forge-btn').getAttribute('aria-label')).toMatch(/, no runner online/);
+    await openIssues();
+    click(q('[data-forge-agent="issue:7"]'));
+    await settle();
+    expect($('agent-start-go').textContent).toBe('Queue it (no runner online)');
+  });
+
+  it('with a runner online there is no dot, the faint line stays, and the button reads Ask the runner', async () => {
+    fakeServer({ presence: presence(20) });
+    mount();
+    await openAgents();
+    expect($('forge-btn-dot').hidden).toBe(true);
+    expect($('forge-btn').getAttribute('aria-label')).not.toMatch(/no runner online/);
+    expect($('forge-runs-runner').dataset.corn).toBeUndefined();
+    await openIssues();
+    click(q('[data-forge-agent="issue:7"]'));
+    await settle();
+    expect($('agent-start-go').textContent).toBe('Ask the runner');
+  });
+
   it.each(['forge', 'push'])('shows nothing on the %s transport, in the Agents tab or the Start dialog', async (transport) => {
     fakeServer({ presence: presence(20, { transport }) });
     mount();

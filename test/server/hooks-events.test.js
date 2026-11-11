@@ -285,6 +285,9 @@ describe('event hooks', () => {
   });
 
   const post = (target, body, { method = 'POST', port = srv.port, as = cookie } = {}) => {
+    // The PR is seeded with maintainer-one's approval of its head (the pipeline's tests need it). The same approval again by the same person is a
+    // repeat, answered with the one that stands and posting nothing, firing nothing (spec 0007), so an approval from the button starts from a PR with none
+    if (method === 'PUT' && target === REVIEW && body.verdict === 'approved' && world.comments[40]?.length === 1) world.comments[40] = [];
     const text = JSON.stringify(body);
     return raw(port, method, target, {
       headers: { cookie: as, origin: `http://127.0.0.1:${port}`, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(text)) },

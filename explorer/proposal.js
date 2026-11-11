@@ -29,6 +29,7 @@ import { looksWith, onMapStyleChange } from './map-style.js';
 import {
   PROPOSAL_VIEWS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, jumpWords,
   sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
+  yoursText,
 } from './proposal-model.js';
 import { renderReviewColumn, reviewOpenedLine, showSection, setPullHead } from './review-column.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
@@ -122,7 +123,8 @@ export async function openProposal(slug, source = null) {
     const found = res.headers.get('X-Proposal-Source');
     let item;
     try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
-    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
+    const sha256 = res.headers.get('X-Proposal-Sha256'); // the version on screen: a review names it, so a push since is refused, not approved unseen
+    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true, sha256 });
     // said once, here: a proposal opens on a person's asking, never on a background refresh
     announce(reviewOpenedLine($('proposal-title').textContent));
     return true;
@@ -148,14 +150,16 @@ let openToken = 0;
 /**
  * Puts a parsed proposal on the map. The map's nodes and edges become `applyProposal(base, proposal)`.
  * @param {object} proposal
- * @param {{slug?: string|null, source?: string|null, pinSource?: boolean, view?: 'before'|'diff'|'after', fit?: boolean}} [opts]
+ * @param {{slug?: string|null, source?: string|null, pinSource?: boolean, view?: 'before'|'diff'|'after', fit?: boolean, sha256?: string|null}} [opts]
+ *   `sha256`: the file's SHA-256 as the server sent it (X-Proposal-Sha256): a review names it (spec 0007)
  *   `fit`: fit the camera to what the proposal touches and what it connects to (default true).
  *   `pinSource`: put `&source=` in the address (it was asked for by name; otherwise `/?proposal=<slug>` finds the same one)
  */
-export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true } = {}) {
+export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true, sha256 = null } = {}) {
   state.proposal = proposal;
   state.proposalSlug = slug;
   state.proposalSource = source;
+  state.proposalSha256 = typeof sha256 === 'string' && /^[0-9a-f]{64}$/.test(sha256) ? sha256 : null;
   pinnedSource = pinSource;
   if (view) state.proposalView = view;
   else if (!PROPOSAL_VIEWS.includes(state.proposalView)) state.proposalView = 'diff';
@@ -198,6 +202,7 @@ export function closeProposal() {
   state.effectiveProposal = null;
   state.proposalSlug = null;
   state.proposalSource = null;
+  state.proposalSha256 = null;
   state.proposalErrors = [];
   swapMap(state.baseNodes.map((n) => ({ ...n })), state.baseEdges);
   fitGraphToViewport(fitPadding());
@@ -371,6 +376,9 @@ export function renderBar() {
     if (!c.mark && /scenarios?$/.test(c.text)) return `<button type="button" class="hx-proposal-count" data-action="review-show-scenarios" data-corn-kind="quiet" title="Show the personas and their scenarios">${escHtml(c.text)}</button>`;
     return `<button type="button" class="hx-proposal-count" data-action="review-show-changes" data-corn-kind="quiet" title="Show the list of changes">${dot}${escHtml(c.text)}</button>`;
   }).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
+  // The reviewer's own edits are a part of their own, never added to the proposal's numbers (spec 0007 D5)
+  const yours = yoursText(state.whatIf && state.whatIf.edits, !!state.whatIfOff);
+  if (yours) chip.insertAdjacentHTML('beforeend', `<span class="hx-proposal-sep" aria-hidden="true"> · </span><span class="hx-proposal-count hx-proposal-yours"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit" aria-hidden="true"></span>${escHtml(yours)}</span>`);
   $('proposal-mode').textContent = t(state.proposalView);
 
   for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
@@ -394,14 +402,13 @@ export function renderBar() {
  * Picks a row of the changes list: select it, centre it in the part of the map the review column, the node panel and (on a phone) the sheets leave free,
  * at a zoom where its label reads, and make sure the current view shows it
  */
-function focusChange(kind, key) {
+export function focusChange(kind, key, { select = true } = {}) {
   const item = kind === 'edge' ? state.edges.find((e) => edgeKey(e) === key) : state.nodes.find((n) => n.id === key);
   if (!item) return;
   const ends = (kind === 'edge' ? [state.nodes.find((n) => n.id === item.from), state.nodes.find((n) => n.id === item.to)] : [item]).filter(Boolean);
   if (!ends.length) return;
   if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff', { quiet: true }); // Before or After hides what it removes or adds
-  if (kind === 'edge') showEdgePanel(item);
-  else selectNode(item);
+  if (select) { if (kind === 'edge') showEdgePanel(item); else selectNode(item); }
   // The panel is open now, so what it covers is known
   const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
   if (cam) Object.assign(state.camera, cam);
