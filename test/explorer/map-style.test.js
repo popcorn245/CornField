@@ -100,6 +100,10 @@ describe('the font, the edge width and the glow (CF review F51)', () => {
   it('reads a font list as a list of families, and refuses anything that could carry script or a URL', () => {
     expect(M.cssFontList('"Nunito", ui-rounded, sans-serif')).toBe('"Nunito", ui-rounded, sans-serif');
     expect(M.cssFontList("Pixelify Sans, 'Courier New', monospace")).toBe('"Pixelify Sans", "Courier New", monospace');
+    // cornfield's own --corn-font, as a theme gets it from var(--corn-font): the system keywords stay bare
+    expect(M.cssFontList('system-ui, -apple-system, "Segoe UI", Roboto, sans-serif')).toBe('system-ui, -apple-system, "Segoe UI", "Roboto", sans-serif');
+    expect(M.cssFontList('BlinkMacSystemFont, sans-serif')).toBe('BlinkMacSystemFont, sans-serif');
+    expect(M.cssFontList('--x, sans-serif')).toBeNull();
     for (const v of ['auto', ' AUTO ', '', '   ', undefined, 'url(https://evil.example/x.woff)', '"A"; background: url(x)', 'Nunito, var(--x)', 'a{b}', '"x"</style><script>', 'Nunito\\9', 'expression(alert(1))', '@import "x"', 'a/b', 'x:y', '12px Nunito', 'Nunito,', ',', 'x'.repeat(201), Array.from({ length: 9 }, (_, i) => `f${i}`).join(', ')]) {
       expect(M.cssFontList(v), String(v)).toBeNull();
     }
@@ -109,7 +113,7 @@ describe('the font, the edge width and the glow (CF review F51)', () => {
     expect(read({ '--corn-map-edge-width': '3px', '--corn-map-glow': '0' })).toMatchObject({ edgeWidth: 3, glow: 0 });
     expect(read({ '--corn-map-edge-width': '2', '--corn-map-glow': '1.5' })).toMatchObject({ edgeWidth: 2, glow: 1.5 });
     expect(read({ '--corn-map-glow': '0px' }).glow).toBe(0);
-    for (const v of ['auto', '', 'thick', '2em', '-1px', '40px', '1e3']) expect(read({ '--corn-map-edge-width': v }).edgeWidth, v).toBeNull();
+    for (const v of ['auto', '', 'thick', '2em', '-1px', '0', '0px', '40px', '1e3']) expect(read({ '--corn-map-edge-width': v }).edgeWidth, v).toBeNull();
     for (const v of ['auto', '', 'big', '8px', '-1', '99']) expect(read({ '--corn-map-glow': v }).glow, v).toBeNull();
     expect(read({ '--corn-map-font': '"Nunito", sans-serif' }).font).toBe('"Nunito", sans-serif');
     expect(read({ '--corn-map-font': 'url(x)' }).font).toBeNull();

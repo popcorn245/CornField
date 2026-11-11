@@ -167,6 +167,9 @@ export function withAlphaOf(token, original) {
   return rgbaText(r, g, b, a * oa);
 }
 
+const GENERIC_FAMILY = /^(?:serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|emoji|math|fangsong)$/i;
+const SYSTEM_FONT_KEYWORD = /^(?:-apple-system|BlinkMacSystemFont)$/;
+
 /**
  * A font list the canvas may be given, or null (`auto`, empty, or anything that is not a plain list of families). Each family is a name in
  * quotes, or bare words (`Nunito`, `ui-rounded`, `sans-serif`); nothing that can carry a URL or script (no parentheses, slashes, colons,
@@ -184,18 +187,20 @@ export function cssFontList(value) {
   const out = [];
   for (const part of parts) {
     const quoted = /^"([A-Za-z0-9 ._+-]{1,60})"$|^'([A-Za-z0-9 ._+-]{1,60})'$/.exec(part);
-    const name = quoted ? (quoted[1] ?? quoted[2]).trim() : /^[A-Za-z][A-Za-z0-9 _-]{0,59}$/.test(part) ? part.replace(/\s+/g, ' ') : null;
+    // A bare name may start with one hyphen (`-apple-system`, in cornfield's own --corn-font), never two (a custom property's name)
+    const name = quoted ? (quoted[1] ?? quoted[2]).trim() : /^-?[A-Za-z][A-Za-z0-9 _-]{0,59}$/.test(part) ? part.replace(/\s+/g, ' ') : null;
     if (!name) return null;
-    out.push(/^(?:serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|emoji|math|fangsong)$/i.test(name) ? name.toLowerCase() : `"${name}"`);
+    // Generic families and the two system-font keywords stay bare (quoted, they would name a font called that); every other name is quoted
+    out.push(GENERIC_FAMILY.test(name) ? name.toLowerCase() : SYSTEM_FONT_KEYWORD.test(name) ? name : `"${name}"`);
   }
   return out.join(', ');
 }
 
-/** A length in px (`2px`, `2`) in 0..max, or null for `auto` and anything else */
+/** A length in px (`2px`, `2`) over 0 and at most max, or null for `auto` and anything else (a canvas ignores a line width of 0) */
 function pxOf(value, max) {
   const m = /^\s*(\d*\.?\d+)(?:px)?\s*$/i.exec(String(value ?? ''));
   const n = m ? parseFloat(m[1]) : NaN;
-  return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
+  return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 }
 
 /** The glow factor: a number (`0` for none, `1` as drawn, up to MAX_GLOW; `0px` reads as 0), or null for `auto` and anything else */
