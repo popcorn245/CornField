@@ -3,7 +3,8 @@
  *
  * Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser
  * accepts it, gzip otherwise, never for what is already compressed (images, fonts) or streamed (event streams), and never
- * on top of an answer that already carries a `Content-Encoding` (a proxied upstream, or a proxy in front that did it).
+ * on top of an answer that already carries a `Content-Encoding`, never a proxied upstream's answer or a range, and never
+ * an answer marked `Cache-Control: no-store` (what may hold a secret: sign-in, tokens, the agent and runner APIs; BREACH).
  * Every compressible answer says `Vary: Accept-Encoding`, so a cache keeps the two apart. ETags are weak (files.js) and
  * the same for every encoding, so a conditional request still gets its 304.
  *
@@ -31,14 +32,24 @@ export function pickEncoding(header) {
     const m = params.map((p) => p.trim()).find((p) => p.startsWith('q='));
     q.set(name.trim(), m ? Number(m.slice(2)) : 1);
   }
-  const ok = (e) => (q.has(e) ? q.get(e) > 0 : q.has('*') && q.get('*') > 0);
-  if (ok('br')) return 'br';
-  if (ok('gzip') || ok('x-gzip')) return 'gzip';
-  return null;
+  const weight = (e) => { const v = q.has(e) ? q.get(e) : q.has('*') ? q.get('*') : 0; return Number.isFinite(v) && v > 0 ? v : 0; };
+  const br = weight('br');
+  const gzip = Math.max(weight('gzip'), weight('x-gzip'));
+  if (!br && !gzip) return null;
+  return br >= gzip ? 'br' : 'gzip'; // the one the browser prefers; brotli on a tie
 }
 
 /** Whether a `Content-Type` is one of the compressible kinds */
 export const isCompressible = (type) => typeof type === 'string' && COMPRESSIBLE.test(type.trim());
+
+const SKIP = Symbol('cornfield.noCompress');
+
+/**
+ * Leaves this answer as it is: a proxied upstream's answer (it may be a stream, or a range, and the upstream saw the
+ * request's Accept-Encoding itself).
+ * @param {import('node:http').ServerResponse} res
+ */
+export function skipCompression(res) { /** @type {any} */ (res)[SKIP] = true; }
 
 const hasVary = (v, name) => String(v || '').split(',').some((t) => t.trim().toLowerCase() === name.toLowerCase() || t.trim() === '*');
 
@@ -86,9 +97,16 @@ export function compressResponse(req, res) {
         }
         const length = Number(header(extra, 'content-length'));
         const done = header(extra, 'content-encoding');
-        const noTransform = /no-transform/i.test(String(header(extra, 'cache-control') || ''));
-        if (encoding && status !== 304 && !done && !noTransform && !(Number.isFinite(length) && length > 0 && length < MIN_BYTES)) {
-          if (extra && !Array.isArray(extra)) { delete extra['Content-Length']; delete extra['content-length']; extra['Content-Encoding'] = encoding; } else res.setHeader('Content-Encoding', encoding);
+        // `no-store` marks what the server treats as secret (sign-in pages, tokens, the agent and runner APIs): a body
+        // that may hold a secret beside what the request sent is never compressed (the BREACH class of attack)
+        const cache = String(header(extra, 'cache-control') || '');
+        const keep = /no-transform|no-store/i.test(cache) || /** @type {any} */ (res)[SKIP]
+          || status === 206 || header(extra, 'content-range') !== undefined;
+        if (encoding && status !== 304 && !done && !keep && !(Number.isFinite(length) && length > 0 && length < MIN_BYTES)) {
+          if (extra && !Array.isArray(extra)) {
+            Object.keys(extra).filter((k) => k.toLowerCase() === 'content-length').forEach((k) => { delete extra[k]; });
+            extra['Content-Encoding'] = encoding;
+          } else res.setHeader('Content-Encoding', encoding);
           res.removeHeader('Content-Length');
           if (req.method !== 'HEAD') startStream();
         }

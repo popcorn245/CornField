@@ -11,6 +11,7 @@
  * The session is a bearer credential for the whole dashboard, and the upstream is someone else's server.
  */
 
+import { skipCompression } from './compress.js';
 import http from 'node:http';
 import https from 'node:https';
 
@@ -40,6 +41,7 @@ export function withoutOwnSetCookies(values) {
  * @param {string} target like `http://127.0.0.1:3245`
  */
 export function proxyTo(req, res, target) {
+  skipCompression(res); // the upstream saw Accept-Encoding and answers as it likes: a stream or a range stays as it is
   const url = new URL(target);
   const client = url.protocol === 'https:' ? https : http;
   const port = url.port || (url.protocol === 'https:' ? '443' : '80');

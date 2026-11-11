@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import http from 'node:http';
 import zlib from 'node:zlib';
-import { compressResponse, pickEncoding, isCompressible } from '../../server/compress.js';
+import { compressResponse, pickEncoding, isCompressible, skipCompression } from '../../server/compress.js';
 
 const BIG = JSON.stringify({ items: Array.from({ length: 400 }, (_, i) => ({ id: `node-${i}`, label: `A node called ${i}` })) });
 
@@ -30,6 +30,9 @@ beforeAll(async () => {
     if (url === '/small') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': 12 }); return res.end('{"ok":true}\n'); }
     if (url === '/already') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }); return res.end(zlib.gzipSync(BIG)); }
     if (url === '/notmodified') { res.writeHead(304, { 'Content-Type': 'application/json', ETag: 'W/"abc"' }); return res.end(); }
+    if (url === '/secret') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); return res.end(BIG); }
+    if (url === '/range') { res.writeHead(206, { 'Content-Type': 'application/json', 'Content-Range': `bytes 0-${BIG.length - 1}/${BIG.length}` }); return res.end(BIG); }
+    if (url === '/proxied') { skipCompression(res); res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end(BIG); }
     if (url === '/vary') { res.writeHead(200, { 'Content-Type': 'application/json', Vary: 'Cookie' }); return res.end(BIG); }
     res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('no');
   });
@@ -57,6 +60,10 @@ describe('pickEncoding', () => {
     expect(pickEncoding('identity')).toBeNull();
     expect(pickEncoding('*')).toBe('br');
     expect(pickEncoding(undefined)).toBeNull();
+    expect(pickEncoding('br;q=0.1, gzip;q=0.9')).toBe('gzip'); // the q-values decide, brotli only on a tie
+    expect(pickEncoding('*;q=0')).toBeNull();
+    expect(pickEncoding('gzip;q=abc')).toBeNull();
+    expect(pickEncoding('BR;Q=0.5 , gzip;q=0.5')).toBe('br');
   });
   it('knows the compressible types', () => {
     for (const t of ['text/html; charset=utf-8', 'text/css', 'application/json', 'application/javascript; charset=utf-8', 'image/svg+xml', 'application/manifest+json; charset=utf-8']) expect(isCompressible(t), t).toBe(true);
@@ -109,6 +116,14 @@ describe('compressResponse', () => {
     expect(already.headers['content-encoding']).toBe('gzip'); // not gzipped twice
     expect(zlib.gunzipSync(already.raw).toString()).toBe(BIG);
     expect((await ask('/png', 'gzip')).headers.vary).toBeUndefined();
+  });
+
+  it('never compresses what may hold a secret (no-store: sign-in, tokens), a range, or a proxied answer', async () => {
+    for (const p of ['/secret', '/range', '/proxied']) {
+      const res = await ask(p, 'gzip, br');
+      expect(res.headers['content-encoding'], p).toBeUndefined();
+      expect(res.raw.toString(), p).toBe(BIG);
+    }
   });
 
   it('adds to a Vary the answer already has, and answers a 304 with the Vary and no body', async () => {
