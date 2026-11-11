@@ -199,7 +199,7 @@ Each step ships on its own and leaves review working.
 
 ## What is not in this spec
 
-- What Approve and Send back do, and the words above them: spec 0007.
+- What Approve and Send back do, and the words above them: [spec 0007](0007-the-decision.md).
 - The camera fixes on open, on a chosen change and on a step ([#156](https://github.com/popcorn245/CornField/issues/156), [#157](https://github.com/popcorn245/CornField/issues/157), [#159](https://github.com/popcorn245/CornField/issues/159)), the focus fixes ([#161](https://github.com/popcorn245/CornField/issues/161)) and the phone player's controls ([#160](https://github.com/popcorn245/CornField/issues/160)): small fixes, being built now. D6 relies on them.
 - Labels, search and selection on a big map: spec 0008.
 - Who may see the dashboard, and what a persona may do in production: unchanged.

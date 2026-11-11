@@ -2018,6 +2018,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0006: scenarios and personas in review (docs/specs/0006-scenarios-and-personas.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0007-the-decision",
+      "type": "page",
+      "label": "/docs/specs/0007-the-decision",
+      "file": "docs/specs/0007-the-decision.md",
+      "summary": "Spec 0007: the decision: what Approve and Send back do, and when",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
     }
   ],
   "edges": [
@@ -6434,7 +6444,31 @@
     {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0007-the-decision"
+    },
+    {
+      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "to": "page-doc-docs-specs-0007-the-decision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0006-safe-actions-only",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0005-reviews-are-pr-comments",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T08:17:38.379Z"
+  "updatedAt": "2026-11-11T08:17:39.977Z"
 }
