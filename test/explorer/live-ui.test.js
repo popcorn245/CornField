@@ -111,6 +111,7 @@ describe('turning a live layer on', () => {
     expect($('live-wrap').hidden).toBe(false);
     expect($('live-chip-text').textContent).toMatch(/^Live · \d\d:\d\d$/);
     expect($('live-wrap').dataset.tone).toBe('ok');
+    expect($('live-chip').getAttribute('data-corn-state')).toBe('success'); // for a theme: success, waiting (as of a while ago), stopped (off), failure (unavailable)
   });
 
   it('People shows the counts on the persona nodes and Other accounts on the chip, never a name', async () => {
@@ -162,6 +163,7 @@ describe('the chip\'s failure states', () => {
     await settle();
     expect(api.calls).toEqual([]);
     expect($('live-chip-text').textContent).toBe('Live layer off: no token in this browser');
+    expect($('live-chip').getAttribute('data-corn-state')).toBe('stopped');
     click($('live-chip'));
     expect($('live-menu').textContent).toContain(`Tokens are saved per address: this is ${window.location.host}.`);
     // the board is a second way, not the main one: a small link under the field
@@ -185,6 +187,7 @@ describe('the chip\'s failure states', () => {
     await settle();
     expect($('live-chip-text').textContent).toBe('Live layer unavailable: the source could not be reached (fetch failed)');
     expect($('live-wrap').dataset.tone).toBe('error');
+    expect($('live-chip').getAttribute('data-corn-state')).toBe('failure');
     expect(sceneIds()).toEqual(['root', 'app-a']); // the code map as it was (Machines and People are off)
     up = true;
     click($('live-chip'));

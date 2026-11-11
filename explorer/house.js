@@ -245,10 +245,10 @@ function paintBar() {
   const fKey = floors.map((f) => `${f.id}:${f.name}`).join('|') + `#${c.floor}#${c.planSource}#${edit || ''}`;
   if (els.floors.dataset.key !== fKey) {
     els.floors.dataset.key = fKey;
-    els.floors.innerHTML = floors.map((f) => `<button type="button" class="hx-house-chip" data-house="floor" data-floor="${escAttr(f.id)}" aria-pressed="${f.id === c.floor}">${escAttr(f.name)}</button>`).join('')
+    els.floors.innerHTML = floors.map((f) => `<button data-corn="house-chip" type="button" class="hx-house-chip" data-house="floor" data-floor="${escAttr(f.id)}" aria-pressed="${f.id === c.floor}">${escAttr(f.name)}</button>`).join('')
       + (c.planSource === 'default' ? '<span class="hx-house-tag" title="The live layer is unavailable: this is the default plan">Default plan</span>' : '')
       + (c.planSource === 'none' ? '<span class="hx-house-tag">No plan</span>' : '')
-      + (edit ? `<a class="hx-house-chip hx-house-edit" href="${escAttr(edit)}" target="_blank" rel="noopener" title="Move and resize the rooms where the plan is kept (opens in a new tab)">Edit layout</a>` : '');
+      + (edit ? `<a data-corn="house-chip" class="hx-house-chip hx-house-edit" href="${escAttr(edit)}" target="_blank" rel="noopener" title="Move and resize the rooms where the plan is kept (opens in a new tab)">Edit layout</a>` : '');
   }
   const chips = c.phone ? personaChips(state.nodes) : [];
   const pKey = c.phone ? chips.map((p) => `${p.id}:${p.text}`).join('|') + `#${c.software}#${c.cloud}` : '';
@@ -256,9 +256,9 @@ function paintBar() {
     els.people.dataset.key = pKey;
     els.people.hidden = !c.phone;
     els.people.innerHTML = c.phone
-      ? chips.map((p) => `<button type="button" class="hx-house-chip hx-house-chip--person" data-house="person" data-id="${escAttr(p.id)}">${escAttr(p.text)}</button>`).join('')
-        + `<button type="button" class="hx-house-chip hx-house-chip--software" data-house="software" aria-pressed="${!!c.software}">Software</button>`
-        + `<button type="button" class="hx-house-chip hx-house-chip--cloud" data-house="cloud" aria-pressed="${!!c.cloud}">Cloud</button>`
+      ? chips.map((p) => `<button data-corn="house-chip" type="button" class="hx-house-chip hx-house-chip--person" data-house="person" data-id="${escAttr(p.id)}">${escAttr(p.text)}</button>`).join('')
+        + `<button data-corn="house-chip" type="button" class="hx-house-chip hx-house-chip--software" data-house="software" aria-pressed="${!!c.software}">Software</button>`
+        + `<button data-corn="house-chip" type="button" class="hx-house-chip hx-house-chip--cloud" data-house="cloud" aria-pressed="${!!c.cloud}">Cloud</button>`
       : '';
   }
 }
@@ -272,7 +272,7 @@ function paintMore() {
     els.over.innerHTML = more.map((m) => {
       const room = nodeById(m.room);
       const name = room ? room.label : m.room;
-      return `<button type="button" class="hx-house-more" data-house="more" data-room="${escAttr(m.room)}" aria-label="${escAttr(`${m.count} more in the ${name}: open the room`)}">+${m.count}</button>`;
+      return `<button data-corn="house-more" type="button" class="hx-house-more" data-house="more" data-room="${escAttr(m.room)}" aria-label="${escAttr(`${m.count} more in the ${name}: open the room`)}">+${m.count}</button>`;
     }).join('');
   }
 }

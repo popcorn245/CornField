@@ -31,7 +31,7 @@ import { t } from './strings.js';
  */
 
 /** A link that opens a new tab, said so for a screen reader */
-const link = (ctx, href, text, after = '') => (ctx.safeUrl(href) ? `<a class="hx-link" href="${ctx.esc(href)}" target="_blank" rel="noreferrer">${ctx.esc(text)} <span class="hx-sr-only">(new tab)</span></a>${after}` : '');
+const link = (ctx, href, text, after = '') => (ctx.safeUrl(href) ? `<a data-corn="text-link" class="hx-link" href="${ctx.esc(href)}" target="_blank" rel="noreferrer">${ctx.esc(text)} <span class="hx-sr-only">(new tab)</span></a>${after}` : '');
 
 /** The address of a branch on the forge, or null */
 function branchUrl(ctx, branch) {
@@ -55,7 +55,7 @@ function linksHtml(ctx, run) {
 /** A run id that is another run of the list is a button that takes you to it; otherwise it is plain text */
 function runLink(ctx, runId, all) {
   const there = (all || []).find((r) => r.runId === runId);
-  return there ? `<button type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(runId)}" title="Go to this run">${ctx.esc(runName(there))}</button>` : 'an earlier run';
+  return there ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(runId)}" title="Go to this run">${ctx.esc(runName(there))}</button>` : 'an earlier run';
 }
 
 /** Which run this one starts again, and which start it again */
@@ -69,7 +69,7 @@ function timelineHtml(ctx, run, all) {
   const items = (run.timeline || []).map((e) => {
     const w = timelineWords(e);
     const other = (e.kind === 'retry-of' || e.kind === 'retried-by') && e.ref ? (all || []).find((r) => r.runId === e.ref) : null;
-    const goto = other ? ` <button type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(e.ref)}" aria-label="Go to it: ${ctx.esc(runName(other))}">Go to it</button>` : '';
+    const goto = other ? ` <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-goto="${ctx.esc(e.ref)}" aria-label="Go to it: ${ctx.esc(runName(other))}">Go to it</button>` : '';
     return `<li><time datetime="${ctx.esc(e.at)}" title="${ctx.esc(e.at)}">${ctx.esc(relativeTime(e.at, ctx.now) || e.at)}</time>${ctx.esc(w.what.replace(/run-[0-9A-Za-z]{26}/g, (id) => { const o = (all || []).find((r) => r.runId === id); return o ? runName(o) : 'an earlier run'; }))}${goto}${w.note ? `<span class="hx-run-note">${ctx.esc(w.note)}</span>` : ''}</li>`;
   });
   return `<ol class="hx-run-timeline" id="run-tl-${ctx.esc(run.runId)}" aria-label="Timeline of ${ctx.esc(runName(run))}, oldest first">${items.join('')}</ol>`;
@@ -94,11 +94,11 @@ function answerHtml(ctx, run) {
   const name = ctx.esc(runName(run, ctx.now));
   const off = ctx.busy ? ' disabled' : '';
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
-  return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" role="group" aria-label="Answer: ${name}">
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(t('continueRun'))}: ${name}"${off}>${ctx.esc(t('continueRun'))}</button>
+  return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" data-corn="run-actions" role="group" aria-label="Answer: ${name}">
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(t('continueRun'))}: ${name}"${off}>${ctx.esc(t('continueRun'))}</button>
       <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="${ctx.esc(t('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(t('stop'))}</button></div>
-    <label class="hx-forge-field" data-corn="field">Reply to ${ctx.esc(`${run.kind} on ${aboutWords(run.refs)}`)}<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
-    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(t('reply'))}: ${name}"${off}>${ctx.esc(t('reply'))}</button></div>`;
+    <label class="hx-forge-field" data-corn="field">Reply to ${ctx.esc(`${run.kind} on ${aboutWords(run.refs)}`)}<input data-corn="control" type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
+    <div class="hx-run-actions" data-corn="run-actions"><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(t('reply'))}: ${name}"${off}>${ctx.esc(t('reply'))}</button></div>`;
 }
 
 /**
@@ -110,8 +110,8 @@ function unsentHtml(ctx, run) {
   if (!reply) return '';
   const id = ctx.esc(run.runId);
   return `<p class="hx-forge-why" data-corn="message" data-corn-state="failure">This run is now ${ctx.esc(statusWords(run).toLowerCase())} and no longer waits for a reply, so what you typed was not sent. It is kept here to copy.</p>
-    <label class="hx-forge-field" data-corn="field">Your reply, not sent<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
-    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-discard="${id}" aria-label="Discard: your reply to ${ctx.esc(runName(run, ctx.now))}">Discard</button></div>`;
+    <label class="hx-forge-field" data-corn="field">Your reply, not sent<input data-corn="control" type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
+    <div class="hx-run-actions" data-corn="run-actions"><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-discard="${id}" aria-label="Discard: your reply to ${ctx.esc(runName(run, ctx.now))}">Discard</button></div>`;
 }
 
 /** The totals as plain lines (see `totalsLines`), escaped; '' when there are none */
@@ -129,6 +129,14 @@ export function loadingRowsHtml(n = 3) {
   return Array.from({ length: n }, () => '<li class="hx-forge-skeleton" data-corn="skeleton" aria-hidden="true"><span></span><span></span></li>').join('');
 }
 
+/**
+ * Placeholder lines for the runner line and the totals above the runs while they load (issue #192): each is one `hx-forge-meta` line high, as the
+ * line it stands for, so the list under them does not move when the data arrives.
+ */
+export function loadingLinesHtml(n = 1) {
+  return Array.from({ length: n }, () => '<p class="hx-forge-meta hx-forge-skeleton-line" data-corn="skeleton" aria-hidden="true"><span></span></p>').join('');
+}
+
 /** One run */
 export function runHtml(ctx, run, all) {
   const lit = ctx.selected === run.runId;
@@ -138,7 +146,7 @@ export function runHtml(ctx, run, all) {
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
   const off = ctx.busy ? ' disabled' : '';
-  const retry = canRetry(run) ? `<button type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('startAgain'))}: ${name}"${off}>${ctx.esc(t('startAgain'))}</button>` : '';
+  const retry = canRetry(run) ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('startAgain'))}: ${name}"${off}>${ctx.esc(t('startAgain'))}</button>` : '';
   const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(t('stop'))}</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
@@ -158,9 +166,9 @@ export function runHtml(ctx, run, all) {
     ${retryHtml(ctx, run, all)}
     ${links ? `<p class="hx-forge-meta">${links}</p>` : ''}
     ${answering ? `${answerHtml(ctx, run)}${result}` : unsentHtml(ctx, run)}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
-    <div class="hx-run-actions">${stop}${retry}
-      <button type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="${lightWords}: ${name}"${noNodes ? ` disabled title="No node on the map yet, so there is nothing to light" aria-describedby="run-nodes-${ctx.esc(run.runId)}"` : ''}>${lightWords}</button>
-      <button type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>
+    <div class="hx-run-actions" data-corn="run-actions">${stop}${retry}
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="${lightWords}: ${name}"${noNodes ? ` disabled title="No node on the map yet, so there is nothing to light" aria-describedby="run-nodes-${ctx.esc(run.runId)}"` : ''}>${lightWords}</button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>
     ${answering ? '' : result}
     ${open ? timelineHtml(ctx, run, all) : ''}</li>`;
 }

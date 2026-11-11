@@ -621,7 +621,9 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-sheet-handle span { width: 40px; height: 5px; border-radius: var(--corn-radius-pill); background: var(--corn-surface-3); }
   .hx-sheet-handle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); border-radius: var(--corn-radius); }
   .hx-backdrop { display: none; }
-  .hx-stage[data-sheet-open="drawer"] .hx-backdrop:not([hidden]) { display: block; }
+  /* With the node panel expanded the backdrop stays as the tap that closes it, but draws nothing: the map above the sheet is the free band the
+     selected node was panned into (camera.js panIntoView), and a scrim or blur over it hides that node (issue #180) */
+  .hx-stage[data-sheet-open="drawer"] .hx-backdrop:not([hidden]) { display: block; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
   /* The proposal bar */
   .hx-proposal-bar { max-height: 50dvh; overflow-y: auto; padding: 0 var(--corn-space-4) var(--corn-space-3); }
@@ -757,6 +759,8 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-forge-tab:focus-visible, .hx-forge-chip:focus-visible, .hx-forge-back:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); }
 .hx-forge-count { color: var(--corn-text-3); font-size: var(--corn-text-xs); font-weight: 500; }
 .hx-forge-count[hidden] { display: none; }
+/* A tab's count holds its width before it is read, so the tabs do not move when the counts arrive (issue #192): it is empty, not hidden; Deploys has none and keeps `hidden` */
+.hx-forge-tab .hx-forge-count { display: inline-block; min-width: 2ch; }
 /* The status line and the Filter chip; the focus is put on the title (a heading, tabindex -1) when the panel opens, so it shows no ring */
 .hx-forge-body > * { flex-shrink: 0; } /* a tall detail scrolls the body; it must not squash the tabs */
 .hx-forge .hx-drawer-title:focus-visible, .hx-forge-notes-title:focus-visible { outline: none; }
@@ -1134,6 +1138,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-forge-skeleton { display: flex; flex-direction: column; gap: var(--corn-space-2); min-height: 64px; padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius); list-style: none; }
 .hx-forge-skeleton > span { display: block; height: 10px; border-radius: var(--corn-radius-sm); background: var(--corn-surface-3); }
 .hx-forge-skeleton > span:last-child { width: 55%; }
+.hx-forge-skeleton-line > span { display: inline-block; width: 55%; height: 10px; vertical-align: middle; border-radius: var(--corn-radius-sm); background: var(--corn-surface-3); } /* one line of the runner line or the totals, while they load */
 .hx-forge-empty { line-height: 1.5; }
 
 /* The panel's title row and tabs stay in place while a list scrolls; the body's padding is taken up by the top so nothing shows above it */
