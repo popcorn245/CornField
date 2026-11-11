@@ -57,8 +57,8 @@ describe('the tokens', () => {
     expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
     expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
-    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 4);
-    expect(M.mapTokenNames()).toHaveLength(66); // 62 colours, widths and marks, and the font, the edge width, the glow and the smallest label
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 4 + 1);
+    expect(M.mapTokenNames()).toHaveLength(67); // 63 colours, widths and marks (the glyph ink among them), and the font, the edge width, the glow and the smallest label
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -541,7 +541,7 @@ describe('the WebGL renderer', () => {
   it('groups the icons by kind, in scene order, and skips a kind whose image has not loaded', () => {
     const scene = M.styledScene(buildScene(mk()), styleOf({}, { icons: { get: () => ({}), anyReady: () => true } }));
     scene.nodes.forEach((n) => { n.icon = n.type === 'page' || n.type === 'table' ? n.type : null; });
-    const p = packIcons(scene, (k) => k !== 'table');
+    const p = packIcons(scene, (k) => k !== 'table' && !k.startsWith('glyph:')); // the type glyphs have their own test (glyphs.test.js)
     expect(p.groups).toEqual([{ kind: 'page', first: 0, count: 1, minR: 20 }]);
     expect(p.stride).toBe(ICON_STRIDE);
     const page = byId(scene, 'page');

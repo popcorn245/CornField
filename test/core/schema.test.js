@@ -17,8 +17,8 @@ describe('the six node types of the physical world', () => {
     expect(NODE_THEMES.container).toEqual({ color: '#d6d3d1', r: 12 });
     expect(NODE_THEMES.persona).toEqual({ color: '#fb7185', r: 22 });
     expect(NODE_THEMES.device).toEqual({ color: '#2dd4bf', r: 14 });
-    expect(NODE_THEMES.floor).toEqual({ color: '#a3e635', r: 20 });
-    expect(NODE_THEMES.room).toEqual({ color: '#bef264', r: 16 });
+    expect(NODE_THEMES.floor).toEqual({ color: '#a3e830', r: 20 });
+    expect(NODE_THEMES.room).toEqual({ color: '#ea9856', r: 16 });
   });
 
   it('add no edge kind: runs-on, delivers and ownership are widened instead (D1)', () => {

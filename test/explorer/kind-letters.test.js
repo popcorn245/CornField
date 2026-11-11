@@ -24,7 +24,7 @@ const nodes = [
   node('pg', 'page', 400), node('cl', 'external', 500, { kind: 'cloud' }), node('odd', 'service', 600, { kind: '<b>x</b>' }),
 ];
 const state = (extra = {}) => ({ nodes, edges: [], view: 'orbit', flow: null, rings: { rings: [], clusters: [] }, selectedNode: null, searchQuery: '', isFreeform: false, activeLayers: {}, scenario: null, sceneVersion: 1, theme: 'dark', projectLayers: [], ...extra });
-const scene = () => buildScene(state());
+const scene = () => { const s = buildScene(state()); s.nodes.forEach((n) => { delete n.glyph; }); return s; }; // the letters alone: the type glyphs have their own test (glyphs.test.js)
 const byId = (s, id) => s.nodes.find((n) => n.id === id);
 const plain = { version: 1, values: {}, strokeWidth: 1.5, icons: null, pixelated: false, plain: true };
 

@@ -48,7 +48,10 @@
  * @property {string} group        the node's layer in the Layers menu (`app`, `cloud`, `web`, `house`, ...): the node's group for the map tokens
  * @property {number} x            world centre
  * @property {number} y
- * @property {number} r            world radius of the filled circle
+ * @property {number} r            world radius of the node: the circle's, or the silhouette's circumscribing one
+ * @property {'circle'|'rounded-square'|'hexagon'|'square'|'diamond'} shape  the silhouette (core/schema.js `NODE_SHAPES`)
+ * @property {string} [glyph]      the type whose built-in glyph the node shows (glyphs.js), when the type has one
+ * @property {string} [letters]    a finer kind's letters (kind-letters.js)
  * @property {string} color        fill, and the glow colour
  * @property {number} alpha        0..1 for everything of this node (halo, circle, core, label): 1, or 0.07 when dimmed by the focus
  * @property {number} glow         blur radius in px in `color`; 0 = none (the dimmed ones, with no glow)
@@ -168,6 +171,8 @@ import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } fr
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
 import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
+import { shapeOf } from '../core/schema.js';
+import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
@@ -206,6 +211,8 @@ export const ARROW = { length: 9, spread: 0.45 };
 export const END_MARKS = Object.freeze({ flow: 'chevron', reads: 'chevron', writes: 'chevron', calls: 'triangle', triggers: 'triangle', delivers: 'triangle', 'runs-on': 'bar', uses: 'diamond', extends: 'diamond' });
 /** The shapes of the end marks and the ticks, in world units (the renderers draw them, the legend mirrors them): stroke width, a bar's and a tick's half length, a diamond's half length and half width */
 export const END_SHAPES = Object.freeze({ strokeWidth: 1.8, barHalf: 5, diamondHalf: 6, diamondAcross: 4.5, tickHalf: 4, tickWidth: 1.6, tickGap: 6 });
+/** The sizes of the silhouettes, as fractions of a node's radius: a rounded square's half side and corner, a hexagon's inradius, a square's half side and corner, a diamond's half diagonal (both renderers draw them) */
+export const SHAPE_SIZES = Object.freeze({ roundedHalf: 0.9, roundedCorner: 0.3, hexInradius: 0.9, squareHalf: 0.86, squareCorner: 0.12, diamondHalf: 1.15 });
 /** The dash a proposed edge is drawn with: the one dashed thing on the map (a usage link is dotted, a `when` is told by ticks) */
 export const PROPOSED_DASH = Object.freeze([7, 5]);
 /** The dash of a usage link: dots */
@@ -566,6 +573,8 @@ function buildNodes(state, subgraph) {
       id: node.id, type: shown.type, group: groupOf(shown),
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
+      shape: shapeOf(shown.type), // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
+      ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: shown.color,
       alpha,

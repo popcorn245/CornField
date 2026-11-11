@@ -8,9 +8,10 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, END_SHAPES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
-import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
+import { GLYPH_TOKEN, ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
+import { GLYPH_RATIO, glyphImage, glyphInk, showsGlyph } from './glyphs.js';
 
 const TAU = Math.PI * 2;
 /** A glow thinner than this on screen (px) is not drawn: zoomed out it is a fraction of a pixel, and costs a stroke or fill per edge and node */
@@ -20,6 +21,36 @@ export const LAYER_MIN_EDGES = 600;
 /** A line dimmer than this (its alpha times its colour's), with no mark, glow or packet, is a trace no eye finds: it is not drawn (a selection dims thousands of lines to 4%) */
 export const TRACE_ALPHA = 0.06;
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
+
+/**
+ * The path of a node's silhouette (spec 0008 D8), inside the circle of radius `r` it is hit-tested by, or a little past it for a diamond: the circle for code,
+ * a rounded square for data, a hexagon for what is outside, a square for where things run, a diamond for people. The WebGL node shader draws the same shapes
+ * with the same sizes (scene.js `SHAPE_SIZES`, shaders.js `sdShape`).
+ */
+export function silhouette(ctx, shape, x, y, r) {
+  if (shape === 'rounded-square' || shape === 'square') {
+    const h = r * (shape === 'square' ? SHAPE_SIZES.squareHalf : SHAPE_SIZES.roundedHalf);
+    const c = r * (shape === 'square' ? SHAPE_SIZES.squareCorner : SHAPE_SIZES.roundedCorner);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - h, y - h, h * 2, h * 2, c); else ctx.rect(x - h, y - h, h * 2, h * 2);
+    return;
+  }
+  if (shape === 'hexagon') {
+    const R = (r * SHAPE_SIZES.hexInradius) / Math.cos(Math.PI / 6); // flat top and bottom: the inradius is what the SDF takes
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; const px = x + R * Math.cos(a), py = y + R * Math.sin(a); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.closePath();
+    return;
+  }
+  if (shape === 'diamond') {
+    const h = r * SHAPE_SIZES.diamondHalf;
+    ctx.beginPath();
+    ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y);
+    ctx.closePath();
+    return;
+  }
+  circle(ctx, x, y, r);
+}
 
 // ---------------------------------------------------------------------------
 //  The background
@@ -257,8 +288,8 @@ function drawNode(ctx, node, zoom, looks, style) {
     }
   }
 
-  // The node circle, glowing, with a white core dot
-  circle(ctx, node.x, node.y, node.r);
+  // The node's silhouette, glowing, with a white core dot
+  silhouette(ctx, node.shape, node.x, node.y, node.r);
   if (node.glow && node.glow * zoom >= GLOW_MIN_PX) {
     // A soft disc behind the node, not `shadowBlur` (see drawEdge): one cheap fill instead of a blur pass
     ctx.save();
@@ -267,7 +298,7 @@ function drawNode(ctx, node, zoom, looks, style) {
     ctx.fillStyle = node.color;
     ctx.fill();
     ctx.restore();
-    circle(ctx, node.x, node.y, node.r);
+    silhouette(ctx, node.shape, node.x, node.y, node.r);
   }
   ctx.fillStyle = node.color;
   ctx.fill();
@@ -277,7 +308,7 @@ function drawNode(ctx, node, zoom, looks, style) {
 
   // The theme's outline (--corn-map-stroke), just inside the edge of the circle
   if (node.stroke) {
-    circle(ctx, node.x, node.y, Math.max(0, node.r - node.stroke.width / 2));
+    silhouette(ctx, node.shape, node.x, node.y, Math.max(0, node.r - node.stroke.width / 2));
     ctx.strokeStyle = node.stroke.color;
     ctx.lineWidth = node.stroke.width;
     ctx.stroke();
@@ -291,11 +322,19 @@ function drawNode(ctx, node, zoom, looks, style) {
     ctx.drawImage(image, node.x - side / 2, node.y - side / 2, side, side);
   } else if (showsLetters(node, zoom)) {
     // A finer kind's letters (spec 0009 D5), where a theme's icon would be: the shortest start of its name, once the node is wide enough
-    const letters = letterImage(node.letters);
+    const letters = letterImage(node.letters, style.values && style.values[GLYPH_TOKEN]);
     if (letters) {
       const side = node.r * LETTER_RATIO;
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(letters, node.x - side / 2, node.y - side / 2, side, side);
+    }
+  } else if (showsGlyph(node, zoom)) {
+    // The type's own glyph (spec 0008 D8), where the white core dot is: after a theme's icon and a finer kind's letters, and before nothing
+    const glyph = glyphImage(node.glyph, glyphInk(node, style));
+    if (glyph) {
+      const side = node.r * GLYPH_RATIO;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(glyph, node.x - side / 2, node.y - side / 2, side, side);
     }
   }
   ctx.restore();

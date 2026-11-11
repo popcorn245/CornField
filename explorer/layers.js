@@ -21,9 +21,9 @@ import { t } from './strings.js';
 
 /** The dot of each starting row: the colour its nodes are drawn in (a project layer's dot is its nodes' own, or the theme's group token) */
 const COLORS = {
-  app: '#6366f1', pkg: '#06b6d4', page: '#38bdf8', atom: '#10b981', molecule: '#a855f7', token: '#ec4899', tool: '#f43f5e', flow: '#fb923c',
-  core: '#14b8a6', store: '#fb923c', table: '#fde047', rom: '#f0abfc', service: '#84cc16', cloud: '#94a3b8', web: '#94a3b8', stack: '#a8a29e',
-  machine: '#78716c', container: '#d6d3d1', device: '#2dd4bf', house: '#a3e635', runs: '#5eead4', persona: '#fb7185',
+  app: '#6366f1', pkg: '#8feae8', page: '#38bdf8', atom: '#1ac96e', molecule: '#cf07f9', token: '#f2489f', tool: '#f55406', flow: '#fb923c',
+  core: '#bc9dd5', store: '#fb923c', table: '#fde047', rom: '#f90744', service: '#d2e239', cloud: '#94a3b8', web: '#94a3b8', stack: '#c75471',
+  machine: '#78716c', container: '#d6d3d1', device: '#2dd4bf', house: '#a3e830', runs: '#5eead4', persona: '#fb7185',
 };
 /** The starting layers that start off: the infra layer is its own view, and the physical world's are loaded when first turned on (spec 0029) */
 const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona']);

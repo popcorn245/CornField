@@ -16,7 +16,7 @@
       "type": "pkg",
       "file": "cli",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The cli workspace package (cli)."
     },
     {
@@ -25,7 +25,7 @@
       "type": "pkg",
       "file": "core",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The core workspace package (core)."
     },
     {
@@ -34,7 +34,7 @@
       "type": "pkg",
       "file": "explorer",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The explorer workspace package (explorer)."
     },
     {
@@ -43,7 +43,7 @@
       "type": "pkg",
       "file": "plugins/cloud",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/cloud workspace package (plugins/cloud)."
     },
     {
@@ -52,7 +52,7 @@
       "type": "pkg",
       "file": "plugins/house",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/house workspace package (plugins/house)."
     },
     {
@@ -61,7 +61,7 @@
       "type": "pkg",
       "file": "plugins/personas",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/personas workspace package (plugins/personas)."
     },
     {
@@ -70,7 +70,7 @@
       "type": "pkg",
       "file": "plugins/starter",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/starter workspace package (plugins/starter)."
     },
     {
@@ -79,7 +79,7 @@
       "type": "pkg",
       "file": "server",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The server workspace package (server)."
     },
     {
@@ -89,7 +89,7 @@
       "file": "cli/cornfield.js",
       "summary": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only unless sign-in is configured) cornfield …",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The cornfield command, run against a repo (the current folder, or `--repo <dir>`): cornfield serve the dev dashboard on http://127.0.0.1:3350 (loopback only until sign-in exists) cornfield sync der… (cli/cornfield.js)"
     },
     {
@@ -99,7 +99,7 @@
       "file": "cli/release-guard.js",
       "summary": "`prepublishOnly`: stops an `npm publish` that is not the release workflow's.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "`prepublishOnly`: stops an `npm publish` that is not the release workflow's. (cli/release-guard.js)"
     },
     {
@@ -109,7 +109,7 @@
       "file": "core/cloud.js",
       "summary": "The cloud on the map (spec 0031 section 5, CLOUD-02): the services outside the house that we do not control, described in a committed registry (`topology.cloud.json`) and validated like the persona…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The cloud on the map (spec 0031 section 5, CLOUD-02): the services outside the house that we do not control, described in a committed registry (`topology.cloud.json`) and validated like the persona… (core/cloud.js)"
     },
     {
@@ -119,7 +119,7 @@
       "file": "core/config.js",
       "summary": "cornfield.config.js: what a repo tells cornfield.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "cornfield.config.js: what a repo tells cornfield. (core/config.js)"
     },
     {
@@ -129,7 +129,7 @@
       "file": "core/derive.js",
       "summary": "Running the derivers: the plugins that read a repo's code and say which nodes and edges the map must hold.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Running the derivers: the plugins that read a repo's code and say which nodes and edges the map must hold. (core/derive.js)"
     },
     {
@@ -139,7 +139,7 @@
       "file": "core/fixture.js",
       "summary": "A synthetic topology to measure the explorer on (TOPO-01, spec 0012 A6).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A synthetic topology to measure the explorer on (TOPO-01, spec 0012 A6). (core/fixture.js)"
     },
     {
@@ -149,7 +149,7 @@
       "file": "core/index.js",
       "summary": "What a repo's own deriver or source can import from cornfield: the schema, the proposal format, the personas and cloud formats, the deriver contract, sync and validate.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What a repo's own deriver or source can import from cornfield: the schema, the proposal format, the personas and cloud formats, the deriver contract, sync and validate. (core/index.js)"
     },
     {
@@ -159,7 +159,7 @@
       "file": "core/personas.js",
       "summary": "Personas on the map (spec 0029 section 2, PHY-02): archetypes a scenario can act as, kept in a committed file (`topology.personas.json`) and validated like a proposal.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Personas on the map (spec 0029 section 2, PHY-02): archetypes a scenario can act as, kept in a committed file (`topology.personas.json`) and validated like a proposal. (core/personas.js)"
     },
     {
@@ -169,7 +169,7 @@
       "file": "core/proposal.js",
       "summary": "A proposal is the one place unbuilt architecture is written down (spec 0012 B1): a JSON file beside the spec that says which nodes and edges a change would add, change and remove, and the scenarios…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A proposal is the one place unbuilt architecture is written down (spec 0012 B1): a JSON file beside the spec that says which nodes and edges a change would add, change and remove, and the scenarios… (core/proposal.js)"
     },
     {
@@ -179,7 +179,7 @@
       "file": "core/repo.js",
       "summary": "Reading a target repo: the small set of readers every deriver and check is handed, rooted at one folder.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Reading a target repo: the small set of readers every deriver and check is handed, rooted at one folder. (core/repo.js)"
     },
     {
@@ -189,7 +189,7 @@
       "file": "core/routes.js",
       "summary": "The routes cornfield answers under /proposals (spec 0012 B2, B5), written down once as data so the map can be derived from them (core/routes.js instead of being typed in by hand.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The routes cornfield answers under /proposals (spec 0012 B2, B5), written down once as data so the map can be derived from them (core/routes.js instead of being typed in by hand. (core/routes.js)"
     },
     {
@@ -199,7 +199,7 @@
       "file": "core/schema.js",
       "summary": "What a `topology.json` node and edge may be: the node types with their colour and radius, and the edge kinds, the physical world's rules (spec 0029: live types and ids, which ends an edge kind may …",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What a `topology.json` node and edge may be: the node types with their colour and radius, and the edge kinds, the physical world's rules (spec 0029: live types and ids, which ends an edge kind may … (core/schema.js)"
     },
     {
@@ -209,7 +209,7 @@
       "file": "core/sync.js",
       "summary": "Keeping `topology.json` true to the code.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Keeping `topology.json` true to the code. (core/sync.js)"
     },
     {
@@ -219,7 +219,7 @@
       "file": "core/text.js",
       "summary": "The one HTML escaper.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The one HTML escaper. (core/text.js)"
     },
     {
@@ -229,7 +229,7 @@
       "file": "core/validate.js",
       "summary": "What `cornfield validate` checks: - `validateTopology(topology)`: the schema, pure.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What `cornfield validate` checks: - `validateTopology(topology)`: the schema, pure. (core/validate.js)"
     },
     {
@@ -239,7 +239,7 @@
       "file": "explorer/bench.js",
       "summary": "The explorer's own stopwatch (TOPO-01, spec 0012 A6).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The explorer's own stopwatch (TOPO-01, spec 0012 A6). (explorer/bench.js)"
     },
     {
@@ -249,7 +249,7 @@
       "file": "explorer/camera.js",
       "summary": "The camera maths input.js uses, as pure functions on `{ x, y, zoom }` (screen px of the world origin, and the scale): `screen = camera.xy + world * zoom`.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The camera maths input.js uses, as pure functions on `{ x, y, zoom }` (screen px of the world origin, and the scale): `screen = camera.xy + world * zoom`. (explorer/camera.js)"
     },
     {
@@ -259,7 +259,7 @@
       "file": "explorer/check-model.js",
       "summary": "Checked scenarios, the pure half (spec 0029 sections 3, 5 and 9, PHY-10): the tool's side, no DOM, no fetch, no storage.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Checked scenarios, the pure half (spec 0029 sections 3, 5 and 9, PHY-10): the tool's side, no DOM, no fetch, no storage. (explorer/check-model.js)"
     },
     {
@@ -269,7 +269,7 @@
       "file": "explorer/check.js",
       "summary": "Checked scenarios in the page (spec 0029 sections 3 and 5, PHY-10; the pure half is check-model.js).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Checked scenarios in the page (spec 0029 sections 3 and 5, PHY-10; the pure half is check-model.js). (explorer/check.js)"
     },
     {
@@ -279,7 +279,7 @@
       "file": "explorer/cloud-model.js",
       "summary": "Cloud on the map, the explorer's pure half (spec 0031 sections 1 and 6, CLOUD-06): no DOM, no state.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Cloud on the map, the explorer's pure half (spec 0031 sections 1 and 6, CLOUD-06): no DOM, no state. (explorer/cloud-model.js)"
     },
     {
@@ -289,7 +289,7 @@
       "file": "explorer/flows.js",
       "summary": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block… (explorer/flows.js)"
     },
     {
@@ -299,7 +299,7 @@
       "file": "explorer/frame.js",
       "summary": "When to draw (spec 0012 A4, TOPO-06).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "When to draw (spec 0012 A4, TOPO-06). (explorer/frame.js)"
     },
     {
@@ -309,7 +309,7 @@
       "file": "explorer/house-model.js",
       "summary": "The House view's pure half (spec 0029 section 7, PHY-11): the tool's side, no DOM, no fetch, no storage.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The House view's pure half (spec 0029 section 7, PHY-11): the tool's side, no DOM, no fetch, no storage. (explorer/house-model.js)"
     },
     {
@@ -319,7 +319,7 @@
       "file": "explorer/house.js",
       "summary": "The House view in the page (spec 0029 section 7, PHY-11); its pure half is house-model.js.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The House view in the page (spec 0029 section 7, PHY-11); its pure half is house-model.js. (explorer/house.js)"
     },
     {
@@ -329,7 +329,7 @@
       "file": "explorer/input.js",
       "summary": "Mouse and touch on the canvas: pan, wheel and pinch zoom, tap a node to inspect it.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Mouse and touch on the canvas: pan, wheel and pinch zoom, tap a node to inspect it. (explorer/input.js)"
     },
     {
@@ -339,7 +339,7 @@
       "file": "explorer/labels.js",
       "summary": "The label overlay (spec 0012 A3, TOPO-05; spec 0008 D2): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The label overlay (spec 0012 A3, TOPO-05): every label the map shows, drawn by one layer on a transparent canvas stacked over the map canvas, for either renderer. (explorer/labels.js)"
     },
     {
@@ -349,7 +349,7 @@
       "file": "explorer/layers.js",
       "summary": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean. (explorer/layers.js)"
     },
     {
@@ -359,7 +359,7 @@
       "file": "explorer/layout.js",
       "summary": "Where every node sits.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Where every node sits. (explorer/layout.js)"
     },
     {
@@ -369,7 +369,7 @@
       "file": "explorer/live-model.js",
       "summary": "The live layer's pure half (spec 0029 sections 4 and 9, PHY-09): the tool's side, no DOM, no fetch, no storage.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The live layer's pure half (spec 0029 sections 4 and 9, PHY-09): the tool's side, no DOM, no fetch, no storage. (explorer/live-model.js)"
     },
     {
@@ -379,7 +379,7 @@
       "file": "explorer/live.js",
       "summary": "The live layer in the page (spec 0029 section 4, PHY-09): runs a live source (a plugin's adapter, handed over by main.js) with live-model.js's runner, lays each answer over the map through `setMap`…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The live layer in the page (spec 0029 section 4, PHY-09): runs a live source (a plugin's adapter, handed over by main.js) with live-model.js's runner, lays each answer over the map through `setMap`… (explorer/live.js)"
     },
     {
@@ -389,7 +389,7 @@
       "file": "explorer/main.js",
       "summary": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol… (explorer/main.js)"
     },
     {
@@ -399,7 +399,7 @@
       "file": "explorer/outage-model.js",
       "summary": "\"X is down\" (spec 0031 section 8, CLOUD-07), the explorer's pure half: no DOM, no state.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "\"X is down\" (spec 0031 section 8, CLOUD-07), the explorer's pure half: no DOM, no state. (explorer/outage-model.js)"
     },
     {
@@ -409,7 +409,7 @@
       "file": "explorer/panels.js",
       "summary": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, …",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, … (explorer/panels.js)"
     },
     {
@@ -419,7 +419,7 @@
       "file": "explorer/plugins.js",
       "summary": "The sources a repo's cornfield.config.js names, loaded in the browser.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The sources a repo's cornfield.config.js names, loaded in the browser. (explorer/plugins.js)"
     },
     {
@@ -429,7 +429,7 @@
       "file": "explorer/proposal-model.js",
       "summary": "The pure half of the proposal overlay (spec 0012 B2, TOPO-09): no DOM, no `window`, no fetch.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pure half of the proposal overlay (spec 0012 B2, TOPO-09): no DOM, no `window`, no fetch. (explorer/proposal-model.js)"
     },
     {
@@ -439,7 +439,7 @@
       "file": "explorer/proposal.js",
       "summary": "The proposal overlay on the page (spec 0012 B2, TOPO-09): the picker that lists what the server finds (`GET /proposals`), `/?proposal=<slug>` opening one directly, the bar with the counts chip, the…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The proposal overlay on the page (spec 0012 B2, TOPO-09): the picker that lists what the server finds (`GET /proposals`), `/?proposal=<slug>` opening one directly, the bar with the counts chip, the… (explorer/proposal.js)"
     },
     {
@@ -449,7 +449,7 @@
       "file": "explorer/render.js",
       "summary": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets. (explorer/render.js)"
     },
     {
@@ -459,7 +459,7 @@
       "file": "explorer/renderer-canvas2d.js",
       "summary": "The reference renderer: draws a scene (scene.js) on a Canvas 2D context.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The reference renderer: draws a scene (scene.js) on a Canvas 2D context. (explorer/renderer-canvas2d.js)"
     },
     {
@@ -469,7 +469,7 @@
       "file": "explorer/renderer-webgl.js",
       "summary": "The WebGL2 renderer (spec 0012 A2, TOPO-03): draws a scene (scene.js) on the GPU.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The WebGL2 renderer (spec 0012 A2, TOPO-03): draws a scene (scene.js) on the GPU. (explorer/renderer-webgl.js)"
     },
     {
@@ -479,7 +479,7 @@
       "file": "explorer/renderer.js",
       "summary": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer. (explorer/renderer.js)"
     },
     {
@@ -489,7 +489,7 @@
       "file": "explorer/review-model.js",
       "summary": "The pure half of approving a proposal or sending it back: no DOM, no `window`, no clock (the time is passed in).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pure half of approving a proposal or sending it back: no DOM, no `window`, no clock (the time is passed in). (explorer/review-model.js)"
     },
     {
@@ -499,7 +499,7 @@
       "file": "explorer/review.js",
       "summary": "Approving a proposal and sending it back: the two buttons on the proposal toolbar (index.html), the note that opens under it, and what a click does.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Approve and Send back on the proposal bar: the review goes to the spec PR as a comment, and the bar shows the latest one."
     },
     {
@@ -509,7 +509,7 @@
       "file": "explorer/scenario-ui.js",
       "summary": "The browser half of the scenario player (spec 0012 B3, TOPO-10; the pure core is scenario.js).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The browser half of the scenario player (spec 0012 B3, TOPO-10; the pure core is scenario.js). (explorer/scenario-ui.js)"
     },
     {
@@ -519,7 +519,7 @@
       "file": "explorer/scenario.js",
       "summary": "THE SCENARIO PLAYER'S CORE (spec 0012 B3, TOPO-10).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "THE SCENARIO PLAYER'S CORE (spec 0012 B3, TOPO-10). (explorer/scenario.js)"
     },
     {
@@ -529,7 +529,7 @@
       "file": "explorer/scene.js",
       "summary": "THE SCENE CONTRACT (spec 0012 A1, TOPO-02).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "THE SCENE CONTRACT (spec 0012 A1, TOPO-02). (explorer/scene.js)"
     },
     {
@@ -539,7 +539,7 @@
       "file": "explorer/shaders.js",
       "summary": "The GLSL (ES 3.00, WebGL2) behind renderer-webgl.js, as strings: no build step, no files to fetch.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The GLSL (ES 3.00, WebGL2) behind renderer-webgl.js, as strings: no build step, no files to fetch. (explorer/shaders.js)"
     },
     {
@@ -549,7 +549,7 @@
       "file": "explorer/sheet-model.js",
       "summary": "The state machine of the phone's bottom sheets (TOPO-18, spec 0010 D7), with no DOM: which sheets exist, which are open, and which one is expanded.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded. (explorer/sheet-model.js)"
     },
     {
@@ -559,7 +559,7 @@
       "file": "explorer/sheets.js",
       "summary": "The phone's bottom sheets (spec 0012, TOPO-18).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The phone's bottom sheets (spec 0012, TOPO-18). (explorer/sheets.js)"
     },
     {
@@ -569,7 +569,7 @@
       "file": "explorer/spatial.js",
       "summary": "Which node is under a point, without looking at every node (spec 0012 A4, TOPO-06).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Which node is under a point, without looking at every node (spec 0012 A4, TOPO-06). (explorer/spatial.js)"
     },
     {
@@ -579,7 +579,7 @@
       "file": "explorer/state.js",
       "summary": "The explorer's one shared, mutable state object.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The explorer's one shared, mutable state object. (explorer/state.js)"
     },
     {
@@ -589,7 +589,7 @@
       "file": "explorer/view.js",
       "summary": "Loading the topology and choosing the view of it: the whole map (orbit) or the data-flow preset.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Loading the topology and choosing the view of it: the whole map (orbit) or the data-flow preset. (explorer/view.js)"
     },
     {
@@ -599,7 +599,7 @@
       "file": "explorer/whatif-model.js",
       "summary": "The pure half of what-if editing (spec 0012 B4, TOPO-11): no DOM, no `window`, no clock.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pure half of what-if editing (spec 0012 B4, TOPO-11): no DOM, no `window`, no clock. (explorer/whatif-model.js)"
     },
     {
@@ -609,7 +609,7 @@
       "file": "explorer/whatif.js",
       "summary": "What-if editing on an open proposal (spec 0012 B4, TOPO-11): the controls next to the proposal bar, the drag that draws an edge, the keyboard and localStorage.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What-if editing on an open proposal (spec 0012 B4, TOPO-11): the controls next to the proposal bar, the drag that draws an edge, the keyboard and localStorage. (explorer/whatif.js)"
     },
     {
@@ -619,7 +619,7 @@
       "file": "plugins/cloud/hosts.js",
       "summary": "Finding the outside hosts a source file names, and what the code does with each (the code detector of the cloud deriver): a call from the server, a fetch by the visitor's browser (a stylesheet or p…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Finding the outside hosts a source file names, and what the code does with each (the code detector of the cloud deriver): a call from the server, a fetch by the visitor's browser (a stylesheet or p… (plugins/cloud/hosts.js)"
     },
     {
@@ -629,7 +629,7 @@
       "file": "plugins/cloud/index.js",
       "summary": "The cloud deriver: the services outside your house (or your company) that the code depends on and you do not control, drawn from a committed registry, `topology.cloud.json` (core/cloud.js has the f…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The cloud deriver: the services outside your house (or your company) that the code depends on and you do not control, drawn from a committed registry, `topology.cloud.json` (core/cloud.js has the f… (plugins/cloud/index.js)"
     },
     {
@@ -639,7 +639,7 @@
       "file": "plugins/cloud/sources.js",
       "summary": "Where software comes from, read from the files that pull it (the software detectors of the cloud deriver): image references (`{ registry }`), Dockerfiles (`FROM` and the package installs of each `R…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Where software comes from, read from the files that pull it (the software detectors of the cloud deriver): image references (`{ registry }`), Dockerfiles (`FROM` and the package installs of each `R… (plugins/cloud/sources.js)"
     },
     {
@@ -649,7 +649,7 @@
       "file": "plugins/house/browser.js",
       "summary": "The house plugin's browser half: a **live source** over a house answer, and a plain **floor renderer** for the House view.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The house plugin's browser half: a **live source** over a house answer, and a plain **floor renderer** for the House view. (plugins/house/browser.js)"
     },
     {
@@ -659,7 +659,7 @@
       "file": "plugins/personas/index.js",
       "summary": "The personas deriver: the repo's `topology.personas.json` (core/personas.js has the format) as one `store-personas` node and a `persona-<id>` node per archetype.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The personas deriver: the repo's `topology.personas.json` (core/personas.js has the format) as one `store-personas` node and a `persona-<id>` node per archetype. (plugins/personas/index.js)"
     },
     {
@@ -669,7 +669,7 @@
       "file": "plugins/starter/index.js",
       "summary": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The starter deriver: a map of any JavaScript, Python, Go or Rust repo with zero plugin code. (plugins/starter/index.js)"
     },
     {
@@ -679,7 +679,7 @@
       "file": "server/bind.js",
       "summary": "Where the server may listen (spec 0001 section 3, ADR 0004).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Where the server may listen. (server/bind.js)"
     },
     {
@@ -689,7 +689,7 @@
       "file": "server/files.js",
       "summary": "Taking a request path apart safely, and the files a request can name.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Taking a request path apart safely, and the files a request can name. (server/files.js)"
     },
     {
@@ -699,7 +699,7 @@
       "file": "server/proposals.js",
       "summary": "The proposal routes.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The proposal routes: proposals from open spec PRs and from the worktrees folder; a review is posted to the spec PR, never written into a checkout."
     },
     {
@@ -709,7 +709,7 @@
       "file": "server/proxy.js",
       "summary": "Same-origin paths for a live source: `proxy: { '/api/': 'http://127.0.0.1:3245' }` in the config sends `/api/*` on to that upstream and pipes the answer back, so a browser module can call its own A…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Same-origin paths for a live source: `proxy: { '/api/': 'http://127.0.0.1:3245' }` in the config sends `/api/*` on to that upstream and pipes the answer back, so a browser module can call its own A… (server/proxy.js)"
     },
     {
@@ -719,7 +719,7 @@
       "file": "server/server.js",
       "summary": "cornfield's HTTP server: zero dependencies, Node's own `http`.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The HTTP server: every route behind the sign-in guard; the loopback rule lifts once sign-in is configured with an https public URL."
     },
     {
@@ -728,7 +728,7 @@
       "type": "tool",
       "file": ".github/workflows",
       "r": 19,
-      "color": "#f43f5e",
+      "color": "#f55406",
       "desc": "CI workflows (.github/workflows)."
     },
     {
@@ -825,7 +825,7 @@
       "file": "server/db.js",
       "summary": "cornfield's own SQLite file: `cornfield.db` in the data folder (`config.dataDir`, never a checkout), over Node's built-in `node:sqlite`, so still no dependency.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The SQLite file in the data folder (node:sqlite): sessions, reviews, the audit of actions, forge caches; numbered migrations."
     },
     {
@@ -835,7 +835,7 @@
       "file": "server/forge-github.js",
       "summary": "The GitHub adapter (REST v3) behind the forge interface (server/forge.js): github.com, or GitHub Enterprise Server at `<url>/api/v3`.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The GitHub adapter (REST v3)."
     },
     {
@@ -845,7 +845,7 @@
       "file": "server/forge-http.js",
       "summary": "What every forge adapter shares when it talks HTTP to its forge: one request with a time limit and a JSON answer; `ForgeError`, in plain words, for anything that is not a 2xx (signed out, not allow…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What the forge adapters share over HTTP: one request with a time limit, errors and rate limits in plain words, pagination that never sends a token off the forge's origin."
     },
     {
@@ -855,7 +855,7 @@
       "file": "server/forge.js",
       "summary": "The forge adapter interface: the one shape the rest of the server talks to, whichever forge holds the repo (spec 0001 section 3).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The forge adapter interface: who you are, your permission on the repo, issues, pull requests, files, comments, checks, branches, file contents at a ref."
     },
     {
@@ -864,7 +864,7 @@
       "type": "pkg",
       "file": "plugins/docs",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/docs workspace package (plugins/docs)."
     },
     {
@@ -874,7 +874,7 @@
       "file": "plugins/docs/index.js",
       "summary": "The docs deriver: a repo's Markdown docs as one app on the map (`app-docs`) with a page per document, and the links between them.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The docs deriver: a repo's Markdown docs as one app on the map (`app-docs`) with a page per document, and the links between them. (plugins/docs/index.js)"
     },
     {
@@ -884,7 +884,7 @@
       "file": "plugins/docs/markdown.js",
       "summary": "A small Markdown renderer, enough for a repo's docs: headings (with GitHub-style anchors), paragraphs, fenced code, block quotes, lists (nested), tables, rules, links, images, code spans, bold and …",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A small Markdown renderer, enough for a repo's docs: headings (with GitHub-style anchors), paragraphs, fenced code, block quotes, lists (nested), tables, rules, links, images, code spans, bold and … (plugins/docs/markdown.js)"
     },
     {
@@ -894,7 +894,7 @@
       "file": "plugins/docs/site.js",
       "summary": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The docs as a small static site, built from what the docs deriver (plugins/docs) mapped: a page per document at its route, a sidebar of every page, and on each page the map around it (what it links… (plugins/docs/site.js)"
     },
     {
@@ -1153,7 +1153,7 @@
       "file": "core/deriver-kit.js",
       "summary": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The deriver kit: the types of the deriver contract and a test kit for the derivers a repo writes to put its own code on the map (its routes, jobs, queues, whatever cornfield does not know). (core/deriver-kit.js)"
     },
     {
@@ -1172,7 +1172,7 @@
       "type": "pkg",
       "file": "plugins/compose",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/compose workspace package (plugins/compose)."
     },
     {
@@ -1182,7 +1182,7 @@
       "file": "plugins/compose/index.js",
       "summary": "The compose deriver: the Software band of a self-hosted repo with zero plugin code.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The compose deriver: the Software band of a self-hosted repo with zero plugin code. (plugins/compose/index.js)"
     },
     {
@@ -1192,7 +1192,7 @@
       "file": "plugins/compose/routes.js",
       "summary": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The routes in front of the containers (the compose deriver's `runs-on` detector): which host a Caddyfile or a container's Traefik labels send to which upstream (`web.example.test → web:3000`). (plugins/compose/routes.js)"
     },
     {
@@ -1201,7 +1201,7 @@
       "type": "pkg",
       "file": "plugins/openapi",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/openapi workspace package (plugins/openapi)."
     },
     {
@@ -1211,7 +1211,7 @@
       "file": "plugins/openapi/index.js",
       "summary": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The OpenAPI deriver: an API's endpoints on the map from its description file, with zero plugin code. (plugins/openapi/index.js)"
     },
     {
@@ -1221,7 +1221,7 @@
       "file": "plugins/starter/languages.js",
       "summary": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What the starter deriver reads in Python, Go and Rust, the way it reads npm workspaces in JavaScript: the packages a repo holds (their manifests, names and descriptions), the dependencies they decl… (plugins/starter/languages.js)"
     },
     {
@@ -1231,7 +1231,7 @@
       "file": "plugins/starter/toml.js",
       "summary": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A small TOML reader for the manifests the starter deriver reads (`pyproject.toml`, `Cargo.toml`): tables and arrays of tables, dotted and quoted keys, strings (basic, literal and multi-line), numbe… (plugins/starter/toml.js)"
     },
     {
@@ -1240,7 +1240,7 @@
       "type": "core",
       "file": "explorer/theme-boot.js",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Puts light or dark on the page before its first paint (MAP-01). (explorer/theme-boot.js)"
     },
     {
@@ -1250,7 +1250,7 @@
       "file": "explorer/theme-model.js",
       "summary": "Light and dark, the pure half (MAP-01).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Light and dark, the pure half (MAP-01). (explorer/theme-model.js)"
     },
     {
@@ -1260,7 +1260,7 @@
       "file": "explorer/theme.js",
       "summary": "Light and dark (MAP-01), the half that touches the page.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Light and dark (MAP-01), the half that touches the page. (explorer/theme.js)"
     },
     {
@@ -1270,7 +1270,7 @@
       "file": "explorer/keyboard-model.js",
       "summary": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The map by keyboard (MAP-02), the pure half: what a key on the focused map means, the order the nodes are stepped through, and the words a screen reader is told. (explorer/keyboard-model.js)"
     },
     {
@@ -1280,7 +1280,7 @@
       "file": "explorer/keyboard.js",
       "summary": "The map by keyboard, and what a screen reader hears (MAP-02).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The map by keyboard, and what a screen reader hears (MAP-02). (explorer/keyboard.js)"
     },
     {
@@ -1300,7 +1300,7 @@
       "file": "server/auth.js",
       "summary": "Sign-in with the repo's forge (GitHub or Forgejo OAuth) and the admins-only guard every route passes through (spec 0001 sections 2.4 and 3, ADR 0004).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Sign-in with GitHub or Forgejo (OAuth), sessions in an HttpOnly cookie, and the admins-only guard every route passes through."
     },
     {
@@ -1319,7 +1319,7 @@
       "type": "pkg",
       "file": "plugins/world",
       "r": 24,
-      "color": "#06b6d4",
+      "color": "#8feae8",
       "desc": "The plugins/world workspace package (plugins/world)."
     },
     {
@@ -1329,7 +1329,7 @@
       "file": "plugins/world/index.js",
       "summary": "The world deriver: which machine each stack runs on.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The world deriver: which machine each stack runs on. (plugins/world/index.js)"
     },
     {
@@ -1339,7 +1339,7 @@
       "file": "plugins/house/home-assistant.js",
       "summary": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Home Assistant as a house source (the server half; the browser reads the answer through plugins/house/browser.js like any house file). (plugins/house/home-assistant.js)"
     },
     {
@@ -1359,7 +1359,7 @@
       "file": "server/proposal-pulls.js",
       "summary": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The proposals of open spec PRs (spec 0001 section 3): the open pull requests that add or change a file in the proposals folder, each file read at the PR's head commit. (server/proposal-pulls.js)"
     },
     {
@@ -1369,7 +1369,7 @@
       "file": "server/forge-forgejo.js",
       "summary": "The Forgejo adapter (its v1 API, which Gitea shares) behind the forge interface (server/forge.js): an instance at `<url>/api/v1`, which `forge.url` has to name (there is no default host).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The Forgejo adapter (its v1 API)."
     },
     {
@@ -1396,7 +1396,7 @@
       "file": "explorer/forge-panel-model.js",
       "summary": "The issues and PRs panel, the pure half: no DOM, no `window`, no clock (the time is passed in).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The issues and PRs panel, the pure half: no DOM, no `window`, no clock (the time is passed in). (explorer/forge-panel-model.js)"
     },
     {
@@ -1406,7 +1406,7 @@
       "file": "explorer/forge-panel.js",
       "summary": "The Work panel (CF-07, CF-42, spec 0001 section 4; it began as the issues and PRs panel): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
     },
     {
@@ -1416,7 +1416,7 @@
       "file": "server/forge-routes.js",
       "summary": "The surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The read-only surface the issues and PRs panel reads (explorer/forge-panel.js, spec 0001 sections 3 and 4). (server/forge-routes.js)"
     },
     {
@@ -1436,7 +1436,7 @@
       "file": "server/reviews.js",
       "summary": "A review is a comment on the spec PR (spec 0001 section 3): a line a person can read, then a fenced block tagged `cornfield-review` and named for the proposal, holding `{ verdict, note, edits }`: A…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Approve / Send back as a spec-PR comment (a human line and a fenced cornfield-review JSON block); the latest admin comment is the review."
     },
     {
@@ -1446,7 +1446,7 @@
       "file": "explorer/mockups-model.js",
       "summary": "The pure half of a proposal's mockups (screens listed in `proposal.mockups`, core/proposal.js): which ones belong to a node, what to say of each, the address of its file, and the section of the nod…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pure half of a proposal's mockups (screens listed in `proposal.mockups`, core/proposal.js): which ones belong to a node, what to say of each, the address of its file, and the section of the nod… (explorer/mockups-model.js)"
     },
     {
@@ -1456,7 +1456,7 @@
       "file": "explorer/mockups.js",
       "summary": "Opening a proposal's mockups (`proposal.mockups`, core/proposal.js) from the node they name.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Opening a proposal's mockups (`proposal.mockups`, core/proposal.js) from the node they name. (explorer/mockups.js)"
     },
     {
@@ -1466,7 +1466,7 @@
       "file": "server/mockups.js",
       "summary": "The mockups of a proposal (its `mockups` list, core/proposal.js): screens kept beside the proposal, images or HTML in the spec branch, that the explorer opens from the node they name.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The mockups of a proposal (its `mockups` list, core/proposal.js): screens kept beside the proposal, images or HTML in the spec branch, that the explorer opens from the node they name. (server/mockups.js)"
     },
     {
@@ -1476,7 +1476,7 @@
       "file": "server/forge-actions.js",
       "summary": "The things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08 and PIPE-05; ADR 0006): land a green pull request, re-run a failed check, and the pipeline's own two steps (server…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The two things cornfield does to a forge, and nothing else (spec 0001 section 3, CF-08): land a green pull request and re-run a failed check. (server/forge-actions.js)"
     },
     {
@@ -1486,7 +1486,7 @@
       "file": "explorer/agents-model.js",
       "summary": "The agents view of the issues and PRs panel, the pure half (CF-09, ADR 0007: v1 tracks agents by what they leave, it does not launch them): no DOM, no `window`, no clock.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The agents view of the issues and PRs panel, the pure half (CF-09, ADR 0007: v1 tracks agents by what they leave, it does not launch them): no DOM, no `window`, no clock. (explorer/agents-model.js)"
     },
     {
@@ -1506,7 +1506,7 @@
       "file": "server/deploys.js",
       "summary": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Which workflow runs are deploys, and what each one restarted (PIPE-03, docs/deploys.md). (server/deploys.js)"
     },
     {
@@ -1526,7 +1526,7 @@
       "file": "core/release-notes.js",
       "summary": "Release notes from the map (PIPE-04), the pure half: no I/O, no clock, no DOM.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Release notes from the map (PIPE-04), the pure half: no I/O, no clock, no DOM. (core/release-notes.js)"
     },
     {
@@ -1536,7 +1536,7 @@
       "file": "server/release-notes.js",
       "summary": "The forge half of the release notes (PIPE-04; the drafting itself is core/release-notes.js): which pull requests were merged since a tag, and the notes for them.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The forge half of the release notes (PIPE-04; the drafting itself is core/release-notes.js): which pull requests were merged since a tag, and the notes for them. (server/release-notes.js)"
     },
     {
@@ -1546,7 +1546,7 @@
       "file": "server/pipeline.js",
       "summary": "The pipeline's own steps (PIPE-05, ADR 0006): what the two steps between stages make, worked out from the forge's own state.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pipeline's own steps (PIPE-05, ADR 0006): what the two steps between stages make, worked out from the forge's own state. (server/pipeline.js)"
     },
     {
@@ -1556,7 +1556,7 @@
       "file": "server/hooks.js",
       "summary": "Event hooks (PIPE-07, docs/config.md#hooks): cornfield tells outside code what happened.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Event hooks (PIPE-07, docs/config.md#hooks): cornfield tells outside code what happened. (server/hooks.js)"
     },
     {
@@ -1566,7 +1566,7 @@
       "file": "explorer/review-tokens-model.js",
       "summary": "The pure half of the review tokens panel (spec 0002): no DOM, no `window`, no clock (the time is passed in).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The pure half of the review tokens panel (spec 0002): no DOM, no `window`, no clock (the time is passed in). (explorer/review-tokens-model.js)"
     },
     {
@@ -1576,7 +1576,7 @@
       "file": "explorer/review-tokens.js",
       "summary": "Review tokens in the dashboard (spec 0002, server/review-api.js): a signed-in maintainer makes a token so a script or a chat bot can Approve or Send back a proposal as them (`POST /api/reviews`), s…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Review tokens in the dashboard (spec 0002, server/review-api.js): a signed-in maintainer makes a token so a script or a chat bot can Approve or Send back a proposal as them (`POST /api/reviews`), s… (explorer/review-tokens.js)"
     },
     {
@@ -1586,7 +1586,7 @@
       "file": "server/defuse.js",
       "summary": "Moved to core/defuse.js, so core/ (core/agent-contract.js) can use it without importing server code.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or … (server/defuse.js)"
     },
     {
@@ -1596,7 +1596,7 @@
       "file": "server/review-api.js",
       "summary": "The review API (spec 0002, issue #67): Approve or Send back from somewhere that is not the button, a script or a chat reaction, with a review token the maintainer made in the dashboard.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The review API (spec 0002, issue #67): Approve or Send back from somewhere that is not the button, a script or a chat reaction, with a review token the maintainer made in the dashboard. (server/review-api.js)"
     },
     {
@@ -1606,7 +1606,7 @@
       "file": "server/review-tokens.js",
       "summary": "API tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through `POST /api/reviews` (server/review-api.js), or ask for an agent run through `POST /api/a…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Review tokens: what a maintainer hands a script or a chat bot so it can Approve or Send back a proposal through `POST /api/reviews` (server/review-api.js). (server/review-tokens.js)"
     },
     {
@@ -1616,7 +1616,7 @@
       "file": "server/submit-review.js",
       "summary": "The one place a review is checked and posted.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The one place a review is checked and posted. (server/submit-review.js)"
     },
     {
@@ -1626,7 +1626,7 @@
       "file": "server/throttle.js",
       "summary": "The flood and repeat limits of everything cornfield does on a forge as a person (server/forge-actions.js: land, re-run, the pipeline's steps; server/submit-review.js: Approve and Send back, from th…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The flood and repeat limits of everything cornfield does on a forge as a person (server/forge-actions.js: land, re-run, the pipeline's steps; server/submit-review.js: Approve and Send back, from th… (server/throttle.js)"
     },
     {
@@ -1646,7 +1646,7 @@
       "file": "server/lander.js",
       "summary": "Landing on approval (PIPE-09, docs/proposals.md#land-on-approval): for a team that has set `proposals: { approveLands: true }`, approving a spec also lands its pull request, once it is mergeable an…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Landing on approval (PIPE-09, docs/proposals.md#land-on-approval): for a team that has set `proposals: { approveLands: true }`, approving a spec also lands its pull request, once it is mergeable an… (server/lander.js)"
     },
     {
@@ -1666,7 +1666,7 @@
       "file": "server/spec-poll.js",
       "summary": "`spec.ready` and the `thread.*` events without anyone at the dashboard (PIPE-10, docs/config.md#hook-poll, docs/threads.md).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "`spec.ready` without anyone at the dashboard (PIPE-10, docs/config.md#hookpoll). (server/spec-poll.js)"
     },
     {
@@ -1706,7 +1706,7 @@
       "file": "core/agent-contract.js",
       "summary": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The contract between cornfield and a developer's runner (spec 0005, D1 to D5, D8, D10; docs/agent-contract.md). (core/agent-contract.js)"
     },
     {
@@ -1726,7 +1726,7 @@
       "file": "core/defuse.js",
       "summary": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or …",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Breaking the mentions and references in text cornfield posts on the forge for someone else: `@user`, `@org/team`, `#1`, `owner/repo#1`, `GH-1`, and the links the forge would make of `https://…` or … (core/defuse.js)"
     },
     {
@@ -1736,7 +1736,7 @@
       "file": "core/mentions.js",
       "summary": "How a thread points at the map (spec 0005, D7).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "How a thread points at the map (spec 0005, D7). (core/mentions.js)"
     },
     {
@@ -1746,7 +1746,7 @@
       "file": "server/threads.js",
       "summary": "Threads (spec 0005, D6 and D7; docs/threads.md): a conversation that lives on the forge, which cornfield only shows.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Threads (spec 0005, D6 and D7; docs/threads.md): a conversation that lives on the forge, which cornfield only shows. (server/threads.js)"
     },
     {
@@ -1766,7 +1766,7 @@
       "file": "explorer/runs-model.js",
       "summary": "Agent runs in the issues and PRs panel, the pure half (issue #80, spec 0005): no DOM, no `window`, no clock.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Agent runs in the issues and PRs panel, the pure half (issue #80, spec 0005): no DOM, no `window`, no clock. (explorer/runs-model.js)"
     },
     {
@@ -1776,7 +1776,7 @@
       "file": "server/agent-api.js",
       "summary": "The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The routes that ask for agent runs and show them (issue #80, spec 0005 D10; the engine is server/agent-runs.js). (server/agent-api.js)"
     },
     {
@@ -1786,7 +1786,7 @@
       "file": "server/agent-runs.js",
       "summary": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Runs on the forge (issue #80, spec 0005, ADR 0012): cornfield **asks** for an agent run and **follows** it, and nothing else. (server/agent-runs.js)"
     },
     {
@@ -1806,7 +1806,7 @@
       "file": "server/runner-api.js",
       "summary": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The runner's side of the pull and push transports (issue #81, spec 0005 D2, D3, D5). (server/runner-api.js)"
     },
     {
@@ -1816,7 +1816,7 @@
       "file": "server/triggers.js",
       "summary": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Opt-in triggers (issue #83, spec 0005 D10, docs/agents.md#triggers): a run asked for by something a maintainer did, with no click. (server/triggers.js)"
     },
     {
@@ -1826,7 +1826,7 @@
       "file": "explorer/runs-map.js",
       "summary": "Agent runs on the map (issue #82, spec 0005 D9): the nodes an open run is changing **pulse**, and a node two or more open runs are changing carries a **collision** mark.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Agent runs on the map (issue #82, spec 0005 D9): the nodes an open run is changing **pulse**, and a node two or more open runs are changing carries a **collision** mark. (explorer/runs-map.js)"
     },
     {
@@ -1836,7 +1836,7 @@
       "file": "explorer/runs-view.js",
       "summary": "The markup of the Runs view in the Agents tab (issue #82), as strings: each run's state as a word, its profile, its limits beside what the runner reported, its thread, branch, pull request and chec…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The markup of the Runs view in the Agents tab (issue #82), as strings: each run's state as a word, its profile, its limits beside what the runner reported, its thread, branch, pull request and chec… (explorer/runs-view.js)"
     },
     {
@@ -1846,7 +1846,7 @@
       "file": "server/proposal-walk.js",
       "summary": "Finding the proposal files of the checkout and of its worktrees without ever holding up the server.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Finding the proposal files of the checkout and of its worktrees without ever holding up the server. (server/proposal-walk.js)"
     },
     {
@@ -1856,7 +1856,7 @@
       "file": "server/runner-presence.js",
       "summary": "Whether a runner is there (issue #99).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Whether a runner is there (issue #99). (server/runner-presence.js)"
     },
     {
@@ -1866,7 +1866,7 @@
       "file": "server/run-thread.js",
       "summary": "The text of a run's **status comment** (issue #104, docs/agents.md#a-thread-for-every-run): the one comment cornfield keeps in the thread a run is about and edits in place as the run moves.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The text of a run's **status comment** (issue #104, docs/agents.md#a-thread-for-every-run): the one comment cornfield keeps in the thread a run is about and edits in place as the run moves. (server/run-thread.js)"
     },
     {
@@ -1876,7 +1876,7 @@
       "file": "explorer/deep-link.js",
       "summary": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Runs tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent bu…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Links from chat that land in the right place (issue #103, docs/agents.md \"Deep links\"): ?run=<runId> the Agents tab, that run lit and in view ?issue=<n> the Issues tab, that issue's Start an agent … (explorer/deep-link.js)"
     },
     {
@@ -1886,7 +1886,7 @@
       "file": "core/theme.js",
       "summary": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The `theme` key of cornfield.config.js (docs/config.md#theme), and the rules a theme file must keep. (core/theme.js)"
     },
     {
@@ -1896,7 +1896,7 @@
       "file": "explorer/theme-names.js",
       "summary": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The named themes of the config (`theme.names`, docs/config.md#theme), the half that touches the page after load. (explorer/theme-names.js)"
     },
     {
@@ -1916,7 +1916,7 @@
       "file": "core/brand.js",
       "summary": "The `brand` key of cornfield.config.js (docs/config.md#brand), and the rules a brand asset must keep.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The `brand` key of cornfield.config.js (docs/config.md#brand), and the rules a brand asset must keep. (core/brand.js)"
     },
     {
@@ -1926,7 +1926,7 @@
       "file": "explorer/corn-state.js",
       "summary": "The public `data-corn-state` values (docs/theming.md, \"States\"): a small fixed set a theme can rely on, whatever word the forge, the runner or the model uses.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The public `data-corn-state` values (docs/theming.md, \"States\"): a small fixed set a theme can rely on, whatever word the forge, the runner or the model uses. (explorer/corn-state.js)"
     },
     {
@@ -1936,7 +1936,7 @@
       "file": "core/color.js",
       "summary": "Colour arithmetic with no dependencies and no Node built-ins, so the explorer (served from core/, see server/server.js BROWSER_CORE), `cornfield validate` (core/contrast.js) and the tests all share…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Colour arithmetic with no dependencies and no Node built-ins, so the explorer (served from core/, see server/server.js BROWSER_CORE), `cornfield validate` (core/contrast.js) and the tests all share… (core/color.js)"
     },
     {
@@ -1946,7 +1946,7 @@
       "file": "core/contrast.js",
       "summary": "The theme's contrast check, for `cornfield validate` (docs/theming.md#the-contrast-check).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The theme's contrast check, for `cornfield validate` (docs/theming.md#the-contrast-check). (core/contrast.js)"
     },
     {
@@ -1956,7 +1956,7 @@
       "file": "explorer/map-style.js",
       "summary": "The map's styling from the theme (docs/theming.md, \"The map\").",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The map's styling from the theme (docs/theming.md, \"The map\"). (explorer/map-style.js)"
     },
     {
@@ -1966,7 +1966,7 @@
       "file": "core/strings.js",
       "summary": "The words a repo may say in its own voice (`strings` in cornfield.config.js, docs/theming.md \"Words\").",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The words a repo may say in its own voice (`strings` in cornfield.config.js, docs/theming.md \"Words\"). (core/strings.js)"
     },
     {
@@ -1976,7 +1976,7 @@
       "file": "explorer/strings.js",
       "summary": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries). (explorer/strings.js)"
     },
     {
@@ -1986,7 +1986,7 @@
       "file": "explorer/capped.js",
       "summary": "A long list in the node panel shows its first few items and a quiet \"and 15 more\" button that opens the rest in place (a disclosure: `aria-expanded`).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A long list in the node panel shows its first few items and a quiet \"and 15 more\" button that opens the rest in place (a disclosure: `aria-expanded`). (explorer/capped.js)"
     },
     {
@@ -1996,7 +1996,7 @@
       "file": "explorer/account-menu.js",
       "summary": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The one menu at the right of the header (`#account-btn` and `#account-menu`): who is signed in, Theme, Freeform layout, Review tokens, Proposals, the links, Sign out, and what powers it. (explorer/account-menu.js)"
     },
     {
@@ -2006,7 +2006,7 @@
       "file": "explorer/file-url.js",
       "summary": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
     },
     {
@@ -2026,7 +2026,7 @@
       "file": "explorer/search-status.js",
       "summary": "The polite live region by each search field (F24): what a screen reader hears of a search.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24). (explorer/search-status.js)"
     },
     {
@@ -2036,7 +2036,7 @@
       "file": "server/compress.js",
       "summary": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Compresses the text the server sends (the page, JS, CSS, JSON, SVG) with Node's own zlib: brotli when the browser accepts it, gzip otherwise, never for what is already compressed (images, fonts) or… (server/compress.js)"
     },
     {
@@ -2046,7 +2046,7 @@
       "file": "explorer/diff-marks.js",
       "summary": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What the map draws for a proposal's diff marks, as plain data with no imports, so the scene (scene.js), the renderers and the contrast check (core/contrast.js, for `cornfield validate`) read one list. (explorer/diff-marks.js)"
     },
     {
@@ -2056,7 +2056,7 @@
       "file": "explorer/focusables.js",
       "summary": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The one list of what the keyboard can stop on, shared by every dialog that keeps the focus inside itself (Review tokens, Start an agent, the confirm step, the mockup window). (explorer/focusables.js)"
     },
     {
@@ -2066,7 +2066,7 @@
       "file": "explorer/connection.js",
       "summary": "Whether the browser is online, said once and in one place.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Whether the browser is online, said once and in one place. (explorer/connection.js)"
     },
     {
@@ -2076,7 +2076,7 @@
       "file": "explorer/feedback.js",
       "summary": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
     },
     {
@@ -2086,7 +2086,7 @@
       "file": "core/map-tokens.js",
       "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow` and `--corn-map-label-min`.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`. (core/map-tokens.js)"
     },
     {
@@ -2096,7 +2096,7 @@
       "file": "explorer/focus-room.js",
       "summary": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54). (explorer/focus-room.js)"
     },
     {
@@ -2106,7 +2106,7 @@
       "file": "explorer/header-fit.js",
       "summary": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46). (explorer/header-fit.js)"
     },
     {
@@ -2116,7 +2116,7 @@
       "file": "explorer/hint.js",
       "summary": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56). (explorer/hint.js)"
     },
     {
@@ -2126,7 +2126,7 @@
       "file": "server/page-head.js",
       "summary": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`. (server/page-head.js)"
     },
     {
@@ -2186,7 +2186,7 @@
       "file": "explorer/waiting-line.js",
       "summary": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\".",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\". (explorer/waiting-line.js)"
     },
     {
@@ -2196,7 +2196,7 @@
       "file": "explorer/waiting-model.js",
       "summary": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in). (explorer/waiting-model.js)"
     },
     {
@@ -2206,7 +2206,7 @@
       "file": "explorer/waiting-view.js",
       "summary": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings. (explorer/waiting-view.js)"
     },
     {
@@ -2216,7 +2216,7 @@
       "file": "explorer/review-column.js",
       "summary": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin… (explorer/review-column.js)"
     },
     {
@@ -2226,7 +2226,7 @@
       "file": "explorer/scenario-list-model.js",
       "summary": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node). (explorer/scenario-list-model.js)"
     },
     {
@@ -2285,7 +2285,7 @@
       "file": "core/layers.js",
       "summary": "The Layers menu's rows as data (spec 0009): the starting layers cornfield ships, the project layers a repo adds in `cornfield.config.js` (`layers: { add, off, order }`), the matcher that says which…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The Layers menu's rows as data (spec 0009): the starting layers cornfield ships, the project layers a repo adds in `cornfield.config.js` (`layers: { add, off, order }`), the matcher that says which… (core/layers.js)"
     },
     {
@@ -2295,7 +2295,7 @@
       "file": "explorer/kind-letters.js",
       "summary": "The letters a finer `kind` shows in the middle of its node (spec 0009 D5): `j` for a job, `h` for a hook (core/layers.js `kindLetters` chooses them; scene.js puts them on the node as `letters`).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The letters a finer `kind` shows in the middle of its node (spec 0009 D5): `j` for a job, `h` for a hook (core/layers.js `kindLetters` chooses them; scene.js puts them on the node as `letters`). (explorer/kind-letters.js)"
     },
     {
@@ -2305,7 +2305,7 @@
       "file": "explorer/layer-model.js",
       "summary": "Which layer a node is in, as the Layers menu and the map read it (spec 0009 D3), from the state alone: no DOM, no drawing.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Which layer a node is in, as the Layers menu and the map read it (spec 0009 D3), from the state alone: no DOM, no drawing. (explorer/layer-model.js)"
     },
     {
@@ -2315,7 +2315,7 @@
       "file": "explorer/cluster.js",
       "summary": "A cluster is a hub and what hangs under it (spec 0008 D1): an app and its pages, a store and its tables.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "A cluster is a hub and what hangs under it (spec 0008 D1): an app and its pages, a store and its tables. (explorer/cluster.js)"
     },
     {
@@ -2325,7 +2325,7 @@
       "file": "explorer/fly.js",
       "summary": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again.",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again. (explorer/fly.js)"
     },
     {
@@ -2335,7 +2335,7 @@
       "file": "explorer/search-model.js",
       "summary": "What a search finds, in what order, and how it reads (spec 0008 D3 and D4).",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "What a search finds, in what order, and how it reads (spec 0008 D3 and D4). (explorer/search-model.js)"
     },
     {
@@ -2345,8 +2345,58 @@
       "file": "explorer/search.js",
       "summary": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field…",
       "r": 20,
-      "color": "#14b8a6",
+      "color": "#bc9dd5",
       "desc": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field… (explorer/search.js)"
+    },
+    {
+      "id": "core-core-delta-e",
+      "label": "delta-e.js",
+      "type": "core",
+      "file": "core/delta-e.js",
+      "summary": "Colour distance as the eye reads it: CIEDE2000 (ΔE00, Sharma, Wu and Dalal 2005) between two sRGB colours.",
+      "r": 20,
+      "color": "#bc9dd5",
+      "desc": "Colour distance as the eye reads it: CIEDE2000 (ΔE00, Sharma, Wu and Dalal 2005) between two sRGB colours. (core/delta-e.js)"
+    },
+    {
+      "id": "core-explorer-edge-key",
+      "label": "edge-key.js",
+      "type": "core",
+      "file": "explorer/edge-key.js",
+      "summary": "The Key in the Layers menu (spec 0008 D7): each kind of line drawn as the map draws it, with its real style and end mark, not a coloured dot.",
+      "r": 20,
+      "color": "#bc9dd5",
+      "desc": "The Key in the Layers menu (spec 0008 D7): each kind of line drawn as the map draws it, with its real style and end mark, not a coloured dot. (explorer/edge-key.js)"
+    },
+    {
+      "id": "core-explorer-glyphs",
+      "label": "glyphs.js",
+      "type": "core",
+      "file": "explorer/glyphs.js",
+      "summary": "The built-in glyph of each node type (spec 0008 D8): a small monochrome picture drawn in the middle of a node once it is 14 px across on screen, where the white core dot is.",
+      "r": 20,
+      "color": "#bc9dd5",
+      "desc": "The built-in glyph of each node type (spec 0008 D8): a small monochrome picture drawn in the middle of a node once it is 14 px across on screen, where the white core dot is. (explorer/glyphs.js)"
+    },
+    {
+      "id": "core-explorer-selection-model",
+      "label": "selection-model.js",
+      "type": "core",
+      "file": "explorer/selection-model.js",
+      "summary": "What a selection lights, and where the camera goes for it (spec 0008 D5 and D6).",
+      "r": 20,
+      "color": "#bc9dd5",
+      "desc": "What a selection lights, and where the camera goes for it (spec 0008 D5 and D6). (explorer/selection-model.js)"
+    },
+    {
+      "id": "core-explorer-selection-view",
+      "label": "selection-view.js",
+      "type": "core",
+      "file": "explorer/selection-view.js",
+      "summary": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them.",
+      "r": 20,
+      "color": "#bc9dd5",
+      "desc": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them. (explorer/selection-view.js)"
     }
   ],
   "edges": [
@@ -7700,7 +7750,159 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-delta-e"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-edge-key"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-glyphs"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-selection-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-selection-view"
+    },
+    {
+      "from": "core-core-contrast",
+      "to": "core-core-delta-e",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-edge-key",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-glyphs",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-glyphs",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-kind-letters",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-edge-key",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-glyphs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-model",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T19:10:41.509Z"
+  "updatedAt": "2026-11-11T20:00:44.391Z"
 }

@@ -55,7 +55,7 @@ describe('renderer-canvas2d', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../explorer/renderer-canvas2d.js'), 'utf8');
     expect(src).not.toMatch(/state\.js/);
     expect(src).not.toMatch(/\bstate\b\./);
-    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js', './kind-letters.js']);
+    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js', './kind-letters.js', './glyphs.js']);
   });
 
   it('sizes the canvas for the device pixel ratio and scales the context to match', () => {
@@ -186,7 +186,7 @@ describe('renderer-canvas2d', () => {
     const scene = buildScene({ ...mk(), nodes: flowNodes, edges: [], view: 'dataflow', flow });
     ctx.log.length = 0;
     r.draw(scene, { x: 0, y: 0, zoom: 1 }, 0);
-    expect((ctx.log          ).filter((c) => c[0] === 'roundRect')).toHaveLength(2);
+    expect((ctx.log          ).filter((c) => c[0] === 'roundRect' && c[5] === 14)).toHaveLength(2); // the lanes (a store's rounded square is a roundRect too: its corner is not 14)
     expect(texts(ctx)).toEqual([]); // the titles, notes and arrows are the label layer's
     expect((ctx.log          ).filter((c) => c[0] === 'setLineDash' && c[1].length === 2 && c[1][0] === 4 && c[1][1] === 6)).toHaveLength(0); // no orbital rings here
   });

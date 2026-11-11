@@ -210,14 +210,14 @@ export const NODE_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_geom;    // x, y, r (world), alpha
 layout(location = 2) in vec4 a_color;   // r, g, b (0..1), glow (px)
-layout(location = 3) in vec3 a_kind;    // halo code, mark code, colour alpha
+layout(location = 3) in vec4 a_kind;    // halo code, mark code, colour alpha, shape code (0 circle, 1 rounded square, 2 hexagon, 3 square, 4 diamond)
 uniform vec4 u_haloGeom[4];             // fillR, ringR, ringWidth (world)
 uniform vec4 u_markGeom[5];             // per mark code: ringR, ringWidth (world), dash on, dash off
 uniform vec3 u_markMin;                 // MARK_MIN_PX, in screen px: ring thickness, edge thickness, gap from the node
 out vec2 v_local;
 flat out vec4 v_geom;
 flat out vec4 v_color;
-flat out vec3 v_kind;
+flat out vec4 v_kind;
 void main() {
   float zoom = u_cam.z;
   int halo = int(a_kind.x + 0.5);
@@ -226,7 +226,7 @@ void main() {
   float pad = a_color.w * 1.5 / u_dpr;
   if (halo > 0) pad = max(pad, (u_haloGeom[halo].y + u_haloGeom[halo].z * 0.5) * zoom);
   if (mark > 0) pad = max(pad, max(u_markGeom[mark].x * zoom, u_markMin.z) + max(u_markGeom[mark].y * zoom, u_markMin.x) + 1.5);
-  float ext = a_geom.z * zoom + pad + 2.0;
+  float ext = a_geom.z * zoom * 1.2 + pad + 2.0; // a diamond reaches 1.15 radii
   vec2 centre = u_cam.xy + a_geom.xy * zoom;
   v_local = a_corner * ext;
   v_geom = a_geom;
@@ -240,7 +240,9 @@ export const NODE_FRAG = `${HEAD}${COVER}
 in vec2 v_local;
 flat in vec4 v_geom;
 flat in vec4 v_color;
-flat in vec3 v_kind;
+flat in vec4 v_kind;
+uniform vec4 u_shape;                   // rounded square half side, its corner, hexagon inradius, square half side (x radius)
+uniform vec2 u_shape2;                  // square corner, diamond half diagonal (x radius)
 uniform vec4 u_haloFill[4];
 uniform vec4 u_haloRing[4];
 uniform vec4 u_haloGeom[4];
@@ -249,6 +251,25 @@ uniform vec4 u_markGeom[5];
 uniform vec3 u_markMin;
 uniform vec4 u_core;
 uniform float u_coreRatio;
+// Signed distance (px) to a node's silhouette of radius R: the same shapes renderer-canvas2d.js draws (silhouette)
+float sdRoundBox(vec2 p, float h, float c) {
+  vec2 q = abs(p) - vec2(h - c);
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - c;
+}
+float sdHex(vec2 p, float r) {
+  const vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+  p = abs(p);
+  p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+  p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+  return length(p) * sign(p.y);
+}
+float sdShape(vec2 p, float R, int shape, float len) {
+  if (shape == 1) return sdRoundBox(p, u_shape.x * R, u_shape.y * R);
+  if (shape == 2) return sdHex(p.yx, u_shape.z * R);
+  if (shape == 3) return sdRoundBox(p, u_shape.w * R, u_shape2.x * R);
+  if (shape == 4) return (abs(p.x) + abs(p.y) - u_shape2.y * R) * 0.70710678;
+  return len - R;
+}
 void main() {
   float zoom = u_cam.z;
   float pix = 1.0 / u_dpr;
@@ -271,8 +292,8 @@ void main() {
   float glow = v_color.w;
   if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr));
 
-  // The circle and its white core
-  over(acc, v_color.rgb, v_kind.z * al * coverEdge(len - R, pix));
+  // The silhouette and its white core
+  over(acc, v_color.rgb, v_kind.z * al * coverEdge(sdShape(v_local, R, int(v_kind.w + 0.5), len), pix));
   over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
 
   // Mark: a ring with the look of its own mark (dashed when its dash is set: added), and for removed a

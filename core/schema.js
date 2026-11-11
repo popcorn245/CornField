@@ -14,27 +14,49 @@ export const NODE_THEMES = {
   root:     { color: '#f59e0b', r: 28 },
   app:      { color: '#6366f1', r: 24 },
   page:     { color: '#38bdf8', r: 18 },  // Mandatory Sky Blue for all pages
-  pkg:      { color: '#06b6d4', r: 24 },  // Vibrant Cyan for Packages / Libraries
-  core:     { color: '#14b8a6', r: 20 },
-  token:    { color: '#ec4899', r: 20 },
-  atom:     { color: '#10b981', r: 19 },
-  molecule: { color: '#a855f7', r: 21 },
-  tool:     { color: '#f43f5e', r: 19 },
+  pkg:      { color: '#8feae8', r: 24 },  // Pale cyan for Packages / Libraries (the palette keeps same-silhouette types 15 ΔE apart: MIN_SHAPE_DELTA_E)
+  core:     { color: '#bc9dd5', r: 20 },
+  token:    { color: '#f2489f', r: 20 },
+  atom:     { color: '#1ac96e', r: 19 },
+  molecule: { color: '#cf07f9', r: 21 },
+  tool:     { color: '#f55406', r: 19 },
   store:    { color: '#fb923c', r: 20 },  // Storage tiers & data-flow endpoints (ADR 0020)
   table:    { color: '#fde047', r: 18 },  // One model table; pages read and write it
-  rom:      { color: '#f0abfc', r: 19 },  // Render on Mutation pipeline stage
-  service:  { color: '#84cc16', r: 20 },  // An API module that runs on a timer, a webhook or a change hook (MAP-03)
+  rom:      { color: '#f90744', r: 19 },  // Render on Mutation pipeline stage
+  service:  { color: '#d2e239', r: 20 },  // An API module that runs on a timer, a webhook or a change hook (MAP-03)
   external: { color: '#94a3b8', r: 21 },  // An outside system the API calls or that calls it
-  stack:    { color: '#a8a29e', r: 22 },  // One docker-compose stack: its containers, ports and the domains it serves (MAP-06)
+  stack:    { color: '#c75471', r: 22 },  // One docker-compose stack: its containers, ports and the domains it serves (MAP-06)
   // The physical world (spec 0029). Derived from code: machine, container, persona, and a device with a `file`
   machine:   { color: '#78716c', r: 26 },  // A computer the code runs on, by hostname
   container: { color: '#d6d3d1', r: 12 },  // One service of a stack
   persona:   { color: '#fb7185', r: 22 },  // An archetype a scenario can act as; never a real person
   device:    { color: '#2dd4bf', r: 14 },  // A camera, phone, NFC tag or Home Assistant device; `kind` says which (DEVICE_KINDS)
   // Live only: drawn from the live layer, never in topology.json (LIVE_TYPES)
-  floor:     { color: '#a3e635', r: 20 },  // A level of the house
-  room:      { color: '#bef264', r: 16 },  // A room, with its box on the floor plan
+  floor:     { color: '#a3e830', r: 20 },  // A level of the house
+  room:      { color: '#ea9856', r: 16 },  // A room, with its box on the floor plan
 };
+
+/**
+ * The silhouette each node type is drawn in (spec 0008 D8), so a type reads at 6 px where no glyph does: a circle for code, a rounded square for
+ * data, a hexagon for what is outside, a square for where things run, a diamond for people. A type this table does not know is a circle.
+ * The silhouette is not a token: it says what a node is. Colour tells the types of one silhouette apart, so they are kept far apart (below).
+ */
+export const NODE_SHAPES = Object.freeze({
+  root: 'circle', app: 'circle', page: 'circle', pkg: 'circle', core: 'circle', token: 'circle', atom: 'circle', molecule: 'circle', tool: 'circle', rom: 'circle', service: 'circle',
+  store: 'rounded-square', table: 'rounded-square',
+  external: 'hexagon',
+  stack: 'square', machine: 'square', container: 'square', device: 'square', floor: 'square', room: 'square',
+  persona: 'diamond',
+});
+/** The silhouettes, in the order the renderers number them (0 is the circle) */
+export const SHAPES = Object.freeze(['circle', 'rounded-square', 'hexagon', 'square', 'diamond']);
+/** The silhouette of a node type: `circle` for one the table does not know (a type is project data, so it only selects from the table) */
+export const shapeOf = (type) => (typeof type === 'string' && Object.hasOwn(NODE_SHAPES, type) ? NODE_SHAPES[type] : 'circle');
+/**
+ * How far apart (CIEDE2000, core/delta-e.js) two types of one silhouette must be, on the dark ground and on the light one. The default palette is held to it
+ * by a test; `cornfield validate` warns when a theme's own map colours break it.
+ */
+export const MIN_SHAPE_DELTA_E = 15;
 
 /** Kinds of data-flow edge (edge.kind === 'flow'); see docs/adr/0020 */
 export const FLOW_KINDS = ['outbox', 'changes', 'trigger', 'sync', 'model', 'rom', 'read', 'build', DERIVED_FLOW];
