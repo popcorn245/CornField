@@ -8,6 +8,8 @@
 
 import { declaredProps, expand, projectGroupOf, resolveProps, themesToCheck } from './contrast.js';
 import { iconKeyShape, parseKindToken } from './layers.js';
+import { readColor } from './color.js';
+import { MAX_NODE_COLOR_CHARS } from '../explorer/css-color.js';
 import { EDGE_WIDTH_TOKEN, FONT_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN, MAX_EDGE_WIDTH, MAX_GLOW, MAX_LABEL_MIN, readMapTokens } from '../explorer/map-style.js';
 
 const WANTS = {
@@ -84,5 +86,26 @@ export function layerTokenWarnings(config, map) {
     if ('layer' in shape && !layers.has(shape.layer)) out.push(`theme.icons "${key}" names a layer the config does not have (project layers: ${layersWord}), so it is never drawn: check the spelling.`);
     else if ('kind' in shape && (!kinds.has(shape.type) || !kinds.get(shape.type).has(shape.kind))) out.push(`theme.icons "${key}" names a kind no ${shape.type} on the map has (${typoOfKind(shape.type, shape.kind)}), so it is never drawn: check the spelling.`);
   }
+  return out;
+}
+
+/** How many bad node colours are named one by one: past this, one line counts the rest */
+export const MAX_NODE_COLOR_WARNINGS = 10;
+const SHOWN_CHARS = 40;
+
+/**
+ * A warning per node whose own `color` is not one the map can draw (a typo, `#12345`, an empty string, a number): the map draws that node in its
+ * type's fill instead (explorer/scene.js `buildScene`). Named as text (quoted, cut to SHOWN_CHARS), at most MAX_NODE_COLOR_WARNINGS lines, then a count.
+ * Validate has no browser, so it reads with core/color.js: hex of 3, 4, 6 or 8 digits, rgb()/rgba(), hsl()/hsla(), transparent, the basic colour names,
+ * color-mix(in srgb). The browser reads more (every named colour, hwb(), lab(), oklch(), color(), color-mix in other spaces), so a node colour in one of
+ * those is warned here though the browser draws it: the stricter side, and only a warning.
+ * @param {{ nodes?: { id?: unknown, color?: unknown }[] } | null} map the committed map
+ * @returns {string[]}
+ */
+export function nodeColorWarnings(map) {
+  const bad = ((map && map.nodes) || []).filter((n) => n && n.color !== undefined && !(typeof n.color === 'string' && n.color.length <= MAX_NODE_COLOR_CHARS && readColor(n.color)));
+  const text = (v) => { const t = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v); return JSON.stringify(t.length > SHOWN_CHARS ? `${t.slice(0, SHOWN_CHARS)}...` : t); };
+  const out = bad.slice(0, MAX_NODE_COLOR_WARNINGS).map((n) => `node ${text(n.id)} has color ${text(n.color)}, which is not a colour the map reads: it draws in its type's fill. Write #rrggbb, rgb(), rgba() or hsl().`);
+  if (bad.length > MAX_NODE_COLOR_WARNINGS) out.push(`${bad.length - MAX_NODE_COLOR_WARNINGS} more nodes have a color the map does not read (${bad.length} in all): they draw in their type's fill.`);
   return out;
 }

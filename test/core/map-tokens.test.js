@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 // @ts-expect-error plain JS module, no declarations
-import { mapTokenWarnings } from '../../core/map-tokens.js';
+import { mapTokenWarnings, nodeColorWarnings, MAX_NODE_COLOR_WARNINGS } from '../../core/map-tokens.js';
 import { CORNFIELD } from '../helpers.js';
 
 const dirs = [];
@@ -41,5 +41,32 @@ describe('map tokens the map cannot read', () => {
     expect(mapTokenWarnings({ root: CORNFIELD, theme: {} })).toEqual([]);
     expect(mapTokenWarnings(repoWith(':root { --corn-map-font: var(--corn-font); --corn-map-edge-width: 2.4px; --corn-map-glow: 0; }'))).toEqual([]);
     expect(mapTokenWarnings({ root: CORNFIELD, theme: { css: 'test/fixtures/themes/retro/theme.css' } })).toEqual([]);
+  });
+});
+
+describe('cornfield validate: nodeColorWarnings', () => {
+  const map = (colors) => ({ nodes: colors.map((c, i) => ({ id: `n${i}`, type: 'page', color: c })) });
+  it('is quiet for every colour core/color.js reads, and for a node with no colour', () => {
+    expect(nodeColorWarnings(map(['#336699', '#369', '#3699', '#336699cc', 'rgb(1,2,3)', 'rgba(1, 2, 3, .5)', 'hsl(10, 50%, 50%)', 'teal', 'transparent']))).toEqual([]);
+    expect(nodeColorWarnings({ nodes: [{ id: 'a', type: 'page' }] })).toEqual([]);
+    expect(nodeColorWarnings(null)).toEqual([]);
+  });
+  it('names the node and the value, one line each, as quoted text cut short', () => {
+    const w = nodeColorWarnings({ nodes: [{ id: 'good', color: '#fff' }, { id: 'a<b>', color: '#12345' }, { id: 'long', color: 'x'.repeat(10000) }, { id: 'num', color: 7 }, { id: 'nul', color: null }] });
+    expect(w).toHaveLength(4);
+    expect(w[0]).toContain('"a<b>"');
+    expect(w[0]).toContain('"#12345"');
+    expect(w[1].length).toBeLessThan(250);
+    expect(w[1]).toContain('...');
+    expect(w[2]).toContain('"7"');
+    expect(w[3]).toContain('"null"');
+  });
+  it('prints a count, not a thousand lines', () => {
+    const w = nodeColorWarnings(map(Array(1000).fill('#12345')));
+    expect(w).toHaveLength(MAX_NODE_COLOR_WARNINGS + 1);
+    expect(w.at(-1)).toContain('990 more');
+  });
+  it('is stricter than the browser: a colour name or oklch() the browser reads is warned about', () => {
+    expect(nodeColorWarnings(map(['hotpink', 'oklch(60% 0.1 200)']))).toHaveLength(2);
   });
 });

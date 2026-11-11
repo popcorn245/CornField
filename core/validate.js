@@ -24,7 +24,7 @@ import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
 import { repoPaths, repoReader } from './repo.js';
 import { checkThemeContrast } from './contrast.js';
-import { layerTokenWarnings, mapTokenWarnings } from './map-tokens.js';
+import { layerTokenWarnings, mapTokenWarnings, nodeColorWarnings } from './map-tokens.js';
 import { layersMapWarnings } from './layers.js';
 import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
 import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeIconFileProblems, themeUrlTarget } from './theme.js';
@@ -288,6 +288,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   if (contrast.summary) notes.push(contrast.summary);
   warnings.push(...mapTokenWarnings(config)); // a map font, line width or glow the map cannot read draws as auto
   warnings.push(...layerTokenWarnings(config, topology)); // a kind token, a group token or an icon for a kind or layer that is not there
+  warnings.push(...nodeColorWarnings(topology)); // a node whose own colour the map cannot read draws in its type's fill
   warnings.push(...layersMapWarnings(config.layers, topology)); // a project layer that matches nothing, or whose every node an earlier layer took
   errors.push(...validateCloudNodes(topology, config.root));
   errors.push(...validateProposalFiles(topology, path.join(config.root, config.proposals), config.root));

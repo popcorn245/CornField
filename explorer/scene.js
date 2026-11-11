@@ -170,6 +170,8 @@ import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
+import { nodeColor } from './css-color.js';
+import { NODE_THEMES } from '../core/schema.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
@@ -539,6 +541,13 @@ function buildEdges(state, subgraph, reduceMotion) {
 /** A node's group: its layer in the Layers menu (layers.js), one per kind but for the rooms and floors (House) and the outside nodes (Cloud, or the Public web) */
 export const groupOf = (node) => (node.type === 'floor' || node.type === 'room' ? 'house' : node.type === 'external' ? externalLayer(node) : node.type);
 
+/**
+ * A node's fill before any theme token: its own `color` when that is a colour the browser reads, else its type's fill in NODE_THEMES (the
+ * built-in the map's fill order ends on, core/layers.js `mapFillNames`). Checked here, once, so WebGL and Canvas 2D are given the same valid
+ * fill and project data never reaches a shader or a `fillStyle` unchecked.
+ */
+const fillOfNode = (node) => nodeColor(node.color) ?? (NODE_THEMES[node.type] || NODE_THEMES.external).color;
+
 function buildNodes(state, subgraph) {
   const { nodes, selectedNode, searchQuery } = state;
   const found = searchQuery ? matchIds(nodes, searchQuery) : null; // what the search finds: label, id, file, type, kind (search-model.js)
@@ -575,7 +584,7 @@ function buildNodes(state, subgraph) {
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
       ...(layer ? { layer } : {}),
-      x: node.x, y: node.y, r: shown.r, color: shown.color,
+      x: node.x, y: node.y, r: shown.r, color: fillOfNode(shown),
       alpha,
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,
       halo: match ? 'match' : selected ? 'selected' : child ? 'child' : 'none',
