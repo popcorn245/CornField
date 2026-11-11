@@ -2227,6 +2227,26 @@
       "account": false,
       "r": 22,
       "color": "#fb7185"
+    },
+    {
+      "id": "core-explorer-review-column",
+      "label": "review-column.js",
+      "type": "core",
+      "file": "explorer/review-column.js",
+      "summary": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin… (explorer/review-column.js)"
+    },
+    {
+      "id": "core-explorer-scenario-list-model",
+      "label": "scenario-list-model.js",
+      "type": "core",
+      "file": "explorer/scenario-list-model.js",
+      "summary": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node). (explorer/scenario-list-model.js)"
     }
   ],
   "edges": [
@@ -7100,7 +7120,99 @@
     {
       "from": "store-personas",
       "to": "persona-guest"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-review-column"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-scenario-list-model"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-review-column",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-review-column",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-check",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-scenario-list-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-list-model",
+      "to": "core-core-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-list-model",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-check-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-scenario-list-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T17:17:50.711Z"
+  "updatedAt": "2026-11-11T17:46:03.946Z"
 }
