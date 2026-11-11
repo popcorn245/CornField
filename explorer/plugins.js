@@ -28,6 +28,16 @@ export const NO_SOURCE = Object.freeze({
   },
 });
 
+/** What the live layer shows when the repo names a live, house or devices source and none of them loaded: an error, not "none set" */
+export const failedSource = (slots) => Object.freeze({
+  name: 'live source that did not load',
+  async load() {
+    const err = new Error('the live source did not load');
+    Object.assign(err, { reason: 'unavailable', hint: `the ${slots.join(' and ')} source in cornfield.config.js did not load (the browser console says why)` });
+    throw err;
+  },
+});
+
 /** The config the server hands the browser; a page opened without the server reads as none */
 export async function loadClientConfig(fetcher = (...a) => globalThis.fetch(...a)) {
   try {
@@ -183,8 +193,10 @@ export function combineSources(sources) {
  */
 export async function loadSources(config, importer = (url) => import(url)) {
   const loaded = {};
+  const named = []; // the live, house and devices slots the config names: a house can come from any of them
   for (const [slot, s] of Object.entries((config && config.sources) || {})) {
     if (!s || typeof s.module !== 'string' || !s.module.startsWith('/')) continue;
+    if (['live', 'house', 'devices'].includes(slot)) named.push(slot);
     try {
       const mod = await importer(s.module);
       loaded[slot] = typeof mod.create === 'function' ? (await mod.create(s.options || {})) || {} : mod;
@@ -195,8 +207,10 @@ export async function loadSources(config, importer = (url) => import(url)) {
   const pick = (key, order) => order.map((slot) => loaded[slot] && loaded[slot][key]).find(Boolean) || null;
   const lives = ['live', 'house', 'devices'].map((slot) => loaded[slot] && loaded[slot].liveSource).filter(Boolean);
   return {
-    houseSource: lives.length > 0 || !!pick('floorRenderer', ['house', 'live', 'devices']), // a source that can answer for a house (the House view is offered, house-model.js `houseOffered`)
-    liveSource: lives.length ? combineSources(lives) : NO_SOURCE,
+    // The config names a source that can answer for a house: the House view is offered (house-model.js `houseOffered`), even when the
+    // source did not load, so its failure shows as one (the live chip's error) rather than as a House button gone missing
+    houseSource: named.length > 0,
+    liveSource: lives.length ? combineSources(lives) : named.length ? failedSource(named) : NO_SOURCE,
     floorRenderer: pick('floorRenderer', ['house', 'live', 'devices']),
     checker: pick('checker', ['checker', 'live', 'house', 'devices']),
   };

@@ -122,9 +122,13 @@ describe('explorer/plugins.js: the sources a config names', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const importer = vi.fn(async () => { throw new Error('404'); });
     const out = await loadSources({ sources: { live: { module: '/repo/gone.js' }, devices: { module: 'https://cdn.example.org/x.js' } } }, importer);
-    expect(out.liveSource).toBe(NO_SOURCE);
     expect(importer).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
+    // A named source that did not load is an error, not "none set", and House stays offered so it can say so
+    expect(out.liveSource).not.toBe(NO_SOURCE);
+    expect(out.houseSource).toBe(true);
+    await expect(out.liveSource.load()).rejects.toMatchObject({ reason: 'unavailable', hint: expect.stringMatching(/live source .* did not load/) });
+    await expect(out.liveSource.load()).rejects.not.toHaveProperty('notConfigured');
     warn.mockRestore();
   });
 
