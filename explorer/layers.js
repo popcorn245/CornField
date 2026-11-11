@@ -12,25 +12,26 @@ import { renderFlowLegend } from './flows.js';
 import { WHEN_STYLES } from './cloud-model.js';
 import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
+import { NODE_THEMES } from '../core/schema.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
 import { groupOf, layerShows } from './scene.js';
-import { STROKE_TOKEN, fillOf, getMapStyle, kindToken, onMapStyleChange, pageReader, setMapSubjects } from './map-style.js';
+import { STROKE_TOKEN, cssColor, fillOf, getMapStyle, kindToken, onMapStyleChange, pageReader, setMapSubjects } from './map-style.js';
 import { over, parseColor, contrast } from '../core/color.js';
 import { DARK_GROUND, LIGHT_GROUND } from './theme-model.js';
 import { t } from './strings.js';
 
-/** The dot of each starting row when the theme sets no fill for it: the colour its nodes are drawn in (the theme's tokens come first: `rowColor`) */
-const COLORS = {
-  app: '#6366f1', pkg: '#06b6d4', page: '#38bdf8', atom: '#10b981', molecule: '#a855f7', token: '#ec4899', tool: '#f43f5e', flow: '#fb923c',
-  core: '#14b8a6', store: '#fb923c', table: '#fde047', rom: '#f0abfc', service: '#84cc16', cloud: '#94a3b8', web: '#94a3b8', stack: '#a8a29e',
-  machine: '#78716c', container: '#d6d3d1', device: '#2dd4bf', house: '#a3e635', runs: '#5eead4', persona: '#fb7185',
-};
+/** The types a starting row's nodes have (House: floors and rooms; Cloud and the Public web: `external`), or none for a row that is not a node type */
+const typesOf = (l) => (l.match && l.match.type ? [].concat(l.match.type) : []);
+/** The dot of the two rows that are not a node type: Data Flow's lines and the ring of a run in flight. Every other row's built-in dot is its
+ * first type's colour in core/schema.js NODE_THEMES, the colour the map draws its nodes in when the theme sets none (one table, not two) */
+const NOT_A_TYPE = { flow: '#fb923c', runs: '#5eead4' };
+const builtIn = (l) => { const type = typesOf(l)[0]; return type && NODE_THEMES[type] ? NODE_THEMES[type].color : NOT_A_TYPE[l.key]; };
 /** The starting layers that start off: the infra layer is its own view, and the physical world's are loaded when first turned on (spec 0029) */
 const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona']);
 
 /** The starting rows (core/layers.js STARTING_LAYERS) with the colour of their dot */
-export const LAYER_DEFS = STARTING_LAYERS.map((l) => ({ ...l, color: COLORS[l.key] }));
+export const LAYER_DEFS = STARTING_LAYERS.map((l) => ({ ...l, color: builtIn(l) }));
 
 const layerListeners = new Set();
 /** Calls `fn` after a layer goes on or off (live.js starts or stops the live layer). Returns how to stop. */
@@ -82,21 +83,25 @@ const isOn = (key) => state.activeLayers[key] !== false;
 const NO_COLOR = '#94a3b8';
 /** A colour as the dot's style may hold it: a hex or an rgb()/rgba() of numbers, else the plain grey. A node's colour is the map's data
  * (a proposal can set it), so it is checked before it reaches a style attribute, and escaped there all the same */
-const SWATCH_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\))$/i;
-const swatch = (c) => (typeof c === 'string' && SWATCH_RE.test(c.trim()) ? c.trim() : NO_COLOR);
+const NUM = '\\d{1,3}(?:\\.\\d+)?%?';
+const SWATCH_RE = new RegExp(`^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|rgba?\\(\\s*${NUM}(?:\\s*,\\s*|\\s+)${NUM}(?:\\s*,\\s*|\\s+)${NUM}(?:\\s*[,/]\\s*(?:\\d*\\.)?\\d+%?)?\\s*\\))$`, 'i');
+const swatch = (c) => (typeof c === 'string' && c.length <= 64 && SWATCH_RE.test(c.trim()) ? c.trim() : NO_COLOR);
 
 /**
  * The colour of a row's dot: the fill the map draws for the row's nodes, by the map's own order (map-style.js `fillOf`: the type's or layer's
  * token, then the starting group's), else the row's built-in colour on this ground (`themed`). `node` is what the row's nodes are: for a
- * starting row its first type (a row of two types, House, shows the first: the map draws floors and rooms apart, and the row has one dot) and its
- * key as the group; for a project row its first node's type with the layer. A finer kind's token is left out: a dot is a row's, not a kind's.
+ * starting row its type (`typeOfRow`: a row of two types, House, speaks for its first, floors, so `--corn-map-group-house` is its dot unless
+ * the theme gives floors a colour of their own) and its key as the group; for a project row its first node's type with the layer. A finer kind's token is left out: a dot is a row's, not a kind's.
  * A token's value is the theme's text and a node's colour is the project's: both go through `swatch` before they reach a style.
  */
 function rowColor(node, built) {
   const fill = fillOf(getMapStyle().values, node);
-  return fill ? swatch(fill) : swatch(themed(swatch(built), state.theme));
+  // The built-in is a node's colour (project data): normalised as the map's renderers read it (`cssColor`, the reader of the tokens), so a
+  // name or an `hsl()` the map draws is the dot too; anything that is not a colour is the grey
+  return fill ? swatch(fill) : swatch(cssColor(themed(built, state.theme)));
 }
-const typeOfRow = (l) => (l.match && l.match.type ? [].concat(l.match.type)[0] : l.key);
+/** The type a row's dot speaks for: of a row of several types (House), the first one the map holds, else the first; a row with no type, its key */
+const typeOfRow = (l) => { const types = typesOf(l); return (types.length > 1 && types.find((ty) => state.nodes.some((n) => n.type === ty))) || types[0] || l.key; };
 
 /** The ground of the menu: its surface laid over the page, as `--corn-surface-1` and `--corn-ground` say, else the theme's own ground */
 function menuSurface() {
@@ -118,7 +123,7 @@ function ringOf(color, surface) {
 /** A swatch of `color` on this menu: the fill, a soft glow on a dark ground, and the outline when it is needed. `extra` is more attributes (a kind's is `aria-hidden`) */
 function dot(color, on, surface, extra = '') {
   const ring = ringOf(color, surface);
-  const glow = on && state.theme !== 'light' && /^#[0-9a-f]{6}$/i.test(color) ? `0 0 8px ${color}90` : 'none';
+  const glow = on && state.theme !== 'light' ? (/^#[0-9a-f]{6}$/i.test(color) ? `0 0 8px ${color}90` : `0 0 8px color-mix(in srgb, ${color} 56%, transparent)`) : 'none';
   const style = `background-color: ${color}; box-shadow: ${glow}${ring && ring.stroke ? `; --hx-dot-ring: ${ring.stroke}` : ''}`;
   return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} style="${escHtml(style)}"></span>`;
 }
@@ -129,7 +134,7 @@ function dot(color, on, surface, extra = '') {
  * `root` is always shown and has no row. The overlays are the rows with `overlay`: the menu draws them under their own heading.
  */
 function layerRows() {
-  const dotted = (l) => ({ ...l, color: rowColor({ type: typeOfRow(l), group: l.key }, l.color) });
+  const dotted = (l) => { const type = typeOfRow(l); return { ...l, color: rowColor({ type, group: l.key }, NODE_THEMES[type] ? NODE_THEMES[type].color : l.color) }; };
   const held = new Set();
   const left = new Set(); // starting layers a project layer took nodes from
   state.nodes.forEach((n) => {

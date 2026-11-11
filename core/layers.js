@@ -88,6 +88,14 @@ const TYPE_SET = new Set(NODE_TYPES);
 export const mapKindToken = (type, kind) => (TYPE_SET.has(type) && typeof kind === 'string' && kind.length <= MAX_KIND_NAME && KIND_NAME_RE.test(kind) ? `--corn-map-kind-${type}-${kind}` : null);
 /** `--corn-map-group-<key>` for a layer key that passes LAYER_KEY_RE, else null */
 export const mapGroupToken = (key) => (typeof key === 'string' && key.length <= MAX_KEY && LAYER_KEY_RE.test(key) ? `--corn-map-group-${key}` : null);
+/**
+ * The tokens that can fill a node, most specific first (spec 0009 D6): its finer kind, its project layer, its type, its starting group. The one
+ * place the order is written: the map (explorer/map-style.js `fillOf`), the Layers menu's dots and `cornfield validate`'s contrast check
+ * (core/contrast.js) all read it.
+ * @param {{type: string, kind?: unknown, layer?: string | null, group?: string}} node
+ * @returns {string[]}
+ */
+export const mapFillNames = ({ type, kind, layer, group }) => [mapKindToken(type, kind), layer ? mapGroupToken(layer) : null, `--corn-map-node-${type}`, `--corn-map-group-${group || type}`].filter(Boolean);
 /** Reads a kind token's name back: `{ type, kind }`, or null (the type is the part before the first "-") */
 export function parseKindToken(name) {
   const m = /^--corn-map-kind-([a-z]+)-([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(String(name));

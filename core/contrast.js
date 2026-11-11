@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { NODE_THEMES } from './schema.js';
-import { LAYER_KEY_RE, MAX_KEY, parseKindToken } from './layers.js';
+import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
@@ -528,7 +528,7 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
   const strokeOn = isColor(stroke.color) && !(Number.parseFloat(widthText) === 0);
   for (const type of Object.keys(NODE_THEMES)) {
     for (const group of MAP_GROUPS_OF(type)) {
-      const names = [`--corn-map-node-${type}`, `--corn-map-group-${group}`];
+      const names = mapFillNames({ type, group }); // the map's own order (a kind and a project layer are checked on their own, below)
       let name = null;
       let fill = null;
       let problem = null;

@@ -20,10 +20,14 @@ import * as M from '../../explorer/map-style.js';
 import { parseColor } from '../../explorer/theme-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast } from '../../core/color.js';
+// @ts-expect-error plain JS modules, no declarations
+import { NODE_THEMES } from '../../core/schema.js';
+// @ts-expect-error plain JS modules, no declarations
+import { mapFillNames } from '../../core/layers.js';
 
 const body = /<body>([\s\S]*)<\/body>/.exec(explorerPage())[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const builtIn = (key) => (LAYER_DEFS.find((l) => l.key === ({ floor: 'house', room: 'house', external: 'cloud' })[key] || l.key === key) || {}).color;
-const node = (id, type, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: builtIn(type) || '#336699', label: id, ...extra });
+const node = (id, type, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: NODE_THEMES[type] ? NODE_THEMES[type].color : '#336699', label: id, ...extra }); // as sync writes it
 const row = (key) => document.querySelector(`[data-action="toggle-layer"][data-layer="${key}"]`);
 const dotOf = (key) => row(key).querySelector('[data-corn="swatch"]');
 const fillOfDot = (el) => parseColor(el.style.backgroundColor);
@@ -113,6 +117,29 @@ describe('a row\'s dot is the fill the map draws for a node on that row', () => 
     show({ activeLayers: { house: true } });
     same(fillOfDot(dotOf('house')), mapFill('fl'));
   });
+  it('... and the type the map holds when the first is not there (rooms only): the house group token, else the room\'s own', () => {
+    show({ nodes: nodes.filter((n) => n.type !== 'floor'), activeLayers: { house: true } });
+    same(fillOfDot(dotOf('house')), mapFill('rm'));
+    setTokens({ '--corn-map-group-house': '#a0522d' });
+    show({ nodes: nodes.filter((n) => n.type !== 'floor'), activeLayers: { house: true } });
+    same(fillOfDot(dotOf('house')), parseColor('#a0522d'));
+    same(fillOfDot(dotOf('house')), mapFill('rm'));
+  });
+  it('with no token, a starting row\'s built-in dot is its type\'s colour in core/schema.js: one table of default colours, not two', () => {
+    for (const l of LAYER_DEFS) {
+      const type = l.match && l.match.type ? [].concat(l.match.type)[0] : null;
+      if (type) expect([l.key, l.color]).toEqual([l.key, NODE_THEMES[type].color]);
+    }
+  });
+});
+
+describe('one order of fills', () => {
+  it('the map, the menu and the contrast check read the one list (core/layers.js mapFillNames): kind, project layer, type, starting group', () => {
+    expect(M.fillNames).toBe(mapFillNames);
+    expect(mapFillNames({ type: 'service', kind: 'timer', layer: 'jobs', group: 'service' })).toEqual(['--corn-map-kind-service-timer', '--corn-map-group-jobs', '--corn-map-node-service', '--corn-map-group-service']);
+    expect(mapFillNames({ type: 'external', group: 'cloud' })).toEqual(['--corn-map-node-external', '--corn-map-group-cloud']);
+    expect(fs.readFileSync(path.join(__dirname, '../../core/contrast.js'), 'utf8')).toContain('mapFillNames({ type, group })');
+  });
 });
 
 describe('the kind key shows each kind\'s swatch', () => {
@@ -155,6 +182,20 @@ describe('a colour never becomes markup', () => {
     show({ nodes: odd, __layers: { add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] } });
     expect(document.querySelector('#layer-toggles-container [onmouseover]')).toBeNull();
     expect(dotOf('ok').style.backgroundColor).not.toContain('onmouseover');
+  });
+  it('a node colour that only looks like one (five hex digits, an rgb() of a thousand numbers) is the grey, and short', () => {
+    for (const bad of ['#12345', `rgb(${'1,'.repeat(4999)}1)`, 'rgb(1, 2, 3); background: url(x)']) {
+      const odd = [node('root', 'root'), node('a', 'service', { kind: 'timer', color: bad })];
+      show({ nodes: odd, __layers: { add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] } });
+      same(fillOfDot(dotOf('ok')), parseColor('#94a3b8'));
+      expect(dotOf('ok').getAttribute('style').length).toBeLessThan(120);
+    }
+  });
+  it('a token the map reads as a colour in another form (the browser\'s rgba(), the space syntax) reaches the dot as the map has it', () => {
+    setTokens({ '--corn-map-node-core': 'rgba(26, 162, 230, 0.5)', '--corn-map-node-store': 'rgb(10 20 200 / 50%)' });
+    show();
+    expect(dotOf('core').style.backgroundColor.replace(/\s/g, '')).toBe('rgba(26,162,230,0.5)');
+    if (M.getMapStyle().values['--corn-map-node-store']) expect(dotOf('store').style.backgroundColor).not.toBe('');
   });
 });
 

@@ -36,7 +36,7 @@
 import { NODE_THEMES } from '../core/schema.js';
 import { parseColor } from './theme-model.js';
 import { LABEL_MIN_FLOOR, looksFor } from './scene.js';
-import { iconKeyShape, iconKeysFor, mapGroupToken, mapKindToken } from '../core/layers.js';
+import { iconKeyShape, iconKeysFor, mapFillNames, mapGroupToken, mapKindToken } from '../core/layers.js';
 
 /** The node kinds (topology types) and the groups (layers a node can belong to) the tokens exist for */
 export const MAP_KINDS = Object.freeze(Object.keys(NODE_THEMES));
@@ -453,13 +453,8 @@ export function watchMapStyle(doc) {
 
 const firstOf = (values, names) => { for (const n of names) if (values[n]) return values[n]; return null; };
 
-/**
- * The tokens that can fill a node, most specific first (spec 0009 D6): its finer kind, its project layer, its type, its starting group. The one
- * place the order is written: the map (`compute`) and the Layers menu's dots both read it, so a dot is the fill its row's nodes are drawn in.
- * @param {{type: string, kind?: unknown, layer?: string | null, group?: string}} node
- * @returns {string[]}
- */
-export const fillNames = ({ type, kind, layer, group }) => [kindToken(type, kind), layer ? mapGroupToken(layer) : null, nodeToken(type), groupToken(group || type)].filter(Boolean);
+/** The tokens that can fill a node, most specific first (core/layers.js `mapFillNames`, the one place the order is written) */
+export const fillNames = mapFillNames;
 
 /** The theme's fill for a node of that kind, layer, type and group (`values` of a style), or null: the node then draws its own colour (`auto`) */
 export const fillOf = (values, node) => firstOf(values, fillNames(node));
