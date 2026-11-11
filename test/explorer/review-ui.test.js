@@ -345,6 +345,21 @@ describe('the time', () => {
     expect(status()).toBe('Approved 2 hours ago');
   });
 
+  it('says the verdict once: the time ticks beside the live region, which is not rewritten while the verdict stays', async () => {
+    fakeServer({ review: { version: 1, verdict: 'approved', note: '', edits: [], at: new Date(T0 - 3 * 60_000).toISOString() } });
+    open();
+    await settle();
+    const live = q('#review [data-review-status] [role=status]');
+    expect(live.textContent).toBe('Approved');
+    expect(q('#review [data-review-status]').getAttribute('role')).toBeNull(); // the line itself is not live: its time is not said again
+    const mo = new MutationObserver(() => {});
+    mo.observe(live, { subtree: true, childList: true, characterData: true });
+    for (const later of [1, 2, 60]) { clock = T0 + later * 60_000; renderBar(); }
+    expect(status()).toBe('Approved 1 hour ago');
+    expect(mo.takeRecords()).toHaveLength(0);
+    mo.disconnect();
+  });
+
   it('shows nothing when there is no review yet, or the hub has no answer', async () => {
     fakeServer({ review: null });
     open();

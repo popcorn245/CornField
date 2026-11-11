@@ -285,7 +285,7 @@ describe('F12 focus goes somewhere stated', () => {
     expect(s.mock.calls.filter(([, init]     ) => init && init.method === 'PUT')).toHaveLength(1);
     const line = q('[data-review-status]')                     ;
     expect(line.textContent).toMatch(/Approved/);
-    expect(line.getAttribute('role')).toBe('status');
+    expect(line.querySelector('[role=status]').textContent).toBe('Approved'); // the verdict is the live region; the time beside it is not
     expect(line.hasAttribute('tabindex')).toBe(false); // never focused: a focused live region is read twice
     expect(document.activeElement).toBe(approve);
   });

@@ -5,6 +5,7 @@
  * confirm on Close. Driven through the page's own markup (explorer/index.html) with a recording canvas, so what a click does to the
  * state and the DOM is what is read.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -275,7 +276,7 @@ describe('removing a node', () => {
     expect(markOf('page-keep')).toBe('edit');
     expect(state.nodes.find((n     ) => n.id === 'page-keep').editOp).toBe('removed');
     expect(sceneNode('page-keep')).toMatchObject({ mark: 'edit', labelStrike: true });
-    expect(sceneNode('page-keep').alpha).toBeLessThan(0.6);
+    expect(sceneNode('page-keep').alpha).toBeLessThan(1);
     expect(getEdits()[0]).toMatchObject({ op: 'remove-node', id: 'page-keep' });
     expect(getEffectiveProposal().nodes.remove.map((n     ) => n.id)).toEqual(['page-keep']);
     setProposalView('after');
@@ -353,7 +354,7 @@ describe('the edge panel', () => {
     const now = state.edges.find((e     ) => e.kind === 'reads');
     expect(now).toMatchObject({ mark: 'edit', editOp: 'removed' });
     const drawn = render.getScene().edges.find((e     ) => e.kind === 'reads');
-    expect(drawn).toMatchObject({ mark: 'edit', color: '#a78bfa' });
+    expect(drawn).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit });
     expect(drawn.dash).not.toBeNull();
   });
 });
@@ -417,7 +418,7 @@ describe('drawing an edge', () => {
     expect(getEdits()[0]).toMatchObject({ op: 'add-edge', from: 'page-keep', to: 'table-t', kind: 'writes', label: 'keep.save' });
     expect(q('.hx-rubber')).toBeNull();
     expect(tool('draw-edge').getAttribute('aria-pressed')).toBe('false');
-    expect(render.getScene().edges.find((e     ) => e.from === 'page-keep' && e.kind === 'writes')).toMatchObject({ mark: 'edit', color: '#a78bfa' });
+    expect(render.getScene().edges.find((e     ) => e.from === 'page-keep' && e.kind === 'writes')).toMatchObject({ mark: 'edit', color: DIFF_MARK_COLORS.dark.edit });
   });
 
   it('a flow edge asks which flow', () => {
@@ -529,6 +530,15 @@ describe('undo and redo', () => {
     const e = key('z', { ctrlKey: true }, input);
     expect(e.defaultPrevented).toBe(false);
     expect(names()).toContain('page-one');
+  });
+
+  it('says what was undone and redone (F18)', async () => {
+    addNodeVia({ label: '/one', parent: 'app-a' });
+    const said = async () => { await new Promise((r) => setTimeout(r, 50)); return document.getElementById('map-announcer').textContent; };
+    key('z', { ctrlKey: true });
+    expect(await said()).toBe('Undid: Added the page “/one” under tasks');
+    key('z', { ctrlKey: true, shiftKey: true });
+    expect(await said()).toBe('Redid: Added the page “/one” under tasks');
   });
 
   it('does nothing with no proposal open', () => {

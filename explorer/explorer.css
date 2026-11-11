@@ -428,8 +428,8 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-legend-row .hx-mark-dot, .hx-change-row .hx-mark-dot { margin-right: 0; }
 .hx-mark-dot--added { border-color: var(--corn-added); border-style: dashed; }
 .hx-mark-dot--changed { border-color: var(--corn-changed); }
-.hx-mark-dot--removed { border-color: var(--corn-removed); background: color-mix(in srgb, var(--corn-removed) 25%, transparent); opacity: 0.7; }
-.hx-mark-dot--edit { border-color: var(--corn-edit); }
+.hx-mark-dot--removed { border-color: var(--corn-removed); background: color-mix(in srgb, var(--corn-removed) 25%, transparent); }
+.hx-mark-dot--edit { border-color: var(--corn-edit); border-style: dotted; } /* a dotted ring: not the changed mark's solid one, with or without colour */
 
 /* The panel's proposal block: why, and what changes */
 .hx-proposal-sec { padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left-width: var(--corn-border-strong); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); margin: 0 0 var(--corn-space-2); font-family: var(--corn-font); }
@@ -1055,6 +1055,21 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 
 /* The node panel's facts break at word boundaries only (F60): "hook" is never "hoo / k". A long path or name still wraps, at its slashes and dashes, and only as a last resort anywhere. */
 .hx-fact-v { overflow-wrap: break-word; word-break: normal; }
+
+/* ---------------------------------------------------------------------------
+   Target sizes (0.34 review, F57): a thumb target is 44x44 (hit area, the drawn size may be smaller), and a change row is
+   28px at a desk. Phone width or a coarse pointer. test/explorer/target-size.test.js holds this list.
+   --------------------------------------------------------------------------- */
+.hx-change-row { min-height: 28px; }
+.hx-run .hx-link { display: inline-flex; align-items: center; min-height: 24px; } /* a run card's links sit on lines 14px apart: 24px at a desk (WCAG 2.5.8) */
+@media (max-width: 767px), (pointer: coarse) {
+  .hx-change-row, .hx-toggle-row, .hx-textbtn, .hx-player-speed, .hx-player .hx-close,
+  .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select, .hx-mobile-search .hx-input { min-height: 44px; }
+  .hx-textbtn, .hx-player-speed, .hx-player .hx-close, .hx-confirm .hx-btn { min-width: 44px; }
+  .hx-proposal-chip { flex-wrap: wrap; white-space: normal; text-align: left; } /* the counts say what they count, so they are longer: they wrap rather than clip */
+  .hx-sheet-handle { height: 44px; } /* the grip is drawn the same; the button itself is 44px (a hit area stretched past it is clipped by the sheet above, and covers its title below) */
+  .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
+}
 
 /* ==========================================================================
    The Work panel's states, results, disabled controls, loading and empty lists, and its fixed top (the 0.34 design review)

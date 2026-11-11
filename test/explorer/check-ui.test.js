@@ -115,6 +115,21 @@ describe('a scenario that names an actor', () => {
     expect(q('.hx-player-check').textContent).toContain('Not checked: nothing in this step to ask');
   });
 
+  it('rewrites the check line (a live region) only when its words change, not on every paint', async () => {
+    initChecks({ checker: fakeChecker().checker });
+    playScenario(scenario(), { autoplay: false });
+    await settle();
+    go(2);
+    const line = q('.hx-player-check');
+    const mo = new MutationObserver(() => {});
+    mo.observe(line, { subtree: true, childList: true, characterData: true });
+    go(2); // the same step painted again
+    expect(mo.takeRecords()).toHaveLength(0);
+    go(1);
+    expect(mo.takeRecords().length).toBeGreaterThan(0); // a new verdict is written
+    mo.disconnect();
+  });
+
   it('says Checking while it asks, and redraws the step when the answer comes', async () => {
     const fake = fakeChecker();
     fake.hold();

@@ -119,6 +119,46 @@ describe('the bar', () => {
     expect(getPlayer().snapshot().playing).toBe(false);
   });
 
+  it('says Paused and Resumed through the live region, once each (F18)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    const said = async () => { await new Promise((r) => setTimeout(r, 50)); return live.textContent; };
+    playScenario(scenario(), { autoplay: false });
+    click('scenario-toggle');
+    expect(await said()).toBe('Playing');
+    click('scenario-toggle');
+    expect(await said()).toBe('Paused');
+    live.remove();
+  });
+
+  it('says Resumed for a scenario paused part-way through its first step', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    playScenario(scenario());
+    tickScenario(0);
+    tickScenario(200); // part-way through step 1
+    click('scenario-toggle');
+    click('scenario-toggle');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(live.textContent).toBe('Resumed');
+    live.remove();
+  });
+
+  it('writes the step line (a live region) only when its words change, not on every frame', () => {
+    playScenario(scenario());
+    tickScenario(0);
+    const line = q('.hx-player-text');
+    const seen = [];
+    const mo = new MutationObserver((ms) => seen.push(...ms));
+    mo.observe(line, { subtree: true, childList: true, characterData: true });
+    for (let t = 16; t < 200; t += 16) tickScenario(t); // frames within step 1
+    mo.takeRecords().forEach((m) => seen.push(m));
+    mo.disconnect();
+    expect(seen).toHaveLength(0);
+  });
+
   it('starts playing by default, and a close button takes the bar and the highlight away', () => {
     const before = state.sceneVersion;
     playScenario(scenario());

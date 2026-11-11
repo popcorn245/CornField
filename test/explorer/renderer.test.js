@@ -4,6 +4,7 @@
  * it (TOPO-02). No real canvas: a recording context stands in, so the tests read what the
  * renderer asked it to draw.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -183,18 +184,46 @@ describe('renderer-canvas2d proposal marks', () => {
 
   it('draws no ring for an unmarked node', () => {
     const ctx = marked('none');
-    for (const color of ['#2dd4bf', '#fbbf24', '#f87171', '#a78bfa']) expect(ringsOf(ctx, color), color).toHaveLength(0);
+    for (const color of Object.values(DIFF_MARK_COLORS.dark)) expect(ringsOf(ctx, color), color).toHaveLength(0);
   });
 
-  it('draws a dashed ring in the added colour for an addition, and a solid one for the others', () => {
+  it('draws a dashed ring in the added colour for an addition, a dotted one for an edit, and a solid one for the others', () => {
     const added = marked('added');
-    expect(ringsOf(added, '#2dd4bf')).toHaveLength(1);
+    expect(ringsOf(added, DIFF_MARK_COLORS.dark.added)).toHaveLength(1);
     expect(added.log).toContainEqual(['setLineDash', [5, 4]]);
-    for (const [mark, color] of [['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
+    for (const [mark, color] of [['changed', DIFF_MARK_COLORS.dark.changed], ['removed', DIFF_MARK_COLORS.dark.removed], ['edit', DIFF_MARK_COLORS.dark.edit]]) {
       const ctx = marked(mark);
       expect(ringsOf(ctx, color), mark).toHaveLength(1);
       expect(ctx.log, mark).not.toContainEqual(['setLineDash', [5, 4]]);
+      if (mark === 'edit') expect(ctx.log).toContainEqual(['setLineDash', [2, 5]]); // F20: not the changed mark's solid ring
     }
+  });
+
+  it('draws a mark\'s ring at the node\'s own alpha, as the WebGL shader does, so a removed ring is faded as the contrast check measures it', () => {
+    const ctx = marked('removed', { alpha: 0.85 });
+    const i = (ctx.log          ).findIndex((c) => c[0] === 'set:strokeStyle' && c[1] === DIFF_MARK_COLORS.dark.removed);
+    const alphas = (ctx.log          ).slice(0, i).filter((c) => c[0] === 'set:globalAlpha').map((c) => c[1]);
+    expect(alphas.at(-1)).toBe(0.85);
+  });
+
+  it('strikes a removed node through, as the WebGL shader does, and no other mark', () => {
+    const lines = (ctx     ) => (ctx.log          ).filter((c) => c[0] === 'lineTo').length;
+    expect(lines(marked('removed'))).toBe(lines(marked('changed')) + 1);
+    expect(lines(marked('edit'))).toBe(lines(marked('changed')));
+  });
+
+  it('strikes a removed edge across at its midpoint, as the WebGL tips pass does', () => {
+    const drawn = (mark        ) => {
+      const scene = buildScene(mk());
+      Object.assign(scene.edges[0], { mark, curve: null, arrow: false, packet: null });
+      const ctx = recordingCtx();
+      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      r.resize(800, 600, 1);
+      ctx.log.length = 0;
+      r.draw(scene, { x: 0, y: 0, zoom: 1 }, 0);
+      return (ctx.log          ).filter((c) => c[0] === 'lineTo').length;
+    };
+    expect(drawn('removed')).toBe(drawn('changed') + 1);
   });
 
   it('keeps a ring at least 1.8px thick on screen when zoomed out', () => {

@@ -560,8 +560,14 @@ describe('state errors', () => {
 
 describe('summarize', () => {
   it('counts nodes and edges together, and the scenarios', () => {
-    expect(summarize(proposal())).toEqual({ added: 2, changed: 2, removed: 2, scenarios: 1 });
-    expect(summarize(minimal())).toEqual({ added: 0, changed: 0, removed: 0, scenarios: 0 });
+    const none = { added: 0, changed: 0, removed: 0 };
+    expect(summarize(proposal())).toMatchObject({ added: 2, changed: 2, removed: 2, scenarios: 1 });
+    expect(summarize(minimal())).toEqual({ ...none, scenarios: 0, nodes: none, edges: none });
+  });
+
+  it('also counts nodes and edges apart, so the chip can say what it counts', () => {
+    const s = summarize(proposal());
+    for (const k of ['added', 'changed', 'removed']) expect(s.nodes[k] + s.edges[k], k).toBe(s[k]);
   });
 });
 

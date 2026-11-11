@@ -70,6 +70,7 @@ import { state, nodeById, escHtml, touchScene, onSceneTouch } from './state.js';
 import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
+import { trapTab } from './focusables.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
@@ -1706,13 +1707,7 @@ function onConfirmKey(e) {
     if (!ui.busy) closeConfirm();
     return;
   }
-  if (e.key !== 'Tab') return;
-  const buttons = [...confirmEl().querySelectorAll('button:not([disabled])')];
-  if (!buttons.length) { e.preventDefault(); return; }
-  const at = buttons.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1) : (at === -1 || at === buttons.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  buttons[next].focus();
+  trapTab(e, confirmEl());
 }
 
 function onConfirmClick(e) {
@@ -1906,13 +1901,7 @@ function onAgentKey(e) {
     if (!ui.agent || !ui.agent.posting) closeAgent();
     return;
   }
-  if (e.key !== 'Tab') return;
-  const fields = [...agentEl().querySelectorAll('select, textarea, input, button')].filter((el) => !el.disabled && !el.closest('[hidden]'));
-  if (!fields.length) { e.preventDefault(); return; }
-  const at = fields.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? fields.length - 1 : at - 1) : (at === -1 || at === fields.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  fields[next].focus();
+  trapTab(e, agentEl());
 }
 
 function onAgentClick(e) {

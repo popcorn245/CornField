@@ -27,12 +27,13 @@ import { edgePoint, looksFor } from './scene.js';
 import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
 import {
-  PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds,
+  PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, openedWords, jumpWords,
   sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
 } from './proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
 import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
+import { announce } from './keyboard.js';
 import { t } from './strings.js';
 import { isOffline } from './connection.js';
 
@@ -119,6 +120,8 @@ export async function openProposal(slug, source = null) {
     let item;
     try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
     showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
+    // said once, here: a proposal opens on a person's asking, never on a background refresh
+    announce(openedWords($('proposal-title').textContent, summarize(state.proposal), state.proposalView));
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
@@ -203,7 +206,7 @@ export function closeProposal() {
 }
 
 /** Switches between Before, Diff and After; no node moves. Entering Diff fits the camera to the change. */
-export function setProposalView(view) {
+export function setProposalView(view, { quiet = false } = {}) {
   if (!state.proposal || !PROPOSAL_VIEWS.includes(view) || state.proposalView === view) return;
   state.proposalView = view;
   touchScene();
@@ -212,6 +215,7 @@ export function setProposalView(view) {
   render();
   renderBar();
   syncAddress();
+  if (!quiet) announce(viewWords(view));
 }
 
 /** Hands the map new nodes and edges, keeping the selection on the same node */
@@ -415,13 +419,14 @@ function focusChange(kind, key) {
   if (!item) return;
   const ends = (kind === 'edge' ? [state.nodes.find((n) => n.id === item.from), state.nodes.find((n) => n.id === item.to)] : [item]).filter(Boolean);
   if (!ends.length) return;
-  if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff'); // Before or After hides what it removes or adds
+  if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff', { quiet: true }); // Before or After hides what it removes or adds
   if (kind === 'edge') showEdgePanel(item);
   else selectNode(item);
   // The panel is open now, so what it covers is known
   const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
   if (cam) Object.assign(state.camera, cam);
   render();
+  announce(jumpWords(MARK_WORDS[item.mark] || item.mark, kind === 'edge' ? `${nameOf(item.from)} to ${nameOf(item.to)}` : item.label));
 }
 
 // ---------------------------------------------------------------------------
@@ -746,7 +751,7 @@ export async function initProposals() {
     return false;
   }
   const ok = await openProposal(asked.slug, asked.source);
-  if (ok && asked.view) setProposalView(asked.view);
+  if (ok && asked.view) { setProposalView(asked.view, { quiet: true }); announce(openedWords($('proposal-title').textContent, summarize(state.proposal), state.proposalView)); }
   return ok;
 }
 

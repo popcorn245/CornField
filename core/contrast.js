@@ -23,6 +23,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } from './color.js';
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
+import { lightColor } from '../explorer/theme-model.js';
 
 /** WCAG 2.1 AA: text, and large text and user-interface parts */
 export const MIN_TEXT = 4.5;
@@ -399,6 +401,9 @@ export const UI_PAIRS = Object.freeze([
   ...['--corn-ok', '--corn-edit-text', '--corn-bad', '--corn-warn', '--corn-text-3'].flatMap((fg) => ['--corn-surface-2', '--corn-surface-3'].map((bg) => [fg, bg, 'a state pill\'s border'])),
 ]);
 
+/** The dots that name a diff mark in the bar, the change list and the legend (explorer.css `.hx-mark-dot--*`), each a ring on the ground */
+const DIFF_DOT_PAIRS = Object.freeze(['added', 'changed', 'removed', 'edit'].map((m) => [`--corn-${m}`, GROUND, `the ${m} mark's dot`]));
+
 /**
  * Every pair that is read against each other: `{ fg, bg, min, kind, use? }`, `fg` and `bg` each a token or a CSS colour value. A pair
  * listed twice is checked once, at the higher minimum. How a translucent `bg` is composited: see checkState.
@@ -417,6 +422,7 @@ export function contrastPairs() {
   for (const bg of SOLID_FILLS) add(GROUND, bg, MIN_TEXT, 'text');
   for (const [fg, bg] of PAINTED_TEXT) add(fg, bg, MIN_TEXT, 'text');
   for (const [fg, bg, use] of UI_PAIRS) add(fg, bg, MIN_UI, 'ui', use);
+  for (const [fg, bg, use] of DIFF_DOT_PAIRS) add(fg, bg, MIN_UI, 'ui', use);
   return [...pairs.values()];
 }
 
@@ -498,6 +504,62 @@ function checkState(props, theme, mode) {
         const r = ratio(luminance(fg), luminance(bg));
         if (!worst || r < worst.ratio) worst = { fgValue: toHex(fg), bgValue: toHex(bg), ratio: r, image };
       }
+    }
+    const { image, ...rest } = worst;
+    out.push({ ...finding, ...rest, ...(image ? { groundImage: true } : {}) });
+  }
+  out.push(...diffMapFindings(props, theme, mode, grounds, isColor(g) ? over(g, canvas) : null));
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+//  The map's diff marks and dimmed labels (0.34 review, F19 and F23)
+//
+//  The canvas draws a proposal's marks in `--corn-map-added|changed|removed|edit` (`auto` is the default look, explorer/diff-marks.js)
+//  and a label a diff dims at DIFF_LABEL_ALPHA. Each is read at 3:1 against every ground the map draws: the ground, each glow of
+//  `--corn-ground-image` at its strongest, and all of them laid over each other (the darkest and the lightest the map shows), at the
+//  opacity it is drawn at (a removed mark is faded, an edge is never fainter than EDGE_MIN_ALPHA). Nothing here reads node fills:
+//  those are another check.
+// ---------------------------------------------------------------------------
+
+/** Every ground the map can show: the page ground, each glow at its peak over it, and all the glows stacked */
+function mapGrounds(grounds, base, props) {
+  const out = grounds.map((x) => ({ ...x }));
+  if (base && props.has('--corn-ground-image')) {
+    const r = expand('var(--corn-ground-image)', props);
+    if ('text' in r) {
+      let stack = base;
+      for (const layer of layerTexts(r.text).slice(0, 16)) {
+        let peak = null;
+        for (const c of colorsIn(layer, 0)) if (!peak || c[3] > peak[3]) peak = c;
+        if (peak && peak[3] > 0) stack = over(peak, stack);
+      }
+      if (stack !== base) out.push({ color: stack, image: true });
+    }
+  }
+  return out;
+}
+
+/** The pairs the map's diff marks make: `[token, default colour (auto), opacity, what it is]` */
+const DIFF_MAP_PAIRS = (mode) => [
+  ...['added', 'changed', 'removed', 'edit'].map((m) => [`--corn-map-${m}`, DIFF_MARK_COLORS[mode][m], markOpacity(m), `the ${m} mark on the map, drawn at ${Math.round(markOpacity(m) * 100)}% opacity`]),
+  ['--corn-map-label', mode === 'light' ? lightColor('#f8fafc', 'text') : '#f8fafc', DIFF_LABEL_ALPHA, `a label the diff dims, drawn at ${Math.round(DIFF_LABEL_ALPHA * 100)}% opacity`],
+];
+
+function diffMapFindings(props, theme, mode, grounds, base) {
+  const out = [];
+  const list = mapGrounds(grounds, base, props);
+  for (const [token, auto, opacity, use] of DIFF_MAP_PAIRS(mode)) {
+    const finding = { theme, mode, fg: token, bg: GROUND, min: MIN_UI, kind: 'ui', use };
+    const raw = (props.get(token) || 'auto').trim();
+    const fg0 = raw.toLowerCase() === 'auto' ? readColor(auto) : resolveColor(props, token);
+    if (!isColor(fg0)) { out.push({ ...finding, problem: fg0 ? fg0.problem : `${token} is not a colour cornfield reads` }); continue; }
+    if (!list.length) continue;
+    let worst = null;
+    for (const { color: ground, image } of list) {
+      const fg = over([fg0[0], fg0[1], fg0[2], fg0[3] * opacity], ground);
+      const r = ratio(luminance(fg), luminance(ground));
+      if (!worst || r < worst.ratio) worst = { fgValue: toHex(fg), bgValue: toHex(ground), ratio: r, image };
     }
     const { image, ...rest } = worst;
     out.push({ ...finding, ...rest, ...(image ? { groundImage: true } : {}) });

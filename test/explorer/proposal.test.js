@@ -23,7 +23,9 @@ import { computeLaneLayout } from '../../explorer/layout.js';
 // @ts-expect-error plain JS modules, no declarations
 import { state as sharedState } from '../../explorer/state.js';
 // @ts-expect-error plain JS modules, no declarations
-import { MARK, PROPOSAL_DIM_ALPHA, buildScene, isNodeVisible } from '../../explorer/scene.js';
+import { MARK, PROPOSAL_DIM_ALPHA, buildScene, isNodeVisible, looksFor } from '../../explorer/scene.js';
+import { DIFF_LABEL_ALPHA, markOpacity } from '../../explorer/diff-marks.js';
+import { contrast, over, parseColor } from '../../core/color.js';
 
 // ---------------------------------------------------------------------------
 //  A small map and a proposal over it
@@ -130,7 +132,7 @@ describe('Diff', () => {
 
   it('dims what the proposal does not touch, but keeps it drawn, and keeps what it touches at full strength', () => {
     expect(sn(scene, 'far-away').alpha).toBe(PROPOSAL_DIM_ALPHA);
-    expect(sn(scene, 'far-away').labelAlpha).toBe(PROPOSAL_DIM_ALPHA);
+    expect(sn(scene, 'far-away').labelAlpha).toBe(DIFF_LABEL_ALPHA); // the node is dimmed, its name stays readable (F23: 3:1)
     expect(sn(scene, 'far-away').glow).toBe(0);
     expect(sn(scene, 'page-keep').alpha).toBe(PROPOSAL_DIM_ALPHA); // an existing page the proposal does not touch
     expect(sn(scene, 'page-new').alpha).toBe(1);
@@ -256,6 +258,15 @@ describe('barCounts', () => {
     expect(barCounts({ added: 0, changed: 0, removed: 0 })).toEqual([{ mark: null, text: 'No changes' }]);
     expect(barCounts(null)).toEqual([{ mark: null, text: 'No changes' }]);
   });
+
+  it('says what it counts when it has the nodes and the edges apart (F57)', () => {
+    const counts = { added: 6, changed: 1, removed: 0, scenarios: 2, nodes: { added: 4, changed: 1, removed: 0 }, edges: { added: 2, changed: 0, removed: 0 } };
+    expect(barCounts(counts).map((c) => c.text)).toEqual(['4 nodes, 2 edges added', '1 node changed', '2 scenarios']);
+    expect(barCounts({ added: 1, changed: 0, removed: 0, nodes: { added: 0, changed: 0, removed: 0 }, edges: { added: 1, changed: 0, removed: 0 } })[0].text).toBe('1 edge added');
+  });
+  it('is never read from a split that does not add up', () => {
+    expect(barCounts({ added: 3, changed: 0, removed: 0, nodes: { added: 1 }, edges: { added: 1 } })[0].text).toBe('+3 added');
+  });
 });
 
 describe('chipText', () => {
@@ -267,8 +278,9 @@ describe('chipText', () => {
     expect(chipText(null)).toBe('No changes');
   });
 
-  it('reads what summarize counts', () => {
-    expect(chipText(summarize(proposal))).toBe('2 added · 1 changed · 1 removed');
+  it('reads what summarize counts, and says what it counts: nodes and edges apart (F57)', () => {
+    expect(chipText(summarize(proposal))).toBe('1 node, 1 edge added · 1 node changed · 1 node removed');
+    expect(chipText({ added: 11, changed: 0, removed: 0, nodes: { added: 5, changed: 0, removed: 0 }, edges: { added: 6, changed: 0, removed: 0 } })).toBe('5 nodes, 6 edges added');
   });
 });
 
@@ -473,5 +485,40 @@ describe('pinLanes', () => {
     const { baseFlow, flow, pinned } = both({ version: 1, title: 't', summary: 's', nodes: { add: [{ id: 'page-x', label: '/x', type: 'page', parent: 'app-web' }] } });
     expect(pinned).toBe(true);
     expect(flow.top).toBe(baseFlow.top);
+  });
+});
+
+describe('the four marks (F19, F20, F23)', () => {
+  it('have four distinct styles without colour: a dashed ring, a solid ring, a struck faded ring, a dotted ring', () => {
+    const style = (m) => JSON.stringify([m.ringDash, m.strike, m.alpha < 1]);
+    const styles = ['added', 'changed', 'removed', 'edit'].map((k) => style(MARK[k]));
+    expect(new Set(styles).size).toBe(4);
+    expect(MARK.added.ringDash).toEqual([5, 4]);
+    expect(MARK.changed.ringDash).toBeNull();
+    expect(MARK.edit.ringDash).not.toBeNull();
+    expect(MARK.edit.ringDash).not.toEqual(MARK.added.ringDash); // dotted, not added's dashes
+    expect(MARK.edit.ringDash[0]).toBeLessThan(MARK.added.ringDash[0]);
+    for (const theme of ['dark', 'light']) expect(looksFor(theme).mark.edit.ringDash).toEqual(MARK.edit.ringDash);
+  });
+
+  it('are each 3:1 against the lightest and darkest ground of its level, at the opacity drawn', () => {
+    const grounds = { light: ['#f4f6fa', '#dfebf7', '#dfdfea'], dark: ['#090d16', '#1d3e5e', '#493e57'] };
+    for (const theme of ['light', 'dark']) {
+      for (const k of ['added', 'changed', 'removed', 'edit']) {
+        for (const g of grounds[theme]) {
+          const ground = parseColor(g);
+          const c = parseColor(looksFor(theme).mark[k].color);
+          const seen = over([c[0], c[1], c[2], markOpacity(k)], ground);
+          expect(contrast(`rgb(${seen.join(',')})`, g), `${theme} ${k} on ${g}`).toBeGreaterThanOrEqual(3);
+        }
+      }
+    }
+  });
+
+  it('a removed mark is faded, but its edge is drawn no fainter than markOpacity says', () => {
+    const scene = buildScene(mkState('diff'));
+    const edge = scene.edges.find((e) => e.mark === 'removed');
+    expect(edge.alpha).toBeGreaterThanOrEqual(markOpacity('removed') - 1e-9);
+    expect(sn(scene, 'page-old').alpha).toBeGreaterThanOrEqual(0.8);
   });
 });

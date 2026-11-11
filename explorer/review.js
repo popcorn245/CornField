@@ -28,7 +28,7 @@ import { expandSheet, isPhone } from './sheets.js';
 import { hooks } from './proposal.js';
 import { refreshMockups } from './mockups.js';
 import { getEdits, clearEdits } from './whatif.js';
-import { reviewWords, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
+import { reviewParts, sendBackProblem, reviewBody, editsHint, isReviewable, NOT_ON_A_PR } from './review-model.js';
 import { t } from './strings.js';
 import { isOffline, notSentWords } from './connection.js';
 
@@ -71,7 +71,7 @@ function mount() {
     root.className = 'hx-review';
     root.dataset.corn = 'review-bar';
     root.innerHTML = `
-      <p class="hx-review-status" data-review-status role="status" hidden></p>
+      <p class="hx-review-status" data-review-status hidden><span data-review-verdict role="status"></span><span data-review-when></span></p>
       <div class="hx-review-form" id="review-form" data-review-form hidden>
         <label class="hx-review-label" for="review-note"></label>
         <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
@@ -99,9 +99,13 @@ function mount() {
 /** Everything the review shows, from `ui` */
 function paint() {
   if (!root) return;
+  // Only the verdict is a live region, written when it changes: the time beside it ticks every TICK_MS and is never said again
   const status = q('[data-review-status]');
-  status.textContent = reviewWords(ui.review, now());
-  status.hidden = !status.textContent;
+  const { verdict, when } = reviewParts(ui.review, now());
+  const said = q('[data-review-verdict]');
+  if (said.textContent !== verdict) said.textContent = verdict;
+  q('[data-review-when]').textContent = when ? ` ${when}` : '';
+  status.hidden = !verdict;
   // A failed read of the past reviews says so: an approved proposal must not look as if nobody had reviewed it
   const failed = q('[data-review-loadfail]');
   failed.hidden = !ui.loadFailed;
