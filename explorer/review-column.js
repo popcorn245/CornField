@@ -201,6 +201,9 @@ function repaint() {
   if (!lists || !col || !state.proposal) return;
   // a scenario that is no longer in the proposal (a what-if edit deleted it) is not open any more
   if (ui.open !== null && !scenariosNow().some((s) => s.id === ui.open)) ui.open = null;
+  // an edit to the open scenario (what-if) plans its checks again: the verdicts are of the steps it has now
+  const openScenario = ui.open !== null && !getPlayer() ? scenariosNow().find((s) => s.id === ui.open) : null;
+  if (openScenario && checkedScenarioId() === openScenario.id) openChecks(openScenario, () => repaint());
   const active = document.activeElement;
   const key = active && lists.contains(active) && active.getAttribute ? active.getAttribute('data-focus-key') : null;
   const scroll = lists.scrollTop;

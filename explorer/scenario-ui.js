@@ -242,9 +242,9 @@ function showBar(speed) {
   bar.innerHTML = `
     <span class="hx-player-title hx-sr-only"></span>
     <div class="hx-player-controls" role="group" aria-label="Steps">
-      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-prev" data-action="scenario-prev" data-peek-ok></button>
-      <button type="button" class="hx-btn hx-btn--active hx-player-toggle" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
-      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next" data-action="scenario-next" data-peek-ok></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-prev" data-action="scenario-prev" data-peek-ok><span class="hx-player-label"></span></button>
+      <button type="button" class="hx-btn hx-btn--active hx-player-toggle" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"><span class="hx-player-label"></span></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next" data-action="scenario-next" data-peek-ok><span class="hx-player-label"></span></button>
       <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next-scenario" data-action="scenario-next-scenario" data-peek-ok hidden></button>
     </div>
     <p class="hx-player-text"><span class="hx-player-count" data-corn="count"></span><span class="hx-player-sep" aria-hidden="true"> · </span><span class="hx-player-who"></span><span class="hx-player-step"></span></p>
@@ -254,8 +254,8 @@ function showBar(speed) {
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
     <div class="hx-player-track" data-corn="scenario-track" aria-hidden="true"><span class="hx-player-fill" data-corn="scenario-fill"></span></div>`;
-  bar.querySelector('.hx-player-prev').textContent = t('previousStep');
-  bar.querySelector('.hx-player-next').textContent = t('nextStep');
+  bar.querySelector('.hx-player-prev .hx-player-label').textContent = t('previousStep');
+  bar.querySelector('.hx-player-next .hx-player-label').textContent = t('nextStep');
   bar.querySelector('.hx-player-next-scenario').textContent = t('nextScenario');
   bar.addEventListener('click', (e) => {
     const button = e.target.closest('[data-action]');
@@ -329,7 +329,7 @@ function updateBar(snap) {
   bar.dataset.done = String(!!snap.done);
   const toggle = q('[data-action=scenario-toggle]');
   const label = snap.playing ? t('pause') : snap.done ? t('playAgain') : t('play');
-  if (toggle.textContent !== label) toggle.textContent = label;
+  put('[data-action=scenario-toggle] .hx-player-label', label);
   toggle.dataset.state = snap.playing ? 'playing' : snap.done ? 'done' : 'paused';
   toggle.disabled = snap.total === 0 || snap.manual;
   toggle.title = snap.manual ? 'The time for each step is Manual: use Next' : '';

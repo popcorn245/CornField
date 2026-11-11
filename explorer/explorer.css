@@ -472,7 +472,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-player-prev::before { content: "◀" / ""; margin-right: var(--corn-space-2); }
 .hx-player-next::after { content: "▶" / ""; margin-left: var(--corn-space-2); }
 /* the pause mark is drawn (two bars), not a character: not every font has one */
-.hx-player-toggle[data-state="playing"]::before { content: "" / ""; display: inline-block; box-sizing: border-box; width: 0.7em; height: 0.9em; margin-right: var(--corn-space-2); border-left: 0.22em solid currentColor; border-right: 0.22em solid currentColor; }
+.hx-player-toggle[data-state="playing"]::before { content: "" / ""; display: inline-block; box-sizing: border-box; width: 0.7em; height: 0.9em; margin-right: var(--corn-space-2); border-left: var(--corn-border-strong) solid currentColor; border-right: var(--corn-border-strong) solid currentColor; }
 .hx-player-toggle[data-state="paused"]::before { content: "▶" / ""; margin-right: var(--corn-space-2); }
 .hx-player-toggle[data-state="done"]::before { content: "↻" / ""; margin-right: var(--corn-space-2); }
 .hx-player-controls .hx-btn:disabled { opacity: 0.4; cursor: default; }
@@ -1067,8 +1067,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-proposal-source { grid-column: 1 / -1; order: 1; justify-self: start; }
   .hx-player-controls .hx-btn { min-height: 44px; min-width: 44px; padding: 0 var(--corn-space-3); white-space: nowrap; }
   /* On a phone the controls are glyphs, the names are said: ◀ ⏸ ▶ in a 44px row */
-  .hx-player-prev, .hx-player-next, .hx-player-toggle { font-size: 0; }
-  .hx-player-prev::before, .hx-player-next::after, .hx-player-toggle::before { margin: 0; font-size: var(--corn-text-md); }
+  .hx-player-prev .hx-player-label, .hx-player-next .hx-player-label, .hx-player-toggle .hx-player-label { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .hx-player-prev::before, .hx-player-next::after, .hx-player-toggle::before { margin: 0; }
   .hx-player-next-scenario { font-size: var(--corn-text-sm); }
   .hx-proposal-ways .hx-btn, a.hx-proposal-source { min-height: 44px; } /* targets a thumb can hit */
   .hx-proposal-source { padding: 0; border: 0; border-radius: 0; background: none; } /* a line of the sheet, not a pill 44px tall */

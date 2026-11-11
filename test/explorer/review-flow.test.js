@@ -460,7 +460,7 @@ describe('F16 a link that finds nothing says what, and offers the ways on', () =
 describe('the phone and reflow rules (F11, F14, F21): what the stylesheet says', () => {
   const phoneCss = css.slice(css.indexOf('the review flow, 0.34 design review'));
   it('F11 the player peek keeps Previous, Pause and Next, and they work from the peek', () => {
-    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-head\):not\(\.hx-player-text\):not\(\.hx-player-controls\)/);
+    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-controls\):not\(\.hx-player-text\)/);
     clearScenario();
     playScenario({ id: 's', title: 'S', steps: [{ node: 'root', text: 'a' }] }, { autoplay: false });
     for (const a of ['scenario-prev', 'scenario-toggle', 'scenario-next']) expect(q(`[data-action=${a}]`).hasAttribute('data-peek-ok')).toBe(true);

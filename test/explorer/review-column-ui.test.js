@@ -218,6 +218,22 @@ describe('a scenario reads as a list of steps (D4)', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('plans the checks again when the open scenario is edited, so the verdicts are of the steps it has now', async () => {
+    const calls            = [];
+    const checker = { name: 'test', async check(items         ) { calls.push(items.length); return items.map((i         ) => ({ id: i.id, allowed: true, status: 200, reason: '', checked: true })); } };
+    await mount(base(), { checker });
+    const step = (text        ) => ({ node: 'page-meals', text, check: { route: '/meals', method: 'GET' } });
+    open(robot({ scenarios: [{ id: 'plan', title: 'Plan', actor: 'adult', steps: [step('a')] }] }));
+    click(qa('.hx-sc-row')[0]);
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    open(robot({ scenarios: [{ id: 'plan', title: 'Plan', actor: 'adult', steps: [step('a'), step('b')] }] }));
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls).toEqual([1, 2]);
+    expect(qa('[data-corn="state-pill"]').map((p) => p.textContent)).toEqual(['Allowed', 'Allowed']);
+  });
+
   it('does not check anything when the proposal opens, only when a scenario does', async () => {
     const calls            = [];
     const checker = { name: 'test', async check(items         ) { calls.push(items.length); return []; } };
