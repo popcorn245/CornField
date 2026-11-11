@@ -121,6 +121,14 @@ describe('renderer-canvas2d', () => {
       expect((ctx.log          ).some((c     ) => c[0] === 'arc' && c[3] === 3.5)).toBe(true); // the packet still moved
       r.draw(scene, { x: 5, y: 0, zoom: 1 }, 600); // the camera moved: the lines are drawn again
       expect(names(layerCtx)).toContain('stroke');
+      // A new scene (a selection, a layer, the theme, a proposal or a scenario step all build one) draws the lines again
+      const again = (fn) => { fn(); layerCtx.log.length = 0; r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 700); return names(layerCtx).includes('stroke'); };
+      const scene2 = buildScene(mk({ selectedNode: nodes[1], sceneVersion: 2 })); // the same selection, built again
+      expect(again(() => {})).toBe(true);
+      layerCtx.log.length = 0;
+      r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 800);
+      expect(names(layerCtx)).not.toContain('stroke'); // and then holds
+      expect(again(() => r.resize(390, 844, 3))).toBe(true); // a resize or a new device pixel ratio
     } finally { vi.unstubAllGlobals(); }
   });
 
