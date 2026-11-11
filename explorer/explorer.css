@@ -1019,6 +1019,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
    28px at a desk. Phone width or a coarse pointer. test/explorer/target-size.test.js holds this list.
    --------------------------------------------------------------------------- */
 .hx-change-row { min-height: 28px; }
+.hx-run .hx-link { display: inline-flex; align-items: center; min-height: 24px; } /* a run card's links sit on lines 14px apart: 24px at a desk (WCAG 2.5.8) */
 @media (max-width: 767px), (pointer: coarse) {
   .hx-change-row, .hx-toggle-row, .hx-textbtn, .hx-player-speed, .hx-player .hx-close,
   .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select, .hx-mobile-search .hx-input { min-height: 44px; }

@@ -42,4 +42,5 @@ describe('touch targets', () => {
     expect(px(phone, '.hx-sheet-handle', 'height')).toBeGreaterThanOrEqual(44);
   });
   it('a change row is 28px at a desk', () => { expect(px(desk, '.hx-change-row', 'min-height')).toBeGreaterThanOrEqual(28); });
+  it('a run card\'s link is 24px at a desk (its lines are closer than 24px: WCAG 2.5.8)', () => { expect(px(desk, '.hx-run .hx-link', 'min-height')).toBeGreaterThanOrEqual(24); });
 });
