@@ -13,7 +13,9 @@
  */
 
 import { state, touchScene } from './state.js';
-import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom, setHoverNode } from './render.js';
+import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom, setHoverNode, labelNodeAt, fitGraphToViewport, fitPadding } from './render.js';
+import { clusterIds } from './cluster.js';
+import { LANDMARK_TYPES } from './scene.js';
 import { saveFreeformPositions } from './layout.js';
 import { selectNode, closeDrawer } from './panels.js';
 import { hitTestScreen } from './spatial.js';
@@ -188,8 +190,11 @@ function onPointerUp(e) {
           }
         }
       }
-    } else if (state.selectedNode) {
-      closeDrawer(); // the background was clicked: back to the normal view
+    } else {
+      // A cluster's title (its hub's label) is not a node to select: a click on it frames the cluster (spec 0008 D1)
+      const titled = topologyNode(labelNodeAt(p.x, p.y));
+      if (titled && LANDMARK_TYPES.includes(titled.type) && titled.id !== 'root') fitGraphToViewport(fitPadding(), clusterIds(titled.id, state.edges));
+      else if (state.selectedNode) closeDrawer(); // the background was clicked: back to the normal view
     }
   }
   isDragging = false;

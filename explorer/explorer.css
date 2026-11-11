@@ -1168,6 +1168,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-search:has(.hx-search-steps:not([hidden])) { width: 340px; }
 .hx-search-results { position: absolute; top: calc(100% + var(--corn-space-2)); right: 0; z-index: 40; width: min(440px, 92vw); max-height: min(60vh, 560px); overflow-y: auto; padding: var(--corn-space-1) 0; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); box-shadow: var(--corn-shadow); color: var(--corn-text); font-size: var(--corn-text-sm); }
 .hx-search-results[hidden] { display: none; }
+/* The list is part of the header, which sits under the node panel (40): while the list is open the header is over it, so a row is never half under the panel */
+.hx-header:has(.hx-search-results:not([hidden])) { z-index: 46; }
 .hx-search-group-title { position: sticky; top: 0; display: flex; justify-content: space-between; gap: var(--corn-space-3); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-1); background: var(--corn-surface-2); color: var(--corn-text-3); font-size: var(--corn-text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .hx-search-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--corn-space-3); width: 100%; min-height: 28px; padding: var(--corn-space-1) var(--corn-space-3); border: 0; border-left: var(--corn-border-strong) solid transparent; background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
 .hx-search-row:hover, .hx-search-row:focus-visible { background: var(--corn-surface-3); }
@@ -1178,6 +1180,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-search-empty, .hx-search-more { margin: 0; padding: var(--corn-space-2) var(--corn-space-3); color: var(--corn-text-2); overflow-wrap: anywhere; }
 .hx-mobile-search { flex-wrap: wrap; }
 .hx-mobile-search .hx-input { flex: 1 1 0; min-width: 0; }
+.hx-mobile-search::before { top: calc(var(--corn-space-3) + 22px); } /* the magnifier stays by the field when the bar wraps to a second row of steps */
 .hx-mobile-search .hx-search-steps { flex: 1 0 100%; justify-content: flex-end; gap: var(--corn-space-1); }
 .hx-mobile-search .hx-search-count { margin-right: auto; font-size: var(--corn-text-xs); }
 .hx-mobile-search .hx-search-results { top: 100%; left: 0; right: 0; width: auto; max-height: 50vh; border-radius: 0; border-left: 0; border-right: 0; }

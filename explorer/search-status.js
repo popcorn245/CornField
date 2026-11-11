@@ -1,9 +1,10 @@
 /**
  * @module explorer/search-status
  *
- * The line by the search field that says a search found nothing ("No match for “xyz”"), in a polite live region so a
- * screen reader says it too (F24). Spec 0008 builds the results list; this is only the no-match message.
- * The words are the `searchNoMatch` string; the query goes in as text, never as HTML.
+ * The polite live region by each search field (F24): what a screen reader hears of a search. It says "No match for “xyz”" for a query that
+ * found nothing (once the typing pauses), and search.js (spec 0008) says the count and the match chosen through it. The region is out of
+ * sight: the count in the field and the list under it say it on the screen. The no-match words are the `searchNoMatch` string; the query
+ * goes in as text, never as HTML.
  */
 
 import { t } from './strings.js';

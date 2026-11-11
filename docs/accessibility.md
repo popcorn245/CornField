@@ -24,7 +24,7 @@ Elsewhere:
 
 | Where | Keys |
 |---|---|
-| The search box | `Enter` selects the first node whose name matches; no match is said |
+| The search box | it reads names, ids, files, types and kinds. What it found is said ("33 matches", or "No match for …"), and shown as a count in the field and a list under it, grouped by type. `Enter` selects the best match and flies to it, `Enter` again the next, `Shift+Enter` the one before; `↓` goes into the list (`↑` and `↓` move through it, `Enter` chooses, `Escape` goes back to the field), and its first row, "Frame all", fits every match on the screen. With a search on, `N` and `P` on the map step through its matches. `Escape` closes the list, and again clears the search. Each step says "3 of 33: /sync/list, in Orders app" |
 | The node's panel | `Escape` closes it and gives the focus back to the map |
 | The Layers and Proposals menus | `Escape` closes them, back on their button |
 | The Threads tab of that panel | a button in the panel's Show group; each thread is a row button that opens it, and a thread's messages are an ordered list named "Messages" with nothing to type into (replying is a link to the forge). **New idea** is a button that says it expands a labelled group (title, text, Open the idea, Cancel); its answer is a live status. A node's "Mentioned in" lists buttons that open the thread ([threads.md](threads.md)) |
@@ -57,7 +57,7 @@ The sample repo (`node cli/cornfield.js serve --repo test/fixtures/sample --port
 3. `N` selects the first node: "CI workflows, tool, 3 connections, 1 of 38". `N` again: "cloud.example.test, app, 2 connections, 2 of 38". `P` goes back; `End` goes to the last, "@acme/shared, pkg, 3 connections, 38 of 38".
 4. `Enter` moves the focus to the panel's title, so a screen reader reads the panel from its start; `Tab` goes on to its close button, its links and buttons.
 5. `Escape` closes the panel ("Panel closed") and the focus is on the map again.
-6. In the search box, typing `orders` and `Enter` selects "/api/v1/orders, page, 4 connections, 23 of 38".
+6. In the search box, typing `orders` says "21 matches"; `Enter` selects the best one and says "1 of 21: order-summary, in @big/ui"; `↓` goes into the list, whose first row is "Frame all 21".
 7. On Layers ("Layers · 13 of 20"), `Enter` opens the menu (its button says it is expanded); `Tab` goes through the layer toggles; `Escape` closes it, back on the button.
 8. With a proposal open (`/?proposal=0002-checkout`), the proposal bar is one named group, and `Tab` reaches, in order, the counts (they open the list of changes, each one takes the map to that change), Before / Diff / After, Play (the scenarios), Edit (the what-if controls), Send back, Approve and the ⋯ menu. Send back opens the note and moves focus to it; `Tab` from the note reaches Cancel, then "Send back with this note"; Cancel (or `Escape`) closes it and returns focus to Send back. The ⋯ menu is a menu button: it opens on `Enter`, `Space` or the arrow keys, the arrows move through it, and `Escape` closes it back to the button. On a phone every one of them is at least 44px tall. A scenario's player reads each step as it comes (a polite live region).
 

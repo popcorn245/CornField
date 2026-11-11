@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { chooseLabels, createLabelLayer, placeLabels, LABEL_PAD, MAX_LABELS } from '../../explorer/labels.js';
+import { chooseLabels, createLabelLayer, labelHit, placeLabels, LABEL_PAD, MAX_LABELS } from '../../explorer/labels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { buildScene, FONT_NODE, LABEL_OUTLINE } from '../../explorer/scene.js';
 
@@ -189,6 +189,28 @@ describe('placeLabels: no two labels touch, in a fixed priority order (spec 0008
     expect(withChip.at(-1).size * 1).toBeGreaterThanOrEqual(11);
     expect(chooseLabels(scene, CAM, VIEW, { ...noMargin, hover: 'a' }).some((i) => i.kind === 'chip')).toBe(false); // it already shows its label
     expect(chooseLabels(scene, CAM, VIEW, noMargin).some((i) => i.kind === 'chip')).toBe(false);
+  });
+});
+
+describe('labelHit and the layer\'s hit: the label under a screen point (a cluster\'s title)', () => {
+  const scene = sc([sn('a', 100, 100, { type: 'app', labelKeep: true, labelSize: 12, labelBold: true }), sn('b', 400, 100)]);
+  it('answers with the node whose box holds the point, and null off any box', () => {
+    const cam = { x: 10, y: 20, zoom: 1 };
+    const placed = placeLabels(scene, 1, { measure });
+    // a: centred on x = 100, baseline y = 100 + 10 + 3 + 13 = 126, box from 113 up to 126 and 3.9 down, in screen px + the camera
+    expect(labelHit(placed, cam, 110, 20 + 120)).toBe('a');
+    expect(labelHit(placed, cam, 410, 20 + 120)).toBe('b');
+    expect(labelHit(placed, cam, 250, 20 + 120)).toBeNull();
+    expect(labelHit(placed, cam, 110, 20 + 90)).toBeNull(); // on the disc, above the label
+  });
+  it('is the layer\'s hit for the last scene and camera it drew', () => {
+    const ctx = recordingCtx();
+    const layer = createLabelLayer(fakeCanvas(ctx));
+    layer.resize(800, 600, 1);
+    expect(layer.hit(110, 140)).toBeNull(); // nothing drawn yet
+    layer.draw(scene, { x: 10, y: 20, zoom: 1 });
+    expect(layer.hit(110, 20 + 120)).toBe('a');
+    expect(layer.hit(5, 5)).toBeNull();
   });
 });
 

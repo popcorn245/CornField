@@ -90,7 +90,10 @@ export function paintSearch({ keepOpen = true } = {}) {
     const count = $(field.count);
     if (count) { count.textContent = text; count.dataset.empty = result.query && !result.total ? 'true' : 'false'; }
     const steps = $(field.steps);
-    if (steps) steps.hidden = !result.query;
+    if (steps) {
+      steps.hidden = !result.query;
+      for (const b of steps.querySelectorAll('[data-action="search-prev"], [data-action="search-next"]')) b.disabled = !result.total; // nothing to step to
+    }
     const list = listOf(field);
     if (!list) continue;
     const input = $(field.input);

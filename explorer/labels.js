@@ -262,11 +262,26 @@ function coverWithNodes(ctx, nodes) {
 }
 
 /**
+ * The placed label under a screen point, or null: the one drawn on top (the last in scene order) when two overlap their padding
+ * @param {ReturnType<typeof placeLabels>} placed
+ * @param {import('./scene.js').Camera} camera
+ * @param {number} x screen px
+ * @param {number} y
+ */
+export function labelHit(placed, camera, x, y) {
+  let hit = null;
+  for (const p of placed) {
+    if (x >= camera.x + p.l && x <= camera.x + p.r && y >= camera.y + p.t && y <= camera.y + p.b && (!hit || p.index > hit.index)) hit = p;
+  }
+  return hit ? hit.id : null;
+}
+
+/**
  * A transparent 2D canvas that draws the chosen labels over the map
  * @param {HTMLCanvasElement} canvas
  * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`);
  *   a node's label colour is the theme's `--corn-map-label`, and the outline under every label its `--corn-map-label-halo`, when it sets them
- * @returns {{draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera, extras?: {hover?: string|null}) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
+ * @returns {{hit: (x: number, y: number) => string|null, draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera, extras?: {hover?: string|null}) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
  *   `draw` returns whether it painted: false when the camera, the scene, the size and the hovered node were unchanged; `extras.hover` is the
  *   node the pointer is on (named by a chip when it has no label)
  */
@@ -295,6 +310,11 @@ export function createLabelLayer(canvas, opts = {}) {
   };
 
   return {
+    /** The node whose label is drawn under a screen point (a cluster's title: input.js frames the cluster), or null */
+    hit(x, y) {
+      return kept && lastScene ? labelHit(kept, { x: lastX, y: lastY, zoom: lastZoom }, x, y) : null;
+    },
+
     resize(w, h, ratio) {
       width = w;
       height = h;

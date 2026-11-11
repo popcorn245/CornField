@@ -176,6 +176,12 @@ function paint() {
   paintHooks.forEach((fn) => fn(scene, state.camera));
 }
 
+/** The node whose label is drawn under a screen point, or null (labels.js `hit`): a cluster's title frames the cluster */
+export function labelNodeAt(x, y) {
+  const labels = getLabelLayer();
+  return labels ? labels.hit(x, y) : null;
+}
+
 /**
  * The node the pointer is on (or null): a node with no label is named by a chip over the map while it is. Only the label layer
  * draws again (the map has nothing new to show), so moving across the map costs one small redraw per node entered.
