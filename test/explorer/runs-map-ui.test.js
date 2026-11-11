@@ -149,7 +149,7 @@ describe('the words (runs-model.js)', () => {
       'Requested by maintainer-one under the profile claude', 'Claimed by runner-bot', 'Push seen: abcdef0 on agent/meals', 'Opened pull request #50 by runner-bot', 'Reported working by runner-bot', 'Checks running',
     ]);
     expect(limitRows(A)).toEqual([
-      { name: 'Minutes', limit: '30', reported: 'not reported' }, { name: 'Cost', limit: '5', reported: '0.4' }, { name: 'Tokens', limit: 'no limit asked', reported: '1200' },
+      { name: 'Minutes', limit: '30', reported: 'not reported' }, { name: 'Cost', limit: '$5.00', reported: '$0.40' }, { name: 'Tokens', limit: 'no limit asked', reported: '1,200' },
     ]);
   });
 
@@ -163,10 +163,13 @@ describe('the words (runs-model.js)', () => {
 
   it('say what changed, and nothing on the first answer', () => {
     expect(changeWords(null, [A])).toEqual([]);
+    // a run is called by what its card shows, never by its id
+    const nameA = 'code on issue #7, profile claude, asked by maintainer-one';
+    const nameB = 'code on issue #9, profile qwen, asked by maintainer-one';
     expect(changeWords([A, B], [A2, { ...B, status: 'done', open: false }])).toEqual([
-      `Run ${A.runId} now collides with ${B.runId}`, `Run ${B.runId} is now done`, `Run ${B.runId} no longer collides`,
+      `Run ${nameA} now collides with ${nameB}`, `Run ${nameB} is now done`, `Run ${nameB} no longer collides`,
     ]);
-    expect(changeWords([A], [A2, B])).toEqual([`Run ${A.runId} now collides with ${B.runId}`, expect.stringMatching(/^New run /)]);
+    expect(changeWords([A], [A2, B])).toEqual([`Run ${nameA} now collides with ${nameB}`, expect.stringMatching(/^New run: /)]);
   });
 });
 
@@ -258,7 +261,7 @@ describe('the Runs view', () => {
     expect(a.textContent).toContain('Working');
     expect(a.textContent).toContain('profile claude');
     expect(a.querySelector('.hx-run-limits').textContent).toContain('Cost');
-    expect(a.querySelector('.hx-run-limits').textContent).toContain('limit: 5; reported: 0.4');
+    expect(a.querySelector('.hx-run-limits').textContent).toContain('limit: $5.00; reported: $0.40');
     expect(a.textContent).toContain('Checks running');
     expect(a.textContent).toContain('Changing orders');
     expect(a.textContent).toContain(`Collides with ${B.runId} on orders`);
@@ -340,7 +343,7 @@ describe('the Runs view', () => {
       server.runs = [A2, B];
       await vi.advanceTimersByTimeAsync(60_000);
       await vi.advanceTimersByTimeAsync(100);
-      expect($('map-announcer').textContent).toBe(`Run ${A.runId} now collides with ${B.runId}. Run ${B.runId} now collides with ${A.runId}`);
+      expect($('map-announcer').textContent).toBe('Run code on issue #7, profile claude, asked by maintainer-one now collides with code on issue #9, profile qwen, asked by maintainer-one. Run code on issue #9, profile qwen, asked by maintainer-one now collides with code on issue #7, profile claude, asked by maintainer-one');
     } finally {
       vi.useRealTimers();
     }

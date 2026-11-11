@@ -1375,12 +1375,14 @@ function patchList(list, html) {
   const keyOf = (el) => el.dataset.key || el.dataset.run || null;
   const old = new Map([...list.children].filter((el) => keyOf(el)).map((el) => [keyOf(el), el]));
   const typing = (el) => el.contains(document.activeElement) && document.activeElement.matches('input, textarea');
+  const redraw = new Set(redrawRuns); // runs the page has just acted on: their cards say what the action did, so they are drawn anew (the focus is put back by hand)
+  redrawRuns.clear();
   const unsent = (el) => [...el.querySelectorAll('[data-run-reply]')].some((f) => f.value !== '');
   const target = fresh.map((f) => {
     const was = keyOf(f) && old.get(keyOf(f));
     if (!was) return f;
     if (was.outerHTML === f.outerHTML) return was;
-    if ((typing(was) || unsent(was)) && f.querySelector('[data-run-reply]') && was.querySelector('[data-run-reply]')) {
+    if (!redraw.has(keyOf(f)) && (typing(was) || unsent(was)) && f.querySelector('[data-run-reply]') && was.querySelector('[data-run-reply]')) {
       // the field stays; only what was said about the last action is brought up to date
       for (const slot of f.querySelectorAll('[data-run-result]')) { const mine = was.querySelector(`[data-run-result="${slot.dataset.runResult}"]`); if (mine) mine.replaceWith(slot); }
       // The typed text is in `ui.runReplies` as well, always (every keystroke); a field that differs from it was changed by the page itself (a reply that was sent is emptied)
@@ -1459,8 +1461,7 @@ function drawNotes() {
   $('forge-status').textContent = n.loading && !n.data ? `Drafting the release notes from ${forgeName()} …` : n.data ? notesSummary(n.data) : '';
   const notice = $('forge-notice');
   const words = n.error || (n.data && n.data.stale ? `Showing an older answer. ${n.data.stale}` : '');
-  notice.hidden = !words;
-  notice.textContent = words;
+  setNotice(notice, words, !!words);
   $('forge-detail').hidden = true;
   paintIdea();
   $('forge-rate').textContent = (n.data && n.data.rate) || '';
@@ -1881,6 +1882,9 @@ function onAgentClick(e) {
   if (t.closest && t.closest('[data-action="agent-start-cancel"]') && ui.agent && !ui.agent.posting) closeAgent();
 }
 
+/** The runs whose card is drawn anew at the next paint, whatever holds the focus in it (the page itself changed what it says) */
+const redrawRuns = new Set();
+
 /** Gives the focus to the first of `selectors` that is there and not disabled, inside the card of a run (else the card itself) */
 function focusInRun(runId, selectors) {
   const panel = $('forge-panel');
@@ -1888,6 +1892,7 @@ function focusInRun(runId, selectors) {
   if (!card) return;
   const to = selectors.map((sel) => card.querySelector(sel)).find((el) => el && !el.disabled) || card;
   if (to !== document.activeElement) to.focus();
+  if (to.matches('input') && typeof to.setSelectionRange === 'function') to.setSelectionRange(to.value.length, to.value.length); // typing goes on at the end of what is there
 }
 
 /** Asks a run to stop: one POST, then the runs are read again. What it came to is said in the run's own card, and to a screen reader */
@@ -1904,6 +1909,7 @@ async function stopRun(runId) {
   ui.busy = '';
   sayResult(runId, res.status === null ? notSentWords('The stop request') : stopWords(res.status, res.body, name), res.ok);
   await loadRuns(false, { say: false });
+  redrawRuns.add(runId);
   paint();
   // The Stop button is gone once the stop is asked for: the focus goes to the run's row, never to the page
   focusInRun(runId, [`[data-forge-stop="${runId}"]`]);
@@ -1934,6 +1940,7 @@ async function answerRun(runId, action) {
   const words = res.status === null ? notSentWords(action === 'reply' ? 'Your reply' : 'The answer') : answerWordsFor(res.status, res.body, name, action);
   sayResult(runId, words, res.ok);
   await loadRuns(false, { say: false });
+  redrawRuns.add(runId);
   paint();
   focusInRun(runId, [back, `[data-run-timeline="${runId}"]`]);
 }

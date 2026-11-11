@@ -1053,8 +1053,8 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 @media (min-width: 640px) { .hx-forge-body { --hx-forge-pad: var(--corn-space-6); --hx-forge-padx: calc(var(--corn-space-5) + var(--corn-space-1)); } }
 .hx-forge-top { position: sticky; top: calc(var(--hx-forge-pad) * -1); z-index: 3; display: flex; flex-direction: column; gap: var(--corn-space-4); margin: calc(var(--hx-forge-pad) * -1) calc(var(--hx-forge-padx) * -1) 0; padding: var(--hx-forge-pad) var(--hx-forge-padx) 0; background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); } /* opaque: the panel's surface over the ground, so a list scrolls under it without showing through */
 .hx-forge-top .hx-forge-tabs { margin: 0 calc(var(--hx-forge-padx) * -1); padding: 0 var(--hx-forge-padx); }
-/* Where the tabs run on past an edge (a phone), they fade out on that side: a mask, so it works on any surface and in any theme */
-.hx-forge-top .hx-forge-tabs { mask-image: linear-gradient(to right, transparent 0, #000 var(--hx-fade-l, 0px), #000 calc(100% - var(--hx-fade-r, 0px)), transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--hx-fade-l, 0px), #000 calc(100% - var(--hx-fade-r, 0px)), transparent 100%); }
+/* Where the tabs run on past an edge (a phone), they fade out on that side: a mask (only its alpha counts, so any opaque token does), so it works on any surface and in any theme */
+.hx-forge-top .hx-forge-tabs { mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); }
 .hx-forge-top[data-more~="start"] { --hx-fade-l: calc(var(--corn-space-6) * 1.5); }
 .hx-forge-top[data-more~="end"] { --hx-fade-r: calc(var(--corn-space-6) * 1.5); }
 
