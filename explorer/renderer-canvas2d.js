@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, MARK_MIN_PX, looksFor, packetPoint } from './scene.js';
+import { CORE_RATIO, ARROW, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 
 const TAU = Math.PI * 2;
@@ -80,6 +80,18 @@ function drawEdge(ctx, edge, timeMs, zoom) {
   ctx.shadowBlur = 0;
   ctx.setLineDash([]);
 
+  // A removed edge is struck across at its midpoint, as the WebGL tips pass draws it
+  if (edge.mark === 'removed') {
+    const mid = edgePoint(edge, 0.5);
+    const len = Math.hypot(edge.x2 - edge.x1, edge.y2 - edge.y1);
+    const [dx, dy] = len > 0 ? [(edge.x2 - edge.x1) / len, (edge.y2 - edge.y1) / len] : [1, 0];
+    ctx.beginPath();
+    ctx.moveTo(mid.x - dy * EDGE_STRIKE.halfLength, mid.y + dx * EDGE_STRIKE.halfLength);
+    ctx.lineTo(mid.x + dy * EDGE_STRIKE.halfLength, mid.y - dx * EDGE_STRIKE.halfLength);
+    ctx.lineWidth = Math.max(EDGE_STRIKE.width, 1.5 / zoom);
+    ctx.stroke();
+  }
+
   // Arrowhead along the curve's end tangent
   if (edge.arrow) {
     const { cx, cy } = edge.curve || { cx: edge.x1, cy: edge.y1 };
@@ -128,17 +140,23 @@ function drawNode(ctx, node, zoom, looks, style) {
     ctx.stroke();
   }
 
-  // A proposal's mark: a ring just outside the node, dashed for an addition (drawn a little stronger than the node, so a faded removal is still plain)
+  // A proposal's mark: a ring just outside the node in the mark's own dash, at the node's alpha (a removed node's ring is as faded
+  // as the node, as the WebGL shader draws it and as the contrast check measures it), and for removed a strike through the node
   const mark = looks.mark[node.mark];
   if (mark) {
-    ctx.globalAlpha = Math.min(1, node.alpha * 1.8);
-    circle(ctx, node.x, node.y, node.r + Math.max(mark.ringR, MARK_MIN_PX.gap / zoom));
+    const rr = node.r + Math.max(mark.ringR, MARK_MIN_PX.gap / zoom);
+    circle(ctx, node.x, node.y, rr);
     ctx.strokeStyle = mark.color;
     ctx.lineWidth = Math.max(mark.ringWidth, MARK_MIN_PX.ring / zoom);
     ctx.setLineDash(mark.ringDash || []);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.globalAlpha = node.alpha;
+    if (node.mark === 'removed') {
+      ctx.beginPath();
+      ctx.moveTo(node.x - rr, node.y);
+      ctx.lineTo(node.x + rr, node.y);
+      ctx.stroke();
+    }
   }
 
   // The node circle, glowing, with a white core dot

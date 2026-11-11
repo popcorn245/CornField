@@ -5,7 +5,7 @@
  * one, and both renderers and the label layer take their own looks for the scene's ground. No GPU: the WebGL
  * renderer runs on the fake GL and the tests read the uniforms it sets.
  */
-import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
+import { DIFF_MARK_COLORS, markOpacity } from '../../explorer/diff-marks.js';
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -204,6 +204,14 @@ describe('the looks a renderer draws itself', () => {
     const markEdge = { ...scene.edges[0], mark: 'added', color: MARK.added.color };
     lightenScene({ nodes: [], edges: [markEdge], decor: { grid: null, rings: [], lanes: [] } });
     expect(markEdge.color).toBe(looksFor('light').mark.added.color);
+  });
+
+  it('a proposal mark\'s edge keeps the opacity scene.js gave it on light (no line gain), the one the contrast check measures', () => {
+    const removed = { ...buildScene(sampleState({ theme: 'light' })).edges[0], mark: 'removed', color: MARK.removed.color, alpha: markOpacity('removed') };
+    const plain = { ...removed, mark: 'none', color: 'rgba(255, 255, 255, 0.16)', alpha: 0.5 };
+    lightenScene({ nodes: [], edges: [removed, plain], decor: { grid: null, rings: [], lanes: [] } });
+    expect(removed.alpha).toBe(markOpacity('removed'));
+    expect(plain.alpha).toBeCloseTo(0.5 * LINE_GAIN); // the other lines still get it
   });
 
   it('the WebGL style tables follow the theme; the renderer sets them again when the scene\'s theme changes', () => {

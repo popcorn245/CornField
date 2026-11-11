@@ -204,7 +204,7 @@ export const MARK = {
   added: { ...MARK_SHAPES.added, color: DIFF_MARK_COLORS.dark.added, ringR: 9, ringWidth: 2, edgeWidth: 2.2, alpha: 1 },
   changed: { ...MARK_SHAPES.changed, color: DIFF_MARK_COLORS.dark.changed, ringR: 9, ringWidth: 2.5, edgeWidth: 2.4, alpha: 1 },
   removed: { ...MARK_SHAPES.removed, color: DIFF_MARK_COLORS.dark.removed, ringR: 9, ringWidth: 2, edgeWidth: 2, alpha: REMOVED_ALPHA },
-  edit: { ...MARK_SHAPES.edit, color: DIFF_MARK_COLORS.dark.edit, ringR: 9, ringWidth: 2.5, edgeWidth: 2.4, alpha: 1 }, // dotted: not the same ring as a change
+  edit: { ...MARK_SHAPES.edit, color: DIFF_MARK_COLORS.dark.edit, ringR: 9, ringWidth: 3, edgeWidth: 2.4, alpha: 1 }, // dotted: not the same ring as a change
 };
 /**
  * The looks a renderer draws itself, per theme (MAP-01): the halos, the mark rings, the core dot and the

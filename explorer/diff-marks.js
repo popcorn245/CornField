@@ -31,5 +31,5 @@ export const MARK_SHAPES = Object.freeze({
   added: Object.freeze({ ringDash: Object.freeze([5, 4]), edgeDash: Object.freeze([7, 5]), strike: false }), // a dashed ring
   changed: Object.freeze({ ringDash: null, edgeDash: null, strike: false }), // a plain solid ring
   removed: Object.freeze({ ringDash: null, edgeDash: Object.freeze([3, 4]), strike: true }), // a faded ring, struck through
-  edit: Object.freeze({ ringDash: Object.freeze([1.5, 3.5]), edgeDash: Object.freeze([1.5, 3.5]), strike: false }), // a dotted ring
+  edit: Object.freeze({ ringDash: Object.freeze([2, 5]), edgeDash: Object.freeze([2, 5]), strike: false }), // a dotted ring: short marks, wide gaps (a 1.5/3.5 dot blurred into a solid ring at 1x)
 });

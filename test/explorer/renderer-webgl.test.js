@@ -134,12 +134,12 @@ describe('styleTables (the looks in scene.js, handed to the shaders as uniforms)
     const width = (name        ) => t.markGeom[(MARK_CODE       )[name] * 4 + 1];
     const dash = (name        ) => Array.from(t.markGeom.slice((MARK_CODE       )[name] * 4 + 2, (MARK_CODE       )[name] * 4 + 4));
     expect(width('changed')).toBe(2.5);
-    expect(width('edit')).toBe(2.5);
+    expect(width('edit')).toBe(3);
     expect(width('added')).toBe(2);
     expect(width('removed')).toBe(2);
     expect(width('changed')).toBeGreaterThan(width('added'));
     expect(dash('added')).toEqual([5, 4]);
-    expect(dash('edit')).toEqual([1.5, 3.5]); // a dotted ring: not the changed mark's solid one (F20)
+    expect(dash('edit')).toEqual([2, 5]); // a dotted ring: not the changed mark's solid one (F20)
     for (const name of ['changed', 'removed']) expect(dash(name), name).toEqual([0, 0]);
   });
 

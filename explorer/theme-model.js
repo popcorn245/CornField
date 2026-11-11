@@ -187,13 +187,18 @@ export function lightenScene(scene) {
     n.labelColor = lightColor(n.labelColor, 'text');
   }
   for (const e of scene.edges) {
-    // A thin dark line on a light ground reads weaker than a thin light one on a dark ground at the same
-    // alpha (the contrast ratio is lower): a faded or translucent line gets LINE_GAIN more, capped at opaque
-    if (e.alpha < 1) e.alpha = Math.min(1, e.alpha * LINE_GAIN);
-    // a proposal's mark keeps the light colour chosen for it (diff-marks.js), the same as its ring, not a derived one
-    e.color = e.mark && DIFF_MARK_COLORS.dark[e.mark] === e.color ? DIFF_MARK_COLORS.light[e.mark] : lightColor(e.color);
-    const [r, g, b, a] = parseColor(e.color);
-    if (a > 0 && a < 1) e.color = css([r, g, b], Math.min(1, a * LINE_GAIN));
+    if (e.mark && e.mark !== 'none') {
+      // A proposal's mark keeps the light colour chosen for it (diff-marks.js) and the opacity scene.js gave it, with no gain:
+      // those were chosen together to be 3:1 at that opacity, and the contrast check (markOpacity) measures exactly that
+      e.color = DIFF_MARK_COLORS.dark[e.mark] === e.color ? DIFF_MARK_COLORS.light[e.mark] : lightColor(e.color);
+    } else {
+      // A thin dark line on a light ground reads weaker than a thin light one on a dark ground at the same
+      // alpha (the contrast ratio is lower): a faded or translucent line gets LINE_GAIN more, capped at opaque
+      if (e.alpha < 1) e.alpha = Math.min(1, e.alpha * LINE_GAIN);
+      e.color = lightColor(e.color);
+      const [r, g, b, a] = parseColor(e.color);
+      if (a > 0 && a < 1) e.color = css([r, g, b], Math.min(1, a * LINE_GAIN));
+    }
     if (e.glowColor) e.glowColor = lightColor(e.glowColor);
     if (e.label) e.label = { ...e.label, color: lightColor(e.label.color, 'text') };
     if (e.packet) e.packet = { ...e.packet, color: lightColor(e.packet.color), glowColor: lightColor(e.packet.glowColor) };
