@@ -195,9 +195,11 @@
     <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Play, Edit, Send back, Approve, ⋯ (proposal.js, review.js, whatif.js, scenario-ui.js) -->
     <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
       <p id="proposal-message" class="hx-proposal-message" role="status" hidden></p>
+      <div id="proposal-ways" class="hx-proposal-ways" role="group" aria-label="Ways on" data-corn="proposal-ways" hidden></div>
       <div id="proposal-body">
         <div class="hx-proposal-head" role="group" aria-label="Proposal actions">
           <strong id="proposal-title" class="hx-proposal-name"></strong>
+          <a id="proposal-source" class="hx-proposal-source" data-corn="proposal-source" hidden></a>
           <div class="hx-proposal-counts">
             <button type="button" id="proposal-chip" class="hx-proposal-chip" data-action="toggle-proposal-changes" aria-expanded="false"></button>
             <button type="button" id="proposal-mode" class="hx-proposal-mode" data-action="toggle-proposal-mode" data-peek-ok aria-expanded="false" aria-controls="proposal-seg" title="Before, Diff or After"></button>

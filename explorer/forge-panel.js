@@ -89,7 +89,7 @@ import {
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
 import { cornStateAttr } from './corn-state.js';
-import { proposalListing, onProposalListing, loadProposalList } from './proposal.js';
+import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
 import { specRowHtml } from './proposal-model.js';
 import { t } from './strings.js';
 
@@ -2202,6 +2202,7 @@ export function initForgePanel(config, opts = {}) {
   const panel = $('forge-panel');
   if (!config || !config.forge || !config.signIn || !panel) return false;
   ui.config = config;
+  proposalHooks.openSpecs = () => openForge({ tab: 'specs' }); // a bad proposal link's way on
   if (opts.clock) now = opts.clock;
   for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
   panel.hidden = false;

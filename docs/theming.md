@@ -395,7 +395,7 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill`, `proposal-source` |
 | `queued`, `running`, `waiting` | not started yet; under way; waiting on a person (or gone quiet) | `run`, `state-pill` |
 | `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped; a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
@@ -445,6 +445,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar` | the open proposal's bar |
+| `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 
@@ -510,6 +511,7 @@ Only labels a brand would want to voice are keys (about forty). Sentences of hel
 | `sendBackWithNote` | Send back with this note |
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
+| `openSpecsList` | Open the Specs list |
 | `tabSpecs` | Specs |
 | `tabPulls` | PRs |
 | `tabIssues` | Issues |

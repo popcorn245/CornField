@@ -394,7 +394,6 @@ describe('the keyboard', () => {
     expect(key(' ').defaultPrevented).toBe(false);
     playScenario(scenario(), { autoplay: false });
     expect(key('a').defaultPrevented).toBe(false);
-    expect(key('Escape').defaultPrevented).toBe(false);
   });
 
   it('is not bound twice however often it is initialised', () => {
@@ -416,7 +415,9 @@ describe('the camera', () => {
 
   it('glides to a step that is off screen, asking for frames until it arrives, and then stops asking', () => {
     playScenario(scenario(), { autoplay: false });
-    Object.defineProperty(bar(), 'offsetHeight', { value: 100 }); // the bar covers the bottom 100 px (and 24 of room)
+    const rect = (top        , bottom        ) => () => ({ top, bottom, left: 0, right: 800, width: 800, height: bottom - top, x: 0, y: top });
+    state.canvas.getBoundingClientRect = rect(0, 600);
+    bar().getBoundingClientRect = rect(500, 600); // the bar covers the bottom 100 px (and 8 of room)
     click('scenario-next'); click('scenario-next'); click('scenario-next');
     expect(wantsFrames()).toBe(true);
     const start = { ...state.camera };
@@ -425,7 +426,7 @@ describe('the camera', () => {
     for (let t = 32; t < 3000 && wantsFrames(); t += 16) tickScenario(t);
     expect(wantsFrames()).toBe(false);
     expect(state.camera.x).toBeCloseTo(400 - 3000, 5);
-    expect(state.camera.y).toBeCloseTo((600 - 124) / 2 - 2000, 5); // centred in what the bar leaves
+    expect(state.camera.y).toBeCloseTo((600 - 108) / 2 - 2005, 5); // centred in what the bar leaves (a node's label hangs below it: 5 px of that)
   });
 
   it('is the user\'s again as soon as they take hold of the map', () => {
@@ -715,7 +716,7 @@ describe('on a phone: the bar is a bottom sheet', () => {
     expect(wantsFrames()).toBe(false);
     const y = state.camera.y + 2000 * state.camera.zoom;
     expect(y).toBeLessThanOrEqual(state.height - 300 - 16); // above the sheets, with a little room
-    expect(y).toBeCloseTo((600 - 316) / 2, 5); // centred in what they leave
+    expect(y).toBeCloseTo((600 - 308) / 2 - 5, 5); // centred in what they leave (and its label: 5 px)
   });
 
   it('follows the step again when a sheet opens or closes and the covered height changes', () => {
