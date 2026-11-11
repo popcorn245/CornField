@@ -104,7 +104,7 @@ describe('createWebglRenderer', () => {
     const cams = callsOf(gl, 'uniform3f');
     expect(cams[0].slice(1)).toEqual([{ uniform: 'u_cam' }, 100, 50, 1.5]);
     expect(cams[cams.length - 1].slice(1)).toEqual([{ uniform: 'u_cam' }, -40, 7, 0.25]);
-    expect(callsOf(gl, 'uniform2f')[0].slice(2)).toEqual([800, 600]);
+    expect(callsOf(gl, 'uniform2f').find((c) => c[1].uniform === 'u_viewport' || (c[1].uniform !== 'u_tick' && c[1].uniform !== 'u_shape2')).slice(2)).toEqual([800, 600]);
     expect(callsOf(gl, 'uniform1f').filter((c) => c[1].uniform === 'u_dpr')[0][2]).toBe(2);
   });
 

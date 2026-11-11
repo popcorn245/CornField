@@ -210,14 +210,14 @@ export const NODE_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_geom;    // x, y, r (world), alpha
 layout(location = 2) in vec4 a_color;   // r, g, b (0..1), glow (px)
-layout(location = 3) in vec3 a_kind;    // halo code, mark code, colour alpha
+layout(location = 3) in vec4 a_kind;    // halo code, mark code, colour alpha, shape code (0 circle, 1 rounded square, 2 hexagon, 3 square, 4 diamond; plus 8 when a glyph takes the core dot's place)
 uniform vec4 u_haloGeom[4];             // fillR, ringR, ringWidth (world)
 uniform vec4 u_markGeom[5];             // per mark code: ringR, ringWidth (world), dash on, dash off
 uniform vec3 u_markMin;                 // MARK_MIN_PX, in screen px: ring thickness, edge thickness, gap from the node
 out vec2 v_local;
 flat out vec4 v_geom;
 flat out vec4 v_color;
-flat out vec3 v_kind;
+flat out vec4 v_kind;
 void main() {
   float zoom = u_cam.z;
   int halo = int(a_kind.x + 0.5);
@@ -226,7 +226,7 @@ void main() {
   float pad = a_color.w * 1.5 / u_dpr;
   if (halo > 0) pad = max(pad, (u_haloGeom[halo].y + u_haloGeom[halo].z * 0.5) * zoom);
   if (mark > 0) pad = max(pad, max(u_markGeom[mark].x * zoom, u_markMin.z) + max(u_markGeom[mark].y * zoom, u_markMin.x) + 1.5);
-  float ext = a_geom.z * zoom + pad + 2.0;
+  float ext = a_geom.z * zoom * 1.2 + pad + 2.0; // a diamond reaches 1.15 radii
   vec2 centre = u_cam.xy + a_geom.xy * zoom;
   v_local = a_corner * ext;
   v_geom = a_geom;
@@ -240,7 +240,10 @@ export const NODE_FRAG = `${HEAD}${COVER}
 in vec2 v_local;
 flat in vec4 v_geom;
 flat in vec4 v_color;
-flat in vec3 v_kind;
+flat in vec4 v_kind;
+uniform vec4 u_shape;                   // rounded square half side, its corner, hexagon inradius, square half side (x radius)
+uniform vec2 u_shape2;                  // square corner, diamond half diagonal (x radius)
+uniform float u_glyphMin;               // GLYPH_MIN_PX: a node this wide on screen shows its glyph (the icon pass) instead of the core dot
 uniform vec4 u_haloFill[4];
 uniform vec4 u_haloRing[4];
 uniform vec4 u_haloGeom[4];
@@ -249,6 +252,25 @@ uniform vec4 u_markGeom[5];
 uniform vec3 u_markMin;
 uniform vec4 u_core;
 uniform float u_coreRatio;
+// Signed distance (px) to a node's silhouette of radius R: the same shapes renderer-canvas2d.js draws (silhouette)
+float sdRoundBox(vec2 p, float h, float c) {
+  vec2 q = abs(p) - vec2(h - c);
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - c;
+}
+float sdHex(vec2 p, float r) {
+  const vec3 k = vec3(-0.866025404, 0.5, 0.577350269);
+  p = abs(p);
+  p -= 2.0 * min(dot(k.xy, p), 0.0) * k.xy;
+  p -= vec2(clamp(p.x, -k.z * r, k.z * r), r);
+  return length(p) * sign(p.y);
+}
+float sdShape(vec2 p, float R, int shape, float len) {
+  if (shape == 1) return sdRoundBox(p, u_shape.x * R, u_shape.y * R);
+  if (shape == 2) return sdHex(p.yx, u_shape.z * R);
+  if (shape == 3) return sdRoundBox(p, u_shape.w * R, u_shape2.x * R);
+  if (shape == 4) return (abs(p.x) + abs(p.y) - u_shape2.y * R) * 0.70710678;
+  return len - R;
+}
 void main() {
   float zoom = u_cam.z;
   float pix = 1.0 / u_dpr;
@@ -271,9 +293,12 @@ void main() {
   float glow = v_color.w;
   if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr));
 
-  // The circle and its white core
-  over(acc, v_color.rgb, v_kind.z * al * coverEdge(len - R, pix));
-  over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
+  // The silhouette, and its white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
+  int shapeCode = int(v_kind.w + 0.5);
+  bool glyph = shapeCode >= 8;
+  if (glyph) shapeCode -= 8;
+  over(acc, v_color.rgb, v_kind.z * al * coverEdge(sdShape(v_local, R, shapeCode, len), pix));
+  if (!glyph || 2.0 * R < u_glyphMin) over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
 
   // Mark: a ring with the look of its own mark (dashed when its dash is set: added), and for removed a
   // strike through the node. However far out the camera is, the ring stays u_markMin.z px from the node
@@ -449,14 +474,15 @@ export const TIP_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_tip;     // x, y (world), direction x, y (unit)
 layout(location = 2) in vec4 a_color;
-layout(location = 3) in float a_kind;   // 1 = arrowhead (tip at x, y), 2 = strike (centred on x, y)
+layout(location = 3) in float a_kind;   // 1 = arrowhead (tip at x, y), 2 = strike (centred on x, y), 3 = chevron, 4 = bar, 5 = diamond (all with their tip at x, y), 6 = tick (centred on x, y)
 uniform vec4 u_tip;                     // arrow length, arrow spread (radians), strike half length, strike width (world)
+uniform vec4 u_end;                     // stroke width of the open marks, bar half length, diamond half length, diamond half width (world)
 out vec2 v_local;
 flat out vec4 v_color;
 flat out float v_kind;
 void main() {
   float zoom = u_cam.z;
-  float ext = max(u_tip.x, max(u_tip.z, u_tip.w)) * zoom + 3.0;
+  float ext = max(max(u_tip.x, 2.0 * u_end.z), max(u_tip.z, u_end.y)) * zoom + 3.0;
   vec2 dir = a_tip.zw;
   vec2 off = a_corner * ext;
   v_local = vec2(dot(off, dir), dot(off, vec2(-dir.y, dir.x)));
@@ -471,19 +497,53 @@ in vec2 v_local;
 flat in vec4 v_color;
 flat in float v_kind;
 uniform vec4 u_tip;
+uniform vec4 u_end;                     // stroke width of the open marks, bar half length, diamond half length, diamond half width (world)
+uniform vec2 u_tick;                    // tick half length, tick width (world)
+// Distance to the segment a-b
+float sdSeg(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+// Distance to a rhombus with half diagonals b (iq's sdRhombus)
+float ndot(vec2 a, vec2 b) { return a.x * b.x - a.y * b.y; }
+float sdRhombus(vec2 p, vec2 b) {
+  p = abs(p);
+  float h = clamp(ndot(b - 2.0 * p, b) / dot(b, b), -1.0, 1.0);
+  float d = length(p - 0.5 * b * vec2(1.0 - h, 1.0 + h));
+  return d * sign(p.x * b.y + p.y * b.x - b.x * b.y);
+}
 void main() {
   float zoom = u_cam.z;
   float pix = 1.0 / u_dpr;
   float sd;
+  float L = u_tip.x * zoom;
+  float sn = sin(u_tip.y);
+  float cs = cos(u_tip.y);
+  float w = max(u_end.x * zoom, 1.2) * 0.5; // half the stroke of an open mark: at least 1.2 px thick so it stays visible zoomed out
   if (v_kind < 1.5) {
     // The triangle with its tip at the origin and two barbs L back, spread radians either side of the line
-    float L = u_tip.x * zoom;
-    float sn = sin(u_tip.y);
-    float cs = cos(u_tip.y);
     sd = max(max(sn * v_local.x + cs * v_local.y, sn * v_local.x - cs * v_local.y), -v_local.x - L * cs);
-  } else {
+  } else if (v_kind < 2.5) {
     // A box across the edge, at least 1.5 px thick so it stays visible zoomed out
     vec2 q = abs(v_local) - vec2(max(u_tip.w * zoom, 1.5) * 0.5, u_tip.z * zoom);
+    sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+  } else if (v_kind < 3.5) {
+    // The chevron: the arrowhead's two barbs, open (a line each, from the tip back)
+    vec2 barb = vec2(-L * cs, L * sn);
+    sd = min(sdSeg(v_local, vec2(0.0), barb), sdSeg(v_local, vec2(0.0), vec2(barb.x, -barb.y))) - w;
+  } else if (v_kind < 4.5) {
+    // The bar: across the line at the target
+    vec2 q = abs(v_local - vec2(-w, 0.0)) - vec2(w, u_end.y * zoom);
+    sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+  } else if (v_kind < 5.5) {
+    // The diamond: an outline, its front vertex at the tip
+    vec2 h = vec2(u_end.z, u_end.w) * zoom;
+    sd = abs(sdRhombus(v_local - vec2(-h.x, 0.0), h)) - w;
+  } else {
+    // The tick: a short box across the edge, centred, at least 1.5 px thick
+    vec2 q = abs(v_local) - vec2(max(u_tick.y * zoom, 1.5) * 0.5, u_tick.x * zoom);
     sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
   }
   outColor = vec4(v_color.rgb * v_color.a, v_color.a) * coverEdge(sd, pix);
@@ -540,9 +600,12 @@ void main() {
 export const ICON_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_geom;    // x, y, side (world), alpha
+uniform float u_minR;                   // letters and glyphs: the least on-screen radius (px) of a node that shows them; 0 for a theme's icon
+uniform float u_sideRatio;              // the image's side as a multiple of the node's radius (LETTER_RATIO, GLYPH_RATIO), to read the radius back
 out vec2 v_uv;
 flat out float v_alpha;
 void main() {
+  if (u_minR > 0.0 && a_geom.z / u_sideRatio * u_cam.z < u_minR) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); v_uv = vec2(0.0); v_alpha = 0.0; return; } // too small on screen: outside the clip space, nothing drawn
   vec2 centre = u_cam.xy + a_geom.xy * u_cam.z;
   vec2 pos = centre + a_corner * (a_geom.z * 0.5 * u_cam.z);
   v_uv = vec2(a_corner.x * 0.5 + 0.5, a_corner.y * 0.5 + 0.5); // screen y runs down and an image's first row is its top, so the corner below the centre reads the last row

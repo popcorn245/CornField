@@ -273,16 +273,16 @@ describe('chooseLabels: lane titles and selection edge labels are always there',
     expect(chooseLabels(scene, CAM, VIEW, noMargin).filter((i) => i.kind === 'lane')).toHaveLength(3);
   });
 
-  it('adds a selection edge label in the edge font and outline, italic when proposed, at the edge alpha', () => {
+  it('adds the word on a lit edge in the edge font and outline, italic when proposed, at the edge alpha, in screen space at the label minimum', () => {
     const scene = sc([], { edges: [edge({ text: 'calls the API', x: 300, y: 200, color: '#38bdf8', italic: true }), edge(null)] });
     const out = chooseLabels(scene, CAM, VIEW, { ...noMargin, max: 0 });
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ kind: 'edge', text: 'calls the API', x: 300, y: 200, size: 10, bold: false, italic: true, color: '#38bdf8', alpha: 1, align: 'center', outline: LABEL_OUTLINE.edge, family: '"Segoe UI", -apple-system, sans-serif' });
+    expect(out[0]).toMatchObject({ kind: 'edge', text: 'calls the API', x: 300, y: 200 + 11 * 0.35, size: 11, px: 11, screen: true, bold: false, italic: true, color: '#38bdf8', alpha: 1, align: 'center', outline: LABEL_OUTLINE.edge, family: '"Segoe UI", -apple-system, sans-serif' });
   });
 
-  it('orders them lanes, then edge labels, then node labels', () => {
+  it('orders them lanes, then node labels, then the edge words', () => {
     const scene = sc([sn('a', 100, 100)], { preset: true, decor: { grid: null, rings: [], lanes: [lane('Browser', 100)] }, edges: [edge({ text: 'x', x: 1, y: 2, color: '#fff', italic: false })] });
-    expect(chooseLabels(scene, CAM, VIEW, noMargin).map((i) => i.kind)).toEqual(['lane', 'lane', 'lane', 'edge', 'node']);
+    expect(chooseLabels(scene, CAM, VIEW, noMargin).map((i) => i.kind)).toEqual(['lane', 'lane', 'lane', 'node', 'edge']);
   });
 
   it('works on a real scene from buildScene in the data-flow view', () => {
@@ -409,21 +409,25 @@ describe('createLabelLayer', () => {
     for (const op of ['arc', 'lineTo', 'quadraticCurveTo', 'roundRect', 'fill']) expect(names(ctx), op).not.toContain(op);
   });
 
-  it('lets a node cover an edge label, as it did when the circles were drawn after the edges', () => {
+  it('draws an edge word only where no node label, no lit disc and no earlier word is (spec 0008 D7)', () => {
+    const word = (text, x, y) => ({ key: `${text}`, from: 'a', to: 'b', kind: 'flow', alpha: 1, label: { text, x, y, color: '#38bdf8', italic: false } });
+    const scene = sc([sn('a', 100, 100, { r: 14 })], { edges: [word('over disc', 105, 100), word('clear', 400, 300), word('clear too', 410, 302)] });
+    const out = chooseLabels(scene, CAM, VIEW, noMargin);
+    const words = out.filter((i) => i.kind === 'edge').map((i) => i.text);
+    expect(words).toEqual(['clear']); // the first covers a node, the third touches the second
+    // and a node label wins over a word where they meet
+    const label = chooseLabels(sc([sn('a', 100, 100, { r: 14 })], { edges: [word('on its label', 100, 122)] }), CAM, VIEW, noMargin);
+    expect(label.filter((i) => i.kind === 'node')).toHaveLength(1);
+    expect(label.filter((i) => i.kind === 'edge')).toEqual([]);
+  });
+
+  it('draws the words after the node labels, in screen space, and cuts no circles out of anything', () => {
     const { ctx, layer } = make();
-    const edge      = { key: 'a->b', from: 'a', to: 'b', kind: 'flow', alpha: 1, label: { text: 'calls the API', x: 105, y: 90, color: '#38bdf8', italic: false } };
-    const dim = sn('dim', 300, 100, { alpha: 0.07 }); // a dimmed node hides nothing
-    layer.draw(sc([sn('a', 100, 100, { r: 14 }), dim], { edges: [edge] }), CAM);
+    const edge      = { key: 'a->b', from: 'a', to: 'b', kind: 'flow', alpha: 1, label: { text: 'calls', x: 400, y: 300, color: '#38bdf8', italic: false } };
+    layer.draw(sc([sn('a', 100, 100, { r: 14 })], { edges: [edge] }), CAM);
     const ops = ctx.log          ;
-    const edgeText = ops.findIndex((c) => c[0] === 'fillText' && c[1] === 'calls the API');
-    const punch = ops.findIndex((c) => c[0] === 'set:globalCompositeOperation' && c[1] === 'destination-out');
-    const nodeText = ops.findIndex((c) => c[0] === 'fillText' && c[1] === 'a');
-    expect(edgeText).toBeGreaterThan(-1);
-    expect(punch).toBeGreaterThan(edgeText); // erase the circles from the edge labels ...
-    expect(nodeText).toBeGreaterThan(punch); // ... before any node label is drawn
-    const arcs = ops.filter((c) => c[0] === 'arc');
-    expect(arcs).toEqual([['arc', 100, 100, 14, 0, Math.PI * 2]]);
-    expect(ops.slice(punch).findIndex((c) => c[0] === 'restore')).toBeGreaterThan(0); // saved and restored around the cut
+    expect(ops.findIndex((c) => c[0] === 'fillText' && c[1] === 'calls')).toBeGreaterThan(ops.findIndex((c) => c[0] === 'fillText' && c[1] === 'a'));
+    expect(ops.some((c) => c[0] === 'set:globalCompositeOperation' && c[1] === 'destination-out')).toBe(false);
   });
 
   it('redraws nothing when the camera, the scene and the size are the same (a packet frame)', () => {

@@ -282,14 +282,13 @@ function houseState(extra         = {}, phone = false) {
 const sceneLine = (scene     , from        , to        ) => scene.edges.find((e     ) => e.from === from && e.to === to);
 
 describe('the scene: line styles and how busy', () => {
-  it('solid for run, dashed for deploy, dotted for renew; with nothing selected deploy at 25 %, run at full', () => {
+  it('no tick for run, one for deploy, two for renew, none of them dashed; with nothing selected deploy at 25 %, run at full', () => {
     const scene = buildScene(houseState());
     const run = sceneLine(scene, 'container-backend', 'ext-nominatim');
     const deploy = sceneLine(scene, 'container-backend', 'ext-docker-hub');
     const renew = sceneLine(scene, 'container-caddy', 'ext-cloudflare');
-    expect(run.dash).toBe(null);
-    expect(deploy.dash).toEqual(WHEN_STYLES.deploy.dash);
-    expect(renew.dash).toEqual(WHEN_STYLES.renew.dash);
+    expect([run.dash, deploy.dash, renew.dash]).toEqual([null, null, null]); // a dash means proposed and nothing else (spec 0008 D7)
+    expect([run.ticks, deploy.ticks, renew.ticks]).toEqual([WHEN_STYLES.run.ticks, WHEN_STYLES.deploy.ticks, WHEN_STYLES.renew.ticks]);
     expect(deploy.alpha).toBe(0.25);
     expect(run.alpha).toBeGreaterThanOrEqual(0.9);
     expect(run.arrow).toBe(true);

@@ -10,19 +10,23 @@ import { state, touchScene, escHtml } from './state.js';
 import { render, ensureFlowLoop, isNodeVisible } from './render.js';
 import { renderFlowLegend } from './flows.js';
 import { WHEN_STYLES } from './cloud-model.js';
+import { edgeKeyHtml, keySwatch } from './edge-key.js';
 import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
+import { NODE_THEMES } from '../core/schema.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
 import { layerShows } from './scene.js';
 import { getMapStyle, groupToken, setMapSubjects } from './map-style.js';
 import { t } from './strings.js';
 
-/** The dot of each starting row: the colour its nodes are drawn in (a project layer's dot is its nodes' own, or the theme's group token) */
+/**
+ * The dot of each starting row: the colour its nodes are drawn in, read from the node types' own colours (core/schema.js), so the dots and
+ * the map cannot drift apart when the palette moves (a project layer's dot is its nodes' own, or the theme's group token)
+ */
 const COLORS = {
-  app: '#6366f1', pkg: '#06b6d4', page: '#38bdf8', atom: '#10b981', molecule: '#a855f7', token: '#ec4899', tool: '#f43f5e', flow: '#fb923c',
-  core: '#14b8a6', store: '#fb923c', table: '#fde047', rom: '#f0abfc', service: '#84cc16', cloud: '#94a3b8', web: '#94a3b8', stack: '#a8a29e',
-  machine: '#78716c', container: '#d6d3d1', device: '#2dd4bf', house: '#a3e635', runs: '#5eead4', persona: '#fb7185',
+  ...Object.fromEntries(Object.entries(NODE_THEMES).map(([type, { color }]) => [type, color])),
+  flow: NODE_THEMES.store.color, cloud: NODE_THEMES.external.color, web: NODE_THEMES.external.color, house: NODE_THEMES.floor.color, runs: '#5eead4',
 };
 /** The starting layers that start off: the infra layer is its own view, and the physical world's are loaded when first turned on (spec 0029) */
 const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona']);
@@ -272,7 +276,14 @@ export function renderLayerToggles() {
     if (again && typeof again.focus === 'function') again.focus({ preventScroll: true });
   }
   renderFlowLegend();
+  renderEdgeKey();
   renderCloudLegend();
+}
+
+/** The Key (spec 0008 D7): each kind of line as the map draws it (edge-key.js) */
+export function renderEdgeKey() {
+  const el = document.getElementById('edge-key');
+  if (el) el.innerHTML = edgeKeyHtml();
 }
 
 /** What a call into a cloud node looks like for its `when` (spec 0031 section 6), while the Cloud layer is on */
@@ -283,7 +294,7 @@ export function renderCloudLegend() {
   el.hidden = false;
   el.innerHTML = `
     <div class="hx-menu-title" data-corn="menu-title"><span>Cloud: when an outage bites</span></div>
-    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch"><span data-corn="swatch" class="hx-swatch-line hx-swatch-when hx-swatch-when--${when} hx-swatch-when--plain"></span></span><span>${s.legend}</span></div>`).join('')}
+    ${Object.entries(WHEN_STYLES).map(([when, s]) => `<div class="hx-legend-row"><span class="hx-legend-swatch hx-legend-swatch--wide hx-swatch-when--${when}">${keySwatch({ end: 'triangle', ticks: s.ticks })}</span><span>${s.legend}</span></div>`).join('')}
     <div class="hx-legend-row"><span class="hx-legend-swatch"></span><span class="hx-faint"><span class="hx-cloud-browser">(browser)</span> the visitor's browser makes the call, not our server</span></div>`;
 }
 
