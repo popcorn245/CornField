@@ -96,7 +96,7 @@ async function main() {
   let env = rigEnv();
   if (flags.forge) {
     world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: port + 100, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
-    serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull' }, forge: { type: 'github', url: world.forge.url, repo: REPO }, publicUrl: `http://127.0.0.1:${port}` };
+    serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull', ...(flags.trigger ? { profiles: ['claude'], on: { 'spec.approved': { kind: 'code', profile: 'claude' } } } : {}) }, forge: { type: 'github', url: world.forge.url, repo: REPO }, ...(flags.lands ? { approveLands: true } : {}), publicUrl: `http://127.0.0.1:${port}` };
     env = { ...env, ...SIGN_IN_ENV };
   }
   const { url } = await listen(serverConfig, { env });

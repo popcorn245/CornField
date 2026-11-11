@@ -214,7 +214,7 @@ export function totalsLines(totals) {
 }
 
 /** "20 s", "5 min", "2 h": how long ago, short enough for a line */
-function agoShort(ms) {
+export function agoShort(ms) {
   const s = Math.max(0, Math.round(ms / 1000));
   if (s < 60) return `${s} s`;
   if (s < 3600) return `${Math.floor(s / 60)} min`;

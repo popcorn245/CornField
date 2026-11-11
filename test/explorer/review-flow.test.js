@@ -24,6 +24,8 @@ import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initReview, resetReviewForTests } from '../../explorer/review.js';
 // @ts-expect-error plain JS modules, no declarations
+import { HOLD_MS } from '../../explorer/decision-model.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initSheets, visibleMapRect } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MIN } from '../../explorer/camera.js';
@@ -275,43 +277,52 @@ describe('F08 the bar says which copy is under review', () => {
 });
 
 describe('F12 focus goes somewhere stated', () => {
-  it('Approve: it keeps the focus, and the status line (a live region) says it once', async () => {
+  /** The hold (spec 0007 D3) is HOLD_MS of the test's clock: timers are faked for the three tests that press a verdict */
+  const held = async (body) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try { await body(async (ms = 0) => { await vi.advanceTimersByTimeAsync(ms); for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(0); }); } finally { vi.useRealTimers(); }
+  };
+
+  it('Approve: the hold takes the focus to Undo, then Approve has it back, and the status line (a live region) says it once', () => held(async (adv) => {
     const s = fakeHub();
     open();
+    await adv();
     const approve = q('[data-review="approved"]')                     ;
     approve.focus();
     click(approve);
-    expect(approve.getAttribute('aria-disabled')).toBe('true'); // busy, but still the focused button (not `disabled`)
-    expect(document.activeElement).toBe(approve);
-    click(approve); // pressed again while busy: nothing
-    await settle();
+    expect(approve.getAttribute('aria-disabled')).toBe('true'); // held: still the same button, not `disabled`
+    expect(document.activeElement).toBe(q('[data-review-undo]')); // Undo has the focus while nothing has been sent
+    click(approve); // pressed again while held: nothing
+    await adv(HOLD_MS);
     expect(s.mock.calls.filter(([, init]     ) => init && init.method === 'PUT')).toHaveLength(1);
     const line = q('[data-review-status]')                     ;
     expect(line.textContent).toMatch(/Approved/);
     expect(line.querySelector('[role=status]').textContent).toBe('Approved'); // the verdict is the live region; the time beside it is not
     expect(line.hasAttribute('tabindex')).toBe(false); // never focused: a focused live region is read twice
-    expect(document.activeElement).toBe(approve);
-  });
+    expect(document.activeElement).toBe(approve); // Undo went with the hold: the focus is back on Approve
+  }));
 
-  it('Approve from a tap that left the focus on the page: it goes to Approve, not nowhere', async () => {
+  it('Approve from a tap that left the focus on the page: it goes to Approve, not nowhere', () => held(async (adv) => {
     open();
+    await adv();
     click(q('[data-review="approved"]'));
     (document.activeElement               )?.blur?.();
-    await settle();
+    await adv(HOLD_MS);
     expect(document.activeElement).toBe(q('[data-review="approved"]'));
-  });
+  }));
 
-  it('Send back with a note: back on the button that opened the note', async () => {
+  it('Send back with a note: back on the button that opened the note', () => held(async (adv) => {
     open();
+    await adv();
     const send = q('[data-review="notes"]')                     ;
     click(send);
     expect(document.activeElement).toBe($('review-note'));
     ($('review-note')                     ).value = 'not yet';
     send.focus();
     click(send);
-    await settle();
+    await adv(HOLD_MS);
     expect(document.activeElement).toBe(send);
-  });
+  }));
 
   const esc = (el         ) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   const rows = () => [...document.querySelectorAll('.hx-sc-row')]                          ;
@@ -376,15 +387,17 @@ describe('F15 a disabled Approve says why, in words, where a phone shows it', ()
   it('the reason is a line the buttons point at', () => {
     open(robot(), '0013-meals', 'checkout');
     const approve = q('[data-review="approved"]')                     ;
-    expect(approve.disabled).toBe(true);
-    const hint = $('review-hint');
-    expect(hint.hidden).toBe(false);
-    expect(hint.textContent).toMatch(/spec PR/);
-    expect(approve.getAttribute('aria-describedby')).toBe('review-hint');
+    expect(approve.getAttribute('aria-disabled')).toBe('true'); // refused, and still focusable (spec 0007 D2)
+    expect(approve.disabled).toBe(false);
+    const line = $('review-line');
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toMatch(/push it as a spec PR/);
+    expect(approve.getAttribute('aria-describedby')).toBe('review-line');
+    expect(q('[data-review="notes"]').getAttribute('aria-describedby')).toBe('review-line');
   });
 
   it('the phone\'s peek keeps that line (and a refusal) while it folds the rest of the review away', () => {
-    expect(css).toMatch(/\[data-sheet-state="peek"\] \.hx-review > :not\(\[data-review-hint\]\):not\(\[data-review-msg\]\) \{ display: none; \}/);
+    expect(css).toMatch(/\[data-sheet-state="peek"\] \.hx-review > :not\(\[data-review-hint\]\):not\(\[data-review-msg\]\):not\(\[data-review-line\]\):not\(\[data-review-ask\]\):not\(\[data-review-hold\]\):not\(\[data-review-hold-live\]\):not\(\[data-review-landing\]\) \{ display: none; \}/);
     expect(css).not.toMatch(/\.hx-proposal-more-menu, \.hx-review\) \{ display: none; \}/);
   });
 });

@@ -53,7 +53,7 @@ async function atSha(where, key, read) {
 }
 
 /** The files of a pull request at its head, from the cache when that head was read before */
-const filesAt = (forge, where, pull) => atSha(where, `files ${pull.number}@${pull.head.sha}`, () => forge.pullFiles(pull.number));
+export const filesAt = (forge, where, pull) => atSha(where, `files ${pull.number}@${pull.head.sha}`, () => forge.pullFiles(pull.number));
 
 /** `pull/<n>` for a pull request's proposals */
 export const pullSource = (n) => `pull/${n}`;

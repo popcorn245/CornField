@@ -16,6 +16,10 @@ node test/fixtures/big/serve.js --port 3401
 node test/fixtures/big/serve.js --theme retro --port 3402
 # (c) signed-in maintainer with a forge, PRs, issues, threads, checks and runs in every state   http://127.0.0.1:3403/
 node test/fixtures/big/serve.js --forge --port 3403                 # add --theme retro, and --runner offline (or none) for no runner online
+# (c2) the same, with `--lands` (proposals.approveLands) and `--trigger` (agents.on spec.approved: a code run follows an approval); a spec PR's checks
+#      are set while it runs: curl http://127.0.0.1:3503/__rig/checks?pr=21&state=passed|running|failed|none|default
+#      and the agent pushes, or the PR turns draft or ready: curl 'http://127.0.0.1:3503/__rig/pull?pr=21&push=commit|file&draft=1|0'
+#      (`push=file` changes the proposal file; the answer lists what a landing merged: the rig keeps the PR open so it can be reviewed again)
 # (d) the same server, signed out: the real sign-in page, then where it lands
 #     open http://127.0.0.1:3403/?proposal=0100-new-flow-across-apps&source=pull/21 in a fresh browser profile
 ```
