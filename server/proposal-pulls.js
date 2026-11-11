@@ -18,7 +18,7 @@
  *
  * **What the review state costs** (spec 0010 D4). A listed proposal of a ready PR also carries its review state (`reviewStates`): the
  * latest maintainer review, whether it still holds (`current`), and when the head was pushed. It is read once for a PR at a head and kept
- * for `REVIEW_KEEP_MS` (5 minutes): one `comments` call for the PR, a `permission` call for each author of a review block, and a
+ * for `REVIEW_KEEP_MS` (5 minutes): one `comments` call for the PR, a `permission` call for each author of a review block (once per listing, whatever the number of PRs), and a
  * `pullCommits` call for the head (kept by sha for good: a commit never changes). A draft PR is not read at all. A review posted from cornfield
  * is forgotten at once (`forgetReviewState`); one posted on the forge shows within the 5 minutes. A read that fails is never kept, and says so
  * (`review: { error }`), so a PR whose review could not be read never looks unreviewed.
@@ -207,6 +207,8 @@ export async function reviewStates(forge, where, entries, { now = Date.now } = {
   const byPull = new Map();
   entries.forEach((e, i) => { if (!e.pull.draft) byPull.set(e.pull.number, [...(byPull.get(e.pull.number) || []), i]); });
   const numbers = [...byPull.keys()];
+  /** Who is a maintainer, asked once for this listing whatever the number of PRs they reviewed (not kept past it: a role can change) */
+  const admins = new Map();
   let next = 0;
   const worker = async () => {
     while (next < numbers.length) {
@@ -228,7 +230,7 @@ export async function reviewStates(forge, where, entries, { now = Date.now } = {
         const byIndex = {};
         for (const i of at) {
           const entry = entries[i];
-          const found = await latestReview(forge, n, entry.slug, comments);
+          const found = await latestReview(forge, n, entry.slug, comments, admins);
           let review = null;
           if (found) {
             let current;

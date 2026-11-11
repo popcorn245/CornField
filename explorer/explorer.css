@@ -1164,8 +1164,10 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-waiting-badge, .hx-forge-count--waiting { border-radius: var(--corn-radius-pill); background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); font-weight: 700; }
 .hx-waiting-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; height: 1.6em; padding: 0 var(--corn-space-1); font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; font-size: var(--corn-text-xs); line-height: 1; }
 .hx-waiting-badge[hidden] { display: none; }
-/* On a tab the badge keeps the count's own width (the tab does not move when a count becomes a badge): its fill reaches past the digits by a margin that gives the room back */
-.hx-forge-tab .hx-forge-count.hx-forge-count--waiting, .hx-forge-tab[aria-pressed="true"] .hx-forge-count.hx-forge-count--waiting { padding: 0 var(--corn-space-1); margin: 0 calc(var(--corn-space-1) * -1); text-align: center; background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); }
+/* On a tab the badge keeps the count's own width (the tab does not move when a count becomes a badge): its fill reaches past the digits into the tab's own
+   right padding, by a margin that gives the room back (content-box, so the padding is added to the count's 2ch and the margin takes exactly that away
+   again), and keeps the tab's gap from its word on the left */
+.hx-forge-tab .hx-forge-count.hx-forge-count--waiting, .hx-forge-tab[aria-pressed="true"] .hx-forge-count.hx-forge-count--waiting { box-sizing: content-box; padding: 0 var(--corn-space-1); margin: 0 calc(var(--corn-space-1) * -2) 0 0; text-align: center; background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); }
 .hx-work .hx-waiting-badge { margin-right: calc(var(--corn-space-2) * -1); }
 
 /* A group of the Specs list: its header says who must act and how many; Drafts past ten rows fold behind it */

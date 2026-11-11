@@ -114,6 +114,21 @@ describe('every sheet opens as a peek, and only a deep link opens one expanded',
   });
 });
 
+describe('a sheet registered twice', () => {
+  it('still answers one tap on its handle once: the sheets set up again (a re-init) add no second listener', async () => {
+    mount();
+    initSheets();
+    initForgePanel({ forge: { type: 'github', url: 'https://github.com', repo: 'owner/name' }, signIn: { login: 'maintainer-one' } });
+    openProposal();
+    click($('proposal-bar').querySelector('.hx-sheet-handle'));
+    expect(stateOf('proposal-bar')).toBe('expanded'); // two listeners would expand it and fold it straight back
+    click($('forge-btn'));
+    await flush();
+    click($('forge-panel').querySelector(':scope > .hx-sheet-handle'));
+    expect(stateOf('forge-panel')).toBe('expanded');
+  });
+});
+
 describe('one expanded at a time: the other folds to a stub, and a tap on the stub swaps them', () => {
   it('folds the review to a 44px stub with its title while Work is expanded, and Work says what waits in its own stub', async () => {
     mount();
@@ -131,9 +146,11 @@ describe('one expanded at a time: the other folds to a stub, and a tap on the st
     expect([...$('proposal-bar').children].filter((c) => !c.hidden && c !== stub && !c.matches('.hx-sheet-stub'))).not.toHaveLength(0); // (the rest is there, hidden by CSS: display: none !important)
     expect(css).toMatch(/\[data-sheet-state="stub"\] > :not\(\.hx-sheet-stub\) \{ display: none !important; \}/);
     expect(css).toMatch(/\[data-sheet-state="stub"\] \{ min-height: 44px; max-height: 44px;/);
+    stub.focus();
     click(stub); // swap
     expect(stateOf('proposal-bar')).toBe('expanded');
     expect(stateOf('forge-panel')).toBe('stub');
+    expect(document.activeElement).toBe($('proposal-bar').querySelector(':scope > .hx-sheet-handle')); // the focus goes with it, not to the page (so Escape folds it)
     expect($('forge-panel').querySelector('[data-corn="sheet-stub"]').textContent).toContain('Work');
     click($('proposal-bar').querySelector('.hx-sheet-handle')); // fold back
     expect([stateOf('proposal-bar'), stateOf('forge-panel')]).toEqual(['peek', 'peek']);

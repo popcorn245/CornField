@@ -126,6 +126,10 @@ describe('D1, D2: one number, the same everywhere', () => {
     expect(q('[data-forge-kind="specs"]').getAttribute('aria-label')).toBe('Specs, 3 waiting on you');
     expect(q('[data-forge-kind="pulls"] .hx-forge-count').dataset.corn).toBe('count'); // the others keep their plain count
     expect(document.title).toBe('(4) cornfield'); // the page's own title, never a word of ours
+    // a tab keeps its width when its count becomes a badge: the fill's padding is added to the count's 2ch (content-box) and the margin takes it back
+    // (with the page's border-box the padding came out of the 2ch and the tab shrank by 7px; measured in a browser, under 1px now)
+    const css = fs.readFileSync(path.join(__dirname, '../../explorer/explorer.css'), 'utf8');
+    expect(css).toMatch(/\.hx-forge-count\.hx-forge-count--waiting \{ box-sizing: content-box; padding: 0 var\(--corn-space-1\); margin: 0 calc\(var\(--corn-space-1\) \* -2\) 0 0;/);
   });
 
   it('shows no badge at 0, a plain total on the tabs, and the title as it was', async () => {

@@ -279,9 +279,10 @@ describe('the review routes, on a spec PR', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-reviews-'));
     fs.writeFileSync(path.join(root, 'topology.json'), JSON.stringify({ nodes: [{ id: 'root', label: 'root', type: 'root' }], edges: [] }));
     fake = await fakeForge(routes());
+    const where = whereOf(root); // one server, one where, as server/server.js has it: what the server keeps between requests is its own
     server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://localhost');
-      if (!serveProposals(req, res, decodeURIComponent(url.pathname), url, whereOf(root), () => forgeOn(fake), signedIn)) { res.writeHead(418); res.end('not a proposal route'); }
+      if (!serveProposals(req, res, decodeURIComponent(url.pathname), url, where, () => forgeOn(fake), signedIn)) { res.writeHead(418); res.end('not a proposal route'); }
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
     port = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
@@ -343,6 +344,22 @@ describe('the review routes, on a spec PR', () => {
     await fake.close();
     fake = await fakeForge({ ...routes(), [COMMENTS_23]: { body: [...list, ...posts] } });
     expect((await call('GET', PUT23)).json).toMatchObject({ verdict: 'notes', note: 'No.', edits: [], comment: { id: '9201' } });
+  });
+
+  it('makes the listing read the PR\'s review state again once a review is posted, so the Specs row says it at once (spec 0010)', async () => {
+    const list = answers()[COMMENTS_23].body;
+    await fake.close();
+    fake = await fakeForge({
+      ...routes(),
+      [COMMENTS_23]: () => ({ body: [...list, ...posts] }),
+      'GET /repos/owner/name/pulls/23/commits?per_page=100': { body: [{ sha: 'c1', commit: { message: 'Meals', committer: { date: '2026-10-01T00:00:00Z' } } }] },
+    });
+    const meals = async () => (await call('GET', '/proposals')).json.find((e) => e.source === 'pull/23').review;
+    expect(await meals()).toMatchObject({ verdict: 'approved', by: 'maintainer-two' });
+    expect(await meals()).toMatchObject({ verdict: 'approved', by: 'maintainer-two' }); // kept by head: the comments are not asked again
+    expect(fake.requests.filter((r) => r.url.endsWith('/issues/23/comments?per_page=100'))).toHaveLength(1);
+    expect((await call('PUT', PUT23, { verdict: 'notes', note: 'Smaller, please.', edits: [] })).status).toBe(200);
+    expect(await meals()).toMatchObject({ verdict: 'notes', by: 'maintainer-one', current: true }); // not the five-minute-old answer
   });
 
   it('writes the audit row: who, what, which PR, the forge\'s status and the comment', async () => {

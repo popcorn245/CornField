@@ -28,6 +28,7 @@ const SWIPE_PX = 20;
 const model = createSheetModel();
 const elements = new Map(); // id -> the sheet's element
 const options = new Map(); // id -> { stub?: () => { title: string, badge?: string, label?: string }, away?: () => void } what the sheet's owner gave it
+const wiredAs = new WeakMap(); // a sheet's element, and its handle -> the id their listeners were bound for
 const away = new Set(); // sheets displaced by the other of their group: open on the page, hidden until opened again
 const listeners = new Set();
 let dock = null;
@@ -244,8 +245,8 @@ export function registerSheet(id, el, opts = {}) {
     handle.innerHTML = '<span data-corn="sheet-grip"></span>';
     el.prepend(handle);
   }
-  bindHandle(id, handle);
-  el.addEventListener('click', (e) => peekClick(id, e), true);
+  if (wiredAs.get(handle) !== id) { wiredAs.set(handle, id); bindHandle(id, handle); } // registered again (a re-init): one listener, or a tap toggles twice
+  if (wiredAs.get(el) !== id) { wiredAs.set(el, id); el.addEventListener('click', (e) => peekClick(id, e), true); }
   apply();
 }
 
@@ -298,7 +299,7 @@ function bindHandle(id, handle) {
 function peekClick(id, e) {
   if (!isPhone() || model.isExpanded(id)) return;
   const target = e.target;
-  if (target.closest && target.closest('.hx-sheet-handle')) return; // the handle's own listener
+  if (target.closest && target.closest('.hx-sheet-handle, .hx-sheet-stub')) return; // the handle's own listener, and the stub's (it swaps, and takes the focus to the handle)
   if (target.closest && target.closest('select, input, textarea, [data-peek-ok]')) return; // the speed menu, and the proposal's Send back, Approve and mode switcher, work from the peek
   const action = target.closest && target.closest('[data-action]');
   if (action && /close/.test(action.dataset.action)) return;

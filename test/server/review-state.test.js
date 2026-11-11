@@ -107,6 +107,17 @@ describe('what the review state costs', () => {
     expect(w.calls).toContain('comments 1');
   });
 
+  it('asks a reviewer\'s permission once for a listing, however many PRs they reviewed', async () => {
+    const w = world({ comments: {
+      1: [comment('0001-a', { verdict: 'notes', note: 'x' }, '2026-11-04T00:00:00Z')],
+      2: [comment('0002-b', { verdict: 'notes', note: 'y' }, '2026-11-04T00:00:00Z')],
+      3: [comment('0003-c', { verdict: 'notes', note: 'z' }, '2026-11-04T00:00:00Z', 'reader-two')],
+    } });
+    const states = await reviewStates(w.forge, where(), [entry(1, '0001-a'), entry(2, '0002-b'), entry(3, '0003-c')]);
+    expect(states.map((s) => s.review && s.review.by)).toEqual(['maintainer-one', 'maintainer-one', null]);
+    expect(w.calls.filter((c) => c.startsWith('permission')).sort()).toEqual(['permission maintainer-one', 'permission reader-two']);
+  });
+
   it('asks the comments of a PR once for all its proposals, and again at a new head', async () => {
     const w = world();
     const sameWhere = where();
