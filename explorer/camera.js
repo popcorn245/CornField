@@ -51,3 +51,69 @@ export function pinchCamera(start, dist, mid) {
   const wy = (start.mid.y - start.y) / start.zoom;
   return { x: mid.x - wx * zoom, y: mid.y - wy * zoom, zoom };
 }
+
+// ---------------------------------------------------------------------------
+//  Framing: put these nodes in the part of the map nothing covers
+// ---------------------------------------------------------------------------
+
+/** The zoom at which a node's label is about 11px on screen (labels are 11px in world units from LABEL_ZOOM up, scene.js): where a step or a picked change is shown */
+export const READ_ZOOM = 1.0;
+
+/**
+ * The part of a `width` × `height` map that nothing covers, given what covers it from each side (px).
+ * Never smaller than `minSize` in either direction: when the covers leave less, they are eased until it fits.
+ * @param {number} width
+ * @param {number} height
+ * @param {{ top?: number, bottom?: number, left?: number, right?: number }} [covers]
+ * @param {number} [minSize]
+ * @returns {{ x: number, y: number, width: number, height: number }}
+ */
+export function freeRect(width, height, covers = {}, minSize = 120) {
+  const take = (total, a = 0, b = 0) => {
+    const lo = Math.max(0, a);
+    const hi = Math.max(0, b);
+    const room = Math.max(0, total - minSize);
+    const scale = lo + hi > room && lo + hi > 0 ? room / (lo + hi) : 1;
+    return [lo * scale, hi * scale];
+  };
+  const [top, bottom] = take(height, covers.top, covers.bottom);
+  const [left, right] = take(width, covers.left, covers.right);
+  return { x: left, y: top, width: Math.max(0, width - left - right), height: Math.max(0, height - top - bottom) };
+}
+
+/**
+ * The camera that shows `items` (nodes with `x`, `y` and maybe `r`) inside `rect`, with their labels (room below each) and `padding` px to spare.
+ * The zoom is the largest that fits, between `minZoom` and `maxZoom`; when even `minZoom` does not fit, `minZoom` wins and the nodes
+ * are centred (the fit never goes under the map's own zoom limit, whatever that is).
+ * @param {{ x: number, y: number, r?: number }[]} items
+ * @param {{ x: number, y: number, width: number, height: number }} rect CSS px, in the canvas's own coordinates
+ * @param {{ padding?: number, maxZoom?: number, minZoom?: number }} [opts]
+ * @returns {Camera | null} null for no items
+ */
+export function frameNodes(items, rect, { padding = 40, maxZoom = 1, minZoom = ZOOM_MIN } = {}) {
+  if (!items.length) return null;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const n of items) {
+    const r = n.r || 18;
+    minX = Math.min(minX, n.x - r - 25);
+    maxX = Math.max(maxX, n.x + r + 25);
+    minY = Math.min(minY, n.y - r - 25);
+    maxY = Math.max(maxY, n.y + r + 35); // room for the label below
+  }
+  const pad = Math.min(padding, rect.width / 4, rect.height / 4);
+  const fit = Math.min((rect.width - pad * 2) / (maxX - minX), (rect.height - pad * 2) / (maxY - minY));
+  const zoom = Math.max(minZoom, Math.min(maxZoom, fit));
+  return { x: rect.x + rect.width / 2 - ((minX + maxX) / 2) * zoom, y: rect.y + rect.height / 2 - ((minY + maxY) / 2) * zoom, zoom };
+}
+
+/** Whether every one of `items` is inside `rect` (with `margin` px to spare) under `camera` */
+export function allInside(items, camera, rect, margin = 0) {
+  return items.every((n) => {
+    const sx = camera.x + n.x * camera.zoom;
+    const sy = camera.y + n.y * camera.zoom;
+    return sx >= rect.x + margin && sx <= rect.x + rect.width - margin && sy >= rect.y + margin && sy <= rect.y + rect.height - margin;
+  });
+}

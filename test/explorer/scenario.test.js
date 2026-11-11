@@ -9,6 +9,8 @@ import {
   cameraFor, createPlayer, DEFAULT_STEP_MS, parseSpeed, romScenario, SPEED_CHOICES, SPEED_KEY, stepDuration,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario.js';
+// @ts-expect-error plain JS modules, no declarations
+import { ZOOM_MIN, READ_ZOOM } from '../../explorer/camera.js';
 
 const scenario = (extra         = {}) => ({
   id: 'save-a-meal',
@@ -435,16 +437,18 @@ describe('the camera', () => {
     expect(cameraFor({ edge: { from: 'near', to: 'near2' }, text: '' }, at, view, nodes)).toBeNull();
   });
 
-  it('centres a node that is off screen, at the same zoom', () => {
+  it('centres a node that is off screen, at the same zoom (a little high: its label hangs below it)', () => {
     const cam = cameraFor({ node: 'far', text: '' }, at, view, nodes);
-    expect(cam).toEqual({ x: 500 - 3000, y: 300 - 2000, zoom: 1 });
+    expect(cam.zoom).toBe(1);
+    expect(cam.x).toBeCloseTo(500 - 3000);
+    expect(cam.y).toBeCloseTo(300 - 2000 - 5);
   });
 
   it('centres an edge that is off screen but fits, at the same zoom', () => {
     const cam = cameraFor({ edge: { from: 'far', to: 'far2' }, text: '' }, at, view, nodes);
     expect(cam.zoom).toBe(1);
     expect(cam.x + 3200).toBeCloseTo(500); // the middle of the two ends is the middle of the screen
-    expect(cam.y + 2050).toBeCloseTo(300);
+    expect(cam.y + 2050).toBeCloseTo(300 - 5);
   });
 
   it('zooms out to fit an edge too long for the screen', () => {
@@ -456,8 +460,29 @@ describe('the camera', () => {
     expect(screenX(2500)).toBeLessThanOrEqual(1000);
   });
 
-  it('never zooms out below 0.18, the zoom fit-to-screen stops at', () => {
-    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(0.18);
+  it('never zooms out below the map\'s own zoom limit', () => {
+    expect(cameraFor({ edge: { from: 'huge1', to: 'huge2' }, text: '' }, at, view, nodes).zoom).toBe(ZOOM_MIN);
+  });
+
+  it('zooms IN to a node step: at a zoom where its label reads (about 11px), not at the overview\'s', () => {
+    const far = { x: 0, y: 0, zoom: 0.2 };
+    const cam = cameraFor({ node: 'near', text: '' }, far, view, nodes);
+    expect(cam.zoom).toBe(READ_ZOOM);
+    expect(11 * cam.zoom).toBeGreaterThanOrEqual(11);
+    // a node already shown at that zoom is left alone
+    expect(cameraFor({ node: 'near', text: '' }, { x: 0, y: 0, zoom: 1 }, view, nodes)).toBeNull();
+  });
+
+  it('keeps a step out of what covers the map: both ends of an edge inside the free rect', () => {
+    const free = { x: 0, y: 400, width: 1000, height: 300 }; // a bar covers the top 400px
+    const cam = cameraFor({ edge: { from: 'near', to: 'near2' }, text: '' }, { x: 0, y: 0, zoom: 1 }, free, nodes);
+    expect(cam).not.toBeNull(); // (500,300) is on the screen, but under the bar
+    for (const id of ['near', 'near2']) {
+      const n = nodes.get(id);
+      const y = cam.y + n.y * cam.zoom;
+      expect(y).toBeGreaterThanOrEqual(400);
+      expect(y).toBeLessThanOrEqual(700);
+    }
   });
 
   it('does nothing for a step whose node is not in the map', () => {
