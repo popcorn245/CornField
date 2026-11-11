@@ -57,10 +57,13 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   const user = (login) => ({ login, html_url: `https://github.example.com/${login}` });
   const pullOf = (s) => {
     const title = JSON.parse(repoFiles[`${FOLDER}/${s.slug}.json`]).title;
-    return { number: s.n, title: `Spec: ${title}`, state: 'open', draft: !!SPEC_LOOKS[s.n - SPEC_PR_FIRST]?.draft, user: user('agent-four'), labels: [{ name: 'spec' }], head: { ref: `spec/${s.slug}`, sha: s.sha }, base: { ref: 'main', sha: sha('main') }, html_url: `https://github.example.com/${REPO}/pull/${s.n}`, created_at: minutesAgo(600 - s.n * 10), updated_at: minutesAgo(30), merged_at: null };
+    return { number: s.n, title: `Spec: ${title}`, state: 'open', draft: state.draft.has(s.n) ? state.draft.get(s.n) : !!SPEC_LOOKS[s.n - SPEC_PR_FIRST]?.draft, user: user('agent-four'), labels: [{ name: 'spec' }], head: { ref: `spec/${s.slug}`, sha: s.sha }, base: { ref: 'main', sha: sha('main') }, html_url: `https://github.example.com/${REPO}/pull/${s.n}`, created_at: minutesAgo(600 - s.n * 10), updated_at: minutesAgo(30), merged_at: null };
   };
   const mockupsOf = (slug) => Object.keys(repoFiles).filter((f) => f.startsWith(`${FOLDER}/${slug}/`));
-  const state = { runner };
+  // `checks`: a spec PR's checks as the rig was told (GET /__rig/checks?pr=21&state=passed|running|failed|none); unset is one passed, one running.
+  // `draft` and `edited`: a spec PR marked draft or ready, and a proposal file the agent pushed a change to (GET /__rig/pull, below)
+  // `merged`: the heads a landing merged (the PR stays open in the rig, so it can be reviewed again; GET /__rig/pull says what was merged)
+  const state = { runner, checks: new Map(), draft: new Map(), edited: new Map(), merged: [] };
   const comments = new Map(); // issue or PR number -> the comments posted to it since the rig started
   let nextComment = 9900;
   // The reviews the looks above name, posted as comments (kept in memory, like the ones a maintainer posts while the rig runs)
@@ -80,6 +83,32 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     const target = key.slice(space + 1);
     const url = new URL(target, 'http://x');
     const p = decodeURIComponent(url.pathname);
+    if (p === '/__rig/checks') {
+      const pr = Number(url.searchParams.get('pr'));
+      const want = url.searchParams.get('state');
+      if (specs.some((x) => x.n === pr) && ['passed', 'running', 'failed', 'none', 'default'].includes(want)) { if (want === 'default') state.checks.delete(pr); else state.checks.set(pr, want); }
+      return { body: { checks: Object.fromEntries(state.checks) } };
+    }
+    // The agent pushes (`push=commit`: a new head, the proposal unchanged; `push=file`: a new head that changes the proposal file), or the PR is
+    // marked draft or ready (`draft=1|0`): GET /__rig/pull?pr=21&push=file&draft=0
+    if (p === '/__rig/pull') {
+      const spec = specs.find((x) => x.n === Number(url.searchParams.get('pr')));
+      if (!spec) return { status: 404, body: { message: 'Not a spec PR of the rig' } };
+      const push = url.searchParams.get('push');
+      if (push === 'commit' || push === 'file') {
+        spec.pushes = (spec.pushes || 0) + 1;
+        spec.sha = sha(`${spec.slug}#${spec.pushes}`);
+        if (push === 'file') { const file = `${FOLDER}/${spec.slug}.json`; state.edited.set(file, `${(state.edited.get(file) ?? repoFiles[file]).trimEnd()}\n${' '.repeat(spec.pushes)}\n`); }
+      }
+      const draft = url.searchParams.get('draft');
+      if (draft === '1' || draft === '0') state.draft.set(spec.n, draft === '1');
+      return { body: { pr: spec.n, head: spec.sha, draft: pullOf(spec).draft, merged: state.merged.filter((x) => x.pr === spec.n) } };
+    }
+    // What the server asked of the forge (the idle-cost check): the count of calls, and the last few, not counting these
+    if (p === '/__rig/requests') {
+      const real = forge.requests.filter((r) => !r.url.startsWith('/__rig/'));
+      return { body: { count: real.length, last: real.slice(-Number(url.searchParams.get('last') || 0) || real.length).map((r) => `${r.method} ${r.url}`).slice(-50) } };
+    }
     if (p === '/__rig/runner') {
       if (['online', 'offline', 'none'].includes(url.searchParams.get('state'))) { state.runner = /** @type {any} */ (url.searchParams.get('state')); touchRunner(); }
       return { body: { runner: state.runner } };
@@ -113,16 +142,34 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
         return { body: { ...pullOf(spec), mergeable: true, mergeable_state: 'clean', merged: false } };
       }
     }
+    if (method === 'PUT' && (m = new RegExp(`^/repos/${REPO}/pulls/(\\d+)/merge$`).exec(rest)) && specs.some((s) => s.n === Number(m[1]))) {
+      const spec = specs.find((s) => s.n === Number(m[1]));
+      const asked = JSON.parse(req.body || '{}').sha;
+      if (asked && asked !== spec.sha) return { status: 409, body: { message: 'Head branch was modified. Review and try the merge again.' } };
+      state.merged.push({ pr: spec.n, sha: spec.sha, at: new Date().toISOString() });
+      return { body: { sha: sha(`merge-${spec.n}-${state.merged.length}`), merged: true, message: 'Pull Request successfully merged' } };
+    }
     if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/issues/(\\d+)/comments$`).exec(rest)) && specs.some((s) => s.n === Number(m[1]))) return { body: comments.get(Number(m[1])) || [] };
     // a spec PR's head holds its file and mockups; anything else at that sha is not there
     if (method === 'GET' && rest.startsWith(`/repos/${REPO}/contents/`)) {
       const file = rest.slice(`/repos/${REPO}/contents/`.length);
       const spec = specs.find((s) => s.sha === url.searchParams.get('ref'));
-      const text = spec && file.startsWith(`${FOLDER}/${spec.slug}`) ? repoFiles[file] : undefined;
+      const text = spec && file.startsWith(`${FOLDER}/${spec.slug}`) ? state.edited.get(file) ?? repoFiles[file] : undefined;
       if (text !== undefined) return { headers: { 'content-type': 'application/vnd.github.raw; charset=utf-8' }, body: text };
     }
     if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/commits/([0-9a-f]{40})/(check-runs|status)$`).exec(rest)) && specs.some((s) => s.sha === m[1])) {
-      return m[2] === 'status' ? { body: { state: 'success', statuses: [], total_count: 0 } } : { body: { total_count: 2, check_runs: [{ id: 51, name: 'validate', status: 'completed', conclusion: 'success', html_url: `https://github.example.com/${REPO}/actions/runs/9/job/51`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/51`, app: { slug: 'github-actions' } }, { id: 52, name: 'docs', status: 'in_progress', conclusion: null, html_url: `https://github.example.com/${REPO}/actions/runs/9/job/52`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/52`, app: { slug: 'github-actions' } }] } };
+      if (m[2] === 'status') return { body: { state: 'success', statuses: [], total_count: 0 } };
+      const spec = specs.find((x) => x.sha === m[1]);
+      const mode = state.checks.get(spec.n) || 'default';
+      const run = (id, name, status, conclusion) => ({ id, name, status, conclusion, html_url: `https://github.example.com/${REPO}/actions/runs/9/job/${id}`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/${id}`, app: { slug: 'github-actions' } });
+      const sets = {
+        default: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'in_progress', null)],
+        passed: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'completed', 'success')],
+        running: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'in_progress', null)],
+        failed: [run(51, 'validate', 'completed', 'success'), run(53, 'lint', 'completed', 'failure')],
+        none: [],
+      };
+      return { body: { total_count: sets[mode].length, check_runs: sets[mode] } };
     }
     // everything else: the recorded answers, as the server tests use them
     const recordedKey = `${method} ${rest}${url.search}`;

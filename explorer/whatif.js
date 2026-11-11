@@ -22,7 +22,8 @@
 
 import { state, touchScene, onSceneTouch, nameOf, nodeById, escHtml } from './state.js';
 import { render, isNodeVisible } from './render.js';
-import { hooks, rebuildProposalMap, closeProposal } from './proposal.js';
+import { hooks, rebuildProposalMap, closeProposal, focusChange } from './proposal.js';
+import { t } from './strings.js';
 import { getPlayer, playScenario, stopScenario, tickScenario } from './scenario-ui.js';
 import { kindOfMark } from './proposal-model.js';
 import { announce } from './keyboard.js';
@@ -78,9 +79,33 @@ export function onEditsChange(fn) {
   return () => listeners.delete(fn);
 }
 
+/**
+ * The what-if form that is open with something in it, for the decision to ask about before it drops it (spec 0007 D2): `{ name }` or null. The add-node
+ * form counts once it has a label or a description, the edge form while it is open (it holds the pair), a new step once it has words.
+ */
+export function openFormInfo() {
+  if (!state.proposal || !root) return null;
+  if (ui.form && ui.form.kind === 'node') {
+    const f = q('[data-form="node"]');
+    const typed = f && f.elements ? [f.elements.namedItem('label'), f.elements.namedItem('desc')].some((el) => el && String(el.value).trim()) : false;
+    return typed ? { name: 'Add a node' } : null;
+  }
+  if (ui.form && ui.form.kind === 'edge') return { name: 'Draw an edge' };
+  if (ui.panel === 'steps' && (ui.stepDraft.trim() || ui.titleDraft.trim())) return { name: 'New step' };
+  return null;
+}
+
+/** One line for each applied edit, as "Your edits" words them (what a send back keeps readable, spec 0007 D4) */
+export function describeEditsNow() {
+  const proposal = state.effectiveProposal || state.proposal;
+  const words = { nameOf, scenarioTitle: (id) => (scenariosOf(proposal).find((x) => x.id === id) || { title: id }).title };
+  return state.whatIf.edits.map((edit) => M.describeEdit(edit, words));
+}
+
 /** Empties the list and the stored copy (once the edits were sent) and draws the proposal as the robot wrote it */
 export function clearEdits() {
   if (!state.proposal) return;
+  state.whatIfOff = false; // no edits left to hide
   apply({ whatIf: M.emptyWhatIf(), effective: state.proposal });
 }
 
@@ -88,6 +113,7 @@ function load(proposal) {
   const key = keyOf();
   loadedFor = proposal;
   loadedKey = key;
+  state.whatIfOff = false;
   resetUi();
   let stored = M.emptyWhatIf();
   const store = storage();
@@ -105,7 +131,7 @@ function load(proposal) {
 /** hooks.effective: the proposal the map is drawn from. Loads this proposal's stored edits the first time it is asked about it. */
 function effectiveFor(proposal) {
   if (proposal !== loadedFor || keyOf() !== loadedKey) load(proposal);
-  return M.evaluate(base(), proposal, state.whatIf.edits).effective;
+  return state.whatIfOff ? proposal : M.evaluate(base(), proposal, state.whatIf.edits).effective;
 }
 
 hooks.effective = effectiveFor;
@@ -118,6 +144,7 @@ hooks.beforeClose = () => {
 };
 hooks.closed = () => {
   state.whatIf = M.emptyWhatIf();
+  state.whatIfOff = false;
   loadedFor = null;
   loadedKey = null;
   resetUi();
@@ -164,8 +191,9 @@ function apply({ whatIf, effective }) {
   const before = scenariosOf(state.effectiveProposal);
   state.whatIf = whatIf;
   save();
-  rebuildProposalMap(effective);
-  const sync = M.scenarioSync(state.scenario ? state.scenario.id : null, before, scenariosOf(effective));
+  const shown = state.whatIfOff ? state.proposal : effective; // My edits off: the proposal as written, the edits kept
+  rebuildProposalMap(shown);
+  const sync = M.scenarioSync(state.scenario ? state.scenario.id : null, before, scenariosOf(shown));
   if (sync.action === 'update') {
     const player = getPlayer();
     if (player) { player.setScenario(sync.scenario); tickScenario(performance.now()); }
@@ -185,6 +213,7 @@ const clearMessages = () => { ui.messages = {}; };
 /** An intent from a control, as an edit: refused with a message next to the control, or applied */
 function doIntent(intent, where) {
   if (!state.proposal) return false;
+  if (state.whatIfOff) return refuse(where, turnOnWords());
   const effective = state.effectiveProposal || state.proposal;
   const taken = new Set([...state.baseNodes.map((n) => n.id), ...asList(effective?.nodes?.add).map((n) => n.id)]);
   const edit = M.editFromIntent(intent, { takenIds: taken, scenarios: scenariosOf(effective), now: now() });
@@ -193,16 +222,45 @@ function doIntent(intent, where) {
   if (!result.ok) return refuse(where, result.message);
   clearMessages();
   apply(result);
+  bringIntoView(edit);
+  return true;
+}
+
+/** "Turn My edits on to edit.": the tools do nothing while the map is the proposal as written */
+const turnOnWords = () => `Turn ${t('myEdits')} on to edit.`;
+
+/**
+ * An edit that adds a node or an edge brings it into view, in the part of the map the review column and the panels leave free, and says it once
+ * (a new node used to land off screen, issue #166). Other edits move nothing.
+ */
+function bringIntoView(edit) {
+  if (!edit) return;
+  if (edit.op === 'add-node') focusChange('node', edit.id, { select: false });
+  else if (edit.op === 'add-edge') focusChange('edge', edgeKey(edit), { select: false });
+}
+
+/** The My edits toggle: off draws the proposal as written (the edits are kept, and still go with Approve and Send back); on draws them again */
+export function setMyEdits(on) {
+  if (!state.proposal || !M.hasEdits(state.whatIf)) return false;
+  state.whatIfOff = !on;
+  if (!on) { setDrawing(false); ui.form = null; }
+  rebuildProposalMap(on ? M.evaluate(base(), state.proposal, state.whatIf.edits).effective : state.proposal);
+  touchScene();
+  render();
+  renderUi();
+  emit();
+  const n = state.whatIf.edits.length;
+  announce(on ? `${t('myEdits')} on: your ${n === 1 ? 'edit is' : `${n} edits are`} on the map.` : `${t('myEdits')} off: the map shows the proposal as written. Your ${n === 1 ? 'edit is' : `${n} edits are`} kept, and still go with Approve and Send back.`);
   return true;
 }
 
 export function undoEdit() {
-  if (!state.proposal || !M.canUndo(state.whatIf)) return false;
+  if (!state.proposal || state.whatIfOff || !M.canUndo(state.whatIf)) return false;
   const edit = state.whatIf.edits[state.whatIf.edits.length - 1];
   return step(M.undo(state.whatIf), edit, 'Undid');
 }
 export function redoEdit() {
-  if (!state.proposal || !M.canRedo(state.whatIf)) return false;
+  if (!state.proposal || state.whatIfOff || !M.canRedo(state.whatIf)) return false;
   const edit = state.whatIf.undone[state.whatIf.undone.length - 1];
   return step(M.redo(state.whatIf), edit, 'Redid');
 }
@@ -217,6 +275,7 @@ function step(whatIf, edit, verb) {
 }
 
 function removeEditAt(index) {
+  if (state.whatIfOff) return refuse('edits', turnOnWords());
   const result = M.tryRemoveEdit(base(), state.proposal, state.whatIf, index);
   if (!result.ok) return refuse('edits', result.message);
   clearMessages();
@@ -257,6 +316,8 @@ function mount() {
     body.appendChild(root);
     const edit = $('proposal-edit');
     if (edit) edit.addEventListener('click', () => setEditing(!ui.editing));
+    const mine = $('proposal-myedits');
+    if (mine) mine.addEventListener('click', () => setMyEdits(!!state.whatIfOff));
     root.addEventListener('click', onClick);
     root.addEventListener('submit', onSubmit);
     root.addEventListener('change', onChange);
@@ -278,6 +339,13 @@ function renderUi() {
     edit.classList.toggle('hx-btn--active', ui.editing);
     edit.textContent = state.whatIf.edits.length ? `Edit · ${state.whatIf.edits.length}` : 'Edit';
   }
+  const mine = $('proposal-myedits');
+  if (mine) {
+    mine.hidden = !open || !M.hasEdits(state.whatIf);
+    mine.setAttribute('aria-pressed', String(!state.whatIfOff));
+    mine.classList.toggle('hx-btn--active', !state.whatIfOff);
+    mine.textContent = t('myEdits');
+  }
   if (!open) { paintDrawer(); return; }
 
   const wi = state.whatIf;
@@ -295,6 +363,10 @@ function renderUi() {
   q('[data-whatif="edits"]').textContent = M.editsLabel(wi.edits.length);
   const addNode = q('[data-whatif="add-node"]');
   addNode.classList.toggle('hx-btn--active', ui.form?.kind === 'node');
+  // My edits off: the tools say why they do nothing
+  for (const btn of q('[data-whatif="add-node"]').parentElement.querySelectorAll('button')) {
+    if (state.whatIfOff) btn.setAttribute('aria-disabled', 'true'); else btn.removeAttribute('aria-disabled');
+  }
 
   const notice = q('[data-notice]');
   notice.hidden = !ui.notice;
@@ -319,7 +391,7 @@ function setEditing(on) {
 function paintMessages() {
   if (!root) return;
   for (const el of root.querySelectorAll('[data-msg]')) {
-    const text = ui.messages[el.dataset.msg] || '';
+    const text = ui.messages[el.dataset.msg] || (el.dataset.msg === 'toolbar' && state.whatIfOff ? turnOnWords() : '');
     el.hidden = !text;
     el.textContent = text;
   }
@@ -680,10 +752,14 @@ const ACTIONS = {
   },
 };
 
+/** What changes the edits: with My edits off these do nothing and say why */
+const EDITING = new Set(['add-node', 'draw-edge', 'undo', 'redo', 'steps', 'edge-to', 'remove-node', 'remove-edge', 'bring-back', 'remove-edit', 'step-up', 'step-down', 'step-delete']);
+
 function onClick(e) {
   const el = e.target.closest ? e.target.closest('[data-whatif]') : null;
   const action = el && ACTIONS[el.dataset.whatif];
   if (!action || el.disabled) return;
+  if (state.whatIfOff && EDITING.has(el.dataset.whatif)) { refuse('toolbar', turnOnWords()); return; }
   action(el);
 }
 
@@ -944,4 +1020,5 @@ export function resetWhatIfForTests() {
   listeners.clear();
   Object.assign(ui, { editing: false, panel: null, form: null, drawing: false, confirm: false, closing: false, scenarioId: null, stepDraft: '', titleDraft: '', notice: '', messages: {}, recentParents: [], lastSelected: null });
   state.whatIf = M.emptyWhatIf();
+  state.whatIfOff = false;
 }

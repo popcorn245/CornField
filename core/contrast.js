@@ -382,6 +382,7 @@ export const PAINTED_TEXT = Object.freeze([
   ['--corn-bad', tint('--corn-removed', 12), 'a What-if or review message'],
   ['--corn-bad', tint('--corn-removed', 16), 'a refused check'],
   ['--corn-warn', tint('--corn-changed', 16), 'a mismatched check'],
+  ['--corn-text', tint('--corn-warn', 14), 'the question Approve asks in place (spec 0007)'],
   ['--corn-text-2', tint('--corn-text-3', 12), 'a verdict, a cloud badge'], ['--corn-text-3', tint('--corn-text-3', 12), 'a cloud plan not known'],
   ['--corn-text-2', tint('--corn-text-3', 10), 'a check'],
   ['--corn-text-2', tint('--corn-text-2', 12), 'a web badge'],

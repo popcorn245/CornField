@@ -111,6 +111,8 @@ export const state = {
   proposal: null,
   proposalView: 'diff',
   proposalSource: null,
+  /** The open proposal's file as the server sent it, its SHA-256 (X-Proposal-Sha256), or null: a review names it, so a push since is refused (spec 0007) */
+  proposalSha256: null,
   proposalSlug: null,
   proposalErrors: [],
   /** Where each of the open proposal's mockups stands with the review, by position: 'approved' | 'changed' | 'unreviewed' | 'missing' (mockups.js; none read yet is empty) */
@@ -122,6 +124,8 @@ export const state = {
   effectiveProposal: null,
   /** The maintainer's what-if edits to the open proposal, and what Undo took back (whatif-model.js): `{ edits, undone }` */
   whatIf: { edits: [], undone: [] },
+  /** The My edits toggle is off: the map is drawn from the proposal as written, the edits are kept and still go with a review (whatif.js, spec 0007 D5) */
+  whatIfOff: false,
   /** A marked edge picked on the map (nodes are `selectedNode`): the panel shows it, the scene does not change */
   selectedEdge: null,
 
