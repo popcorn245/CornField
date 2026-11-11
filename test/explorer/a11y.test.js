@@ -39,6 +39,8 @@ import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 import { initMockups, resetMockupsForTests, openMockup, closeMockup } from '../../explorer/mockups.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, playScenario, clearScenario } from '../../explorer/scenario-ui.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
 
 // @ts-expect-error plain JS modules, no declarations
 import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
@@ -78,7 +80,7 @@ const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 const FORGE = ['#forge-btn', '#forge-panel', '#forge-confirm'];
 const DRAWER = ['#spec-drawer'];
 const LAYERS = ['#legend-toggle-btn', '#legend-dropdown'];
-const PROPOSAL_REGION = ['#proposal-wrap', '#proposal-bar', '#sheet-dock', '#spec-drawer'];
+const PROPOSAL_REGION = ['#proposal-wrap', '#proposal-bar', '#review-column', '#sheet-dock', '#spec-drawer'];
 const MOCKUP_WINDOW = ['.hx-mockup-dialog'];
 
 /**
@@ -174,13 +176,40 @@ describe('axe finds no violation', () => {
       }));
       mount();
       resetWhatIfForTests();
+      resetReviewColumnForTests();
       initWhatIf();
       await initProposals();
       initScenarioUi();
+      initReviewColumn();
       expect(await openProposal('0013-meals', 'checkout')).toBe(true);
       await settle();
     });
     afterEach(() => { clearScenario(); closeProposal(); });
+
+    it('the review column (spec 0006): both lists, a persona group, a scenario opened to its steps, and the player on a step, in both themes', async () => {
+      const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(document.querySelector('#review-column [data-corn="scenario-list"] h4')).not.toBe(null);
+      click(document.querySelector('.hx-sc-row'));
+      expect(document.querySelectorAll('#review-column [data-corn="step"]').length).toBe(2);
+      click(document.querySelector('#review-column [data-corn="step"]'));
+      expect(document.querySelector('.hx-player')).not.toBe(null);
+      for (const theme of ['dark', 'light']) {
+        if (theme === 'light') document.documentElement.dataset.theme = 'light';
+        expect(await audit(...PROPOSAL_REGION)).toEqual([]);
+      }
+    });
+
+    it('the review column with a hostile persona label and scenario title: the page is still sound', async () => {
+      const hostile = '"><img src=x onerror=alert(1)></script><b id="pwn">';
+      state.nodes.push({ id: 'persona-evil', type: 'persona', x: 0, y: 0, r: 10, label: hostile, role: 'adult', mark: 'none' });
+      state.proposal = { ...PROPOSAL, scenarios: [{ id: 'x"y', title: hostile, actor: 'evil', steps: [{ node: 'page-new', text: hostile }] }] };
+      state.effectiveProposal = state.proposal;
+      resetReviewColumnForTests();
+      initReviewColumn();
+      await settle();
+      expect(document.getElementById('pwn')).toBe(null);
+      expect(await audit('#review-column')).toEqual([]);
+    });
 
     it('the proposal bar, its changes and the what-if toolbar', async () => {
       expect(document.querySelector('#whatif [role="toolbar"]')).not.toBe(null);

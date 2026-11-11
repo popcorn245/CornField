@@ -21,6 +21,8 @@ import { selectNode } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, clearScenario, getPlayer, playScenario, tickScenario } from '../../explorer/scenario-ui.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initWhatIf, resetWhatIfForTests, getEdits, getEffectiveProposal, clearEdits, onEditsChange, undoEdit } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
 import { storageKey } from '../../explorer/whatif-model.js';
@@ -96,6 +98,7 @@ function drag(from        , to        ) {
 async function mount({ stored }                      = {}) {
   vi.stubGlobal('requestAnimationFrame', () => 0);
   resetWhatIfForTests();
+  resetReviewColumnForTests();
   document.body.innerHTML = body;
   localStorage.clear();
   if (stored) localStorage.setItem(KEY, JSON.stringify(stored));
@@ -120,6 +123,7 @@ async function mount({ stored }                      = {}) {
   setMap(state.baseNodes.map((n     ) => ({ ...n })), state.baseEdges);
   history.replaceState(null, '', '/');
   initScenarioUi();
+  initReviewColumn();
   clearScenario();
   await initProposals();
   initWhatIf();
@@ -715,18 +719,19 @@ describe('steps', () => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     expect(getEffectiveProposal().scenarios).toEqual([{ id: 'store-a-meal', title: 'Store a meal', steps: [{ node: 'table-t', text: 'A meal is stored.' }] }]);
     expect((q('[data-scenario-select]')                     ).value).toBe('store-a-meal');
-    // the scenario list on the stage follows the effective proposal
-    expect([...document.querySelectorAll('.hx-scenarios-item')].map((b) => b.textContent)).toEqual(['Store a meal · 1 step']);
+    // the scenario list in the review column follows the effective proposal
+    expect([...document.querySelectorAll('.hx-sc-row .hx-sc-title')].map((b) => b.textContent)).toEqual(['Store a meal']);
+    expect(q('.hx-sc-meta').textContent).toMatch(/^1 step/);
   });
 
-  it('the scenario list on the stage shows the edited scenario', async () => {
-    expect(q('.hx-scenarios button').textContent).toBe('Add a meal · 2 steps');
+  it('the scenario list in the review column shows the edited scenario', async () => {
+    expect(q('.hx-sc-meta').textContent).toMatch(/^2 steps/);
     click(tool('steps'));
     await selectNode(state.nodes.find((n     ) => n.id === 'table-t'));
     const form = q('[data-form="step"]')                   ;
     (form.elements.namedItem('text')                    ).value = 'Stored.';
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    expect(q('.hx-scenarios button').textContent).toBe('Add a meal · 3 steps');
+    expect(q('.hx-sc-meta').textContent).toMatch(/^3 steps/);
   });
 
   it('a scenario that is playing takes the edit and keeps the step it was on', async () => {

@@ -33,6 +33,7 @@ import { closeLegendMenu, toggleAllLayers, toggleLayer, toggleLegendMenu } from 
 import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
+import { initReviewColumn } from './review-column.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
 import { bindCanvasInput } from './input.js';
 import { initProposals } from './proposal.js';
@@ -193,6 +194,7 @@ initKeyboard(); // the map, the panel, the search and the Layers menu by keyboar
 initAccountMenu(); // the one menu at the right of the header (account-menu.js)
 initSheets();
 initScenarioUi();
+initReviewColumn(); // the review column: the changes, and the personas with their scenarios (review-column.js)
 window.addEventListener('resize', resize);
 initSearch(); // the count, the list and the stepping of both search fields (search.js)
 

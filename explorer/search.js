@@ -19,8 +19,8 @@ import { state, touchScene, escHtml } from './state.js';
 import { render, fitGraphToViewport, fitPadding, isNodeVisible } from './render.js';
 import { toggleLayer, onLayersChange } from './layers.js';
 import { selectNode } from './panels.js';
-import { isPhone } from './sheets.js';
-import { centreTarget, announce } from './keyboard.js';
+import { isPhone, visibleMapRect } from './sheets.js';
+import { announce } from './keyboard.js';
 import { flyTo } from './fly.js';
 import { groupOf } from './scene.js';
 import { noMatchText, showSearchStatus, updateSearchStatus } from './search-status.js';
@@ -178,6 +178,12 @@ function showLayerOf(node) {
   }
 }
 
+/** The camera that puts `node` in the middle of the part of the map nothing covers (the panels, the proposal bar, the review column, a phone's sheets: sheets.js) */
+export function matchTarget(node, zoom) {
+  const r = visibleMapRect();
+  return { x: r.x + r.width / 2 - node.x * zoom, y: r.y + r.height / 2 - node.y * zoom, zoom };
+}
+
 /** Selects a match and flies the camera to it (zoom 1 or closer): what Enter, a row and N do */
 let chosen = 0;
 export async function chooseMatch(match, { say = true } = {}) {
@@ -190,7 +196,7 @@ export async function chooseMatch(match, { say = true } = {}) {
   const at = result.matches.findIndex((m) => m.node.id === node.id);
   await selectNode(node);
   if (mine !== chosen || state.searchCurrent !== node.id) return; // a later choice, or a new query, has taken over while the panel was filling
-  flyTo(centreTarget(node, Math.max(state.camera.zoom, MATCH_ZOOM)));
+  flyTo(matchTarget(node, Math.max(state.camera.zoom, MATCH_ZOOM)));
   paintSearch();
   const words = `${at + 1} of ${result.total}: ${node.label}${match.parent ? `, in ${match.parent}` : ''}`;
   showSearchStatus(''); // said once, by the map's announcer: two live regions with the same words are read out twice

@@ -185,6 +185,22 @@ describe('stepping', () => {
     expect($('search-count').textContent).toBe('7 of 7'); // wraps round
   });
 
+  it('flies a match into the part of the map nothing covers: right of the review column (spec 0006)', async () => {
+    mount();
+    state.canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1000, bottom: 700, width: 1000, height: 700 });
+    const column = $('review-column'); // the page's own, shown as a proposal with scenarios would show it
+    column.hidden = false;
+    column.getBoundingClientRect = () => ({ left: 0, top: 60, right: 600, bottom: 700, width: 600, height: 640 });
+    type('mailer');
+    key($('node-search'), 'Enter');
+    await settle();
+    for (let t = 0; flying() && t < 400; t++) tickFlight(16 * t);
+    const node = state.nodes.find((n) => n.id === state.searchCurrent);
+    const sx = state.camera.x + node.x * state.camera.zoom;
+    expect(sx).toBeGreaterThan(608); // past the column and its 8 px
+    expect(sx).toBeCloseTo(608 + (1000 - 608) / 2, 0);
+  });
+
   it('keeps the camera\'s zoom when it is already closer than 1', async () => {
     mount();
     state.camera = { x: 0, y: 0, zoom: 2 };

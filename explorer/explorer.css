@@ -404,7 +404,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-proposal-bar.is-error { border-color: color-mix(in srgb, var(--corn-removed) 50%, transparent); }
 .hx-proposal-message { color: var(--corn-text-2); }
 .hx-proposal-bar.is-error .hx-proposal-message { color: var(--corn-bad); }
-.hx-proposal-chip:focus-visible, .hx-proposal-mode:focus-visible, .hx-seg-btn:focus-visible, .hx-change-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-proposal-count:focus-visible, .hx-proposal-mode:focus-visible, .hx-seg-btn:focus-visible, .hx-change-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 .hx-proposal-summary { margin-top: var(--corn-space-2); color: var(--corn-text-2); line-height: 1.45; }
 
 /* Before / Diff / After */
@@ -418,10 +418,10 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-proposal-errors ul { margin: var(--corn-space-2) 0 var(--corn-space-1); padding-left: var(--corn-space-5); line-height: 1.5; }
 .hx-proposal-errors p { margin-top: var(--corn-space-1); font-size: var(--corn-text-xs); }
 
-.hx-proposal-changes { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); max-height: 40dvh; margin-top: var(--corn-space-2); overflow-y: auto; }
 .hx-change-row { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; text-align: left; font-size: var(--corn-text-xs); }
 .hx-change-row:hover { background: var(--corn-line-soft); }
 .hx-change-what { width: 56px; flex: none; color: var(--corn-text-3); }
+.hx-change-row .hx-name { min-width: 0; overflow-wrap: anywhere; } /* a long label wraps in its row: the list never scrolls sideways */
 
 /* The marks' colours, shared with the picture: the diff tokens, whose light values are theme-model.js `lightColor` of the dark ones */
 .hx-mark-dot { display: inline-block; width: 12px; height: 12px; flex: none; margin-right: var(--corn-space-2); border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-changed); vertical-align: -2px; }
@@ -453,27 +453,34 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 }
 
 /* ---- scenario player (scenario-ui.js): the bar while a scenario plays, and the scenario list --------- */
-.hx-player { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--corn-space-3); padding: var(--corn-space-4) var(--corn-space-4) var(--corn-space-4); border-radius: var(--corn-radius-lg); z-index: 25; overflow: hidden; }
-@media (max-width: 639px) { .hx-player { left: 12px; right: 56px; width: auto; transform: none; } }
-.hx-player-head { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); }
-.hx-player-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-2); }
+.hx-player { position: absolute; left: calc(var(--hx-col-w, 0px) + 24px); right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-4); padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius-lg); z-index: 25; overflow: hidden; }
+
+
+
 .hx-player .hx-close { width: 28px; height: 28px; font-size: var(--corn-text-sm); }
-.hx-player-title { flex: 1; }
+
 .hx-player-speed { flex: none; height: 28px; padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); cursor: pointer; }
 .hx-player-speed:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-offset) / 2); }
-.hx-player-text { margin: 0; min-height: 2.8em; font-size: var(--corn-text-base); line-height: 1.4; color: var(--corn-text); user-select: text; }
+.hx-player-text { margin: 0; flex: 1 1 18em; min-width: 0; font-size: var(--corn-text-base); line-height: 1.4; color: var(--corn-text); user-select: text; overflow-wrap: anywhere; }
+.hx-player-who { color: var(--corn-text-2); font-weight: 600; }
+.hx-player-text .hx-player-verdict { margin-left: var(--corn-space-2); }
 .hx-player-count { color: var(--corn-accent-text); font-weight: 600; white-space: nowrap; }
-.hx-player-controls { display: flex; gap: var(--corn-space-3); }
-.hx-player-controls .hx-btn { flex: 1; justify-content: center; }
+.hx-player-controls { display: flex; flex: none; gap: var(--corn-space-3); }
+.hx-player-side { display: flex; flex: none; align-items: center; gap: var(--corn-space-3); margin-left: auto; }
+.hx-player-controls .hx-btn { justify-content: center; white-space: nowrap; }
+.hx-player-controls .hx-btn[hidden] { display: none; }
+/* The glyphs are drawn, not said: the names are the words (an empty alternative after the slash keeps a screen reader from reading them) */
+.hx-player-prev::before { content: "◀" / ""; margin-right: var(--corn-space-2); }
+.hx-player-next::after { content: "▶" / ""; margin-left: var(--corn-space-2); }
+/* the pause mark is drawn (two bars), not a character: not every font has one */
+.hx-player-toggle[data-state="playing"]::before { content: "" / ""; display: inline-block; box-sizing: border-box; width: 1em; height: 1em; margin-right: var(--corn-space-2); border-left: calc(var(--corn-border-strong) * 1.5) solid currentColor; border-right: calc(var(--corn-border-strong) * 1.5) solid currentColor; }
+.hx-player-toggle[data-state="paused"]::before { content: "▶" / ""; margin-right: var(--corn-space-2); }
+.hx-player-toggle[data-state="done"]::before { content: "↻" / ""; margin-right: var(--corn-space-2); }
 .hx-player-controls .hx-btn:disabled { opacity: 0.4; cursor: default; }
 .hx-player-track { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--corn-line-soft); }
 .hx-player-fill { display: block; height: 100%; width: 0; background: var(--corn-accent-text); }
 
-.hx-scenarios { position: absolute; top: 12px; left: 12px; max-width: min(320px, calc(100% - 24px)); padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); font-size: var(--corn-text-sm); color: var(--corn-text-2); z-index: 12; }
-.hx-scenarios-item { display: block; width: 100%; margin-top: var(--corn-space-2); padding: var(--corn-space-2) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); background: transparent; color: var(--corn-text); font-size: var(--corn-text-sm); text-align: left; cursor: pointer; }
-.hx-scenarios-item:hover { background: color-mix(in srgb, var(--corn-accent-hover) 25%, transparent); }
 /* With a proposal open the list is a row of its bar (scenario-ui.js mounts it there), so it opens in the bar's flow and the bar grows to hold it */
-.hx-proposal-bar .hx-scenarios { position: static; max-width: none; max-height: 40dvh; margin-top: var(--corn-space-2); padding: var(--corn-space-2) var(--corn-space-3); overflow-y: auto; border-radius: var(--corn-radius-sm); border-color: var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 /* ---- what-if editing (whatif.js): the controls under the proposal bar, the drag that draws an edge ---- */
 .hx-whatif { margin-top: var(--corn-space-3); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid color-mix(in srgb, var(--corn-edit) 30%, transparent); }
@@ -539,14 +546,16 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 .hx-proposal-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-3) var(--corn-space-4); }
 .hx-proposal-name { flex: 0 1 auto; min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--corn-text-base); font-weight: 650; color: var(--corn-text); }
 .hx-proposal-counts { display: contents; }
-.hx-proposal-chip { display: inline-flex; align-items: center; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hx-proposal-chip:hover { color: var(--corn-text); text-decoration: underline; }
+.hx-proposal-chip { display: inline-flex; align-items: center; flex-wrap: wrap; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hx-proposal-count { display: inline-flex; align-items: center; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: inherit; font: inherit; white-space: inherit; cursor: pointer; }
+.hx-proposal-count:hover { color: var(--corn-text); text-decoration: underline; }
+.hx-proposal-peek { display: none; margin: 0; }
 .hx-proposal-chip .hx-mark-dot { margin: 0 var(--corn-space-2) 0 0; }
+h2.hx-proposal-name { margin: 0; }
 .hx-proposal-sep { margin: 0 var(--corn-space-2); color: var(--corn-text-3); }
 .hx-proposal-mode { display: none; }
 .hx-proposal-tools, .hx-proposal-actions { display: flex; align-items: center; gap: var(--corn-space-3); }
 .hx-proposal-tools .hx-btn { height: 30px; font-size: var(--corn-text-sm); font-weight: 500; }
-#proposal-play[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); }
 #proposal-edit.hx-btn--active { background: var(--corn-edit-text); border-color: var(--corn-edit); color: var(--corn-ground); }
 .hx-proposal-actions { margin-left: auto; }
 .hx-proposal-actions .hx-btn { height: 32px; justify-content: center; padding: 0 var(--corn-space-5); font-size: var(--corn-text-sm); font-weight: 500; }
@@ -564,7 +573,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-head { display: grid; grid-template-columns: 1fr auto; gap: var(--corn-space-2) var(--corn-space-3); }
   .hx-proposal-name { grid-column: 1 / -1; order: 1; max-width: none; }
   .hx-proposal-counts { display: flex; grid-column: 1 / -1; order: 2; align-items: center; flex-wrap: wrap; column-gap: var(--corn-space-2); }
-  .hx-proposal-chip, .hx-proposal-mode { min-height: 44px; }
+  .hx-proposal-count, .hx-proposal-mode { min-height: 44px; }
   .hx-proposal-mode { display: inline-flex; align-items: center; gap: var(--corn-space-2); padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); font-size: var(--corn-text-sm); font-weight: 600; }
   /* A chevron drawn from an image and the text colour: a thick --corn-border-strong cannot turn it into a heart (the borders it used to be drawn with) */
   .hx-proposal-mode::after { content: ""; width: 10px; height: 10px; background: currentColor; -webkit-mask: var(--hx-chevron) no-repeat center / contain; mask: var(--hx-chevron) no-repeat center / contain; }
@@ -580,7 +589,7 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-more .hx-btn--icon { order: 6; width: 44px; height: 44px; }
   .hx-proposal-more-menu { position: static; grid-column: 1 / -1; order: 7; box-shadow: none; }
   .hx-proposal-more-menu .hx-btn { height: auto; min-height: 44px; font-size: var(--corn-text-md); }
-  .hx-scenarios-item, .hx-review .hx-btn, .hx-whatif .hx-btn { min-height: 44px; }
+  .hx-review .hx-btn, .hx-whatif .hx-btn { min-height: 44px; }
 }
 
 /* A proposal's mockups (mockups.js): the buttons in a node's panel and the window one opens in. A mockup is untrusted content, shown in an <img> or a sandboxed <iframe>. */
@@ -631,13 +640,18 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head),
   .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu) { display: none; }
   .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]) { display: none; } /* the peek keeps the reason Approve is off, and a refusal */
-  .hx-proposal-bar[data-sheet-state="expanded"] .hx-scenarios, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-changes, .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
-  /* The scenario player: the title, then the step counter and its text on two lines */
-  .hx-player { max-height: 50dvh; overflow: hidden; gap: var(--corn-space-2); padding: 0 var(--corn-space-4) var(--corn-space-4); --sheet-pb: var(--corn-space-4); }
+  /* The scenario player: one row (Previous, Pause, Next, the counter and Close) in the peek; the text, the speed and the checks when it is open */
+  .hx-player { position: relative; left: auto; right: auto; bottom: auto; flex-wrap: wrap; max-height: 50dvh; overflow: hidden; gap: 0 var(--corn-space-3); padding: 0 var(--corn-space-4) var(--corn-space-3); --sheet-pb: var(--corn-space-3); }
+  .hx-player > .hx-sheet-handle { flex: 0 0 100%; }
   .hx-player[data-sheet-state="expanded"] { overflow-y: auto; }
-  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-head):not(.hx-player-text):not(.hx-player-controls):not(.hx-player-track) { display: none; } /* Previous, Pause and Next stay in the peek */
-  .hx-player[data-sheet-state="peek"] .hx-player-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; min-height: 0; overflow: hidden; font-size: var(--corn-text-md); }
+  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-controls):not(.hx-player-text):not(.hx-player-side):not(.hx-player-track):not(.hx-player-says) { display: none; } /* Previous, Pause and Next stay in the peek, with the counter and Close */
+  .hx-player[data-sheet-state="peek"] .hx-player-text { flex: 1 1 0; display: flex; align-items: center; gap: var(--corn-space-2); min-height: 44px; overflow: hidden; font-size: var(--corn-text-md); white-space: nowrap; }
+  .hx-player[data-sheet-state="peek"] .hx-player-step, .hx-player[data-sheet-state="peek"] .hx-player-who, .hx-player[data-sheet-state="peek"] .hx-player-sep { display: none; }
+  .hx-player[data-sheet-state="peek"] .hx-player-side .hx-player-speed { display: none; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-text { flex: 1 0 100%; order: 3; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-title { position: static; width: auto; height: auto; clip: auto; clip-path: none; overflow: visible; order: 0; flex: 0 0 100%; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-2); }
 
   /* The node panel: its title and type until expanded */
   .hx-drawer { max-height: 60dvh; }
@@ -1022,7 +1036,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 .hx-header-left[data-brand-short] .hx-title { display: none; }
 .hx-header-left[data-overflow] { -webkit-mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); }
 /* A scroll container never cuts a focus ring: a row that is tabbed to stops short of the edge by the ring's width and offset */
-.hx-forge-body, .hx-drawer-body, .hx-proposal-changes, .hx-proposal-bar, .hx-confirm, .hx-whatif-edges .hx-whatif-list, .hx-proposal-bar .hx-scenarios { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+.hx-forge-body, .hx-drawer-body, .hx-rc-scroll, .hx-proposal-bar, .hx-confirm, .hx-whatif-edges .hx-whatif-list { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
 /* The Work tabs scroll sideways: a tab brought into view stops short of the edge by the strip's own padding */
 .hx-forge-tabs { scroll-padding-inline: var(--corn-space-4); }
 /* Numbers shown as data take the number face (a brand sets --corn-font-num; digits in a pixel face misread) */
@@ -1052,15 +1066,19 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 
 @media (max-width: 767px) {
   .hx-proposal-source { grid-column: 1 / -1; order: 1; justify-self: start; }
-  .hx-player-controls .hx-btn { min-height: 44px; padding: 0 var(--corn-space-2); white-space: nowrap; }
+  .hx-player-controls .hx-btn { min-height: 44px; min-width: 44px; padding: 0 var(--corn-space-3); white-space: nowrap; }
+  /* On a phone the controls are glyphs, the names are said: ◀ ⏸ ▶ in a 44px row */
+  .hx-player-prev .hx-player-label, .hx-player-next .hx-player-label, .hx-player-toggle .hx-player-label { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .hx-player-prev::before, .hx-player-next::after, .hx-player-toggle::before { margin: 0; }
+  .hx-player-next-scenario { font-size: var(--corn-text-sm); }
   .hx-proposal-ways .hx-btn, a.hx-proposal-source { min-height: 44px; } /* targets a thumb can hit */
   .hx-proposal-source { padding: 0; border: 0; border-radius: 0; background: none; } /* a line of the sheet, not a pill 44px tall */
   a.hx-proposal-source { text-decoration: underline; text-underline-offset: 3px; }
   .hx-player-controls { gap: var(--corn-space-2); }
   /* While a scenario plays the proposal sheet folds to its title and counts: the player needs the room */
-  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-actions { display: none; }
+  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-rc-foot { display: none; }
   /* The note open: the field, Cancel and the send button are all there is, so all of them stay above the keyboard */
-  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line) { display: none; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line, .hx-rc-scroll, .hx-rc-tabs, .hx-proposal-peek) { display: none; } /* the review column's lists too: the sheet holds the note and its buttons */
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions { order: 4; grid-template-columns: 1fr; }
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions .hx-btn--approve { display: none; }
   /* Reflow: nothing is wider than the sheet, and long words and counts wrap instead of being cut */
@@ -1090,10 +1108,10 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-change-row { min-height: 28px; }
 .hx-run .hx-link { display: inline-flex; align-items: center; min-height: 24px; } /* a run card's links sit on lines 14px apart: 24px at a desk (WCAG 2.5.8) */
 @media (max-width: 767px), (pointer: coarse) {
-  .hx-change-row, .hx-toggle-row, .hx-textbtn, .hx-player-speed, .hx-player .hx-close,
+  .hx-change-row, .hx-sc-row, .hx-step, .hx-rc-tab, .hx-toggle-row, .hx-textbtn, .hx-player-speed, .hx-player .hx-close,
   .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select, .hx-mobile-search .hx-input { min-height: 44px; }
   .hx-textbtn, .hx-player-speed, .hx-player .hx-close, .hx-confirm .hx-btn { min-width: 44px; }
-  .hx-proposal-chip { flex-wrap: wrap; white-space: normal; text-align: left; } /* the counts say what they count, so they are longer: they wrap rather than clip */
+  .hx-proposal-chip { flex-wrap: wrap; white-space: normal; text-align: left; } .hx-proposal-count { white-space: normal; text-align: left; } /* the counts say what they count, so they are longer: they wrap rather than clip */
   .hx-sheet-handle { height: 44px; } /* the grip is drawn the same; the button itself is 44px (a hit area stretched past it is clipped by the sheet above, and covers its title below) */
   .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
 }
@@ -1194,6 +1212,116 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 @media (forced-colors: active) {
   .hx-search-row[aria-current="true"] { border-left-color: Highlight; }
 }
+
+/* ==== the review column (spec 0006, review-column.js): the changes, and the personas with the scenarios that apply to them ==============
+   From 768px it is docked on the left of the map under the proposal bar (the free map is what it leaves: sheets.js visibleMapRect);
+   on a phone it is the expanded proposal sheet's body, a two-part switch at its top, its foot (the decision) always in view. */
+.hx-review-column { position: absolute; left: 12px; bottom: 12px; top: var(--hx-column-top, 150px); width: 400px; z-index: 14; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--corn-radius-lg); font-size: var(--corn-text-sm); user-select: text; }
+.hx-review-column[hidden] { display: none; }
+@media (max-width: 1023px) { .hx-review-column { width: 320px; } }
+/* The Work panel: from 1280px the column moves over to make room for it; narrower, the panel lies over the column while it is open (moving it would leave the map a sliver) */
+@media (min-width: 1280px) { .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); } }
+/* The node panel (480px) and the 320px column do not both fit under 1024px: the column gives up its width, so the panel covers none of it */
+@media (min-width: 768px) and (max-width: 1023px) { .hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); } }
+.hx-rc-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); overflow: hidden; padding: var(--corn-space-3) var(--corn-space-4); }
+.hx-proposal-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; margin: 0; flex: none; }
+.hx-rc-lists { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-4); }
+/* Both lists are on screen at once: the changes take what they need up to 40%, the scenarios the rest, each scrolling on its own */
+.hx-rc-section { display: flex; flex-direction: column; min-height: 0; }
+/* review-column.js measures the scenarios and sets --hx-changes-max: 40% while the scenarios need the rest, more when they are few */
+#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }
+#rc-scenarios { flex: 1 1 0; min-height: min(12em, var(--hx-scenarios-need, 12em)); }
+.hx-change-list, .hx-rc-sbody { min-height: 0; overflow-y: auto; scroll-padding-block: var(--corn-space-2); }
+.hx-rc-h { flex: none; }
+.hx-rc-tabs { display: flex; gap: var(--corn-space-2); }
+.hx-rc-tabs[hidden] { display: none; }
+.hx-rc-tab { flex: 1; min-height: 32px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font: inherit; font-weight: 600; cursor: pointer; }
+.hx-rc-tab[aria-selected="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+.hx-rc-tab:focus-visible, .hx-sc-row:focus-visible, .hx-step:focus-visible, .hx-rc-h:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-rc-section[hidden] { display: none; }
+.hx-rc-h { margin: 0 0 var(--corn-space-2); font-size: var(--corn-text-sm); font-weight: 650; color: var(--corn-text); }
+.hx-rc-h [data-corn="count"] { color: var(--corn-text-3); font-variant-numeric: tabular-nums; }
+.hx-rc-empty, .hx-rc-note, .hx-rc-coverage { margin: var(--corn-space-2) 0 0; line-height: 1.45; }
+.hx-rc-coverage { color: var(--corn-text-2); }
+.hx-change-list, .hx-sc-list, .hx-steps { margin: 0; padding: 0; list-style: none; }
+.hx-change-list { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-persona { margin-top: var(--corn-space-4); }
+.hx-persona:first-of-type { margin-top: 0; }
+.hx-persona-name { margin: 0 0 var(--corn-space-1); font-size: var(--corn-text-xs); font-weight: 650; letter-spacing: 0.02em; color: var(--corn-text-3); overflow-wrap: anywhere; }
+.hx-sc-list { display: flex; flex-direction: column; gap: var(--corn-space-1); }
+.hx-sc-row { display: flex; align-items: flex-start; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-2) var(--corn-space-2); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
+.hx-sc-row:hover { background: color-mix(in srgb, var(--corn-accent-hover) 18%, transparent); }
+.hx-sc-caret { flex: none; width: 1em; color: var(--corn-text-3); }
+.hx-sc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-sc-title { font-weight: 600; overflow-wrap: anywhere; }
+.hx-sc-meta { font-size: var(--corn-text-xs); color: var(--corn-text-3); }
+.hx-sc-seen { flex: none; font-size: var(--corn-text-xs); color: var(--corn-added-text); white-space: nowrap; }
+.hx-steps { margin: var(--corn-space-1) 0 var(--corn-space-2) var(--corn-space-4); display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-steps[hidden] { display: none; }
+.hx-step { display: flex; align-items: flex-start; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-2) var(--corn-space-2); border: 0; border-left: var(--corn-border-strong) solid transparent; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text); font: inherit; font-size: var(--corn-text-xs); text-align: left; cursor: pointer; }
+.hx-step:hover { background: var(--corn-line-soft); }
+.hx-step[aria-current="step"] { border-left-color: var(--corn-accent-text); background: color-mix(in srgb, var(--corn-accent-hover) 22%, transparent); }
+.hx-step-n { flex: none; min-width: 1.4em; color: var(--corn-accent-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hx-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-step-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--corn-space-3); }
+.hx-step-who { color: var(--corn-text-2); font-weight: 600; }
+.hx-step-where { font-weight: 600; overflow-wrap: anywhere; }
+.hx-step-mark { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-text-3); }
+.hx-step-mark .hx-mark-dot { margin: 0; }
+.hx-step-text { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-step-off { color: var(--corn-text-3); font-style: italic; }
+.hx-step-verdict { align-self: flex-start; white-space: normal; text-align: right; max-width: 40%; overflow-wrap: anywhere; }
+.hx-rc-foot { flex: none; display: flex; flex-direction: column; gap: var(--corn-space-2); padding: var(--corn-space-3) var(--corn-space-4); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-rc-foot .hx-review { flex: none; order: 0; }
+.hx-rc-foot .hx-proposal-actions { margin-left: auto; }
+@media (max-width: 767px) {
+  /* The expanded proposal sheet: the column is its body, with no box of its own */
+  .hx-review-column { position: static; width: auto; max-height: none; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .hx-rc-scroll, .hx-rc-lists, .hx-rc-section, .hx-change-list, .hx-rc-sbody { display: block; overflow: visible; max-height: none; min-height: 0; }
+  .hx-rc-scroll { padding: var(--corn-space-2) 0; }
+  .hx-rc-section[hidden] { display: none; }
+  /* the sheet scrolls, not a section: each section is as tall as its list (the desktop's 40% cap and 12em floor would let the rows run under the decision) */
+  #rc-changes, #rc-scenarios { flex: none; max-height: none; min-height: 0; }
+  .hx-rc-lists { display: flex; flex-direction: column; }
+  .hx-change-list { display: flex; }
+  .hx-rc-foot { padding: var(--corn-space-3) 0 0; } /* after both lists, in the sheet's own flow: nothing overlaps the rows above it */
+  .hx-rc-foot .hx-proposal-actions { margin-left: 0; width: 100%; }
+  .hx-step { min-height: 44px; }
+  .hx-sc-row, .hx-rc-tab { min-height: 44px; }
+  .hx-step-verdict { max-width: 45%; }
+  /* The peek: the title, the one line of counts, and the decision; the lists wait for the sheet to open */
+  .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > .hx-review-column { display: flex; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-review-column > :not(.hx-rc-foot) { display: none; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-chip { display: none; }
+  /* Opened, the sheet's switch carries the counts, so the head is one short row: Before / Diff / After, Edit and ⋯ */
+  .hx-proposal-bar[data-sheet-state="expanded"] { max-height: 62dvh; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-chip, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-summary { display: none; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-counts { grid-column: 1; order: 3; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-tools { grid-column: 2; order: 4; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-head { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-more .hx-btn--icon { grid-column: 3; order: 4; }
+  .hx-proposal-summary { display: none; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-peek { display: block; color: var(--corn-text-2); }
+}
+/* ==== end of the review column ================================================================================================== */
+
+/* ==== the scenario player, one bar under the map (spec 0006 D6) ================================================================
+   From 768px it sits at the foot of the map area, to the right of the review column; the stage tells it how wide the column is. */
+@media (min-width: 768px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(400px, var(--hx-forge-w)); }
+  .hx-stage:has(.drawer-open) .hx-player { right: 504px; }
+}
+@media (min-width: 1280px) {
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(320px, var(--hx-forge-w)); }
+}
+.hx-player-as, .hx-player-check { flex: 1 0 100%; }
+.hx-player-speed[data-corn="control"] { color: var(--corn-text); }
+/* ==== end of the player bar ===================================================================================================== */
 
 /* ==========================================================================
    What is waiting on you (spec 0010): the one number's badge, the Specs groups, each row's review state, the search, the Runs headings

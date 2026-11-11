@@ -18,6 +18,8 @@ import { initProposals, showProposal, openProposal } from '../../explorer/propos
 // @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, clearScenario, playScenario } from '../../explorer/scenario-ui.js';
 // @ts-expect-error plain JS modules, no declarations
+import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/review-column.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initWhatIf, resetWhatIfForTests } from '../../explorer/whatif.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initReview, resetReviewForTests } from '../../explorer/review.js';
@@ -87,6 +89,7 @@ async function mount() {
   vi.stubGlobal('requestAnimationFrame', () => 0);
   resetWhatIfForTests();
   resetReviewForTests();
+  resetReviewColumnForTests();
   document.body.innerHTML = body;
   localStorage.clear();
   const ctx      = new Proxy({}, { get: (_t, k        ) => (k === 'measureText' ? (t        ) => ({ width: t.length * 6 }) : () => {}), set: () => true });
@@ -105,6 +108,7 @@ async function mount() {
   history.replaceState(null, '', '/');
   initSheets();
   initScenarioUi();
+  initReviewColumn();
   clearScenario();
   await initProposals();
   initWhatIf();
@@ -311,93 +315,62 @@ describe('F12 focus goes somewhere stated', () => {
     expect(document.activeElement).toBe(send);
   });
 
-  it('the change list: focus goes to its first row, and Escape folds it back onto its chip', () => {
+  const esc = (el         ) => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  const rows = () => [...document.querySelectorAll('.hx-sc-row')]                          ;
+
+  it('opening a scenario keeps the focus on its button, and its steps are the list after it', () => {
     open();
-    click($('proposal-chip'));
-    expect(document.activeElement).toBe(q('#proposal-changes button'));
-    document.activeElement .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    expect($('proposal-changes').hidden).toBe(true);
-    expect(document.activeElement).toBe($('proposal-chip'));
+    const first = rows()[0];
+    first.focus();
+    click(first);
+    expect(document.activeElement.getAttribute('data-focus-key')).toBe(first.getAttribute('data-focus-key')); // the list was drawn again: the same control has it
+    expect(document.activeElement.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelectorAll('#rc-scenarios [data-corn="step"]')).toHaveLength(2);
   });
 
-  it('the scenario list: focus goes to its first row; choosing one puts focus on the player\'s Pause; Escape closes it and gives Play the focus', () => {
+  it('choosing a step opens the player paused on it and keeps the focus on the step; Escape in the player gives it back to the step it was on', () => {
     open();
-    click($('proposal-play'));
-    const first = q('.hx-scenarios-item')                     ;
-    expect(document.activeElement).toBe(first);
-    first.click();
-    const toggle = q('[data-action=scenario-toggle]')                     ;
-    expect(document.activeElement).toBe(toggle);
-    expect(toggle.textContent).toBe('Pause');
-    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    click(rows()[0]);
+    const step = document.querySelectorAll('[data-corn="step"]')[1]                           ;
+    step.focus();
+    click(step);
+    expect(q('.hx-player')).not.toBeNull();
+    expect(state.scenario.index).toBe(1);
+    expect(state.scenario.playing).toBe(false);
+    expect(document.activeElement.getAttribute('data-focus-key')).toBe(step.getAttribute('data-focus-key'));
+    expect(document.activeElement.getAttribute('aria-current')).toBe('step');
+    // the player moves on a step: the list follows, and Escape returns to the step it is on now, not the one it began on
+    click(q('[data-action=scenario-prev]'));
+    (q('[data-action=scenario-next]')                     ).focus();
+    esc(document.activeElement );
     expect(q('.hx-player')).toBeNull();
-    expect(document.activeElement).toBe($('proposal-play'));
+    expect(document.activeElement.getAttribute('data-corn')).toBe('step');
+    expect(document.activeElement.getAttribute('data-step-index')).toBe('0');
   });
 
-  it('Tab order: an open list comes right after its button, then the toolbar goes on (WCAG 2.4.3)', () => {
+  it('closing the player with its own button gives the focus back to the step too', () => {
     open();
-    const tab = (shift = false) => {
-      const ev = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: shift, bubbles: true, cancelable: true });
-      document.activeElement .dispatchEvent(ev);
-      return ev.defaultPrevented;
-    };
-    // The change list, opened from the counts: its rows, then Before / Diff / After
-    click($('proposal-chip'));
-    const rows = [...document.querySelectorAll('#proposal-changes button')];
-    expect(document.activeElement).toBe(rows[0]);
-    expect(tab(true)).toBe(true);
-    expect(document.activeElement).toBe($('proposal-chip'));
-    expect(tab()).toBe(true);
-    expect(document.activeElement).toBe(rows[0]);
-    rows[rows.length - 1].focus();
-    expect(tab()).toBe(true);
-    const next = document.activeElement;
-    expect(next.closest('#proposal-changes')).toBeNull();
-    expect($('proposal-chip').compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(next.compareDocumentPosition(q('[data-review="approved"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // before Approve, not after it
-    expect(tab(true)).toBe(true);
-    expect(document.activeElement).toBe(rows[rows.length - 1]);
-    // The scenario list, opened from Play: its rows, then Edit
-    click($('proposal-play'));
-    const items = [...document.querySelectorAll('.hx-scenarios-item')];
-    expect(document.activeElement).toBe(items[0]);
-    items[items.length - 1].focus();
-    expect(tab()).toBe(true);
-    expect(document.activeElement).toBe($('proposal-edit'));
-    expect(tab(true)).toBe(true);
-    expect(document.activeElement).toBe(items[items.length - 1]);
-    // Past ⋯ the bar is left: the open lists' rows are not met again
-    $('proposal-more').focus();
-    tab();
-    expect(document.activeElement.closest?.('#proposal-changes, #proposal-scenarios') ?? null).toBeNull();
+    click(rows()[1]);
+    const step = q('[data-corn="step"]')                     ;
+    step.focus();
+    click(step);
+    (q('[data-action=scenario-close]')                     ).focus();
+    click(q('[data-action=scenario-close]'));
+    expect(document.activeElement.getAttribute('data-corn')).toBe('step');
   });
 
-  it('Escape in the scenario list folds it back onto Play', () => {
-    open();
-    click($('proposal-play'));
-    document.activeElement .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    expect(q('#proposal-scenarios').hidden).toBe(true);
-    expect(document.activeElement).toBe($('proposal-play'));
-    expect($('proposal-play').getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('when Play cannot take the focus (a phone\'s peek folds it away), closing the player puts it on the map, not the page', () => {
+  it('a player that no list started (an outage from the cloud panel) closing puts the focus on the map, not the page', () => {
     open();
     playScenario({ id: 's', title: 'S', steps: [{ node: 'root', text: 'a' }] }, { autoplay: false });
     (q('[data-action=scenario-close]')                     ).focus();
-    const play = $('proposal-play');
-    play.focus = () => {}; // as a display: none button does
     click(q('[data-action=scenario-close]'));
     expect(document.activeElement).toBe(state.canvas);
   });
 
-  it('closing the player with its own button gives the focus back to Play too', () => {
+  it('Tab order: the counts, the bar, then the column\'s Changes, its scenarios and its decision, in the page\'s order, without a Tab handler', () => {
     open();
-    click($('proposal-play'));
-    (q('.hx-scenarios-item')                     ).click();
-    (q('[data-action=scenario-close]')                     ).focus();
-    click(q('[data-action=scenario-close]'));
-    expect(document.activeElement).toBe($('proposal-play'));
+    const order = [$('proposal-chip'), $('proposal-edit'), q('#rc-changes'), q('#rc-scenarios'), $('review-decision'), q('[data-review="notes"]'), q('[data-review="approved"]')];
+    order.forEach((el, i) => { if (i) expect(order[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING, `${i}`).toBeTruthy(); });
   });
 });
 
@@ -488,7 +461,7 @@ describe('F16 a link that finds nothing says what, and offers the ways on', () =
 describe('the phone and reflow rules (F11, F14, F21): what the stylesheet says', () => {
   const phoneCss = css.slice(css.indexOf('the review flow, 0.34 design review'));
   it('F11 the player peek keeps Previous, Pause and Next, and they work from the peek', () => {
-    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-head\):not\(\.hx-player-text\):not\(\.hx-player-controls\)/);
+    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-controls\):not\(\.hx-player-text\)/);
     clearScenario();
     playScenario({ id: 's', title: 'S', steps: [{ node: 'root', text: 'a' }] }, { autoplay: false });
     for (const a of ['scenario-prev', 'scenario-toggle', 'scenario-next']) expect(q(`[data-action=${a}]`).hasAttribute('data-peek-ok')).toBe(true);

@@ -149,7 +149,7 @@ describe('the generated markup', () => {
     state.proposalSource = 'pull/3';
     initReview();
     const root = $('review');
-    const bar = $('proposal-bar');
+    const bar = $('review-decision');
     expect(bar.querySelector('[data-review="approved"]').textContent).toBe('Ship it');
     expect(bar.querySelector('[data-review="notes"]').textContent).toBe('Not yet');
     expect(root.querySelector('label').textContent).toBe('Tell the bot');

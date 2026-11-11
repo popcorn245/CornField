@@ -736,6 +736,28 @@ export function summarize(proposal) {
 }
 
 /**
+ * What a reviewer is not told by the checks: scenarios that name no persona (spec 0006 D3). A scenario names
+ * one when it, or any of its steps, has an `actor`. Warnings only: the proposal is still valid, and an outage
+ * or a pipeline scenario honestly has no actor. `topology` is the map the proposal is checked against.
+ * @param {{ nodes?: { id: string, type?: string }[] } | null} topology
+ * @param {object} proposal
+ * @returns {string[]} one line each, ready to print
+ */
+export function personaWarnings(topology, proposal) {
+  const scenarios = asList(proposal?.scenarios);
+  const isPersona = (n) => n && n.type === 'persona';
+  const hasPersonas = asList(topology?.nodes).some(isPersona) || asList(proposal?.nodes?.add).some(isPersona);
+  if (scenarios.length === 0) return [];
+  if (!hasPersonas) return ['Warning: the map has no personas (topology.personas.json); every scenario is listed under Anyone.'];
+  const out = [];
+  scenarios.forEach((s, i) => {
+    if (s?.actor || asList(s?.steps).some((st) => st?.actor)) return;
+    out.push(`Warning: scenarios[${i}] "${s?.id ?? ''}" names no persona; it is listed under Anyone.`);
+  });
+  return out;
+}
+
+/**
  * What-if edits, as the viewer and the what-if agent write them. Every edit is `{ op, …fields }`; an
  * `at` (a timestamp) may ride along and is ignored here. Indexes are 0-based positions in the
  * scenario's `steps`.
