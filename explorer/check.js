@@ -195,6 +195,9 @@ function summary() {
 }
 
 /** Paints the step's state on the bar: called with every bar update */
+/** The words last written into each player's check line (paintChecks) */
+const lineHtml = new WeakMap();
+
 export function paintChecks(bar, snap) {
   if (!bar || !current) return;
   if (!bar.querySelector('.hx-player-as')) {
@@ -214,7 +217,9 @@ export function paintChecks(bar, snap) {
     pill.textContent = words.pill;
     pill.title = words.line;
     line.dataset.tone = words.tone;
-    line.innerHTML = `${escHtml(words.line)}${words.detail ? ` <span class="hx-player-check-detail">${escHtml(words.detail)}</span>` : ''}`;
+    // painted every frame: the live line is rewritten only when its words change, so a verdict is said once
+    const html = `${escHtml(words.line)}${words.detail ? ` <span class="hx-player-check-detail">${escHtml(words.detail)}</span>` : ''}`;
+    if (lineHtml.get(line) !== html) { lineHtml.set(line, html); line.innerHTML = html; }
   }
   fillMenu(row.querySelector('[data-check=as]'));
   row.querySelector('[data-check=recheck]').disabled = current.answer.status === 'pending';

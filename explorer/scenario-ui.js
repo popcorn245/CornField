@@ -235,7 +235,7 @@ function act(action) {
   if (action === 'scenario-toggle') {
     const s = player.snapshot();
     if (s.playing) player.pause(); else player.play();
-    announce(s.playing ? 'Paused' : s.done ? 'Playing again' : s.index > 0 ? 'Resumed' : 'Playing');
+    announce(s.playing ? 'Paused' : s.done ? 'Playing again' : s.index > 0 || s.progress > 0 ? 'Resumed' : 'Playing');
   } else if (action === 'scenario-prev') player.prev();
   else if (action === 'scenario-next') player.next();
   else return;
@@ -248,9 +248,11 @@ let lastFill = -1;
 function updateBar(snap) {
   if (!bar) return;
   const q = (cls) => bar.querySelector(cls);
-  q('.hx-player-title').textContent = snap.title;
-  q('.hx-player-count').textContent = `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`;
-  q('.hx-player-step').textContent = snap.current.text;
+  // this runs every frame: a live region is written only when its words change, so a step is said once, not once a frame
+  const put = (cls, text) => { const el = q(cls); if (el.textContent !== text) el.textContent = text; };
+  put('.hx-player-title', snap.title);
+  put('.hx-player-count', `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`);
+  put('.hx-player-step', snap.current.text);
   const toggle = q('[data-action=scenario-toggle]');
   toggle.textContent = snap.playing ? 'Pause' : snap.done ? 'Play again' : 'Play';
   toggle.disabled = snap.total === 0 || snap.manual;
