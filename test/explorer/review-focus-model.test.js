@@ -18,7 +18,7 @@ import { contrast } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NODE_THEMES } from '../../core/schema.js';
 // @ts-expect-error plain JS modules, no declarations
-import { GREY_MIN_RATIO, DIFF_LABEL_ALPHA } from '../../explorer/diff-marks.js';
+import { GREY_MIN_RATIO, GREY_LABEL_ALPHA } from '../../explorer/diff-marks.js';
 // @ts-expect-error plain JS modules, no declarations
 import { makeBig } from '../fixtures/big/make.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -241,7 +241,7 @@ describe('greying what the change does not involve', () => {
         const [r, g, b] = parseColor(n.color);
         expect(r === g && g === b, `${n.id} ${n.color}`).toBe(true);
         if (n.stroke) { const [a, c, d] = parseColor(n.stroke.color); expect(a === c && c === d).toBe(true); }
-        expect(n.labelAlpha).toBeGreaterThanOrEqual(DIFF_LABEL_ALPHA); // the label of a greyed node stays at the dimmed-label opacity the contrast check holds
+        expect(n.labelAlpha).toBe(GREY_LABEL_ALPHA[s.theme === 'light' ? 'light' : 'dark']); // the label of a greyed node is at the opacity the contrast check holds for it (core/contrast.js)
         expect(n.type).toBeTruthy(); // its silhouette is its type's: nothing is taken from the node but its hue
         expect(n.shape).toBeTruthy();
       }

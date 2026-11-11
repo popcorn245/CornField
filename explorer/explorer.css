@@ -1504,9 +1504,9 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 /* A Layers row the review hid: its name with "hidden while reviewing" under it */
 .hx-toggle-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
 /* On a desk "Whole map" sits on the title's row, beside the source, so the row of counts, Compare, Edit and More keeps the one line it had: at the
-   control height, drawn over the row's own 24px (the source's) so the bar is no taller. On a phone it stays with Edit, 44px */
+   control height, drawn over the row's own 24px (the source's; --corn-space-6) so the bar is no taller. On a phone it stays with Edit, 44px */
 @media (min-width: 768px) {
   .hx-proposal-tools { display: contents; }
   .hx-proposal-name, .hx-proposal-source { order: -2; }
-  :where(.hx-proposal-head) [data-corn="whole-map"] { order: -1; margin-block: calc(min(0px, 24px - var(--hx-control-h)) / 2); }
+  :where(.hx-proposal-head) [data-corn="whole-map"] { order: -1; margin-block: calc((var(--corn-space-6) - var(--hx-control-h)) / 2); } /* the row is 24px (--corn-space-6 by default), the source's height */
 }
