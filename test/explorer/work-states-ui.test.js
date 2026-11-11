@@ -22,7 +22,7 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer, copySpec } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { runsHtml, loadingRowsHtml } from '../../explorer/runs-view.js';
+import { runsHtml, loadingRowsHtml, loadingLinesHtml } from '../../explorer/runs-view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { formatCost, formatTokens, runName, runTone, runMeta, limitRows, pullRunWords, changeWords, RUN_TONE } from '../../explorer/runs-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -613,6 +613,40 @@ describe('loading and empty lists (F44)', () => {
     expect($('forge-status').textContent).toMatch(/Loading/);
     expect(loadingRowsHtml(2).match(/hx-forge-skeleton/g)).toHaveLength(2);
     expect(css).toMatch(/\.hx-forge-skeleton \{[^}]*min-height: 64px/);
+  });
+
+  it('holds the Runs tab\'s status, runner and totals lines while the runs load, so the list does not jump (F44)', async () => {
+    fakeServer({ hang: ['/api/agent-runs'] });
+    mount();
+    openForge({ tab: 'work' });
+    await settle();
+    const runner = $('forge-runs-runner');
+    const totals = $('forge-runs-totals');
+    expect(runner.hidden).toBe(false);
+    expect(runner.querySelectorAll('[data-corn="skeleton"]')).toHaveLength(1);
+    expect(totals.hidden).toBe(false);
+    expect(totals.querySelectorAll('[data-corn="skeleton"]')).toHaveLength(3);
+    expect(runner.querySelector('[data-corn="skeleton"]').getAttribute('aria-hidden')).toBe('true');
+    expect($('forge-runs-status').textContent).toMatch(/Loading the runs/);
+    expect(qa('#forge-runs-list .hx-forge-skeleton')).toHaveLength(3);
+    // rows under the runs wait: their place moves when the runs arrive
+    expect(qa('#forge-list .hx-forge-skeleton')).toHaveLength(0);
+    // the placeholder line is one meta line, like the line it stands for
+    expect(loadingLinesHtml(2).match(/hx-forge-meta hx-forge-skeleton-line/g)).toHaveLength(2);
+    expect(css).toMatch(/\.hx-forge-skeleton-line > span \{[^}]*height: 10px/);
+  });
+
+  it('keeps a width for each tab\'s count before it is read, so the tabs do not move (F44)', async () => {
+    fakeServer({ hang: ['/api/forge/issues', '/api/agent-runs'] });
+    mount();
+    openForge({ tab: 'issues' });
+    await settle();
+    for (const kind of ['specs', 'pulls', 'issues', 'threads', 'work']) {
+      const count = q(`[data-forge-kind="${kind}"] .hx-forge-count`);
+      expect(count, kind).toBeTruthy();
+      expect(count.hidden, kind).toBe(false);
+    }
+    expect(css).toMatch(/\.hx-forge-tab \.hx-forge-count \{[^}]*display: inline-block; min-width: 2ch/);
   });
 
   it('says in each empty list what would appear and how to make one', async () => {
