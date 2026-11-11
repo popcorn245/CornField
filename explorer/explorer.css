@@ -1176,6 +1176,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 @media (max-width: 767px) {
   /* On a phone the menu spans the screen, at most 70% of its height */
   .hx-layers .hx-menu { position: fixed; top: calc(56px + var(--corn-space-4) + 44px + var(--corn-space-2)); left: 12px; right: 12px; width: auto; max-width: none; max-height: 70dvh; }
+  /* An open menu is over the phone's sheets (the dock, z-index 45), not under them: else a proposal's sheet hides its last rows, which no scroll reaches */
+  .hx-header:has(.hx-layers .hx-menu:not([hidden])) { z-index: 46; }
   .hx-kinds-btn { min-height: 44px; }
 /* ==========================================================================
    What is waiting on you (spec 0010): the one number's badge, the Specs groups, each row's review state, the search, the Runs headings

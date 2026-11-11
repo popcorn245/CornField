@@ -220,6 +220,14 @@ describe('the menu with project layers', () => {
     clickWithLegendMenu($('graph-canvas') || document.body, () => {});
     expect(menu.hidden).toBe(true);
   });
+  it('on a phone, an open menu is over the sheets (the dock), so a proposal\'s sheet never hides its last rows', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const phone = css.slice(css.indexOf('Project layers and finer kinds (spec 0009)'));
+    const dock = Number(/\.hx-dock \{[^}]*z-index: (\d+)/.exec(css)[1]);
+    const over = /\.hx-header:has\(\.hx-layers \.hx-menu:not\(\[hidden\]\)\) \{ z-index: (\d+); \}/.exec(phone);
+    expect(over).not.toBeNull();
+    expect(Number(over[1])).toBeGreaterThan(dock);
+  });
   it('has the All and None buttons with their hooks, and they stay at the head of the menu while the rows scroll', () => {
     open({ add });
     expect(document.querySelector('[data-corn="layers-all"]').textContent).toBe('All');
