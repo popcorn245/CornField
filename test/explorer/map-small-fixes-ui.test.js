@@ -4,7 +4,7 @@
  * type on the map and its chip counts layers only (F59); the service panel's Kind value does not repeat the
  * description (F60); a search with no match says so by the field, politely (F24).
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
@@ -17,7 +17,7 @@ import { LAYER_DEFS, renderLayerToggles, toggleLayer } from '../../explorer/laye
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { updateSearchStatus } from '../../explorer/search-status.js';
+import { updateSearchStatus, NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
 
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -129,25 +129,45 @@ describe('the service panel (F60)', () => {
 });
 
 describe('a search with no match (F24)', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('says so by the field, in a polite live region, and clears when there is a match or no query', () => {
+    vi.useFakeTimers();
     mount();
     const status = $('search-status');
     expect(status.getAttribute('aria-live')).toBe('polite');
     expect($('mobile-search-status').getAttribute('aria-live')).toBe('polite');
     expect(status.closest('.hx-search')).not.toBeNull();
     updateSearchStatus('zzzz', false);
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS);
     expect(status.textContent).toBe('No match for “zzzz”');
     expect($('mobile-search-status').textContent).toBe('No match for “zzzz”');
     updateSearchStatus('app', true);
     expect(status.textContent).toBe('');
     updateSearchStatus('zzzz', false);
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS);
     updateSearchStatus('', false);
     expect(status.textContent).toBe('');
   });
 
+  it('changes the live region once while a no-match query is typed, not on every key', () => {
+    vi.useFakeTimers();
+    mount();
+    const seen = [];
+    const type = (q, found = false) => { updateSearchStatus(q, found); vi.advanceTimersByTime(80); seen.push($('search-status').textContent); };
+    ['z', 'zz', 'zzq', 'zzqx', 'zzqxj'].forEach((q) => type(q));
+    type('app', true); // a match in between clears at once and cancels the wait
+    ['zz', 'zzq'].forEach((q) => type(q));
+    expect(seen.every((t) => t === '')).toBe(true); // nothing read out while the keys come
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS);
+    expect($('search-status').textContent).toBe('No match for “zzq”');
+  });
+
   it('puts the query in as text, never as markup', () => {
+    vi.useFakeTimers();
     mount();
     updateSearchStatus('<img src=x onerror=alert(1)>', false);
+    vi.advanceTimersByTime(NO_MATCH_DELAY_MS);
     expect($('search-status').querySelector('img')).toBeNull();
     expect($('search-status').textContent).toContain('<img');
   });

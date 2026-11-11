@@ -22,11 +22,20 @@ export function showSearchStatus(text) {
   }
 }
 
+/** How long the typing must pause before "No match" is shown: a live region that changed on every key would be read out on every key */
+export const NO_MATCH_DELAY_MS = 400;
+let pending = null;
+
 /**
- * Sets the status for a search: nothing for an empty query or a match, "No match for …" when the query found no node.
+ * Sets the status for a search: nothing for an empty query or a match (at once), "No match for …" when the query found
+ * no node, once the typing pauses, so a screen reader says it once and not for every letter.
  * @param {string} query the trimmed query
  * @param {boolean} found whether a shown node matched
  */
 export function updateSearchStatus(query, found) {
-  showSearchStatus(query && !found ? noMatchText(query) : '');
+  clearTimeout(pending);
+  pending = null;
+  if (!query || found) { showSearchStatus(''); return; }
+  const text = noMatchText(query);
+  pending = setTimeout(() => { pending = null; showSearchStatus(text); }, NO_MATCH_DELAY_MS);
 }
