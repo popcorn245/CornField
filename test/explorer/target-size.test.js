@@ -32,8 +32,8 @@ function px(set, selector, prop) {
   return value;
 }
 
-const TALL = ['.hx-change-row', '.hx-toggle-row', '.hx-textbtn', '.hx-player-speed', '.hx-player .hx-close', '.hx-confirm .hx-btn', '.hx-confirm .hx-forge-input', '.hx-confirm .hx-forge-select', '.hx-mobile-search .hx-input', '.hx-run .hx-link', '.hx-forge-check .hx-link'];
-const WIDE = ['.hx-textbtn', '.hx-player-speed', '.hx-player .hx-close', '.hx-confirm .hx-btn'];
+const TALL = ['.hx-search-btn', '.hx-search-row', '.hx-change-row', '.hx-toggle-row', '.hx-textbtn', '.hx-player-speed', '.hx-player .hx-close', '.hx-confirm .hx-btn', '.hx-confirm .hx-forge-input', '.hx-confirm .hx-forge-select', '.hx-mobile-search .hx-input', '.hx-run .hx-link', '.hx-forge-check .hx-link'];
+const WIDE = ['.hx-search-btn', '.hx-textbtn', '.hx-player-speed', '.hx-player .hx-close', '.hx-confirm .hx-btn'];
 
 describe('touch targets', () => {
   it.each(TALL)('%s is 44px tall on a phone', (sel) => { expect(px(phone, sel, 'min-height')).toBeGreaterThanOrEqual(44); });

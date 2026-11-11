@@ -156,3 +156,79 @@ describe.each([[1440, 900], [390, 844]])('the fit at %i x %i', (w, h) => {
     expect(zoomAbout({ ...state.camera, zoom: floor / 2 }, 0.88, 5, 5, floor).zoom).toBeLessThanOrEqual(floor / 2);
   });
 });
+
+// Spec 0008 D1: clusters packed by size, not ringed. The targets are measured on the big synthetic map (seed 245) at the layers on at load.
+describe('the packed layout (spec 0008 D1)', () => {
+  const shown = () => state.nodes.filter((n) => isNodeVisible(state, n));
+  /** Share of the box (the fit's own: disc + 25 px round every node) more than 200 px from any shown node's centre, on a 50 px grid */
+  function emptyShare(nodes) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of nodes) { minX = Math.min(minX, n.x - n.r - 25); maxX = Math.max(maxX, n.x + n.r + 25); minY = Math.min(minY, n.y - n.r - 25); maxY = Math.max(maxY, n.y + n.r + 35); }
+    const cell = 50, B = 200, buckets = new Map();
+    for (const n of nodes) { const k = `${Math.floor(n.x / B)},${Math.floor(n.y / B)}`; (buckets.get(k) || buckets.set(k, []).get(k)).push(n); }
+    let empty = 0, total = 0;
+    for (let x = minX + cell / 2; x < maxX; x += cell) {
+      for (let y = minY + cell / 2; y < maxY; y += cell) {
+        total++;
+        let near = false;
+        for (let a = -1; a <= 1 && !near; a++) for (let b = -1; b <= 1 && !near; b++) {
+          const list = buckets.get(`${Math.floor(x / B) + a},${Math.floor(y / B) + b}`);
+          if (list && list.some((n) => Math.hypot(n.x - x, n.y - y) <= B)) near = true;
+        }
+        if (!near) empty++;
+      }
+    }
+    return { empty: empty / total, width: maxX - minX, height: maxY - minY };
+  }
+
+  beforeAll(() => {
+    lay(makeBig({ seed: 245 }).topology);
+    state.activeLayers = { ...saved.activeLayers };
+  });
+
+  it('fits the box in at most 6,000 px a side, with at most 35% of it more than 200 px from a node (13,300 px and 85% before)', () => {
+    const { empty, width, height } = emptyShare(shown());
+    expect(width).toBeLessThanOrEqual(6000);
+    expect(height).toBeLessThanOrEqual(6000);
+    expect(empty).toBeLessThanOrEqual(0.35);
+  });
+
+  it.each([[1440, 900, 0.12], [390, 844, 0.055]])('fits the whole map at zoom %i x %i of at least %f', (w, h, least) => {
+    state.width = w; state.height = h; state.camera = { x: 0, y: 0, zoom: 1 };
+    fitGraphToViewport(fitPadding());
+    expect(state.camera.zoom).toBeGreaterThanOrEqual(least);
+  });
+
+  it('keeps the root in the middle and no two discs overlapping', () => {
+    const root = state.nodes.find((n) => n.id === 'root');
+    expect([root.x, root.y]).toEqual([0, 0]);
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  it('puts the largest cluster nearest the core, and is the same map every time', () => {
+    const first = state.nodes.map((n) => [n.id, n.x, n.y]);
+    lay(makeBig({ seed: 245 }).topology);
+    expect(state.nodes.map((n) => [n.id, n.x, n.y])).toEqual(first);
+    const dist = (id) => { const n = state.nodes.find((x) => x.id === id); return Math.hypot(n.x, n.y); };
+    const owned = new Map();
+    state.edges.forEach((e) => { if (!e.kind && !e.dashed) owned.set(e.from, (owned.get(e.from) || 0) + 1); });
+    const clusters = state.nodes.filter((n) => n.type === 'app' && owned.get(n.id) > 20).sort((a, b) => owned.get(b.id) - owned.get(a.id));
+    expect(clusters.length).toBeGreaterThan(3);
+    expect(dist(clusters[0].id)).toBeLessThan(dist(clusters.at(-1).id));
+  });
+
+  it('a new small cluster moves no bigger one', () => {
+    const topology = makeBig({ seed: 245 }).topology;
+    lay(topology);
+    const before = new Map(state.nodes.map((n) => [n.id, [n.x, n.y]]));
+    const extra = { nodes: [...topology.nodes, { id: 'zz-new', type: 'tool', r: 20, label: 'zz new' }, ...Array.from({ length: 3 }, (_, i) => ({ id: `zz-kid-${i}`, type: 'page', r: 18, label: `zz kid ${i}` }))],
+      edges: [...topology.edges, { from: 'root', to: 'zz-new' }, ...Array.from({ length: 3 }, (_, i) => ({ from: 'zz-new', to: `zz-kid-${i}` }))] };
+    lay(extra);
+    const moved = state.nodes.filter((n) => before.has(n.id) && (before.get(n.id)[0] !== n.x || before.get(n.id)[1] !== n.y)).map((n) => n.id);
+    // The outer ring of childless hubs may turn (its spacing counts one more); no cluster's own nodes do
+    const parent = new Map(state.edges.filter((e) => !e.kind && !e.dashed).map((e) => [e.to, e.from]));
+    const inCluster = (id) => { const p = parent.get(id); return !!p && state.nodes.find((n) => n.id === p).type === 'app' && state.edges.filter((e) => e.from === p && !e.kind && !e.dashed).length > 3; };
+    const clusterMoved = moved.filter(inCluster);
+    expect(clusterMoved).toEqual([]);
+  });
+});

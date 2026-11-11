@@ -118,7 +118,14 @@
         <svg class="hx-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
         <input type="text" id="node-search" class="hx-search-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" aria-keyshortcuts="/" data-corn="search-input" />
         <kbd class="hx-kbd" data-corn="search-key" aria-hidden="true">/</kbd>
+        <span id="search-steps" class="hx-search-steps" data-corn="search-steps" hidden>
+          <span id="search-count" class="hx-search-count" data-corn="search-count" aria-hidden="true"></span>
+          <button type="button" class="hx-search-btn" data-action="search-prev" aria-label="Previous match" title="Previous match (Shift+Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 10.5L8 6l4.5 4.5" /></svg></button>
+          <button type="button" class="hx-search-btn" data-action="search-next" aria-label="Next match" title="Next match (Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 5.5L8 10l4.5-4.5" /></svg></button>
+          <button type="button" class="hx-search-btn" data-action="clear-search" aria-label="Clear search" title="Clear search (Escape)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
+        </span>
         <div id="search-status" class="hx-search-status" role="status" aria-live="polite" data-corn="search-status"></div>
+        <div id="search-results" class="hx-search-results" data-corn="search-results" hidden></div>
       </div>
 
       <!-- The Work toggle (explorer/forge-panel.js): opens the Work panel; shown only when the config names a forge -->
@@ -177,9 +184,15 @@
   <!-- Mobile search bar -->
   <div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden data-corn="mobile-search">
     <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" data-corn="search-input" />
-    <button type="button" class="hx-textbtn" data-action="clear-search" aria-label="Clear search" data-corn-kind="quiet">✕</button>
     <button type="button" class="hx-textbtn" data-action="close-mobile-search" data-corn-kind="quiet">Cancel</button>
+    <span id="mobile-search-steps" class="hx-search-steps" data-corn="search-steps" hidden>
+          <span id="mobile-search-count" class="hx-search-count" data-corn="search-count" aria-hidden="true"></span>
+          <button type="button" class="hx-search-btn" data-action="search-prev" aria-label="Previous match" title="Previous match (Shift+Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 10.5L8 6l4.5 4.5" /></svg></button>
+          <button type="button" class="hx-search-btn" data-action="search-next" aria-label="Next match" title="Next match (Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 5.5L8 10l4.5-4.5" /></svg></button>
+          <button type="button" class="hx-search-btn" data-action="clear-search" aria-label="Clear search" title="Clear search (Escape)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
+        </span>
     <div id="mobile-search-status" class="hx-search-status" role="status" aria-live="polite" data-corn="search-status"></div>
+    <div id="mobile-search-results" class="hx-search-results" data-corn="search-results" hidden></div>
   </div>
 
   <!-- The map -->

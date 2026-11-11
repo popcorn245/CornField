@@ -321,3 +321,51 @@ describe('zoom keeps the point under the pointer still', () => {
     touchEvent('touchend', [], [touch(350, 300)], window);
   });
 });
+
+describe('a click on a cluster\'s title (spec 0008 D1)', () => {
+  function withLabels() {
+    const ctx = new Proxy({}, { get: (_t, key) => (key === 'measureText' ? (t         ) => ({ width: t.length * 7 }) : () => {}), set: () => true });
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.getContext = () => ctx           ;
+    state.labelCanvas = labelCanvas;
+    state.nodes = [node('root', 'root', 100, 100, 20), node('app', 'app', 300, 100), node('kid1', 'page', 380, 300, 10), node('kid2', 'page', 420, 340, 10), node('other', 'page', 700, 500, 10)];
+    state.edges = [{ from: 'root', to: 'app' }, { from: 'app', to: 'kid1' }, { from: 'app', to: 'kid2' }, { from: 'root', to: 'other' }];
+    touchScene();
+    render.resize(); // happy-dom has no layout: the size is the test's
+    state.width = 800;
+    state.height = 600;
+    render.renderNow();
+  }
+  afterEach(() => { state.labelCanvas = null; });
+
+  it('frames the cluster (the hub and what hangs under it) and selects nothing', () => {
+    withLabels();
+    state.camera = { x: 0, y: 0, zoom: 0.5 };
+    render.renderNow(); // the labels are placed for this zoom
+    state.selectedNode = null;
+    // the app's title sits under its disc: (300, 100) * 0.5 = (150, 50), label centred below it
+    const at = { x: 150, y: 50 + 20 * 0.5 + 3 + 12 - 4 };
+    mouse('mousedown', at.x, at.y);
+    mouse('mouseup', at.x, at.y, window           );
+    expect(selectNode).not.toHaveBeenCalled();
+    expect(state.camera).not.toEqual({ x: 0, y: 0, zoom: 0.5 }); // the camera moved to the cluster
+    for (const n of state.nodes.filter((x         ) => ['app', 'kid1', 'kid2'].includes(x.id))) {
+      const sx = state.camera.x + n.x * state.camera.zoom, sy = state.camera.y + n.y * state.camera.zoom;
+      expect(sx).toBeGreaterThanOrEqual(0); expect(sx).toBeLessThanOrEqual(800);
+      expect(sy).toBeGreaterThanOrEqual(0); expect(sy).toBeLessThanOrEqual(600);
+    }
+    expect(state.camera.zoom).toBeGreaterThanOrEqual(0.9); // the cluster is small: it is framed close, not as part of the whole map
+  });
+
+  it('does nothing for the root\'s title or a plain node\'s label (the background click it was)', () => {
+    withLabels();
+    state.camera = { x: 0, y: 0, zoom: 1 };
+    render.renderNow();
+    state.selectedNode = state.nodes[1];
+    const root = { x: 100, y: 100 + 20 + 3 + 12 - 4 };
+    mouse('mousedown', root.x, root.y);
+    mouse('mouseup', root.x, root.y, window           );
+    expect(closeDrawer).toHaveBeenCalledTimes(1);
+    expect(state.camera).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+});

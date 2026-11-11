@@ -10,7 +10,7 @@
  *     Escape closes it, and in Freeform Alt+arrow moves the selected node;
  *   - `#map-announcer` (a polite live region) says where the keyboard landed: the node, its type, its
  *     connections, its place; the zoom; a search's hit;
- *   - Enter in the search box selects the first visible match;
+ *   - Enter in the search box selects the best match and goes on to the next (search.js); with a search on, N and P step through its matches;
  *   - the panel: Escape inside it closes it and gives the focus back to the map; it is `inert` while closed
  *     (panels.js), so its buttons are never tabbed to off screen;
  *   - the Layers menu says whether it is open (`aria-expanded`), and Escape closes it, back on its button;
@@ -24,6 +24,7 @@ import { selectNode, closeDrawer } from './panels.js';
 import { saveFreeformPositions } from './layout.js';
 import { closeLegendMenu } from './layers.js';
 import * as K from './keyboard-model.js';
+import { searchActive, stepMatch } from './search.js';
 
 const $ = (id) => document.getElementById(id);
 let wired = false;
@@ -42,17 +43,21 @@ export function announce(text) {
 /** The visible nodes, in the order the keys step through them */
 const stepOrder = () => K.readingOrder(state.nodes.filter((n) => isNodeVisible(n)));
 
-/** Moves the camera so `node` is in the middle of the part of the map not under the panels or a phone's sheets */
-export function centreOn(node) {
-  const { camera, width, height } = state;
+/** The camera that puts `node` in the middle of the part of the map not under the panels or a phone's sheets, at `zoom` (the current one by default) */
+export function centreTarget(node, zoom = state.camera.zoom) {
+  const { width, height } = state;
   const visibleHeight = Math.max(160, height - (state.coveredBottom || 0));
   const panel = $('spec-drawer');
   const visibleWidth = width >= 768 && panel && panel.classList.contains('drawer-open') ? Math.max(160, width - (panel.offsetWidth || 480)) : width;
   // The issues and PRs panel slides in from the left (forge-panel.js)
   const forge = $('forge-panel');
   const left = width >= 768 && forge && forge.classList.contains('forge-open') ? Math.min(forge.offsetWidth || 400, visibleWidth - 160) : 0;
-  camera.x = left + (visibleWidth - left) / 2 - node.x * camera.zoom;
-  camera.y = visibleHeight / 2 - node.y * camera.zoom;
+  return { x: left + (visibleWidth - left) / 2 - node.x * zoom, y: visibleHeight / 2 - node.y * zoom, zoom };
+}
+
+/** Moves the camera so `node` is in the middle of the part of the map not under the panels or a phone's sheets */
+export function centreOn(node) {
+  Object.assign(state.camera, centreTarget(node));
   render();
 }
 
@@ -108,6 +113,7 @@ function onMapKey(e) {
       announce(`The whole map. ${K.zoomWords(camera.zoom)}`);
       break;
     case 'step': {
+      if (searchActive() && stepMatch(action.by)) break; // with a search on, N and P walk its matches (search.js)
       const order = stepOrder();
       land(K.stepFrom(order, state.selectedNode && state.selectedNode.id, action.by), order);
       break;
@@ -145,18 +151,6 @@ function onPanelKey(e) {
 function onPanelClick(e) {
   const close = e.target.closest && e.target.closest('[data-action="close-drawer"]');
   if (close && state.canvas) setTimeout(() => state.canvas.focus(), 0);
-}
-
-/** Enter in a search box: the first visible node it matches is selected, like a click on it */
-function onSearchKey(e) {
-  if (e.key !== 'Enter') return;
-  const q = e.target.value.trim().toLowerCase();
-  if (!q) return;
-  e.preventDefault();
-  const order = stepOrder();
-  const hit = order.find((n) => n.label.toLowerCase().includes(q));
-  if (!hit) { announce(`No node matches ${e.target.value.trim()}`); return; }
-  land(hit, order);
 }
 
 /** Whether the key went to something that takes typing */
@@ -197,10 +191,6 @@ export function initKeyboard() {
   if (drawer) {
     drawer.addEventListener('keydown', onPanelKey);
     drawer.addEventListener('click', onPanelClick);
-  }
-  for (const id of ['node-search', 'mobile-node-search']) {
-    const input = $(id);
-    if (input) input.addEventListener('keydown', onSearchKey);
   }
   document.addEventListener('keydown', onDocumentKey);
 }
