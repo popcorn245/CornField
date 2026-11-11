@@ -223,6 +223,31 @@ describe('the parts 0.35 added hooks to', () => {
   });
 });
 
+describe('the retro fixture theme, the proof that hooks are enough', () => {
+  const css = fs.readFileSync(path.join(CORNFIELD, 'test', 'fixtures', 'themes', 'retro', 'theme.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = css.split('}').map((r) => r.split('{')).filter((r) => r.length === 2 && !/^\s*(@|:root)/.test(r[0]) && /\[data-corn/.test(r[0]));
+
+  it('styles with hooks, kinds and states alone: no class, no id, no !important', () => {
+    expect(css).not.toMatch(/!important/);
+    for (const [selector] of rules) {
+      expect(selector, selector).not.toMatch(/\.hx-|\.cf-|#[a-z]/i);
+    }
+    expect(rules.length).toBeGreaterThan(30);
+  });
+
+  it('names only hooks, kinds and states the docs list', () => {
+    const named = (attr) => [...css.matchAll(new RegExp(`\\[${attr}[\\^$*]?=\\"([a-z0-9-]+)\\"\\]`, 'g'))].map((m) => m[1]);
+    const corn = named('data-corn').filter((v) => v !== 'preset-' && v !== '-dialog'); // `^="preset-"` and `$="-dialog"` are prefixes and suffixes
+    expect(corn.filter((h) => !hooks.includes(h))).toEqual([]);
+    expect(named('data-corn-kind').filter((k) => !kinds.includes(k))).toEqual([]);
+    expect(named('data-corn-state').filter((v) => !states.includes(v))).toEqual([]);
+  });
+
+  it('reaches what it could not before: secondary buttons, the compare control, the Filter chip, node chips, the diff pill', () => {
+    for (const part of ['[data-corn-kind="secondary"]', '[data-corn="compare"]', '[data-corn="compare-option"]', '[data-corn="filter-chip"]', '[data-corn="node-chip"]', '[data-corn="diff-pill"][data-corn-state="removed"]', '[data-corn="live-chip"][data-corn-state="failure"]']) expect(css, part).toContain(part);
+  });
+});
+
 // --- The page and some panels, mounted -------------------------------------------------------------------------------
 
 const html = explorerPage();

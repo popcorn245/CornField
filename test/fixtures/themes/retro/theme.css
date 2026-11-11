@@ -279,6 +279,7 @@
 [data-corn="brand-logo"] { height: 28px; width: 28px; image-rendering: pixelated; }
 [data-corn="brand-wordmark"] { height: 18px; width: auto; image-rendering: pixelated; }
 [data-corn-kind="primary"],
+[data-corn-kind="secondary"],
 [data-corn-kind="approve"],
 [data-corn-kind="danger"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
 [data-corn-kind]:active { transform: translate(2px, 2px); box-shadow: none; }
@@ -292,3 +293,39 @@
 [data-corn="count"] { font-weight: 700; }
 [data-corn="auth-card"] { box-shadow: var(--corn-shadow-lg); }
 [data-corn="auth-brand"] { padding-bottom: 12px; border-bottom: var(--corn-border) solid var(--corn-line-soft); }
+
+/* The parts 0.35 gave a hook (docs/theming.md, "The hooks"): one button row is one face, the way to say where you are is a pixel mark, not a colour */
+/* Header: the View switch and the account menu */
+[data-corn="view-switch"] { box-shadow: var(--corn-shadow-sm); }
+[data-corn^="preset-"] { font-family: var(--corn-font-display); }
+[data-corn="avatar"] { border: var(--corn-border) solid var(--corn-line); border-radius: 0; }
+[data-corn="account-who"] { font-family: var(--corn-font-display); }
+[data-corn="theme-option"] { font-family: var(--corn-font-display); }
+[data-corn="theme-option"][aria-pressed="true"],
+[data-corn="compare-option"][aria-pressed="true"] { box-shadow: inset 0 -4px 0 var(--corn-accent-text); }
+/* The live chip says its state in the shape of its edge as well as its dot */
+[data-corn="live-chip"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
+[data-corn="live-chip"][data-corn-state="failure"] { border-style: dashed; }
+[data-corn="live-chip"][data-corn-state="stopped"] { border-style: dotted; }
+/* Proposal bar: the name, the counts, the compare control, the review note */
+[data-corn="proposal-title"] { font-family: var(--corn-font-display); }
+[data-corn="proposal-counts"] { font-family: var(--corn-font-num); }
+[data-corn="compare"] { box-shadow: var(--corn-shadow-sm); }
+[data-corn="compare-option"],
+[data-corn="proposal-mode"] { font-family: var(--corn-font-display); }
+[data-corn="review-note"] { border-width: var(--corn-border-strong); box-shadow: inset 2px 2px 0 var(--corn-line-soft); }
+/* Work panel: the Filter chip, labels, the way back, the detail's title, the nodes a pull request lights, the out arrow */
+[data-corn="filter-chip"],
+[data-corn="back"],
+[data-corn="more"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
+[data-corn="label"] { text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; }
+[data-corn="detail"] { font-family: var(--corn-font-display); }
+[data-corn="node-chip"] { box-shadow: var(--corn-shadow-sm); }
+[data-corn="out-link"] { box-shadow: var(--corn-shadow-sm); }
+[data-corn="control"] { box-shadow: inset 2px 2px 0 var(--corn-line-soft); }
+/* Node panel: a title is often a file name or an id, so it keeps the body face's digits; the diff pill says what happens in the shape of its edge */
+[data-corn="node-title"] { font-family: var(--corn-font); }
+[data-corn="diff-pill"] { box-shadow: var(--corn-shadow-sm); } /* a pill holds a proposal's title: it stays in the body face */
+[data-corn="diff-pill"][data-corn-state="added"] { border-style: dashed; }
+[data-corn="diff-pill"][data-corn-state="removed"] { text-decoration: line-through; }
+[data-corn="diff-pill"][data-corn-state="edit"] { border-style: dotted; }
