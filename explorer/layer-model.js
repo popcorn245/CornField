@@ -98,7 +98,7 @@ export function touchedLayerKeys({ nodes, edges, rowOf, flight = null }) {
  */
 export function reviewLayers({ active, touched, universe, review }) {
   const out = { ...active };
-  if (!review.whole) for (const key of universe) out[key] = touched.has(key);
+  if (!review.whole && touched.size) for (const key of universe) out[key] = touched.has(key); // a proposal that touches no layer has nothing to narrow the map to: it is left whole
   Object.assign(out, review.manual || {}, review.step || {});
   return out;
 }
@@ -145,5 +145,5 @@ export function reviewHides(state, key) {
   return layersOf(state)[key] === false;
 }
 
-/** Whether the greying is on: a review is open and the whole map is not asked for (scene.js, map-style.js) */
-export const greying = (state) => !!state.review && !!state.proposal && !state.review.whole;
+/** Whether the greying is on: a review is open, the whole map is not asked for, and the proposal involves something (a proposal that changes nothing greys nothing: scene.js, map-style.js) */
+export const greying = (state) => !!state.review && !!state.proposal && !state.review.whole && touchedBy(state).size > 0;

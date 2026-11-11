@@ -2084,7 +2084,7 @@
       "label": "map-tokens.js",
       "type": "core",
       "file": "core/map-tokens.js",
-      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow` and `--corn-map-label-min`.",
+      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width`, `--corn-map-glow`, `--corn-map-label-min` and `--corn-map-grey-alpha`.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`. (core/map-tokens.js)"
@@ -8064,7 +8064,37 @@
       "to": "core-explorer-css-color",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-check",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-map",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T21:43:19.871Z"
+  "updatedAt": "2026-11-11T22:45:13.492Z"
 }

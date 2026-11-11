@@ -280,17 +280,20 @@ export { GREY_ALPHA }; // how much of a greyed node is left (diff-marks.js): its
 // ---------------------------------------------------------------------------
 //  Visibility and focus (moved unchanged from render.js)
 // ---------------------------------------------------------------------------
-export function isNodeVisible(state, node) {
+/**
+ * Whether the map draws a node. `viewer`: as the viewer's own layers say, whatever a review has hidden (a list of what could be picked while the review
+ * narrows the map, such as the other end of a what-if edge: the edge, once drawn, brings its two ends' layers on).
+ */
+export function isNodeVisible(state, node, { viewer = false } = {}) {
   if (state.proposal && !showsNode(state.proposalView || 'diff', node)) return false; // Before hides what is added, After what is removed
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
-  return layerShows(state, node) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+  return layerShows(state, node, viewer ? state.activeLayers : layersOf(state)) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
 }
 
 /** Whether the Layers menu has the node's layer on: a project layer that takes it decides alone, else its starting layer, with the rules each type has */
-export function layerShows(state, node) {
-  const activeLayers = layersOf(state); // the viewer's layers, or a review's (layer-model.js): the one place that decides
+export function layerShows(state, node, activeLayers = layersOf(state)) { // the viewer's layers, or a review's (layer-model.js `layersOf`): the one place that decides
   const project = projectLayerKey(state, node);
   if (project) return activeLayers[project] !== false;
   if (node.type === 'core') return (activeLayers.pkg || activeLayers.atom) && activeLayers.core !== false; // its own row in Layers, and Packages or Atoms

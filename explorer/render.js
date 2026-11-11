@@ -21,6 +21,8 @@ import { ZOOM_MIN, ZOOM_FLOOR } from './camera.js';
 //  Visibility and focus (decided in scene.js, kept here under their old names)
 // ---------------------------------------------------------------------------
 export const isNodeVisible = (node) => nodeVisible(state, node);
+/** Whether the viewer's own layers show the node, whatever a review has hidden (what-if's list of the other end of an edge) */
+export const isNodeVisibleToViewer = (node) => nodeVisible(state, node, { viewer: true });
 
 /** The focus subgraph: the selected node and every node one edge away (selection-model.js); the switch and the kind come from the state */
 export const getActiveSubgraph = (selected, edges = viewEdges(), opts = { throughChildren: !!state.throughChildren, kind: state.selectedKind || null }) => activeSubgraph(selected, edges, opts);

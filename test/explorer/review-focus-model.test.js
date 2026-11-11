@@ -89,6 +89,14 @@ describe('reviewLayers: what a review draws', () => {
     expect(reviewLayers({ active, touched, universe, review: { whole: true, manual: {}, step: {} } })).toEqual(active);
     expect(reviewLayers({ active, touched, universe, review: { whole: true, manual: { service: true }, step: {} } }).service).toBe(true);
   });
+  it('a proposal that touches no layer has nothing to narrow to: the map is left whole, and nothing is greyed', () => {
+    const active = { app: true, page: false, table: true };
+    expect(reviewLayers({ active, touched: new Set(), universe, review: { whole: false, manual: {}, step: {} } })).toEqual(active);
+    const s = stateOf({ nodes: nodes().map((n) => ({ ...n, mark: undefined })), edges: edges() });
+    expect(layersOf(s)).toMatchObject({ app: true, service: true, table: true });
+    expect(greying(s)).toBe(false);
+    expect(buildScene(s).nodes.some((n) => n.greyed)).toBe(false);
+  });
   it('never changes the viewer\'s own object', () => {
     const active = { app: true, page: true };
     Object.freeze(active);
