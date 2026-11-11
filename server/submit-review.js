@@ -36,7 +36,7 @@
 
 import { ForgeError, isMaintainer } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
-import { findPullProposal, forgeWords, readPullProposal } from './proposal-pulls.js';
+import { findPullProposal, forgeWords, forgetReviewState, readPullProposal } from './proposal-pulls.js';
 import { hashPullMockups } from './mockups.js';
 import { postReview, proposalHash, validateReview } from './reviews.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
@@ -130,6 +130,7 @@ export async function submitReview(ctx, { pull, slug, review, sha256 = null, pro
       if (why) throw new Refused(403, why, 'forbidden');
     }
     const posted = await postReview(forge, pull, slug, checkedReview, { login: me.login, record, via });
+    forgetReviewState(ctx.where, pull); // the listing's review state for this PR is read again (spec 0010)
     // The one place a review is posted, so the button and the API fire the same event; the actor is who the forge says
     // the poster is (with the API, the token's owner), never a name the caller sent
     ctx.hooks?.emit(posted.verdict === 'approved' ? 'spec.approved' : 'spec.sentBack', () => proposalPayload(forge, ctx.where, entry, { actor: me.login, note: checkedReview.note, edits: checkedReview.edits }));

@@ -16,12 +16,22 @@
  * head. Every maintainer of the repo sees the same PRs, so what one maintainer's token read is shown to another.
  * Answers are kept only when the forge gave them; a failure is asked again next time.
  *
- * @typedef {{ slug: string, source: string, path: string, sha: string, pull: { number: number, title: string, url: string, draft: boolean, author: string | null } }} PullEntry
+ * **What the review state costs** (spec 0010 D4). A listed proposal of a ready PR also carries its review state (`reviewStates`): the
+ * latest maintainer review, whether it still holds (`current`), and when the head was pushed. It is read once for a PR at a head and kept
+ * for `REVIEW_KEEP_MS` (5 minutes): one `comments` call for the PR, a `permission` call for each author of a review block, and a
+ * `pullCommits` call for the head (kept by sha for good: a commit never changes). A draft PR is not read at all. A review posted from cornfield
+ * is forgotten at once (`forgetReviewState`); one posted on the forge shows within the 5 minutes. A read that fails is never kept, and says so
+ * (`review: { error }`), so a PR whose review could not be read never looks unreviewed.
+ *
+ * @typedef {{ slug: string, source: string, path: string, sha: string, pull: { number: number, title: string, url: string, draft: boolean, author: string | null, createdAt: string, updatedAt: string } }} PullEntry
+ * @typedef {{ verdict: 'approved' | 'notes', by: string, at: string, current: boolean }} ReviewState `current`: an approval is of the file as the head holds it now; a send-back has had no push since
+ * @typedef {{ pushedAt: string | null, review: ReviewState | { error: string } | null }} PullReviewState
  */
 
 import path from 'node:path';
 import { ForgeError } from './forge.js';
 import { PROPOSAL_FILE } from './files.js';
+import { latestReview, proposalHash } from './reviews.js';
 
 /** How many pull requests have their files asked at once */
 const PARALLEL = 6;
@@ -72,7 +82,7 @@ function entryOf(pull, file) {
     source: pullSource(pull.number),
     path: file.path,
     sha: pull.head.sha,
-    pull: { number: pull.number, title: pull.title, url: pull.url, draft: pull.draft, author: pull.author ? pull.author.login : null },
+    pull: { number: pull.number, title: pull.title, url: pull.url, draft: pull.draft, author: pull.author ? pull.author.login : null, createdAt: pull.createdAt, updatedAt: pull.updatedAt },
   };
 }
 
@@ -160,4 +170,83 @@ export async function readPullProposal(forge, where, entry) {
   const text = await atSha(where, `file ${entry.sha}:${entry.path}`, () => forge.file(entry.sha, entry.path));
   if (text === null) throw new ForgeError(`${entry.path} is not at the head of pull request #${entry.pull.number}.`, { code: 'not-found' });
   return text;
+}
+
+// ---------------------------------------------------------------------------
+//  The review state of each listed proposal (spec 0010 D4)
+// ---------------------------------------------------------------------------
+
+/** How long a PR's review state is kept at one head: a review posted on the forge itself shows within this */
+export const REVIEW_KEEP_MS = 5 * 60_000;
+
+/** @type {WeakMap<object, Map<string, { at: number, value: { byIndex: Record<string, PullReviewState> } }>>} */
+const reviewCaches = new WeakMap();
+
+/** Forgets what was kept of PR `n`'s reviews (a review was just posted on it), so the next listing reads it again */
+export function forgetReviewState(where, n) {
+  const kept = reviewCaches.get(where);
+  if (!kept) return;
+  for (const key of [...kept.keys()]) if (key.startsWith(`${n}@`)) kept.delete(key);
+}
+
+/**
+ * The review state of every listed proposal, in the order of `entries`: `{ pushedAt, review }`. A draft PR is not read (it waits on the agent,
+ * whatever was said on it before): `{ pushedAt: null, review: null }`. For a ready PR, `review` is null (none yet), the latest maintainer review
+ * with `current`, or `{ error }` when the forge could not say. Never throws.
+ * @param {import('./forge.js').Forge} forge
+ * @param {{ proposals: string }} where
+ * @param {PullEntry[]} entries
+ * @param {{ now?: () => number }} [opts]
+ * @returns {Promise<PullReviewState[]>}
+ */
+export async function reviewStates(forge, where, entries, { now = Date.now } = {}) {
+  let kept = reviewCaches.get(where);
+  if (!kept) reviewCaches.set(where, (kept = new Map()));
+  const out = entries.map(() => ({ pushedAt: null, review: null }));
+  /** @type {Map<number, number[]>} the indexes of the ready PRs' entries, by PR number */
+  const byPull = new Map();
+  entries.forEach((e, i) => { if (!e.pull.draft) byPull.set(e.pull.number, [...(byPull.get(e.pull.number) || []), i]); });
+  const numbers = [...byPull.keys()];
+  let next = 0;
+  const worker = async () => {
+    while (next < numbers.length) {
+      const n = numbers[next++];
+      const at = byPull.get(n);
+      const head = entries[at[0]].sha;
+      const key = `${n}@${head}`;
+      const hit = kept.get(key);
+      if (hit && now() - hit.at < REVIEW_KEEP_MS && at.every((i) => hit.value.byIndex[entries[i].slug])) {
+        at.forEach((i) => { out[i] = hit.value.byIndex[entries[i].slug]; });
+        continue;
+      }
+      let pushedAt = null;
+      try {
+        const commits = await atSha(where, `commits ${n}@${head}`, () => forge.pullCommits(n));
+        pushedAt = commits.length ? commits[commits.length - 1].date : null;
+        const comments = await forge.comments(n);
+        /** @type {Record<string, PullReviewState>} */
+        const byIndex = {};
+        for (const i of at) {
+          const entry = entries[i];
+          const found = await latestReview(forge, n, entry.slug, comments);
+          let review = null;
+          if (found) {
+            let current;
+            if (found.verdict === 'approved') current = found.proposal === proposalHash(await readPullProposal(forge, where, entry));
+            else current = !(pushedAt && Date.parse(pushedAt) > Date.parse(found.at)); // a send-back stands until something is pushed after it
+            review = { verdict: found.verdict, by: found.by, at: found.at, current };
+          }
+          byIndex[entry.slug] = { pushedAt, review };
+          out[i] = byIndex[entry.slug];
+        }
+        kept.set(key, { at: now(), value: { byIndex } });
+        if (kept.size > CACHE_MAX) kept.delete(kept.keys().next().value);
+      } catch (err) {
+        const failed = { pushedAt, review: { error: forgeWords(err) } }; // not kept: asked again next time
+        at.forEach((i) => { out[i] = failed; });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, numbers.length) }, worker));
+  return out;
 }
