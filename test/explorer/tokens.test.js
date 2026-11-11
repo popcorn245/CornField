@@ -183,10 +183,28 @@ describe('tokens.css defines the documented tokens', () => {
   it('documents every token tokens.css defines, and every one is read by a stylesheet', () => {
     const defined = [...names(darkBlock)];
     expect(defined.filter((t) => !documented.includes(t))).toEqual([]);
-    const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n') + tokensCss;
+    // every stylesheet in explorer/ (sign-in.css too: --corn-text-xl, once the node panel's heading, is now the sign-in pages')
+    const sheets = files.map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n') + tokensCss;
     // the map's colours (--corn-map-*) are read by script (explorer/map-style.js), not by a stylesheet: the module's own list says which
     const readByScript = new Set([...MAP_COLOR_TOKENS, STROKE_WIDTH_TOKEN, FONT_TOKEN, EDGE_WIDTH_TOKEN, GLOW_TOKEN, LABEL_MIN_TOKEN]);
     expect(defined.filter((t) => !readByScript.has(t) && !sheets.includes(`var(${t})`))).toEqual([]);
+  });
+
+  it('defines the three density tokens (issue #200): a control height, a panel padding and a panel head height, each read by explorer.css', () => {
+    const have = names(darkBlock);
+    for (const t of ['--corn-control-height', '--corn-panel-pad', '--corn-panel-head-height']) {
+      expect(have.has(t), `${t} in :root`).toBe(true);
+      expect(documented, `${t} in docs/theming.md`).toContain(t);
+      expect(fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8'), `${t} read by explorer.css`).toContain(`var(${t})`);
+    }
+    expect(darkBlock).toMatch(/--corn-control-height:\s*32px;/);
+    expect(darkBlock).toMatch(/--corn-panel-pad:\s*calc\(var\(--corn-space-5\) \+ var\(--corn-space-1\)\);/);
+    // the head is the control and a step of padding, so it follows the phone's density without a rule of its own
+    expect(darkBlock).toMatch(/--corn-panel-head-height:\s*calc\(var\(--corn-control-height\) \+ var\(--corn-space-3\)\);/);
+    // they are the same on either ground (not marked light), and a phone's 44px control and 16px padding are set after the light blocks
+    for (const t of ['--corn-control-height', '--corn-panel-pad', '--corn-panel-head-height']) expect(lightMarked.has(t), t).toBe(false);
+    expect(tokensCss).toMatch(/@media \(max-width: 767px\) \{ :root \{ --corn-control-height: 44px; \} \}/);
+    expect(tokensCss).toMatch(/@media \(max-width: 639px\) \{ :root \{ --corn-panel-pad: var\(--corn-space-5\); \} \}/);
   });
 
   it('defines in tokens.css every map token explorer/map-style.js reads, each \`auto\` (the map as it was) but the width and the collision mark', () => {

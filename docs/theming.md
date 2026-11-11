@@ -245,8 +245,8 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-text-sm` | 12px |
 | `--corn-text-md` | 13px |
 | `--corn-text-base` | 14px |
-| `--corn-text-lg` | 15px, a panel's title |
-| `--corn-text-xl` | 20px, the node panel's heading |
+| `--corn-text-lg` | 15px, the title of every panel: the Work panel, the node panel, the proposal bar, a pull request's detail, a dialog (one size, weight 700, line height 1.25) |
+| `--corn-text-xl` | 20px, a sign-in page's heading |
 | **Shape** | |
 | `--corn-radius-xs` | 3px, a tag |
 | `--corn-radius-sm` | 6px, a button, a field |
@@ -265,6 +265,10 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | `--corn-space-4` | 12px |
 | `--corn-space-5` | 16px |
 | `--corn-space-6` | 24px |
+| **Density** (one height, one padding) | |
+| `--corn-control-height` | the one height of a control in a bar: the header, the proposal bar, the decision foot, the scenario player and the Work panel's top row. 32px at a desk and 44px under 768px. **On a phone a control is never under 44px**, the least target a finger needs: the stylesheet reads `max(44px, var(--corn-control-height))` there, so a brand that sets 36px on `:root` gets 36px at a desk and 44px on a phone without a media query of its own, and one that sets 48px gets 48px on both. A segmented control (View, Before / Diff / After, the theme choice) is this high outside, its buttons this less their frame |
+| `--corn-panel-pad` | the padding of a panel's body, all four sides: the Work panel and the node panel share it, so their text starts at one edge. 20px, and 16px under 640px (`tokens.css` sets the phone's value in a media query, so a brand that sets this token on `:root` sets it on a phone too, unless it sets it again under `@media (max-width: 639px)`) |
+| `--corn-panel-head-height` | the least height of a panel's head, the row with its title and its Close: the control height and a step of padding (40px) |
 
 Where the stylesheets once had a one-off tint, they mix a token: `color-mix(in srgb, var(--corn-added) 14%, transparent)`. Where they had many near-identical values, they now share the nearest step: the radii 8 and 12px became `--corn-radius-sm` and `--corn-radius`; the font sizes 9 and 10.5px became `--corn-text-2xs`, 16px became `--corn-text-lg`; a 10px padding is `--corn-space-3` (8px), 14px and 18px are `--corn-space-4` and `-5`, a 2px gap is `calc(var(--corn-space-1) / 2)`; a 3px accent bar is `--corn-border-strong`. Lengths that are not one of these (a width, a height, a position) stay in the stylesheets.
 
