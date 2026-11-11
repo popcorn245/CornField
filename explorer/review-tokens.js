@@ -20,6 +20,7 @@
 
 import { escHtml } from './state.js';
 import { announce } from './keyboard.js';
+import { trapTab } from './focusables.js';
 import { tokensUrl, introWords, DEFAULT_DAYS, MAX_DAYS, makeRequest, revokeUrl, tokenLine, errorWords } from './review-tokens-model.js';
 
 const $ = (id) => document.getElementById(id);
@@ -178,13 +179,7 @@ function onClick(e) {
 function onKey(e) {
   e.stopPropagation();
   if (e.key === 'Escape') { e.preventDefault(); closeTokens(); return; }
-  if (e.key !== 'Tab') return;
-  const items = [...dialog().querySelectorAll('button:not([disabled]), input:not([disabled])')].filter((el) => !el.closest('[hidden]'));
-  if (!items.length) { e.preventDefault(); return; }
-  const at = items.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? items.length - 1 : at - 1) : (at === -1 || at === items.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  items[next].focus();
+  trapTab(e, dialog());
 }
 
 /**

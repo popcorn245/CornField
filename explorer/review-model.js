@@ -46,9 +46,14 @@ const VERDICT_WORDS = { approved: 'Approved', notes: 'Sent back' };
  * @param {number} nowMs
  */
 export function reviewWords(review, nowMs) {
-  if (!review || !VERDICT_WORDS[review.verdict]) return '';
-  const when = relativeTime(review.at, nowMs);
-  return when ? `${VERDICT_WORDS[review.verdict]} ${when}` : VERDICT_WORDS[review.verdict];
+  const { verdict, when } = reviewParts(review, nowMs);
+  return when ? `${verdict} ${when}` : verdict;
+}
+
+/** The same line in two parts, `{ verdict: 'Approved', when: '3 minutes ago' }`: the bar says the verdict (a live region) and shows the time beside it */
+export function reviewParts(review, nowMs) {
+  if (!review || !VERDICT_WORDS[review.verdict]) return { verdict: '', when: '' };
+  return { verdict: VERDICT_WORDS[review.verdict], when: relativeTime(review.at, nowMs) || '' };
 }
 
 /** Why a proposal cannot be sent back yet: it needs a note. Null when it can be. */

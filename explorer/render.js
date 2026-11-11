@@ -15,6 +15,7 @@ import { createSpatialCache } from './spatial.js';
 import { createFrameScheduler, packetsOnScreen } from './frame.js';
 import { createLabelLayer } from './labels.js';
 import { measureCovered } from './sheets.js';
+import { ZOOM_MIN, ZOOM_FLOOR } from './camera.js';
 
 // ---------------------------------------------------------------------------
 //  Visibility and focus (decided in scene.js, kept here under their old names)
@@ -93,15 +94,15 @@ export function resize() {
   render();
 }
 
-/** Zoom and pan so every visible node (and its label) is on screen; `only` (a Set of ids) narrows it to those, when any are visible */
-export function fitGraphToViewport(padding = 40, only = null) {
-  const { nodes, width, height, camera } = state;
+/** The box the fit shows (world px) and the zoom that makes it fill the screen, before any limit; null with nothing to show */
+function fitTarget(padding, only = null) {
+  const { nodes, width, height } = state;
   let visible = nodes.filter(isNodeVisible);
   if (only) {
     const part = visible.filter((n) => only.has(n.id));
     if (part.length) visible = part;
   }
-  if (visible.length === 0) return;
+  if (visible.length === 0) return null;
   // The phone's sheets hide the bottom of the map (sheets.js): fit into the part they leave
   const mapHeight = Math.max(160, height - measureCovered());
 
@@ -118,7 +119,34 @@ export function fitGraphToViewport(padding = 40, only = null) {
 
   const availWidth = Math.max(160, width - padding * 2);
   const availHeight = Math.max(160, mapHeight - padding * 2);
-  const targetZoom = Math.min(1.0, Math.max(0.18, Math.min(availWidth / (maxX - minX), availHeight / (maxY - minY))));
+  const raw = Math.min(availWidth / (maxX - minX), availHeight / (maxY - minY));
+  return { minX, maxX, minY, maxY, mapHeight, raw };
+}
+
+let minZoomKey = '';
+let minZoomValue = ZOOM_MIN;
+
+/**
+ * The lowest zoom for this map on this screen: low enough that Fit shows all of it (at most the default floor, so a small
+ * map keeps its limit). Hand zoom (wheel, pinch, keys) and Fit share it.
+ */
+export function getMinZoom() {
+  const key = `${state.sceneVersion}|${state.width}|${state.height}|${state.view}|${measureCovered()}`;
+  if (key !== minZoomKey) {
+    minZoomKey = key;
+    const t = fitTarget(fitPadding());
+    minZoomValue = t && t.raw > 0 && Number.isFinite(t.raw) ? Math.max(ZOOM_FLOOR, Math.min(ZOOM_MIN, t.raw)) : ZOOM_MIN;
+  }
+  return minZoomValue;
+}
+
+/** Zoom and pan so every visible node (and its label) is on screen; `only` (a Set of ids) narrows it to those, when any are visible */
+export function fitGraphToViewport(padding = 40, only = null) {
+  const { width, camera } = state;
+  const t = fitTarget(padding, only);
+  if (!t) return;
+  const { minX, maxX, minY, maxY, mapHeight } = t;
+  const targetZoom = Math.min(1.0, Math.max(ZOOM_FLOOR, t.raw));
 
   camera.zoom = targetZoom;
   camera.x = width / 2 - ((minX + maxX) / 2) * targetZoom;

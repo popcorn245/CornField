@@ -52,6 +52,7 @@
  */
 
 import { edgeKey } from '../core/proposal.js';
+import { frameNodes, allInside, READ_ZOOM, ZOOM_MIN } from './camera.js';
 
 export const DEFAULT_STEP_MS = 5000;
 /** Where the viewer's speed is kept (localStorage); scenario-ui.js reads and writes it */
@@ -70,8 +71,6 @@ export function parseSpeed(raw) {
   if (!choice) return DEFAULT_STEP_MS;
   return choice.value === 'manual' ? 'manual' : Number(choice.value);
 }
-/** The zoom fit-to-screen never goes below (render.js `fitGraphToViewport`) */
-export const MIN_FIT_ZOOM = 0.18;
 
 /** How long a step plays: its own `ms` when that is a positive number, else `fallback` */
 export function stepDuration(step, fallback = DEFAULT_STEP_MS) {
@@ -223,39 +222,32 @@ export function createPlayer(scenario, opts = {}) {
 }
 
 /**
- * Where the camera should go so a step is on screen, or null when it already is (or the step points
- * at something that is not in the map). A node off screen is centred at the same zoom; an edge is
- * centred and, if its two ends do not fit, zoomed out to fit (never below MIN_FIT_ZOOM, never in).
- * A step's `at` is kept in view with it when it is on the map, and ignored when it is not (a live id with no live layer).
+ * Where the camera should go so a step is on screen and readable, or null when it already is (or the step points at something that
+ * is not in the map). The step's node, or both ends of its edge, must be inside `viewport` (the part of the map nothing covers) at a zoom
+ * where the label reads (READ_ZOOM, about 11px): a node step zooms in to it, an edge step fits both ends (and no closer than READ_ZOOM).
+ * It never goes under `minZoom` (the map's floor, render.js `getMinZoom()`), so an edge too long even for that is shown as close as it allows.
+ * A step already shown well enough is left alone, so a walk does not wobble. A step's `at` is kept in view with it when it is on the map,
+ * and ignored when it is not (a live id with no live layer).
  * @param {Step} step
  * @param {{ x: number, y: number, zoom: number }} camera
- * @param {{ width: number, height: number }} viewport CSS px
+ * @param {{ width: number, height: number, x?: number, y?: number }} viewport CSS px (the free rect: `x` and `y` default to 0)
  * @param {Map<string, { x: number, y: number, r?: number }>} nodes by id
- * @param {number} [margin] px kept clear at the screen's edge
+ * @param {number} [margin] px kept clear at the viewport's edge
+ * @param {number} [minZoom] the lowest zoom it may go to
  * @returns {{ x: number, y: number, zoom: number } | null}
  */
-export function cameraFor(step, camera, viewport, nodes, margin = 60) {
+export function cameraFor(step, camera, viewport, nodes, margin = 60, minZoom = ZOOM_MIN) {
   if (!viewport.width || !viewport.height) return null;
   const ids = step.node !== undefined ? [step.node] : step.edge ? [step.edge.from, step.edge.to] : [];
   const ends = ids.map((id) => nodes.get(id));
   if (ends.length === 0 || ends.some((n) => !n)) return null;
   if (step.at !== undefined && nodes.has(step.at) && !ids.includes(step.at)) ends.push(nodes.get(step.at));
 
-  const onScreen = ends.every((n) => {
-    const sx = camera.x + n.x * camera.zoom;
-    const sy = camera.y + n.y * camera.zoom;
-    return sx >= margin && sx <= viewport.width - margin && sy >= margin && sy <= viewport.height - margin;
-  });
-  if (onScreen) return null;
-
-  const r = (n) => n.r || 18;
-  const minX = Math.min(...ends.map((n) => n.x - r(n)));
-  const maxX = Math.max(...ends.map((n) => n.x + r(n)));
-  const minY = Math.min(...ends.map((n) => n.y - r(n)));
-  const maxY = Math.max(...ends.map((n) => n.y + r(n)));
-  const fit = Math.min((viewport.width - margin * 2) / (maxX - minX), (viewport.height - margin * 2) / (maxY - minY));
-  const zoom = Math.max(MIN_FIT_ZOOM, Math.min(camera.zoom, fit));
-  return { x: viewport.width / 2 - ((minX + maxX) / 2) * zoom, y: viewport.height / 2 - ((minY + maxY) / 2) * zoom, zoom };
+  const rect = { x: viewport.x || 0, y: viewport.y || 0, width: viewport.width, height: viewport.height };
+  const target = frameNodes(ends, rect, { padding: margin, maxZoom: Math.max(READ_ZOOM, camera.zoom), minZoom });
+  const edge = Math.min(margin, rect.width / 4, rect.height / 4);
+  if (allInside(ends, camera, rect, edge) && camera.zoom >= target.zoom - 0.001) return null;
+  return target;
 }
 
 /**

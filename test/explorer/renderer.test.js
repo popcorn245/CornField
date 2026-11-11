@@ -4,6 +4,7 @@
  * it (TOPO-02). No real canvas: a recording context stands in, so the tests read what the
  * renderer asked it to draw.
  */
+import { DIFF_MARK_COLORS } from '../../explorer/diff-marks.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -93,7 +94,43 @@ describe('renderer-canvas2d', () => {
     r.draw(buildScene(mk({ selectedNode: nodes[2] })), { x: 0, y: 0, zoom: 1 }, 0);
     const sets = (ctx.log          ).filter((c) => c[0] === 'set:shadowBlur' || c[0] === 'set:globalAlpha').map((c) => `${c[0].slice(4)}=${c[1]}`);
     expect(sets).toContain('globalAlpha=0.07'); // the nodes outside the focus
-    expect(sets).toContain('shadowBlur=9'); // the selected page
+    // a glow is a soft disc behind the node, never a shadowBlur (a blur per node and edge is what made a tap take seconds: F30)
+    expect(sets.some((x     ) => x.startsWith('shadowBlur'))).toBe(false);
+    const sel = buildScene(mk({ selectedNode: nodes[2] })).nodes.find((n     ) => n.glow);
+    expect(ctx.log.some((c     ) => c[0] === 'arc' && Math.abs(c[3] - (sel.r + sel.glow * 0.7)) < 1e-9)).toBe(true); // the selected page's halo
+  });
+
+  it('draws the lines of a scene with packets once, and only the packets again while nothing but time moves (F30)', () => {
+    const layerCtx = recordingCtx();
+    vi.stubGlobal('OffscreenCanvas', class { width = 1; height = 1; getContext() { return layerCtx; } });
+    try {
+      const ctx = recordingCtx();
+      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      r.resize(800, 600, 1);
+      const scene = buildScene(mk({ selectedNode: nodes[1] }));
+      expect(scene.edges.some((e     ) => e.packet)).toBe(true);
+      const camera = { x: 0, y: 0, zoom: 1 };
+      r.draw(scene, camera, 0);
+      const strokesOnce = names(layerCtx).filter((n     ) => n === 'stroke').length;
+      expect(strokesOnce).toBeGreaterThan(0); // the lines went to the layer
+      expect(names(ctx)).toContain('drawImage');
+      layerCtx.log.length = 0; ctx.log.length = 0;
+      r.draw(scene, camera, 500); // only the time moved
+      expect(names(layerCtx)).not.toContain('stroke');
+      expect(names(ctx)).not.toContain('quadraticCurveTo');
+      expect(names(ctx)).toContain('drawImage');
+      expect((ctx.log          ).some((c     ) => c[0] === 'arc' && c[3] === 3.5)).toBe(true); // the packet still moved
+      r.draw(scene, { x: 5, y: 0, zoom: 1 }, 600); // the camera moved: the lines are drawn again
+      expect(names(layerCtx)).toContain('stroke');
+      // A new scene (a selection, a layer, the theme, a proposal or a scenario step all build one) draws the lines again
+      const again = (fn) => { fn(); layerCtx.log.length = 0; r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 700); return names(layerCtx).includes('stroke'); };
+      const scene2 = buildScene(mk({ selectedNode: nodes[1], sceneVersion: 2 })); // the same selection, built again
+      expect(again(() => {})).toBe(true);
+      layerCtx.log.length = 0;
+      r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 800);
+      expect(names(layerCtx)).not.toContain('stroke'); // and then holds
+      expect(again(() => r.resize(390, 844, 3))).toBe(true); // a resize or a new device pixel ratio
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('moves a packet with the time it is given and builds nothing', () => {
@@ -147,18 +184,46 @@ describe('renderer-canvas2d proposal marks', () => {
 
   it('draws no ring for an unmarked node', () => {
     const ctx = marked('none');
-    for (const color of ['#2dd4bf', '#fbbf24', '#f87171', '#a78bfa']) expect(ringsOf(ctx, color), color).toHaveLength(0);
+    for (const color of Object.values(DIFF_MARK_COLORS.dark)) expect(ringsOf(ctx, color), color).toHaveLength(0);
   });
 
-  it('draws a dashed ring in the added colour for an addition, and a solid one for the others', () => {
+  it('draws a dashed ring in the added colour for an addition, a dotted one for an edit, and a solid one for the others', () => {
     const added = marked('added');
-    expect(ringsOf(added, '#2dd4bf')).toHaveLength(1);
+    expect(ringsOf(added, DIFF_MARK_COLORS.dark.added)).toHaveLength(1);
     expect(added.log).toContainEqual(['setLineDash', [5, 4]]);
-    for (const [mark, color] of [['changed', '#fbbf24'], ['removed', '#f87171'], ['edit', '#a78bfa']]) {
+    for (const [mark, color] of [['changed', DIFF_MARK_COLORS.dark.changed], ['removed', DIFF_MARK_COLORS.dark.removed], ['edit', DIFF_MARK_COLORS.dark.edit]]) {
       const ctx = marked(mark);
       expect(ringsOf(ctx, color), mark).toHaveLength(1);
       expect(ctx.log, mark).not.toContainEqual(['setLineDash', [5, 4]]);
+      if (mark === 'edit') expect(ctx.log).toContainEqual(['setLineDash', [2, 5]]); // F20: not the changed mark's solid ring
     }
+  });
+
+  it('draws a mark\'s ring at the node\'s own alpha, as the WebGL shader does, so a removed ring is faded as the contrast check measures it', () => {
+    const ctx = marked('removed', { alpha: 0.85 });
+    const i = (ctx.log          ).findIndex((c) => c[0] === 'set:strokeStyle' && c[1] === DIFF_MARK_COLORS.dark.removed);
+    const alphas = (ctx.log          ).slice(0, i).filter((c) => c[0] === 'set:globalAlpha').map((c) => c[1]);
+    expect(alphas.at(-1)).toBe(0.85);
+  });
+
+  it('strikes a removed node through, as the WebGL shader does, and no other mark', () => {
+    const lines = (ctx     ) => (ctx.log          ).filter((c) => c[0] === 'lineTo').length;
+    expect(lines(marked('removed'))).toBe(lines(marked('changed')) + 1);
+    expect(lines(marked('edit'))).toBe(lines(marked('changed')));
+  });
+
+  it('strikes a removed edge across at its midpoint, as the WebGL tips pass does', () => {
+    const drawn = (mark        ) => {
+      const scene = buildScene(mk());
+      Object.assign(scene.edges[0], { mark, curve: null, arrow: false, packet: null });
+      const ctx = recordingCtx();
+      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      r.resize(800, 600, 1);
+      ctx.log.length = 0;
+      r.draw(scene, { x: 0, y: 0, zoom: 1 }, 0);
+      return (ctx.log          ).filter((c) => c[0] === 'lineTo').length;
+    };
+    expect(drawn('removed')).toBe(drawn('changed') + 1);
   });
 
   it('keeps a ring at least 1.8px thick on screen when zoomed out', () => {

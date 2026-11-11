@@ -109,6 +109,24 @@ describe('the dialog', () => {
     expect($('tokens-dialog').contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(last);
   });
+
+  it('reaches "Kind of token" from the keyboard: Tab from the first control goes round every control, the select included (F05)', async () => {
+    mount();
+    openTokens();
+    await settle();
+    const seen = [];
+    $('tokens-scope').focus();
+    for (let i = 0; i < 12; i++) {
+      seen.push(document.activeElement.id || document.activeElement.textContent.trim());
+      key(document.activeElement, 'Tab');
+    }
+    expect(seen.slice(0, 5)).toEqual(['tokens-scope', 'tokens-label', 'tokens-days', 'tokens-make', 'Close']);
+    expect(seen[5]).toBe('tokens-scope'); // it wraps back to the select
+    // and Shift+Tab from the label goes back to it
+    $('tokens-label').focus();
+    key($('tokens-label'), 'Tab', { shiftKey: true });
+    expect(document.activeElement).toBe($('tokens-scope'));
+  });
 });
 
 describe('making a token', () => {
