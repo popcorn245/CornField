@@ -6934,7 +6934,17 @@
       "from": "page-doc-docs-specs-0007-the-decision",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0006-scenarios-and-personas",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0007-the-decision",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T11:57:32.377Z"
+  "updatedAt": "2026-11-11T17:06:43.403Z"
 }
