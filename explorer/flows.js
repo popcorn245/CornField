@@ -137,13 +137,13 @@ export function renderFlowLegend() {
   el.hidden = false;
   const row = (swatch, text) => `<div class="hx-legend-row"><span class="hx-legend-swatch">${swatch}</span><span>${text}</span></div>`;
   el.innerHTML = `
-    <div class="hx-menu-section">
-      <div class="hx-menu-title">
+    <div class="hx-menu-section" data-corn="menu-section">
+      <div class="hx-menu-title" data-corn="menu-title">
         <span>Data Flow</span>
       </div>
-      ${Object.values(FLOW_STYLES).map((s) => row(`<span class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
-      ${row('<span class="hx-swatch-line hx-swatch-solid"></span>', '<span class="hx-faint">Solid: live today</span>')}
-      ${row('<span class="hx-swatch-line hx-swatch-dashed"></span>', '<span class="hx-faint">Dashed: proposed</span>')}
+      ${Object.values(FLOW_STYLES).map((s) => row(`<span data-corn="swatch" class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
+      ${row('<span data-corn="swatch" class="hx-swatch-line hx-swatch-solid"></span>', '<span class="hx-faint">Solid: live today</span>')}
+      ${row('<span data-corn="swatch" class="hx-swatch-line hx-swatch-dashed"></span>', '<span class="hx-faint">Dashed: proposed</span>')}
     </div>`;
 }
 

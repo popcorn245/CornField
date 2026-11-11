@@ -387,24 +387,26 @@ There are 65 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 
 The tokens above change what the explorer looks like; the hooks let a stylesheet single out a part of it. The regions, the repeated components and the dialogs carry a `data-corn="…"` attribute, so a theme selects `[data-corn="node-panel"]` instead of the internal `hx-*` class names, which are not public and change freely.
 
-- **Public API, kept short on purpose.** The names below are documented, and **renaming or removing one is a breaking change**: it is listed under "Breaking" in the release notes (the `breaking` label). Adding one is not. The parts inside a region (a title, a label, a line of meta) have no hook: reach them from their region (`[data-corn="node-panel"] h2`), or change them with the tokens. [test/explorer/hooks.test.js](../test/explorer/hooks.test.js) fails when this list and the markup disagree, in either direction.
+- **Public API.** The names below are documented, and **renaming or removing one is a breaking change**: it is listed under "Breaking" in the release notes (the `breaking` label). Adding one is not. Every control and every part that paints its own background or border has a hook, and so does a title a person lands on; plain text inside a region (a line of meta, a key) has none: reach it from its region (`[data-corn="node-panel"] p`), or change it with the tokens. [test/explorer/hooks.test.js](../test/explorer/hooks.test.js) fails when this list and the markup disagree, in either direction, and when a button, link or field in the markup has neither a `data-corn` nor a `data-corn-kind`.
 - **Values** are short kebab-case nouns. One element has one `data-corn` value; a component used in many places (`row`, `field`, `badge`) has the same value everywhere, so scope it by its region: `[data-corn="layers-menu"] [data-corn="row"]`.
 - **Two companions:** `data-corn-kind` (a button's kind) and `data-corn-state` (a state). Their values are listed below and are public in the same way.
+- **A theme needs no `.hx-*` class, no id, no deep selector and no `!important`** to single out any part of the page: `[data-corn="compare-option"][aria-pressed="true"]` is the chosen one of Before / Diff / After, `[data-corn="diff-pill"][data-corn-state="removed"]` a node a proposal removes.
 - **No shadow DOM.** The explorer uses none, so a stylesheet reaches everything with an ordinary selector and there are no `::part()` names.
 - **CSS only.** Hooks are for selectors, never for script: a plugin or a theme must not read them to change behaviour.
-- **What is on is in ARIA.** A tab, a layer row or a view button that is on has `aria-pressed="true"`; an open menu's button has `aria-expanded="true"`; a panel is open when it is not `inert` (`[data-corn="node-panel"]:not([inert])`), and a hidden one is `[hidden]`.
+- **What is on is in ARIA.** A tab, a layer row, a view button, a theme option or a Before / Diff / After option that is on has `aria-pressed="true"`; an open menu's button has `aria-expanded="true"`; a panel is open when it is not `inert` (`[data-corn="node-panel"]:not([inert])`), and a hidden one is `[hidden]`.
 
 ### Button kinds: `data-corn-kind`
 
-Buttons have no `data-corn` of their own (unless they are a region's button, such as `layers-button`): `[data-corn-kind]` selects every button that has a kind, wherever it is, and a button with no kind is the plain one.
+A button that does an ordinary job has no `data-corn` of its own (a region's button, such as `layers-button`, does): it has a kind, and `[data-corn-kind]` selects every button that has one, wherever it is, so no button is without both. A button of a part with a name of its own (`filter-chip`, `back`, `node-chip`, `more`, `compare-option`) has that hook, and a kind when it has one.
 
 | Value | What it is |
 |---|---|
-| `primary` | the accent-filled action: Retry, Play |
-| `quiet` | a low-key button: Close, Refresh, Cancel, Sign out |
+| `primary` | the accent-filled action: Retry, Play (in the scenario player), Add node, Open file |
+| `secondary` | the ordinary bordered button: Send back, Play and Edit in the proposal bar, Light on the map and Timeline on a run, Start a spec, Cancel in a dialog, Start a run |
+| `quiet` | a low-key button: Close, Refresh, Cancel, Sign out, "and 15 more" |
 | `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
 | `approve` | a button that commits: Approve, Land it, Open the build issue |
-| `icon` | a button that is only a symbol: ✕, Fit |
+| `icon` | a button that is only a symbol: ✕, Fit, ⋯ |
 
 ### States: `data-corn-state`
 
@@ -416,9 +418,10 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 | `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`) | `run`, `state-pill` |
 | `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped (a run asked to stop is `stopped` too); a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
 | `queued`, `running` | a check or deploy that has not started, and one under way (a run is never either: it has the four above) | `state-pill` |
-| `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem; what an action came to; a sign-in page about a problem (`failure`) | `state-pill`, `notice`, `message`, `result`, `auth-card` |
+| `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem; what an action came to; a sign-in page about a problem (`failure`); the live chip: fresh (`success`), unavailable (`failure`) | `state-pill`, `notice`, `message`, `result`, `auth-card`, `live-chip` |
+| `added`, `changed`, `removed`, `edit` | what a proposal does to a node, an edge or a file: the four marks of the diff (the same four as the map's rings and `--corn-added`, `--corn-changed`, `--corn-removed` and `--corn-edit`). `edit` is your own what-if edit, whether it adds or removes. Not a status: a deploy that restarts a node is `changed` | `diff-pill`, `diff-block`, `mark-dot` |
 
-A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` is only ever a run; `failure` is only ever a result.
+A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-pill` never says `changed`, which is the diff mark's. `failed` is only ever a run; `failure` is only ever a result. The live chip is also `waiting` (its answer is a while old, "as of 6 min ago"), `stopped` (the layer is off or not set up) or `running` (loading, and before its first answer, while the chip is still hidden).
 
 **Changed for a theme that styles runs.** Before this release a run's `data-corn-state` was `queued` (asked for, or picked up by a runner) or `running` (being worked on). It is now `requested`, `claimed` or `working`: a rule on `[data-corn="run"][data-corn-state="queued"]` or a run's `state-pill` with `queued` becomes `requested` and `claimed`, and `running` becomes `working`. `queued` and `running` still mean a check or a deploy, so a rule that styled those keeps working. The seven run states also have colour tokens (`--corn-run-<state>`): setting those is simpler than a selector per state.
 
@@ -436,15 +439,18 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` 
 | `brand`, `brand-logo`, `brand-wordmark`, `powered-by` | the title button (it resets the view), the brand's logo and wordmark in it, the "powered by cornfield" footer line of the account menu |
 | `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
 | `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
-| `preset-dataflow`, `preset-house` | the View switch (Map, Flow, House): the Flow and House buttons |
+| `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `fit-button` | the View switch (Map, Flow, House, then Fit), and its four buttons; the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
 | `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
-| `forge-button`, `tokens-button` | the Work toggle, the Review tokens entry of the account menu |
-| `account-button`, `account-menu` | the account button (the initial of who is signed in) and its menu |
-| `live-chip`, `live-menu` | the live layer's chip and its dropdown |
-| `search`, `search-input`, `mobile-search` | the desktop search box, a search field (desktop and phone), the phone's search bar |
+| `forge-button`, `tokens-button` | the Work toggle (its lit tag, "#21", is a `count`), the Review tokens entry of the account menu |
+| `account-button`, `avatar`, `account-menu` | the account button, the initial of who is signed in inside it, and the menu |
+| `account-who`, `account-row` | the line that says who is signed in; a labelled setting of the menu (Theme, with its options) |
+| `live-chip`, `live-dot`, `live-menu` | the live layer's chip, the dot in it, and its dropdown. The chip has a `data-corn-state`: `success` (fresh), `waiting` (as of a while ago), `stopped` (off), `failure` (unavailable) or `running` (loading) |
+| `search`, `search-input`, `search-key`, `mobile-search`, `mobile-search-button` | the desktop search box, a search field (desktop and phone), the "/" key hint in the desktop box, the phone's search bar and the icon that opens it |
 | `search-status` | the line under a search field that says "No match for …" (a polite live region, empty while there is a match) |
-| `layout-toggle` | the Freeform layout switch in the account menu |
-| `theme-toggle`, `theme-picker` | the System / Dark / Light segment, the named-theme menu (both in the account menu) |
+| `layout-toggle`, `switch` | the Freeform layout row in the account menu, and the switch drawn inside it (`aria-checked` on the row says if it is on) |
+| `theme-toggle`, `theme-option`, `theme-picker` | the System / Dark / Light segment, one of its three buttons (the chosen one has `aria-pressed="true"`), the named-theme menu (all in the account menu) |
+| `menu-title`, `menu-section`, `swatch` | in the Layers menu and the Proposals menu: a heading row, a section (Data Flow, Agent runs, Proposal marks, Connections), and a colour sample (a layer's dot, a line style in a legend) |
+| `live-tag` | the "live" tag on a layer row that is fed by the live layer |
 
 The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, the wheel and `+` / `-` still zoom; Fit is in the View switch), `account-button` and `account-menu` are new, and `layout-toggle`, `theme-toggle`, `theme-picker`, `tokens-button`, `proposals-button`, `links`, `link`, `sign-out` and `powered-by` moved into the account menu. The `strings` keys are the same; `dataFlow` now reads "Flow" and `issuesAndPrs` "Work" by default, and `signOut` and `poweredBy` are drawn inside the menu.
 
@@ -456,7 +462,8 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
-| `dock`, `sheet-handle`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
+| `dock`, `sheet-handle`, `sheet-grip`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle and the bar drawn in it, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
+| `house-chip`, `house-more` | in the House view's bar: a floor, a person, Software or Cloud (the one that is on has `aria-pressed="true"`; Edit plan is one too), and a room's "+3 more" |
 | `hint`, `hint-icon`, `loading`, `error` | the hint at the map's corner and its icon (an SVG, so `[data-corn="hint-icon"]` can be hidden or given another picture), the loading line, the load-error box |
 
 ### Panels and sheets
@@ -464,12 +471,31 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | Hook | What it is |
 |---|---|
 | `node-panel` | the node panel (a slide-over, or a bottom sheet on a phone) |
+| `node-title`, `node-host`, `diff-pill`, `node-foot`, `open-link` | in the node panel: its heading (a file name, an id or a route, so it may hold digits), the host after the kind badge (" · app.example.test"), the pill that says what the open proposal does to the node ("Added by Checkout"; `data-corn-state` is `added`, `changed`, `removed` or `edit`; there only while a proposal is open), the foot with its actions, and Open file / Open route (`data-corn-kind` `primary`, or `quiet` for the route when there is a file). `open-link` is also the PR detail's "Open on" the forge |
+| `diff-block` | the key / value rows of the node panel's "In this proposal" (`data-corn-state` as for the pill) |
+| `more` | the capped list's "and 15 more" button (`data-corn-kind="quiet"`, `aria-expanded`) |
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
+| `work-head`, `work-title`, `work-foot` | in the Work panel: the title row (the title, Refresh, close), the title itself (focus lands on it), the foot of the list (Release notes, New idea) |
+| `filter-chip`, `filters`, `check-field` | the Filter chip on a list (`aria-expanded`; its count is a `count`), the box of fields it opens, a check box with its words ("Agent-made only"; the box itself is a `control`) |
+| `back`, `detail-title` | in a detail view (a pull request, a thread, a deploy, a run's issue, the release notes): the back control ("All pull requests"), and the title |
+| `tag` | a short tag on an item of a list: a pull request's or an issue's label ("spec"), a thread's kind, what a deploy lights |
+| `out-link`, `text-link` | the ↗ that opens an item on the forge in a new tab; a link inside text (a check's run, a thread's reply, the node's route, "Where to set a token") |
+| `node-chip`, `node-link` | a button that shows a node on the map: a chip (the nodes a pull request, a thread or a deploy lights); a link-like one inside a sentence (the proposal's edge "From" and "To", a live room) |
+| `file` | a changed file in a pull request's detail, with its nodes |
+| `thread-message` | one message of a thread, in the Threads tab's detail |
+| `field-change` | in "In this proposal" (the node panel): a field a change touches, with what it was and what it is |
+| `run-actions`, `run-totals` | the buttons of a run card (Light on the map, Timeline, Stop, Reply and the rest: each has a `data-corn-kind`), the totals of what the runners reported |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
-| `proposal-bar` | the open proposal's bar |
+| `proposal-bar`, `proposal-head` | the open proposal's bar, and its toolbar row |
+| `proposal-title`, `proposal-counts`, `proposal-mode` | in the proposal bar: the proposal's name, the counts button ("5 nodes, 6 edges added …": it opens the list of changes, `aria-expanded`), and on a phone the button that shows Before / Diff / After (it says which is on) |
+| `compare`, `compare-option` | the Before / Diff / After group and one of its options (the chosen one has `aria-pressed="true"`) |
+| `proposal-menu`, `proposal-errors`, `proposal-changes` | the bar's ⋯ menu, the folded list of problems with the file, the list of changes behind the counts (each change is a `row`) |
+| `scenario-list`, `whatif-toolbar` | the list of scenarios behind Play (each is a `row`), the What-if editor's toolbar (Add a node, Draw an edge, Undo, Redo …) |
+| `mark-dot` | the dot in front of a change or a count and in a legend; `data-corn-state` is `added`, `changed`, `removed` or `edit` |
+| `step-number` | in the What-if editor, the number of a scenario's step (it shows that step on the map) |
 | `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
-| `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
-| `scenario-player` | the scenario player |
+| `review-bar`, `review-label`, `review-note`, `whatif`, `whatif-panel`, `whatif-node` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the note's label, the note's text field, the what-if editor (behind Edit), one of its panels (the form to add a node or an edge, the list of edits, the steps), and its editor for the selected node in the node panel |
+| `scenario-player`, `scenario-check`, `scenario-track`, `scenario-fill` | the scenario player, the line that says whether a step was allowed, and the progress bar with its fill (`style="width"`) |
 
 ### The sign-in pages
 
@@ -490,7 +516,8 @@ The buttons carry `data-corn-kind` (`primary`: Sign in, Try again; `quiet`: Sign
 |---|---|
 | `dialog-scrim` | the scrim behind a dialog |
 | `confirm-dialog`, `agent-dialog`, `tokens-dialog` | the confirm dialog (land a pull request, start a spec, open a build issue), Start an agent, Review tokens |
-| `mockup-dialog` | the mockup window |
+| `mockup-dialog`, `mockup-stage` | the mockup window, and the stage in it that holds the image or the frame |
+| `dialog-title`, `confirm-form`, `confirm-preview` | a dialog's heading, the box of a form in a dialog or a panel (Start an agent, New idea, Post as a draft release), and the preformatted text a confirm step shows (the files a spec will add) |
 
 Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of them.
 
@@ -510,7 +537,9 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
 | `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height), and the placeholder lines of the Runs tab's runner line and totals while the runs load; what a list says when it has nothing, and how to make something |
 | `field` | a labelled form field, its control inside |
-| `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |
+| `control` | a text field, a number field, a select, a check box or a text area: the control inside a `field`, or on its own. The search fields are `search-input` and the note on Send back is `review-note`; the named-theme menu is `theme-picker` |
+| `summary` | the line of a disclosure that opens and folds (the proposal's problems, "Its edges (3)") |
+| `notice`, `message` | a notice in a panel (the Layers menu's note about the data-flow view too); a status line under a form or above the proposal bar (`data-corn-state="success"` or `"failure"`) |
 
 ## Words
 

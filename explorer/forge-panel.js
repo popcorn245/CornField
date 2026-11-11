@@ -88,7 +88,7 @@ import {
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
-import { cornStateAttr, stateIconHtml } from './corn-state.js';
+import { cornStateAttr, markStateAttr, stateIconHtml } from './corn-state.js';
 import { sayResult, clearResult, resultOf, showResultIn, resetFeedbackForTests } from './feedback.js';
 import { isOffline, initConnection, notSentWords, resetConnectionForTests } from './connection.js';
 import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
@@ -713,6 +713,7 @@ function paintIdea() {
   if (ui.idea.message && ui.idea.link && safeUrl(ui.idea.link)) {
     const link = document.createElement('a');
     link.className = 'hx-link';
+    link.dataset.corn = 'text-link';
     link.href = ui.idea.link;
     link.target = '_blank';
     link.rel = 'noreferrer';
@@ -865,6 +866,7 @@ function paintNotes() {
   if (n.message && n.link && safeUrl(n.link)) {
     const link = document.createElement('a');
     link.className = 'hx-link';
+    link.dataset.corn = 'text-link';
     link.href = n.link;
     link.target = '_blank';
     link.rel = 'noreferrer';
@@ -936,17 +938,17 @@ function lightsWords(deploy) {
 
 function deployHtml(d) {
   const link = safeUrl(d.url);
-  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open deploy ${escHtml(d.name)} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  const out = link ? `<a data-corn="out-link" class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open deploy ${escHtml(d.name)} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-deploy="${escHtml(d.id)}" aria-pressed="${ui.deploy === d.id}" data-corn="row">
     <span class="hx-forge-title">${escHtml(d.name)}${d.title && d.title !== d.name ? `<span class="hx-faint"> · ${escHtml(d.title)}</span>` : ''}</span>
     <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}</span>
-    <span class="hx-forge-labels"><span class="hx-forge-label">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
+    <span class="hx-forge-labels"><span class="hx-forge-label" data-corn="tag">${escHtml(lightsWords(d))}</span></span></button>${out}</li>`;
 }
 
 /** One thread in the list: a row that opens it, and a link out to the forge */
 function threadHtml(t) {
   const link = safeUrl(t.url);
-  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open thread ${t.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  const out = link ? `<a data-corn="out-link" class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open thread ${t.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
   const note = [t.proposals && t.proposals.length ? `Proposal ${t.proposals.map((p) => p.slug).join(', ')}` : '', t.idea ? `Idea #${t.idea}` : ''].filter(Boolean).join(' · ');
   // The run that is about this thread, as a word (issue #104): the Agents tab's list, read for every tab, says it; the row only names its state
   const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
@@ -954,26 +956,26 @@ function threadHtml(t) {
   const runWord = run ? `${runPillHtml({ esc: escHtml }, run, threadRunWords(runs, t.number), ` data-thread-run="${escHtml(run.runId)}"`)} ` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-thread="${t.number}" aria-pressed="${ui.thread === t.number}" data-corn="row">
     <span class="hx-forge-title">${escHtml(t.title)}</span>
-    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
+    <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${escHtml(t.state === 'open' ? 'Open' : 'Closed')}</span> ${runWord}<span class="hx-forge-label" data-corn="tag">${escHtml(threadKindWords(t))}</span> ${escHtml(threadMeta(t, now()))}</span>${note ? `<span class="hx-forge-meta">${escHtml(note)}</span>` : ''}</button>${out}</li>`;
 }
 
 function itemHtml(item, before = '', after = '') {
   if (ui.kind === 'deploys') return deployHtml(item);
   if (ui.kind === 'threads') return threadHtml(item);
   const link = safeUrl(item.url);
-  const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label">${escHtml(l)}</span>`).join('')}</span>` : '';
+  const labels = item.labels.length ? `<span class="hx-forge-labels">${item.labels.map((l) => `<span class="hx-forge-label" data-corn="tag">${escHtml(l)}</span>`).join('')}</span>` : '';
   const inner = `<span class="hx-forge-title">${escHtml(item.title)}</span>
     <span class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(item.draft ? 'draft' : item.state)}" data-corn="state-pill"${cornStateAttr(item.draft ? 'draft' : item.state)}>${escHtml(stateWords(item))}</span> ${escHtml(metaWords(item, now()))}</span>${before}${after}${labels}`;
-  const out = link ? `<a class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(item.head ? 'pull request' : 'issue')} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+  const out = link ? `<a data-corn="out-link" class="hx-forge-out" href="${escHtml(link)}" target="_blank" rel="noreferrer" aria-label="Open ${escHtml(item.head ? 'pull request' : 'issue')} ${item.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
   if (ui.kind !== 'issues') {
     return `<li class="hx-forge-item"><button type="button" class="hx-forge-row" data-forge-pr="${item.number}" aria-pressed="${ui.selected === item.number}" data-corn="row">${inner}</button>${out}</li>`;
   }
   // An issue has no more to show here: its row is the link out; an open one also starts its spec (step 1 of the pipeline)
   const spec = specBlock(item) === null
-    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${item.number}" aria-label="Start a spec for issue ${item.number}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
+    ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${item.number}" aria-label="Start a spec for issue ${item.number}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
     : '';
   const agent = item.state === 'open'
-    ? `<button type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${item.number}" aria-label="${escHtml(t('startAgent'))} on issue ${item.number}">${escHtml(t('startAgent'))} …</button>`
+    ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${item.number}" aria-label="${escHtml(t('startAgent'))} on issue ${item.number}">${escHtml(t('startAgent'))} …</button>`
     : '';
   return link
     ? `<li class="hx-forge-item"><a class="hx-forge-row" href="${escHtml(link)}" target="_blank" rel="noreferrer" data-corn="row">${inner}<span class="hx-sr-only"> (opens ${escHtml(forgeName())} in a new tab)</span></a>${spec}${agent}</li>`
@@ -994,9 +996,9 @@ function workHtml(e) {
 /** The Agents tab's groups, each a heading and its work */
 function groupsHtml(groups) {
   return groups.map((g, i) => {
-    const link = g.issue && safeUrl(g.issue.url) ? ` <a class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+    const link = g.issue && safeUrl(g.issue.url) ? ` <a data-corn="text-link" class="hx-link hx-forge-gout" href="${escHtml(g.issue.url)}" target="_blank" rel="noreferrer" aria-label="Open issue ${g.number} on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
     const startRef = g.kind === 'issue' && g.issue && g.issue.state === 'open' ? `issue:${g.number}` : g.kind === 'proposal' ? `proposal:${g.slug}` : null;
-    const start = startRef ? ` <button type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="${escHtml(t('startAgent'))} on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">${escHtml(t('startAgent'))} …</button>` : '';
+    const start = startRef ? ` <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-agent="${escHtml(startRef)}" aria-label="${escHtml(t('startAgent'))} on ${escHtml(g.kind === 'issue' ? `issue ${g.number}` : `proposal ${g.slug}`)}">${escHtml(t('startAgent'))} …</button>` : '';
     return `<li class="hx-forge-group"><h3 class="hx-forge-gtitle" id="forge-group-${i}">${escHtml(g.title)}${link}</h3>${start}<p class="hx-forge-meta">${escHtml(groupWords(g))}</p><ul class="hx-forge-list" aria-labelledby="forge-group-${i}">${g.entries.map(workHtml).join('')}</ul></li>`;
   }).join('');
 }
@@ -1010,40 +1012,40 @@ function detailKey() {
 }
 
 /** The back control of a detail: an arrow and the name of the list it returns to ("All pull requests") */
-const backHtml = (action, words) => `<button type="button" class="hx-forge-back" data-action="${action}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">${escHtml(words)}</span></button>`;
+const backHtml = (action, words) => `<button data-corn="back" type="button" class="hx-forge-back" data-action="${action}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg><span class="hx-forge-back-text">${escHtml(words)}</span></button>`;
 
 /** The selected deploy: what it was, and the nodes it restarted (each a button that selects it on the map) */
 function deployDetailHtml() {
   const d = ui.deployItem;
   const lit = ui.litDeploy;
   const url = safeUrl(d.url);
-  const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title">${escHtml(d.name)}</h3>
-    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
+  const head = `${backHtml('clear-forge-deploy', 'All deploys')}<h3 class="hx-forge-detail-title" data-corn="detail-title">${escHtml(d.name)}</h3>
+    <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(d.state)}" data-corn="state-pill"${cornStateAttr(d.state)}>${stateIconHtml(d.state)}${escHtml(deployWords(d))}</span> ${escHtml(deployMeta(d, now()))}${url ? ` · <a data-corn="text-link" class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</p>`;
   const stale = ui.lists.deploys && ui.lists.deploys.stale;
   let body;
   if (!d.restarts.length) {
     body = '<p class="hx-forge-notice" data-corn="notice">No node is mapped to this deploy, so nothing is lit. Say what it restarts under <code class="hx-code">deploys.restarts</code> in cornfield.config.js (docs/deploys.md).</p>';
   } else {
-    const rows = lit.nodes.map((n) => `<li class="hx-forge-file"><button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
+    const rows = lit.nodes.map((n) => `<li class="hx-forge-file" data-corn="file"><button data-corn="node-chip" type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button> <span class="hx-faint">${escHtml(n.type)}</span></li>`).join('');
     const missing = lit.missing.length ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(lit.missing.join(', '))} ${lit.missing.length === 1 ? 'is' : 'are'} named in the config but not on the map.</p>` : '';
-    const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--${d.state === 'failure' ? 'removed' : 'changed'}" aria-hidden="true"></span>${d.state === 'failure' ? 'restarted by a deploy that failed' : 'restarted by this deploy'}</p>` : '';
+    const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--${d.state === 'failure' ? 'removed' : 'changed'}" data-corn="mark-dot"${markStateAttr(d.state === 'failure' ? 'removed' : 'changed')} aria-hidden="true"></span>${d.state === 'failure' ? 'restarted by a deploy that failed' : 'restarted by this deploy'}</p>` : '';
     body = `<h4 class="hx-forge-sub">${escHtml(`Restarted: ${plural(lit.nodes.length, 'node')} on the map`)}</h4>${key}${rows ? `<ul class="hx-forge-files">${rows}</ul>` : ''}${missing}`;
   }
   return `${head}${stale ? `<p class="hx-forge-notice" data-corn="notice">${escHtml(`This is an older answer. ${stale}`)}</p>` : ''}${body}`;
 }
 
 /** A node button, as in a pull request's files: it selects the node on the map */
-const nodeButton = (n) => `<button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button>`;
+const nodeButton = (n) => `<button data-corn="node-chip" type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button>`;
 
 /** The selected thread: read-only, its messages as written, a way to reply on the forge, and the nodes its text lights */
 function threadDetailHtml() {
-  const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title">${title}</h3>`;
+  const head = (title) => `${backHtml('clear-forge-thread', 'All threads')}<h3 class="hx-forge-detail-title" data-corn="detail-title">${title}</h3>`;
   if (ui.threadError) return `${head(`Thread ${ui.thread}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.threadError)}</p>`;
   if (!ui.threadDetail) return `${head(`Thread ${ui.thread}`)}<p class="hx-faint">Loading its messages …</p>`;
   const { thread: t, stale } = ui.threadDetail;
   const lit = ui.litThread;
   const url = safeUrl(t.url);
-  const reply = url ? `<a class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(forgeName())} (new tab)</a>` : '';
+  const reply = url ? `<a data-corn="text-link" class="hx-link" href="${escHtml(url)}" target="_blank" rel="noreferrer">Reply on ${escHtml(forgeName())} (new tab)</a>` : '';
   const named = [
     ...(t.proposals || []).map((p) => `Proposal <code class="hx-code">${escHtml(p.slug)}</code> in pull request #${p.pull}`),
     ...(t.kind === 'proposal' ? [`Spec pull request for <code class="hx-code">${escHtml((t.slugs || []).join(', '))}</code>`] : []),
@@ -1051,13 +1053,13 @@ function threadDetailHtml() {
   ];
   const msgs = t.messages.map((m) => {
     const own = lit.perMessage.get(m.id) || { nodes: [], unresolved: [] };
-    const link = safeUrl(m.url) ? ` <a class="hx-link" href="${escHtml(m.url)}" target="_blank" rel="noreferrer" aria-label="Open this message on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
+    const link = safeUrl(m.url) ? ` <a data-corn="out-link" class="hx-link" href="${escHtml(m.url)}" target="_blank" rel="noreferrer" aria-label="Open this message on ${escHtml(forgeName())} (new tab)">↗</a>` : '';
     const chips = own.nodes.length || own.unresolved.length
       ? `<span class="hx-forge-nodes hx-thread-nodes">${own.nodes.map(nodeButton).join('')}${own.unresolved.length ? `<span class="hx-faint">not on the map: ${own.unresolved.map((r) => `<code class="hx-code">${escHtml(r)}</code>`).join(' ')}</span>` : ''}</span>`
       : '';
-    return `<li class="hx-thread-msg"><p class="hx-forge-meta"><strong class="hx-strong">${escHtml(m.author ? m.author.login : 'someone')}</strong>${m.opening ? ' opened this' : ''} · ${escHtml(relativeTime(m.createdAt, now()))}${link}</p><p class="hx-thread-body">${escHtml(m.body.trim() === '' ? '(no text)' : m.body)}${m.cut ? '\n… (cut here; the rest is on the forge)' : ''}</p>${chips}</li>`;
+    return `<li class="hx-thread-msg" data-corn="thread-message"><p class="hx-forge-meta"><strong class="hx-strong">${escHtml(m.author ? m.author.login : 'someone')}</strong>${m.opening ? ' opened this' : ''} · ${escHtml(relativeTime(m.createdAt, now()))}${link}</p><p class="hx-thread-body">${escHtml(m.body.trim() === '' ? '(no text)' : m.body)}${m.cut ? '\n… (cut here; the rest is on the forge)' : ''}</p>${chips}</li>`;
   }).join('');
-  const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a node this thread mentions</p>` : '';
+  const key = lit.nodes.length ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" data-corn-state="changed" aria-hidden="true"></span>a node this thread mentions</p>` : '';
   return `${head(`#${t.number} ${escHtml(t.title)}`)}
     <p class="hx-forge-meta"><span class="hx-forge-state hx-forge-state--${escHtml(t.state)}" data-corn="state-pill"${cornStateAttr(t.state)}>${t.state === 'open' ? 'Open' : 'Closed'}</span> ${escHtml(threadKindWords(t))} · ${escHtml(threadMeta({ ...t, comments: t.messages.length - (t.kind === 'idea' ? 1 : 0) + (t.hidden || 0) }, now()))}</p>
     <p class="hx-forge-why hx-faint">Read-only here: a thread is a conversation on ${escHtml(forgeName())}, so you reply there. ${reply}</p>
@@ -1077,7 +1079,7 @@ function detailHtml() {
   if (shown.startsWith('thread:')) return threadDetailHtml();
   if (shown.startsWith('deploy:')) return deployDetailHtml();
   if (!shown) return '';
-  const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title">${title}</h3>`;
+  const head = (title, meta) => `${backHtml('clear-forge-pr', ui.kind === 'work' ? 'All work' : 'All pull requests')}${meta || ''}<h3 class="hx-forge-detail-title" data-corn="detail-title">${title}</h3>`;
   if (ui.detailError) return `${head(`Pull request ${ui.selected}`)}<p class="hx-forge-notice" data-corn="notice">${escHtml(ui.detailError)}</p>`;
   if (!ui.detail) return `${head(`Pull request ${ui.selected}`)}<p class="hx-faint">Loading its files and checks …</p><ul class="hx-forge-list" aria-hidden="true">${loadingRowsHtml(4)}</ul>`;
   const { pull, checks, stale } = ui.detail;
@@ -1093,10 +1095,10 @@ function detailHtml() {
         ? `Lights ${failed.tests.map((t) => `<code class="hx-code">${escHtml(t.path)}</code>${t.nodes.length ? '' : ' (not on the map)'}`).join(', ')}`
         : 'Names no test file, so lights nothing'}</span>`
       : '';
-    const name = safeUrl(c.url) ? `<a class="hx-link" href="${escHtml(c.url)}" target="_blank" rel="noreferrer">${escHtml(c.name)}</a>` : `<span class="hx-name">${escHtml(c.name)}</span>`;
+    const name = safeUrl(c.url) ? `<a data-corn="text-link" class="hx-link" href="${escHtml(c.url)}" target="_blank" rel="noreferrer">${escHtml(c.name)}</a>` : `<span class="hx-name">${escHtml(c.name)}</span>`;
     const why = rerunWhy(c, forgeName());
     const again = c.state === 'failure' && c.canRerun
-      ? `<button type="button" class="hx-btn hx-forge-act" data-forge-rerun="${escHtml(c.id)}" aria-label="Re-run ${escHtml(c.name)}"${ui.busy ? ' disabled' : ''}>Re-run</button>`
+      ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-rerun="${escHtml(c.id)}" aria-label="Re-run ${escHtml(c.name)}"${ui.busy ? ' disabled' : ''}>Re-run</button>`
       : '';
     const whyNot = why ? `<span class="hx-faint hx-forge-lights">${escHtml(why)}</span>` : '';
     return `<li class="hx-forge-check"><span class="hx-forge-state hx-forge-state--${escHtml(c.state)}" data-corn="state-pill"${cornStateAttr(c.state)}>${stateIconHtml(c.state)}${escHtml(checkWords(c))}</span> ${name}${again}${lights}${whyNot}</li>`;
@@ -1104,10 +1106,10 @@ function detailHtml() {
 
   const fileRows = lit.files.map((f) => {
     const nodes = f.nodes.length
-      ? f.nodes.map((n) => `<button type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button>`).join('')
+      ? f.nodes.map((n) => `<button data-corn="node-chip" type="button" class="hx-forge-node" data-forge-node="${escHtml(n.id)}" aria-label="Show ${escHtml(n.label)} on the map${isNodeVisible(n) ? '' : ' (its layer is off)'}">${escHtml(n.label)}${isNodeVisible(n) ? '' : ' · layer off'}</button>`).join('')
       : '<span class="hx-faint">not on the map</span>';
     const renamed = f.status === 'renamed' && f.previousPath ? `<span class="hx-faint"> from ${escHtml(f.previousPath)}</span>` : '';
-    return `<li class="hx-forge-file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
+    return `<li class="hx-forge-file" data-corn="file"><span class="hx-forge-fstatus">${escHtml(f.status)}</span> <code class="hx-code">${escHtml(f.path)}</code>${renamed} <span class="hx-good">+${f.additions}</span> <span class="hx-forge-del">−${f.deletions}</span><span class="hx-forge-nodes">${nodes}</span></li>`;
   }).join('');
 
   // Land it is the one primary action, with Open on the forge beside it; a pull request that cannot land says why in one line
@@ -1115,10 +1117,10 @@ function detailHtml() {
   const land = block
     ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
     : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' disabled' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
-  const act = `<div class="hx-forge-cta">${land}${url ? `<a class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${approvalWarning(ui.detail) ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(approvalWarning(ui.detail))}</p>` : ''}`;
+  const act = `<div class="hx-forge-cta">${land}${url ? `<a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${approvalWarning(ui.detail) ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(approvalWarning(ui.detail))}</p>` : ''}`;
   // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
   const waiting = ui.landing && pull.state === 'open'
-    ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, now()))}</p><button type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
+    ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, now()))}</p><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' disabled' : ''}>Cancel</button></div>`
     : '';
   const note = ui.note ? `<p class="hx-forge-notice${ui.note.ok ? ' hx-forge-notice--ok' : ''}" data-corn="notice"${ui.note.ok ? ' data-corn-state="success"' : ''}>${escHtml(ui.note.text)}</p>` : '';
   // Step 2 of the pipeline: a spec pull request with an approved proposal opens its build issue
@@ -1130,7 +1132,7 @@ function detailHtml() {
     : '';
 
   const key = lit.changed.size || lit.failing.size
-    ? `<p class="hx-forge-key hx-faint">${lit.changed.size ? '<span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes ' : ''}${lit.failing.size ? '<span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names' : ''}</p>`
+    ? `<p class="hx-forge-key hx-faint">${lit.changed.size ? '<span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" data-corn-state="changed" aria-hidden="true"></span>a file this pull request changes ' : ''}${lit.failing.size ? '<span class="hx-mark-dot hx-mark-dot--removed" data-corn="mark-dot" data-corn-state="removed" aria-hidden="true"></span>a test a failing check names' : ''}</p>`
     : '';
   // Its run: who is running it, their state, the time and the cost (the runs are read for the Runs tab, and once for the first PR selected)
   const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
@@ -1305,7 +1307,7 @@ function draw(panel) {
     const link = ui.actNote && safeUrl(ui.actNote.url);
     act.className = `hx-forge-notice${ui.actNote && ui.actNote.ok ? ' hx-forge-notice--ok' : ''}`;
     if (ui.actNote && ui.actNote.ok) act.dataset.cornState = 'success'; else delete act.dataset.cornState;
-    act.innerHTML = ui.actNote ? `${escHtml(ui.actNote.text)}${link ? ` <a class="hx-link" href="${escHtml(link)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}` : '';
+    act.innerHTML = ui.actNote ? `${escHtml(ui.actNote.text)}${link ? ` <a data-corn="text-link" class="hx-link" href="${escHtml(link)}" target="_blank" rel="noreferrer">Open on ${escHtml(forgeName())} ↗</a>` : ''}` : '';
   }
 
   const rows = $('forge-list');
@@ -1587,7 +1589,7 @@ function showConfirm(what, goLabel, state) {
   $('forge-confirm-title').textContent = what.title;
   $('forge-confirm-body').innerHTML = `<dl class="hx-confirm-facts">${what.lines.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${asCode.includes(k) ? `<code class="hx-code">${escHtml(v)}</code>` : escHtml(v)}</dd>`).join('')}</dl>
     ${(what.checks || []).length ? `<ul class="hx-confirm-checks">${what.checks.map((c) => `<li><span class="hx-forge-state hx-forge-state--success" data-corn="state-pill" data-corn-state="success">${escHtml(c.words)}</span> ${escHtml(c.name)}</li>`).join('')}</ul>` : ''}
-    ${(what.previews || []).map((pv) => `<p class="hx-confirm-label">${escHtml(pv.label)}</p><pre class="hx-confirm-pre" tabindex="0" role="region" aria-label="${escHtml(pv.label)}">${escHtml(pv.text)}</pre>`).join('')}
+    ${(what.previews || []).map((pv) => `<p class="hx-confirm-label">${escHtml(pv.label)}</p><pre class="hx-confirm-pre" data-corn="confirm-preview" tabindex="0" role="region" aria-label="${escHtml(pv.label)}">${escHtml(pv.text)}</pre>`).join('')}
     <p class="hx-confirm-note">${escHtml(what.note)}</p>`;
   const go = el.querySelector('[data-action="forge-confirm-go"]');
   go.disabled = false;

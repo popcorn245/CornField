@@ -135,7 +135,7 @@ export function registerSheet(id, el) {
     handle.type = 'button';
     handle.className = 'hx-sheet-handle';
     handle.dataset.corn = 'sheet-handle';
-    handle.innerHTML = '<span></span>';
+    handle.innerHTML = '<span data-corn="sheet-grip"></span>';
     el.prepend(handle);
   }
   bindHandle(id, handle);
