@@ -27,6 +27,7 @@
 import { state, nodeById, escHtml, touchScene } from './state.js';
 import { render, ensureFlowLoop } from './render.js';
 import { setMap } from './view.js';
+import { cornState } from './corn-state.js';
 import { onLayersChange, renderLayerToggles } from './layers.js';
 import { chipModel, createLiveRunner, groupsOf, liveDetailsHtml, liveWanted } from './live-model.js';
 
@@ -140,6 +141,8 @@ function paintChip() {
   if (text) text.textContent = chip.text;
   const btn = $('live-chip');
   if (btn) {
+    const live = cornState(chip.tone); // success, waiting (stale), stopped (off), failure (unavailable) or running (loading)
+    if (live) btn.dataset.cornState = live; else delete btn.dataset.cornState;
     btn.title = chip.text;
     btn.setAttribute('aria-label', chip.text || 'Live layer');
     btn.setAttribute('aria-expanded', String(menuOpen));
@@ -158,7 +161,7 @@ function paintChip() {
       <p class="hx-live-line hx-live-line--main">${escHtml(chip.text)}</p>
       ${chip.lines.map((l) => `<p class="hx-live-line">${escHtml(l)}</p>`).join('')}
       ${chip.note ? `<p class="hx-live-line hx-faint">${escHtml(chip.note)}</p>` : ''}
-      ${chip.href && !asking ? `<p class="hx-live-line"><a class="hx-link" href="${escHtml(chip.href)}">Where to set a token ↗</a></p>` : ''}`;
+      ${chip.href && !asking ? `<p class="hx-live-line"><a data-corn="text-link" class="hx-link" href="${escHtml(chip.href)}">Where to set a token ↗</a></p>` : ''}`;
     // The field is painted only when it changes, so a repaint (a refresh, the stale tick) never drops what is being typed
     const fieldHtml = asking ? tokenFieldHtml(tok, chip.href) : '';
     if (field.dataset.painted !== String(asking)) {
@@ -168,7 +171,7 @@ function paintChip() {
     field.hidden = !asking;
     row.innerHTML = `
       <span class="hx-live-buttons">
-        <button type="button" class="hx-btn" data-live="refresh"${loading ? ' disabled' : ''}>Refresh</button>
+        <button data-corn-kind="secondary" type="button" class="hx-btn" data-live="refresh"${loading ? ' disabled' : ''}>Refresh</button>
         ${has ? '<button type="button" class="hx-btn" data-live="token-forget" data-corn-kind="danger">Forget token</button>' : ''}
       </span>
       <span class="hx-faint">${escHtml(source && source.name ? source.name : '')}</span>`;
@@ -218,11 +221,11 @@ function tokenFieldHtml(tok, href) {
   return `
     <label class="hx-live-token-label" for="live-token-input">${escHtml(label)}</label>
     <div class="hx-live-token-row">
-      <input id="live-token-input" class="hx-field hx-live-token-input" type="password" data-live="token-input" autocomplete="off" autocapitalize="off" spellcheck="false" />
-      <button type="button" class="hx-btn" data-live="token-save">Save</button>
+      <input data-corn="control" id="live-token-input" class="hx-field hx-live-token-input" type="password" data-live="token-input" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button data-corn-kind="secondary" type="button" class="hx-btn" data-live="token-save">Save</button>
     </div>
     ${tok.help ? `<p class="hx-live-line hx-faint hx-live-help">${withCode(tok.help)}</p>` : ''}
-    ${href ? `<p class="hx-live-line hx-live-second"><a class="hx-link" href="${escHtml(href)}">or set it there ↗</a></p>` : ''}`;
+    ${href ? `<p class="hx-live-line hx-live-second"><a data-corn="text-link" class="hx-link" href="${escHtml(href)}">or set it there ↗</a></p>` : ''}`;
 }
 
 /** Saves what is in the field (then empties it) and asks the source again at once; an empty field saves nothing */

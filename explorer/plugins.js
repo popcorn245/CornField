@@ -93,7 +93,7 @@ function paintFooter(doc, config) {
   if (!foot) return;
   const words = [t('poweredBy'), typeof config.version === 'string' ? config.version : ''].filter(Boolean).join(' ');
   const home = config.brand && typeof config.brand.poweredBy === 'string' && /^https:\/\//.test(config.brand.poweredBy) ? config.brand.poweredBy : '';
-  foot.innerHTML = home ? `<a href="${escHtml(home)}" target="_blank" rel="noreferrer">${escHtml(words)}</a>` : escHtml(words);
+  foot.innerHTML = home ? `<a data-corn="text-link" href="${escHtml(home)}" target="_blank" rel="noreferrer">${escHtml(words)}</a>` : escHtml(words);
 }
 
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };

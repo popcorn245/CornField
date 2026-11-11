@@ -6884,6 +6884,30 @@
       "dashed": true
     },
     {
+      "from": "core-explorer-live",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0006-scenarios-and-personas"
     },
@@ -6912,5 +6936,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T10:34:10.221Z"
+  "updatedAt": "2026-11-11T11:57:32.377Z"
 }

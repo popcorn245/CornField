@@ -73,8 +73,8 @@ function mount() {
     root.innerHTML = `
       <p class="hx-review-status" data-review-status hidden><span data-review-verdict role="status"></span><span data-review-when></span></p>
       <div class="hx-review-form" id="review-form" data-review-form hidden>
-        <label class="hx-review-label" for="review-note"></label>
-        <textarea id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
+        <label class="hx-review-label" for="review-note" data-corn="review-label"></label>
+        <textarea data-corn="review-note" id="review-note" class="hx-review-note" rows="2" maxlength="20000"></textarea>
         <div class="hx-review-row">
           <button type="button" class="hx-btn hx-btn--quiet" data-review-cancel data-corn-kind="quiet">Cancel</button>
         </div>

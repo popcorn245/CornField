@@ -17,6 +17,7 @@ import { panIntoView } from './camera.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
 import { t } from './strings.js';
+import { markStateAttr, markState } from './corn-state.js';
 import { fileUrl } from './file-url.js';
 import { capped, toggleCapped } from './capped.js';
 import { dismissHint } from './hint.js';
@@ -61,7 +62,7 @@ function dataSummary(node) {
 
   if (node.type === 'app') {
     const served = node.deployed
-      ? line(`${/^https?:\/\//.test(node.url) ? `<a class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer">${escHtml(node.url)}</a>` : code(node.url)} → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
+      ? line(`${/^https?:\/\//.test(node.url) ? `<a data-corn="text-link" class="hx-link" href="${escHtml(node.url)}" target="_blank" rel="noreferrer">${escHtml(node.url)}</a>` : code(node.url)} → ${(node.upstreams || []).map(code).join(' ')}${node.stack ? ` <span class="hx-faint">[${escHtml(node.stack)}]</span>` : ''}`)
       : line('Not deployed by any stack in this repo');
     const runsOn = state.edges.filter((e) => e.kind === 'runs-on' && e.from === node.id)
       .map((e) => line(`${nm(e.to)}${(e.mappings || []).map((m) => `<div class="hx-faint">${code(m.host)} → ${code(m.upstream)}${m.service ? ` = ${code(m.service)}` : ''}</div>`).join('')}`));
@@ -158,7 +159,7 @@ function threadsSection(node) {
   if (!index) return '';
   const threads = index.for(node.id);
   // "Start a thread about this" shows whenever threads are on and a maintainer is signed in (the panel only sets `start` then)
-  const start = index.start ? `<button type="button" class="hx-btn hx-btn--quiet hx-textact" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned">Start a thread about this</button>` : '';
+  const start = index.start ? `<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-textact" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned">Start a thread about this</button>` : '';
   if (!threads || !threads.length) return start;
   const rows = threads.map((th) => {
     const count = Number(th.comments) || 0;
@@ -214,7 +215,7 @@ function diffSection(node) {
   if (kind === 'changed') {
     for (const r of fieldRows(node)) rows.push(row(r.field, `<span class="hx-change-before">${escHtml(r.before) || '<em>nothing</em>'}</span> <span aria-hidden="true">→</span><span class="hx-sr-only"> became </span> <span class="hx-change-after">${escHtml(r.after) || '<em>nothing</em>'}</span>`));
   }
-  return `<div class="hx-sec-block" data-proposal-mark="${escHtml(node.mark)}" data-corn="section"><h3 class="hx-sec-title">In this proposal</h3>${node.why ? `<p class="hx-why">${escHtml(node.why)}</p>` : ''}<div class="hx-diff hx-diff--${escHtml(kind)}">${rows.join('')}</div></div>`;
+  return `<div class="hx-sec-block" data-proposal-mark="${escHtml(node.mark)}" data-corn="section"><h3 class="hx-sec-title">In this proposal</h3>${node.why ? `<p class="hx-why">${escHtml(node.why)}</p>` : ''}<div class="hx-diff hx-diff--${escHtml(kind)}" data-corn="diff-block"${markStateAttr(node.mark)}>${rows.join('')}</div></div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +247,8 @@ export async function selectNode(node) {
   const pill = diffPillWords(node);
   $('drawer-diff').textContent = pill;
   $('drawer-diff').hidden = !pill;
+  const pillState = markState(pill ? node.mark : ''); // added, changed, removed or edit
+  if (pillState) $('drawer-diff').dataset.cornState = pillState; else delete $('drawer-diff').dataset.cornState;
   const lead = $('drawer-description');
   lead.textContent = node.desc || '';
   lead.hidden = !node.desc;
@@ -270,6 +273,7 @@ export async function selectNode(node) {
   if (route) openBtn.href = node.url; else openBtn.removeAttribute('href');
   openBtn.hidden = !route;
   openBtn.className = file ? 'hx-btn hx-btn--quiet hx-foot-btn' : 'hx-open';
+  if (file) openBtn.dataset.cornKind = 'quiet'; else openBtn.dataset.cornKind = 'primary'; // the route is the primary action when there is no file
   openBtn.textContent = `${t('openRoute')} ↗`;
   fileBtn.textContent = `${t('openFile')} ↗`;
   const run = $('drawer-run-btn');
