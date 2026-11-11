@@ -441,6 +441,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `work-panel` | the Work panel: Specs, PRs, Issues, Threads, Runs and Deploys |
 | `forge-panel` | **deprecated**: the old name of `work-panel`, kept for one release. It is now on the panel's inner box (its first child), so a rule that sets the panel's position or width must move to `work-panel`; colours and type still apply |
 | `proposal-bar` | the open proposal's bar |
+| `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-tone` is `draft`, `open`, `bad` or `local`), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
 | `review-bar`, `whatif` | in the proposal bar: the review part (the status line and the note that opens on Send back: a row under the toolbar, or on a phone under the counts, above Send back and Approve), the what-if editor (behind Edit) |
 | `scenario-player` | the scenario player |
 

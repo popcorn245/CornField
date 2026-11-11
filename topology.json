@@ -6420,7 +6420,25 @@
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T22:00:49.574Z"
+  "updatedAt": "2026-11-11T08:29:27.609Z"
 }

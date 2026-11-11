@@ -67,7 +67,7 @@ function fakeServer(opts                                                        
     return json(404, { error: 'unexpected' });
   });
   vi.stubGlobal('fetch', mock);
-  return { calls, mock, puts: () => calls.filter((c) => c.method === 'PUT'), api: () => calls.filter((c) => c.url.startsWith('/api/')) };
+  return { calls, mock, puts: () => calls.filter((c) => c.method === 'PUT'), api: () => calls.filter((c) => c.url.startsWith('/api/v1/')) };
 }
 
 const $ = (id        ) => document.getElementById(id)               ;
@@ -428,12 +428,12 @@ describe('when the server says no', () => {
     const s = fakeServer();
     open();
     click(approveBtn());
-    expect(approveBtn().disabled).toBe(true);
-    expect(sendBackBtn().disabled).toBe(true);
+    expect(approveBtn().getAttribute('aria-disabled')).toBe('true'); // not `disabled`: the pressed button keeps the focus while it posts
+    expect(sendBackBtn().getAttribute('aria-disabled')).toBe('true');
     click(approveBtn());
     await settle();
     expect(s.puts()).toHaveLength(1);
-    expect(approveBtn().disabled).toBe(false);
+    expect(approveBtn().getAttribute('aria-disabled')).toBeNull();
   });
 });
 

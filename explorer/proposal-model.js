@@ -235,6 +235,97 @@ export function specRowHtml(entry, { current = null } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+//  Which copy is open: the chip on the bar, and a link that finds nothing
+// ---------------------------------------------------------------------------
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The checks on a PR's head in words, for the bar's source chip: "no checks", "1 check running", "2 checks failed, 1 check running",
+ * "all 3 checks passed". Failed first, then cancelled, then the ones still going.
+ * @param {{ state: string }[]} checks
+ */
+export function checksLine(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) return 'no checks';
+  const n = (states) => checks.filter((c) => states.includes(c.state)).length;
+  const failed = n(['failure']);
+  const cancelled = n(['cancelled']);
+  const waiting = n(['running', 'queued']);
+  const parts = [];
+  if (failed) parts.push(`${plural(failed, 'check')} failed`);
+  if (cancelled) parts.push(`${plural(cancelled, 'check')} cancelled`);
+  if (waiting) parts.push(`${plural(waiting, 'check')} running`);
+  if (parts.length) return parts.join(', ');
+  return checks.length === 1 ? '1 check passed' : `all ${checks.length} checks passed`;
+}
+
+/** `pull/<n>` to n, or null (the same shape the server reads, server/proposal-pulls.js) */
+export function pullNumberOf(source) {
+  const m = typeof source === 'string' ? /^pull\/([1-9]\d{0,8})$/.exec(source) : null;
+  return m ? Number(m[1]) : null;
+}
+
+/** Where a source is, in words: "PR #21", "the checkout", "worktree <name>" */
+export function sourceWhere(source) {
+  const n = pullNumberOf(source);
+  if (n) return `PR #${n}`;
+  if (!source || source === 'checkout') return 'the checkout';
+  return `worktree ${source}`;
+}
+
+/**
+ * What the bar's source chip says of the copy under review. A spec PR's copy: "PR #24 · draft · 1 check running" (the state and the checks
+ * are left out until known: `pull` is the listing's entry, `checks` the PR's checks, or null when they could not be read). A copy in the checkout
+ * or a worktree: "Local draft · in the checkout". `href` is the PR's address when it has one (the caller checks the scheme).
+ * @param {string|null} source `pull/<n>`, `checkout` or a worktree's name
+ * @param {{ draft?: boolean, url?: string, state?: string }|null} [pull]
+ * @param {{ state: string }[]|null} [checks]
+ * @returns {{ text: string, href: string|null, tone: 'draft'|'open'|'bad'|'local', label: string }}
+ */
+export function sourceChip(source, pull = null, checks = null) {
+  const n = pullNumberOf(source);
+  if (!n) {
+    const where = !source || source === 'checkout' ? 'in the checkout' : `in worktree ${source}`;
+    return { text: `Local draft \u00b7 ${where}`, href: null, tone: 'local', label: `This is a local draft, ${where}, not a pull request` };
+  }
+  const parts = [`PR #${n}`];
+  if (pull && pull.state && pull.state !== 'open') parts.push(pull.state);
+  else if (pull && typeof pull.draft === 'boolean') parts.push(pull.draft ? 'draft' : 'open');
+  if (Array.isArray(checks)) parts.push(checksLine(checks));
+  const failed = Array.isArray(checks) && checks.some((c) => c.state === 'failure');
+  return {
+    text: parts.join(' \u00b7 '),
+    href: pull && typeof pull.url === 'string' ? pull.url : null,
+    tone: failed ? 'bad' : pull && pull.draft ? 'draft' : 'open',
+    label: `Reviewing spec pull request: ${parts.join(', ')}`,
+  };
+}
+
+/**
+ * What to say when a link names a proposal the server does not have: what was not found, said plainly.
+ * @param {string} slug
+ * @param {string|null} source
+ */
+export function notFoundWords(slug, source) {
+  return source ? `There is no proposal called ${slug} in ${sourceWhere(source)}.` : `There is no proposal called ${slug}.`;
+}
+
+/**
+ * The ways on from a link that found nothing: the same slug under another source, from the listing (a spec PR's copy before a local one),
+ * each as `{ slug, source, label }`. The Specs list is offered by the caller, always.
+ * @param {{ slug: string, source: string, error?: string, pull?: object }[]|null} listing
+ * @param {string} slug
+ * @param {string|null} source the one that was asked for (left out)
+ */
+export function otherCopies(listing, slug, source) {
+  if (!Array.isArray(listing)) return [];
+  return listing
+    .filter((e) => e && e.slug === slug && e.source !== source && !e.error)
+    .sort((a, b) => (pullNumberOf(b.source) ? 1 : 0) - (pullNumberOf(a.source) ? 1 : 0))
+    .map((e) => ({ slug: e.slug, source: e.source, label: pullNumberOf(e.source) ? `Open the copy in PR #${pullNumberOf(e.source)}${e.pull && e.pull.draft ? ' (draft)' : ''}` : `Open the copy ${e.source === 'checkout' ? 'in the checkout' : `in worktree ${e.source}`}` }));
+}
+
+// ---------------------------------------------------------------------------
 //  Where an added node sits
 // ---------------------------------------------------------------------------
 

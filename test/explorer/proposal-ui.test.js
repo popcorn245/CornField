@@ -222,7 +222,7 @@ describe('/?proposal=<slug>', () => {
     fakeHub(LISTING, {});
     expect(await mount('?proposal=nope')).toBe(false);
     expect($('proposal-bar').hidden).toBe(false);
-    expect($('proposal-message').textContent).toContain('No proposal called nope');
+    expect($('proposal-message').textContent).toContain('There is no proposal called nope');
     expect($('proposal-body').hidden).toBe(true);
     expect(state.proposal).toBeNull();
     expect(state.nodes).toHaveLength(base.nodes.length);
