@@ -114,6 +114,8 @@ export const state = {
   effectiveProposal: null,
   /** The maintainer's what-if edits to the open proposal, and what Undo took back (whatif-model.js): `{ edits, undone }` */
   whatIf: { edits: [], undone: [] },
+  /** The My edits toggle is off: the map is drawn from the proposal as written, the edits are kept and still go with a review (whatif.js, spec 0007 D5) */
+  whatIfOff: false,
   /** A marked edge picked on the map (nodes are `selectedNode`): the panel shows it, the scene does not change */
   selectedEdge: null,
 

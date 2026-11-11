@@ -638,7 +638,7 @@ h2.hx-proposal-name { margin: 0; }
   .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-ways):not(#proposal-body),
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head),
   .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu) { display: none; }
-  .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]) { display: none; } /* the peek keeps the reason Approve is off, and a refusal */
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]):not([data-review-line]):not([data-review-ask]):not([data-review-hold]):not([data-review-hold-live]):not([data-review-landing]) { display: none; } /* the peek keeps the line Approve points at, the question, the hold, a landing that waits, and a refusal */
   .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
   /* The scenario player: one row (Previous, Pause, Next, the counter and Close) in the peek; the text, the speed and the checks when it is open */
@@ -1372,3 +1372,30 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"], .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50dvh), 50dvh); }
   .hx-dock > .hx-drawer[data-sheet-state="expanded"], .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60dvh), 60dvh); }
 }
+
+/* ===== Spec 0007: the decision. The line above Approve, the question asked in place, the hold with Undo, a landing that waits, what a send back carried ===== */
+.hx-decision-line { margin: 0; color: var(--corn-text-2); font-size: var(--corn-text-sm); line-height: 1.45; }
+.hx-decision-line[hidden], .hx-review-ask[hidden], .hx-hold[hidden], .hx-review-landing[hidden], .hx-sent-edits[hidden] { display: none; }
+.hx-review-ask { margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid color-mix(in srgb, var(--corn-warn) 55%, transparent); background: color-mix(in srgb, var(--corn-warn) 14%, transparent); color: var(--corn-text); line-height: 1.4; }
+.hx-review-landing { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); color: var(--corn-text-2); }
+.hx-review-landing p { margin: 0; line-height: 1.4; }
+.hx-sent-edits { color: var(--corn-text-2); }
+.hx-sent-edits summary { cursor: pointer; min-height: 24px; }
+.hx-hold { height: 3px; border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-accent) 22%, transparent); overflow: hidden; }
+.hx-hold-fill { display: block; height: 100%; width: 100%; background: var(--corn-accent); transform-origin: left center; animation-name: hx-hold-drain; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes hx-hold-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.hx-proposal-actions .hx-btn[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.hx-proposal-actions .hx-btn[data-holding="true"] { opacity: 1; font-variant-numeric: tabular-nums; }
+.hx-review-undo[hidden] { display: none; }
+@media (max-width: 767px) {
+  .hx-review-undo { min-height: 44px; min-width: 44px; }
+  .hx-review-landing .hx-btn { min-height: 44px; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-decision-line { display: none; } /* the note's sheet shows the send back line under the note, not Approve's */
+}
+@media (prefers-reduced-motion: reduce) { .hx-hold { display: none; } .hx-hold-fill { animation: none; } } /* only the words count down */
+.hx-rc-sub { margin: var(--corn-space-2) 0 var(--corn-space-1); font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-edit-text, var(--corn-text)); }
+.hx-proposal-yours { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-edit-text, var(--corn-text-2)); }
+.hx-proposal-tools [aria-pressed="false"] { opacity: 0.8; }
+.hx-whatif-row [aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.hx-runner-dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--corn-space-1); border-radius: 50%; background: var(--corn-warn); vertical-align: middle; }
+.hx-runner-dot[hidden] { display: none; }

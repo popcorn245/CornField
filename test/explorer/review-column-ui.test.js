@@ -285,12 +285,13 @@ describe('choosing a step goes to it (D4, D6)', () => {
     expect(qa('.hx-sc-seen').map((s) => s.textContent)).toEqual(['✓ Played']);
     // the PR's head is not known yet (the forge did not answer): the tick is held for this visit, never kept under an empty head
     expect(readSeen(localStorage, seenKey('pull/23', '0013-meals', ''))).toEqual({ played: [], read: [] });
-    expect(q('.hx-rc-note[data-corn="notice"]').textContent).toBe('1 of 3 scenarios played');
+    expect(document.getElementById('review-line').textContent).toContain('1 of 3 scenarios played'); // in the decision line now (spec 0007 D1), not under the list
+    expect(document.querySelector('.hx-rc-note[data-corn="notice"]')).toBeNull();
     setPullHead('abc123');
     expect(readSeen(localStorage, seenKey('pull/23', '0013-meals', 'abc123'))).toEqual({ played: ['gone'], read: [] });
     expect(qa('.hx-sc-seen').map((s) => s.textContent)).toEqual(['✓ Played']);
     // it never gates the decision, and is not part of the review
-    expect((q('[data-review="approved"]')                     ).hasAttribute('aria-disabled')).toBe(false);
+    expect((q('[data-review="approved"]')                     ).getAttribute('aria-describedby')).toBe('review-line'); // the count is words in the line, not a condition of Approve
     expect(Object.keys(reviewBody('approved', '', [])).sort()).toEqual(['edits', 'note', 'verdict']);
   });
 

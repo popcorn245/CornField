@@ -29,6 +29,7 @@ import { looksWith, onMapStyleChange } from './map-style.js';
 import {
   PROPOSAL_VIEWS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, jumpWords,
   sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
+  yoursText,
 } from './proposal-model.js';
 import { renderReviewColumn, reviewOpenedLine, showSection, setPullHead } from './review-column.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
@@ -371,6 +372,9 @@ export function renderBar() {
     if (!c.mark && /scenarios?$/.test(c.text)) return `<button type="button" class="hx-proposal-count" data-action="review-show-scenarios" data-corn-kind="quiet" title="Show the personas and their scenarios">${escHtml(c.text)}</button>`;
     return `<button type="button" class="hx-proposal-count" data-action="review-show-changes" data-corn-kind="quiet" title="Show the list of changes">${dot}${escHtml(c.text)}</button>`;
   }).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
+  // The reviewer's own edits are a part of their own, never added to the proposal's numbers (spec 0007 D5)
+  const yours = yoursText(state.whatIf && state.whatIf.edits, !!state.whatIfOff);
+  if (yours) chip.insertAdjacentHTML('beforeend', `<span class="hx-proposal-sep" aria-hidden="true"> · </span><span class="hx-proposal-count hx-proposal-yours"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit" aria-hidden="true"></span>${escHtml(yours)}</span>`);
   $('proposal-mode').textContent = t(state.proposalView);
 
   for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
@@ -394,14 +398,13 @@ export function renderBar() {
  * Picks a row of the changes list: select it, centre it in the part of the map the review column, the node panel and (on a phone) the sheets leave free,
  * at a zoom where its label reads, and make sure the current view shows it
  */
-function focusChange(kind, key) {
+export function focusChange(kind, key, { select = true } = {}) {
   const item = kind === 'edge' ? state.edges.find((e) => edgeKey(e) === key) : state.nodes.find((n) => n.id === key);
   if (!item) return;
   const ends = (kind === 'edge' ? [state.nodes.find((n) => n.id === item.from), state.nodes.find((n) => n.id === item.to)] : [item]).filter(Boolean);
   if (!ends.length) return;
   if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff', { quiet: true }); // Before or After hides what it removes or adds
-  if (kind === 'edge') showEdgePanel(item);
-  else selectNode(item);
+  if (select) { if (kind === 'edge') showEdgePanel(item); else selectNode(item); }
   // The panel is open now, so what it covers is known
   const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
   if (cam) Object.assign(state.camera, cam);

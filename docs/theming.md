@@ -509,7 +509,8 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `proposal-changes`, `scenario-list` | the review column's two sections, each with its heading (`h3`) and its list: Changes (each change is a `row`, a button, in a `li`) and Personas and scenarios. Since spec 0006 both are sections of the column, not boxes of their own: `proposal-changes` was the list behind the counts in the bar, and `scenario-list` the list behind Play, a box over the map; a rule that placed or sized either (`position`, `max-height`, `top`) no longer applies the same way |
 | `persona-group` | one persona's `h4` ("Adult · 1 scenario") and the scenarios that apply to it, one `row` each (a disclosure: `aria-expanded`); the last group is Anyone, the scenarios that name no persona |
 | `step-list`, `step` | an opened scenario's numbered list of steps, and one step (a button: who acts, the node, its mark, the text and its verdict; the one the player is on has `aria-current="step"`). Its verdict is a `state-pill` |
-| `decision` | the column's foot, a group: Send back and Approve and the review status above them (`review-bar`); spec 0007 puts the line that says what Approve does there |
+| `decision` | the column's foot, a group: Send back and Approve, and above them the review status (`review-bar`), the one line that says what Approve does in this state (Approve's `aria-describedby`, `id="review-line"`), the question Approve asks in place in four states (a `message` with `data-corn-state="waiting"`, `role="alert"`), the hold's bar, and the notice of a landing that waits with its **Cancel landing**. While a press is held the pressed button reads "Approving in 5 s" (`data-holding="true"`), **Undo** (`data-corn-kind="secondary"`) sits beside it, and Approve reads "Approved" (`aria-disabled`) once an approval stands at this head |
+| `sent-edits` | under the decision after a send back: **Sent with 2 edits**, a read-only disclosure (`summary`) of the edits the review carried; they are no longer on the map, the review comment holds them |
 | `mark-dot` | the dot in front of a change or a count and in a legend; `data-corn-state` is `added`, `changed`, `removed` or `edit` |
 | `step-number` | in the What-if editor, the number of a scenario's step (it shows that step on the map) |
 | `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
@@ -635,6 +636,13 @@ Only labels a brand would want to voice are keys (about seventy). Sentences of h
 | `landIt` | Land it |
 | `startAgent` | Start an agent |
 | `askRunner` | Ask the runner |
+| `approveAnyway`, `sendBackAnyway` | the button while a question is asked in place: Approve anyway, Send back anyway |
+| `undo` | Undo, beside the button of a held press (5 seconds before anything is sent) |
+| `approved` | what Approve reads once an approval stands at the PR's head |
+| `myEdits` | the toggle beside Before / Diff / After that shows the map without your what-if edits |
+| `yourEdits` | the first group of the change list, "Your edits · 1": your what-if edits, counted apart from the proposal's changes |
+| `cancelLanding` | Cancel landing, in the decision foot while a landing waits |
+| `queueIt` | Queue it: what Ask the runner reads while no runner is online |
 | `startAgain` | Start again |
 | `stop` | Stop |
 | `continueRun` | Continue |

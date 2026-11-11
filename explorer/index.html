@@ -126,6 +126,7 @@
         <span data-corn-string="issuesAndPrs">Work</span>
         <span id="forge-btn-lit" class="hx-forge-lit" data-corn="count" hidden></span>
         <!-- What waits on you (explorer/waiting-model.js): specs to decide plus runs that need an answer; hidden at 0 and for anyone not signed in -->
+        <span id="forge-btn-dot" class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
         <span id="forge-btn-waiting" class="hx-waiting-badge" data-corn="waiting-badge" aria-hidden="true" hidden></span>
       </button>
 
@@ -215,6 +216,8 @@
             <button data-corn="compare-option" type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false" data-corn-string="after">After</button>
           </div>
           <div class="hx-proposal-tools">
+            <!-- Shown only while there are what-if edits: off, the map is the proposal as written; the edits are kept and still go with a review (whatif.js) -->
+            <button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>
             <button data-corn-kind="secondary" type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
           </div>
           <div class="hx-proposal-more">
@@ -312,8 +315,8 @@
         <!-- Agent runs (forge-panel.js, runs-model.js): shown on the Runs tab; each run's state, what it is about, links, and Stop -->
         <section id="forge-runs" class="hx-forge-runs" aria-labelledby="forge-runs-title" hidden>
           <h3 id="forge-runs-title" class="hx-forge-runs-title">Agent runs</h3>
-          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
           <p id="forge-runs-runner" class="hx-forge-meta" hidden></p>
+          <p id="forge-runs-status" class="hx-forge-meta hx-faint"></p>
           <p id="forge-runs-note" class="hx-forge-notice" hidden data-corn="notice"></p>
           <p id="forge-runs-trigger" class="hx-forge-notice" hidden data-corn="notice"></p>
           <div id="forge-runs-totals" data-corn="run-totals" role="group" aria-label="Tokens and cost the runners reported" hidden></div>
