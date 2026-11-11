@@ -115,6 +115,13 @@
   --corn-space-5: 16px;
   --corn-space-6: 24px;
 
+  /* Density (issue #200). The one height of a control in a bar (the header, the proposal bar, the decision foot, the player, the Work panel's top row):
+     32px at a desk, 44px on a phone (the media query after the light blocks). The padding of a panel's body, which the Work panel and the node panel share,
+     and the least height of a panel's head: a control and a step of padding */
+  --corn-control-height: 32px;
+  --corn-panel-pad: calc(var(--corn-space-5) + var(--corn-space-1));
+  --corn-panel-head-height: calc(var(--corn-control-height) + var(--corn-space-3));
+
   /* The House view's plan: the house's outline and each room's */
   --corn-house-line: color-mix(in srgb, var(--corn-hue-lime) 18%, transparent);
   --corn-house-room: color-mix(in srgb, var(--corn-hue-lime) 45%, transparent);
@@ -301,6 +308,11 @@
 
   color-scheme: light;
 }
+
+/* A phone's density: controls are 44px tall (the target), and a panel pads by 16px under 640px. explorer.css floors a phone's control at 44px whatever
+   a brand sets (max(44px, …)); a brand that sets --corn-panel-pad on :root sets a phone's too, unless it sets it again under the same query */
+@media (max-width: 767px) { :root { --corn-control-height: 44px; } }
+@media (max-width: 639px) { :root { --corn-panel-pad: var(--corn-space-5); } }
 
 /* ==========================================================================
    The old --hx-* names, as aliases of the tokens above, for one release (scene.js, proposal.js and plugin

@@ -25,7 +25,7 @@ import { MAX_MIX_DEPTH, readColor, over, toHex, luminance, ratio, splitTop } fro
 import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
 import { deltaE2000 } from './delta-e.js';
-import { LAYER_KEY_RE, MAX_KEY, parseKindToken } from './layers.js';
+import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
@@ -311,7 +311,7 @@ function origin(props, name) {
   return at;
 }
 
-const READS = 'hex, rgb(), hsl(), color-mix(in srgb, …), transparent and the basic colour names';
+const READS = 'hex, rgb(), hsl(), color-mix(in srgb, …), transparent and the CSS named colours';
 
 /**
  * A token (`--corn-text`) or a value (`color-mix(…)`) as `[r, g, b, a]`, or `{ problem }` naming the custom property that could not
@@ -529,7 +529,7 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
   const strokeOn = isColor(stroke.color) && !(Number.parseFloat(widthText) === 0);
   for (const type of Object.keys(NODE_THEMES)) {
     for (const group of MAP_GROUPS_OF(type)) {
-      const names = [`--corn-map-node-${type}`, `--corn-map-group-${group}`];
+      const names = mapFillNames({ type, group }); // the map's own order (a kind and a project layer are checked on their own, below)
       let name = null;
       let fill = null;
       let problem = null;
