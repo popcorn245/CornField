@@ -24,7 +24,7 @@
  * The pure packing (`packNodes`, `packEdges`, `packDecor`, `styleTables`) is what the tests read: there is no GPU in CI.
  */
 
-import { ARROW, CORE_RATIO, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
+import { ARROW, CORE_RATIO, EDGE_STRIKE, END_SHAPES, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_MIN_PX, LETTER_RATIO, isLetterKey, letterImage, letterKey, lettersOfKey } from './kind-letters.js';
 import {
@@ -55,7 +55,8 @@ export const TIP_STRIDE = 9;
 export const PACKET_STRIDE = 18;
 
 export const HALO_CODE = { none: 0, selected: 1, match: 2, child: 3 };
-export const TIP_CODE = { arrow: 1, strike: 2 };
+/** What a tip is: a filled arrowhead, the strike across a removed edge, and (spec 0008 D7) the open chevron, the bar and the open diamond that end the other families, and the tick of a `when` */
+export const TIP_CODE = { arrow: 1, strike: 2, chevron: 3, bar: 4, diamond: 5, tick: 6 };
 export const MARK_CODE = { none: 0, added: 1, changed: 2, removed: 3, edit: 4 };
 
 /** A CSS colour as [r, g, b, a], all 0..1 */
@@ -141,7 +142,18 @@ export function packEdges(scene) {
     if (edge.arrow) {
       // along the end tangent: from the control point (a straight edge: from its start)
       const ang = Math.atan2(edge.y2 - (edge.curve ? edge.curve.cy : edge.y1), edge.x2 - (edge.curve ? edge.curve.cx : edge.x1));
-      rows.tips.push([edge.x2, edge.y2, Math.cos(ang), Math.sin(ang), r, g, b, lineAlpha, TIP_CODE.arrow]);
+      const code = edge.end && edge.end !== 'triangle' ? codeOf(TIP_CODE, edge.end) || TIP_CODE.arrow : TIP_CODE.arrow;
+      rows.tips.push([edge.x2, edge.y2, Math.cos(ang), Math.sin(ang), r, g, b, lineAlpha, code]);
+    }
+    if (edge.ticks) {
+      // across the middle, one or two, a few units apart along the chord (renderer-canvas2d.js drawTicks)
+      const mid = edgePoint(edge, 0.5);
+      const len = Math.hypot(edge.x2 - edge.x1, edge.y2 - edge.y1);
+      const [dx, dy] = len > 0 ? [(edge.x2 - edge.x1) / len, (edge.y2 - edge.y1) / len] : [1, 0];
+      for (let i = 0; i < edge.ticks; i++) {
+        const along = (i - (edge.ticks - 1) / 2) * END_SHAPES.tickGap;
+        rows.tips.push([mid.x + dx * along, mid.y + dy * along, dx, dy, r, g, b, lineAlpha, TIP_CODE.tick]);
+      }
     }
     if (edge.mark === 'removed') {
       // across the edge at its midpoint (the quadratic's tangent there is its chord)
@@ -304,6 +316,8 @@ const CONSTANTS = {
   },
   tips(gl, at) {
     gl.uniform4f(at('u_tip'), ARROW.length, ARROW.spread, EDGE_STRIKE.halfLength, EDGE_STRIKE.width);
+    gl.uniform4f(at('u_end'), END_SHAPES.strokeWidth, END_SHAPES.barHalf, END_SHAPES.diamondHalf, END_SHAPES.diamondAcross);
+    gl.uniform2f(at('u_tick'), END_SHAPES.tickHalf, END_SHAPES.tickWidth);
   },
 };
 

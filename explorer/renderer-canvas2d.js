@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
+import { CORE_RATIO, ARROW, END_SHAPES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
 import { ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 
@@ -105,23 +105,79 @@ function drawEdge(ctx, edge, timeMs, zoom, withPacket = true) {
     ctx.stroke();
   }
 
-  // Arrowhead along the curve's end tangent
+  // The tick marks of a call that bites later than now: across the middle, one or two (spec 0008 D7)
+  if (edge.ticks) drawTicks(ctx, edge, zoom);
+
+  // The mark at the target, along the curve's end tangent: one per family of edge (spec 0008 D7)
   if (edge.arrow) {
     const { cx, cy } = edge.curve || { cx: edge.x1, cy: edge.y1 };
-    const ang = Math.atan2(edge.y2 - cy, edge.x2 - cx);
-    ctx.beginPath();
-    ctx.moveTo(edge.x2, edge.y2);
-    ctx.lineTo(edge.x2 - Math.cos(ang - ARROW.spread) * ARROW.length, edge.y2 - Math.sin(ang - ARROW.spread) * ARROW.length);
-    ctx.lineTo(edge.x2 - Math.cos(ang + ARROW.spread) * ARROW.length, edge.y2 - Math.sin(ang + ARROW.spread) * ARROW.length);
-    ctx.closePath();
-    ctx.fillStyle = edge.color;
-    ctx.fill();
+    drawEnd(ctx, edge, Math.atan2(edge.y2 - cy, edge.x2 - cx), zoom);
   }
 
   // The edge's label (selection only) is the label layer's, not drawn here
 
   if (withPacket && edge.packet) drawPacketIn(ctx, edge, timeMs, zoom);
   ctx.restore();
+}
+
+/**
+ * The mark at an edge's target, pointing along `ang` (spec 0008 D7): a filled triangle (services), an open chevron (data), a bar across the
+ * line (places) or an open diamond (tokens). The same shapes the WebGL tips pass draws (shaders.js TIP_FRAG).
+ */
+function drawEnd(ctx, edge, ang, zoom) {
+  const kind = edge.end || 'triangle';
+  const { x2: x, y2: y, color } = edge;
+  const cs = Math.cos(ang), sn = Math.sin(ang);
+  const at = (back, across) => [x - cs * back - sn * across, y - sn * back + cs * across]; // the tip's own frame: `back` behind it, `across` to its left
+  const thin = Math.max(END_SHAPES.strokeWidth, 1.2 / zoom);
+  ctx.beginPath();
+  if (kind === 'triangle') {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(ang - ARROW.spread) * ARROW.length, y - Math.sin(ang - ARROW.spread) * ARROW.length);
+    ctx.lineTo(x - Math.cos(ang + ARROW.spread) * ARROW.length, y - Math.sin(ang + ARROW.spread) * ARROW.length);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    return;
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thin;
+  ctx.lineJoin = 'miter';
+  if (kind === 'chevron') {
+    const back = ARROW.length * Math.cos(ARROW.spread), side = ARROW.length * Math.sin(ARROW.spread);
+    ctx.moveTo(...at(back, side));
+    ctx.lineTo(x, y);
+    ctx.lineTo(...at(back, -side));
+  } else if (kind === 'bar') {
+    ctx.moveTo(...at(thin / 2, END_SHAPES.barHalf));
+    ctx.lineTo(...at(thin / 2, -END_SHAPES.barHalf));
+  } else { // diamond: its front vertex at the tip
+    const h = END_SHAPES.diamondHalf;
+    ctx.moveTo(x, y);
+    ctx.lineTo(...at(h, END_SHAPES.diamondAcross));
+    ctx.lineTo(...at(2 * h, 0));
+    ctx.lineTo(...at(h, -END_SHAPES.diamondAcross));
+    ctx.closePath();
+  }
+  ctx.stroke();
+}
+
+/** The ticks of a `when` across the middle of an edge: short lines square to it, a few units apart along it */
+function drawTicks(ctx, edge, zoom) {
+  const len = Math.hypot(edge.x2 - edge.x1, edge.y2 - edge.y1);
+  const [dx, dy] = len > 0 ? [(edge.x2 - edge.x1) / len, (edge.y2 - edge.y1) / len] : [1, 0];
+  const mid = edgePoint(edge, 0.5);
+  ctx.beginPath();
+  for (let i = 0; i < edge.ticks; i++) {
+    const along = (i - (edge.ticks - 1) / 2) * END_SHAPES.tickGap;
+    const px = mid.x + dx * along, py = mid.y + dy * along;
+    ctx.moveTo(px - dy * END_SHAPES.tickHalf, py + dx * END_SHAPES.tickHalf);
+    ctx.lineTo(px + dy * END_SHAPES.tickHalf, py - dx * END_SHAPES.tickHalf);
+  }
+  ctx.strokeStyle = edge.color;
+  ctx.lineWidth = Math.max(END_SHAPES.tickWidth, 1.5 / zoom);
+  ctx.setLineDash([]);
+  ctx.stroke();
 }
 
 /** The packet's dot: a soft disc under it for the glow (no `shadowBlur`: see drawEdge), then the dot */

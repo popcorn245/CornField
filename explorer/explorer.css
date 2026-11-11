@@ -299,8 +299,6 @@ h1, h2, h3, p { margin: 0; }
 .hx-legend-label { display: flex; align-items: center; gap: var(--corn-space-3); font-weight: 500; }
 .hx-legend-swatch { width: 16px; flex: none; display: inline-flex; justify-content: center; }
 .hx-swatch-line { display: inline-block; width: 16px; height: 2px; border-radius: var(--corn-radius-xs); }
-.hx-swatch-solid { background: color-mix(in srgb, var(--corn-text) 55%, transparent); }
-.hx-swatch-dashed { height: 0; background: none; border-top: var(--corn-border-strong) dashed var(--corn-text-2); }
 .hx-swatch-indigo { border-top-color: var(--corn-accent-text); }
 
 /* ---- stage: canvas, hint, states --------------------------------------------------------- */
@@ -714,12 +712,6 @@ h2.hx-proposal-name { margin: 0; }
 .hx-player-as[hidden], .hx-player-verdict[hidden], .hx-player-check[hidden] { display: none; }
 
 /* ---- cloud nodes (spec 0031, CLOUD-06): the panel's badges, plan and Used by; the `when` line styles -- */
-/* The `when` swatches mirror cloud-model.js WHEN_STYLES (run solid, deploy dashed, renew dotted; red, amber, violet) */
-.hx-swatch-when { width: 18px; height: 2px; border-radius: 0; color: var(--corn-text-2); background: currentColor; }
-.hx-swatch-when--run { color: var(--corn-removed); }
-.hx-swatch-when--deploy { color: var(--corn-changed); background: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 8px); }
-.hx-swatch-when--renew { color: var(--corn-edit); background: repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 5px); }
-.hx-swatch-when--plain { color: var(--corn-text-2); } /* the legend: the map draws every call in the calls colour, so only the pattern is the key */
 .hx-cloud-browser { color: var(--corn-text-3); font-size: var(--corn-text-sm); }
 
 /* ---- a panel glyph (MAP-01) ----------------------------------------------------------------------
@@ -1439,3 +1431,11 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-lines-kind, .hx-lines-switch, .hx-lines-list .hx-linkbtn, .hx-lines-reach .hx-btn { min-height: 44px; }
   .hx-lines-switch input { width: 24px; height: 24px; }
 }
+
+/* ---------------------------------------------------------------------------
+   The Key (spec 0008 D7, edge-key.js): each kind of line drawn with its real style and end mark. The map says the kind by line style
+   and mark, never by colour alone, so the swatches are one ink; a `when` is told by ticks (cloud-model.js WHEN_STYLES)
+   --------------------------------------------------------------------------- */
+.hx-legend-swatch--wide { width: 44px; justify-content: flex-start; color: var(--corn-text-2); }
+.hx-key-line { display: block; overflow: visible; }
+.hx-key-note { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-xs); }

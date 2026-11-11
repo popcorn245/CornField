@@ -449,14 +449,15 @@ export const TIP_VERT = `${HEAD}${TO_CLIP}
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_tip;     // x, y (world), direction x, y (unit)
 layout(location = 2) in vec4 a_color;
-layout(location = 3) in float a_kind;   // 1 = arrowhead (tip at x, y), 2 = strike (centred on x, y)
+layout(location = 3) in float a_kind;   // 1 = arrowhead (tip at x, y), 2 = strike (centred on x, y), 3 = chevron, 4 = bar, 5 = diamond (all with their tip at x, y), 6 = tick (centred on x, y)
 uniform vec4 u_tip;                     // arrow length, arrow spread (radians), strike half length, strike width (world)
+uniform vec4 u_end;                     // stroke width of the open marks, bar half length, diamond half length, diamond half width (world)
 out vec2 v_local;
 flat out vec4 v_color;
 flat out float v_kind;
 void main() {
   float zoom = u_cam.z;
-  float ext = max(u_tip.x, max(u_tip.z, u_tip.w)) * zoom + 3.0;
+  float ext = max(max(u_tip.x, 2.0 * u_end.z), max(u_tip.z, u_end.y)) * zoom + 3.0;
   vec2 dir = a_tip.zw;
   vec2 off = a_corner * ext;
   v_local = vec2(dot(off, dir), dot(off, vec2(-dir.y, dir.x)));
@@ -471,19 +472,53 @@ in vec2 v_local;
 flat in vec4 v_color;
 flat in float v_kind;
 uniform vec4 u_tip;
+uniform vec4 u_end;                     // stroke width of the open marks, bar half length, diamond half length, diamond half width (world)
+uniform vec2 u_tick;                    // tick half length, tick width (world)
+// Distance to the segment a-b
+float sdSeg(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h);
+}
+// Distance to a rhombus with half diagonals b (iq's sdRhombus)
+float ndot(vec2 a, vec2 b) { return a.x * b.x - a.y * b.y; }
+float sdRhombus(vec2 p, vec2 b) {
+  p = abs(p);
+  float h = clamp(ndot(b - 2.0 * p, b) / dot(b, b), -1.0, 1.0);
+  float d = length(p - 0.5 * b * vec2(1.0 - h, 1.0 + h));
+  return d * sign(p.x * b.y + p.y * b.x - b.x * b.y);
+}
 void main() {
   float zoom = u_cam.z;
   float pix = 1.0 / u_dpr;
   float sd;
+  float L = u_tip.x * zoom;
+  float sn = sin(u_tip.y);
+  float cs = cos(u_tip.y);
+  float w = max(u_end.x * zoom, 1.2) * 0.5; // half the stroke of an open mark: at least 1.2 px thick so it stays visible zoomed out
   if (v_kind < 1.5) {
     // The triangle with its tip at the origin and two barbs L back, spread radians either side of the line
-    float L = u_tip.x * zoom;
-    float sn = sin(u_tip.y);
-    float cs = cos(u_tip.y);
     sd = max(max(sn * v_local.x + cs * v_local.y, sn * v_local.x - cs * v_local.y), -v_local.x - L * cs);
-  } else {
+  } else if (v_kind < 2.5) {
     // A box across the edge, at least 1.5 px thick so it stays visible zoomed out
     vec2 q = abs(v_local) - vec2(max(u_tip.w * zoom, 1.5) * 0.5, u_tip.z * zoom);
+    sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+  } else if (v_kind < 3.5) {
+    // The chevron: the arrowhead's two barbs, open (a line each, from the tip back)
+    vec2 barb = vec2(-L * cs, L * sn);
+    sd = min(sdSeg(v_local, vec2(0.0), barb), sdSeg(v_local, vec2(0.0), vec2(barb.x, -barb.y))) - w;
+  } else if (v_kind < 4.5) {
+    // The bar: across the line at the target
+    vec2 q = abs(v_local - vec2(-w, 0.0)) - vec2(w, u_end.y * zoom);
+    sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+  } else if (v_kind < 5.5) {
+    // The diamond: an outline, its front vertex at the tip
+    vec2 h = vec2(u_end.z, u_end.w) * zoom;
+    sd = abs(sdRhombus(v_local - vec2(-h.x, 0.0), h)) - w;
+  } else {
+    // The tick: a short box across the edge, centred, at least 1.5 px thick
+    vec2 q = abs(v_local) - vec2(max(u_tick.y * zoom, 1.5) * 0.5, u_tick.x * zoom);
     sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
   }
   outColor = vec4(v_color.rgb * v_color.a, v_color.a) * coverEdge(sd, pix);

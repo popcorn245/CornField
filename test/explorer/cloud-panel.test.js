@@ -10,7 +10,7 @@ import { CAP } from '../../explorer/capped.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  WHEN_STYLES, whenOf, whenDash, externalLayer, planLabel, cloudUsedBy, cloudPanelHtml,
+  WHEN_STYLES, whenOf, whenTicks, externalLayer, planLabel, cloudUsedBy, cloudPanelHtml,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/cloud-model.js';
 
@@ -50,15 +50,13 @@ describe('when an outage bites', () => {
     expect(whenOf({ kind: 'calls', when: 'later' })).toBe('run');
   });
 
-  it('draws run solid, deploy dashed and renew dotted, and only on a calls edge', () => {
+  it('marks run with no tick, deploy with one and renew with two, and only on a calls edge', () => {
     expect(Object.keys(WHEN_STYLES)).toEqual(['run', 'deploy', 'renew']);
-    expect(whenDash({ kind: 'calls' })).toBeNull();
-    const dashed = whenDash({ kind: 'calls', when: 'deploy' });
-    const dotted = whenDash({ kind: 'calls', when: 'renew' });
-    expect(dashed).toHaveLength(2);
-    expect(dotted).toHaveLength(2);
-    expect(dotted[0]).toBeLessThan(dashed[0]); // a dot is shorter than a dash
-    expect(whenDash({ kind: 'flow', when: 'deploy' })).toBeNull();
+    expect(whenTicks({ kind: 'calls' })).toBe(0);
+    expect(whenTicks({ kind: 'calls', when: 'deploy' })).toBe(1);
+    expect(whenTicks({ kind: 'calls', when: 'renew' })).toBe(2);
+    expect(whenTicks({ kind: 'calls', when: 'bogus' })).toBe(0);
+    expect(whenTicks({ kind: 'flow', when: 'deploy' })).toBe(0);
     // each style has its words for the legend and the panel, and a colour
     for (const s of Object.values(WHEN_STYLES)         ) {
       expect(s.title).toMatch(/^Breaks /);

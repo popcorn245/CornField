@@ -142,8 +142,6 @@ export function renderFlowLegend() {
         <span>Data Flow</span>
       </div>
       ${Object.values(FLOW_STYLES).map((s) => row(`<span data-corn="swatch" class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
-      ${row('<span data-corn="swatch" class="hx-swatch-line hx-swatch-solid"></span>', '<span class="hx-faint">Solid: live today</span>')}
-      ${row('<span data-corn="swatch" class="hx-swatch-line hx-swatch-dashed"></span>', '<span class="hx-faint">Dashed: proposed</span>')}
     </div>`;
 }
 
