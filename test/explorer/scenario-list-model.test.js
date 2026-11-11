@@ -5,7 +5,7 @@
  * personas no scenario uses, step rows with their node, mark and verdict words, and the record of what was seen.
  */
 import { describe, it, expect } from 'vitest';
-import { buildScenarioList, changeRows, actorsOf, stepVerdictWords, stepSentence, reviewCounts, reviewOpenedWords, safeKey, seenKey, readSeen, writeSeen } from '../../explorer/scenario-list-model.js';
+import { buildScenarioList, currentStepSentence, changeRows, actorsOf, stepVerdictWords, stepSentence, reviewCounts, reviewOpenedWords, safeKey, seenKey, readSeen, writeSeen } from '../../explorer/scenario-list-model.js';
 
 const nodes = [
   { id: 'persona-adult', type: 'persona', label: 'Adult', mark: 'none' },
@@ -109,6 +109,14 @@ describe('step rows (D4)', () => {
     const s = sc.steps[1];
     expect(stepSentence({ ...s, verdict: { words: 'Allowed' } }, 3)).toBe('Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.');
     expect(stepSentence(sc.steps[0], 3)).toBe('Step 1 of 3, as Adult: cart page, Changed. Opens the cart.');
+  });
+});
+
+describe('the player says the step as the list does', () => {
+  it('one sentence for the step it is on, with the verdict when there is one', () => {
+    const snap = { index: 1, total: 3, current: { node: 'page-pay', text: 'You pay.', actor: 'adult' }, verdict: { state: 'allowed' } };
+    expect(currentStepSentence({ snap, nodes, edges })).toBe('Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.');
+    expect(currentStepSentence({ snap: { ...snap, current: { edge: { from: 'page-pay', to: 'table-orders', kind: 'writes' }, text: 'Stored.' }, verdict: undefined }, nodes, edges })).toBe('Step 2 of 3: checkout page → orders table, Added. Stored.');
   });
 });
 

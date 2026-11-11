@@ -61,6 +61,8 @@ export function makeProposals(topo, { seed = 245 } = {}) {
   const stores = ofType('store');
   const queueStore = edges.find((e) => e.kind === 'triggers' && nodes.get(e.from)?.type === 'store')?.from || stores[0]?.id;
   const personas = ofType('persona');
+  /** The i-th persona's id as a scenario names it (`persona-shopper` -> `shopper`), or nothing when the map has fewer */
+  const who = (i) => (personas[i] ? { actor: personas[i].id.replace(/^persona-/, '') } : {});
   const edgeKey = (e) => `${e.from}|${e.to}|${e.kind || ''}|${e.flow || ''}`;
   const ref = (e) => ({ from: e.from, to: e.to, ...(e.kind ? { kind: e.kind } : {}), ...(e.flow ? { flow: e.flow } : {}) });
   const readsOf = (id) => edges.find((e) => e.kind === 'reads' && e.to === id);
@@ -257,8 +259,8 @@ export function makeProposals(topo, { seed = 245 } = {}) {
       mockups: [{ node: pa, path: '0100-new-flow-across-apps/start.svg', title: 'The first page of the flow: a list of items and a Start button' }],
       scenarios: [
         { id: 'start-a-flow', title: 'A person starts a flow', ...(personas.length ? { actor: personas[0].id.replace(/^persona-/, '') } : {}), steps: [{ node: pa, text: 'They open the first page.' }, { edge: { from: tn, to: pa, kind: 'reads' }, text: 'It lists their items.' }, { edge: { from: pa, to: pb, kind: 'calls' }, text: 'Add calls the endpoint.' }, { edge: { from: pb, to: tn, kind: 'writes' }, text: 'The item is stored.' }] },
-        { id: 'notice-goes-out', title: 'The notice goes out', steps: [{ node: pb, text: 'The last item is added.' }, { edge: { from: pb, to: sv, kind: 'calls' }, text: 'The endpoint calls the notifier.' }, ...(ext ? [{ edge: { from: sv, to: ext.id, kind: 'calls' }, text: `${ext.label} delivers it.` }] : [])] },
-        { id: 'across-the-map', title: 'A long walk across the map', steps: walkSteps(w, sayNode) },
+        { id: 'notice-goes-out', title: 'The notice goes out', ...who(2), steps: [{ node: pb, text: 'The last item is added.' }, { edge: { from: pb, to: sv, kind: 'calls' }, text: 'The endpoint calls the notifier.' }, ...(ext ? [{ edge: { from: sv, to: ext.id, kind: 'calls' }, text: `${ext.label} delivers it.` }] : [])] },
+        { id: 'across-the-map', title: 'A long walk across the map', ...who(0), steps: walkSteps(w, sayNode).map((st, i) => (i === 2 && personas[3] ? { ...st, ...who(3) } : st)) },
         { id: 'old-page-goes', title: 'The old page goes away', steps: [{ node: old.id, text: `${old.label} is removed.` }, ...(oldRead ? [{ edge: ref(oldRead), text: 'And the read that fed it.' }] : [])] },
         ...(ext ? [{ id: 'provider-down', title: `${ext.label} is down`, down: [ext.id], steps: [{ node: ext.id, text: 'The provider is out.' }, { node: sv, text: 'Notices queue up.' }] }] : []),
       ],

@@ -132,6 +132,33 @@ export function stepSentence(step, total) {
   return [head, step.text, step.verdict ? `${step.verdict.words}${/[.!?…]$/.test(step.verdict.words) ? '' : '.'}` : ''].filter(Boolean).join(' ');
 }
 
+/**
+ * The sentence the player says for the step it is on (D5), the same words the list uses: "Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed."
+ * @param {{ snap: { index: number, total: number, current: { node?: string, edge?: { from: string, to: string, kind?: string, flow?: string }, text?: string, actor?: string }, verdict?: any }, nodes: any[], edges: any[], words?: { notChecked?: string } }} input
+ */
+export function currentStepSentence({ snap, nodes, edges, words = {} }) {
+  const cur = snap.current || {};
+  const label = (id) => String((nodes.find((n) => n.id === id) || { label: id }).label ?? id);
+  const persona = cur.actor ? nodes.find((n) => n.type === 'persona' && (n.id === `persona-${cur.actor}` || n.id === cur.actor)) : null;
+  let where = '';
+  let mark = '';
+  if (cur.edge) {
+    where = `${label(cur.edge.from)} → ${label(cur.edge.to)}`;
+    const e = edges.find((x) => edgeKey(x) === edgeKey(cur.edge));
+    if (e && e.mark && e.mark !== 'none') mark = e.mark;
+  } else if (cur.node !== undefined) {
+    where = label(cur.node);
+    const n = nodes.find((x) => x.id === cur.node);
+    if (n && n.mark && n.mark !== 'none') mark = n.mark;
+  }
+  const verdict = cur.actor ? stepVerdictWords(snap.verdict, words) : null;
+  const step = {
+    number: snap.index + 1, actorLabel: cur.actor ? (persona ? personaName(persona) : String(cur.actor)) : '', where,
+    markWord: mark ? MARK_WORDS[mark] || '' : '', text: String(cur.text ?? ''), verdict,
+  };
+  return stepSentence(step, snap.total);
+}
+
 /** "Allowed", "Refused" counts for a row once its checks are in: "3 allowed · 1 refused" ('' before) */
 function verdictSummary(rows) {
   const count = (state) => rows.filter((r) => r.verdict && r.verdict.tone === state).length;

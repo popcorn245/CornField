@@ -267,6 +267,29 @@ describe('choosing a step goes to it (D4, D6)', () => {
   });
 });
 
+describe('the end of a scenario (D6)', () => {
+  it('offers the next scenario in the list\'s order, each scenario once, and the list follows when it starts', () => {
+    open();
+    click(qa('.hx-sc-row')[0]); // An adult plans a meal
+    click(qa('[data-corn="step"]')[0]);
+    click(q('[data-action=scenario-next]'));
+    click(q('[data-action=scenario-next]'));
+    expect(q('.hx-player-step').textContent).toBe('Played to the end');
+    const next = q('[data-action=scenario-next-scenario]') ;
+    expect(next.hidden).toBe(false);
+    click(next);
+    expect(q('.hx-player-title').textContent).toBe('A guest asks, an admin answers'); // Guest comes after Adult
+    expect(qa('.hx-sc-row').filter((b) => b.getAttribute('aria-expanded') === 'true')).toHaveLength(2); // the list opened it, under Guest and under Admin
+    // "A guest asks, an admin answers" is under two personas but comes once: the next after it is Anyone's
+    click(q('[data-action=scenario-next]'));
+    click(q('[data-action=scenario-next]'));
+    click(q('[data-action=scenario-next-scenario]') );
+    expect(q('.hx-player-title').textContent).toBe('The old page goes');
+    click(q('[data-action=scenario-next]'));
+    expect(q('[data-action=scenario-next-scenario]').hidden).toBe(true); // the last one has none
+  });
+});
+
 describe('what a project\'s files say is data (D5, the rules)', () => {
   const hostile = '"><img src=x onerror=alert(1)></script><b id="pwn">';
   it('escapes a hostile persona label and scenario title everywhere, and makes ids safe', async () => {
@@ -346,5 +369,64 @@ describe('the counts open their section (D1)', () => {
     expect(document.activeElement).toBe($('rc-scenarios-h'));
     click(q('[data-action="review-show-changes"]') );
     expect(document.activeElement).toBe($('rc-changes-h'));
+  });
+});
+
+describe('the whole review without the canvas (D5): the path a keyboard or a screen reader takes', () => {
+  /** The controls Tab visits, in the page's order: what is visible and not disabled, in the bar and the column */
+  const tabOrder = () => qa('#proposal-bar a[href], #proposal-bar button, #proposal-bar select, #review-column button, #review-column textarea')
+    .filter((el) => !el.closest('[hidden]') && !el.disabled && el.tabIndex >= 0);
+  const name = (el         ) => el.getAttribute('aria-label') || el.textContent .replace(/\s+/g, ' ').trim();
+
+  it('has the headings a reader jumps by, in document order: the title, Changes, Personas and scenarios, then each persona', () => {
+    open();
+    const headings = qa('#proposal-bar h2, #review-column h3, #review-column h4').map((h) => `${h.tagName.toLowerCase()} ${h.textContent.replace(/\s+/g, ' ').trim()}`);
+    expect(headings).toEqual(['h2 Meals', 'h3 Changes · , 3', 'h3 Personas and scenarios · , 3', 'h4 Adult · , 1 scenario', 'h4 Guest (no account) · , 1 scenario', 'h4 Admin · , 1 scenario', 'h4 Anyone · , 1 scenario']);
+    // the title is in the bar's region, named "Open proposal"; the decision is the column's last group
+    expect($('proposal-title').closest('[aria-label="Open proposal"]')).not.toBeNull();
+    const groups = qa('#review-column [role="group"]');
+    expect(groups[groups.length - 1].getAttribute('aria-label')).toBe('Decision');
+  });
+
+  it('reaches, with Tab alone, every change, every scenario, every step of an opened one and then Send back and Approve', () => {
+    open();
+    const row = qa('.hx-sc-row')[0];
+    row.focus();
+    click(row); // Enter or Space on a button is a click
+    const names = tabOrder().map(name);
+    const at = (text         ) => names.findIndex((n) => n.includes(text));
+    // the bar first, then the changes, then the scenarios (the open one followed by its steps), then the decision
+    expect(at('Edit')).toBeLessThan(at('Added /meals, page'));
+    expect(at('Added /meals, page')).toBeLessThan(at('Removed page-old, page'));
+    expect(at('Removed page-old, page')).toBeLessThan(at('An adult plans a meal'));
+    expect(at('An adult plans a meal')).toBeLessThan(at('Step 1 of 2, as Adult'));
+    expect(at('Step 1 of 2, as Adult')).toBeLessThan(at('Step 2 of 2, as Adult'));
+    expect(at('Step 2 of 2, as Adult')).toBeLessThan(at('A guest asks, an admin answers'));
+    expect(at('The old page goes')).toBeLessThan(at('Send back'));
+    expect(at('Send back')).toBeLessThan(at('Approve'));
+    expect(names[names.length - 1]).toBe('Approve');
+    // and each of them is a button with a name: nothing is a bare div
+    for (const el of qa('#review-column button')) expect(name(el), el.outerHTML.slice(0, 80)).not.toBe('');
+  });
+
+  it('plays the whole way through by keyboard: a step is chosen with Enter, the player takes the arrows and Space, Escape comes back to the step', () => {
+    open();
+    click(qa('.hx-sc-row')[0]);
+    const step = qa('[data-corn="step"]')[0];
+    step.focus();
+    click(step); // Enter
+    expect(document.activeElement.getAttribute('data-focus-key')).toBe(step.getAttribute('data-focus-key'));
+    const key = (k         , target          ) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k === ' ' ? 'Space' : k, bubbles: true, cancelable: true }));
+    key('ArrowRight', document.activeElement );
+    expect(getPlayer().snapshot().index).toBe(1);
+    expect(qa('[data-corn="step"]').map((s) => s.getAttribute('aria-current'))).toEqual([null, 'step']);
+    const space = new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true });
+    document.activeElement .dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(false); // on a step Space presses the button, it does not start the walk
+    tickScenario(0);
+    key('Escape', document.activeElement );
+    expect(getPlayer()).toBeNull();
+    expect(document.activeElement.getAttribute('data-step-index')).toBe('1'); // on the step it was on
+    expect(document.activeElement).not.toBe(document.body);
   });
 });

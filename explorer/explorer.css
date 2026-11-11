@@ -452,18 +452,28 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 }
 
 /* ---- scenario player (scenario-ui.js): the bar while a scenario plays, and the scenario list --------- */
-.hx-player { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--corn-space-3); padding: var(--corn-space-4) var(--corn-space-4) var(--corn-space-4); border-radius: var(--corn-radius-lg); z-index: 25; overflow: hidden; }
-@media (max-width: 639px) { .hx-player { left: 12px; right: 56px; width: auto; transform: none; } }
-.hx-player-head { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); }
-.hx-player-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-2); }
+.hx-player { position: absolute; left: calc(var(--hx-col-w, 0px) + 24px); right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-4); padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius-lg); z-index: 25; overflow: hidden; }
+
+
+
 .hx-player .hx-close { width: 28px; height: 28px; font-size: var(--corn-text-sm); }
-.hx-player-title { flex: 1; }
+
 .hx-player-speed { flex: none; height: 28px; padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); cursor: pointer; }
 .hx-player-speed:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-offset) / 2); }
-.hx-player-text { margin: 0; min-height: 2.8em; font-size: var(--corn-text-base); line-height: 1.4; color: var(--corn-text); user-select: text; }
+.hx-player-text { margin: 0; flex: 1 1 18em; min-width: 0; font-size: var(--corn-text-base); line-height: 1.4; color: var(--corn-text); user-select: text; overflow-wrap: anywhere; }
+.hx-player-who { color: var(--corn-text-2); font-weight: 600; }
+.hx-player-text .hx-player-verdict { margin-left: var(--corn-space-2); }
 .hx-player-count { color: var(--corn-accent-text); font-weight: 600; white-space: nowrap; }
-.hx-player-controls { display: flex; gap: var(--corn-space-3); }
-.hx-player-controls .hx-btn { flex: 1; justify-content: center; }
+.hx-player-controls { display: flex; flex: none; gap: var(--corn-space-3); }
+.hx-player-side { display: flex; flex: none; align-items: center; gap: var(--corn-space-3); margin-left: auto; }
+.hx-player-controls .hx-btn { justify-content: center; white-space: nowrap; }
+.hx-player-controls .hx-btn[hidden] { display: none; }
+/* The glyphs are drawn, not said: the names are the words (an empty alternative after the slash keeps a screen reader from reading them) */
+.hx-player-prev::before { content: "◀" / ""; margin-right: var(--corn-space-2); }
+.hx-player-next::after { content: "▶" / ""; margin-left: var(--corn-space-2); }
+.hx-player-toggle[data-state="playing"]::before { content: "⏸" / ""; margin-right: var(--corn-space-2); }
+.hx-player-toggle[data-state="paused"]::before { content: "▶" / ""; margin-right: var(--corn-space-2); }
+.hx-player-toggle[data-state="done"]::before { content: "↻" / ""; margin-right: var(--corn-space-2); }
 .hx-player-controls .hx-btn:disabled { opacity: 0.4; cursor: default; }
 .hx-player-track { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--corn-line-soft); }
 .hx-player-fill { display: block; height: 100%; width: 0; background: var(--corn-accent-text); }
@@ -630,11 +640,16 @@ h2.hx-proposal-name { margin: 0; }
   .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]) { display: none; } /* the peek keeps the reason Approve is off, and a refusal */
   .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
 
-  /* The scenario player: the title, then the step counter and its text on two lines */
-  .hx-player { max-height: 50dvh; overflow: hidden; gap: var(--corn-space-2); padding: 0 var(--corn-space-4) var(--corn-space-4); --sheet-pb: var(--corn-space-4); }
+  /* The scenario player: one row (Previous, Pause, Next, the counter and Close) in the peek; the text, the speed and the checks when it is open */
+  .hx-player { position: relative; left: auto; right: auto; bottom: auto; flex-wrap: wrap; max-height: 50dvh; overflow: hidden; gap: 0 var(--corn-space-3); padding: 0 var(--corn-space-4) var(--corn-space-3); --sheet-pb: var(--corn-space-3); }
+  .hx-player > .hx-sheet-handle { flex: 0 0 100%; }
   .hx-player[data-sheet-state="expanded"] { overflow-y: auto; }
-  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-head):not(.hx-player-text):not(.hx-player-controls):not(.hx-player-track) { display: none; } /* Previous, Pause and Next stay in the peek */
-  .hx-player[data-sheet-state="peek"] .hx-player-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; min-height: 0; overflow: hidden; font-size: var(--corn-text-md); }
+  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-controls):not(.hx-player-text):not(.hx-player-side):not(.hx-player-track):not(.hx-player-says) { display: none; } /* Previous, Pause and Next stay in the peek, with the counter and Close */
+  .hx-player[data-sheet-state="peek"] .hx-player-text { flex: 1 1 0; display: flex; align-items: center; gap: var(--corn-space-2); min-height: 44px; overflow: hidden; font-size: var(--corn-text-md); white-space: nowrap; }
+  .hx-player[data-sheet-state="peek"] .hx-player-step, .hx-player[data-sheet-state="peek"] .hx-player-who, .hx-player[data-sheet-state="peek"] .hx-player-sep { display: none; }
+  .hx-player[data-sheet-state="peek"] .hx-player-side .hx-player-speed { display: none; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-text { flex: 1 0 100%; order: 3; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-title { position: static; width: auto; height: auto; clip: auto; clip-path: none; overflow: visible; order: 0; flex: 0 0 100%; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-2); }
 
   /* The node panel: its title and type until expanded */
   .hx-drawer { max-height: 60dvh; }
@@ -1049,13 +1064,17 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 
 @media (max-width: 767px) {
   .hx-proposal-source { grid-column: 1 / -1; order: 1; justify-self: start; }
-  .hx-player-controls .hx-btn { min-height: 44px; padding: 0 var(--corn-space-2); white-space: nowrap; }
+  .hx-player-controls .hx-btn { min-height: 44px; min-width: 44px; padding: 0 var(--corn-space-3); white-space: nowrap; }
+  /* On a phone the controls are glyphs, the names are said: ◀ ⏸ ▶ in a 44px row */
+  .hx-player-prev, .hx-player-next, .hx-player-toggle { font-size: 0; }
+  .hx-player-prev::before, .hx-player-next::after, .hx-player-toggle::before { margin: 0; font-size: var(--corn-text-md); }
+  .hx-player-next-scenario { font-size: var(--corn-text-sm); }
   .hx-proposal-ways .hx-btn, a.hx-proposal-source { min-height: 44px; } /* targets a thumb can hit */
   .hx-proposal-source { padding: 0; border: 0; border-radius: 0; background: none; } /* a line of the sheet, not a pill 44px tall */
   a.hx-proposal-source { text-decoration: underline; text-underline-offset: 3px; }
   .hx-player-controls { gap: var(--corn-space-2); }
   /* While a scenario plays the proposal sheet folds to its title and counts: the player needs the room */
-  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-actions { display: none; }
+  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-rc-foot { display: none; }
   /* The note open: the field, Cancel and the send button are all there is, so all of them stay above the keyboard */
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) :is(.hx-proposal-name, .hx-proposal-source, .hx-proposal-counts, .hx-proposal-tools, .hx-proposal-more, .hx-review-status, .hx-review-line) { display: none; }
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions { order: 4; grid-template-columns: 1fr; }
@@ -1226,6 +1245,29 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > .hx-review-column { display: flex; }
   .hx-proposal-bar[data-sheet-state="peek"] .hx-review-column > :not(.hx-rc-foot) { display: none; }
   .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-chip { display: none; }
+  /* Opened, the sheet's switch carries the counts, so the head is one short row: Before / Diff / After, Edit and ⋯ */
+  .hx-proposal-bar[data-sheet-state="expanded"] { max-height: 62dvh; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-chip, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-summary { display: none; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-counts { grid-column: 1; order: 3; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-tools { grid-column: 2; order: 4; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-head { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-more .hx-btn--icon { grid-column: 3; order: 4; }
+  .hx-proposal-summary { display: none; }
   .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-peek { display: block; color: var(--corn-text-2); }
 }
 /* ==== end of the review column ================================================================================================== */
+
+/* ==== the scenario player, one bar under the map (spec 0006 D6) ================================================================
+   From 768px it sits at the foot of the map area, to the right of the review column; the stage tells it how wide the column is. */
+@media (min-width: 768px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
+  .hx-stage:has(.drawer-open) .hx-player { right: 504px; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(320px + var(--hx-forge-w)); }
+}
+.hx-player-as, .hx-player-check { flex: 1 0 100%; }
+.hx-player-speed[data-corn="control"] { color: var(--corn-text); }
+/* ==== end of the player bar ===================================================================================================== */

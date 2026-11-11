@@ -32,6 +32,9 @@ import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks }
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
 import { toggleLayer } from './layers.js';
 import { announce } from './keyboard.js';
+import { t } from './strings.js';
+import { currentStepSentence } from './scenario-list-model.js';
+import { personaFor, personaLabel } from './check-model.js';
 
 /** A frame that arrives later than this (a tab that was hidden) counts as this long */
 const MAX_FRAME_MS = 250;
@@ -154,11 +157,11 @@ export function clearScenario({ keepChecks = false } = {}) {
 /** Ends the scenario and redraws the map without it */
 export function stopScenario() {
   if (!player && !state.scenario) return;
-  const hadFocus = !!bar && bar.contains(document.activeElement);
+  const hadFocus = (!!bar && bar.contains(document.activeElement)) || !!document.activeElement?.closest?.('#review-column'); // in the player, or in the list that follows it
   clearScenario();
   touchScene();
   render();
-  if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone
+  if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone: it goes to the step the player was on
   else returnTo = null;
 }
 
@@ -234,19 +237,26 @@ function showBar(speed) {
   bar.dataset.corn = 'scenario-player';
   bar.setAttribute('role', 'region');
   bar.setAttribute('aria-label', 'Scenario player');
+  // One bar (spec 0006 D6): Previous, Pause or Play, Next; "2 of 4 · As Adult · the step's text · Allowed"; the speed and Close.
+  // The scenario's name is the title (heard, and shown on a phone's open sheet); the list beside the map has it open and the step marked.
   bar.innerHTML = `
-    <div class="hx-player-head">
-      <span class="hx-player-title"></span>
+    <span class="hx-player-title hx-sr-only"></span>
+    <div class="hx-player-controls" role="group" aria-label="Steps">
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-prev" data-action="scenario-prev" data-peek-ok></button>
+      <button type="button" class="hx-btn hx-btn--active hx-player-toggle" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next" data-action="scenario-next" data-peek-ok></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next-scenario" data-action="scenario-next-scenario" data-peek-ok hidden></button>
+    </div>
+    <p class="hx-player-text"><span class="hx-player-count" data-corn="count"></span><span class="hx-player-sep" aria-hidden="true"> · </span><span class="hx-player-who"></span><span class="hx-player-step"></span></p>
+    <span class="hx-player-says hx-sr-only" role="status" aria-live="polite"></span>
+    <div class="hx-player-side">
       <select data-corn="control" class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
-    <p class="hx-player-text" aria-live="polite"><span class="hx-player-count" data-corn="count"></span> · <span class="hx-player-step"></span></p>
-    <div class="hx-player-controls">
-      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-prev" data-peek-ok>◀ Previous</button>
-      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
-      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-next" data-peek-ok>Next ▶</button>
-    </div>
     <div class="hx-player-track" data-corn="scenario-track" aria-hidden="true"><span class="hx-player-fill" data-corn="scenario-fill"></span></div>`;
+  bar.querySelector('.hx-player-prev').textContent = t('previousStep');
+  bar.querySelector('.hx-player-next').textContent = t('nextStep');
+  bar.querySelector('.hx-player-next-scenario').textContent = t('nextScenario');
   bar.addEventListener('click', (e) => {
     const button = e.target.closest('[data-action]');
     if (button) act(button.dataset.action);
@@ -254,7 +264,7 @@ function showBar(speed) {
   const menu = bar.querySelector('.hx-player-speed');
   menu.value = String(speed);
   menu.addEventListener('change', (e) => chooseSpeed(e.target.value));
-  // On a phone the bar is a sheet in the dock, above the node panel; it opens as a peek and the others fold, so the map shows
+  // On a phone the bar is a sheet in the dock, above the node panel; it opens as a peek (one row) and the others fold, so the map shows
   const dock = document.getElementById('sheet-dock');
   const drawer = document.getElementById('spec-drawer');
   if (dock && drawer && drawer.parentElement === dock) dock.insertBefore(bar, drawer);
@@ -262,6 +272,10 @@ function showBar(speed) {
   registerSheet('player', bar);
   collapseAllSheets();
 }
+
+/** Who knows the scenario after this one, in the order the list reads (review-column.js): `fn(scenarioId)` gives the scenario or null */
+let nextScenarioOf = null;
+export function setNextScenario(fn) { nextScenarioOf = typeof fn === 'function' ? fn : null; }
 
 // The viewer's speed: a setting of theirs, kept for the next scenario and the next visit
 function readSpeed() {
@@ -282,6 +296,12 @@ function chooseSpeed(value) {
 function act(action) {
   if (!player) return;
   if (action === 'scenario-close') return stopScenario();
+  if (action === 'scenario-next-scenario') {
+    // the end of a scenario: nothing advances by itself; this is the reviewer's choice, and it starts the next one in the list's order
+    const next = nextScenarioOf ? nextScenarioOf(player.scenario().id) : null;
+    if (next) playScenario(next);
+    return;
+  }
   if (action === 'scenario-toggle') {
     const s = player.snapshot();
     if (s.playing) player.pause(); else player.play();
@@ -301,14 +321,27 @@ function updateBar(snap) {
   // this runs every frame: a live region is written only when its words change, so a step is said once, not once a frame
   const put = (cls, text) => { const el = q(cls); if (el.textContent !== text) el.textContent = text; };
   put('.hx-player-title', snap.title);
+  bar.setAttribute('aria-label', `Scenario player: ${snap.title}`);
   put('.hx-player-count', `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`);
-  put('.hx-player-step', snap.current.text);
+  const actor = snap.current.actor ? personaLabel(personaFor(state.nodes, snap.current.actor)) || snap.current.actor : '';
+  put('.hx-player-who', actor && !snap.done ? `As ${actor} · ` : '');
+  put('.hx-player-step', snap.done ? 'Played to the end' : snap.current.text);
+  bar.dataset.done = String(!!snap.done);
   const toggle = q('[data-action=scenario-toggle]');
-  toggle.textContent = snap.playing ? 'Pause' : snap.done ? 'Play again' : 'Play';
+  const label = snap.playing ? t('pause') : snap.done ? t('playAgain') : t('play');
+  if (toggle.textContent !== label) toggle.textContent = label;
+  toggle.dataset.state = snap.playing ? 'playing' : snap.done ? 'done' : 'paused';
   toggle.disabled = snap.total === 0 || snap.manual;
   toggle.title = snap.manual ? 'The time for each step is Manual: use Next' : '';
   q('[data-action=scenario-prev]').disabled = snap.index === 0 && !snap.done;
-  q('[data-action=scenario-next]').disabled = snap.done || snap.total === 0;
+  const next = q('[data-action=scenario-next]');
+  next.disabled = snap.done || snap.total === 0;
+  // at the end: Play again and Next scenario (the next one in the list's order); nothing carries on by itself
+  const following = snap.done && nextScenarioOf ? nextScenarioOf(snap.id) : null;
+  q('[data-action=scenario-next-scenario]').hidden = !following;
+  next.hidden = !!following;
+  // the one polite line: a step as the list says it ("Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.")
+  put('.hx-player-says', snap.done ? `${snap.title}: played to the end.` : currentStepSentence({ snap, nodes: state.nodes, edges: state.edges, words: { notChecked: t('notChecked') } }));
   const fill = snap.total ? Math.round(((snap.done ? snap.total : snap.index + snap.progress) / snap.total) * 1000) / 10 : 0;
   if (fill !== lastFill) { lastFill = fill; q('.hx-player-fill').style.width = `${fill}%`; }
   paintChecks(bar, snap);

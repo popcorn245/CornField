@@ -26,7 +26,7 @@ import { state, escHtml } from './state.js';
 import { t } from './strings.js';
 import { markStateAttr } from './corn-state.js';
 import { isPhone, expandSheet, PHONE_QUERY } from './sheets.js';
-import { playScenario, getPlayer, onPlayerChange, setCloseFocus } from './scenario-ui.js';
+import { playScenario, getPlayer, onPlayerChange, setCloseFocus, setNextScenario } from './scenario-ui.js';
 import { openChecks, closeChecks, scenarioVerdicts, checkedScenarioId } from './check.js';
 import { buildScenarioList, changeRows, stepSentence, reviewCounts, reviewOpenedWords, seenKey, readSeen, writeSeen } from './scenario-list-model.js';
 
@@ -312,6 +312,15 @@ function stepToFocus() {
   return lists ? lists.querySelector(`[data-action="scenario-step"][data-scenario-index="${at.index}"][data-step-index="${at.step}"]`) : null;
 }
 
+/** The scenario after `id` in the order the list reads (the personas' order, each scenario once), or null at the end of the list */
+function nextScenarioAfter(id) {
+  const order = [];
+  for (const g of model().groups) for (const sc of g.scenarios) if (!order.includes(sc.id)) order.push(sc.id);
+  const at = order.indexOf(id);
+  const next = at >= 0 ? order[at + 1] : undefined;
+  return next === undefined ? null : scenariosNow().find((s) => String(s.id) === next) || null;
+}
+
 function wire(col) {
   if (wiredRoot === col) return;
   wiredRoot = col;
@@ -329,6 +338,7 @@ export function initReviewColumn() {
   const bar = $('proposal-bar');
   if (bar && typeof ResizeObserver === 'function') new ResizeObserver(() => { placeColumn(); }).observe(bar);
   setCloseFocus(stepToFocus);
+  setNextScenario(nextScenarioAfter);
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     const mq = window.matchMedia(PHONE_QUERY);
     if (mq && mq.addEventListener) mq.addEventListener('change', () => { if (state.proposal) renderReviewColumn(); });

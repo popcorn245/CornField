@@ -16,7 +16,7 @@ import { setRenderer } from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, sheetState, expandSheet, measureCovered } from '../../explorer/sheets.js';
 import {
-  clearScenario, demoScenario, getPlayer, initScenarioUi, maybeStartDemo, onPlayerChange, playScenario, setCloseFocus, stopScenario, tickScenario, wantsFrames,
+  clearScenario, demoScenario, getPlayer, initScenarioUi, maybeStartDemo, onPlayerChange, playScenario, setCloseFocus, setNextScenario, stopScenario, tickScenario, wantsFrames,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario-ui.js';
 
@@ -77,9 +77,40 @@ describe('the bar', () => {
     expect(bar().getAttribute('role')).toBe('region');
     expect(q('.hx-player-title').textContent).toBe('Saving a meal');
     expect(text()).toBe('1 of 4 · The page opens.');
-    expect([...bar().querySelectorAll('button:not(.hx-sheet-handle)')].map((b) => b.textContent .trim())).toEqual(['✕', '◀ Previous', 'Play', 'Next ▶']);
+    // one bar: Previous, Pause or Play, Next, then the speed and Close (the glyphs are drawn by the stylesheet, so the names are the words)
+    expect([...bar().querySelectorAll('button:not(.hx-sheet-handle):not([hidden])')].map((b) => b.textContent .trim())).toEqual(['Previous', 'Play', 'Next', '✕']);
     expect(q('[data-action=scenario-close]').getAttribute('aria-label')).toBe('Close the scenario');
-    expect(q('.hx-player-text').getAttribute('aria-live')).toBe('polite');
+    // the one polite line is the step as the list says it, not the visible line again
+    expect(q('.hx-player-text').hasAttribute('aria-live')).toBe(false);
+    expect(q('.hx-player-says').getAttribute('aria-live')).toBe('polite');
+    expect(q('.hx-player-says').textContent).toBe('Step 1 of 4: a. The page opens.');
+    expect(bar().getAttribute('aria-label')).toBe('Scenario player: Saving a meal');
+  });
+
+  it('is one row under the map to the right of the review column, and a phone\'s peek keeps Previous, Pause, Next and Close in a row of 44px targets', () => {
+    const css = fs.readFileSync(path.join(here, '../../explorer', 'explorer.css'), 'utf8');
+    expect(css).toMatch(/\.hx-player \{ position: absolute; left: calc\(var\(--hx-col-w, 0px\) \+ 24px\); right: 12px; bottom: 12px;/);
+    expect(css).toMatch(/\.hx-stage:has\(\.hx-review-column:not\(\[hidden\]\)\) \{ --hx-col-w: 400px; \}/);
+    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-controls\):not\(\.hx-player-text\):not\(\.hx-player-side\)/);
+    expect(css).toMatch(/\.hx-player-controls \.hx-btn \{ min-height: 44px; min-width: 44px;/);
+  });
+
+  it('ends with "Played to the end", Play again and Next scenario; nothing carries on by itself', () => {
+    const second = scenario({ id: 't', title: 'Another' });
+    setNextScenario((id) => (id === 's' ? second : null));
+    playScenario(scenario(), { autoplay: false });
+    expect(q('[data-action=scenario-next-scenario]').hidden).toBe(true);
+    for (let i = 0; i < 4; i++) click('scenario-next');
+    expect(text()).toBe('4 of 4 · Played to the end');
+    expect(q('[data-action=scenario-toggle]').textContent).toBe('Play again');
+    expect(q('[data-action=scenario-next-scenario]').hidden).toBe(false);
+    expect(q('[data-action=scenario-next-scenario]').textContent).toBe('Next scenario');
+    frames(0, 3000);
+    expect(getPlayer().scenario().id).toBe('s'); // time passes: it is still this one
+    click('scenario-next-scenario');
+    expect(q('.hx-player-title').textContent).toBe('Another');
+    expect(getPlayer().snapshot().index).toBe(0);
+    setNextScenario(null);
   });
 
   it('puts the player\'s snapshot in state.scenario and rebuilds the scene when something moved', () => {

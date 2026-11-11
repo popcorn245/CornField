@@ -401,8 +401,8 @@ A button that does an ordinary job has no `data-corn` of its own (a region's but
 
 | Value | What it is |
 |---|---|
-| `primary` | the accent-filled action: Retry, Play (in the scenario player), Add node, Open file |
-| `secondary` | the ordinary bordered button: Send back, Play and Edit in the proposal bar, Light on the map and Timeline on a run, Start a spec, Cancel in a dialog, Start a run |
+| `primary` | the accent-filled action: Retry, Play or Pause (in the scenario player), Add node, Open file |
+| `secondary` | the ordinary bordered button: Send back (in the review column's decision), Edit in the proposal bar, Previous, Next and Next scenario in the scenario player, Light on the map and Timeline on a run, Start a spec, Cancel in a dialog, Start a run |
 | `quiet` | a low-key button: Close, Refresh, Cancel, Sign out, "and 15 more" |
 | `danger` | a button that stops or removes: Stop a run, Revoke, Forget token |
 | `approve` | a button that commits: Approve, Land it, Open the build issue |
@@ -500,7 +500,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `step-number` | in the What-if editor, the number of a scenario's step (it shows that step on the map) |
 | `proposal-source`, `proposal-ways` | in the proposal bar: the chip after the title that says which copy is under review ("PR #24 · draft · 1 check running", linking to the PR; or "Local draft · in the checkout"; its `data-corn-state` is the PR's `open`, `draft`, `merged` or `closed`, and `draft` for a local copy; none until the PR is known), and the buttons a link that found nothing offers (the Specs list, the same name under another source) |
 | `review-bar`, `review-label`, `review-note`, `whatif`, `whatif-panel`, `whatif-node` | the review part, in the `decision` (the status line and the note that opens on Send back, above Send back and Approve), and in the proposal bar, the note's label, the note's text field, the what-if editor (behind Edit), one of its panels (the form to add a node or an edge, the list of edits, the steps), and its editor for the selected node in the node panel |
-| `scenario-player`, `scenario-check`, `scenario-track`, `scenario-fill` | the scenario player, the line that says whether a step was allowed, and the progress bar with its fill (`style="width"`) |
+| `scenario-player`, `scenario-check`, `scenario-track`, `scenario-fill` | the scenario player (one bar at the foot of the map area, to the right of the review column; on a phone one row of 44px targets), the line that says whether a step was allowed, and the progress bar with its fill (`style="width"`) |
 
 ### The sign-in pages
 
