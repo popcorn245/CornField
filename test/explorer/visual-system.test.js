@@ -80,8 +80,8 @@ describe('the panel title is one style', () => {
   });
 });
 
-describe('a bar\'s controls are one height, --corn-control-height (read through --hx-control, never under 44px on a phone)', () => {
-  const TOKEN = 'var(--hx-control)';
+describe('a bar\'s controls are one height, --corn-control-height (read through --hx-control-h, never under 44px on a phone)', () => {
+  const TOKEN = 'var(--hx-control-h)';
   // [what, selector, property]: the controls of the header, the proposal bar, the decision foot, the player and the Work panel's top row
   const READS = [
     ['the header: the Layers chip', '.hx-layers-chip', 'height'],
@@ -107,23 +107,23 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
   it('makes a segmented control one height outside as well: its buttons are the token less the frame', () => {
     for (const sel of ['.hx-seg-btn', '.hx-view-btn', '.hx-account-seg-btn']) expect(declared(sel, 'height'), sel).toBe('var(--hx-seg-inner)');
     const inner = declared(':root', '--hx-seg-inner');
-    expect(inner).toContain('var(--hx-control)');
+    expect(inner).toContain('var(--hx-control-h)');
     expect(inner).toContain('var(--corn-border)');
     // the frame is two thirds of a step of padding and two borders, so the outside of the control is the token
     for (const sel of ['.hx-seg', '.hx-view', '.hx-account-seg']) expect(declared(sel, 'padding'), sel).toBe('calc(var(--corn-space-1) / 2)');
   });
 
-  it('reads the token only through --hx-control, which a phone floors at 44px: a brand that sets the token on :root (36px, say) cannot shrink a phone\'s targets', () => {
-    expect(declared(':root', '--hx-control')).toBe('var(--corn-control-height)');
-    const phone = ALL.filter((r) => /max-width: 767px/.test(r.media) && r.selectors.includes(':root') && /--hx-control\s*:/.test(r.body));
-    expect(phone.map((r) => r.body.trim())).toEqual(['--hx-control: max(44px, var(--corn-control-height));']);
+  it('reads the token only through --hx-control-h, which a phone floors at 44px: a brand that sets the token on :root (36px, say) cannot shrink a phone\'s targets', () => {
+    expect(declared(':root', '--hx-control-h')).toBe('var(--corn-control-height)');
+    const phone = ALL.filter((r) => /max-width: 767px/.test(r.media) && r.selectors.includes(':root') && /--hx-control-h\s*:/.test(r.body));
+    expect(phone.map((r) => r.body.trim())).toEqual(['--hx-control-h: max(44px, var(--corn-control-height));']);
     // no other rule reads the token itself, so none can bypass the floor
-    const direct = ALL.filter((r) => /var\(--corn-control-height\)/.test(r.body) && !/--hx-control\s*:/.test(r.body));
+    const direct = ALL.filter((r) => /var\(--corn-control-height\)/.test(r.body) && !/--hx-control-h\s*:/.test(r.body));
     expect(direct.map((r) => r.selectors.join(', '))).toEqual([]);
   });
 
   it('gives its rules no more weight than one class (an ancestor is in :where()), so a brand\'s [data-corn] hook still wins', () => {
-    const block = css.slice(css.indexOf(':root { --hx-control'));
+    const block = css.slice(css.indexOf(':root { --hx-control-h'));
     const heavy = rules(block).flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
     expect(heavy).toEqual([]);
     expect(block).not.toMatch(/!important/);
@@ -186,5 +186,19 @@ describe('the header fits a narrow desktop', () => {
   it('shows the live chip as its dot from 768 to 1023px, where its words ran the header 100px past the page', () => {
     const r = ALL.filter((x) => /min-width: 768px\) and \(max-width: 1023px/.test(x.media) && x.selectors.includes('.hx-live-chip-text'));
     expect(r.map((x) => x.body.trim())).toEqual(['display: none;']);
+  });
+});
+
+describe('names that must not collide, and a chip that centres its words', () => {
+  it('keeps the old --hx-control colour alias for plugin CSS: the bar height has its own name', () => {
+    const tokens = fs.readFileSync(path.join(EXPLORER, 'tokens.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(tokens).toMatch(/--hx-control:\s*var\(--corn-surface-2\)/); // docs/theming.md, "The old --hx-* names"
+    expect(css).not.toMatch(/--hx-control\s*:/); // explorer.css never redefines it, as a length or anything else
+    expect(css).not.toMatch(/var\(--hx-control\)/);
+  });
+
+  it('centres the words of a kind chip where the chip is 44px tall', () => {
+    // the rule sits in the touch block, right after the one that makes the chip 44px tall
+    expect(css).toMatch(/\.hx-lines-kind,[^{}]*\{\s*min-height:\s*44px;\s*\}\s*\.hx-lines-kind\s*\{\s*align-items:\s*center;/);
   });
 });
