@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
-import { createSheetModel } from '../../explorer/sheet-model.js';
+import { createSheetModel, sheetCap, mapFloorPx, MAP_FLOOR, STUB_PX } from '../../explorer/sheet-model.js';
 
 describe('sheet model', () => {
   it('starts every sheet as a peek', () => {
@@ -52,6 +52,85 @@ describe('sheet model', () => {
     m.remove('a');
     expect(m.expanded()).toBeNull();
     expect(m.has('a')).toBe(false);
+  });
+});
+
+describe('spec 0010 D7: two sheets, one expanded, a stub, the map keeps 35%', () => {
+  const open = (...ids) => { const m = createSheetModel(); ids.forEach((id) => { m.add(id); m.hide(id); }); return m; };
+
+  it('opens every sheet as a peek', () => {
+    const m = open('proposal', 'forge');
+    m.show('proposal');
+    m.show('forge');
+    expect(m.stateOf('proposal')).toBe('peek');
+    expect(m.stateOf('forge')).toBe('peek');
+    expect(m.stateOf('drawer')).toBeUndefined();
+    expect(m.expanded()).toBeNull();
+  });
+
+  it('holds at most two sheets: Work displaces the node panel and the node panel displaces Work; the review is not displaced', () => {
+    const m = open('proposal', 'drawer', 'forge');
+    m.show('proposal');
+    expect(m.show('drawer')).toEqual([]);
+    expect(m.show('forge')).toEqual(['drawer']);
+    expect(m.shown().sort()).toEqual(['forge', 'proposal']);
+    expect(m.stateOf('drawer')).toBe('hidden');
+    expect(m.show('drawer')).toEqual(['forge']);
+    expect(m.shown().sort()).toEqual(['drawer', 'proposal']);
+    expect(m.show('proposal')).toEqual([]); // the review has no rival
+  });
+
+  it('folds the other group\'s sheet to a stub while one is expanded, and swaps them when the stub is tapped', () => {
+    const m = open('proposal', 'forge');
+    m.show('proposal');
+    m.show('forge');
+    m.expand('forge');
+    expect(m.stateOf('forge')).toBe('expanded');
+    expect(m.stateOf('proposal')).toBe('stub');
+    expect(m.stubs()).toBe(1);
+    m.expand('proposal'); // a tap on the stub
+    expect(m.stateOf('proposal')).toBe('expanded');
+    expect(m.stateOf('forge')).toBe('stub');
+    m.collapseAll();
+    expect([m.stateOf('proposal'), m.stateOf('forge'), m.stubs()]).toEqual(['peek', 'peek', 0]);
+  });
+
+  it('has no stub when there is nothing else open, and does not stub the review\'s own pair', () => {
+    const alone = open('forge');
+    alone.show('forge');
+    alone.expand('forge');
+    expect(alone.stubs()).toBe(0);
+    const pair = open('proposal', 'player');
+    pair.show('proposal');
+    pair.show('player');
+    pair.expand('player');
+    expect(pair.stateOf('proposal')).toBe('peek');
+  });
+
+  it('cannot expand a sheet that is not open, and forgets an expanded sheet that is displaced or closed', () => {
+    const m = open('drawer', 'forge');
+    expect(m.expand('forge')).toBe(false);
+    m.show('drawer');
+    m.expand('drawer');
+    m.show('forge'); // displaces the expanded node panel
+    expect(m.expanded()).toBeNull();
+    m.expand('forge');
+    m.hide('forge');
+    expect(m.expanded()).toBeNull();
+  });
+
+  it('caps an expanded sheet so the map keeps 35% of the screen: 296 px at 844, whatever is open', () => {
+    expect(MAP_FLOOR).toBe(0.35);
+    expect(mapFloorPx(844)).toBe(296);
+    expect(sheetCap(844, 0)).toBe(844 - 296); // alone
+    expect(sheetCap(844, 1)).toBe(844 - 296 - STUB_PX); // with the other sheet folded to its stub: 504
+    for (const vh of [568, 667, 844, 932]) {
+      for (const stubs of [0, 1]) {
+        const dock = sheetCap(vh, stubs) + stubs * STUB_PX; // the expanded sheet at its cap, and the stub
+        expect(vh - dock, `${vh} with ${stubs} stub`).toBeGreaterThanOrEqual(mapFloorPx(vh));
+      }
+    }
+    expect(sheetCap(100, 3)).toBe(0); // never negative
   });
 });
 

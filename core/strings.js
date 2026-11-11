@@ -54,6 +54,16 @@ export const STRINGS = Object.freeze({
   tabThreads: 'Threads',
   tabRuns: 'Runs',
   tabDeploys: 'Deploys',
+  // What is waiting on you (spec 0010): the badge, the Specs groups, the Runs groups, the answer
+  waitingOnYou: 'waiting on you',
+  toDecide: 'To decide',
+  withAgent: 'With the agent',
+  approvedGroup: 'Approved',
+  drafts: 'Drafts',
+  needsYou: 'Needs you',
+  inMotion: 'In motion',
+  finished: 'Finished',
+  answer: 'Answer',
   newIdea: 'New idea',
   landIt: 'Land it',
   // Agent runs

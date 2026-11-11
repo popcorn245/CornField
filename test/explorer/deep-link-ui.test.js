@@ -192,6 +192,7 @@ describe.each([['a desktop', false], ['a phone', true]])('on %s', (_name, onPhon
   it('?proposal=&start=1 opens the Start dialog on that proposal, and leaves ?proposal= in the address', async () => {
     fakeServer();
     mount();
+    $('proposal-bar').hidden = false; // proposalOpened: the bar is showing (a sheet that is not open cannot be expanded)
     expect(await follow('?proposal=0040-meals&start=1&view=dataflow', { proposalOpened: true })).toBe(true);
     if (onPhone) expect(sheetState('proposal')).toBe('expanded');
     expect($('agent-start').hidden).toBe(false);

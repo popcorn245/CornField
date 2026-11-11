@@ -469,6 +469,15 @@ describe('on a phone (D1)', () => {
     expect($('rc-changes').hidden).toBe(false);
   });
 
+  it('opens from its handle: a tap on the grip of a proposal sheet shown since the last change expands it, with the switch in reach', () => {
+    open();
+    const handle = q('#proposal-bar > .hx-sheet-handle') ;
+    click(handle);
+    expect($('proposal-bar').dataset.sheetState).toBe('expanded');
+    click(handle);
+    expect($('proposal-bar').dataset.sheetState).toBe('peek');
+  });
+
   it('holds only the note and its buttons while a note is written, so they stay above the keyboard', () => {
     const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
     expect(css).toMatch(/\.hx-proposal-bar:has\(\.hx-review-form:not\(\[hidden\]\)\) :is\([^)]*\.hx-rc-scroll, \.hx-rc-tabs, \.hx-proposal-peek\) \{ display: none; \}/);

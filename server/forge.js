@@ -60,7 +60,7 @@
  * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null }} Pull
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
- * @typedef {{ sha: string, message: string }} PullCommit
+ * @typedef {{ sha: string, message: string, date: string | null }} PullCommit `date`: when it was committed (the committer's date, else the author's), or null when the forge gave none
  * @typedef {'queued' | 'running' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'} CheckState
  * @typedef {{ id: string, name: string, state: CheckState, url: string | null, rerunnable: boolean }} Check
  * @typedef {{ name: string, sha: string, protected: boolean }} Branch

@@ -49,8 +49,9 @@ const $ = (id) => document.getElementById(id);
  *  - `closed()`   the proposal was closed
  *  - `bar(open)`   the bar was drawn: redraw the editing controls
  *  - `openSpecs()`   the Work panel's Specs tab, for a bad link's way on (forge-panel.js sets it; without it the header's Proposals menu opens)
+ *  - `reviewed()`   a review was posted (Approve or Send back): what waits on the maintainer is read again (forge-panel.js sets it)
  */
-export const hooks = { effective: null, mark: null, beforeClose: null, closed: null, bar: null, openSpecs: null };
+export const hooks = { effective: null, mark: null, beforeClose: null, closed: null, bar: null, openSpecs: null, reviewed: null };
 
 /** Whether the open proposal's source goes in the address (see `showProposal`) */
 let pinnedSource = false;

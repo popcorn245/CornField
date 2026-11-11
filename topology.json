@@ -547,7 +547,7 @@
       "label": "sheet-model.js",
       "type": "core",
       "file": "explorer/sheet-model.js",
-      "summary": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded.",
+      "summary": "The state machine of the phone's bottom sheets (TOPO-18, spec 0010 D7), with no DOM: which sheets exist, which are open, and which one is expanded.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The state machine of the phone's bottom sheets (TOPO-18), with no DOM: which sheets exist, and which one is expanded. (explorer/sheet-model.js)"
@@ -2180,6 +2180,56 @@
       "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
     },
     {
+      "id": "core-explorer-waiting-line",
+      "label": "waiting-line.js",
+      "type": "core",
+      "file": "explorer/waiting-line.js",
+      "summary": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\".",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\". (explorer/waiting-line.js)"
+    },
+    {
+      "id": "core-explorer-waiting-model",
+      "label": "waiting-model.js",
+      "type": "core",
+      "file": "explorer/waiting-model.js",
+      "summary": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What is waiting on the maintainer (spec 0010), the pure half: no DOM, no `window`, no clock of its own (`nowMs` is handed in). (explorer/waiting-model.js)"
+    },
+    {
+      "id": "core-explorer-waiting-view",
+      "label": "waiting-view.js",
+      "type": "core",
+      "file": "explorer/waiting-view.js",
+      "summary": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The markup of what is waiting on the maintainer (spec 0010), as strings: the Specs tab's groups with their headers, and the Runs tab's group headings. (explorer/waiting-view.js)"
+    },
+    {
+      "id": "core-explorer-review-column",
+      "label": "review-column.js",
+      "type": "core",
+      "file": "explorer/review-column.js",
+      "summary": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin… (explorer/review-column.js)"
+    },
+    {
+      "id": "core-explorer-scenario-list-model",
+      "label": "scenario-list-model.js",
+      "type": "core",
+      "file": "explorer/scenario-list-model.js",
+      "summary": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node). (explorer/scenario-list-model.js)"
+    },
+    {
       "id": "store-personas",
       "label": "Personas file",
       "type": "store",
@@ -2227,26 +2277,6 @@
       "account": false,
       "r": 22,
       "color": "#fb7185"
-    },
-    {
-      "id": "core-explorer-review-column",
-      "label": "review-column.js",
-      "type": "core",
-      "file": "explorer/review-column.js",
-      "summary": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin…",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "The review column (spec 0006 D1, D2, D4, D5): while a proposal is open, one panel that holds what the proposal changes and, persona by persona, the scenarios that apply to them, so neither is behin… (explorer/review-column.js)"
-    },
-    {
-      "id": "core-explorer-scenario-list-model",
-      "label": "scenario-list-model.js",
-      "type": "core",
-      "file": "explorer/scenario-list-model.js",
-      "summary": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node).",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "The review column's two lists, the pure half (spec 0006, D1, D2, D4; no DOM, no storage of its own, tested in Node). (explorer/scenario-list-model.js)"
     }
   ],
   "edges": [
@@ -7102,24 +7132,112 @@
       "dashed": true
     },
     {
-      "from": "root",
-      "to": "store-personas"
+      "from": "pkg-explorer",
+      "to": "core-explorer-waiting-line"
     },
     {
-      "from": "store-personas",
-      "to": "persona-maintainer"
+      "from": "pkg-explorer",
+      "to": "core-explorer-waiting-model"
     },
     {
-      "from": "store-personas",
-      "to": "persona-reader"
+      "from": "pkg-explorer",
+      "to": "core-explorer-waiting-view"
     },
     {
-      "from": "store-personas",
-      "to": "persona-agent"
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-line",
+      "dashed": true,
+      "label": "imports"
     },
     {
-      "from": "store-personas",
-      "to": "persona-guest"
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-waiting-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-view",
+      "to": "core-explorer-waiting-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-line",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-model",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposal-pulls",
+      "to": "core-server-reviews",
+      "dashed": true,
+      "label": "imports"
     },
     {
       "from": "pkg-explorer",
@@ -7150,6 +7268,24 @@
     {
       "from": "core-explorer-review-column",
       "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review-column",
+      "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
     },
@@ -7203,6 +7339,12 @@
     },
     {
       "from": "core-explorer-scenario-ui",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario-ui",
       "to": "core-explorer-scenario-list-model",
       "dashed": true,
       "label": "imports"
@@ -7214,29 +7356,25 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-review-column",
-      "to": "core-explorer-layers",
-      "dashed": true,
-      "label": "imports"
+      "from": "root",
+      "to": "store-personas"
     },
     {
-      "from": "core-explorer-review-column",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
+      "from": "store-personas",
+      "to": "persona-maintainer"
     },
     {
-      "from": "core-explorer-review-column",
-      "to": "core-explorer-proposal-model",
-      "dashed": true,
-      "label": "imports"
+      "from": "store-personas",
+      "to": "persona-reader"
     },
     {
-      "from": "core-explorer-scenario-ui",
-      "to": "core-explorer-cloud-model",
-      "dashed": true,
-      "label": "imports"
+      "from": "store-personas",
+      "to": "persona-agent"
+    },
+    {
+      "from": "store-personas",
+      "to": "persona-guest"
     }
   ],
-  "updatedAt": "2026-11-11T18:34:20.688Z"
+  "updatedAt": "2026-11-11T18:35:29.523Z"
 }

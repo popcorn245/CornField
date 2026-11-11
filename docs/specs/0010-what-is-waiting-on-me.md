@@ -1,6 +1,6 @@
 # Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone)
 
-Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0010-what-is-waiting-on-me.json`](proposals/0010-what-is-waiting-on-me.json).
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. **Built** (all seven steps, 2026-11-11); its proposal, `proposals/0010-what-is-waiting-on-me.json`, is deleted (`git log` keeps it).
 
 Issues: [#182](https://github.com/popcorn245/CornField/issues/182) (F34, the surfacing part), [#184](https://github.com/popcorn245/CornField/issues/184) (F36), [#193](https://github.com/popcorn245/CornField/issues/193) (F45), from the 0.34 design review.
 

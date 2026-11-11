@@ -611,11 +611,11 @@ describe('on a phone: bottom sheets', () => {
     handle('proposal-bar').click();
     await selectNode(state.nodes.find((n     ) => n.id === 'app-a'));
     expect($('spec-drawer').classList.contains('drawer-open')).toBe(true);
-    expect($('spec-drawer').dataset.sheetState).toBe('peek');
-    expect(sheetState('proposal')).toBe('expanded'); // opening a peek folds nothing
-    handle('spec-drawer').click();
+    expect($('spec-drawer').dataset.sheetState).toBe('stub'); // the bar is expanded, so the sheet that opens beside it is a stub (spec 0010 D7)
+    expect(sheetState('proposal')).toBe('expanded'); // opening a sheet folds nothing
+    document.querySelector('#spec-drawer .hx-sheet-stub').click(); // a tap on the stub swaps them: one expanded at a time
     expect($('spec-drawer').dataset.sheetState).toBe('expanded');
-    expect(sheetState('proposal')).toBe('peek');
+    expect(sheetState('proposal')).toBe('stub');
     expect(state.canvas.parentElement .dataset.sheetOpen).toBe('drawer');
   });
 

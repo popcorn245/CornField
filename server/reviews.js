@@ -187,19 +187,20 @@ export function parseReviewBlocks(body) {
  * @param {number} n
  * @param {string} slug
  * @param {import('./forge.js').Comment[]} [comments] when the caller already has them
+ * @param {Map<string, Promise<boolean>>} [admins] who was found to be a maintainer, shared by the caller across one read of several PRs (never kept longer)
  * @returns {Promise<FoundReview | null>}
  */
-export async function latestReview(forge, n, slug, comments) {
+export async function latestReview(forge, n, slug, comments, admins = new Map()) {
   const all = comments ?? (await forge.comments(n));
-  const admins = new Map();
   for (let i = all.length - 1; i >= 0; i--) {
     const c = all[i];
     if (!c.author) continue; // a deleted account: nobody to ask about
     const found = parseReviewBlocks(c.body).filter((b) => b.slug === slug).pop();
     if (!found) continue;
     const login = c.author.login;
-    if (!admins.has(login)) admins.set(login, isMaintainer(await forge.permission(forge.repo, login)));
-    if (!admins.get(login)) continue;
+    // the answer is kept as a promise, so PRs read side by side ask about one person once
+    if (!admins.has(login)) admins.set(login, Promise.resolve(forge.permission(forge.repo, login)).then(isMaintainer));
+    if (!(await admins.get(login))) continue;
     // A maintainer's review someone may have rewritten: it does not stand, and an older one does not take its place
     if (wasEdited(c)) return null;
     return { version: 1, slug, ...found.review, at: c.createdAt, by: login, comment: { id: c.id, url: c.url } };

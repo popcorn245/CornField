@@ -71,7 +71,7 @@ import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { trapTab } from './focusables.js';
-import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
+import { isPhone, registerSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from './sheets.js';
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
@@ -92,8 +92,11 @@ import { cornStateAttr, markStateAttr, stateIconHtml } from './corn-state.js';
 import { sayResult, clearResult, resultOf, showResultIn, resetFeedbackForTests } from './feedback.js';
 import { isOffline, initConnection, notSentWords, resetConnectionForTests } from './connection.js';
 import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
-import { specRowHtml, mergeSpecs } from './proposal-model.js';
+import { mergeSpecs } from './proposal-model.js';
 import { t } from './strings.js';
+import { waiting, specGroups, workButtonName, waitingWords, runWaitingOn } from './waiting-model.js';
+import { paintWaitingLine, resetWaitingLineForTests } from './waiting-line.js';
+import { specGroupsHtml } from './waiting-view.js';
 
 const $ = (id) => document.getElementById(id);
 const FORGE_NAMES = { github: 'GitHub', forgejo: 'Forgejo' };
@@ -108,6 +111,8 @@ const ui = {
   filters: defaultFilters(),
   lists: {}, // `${kind}|${server state}` -> { items, at, rate, stale }
   work: null, // { grouped, problem, at, rate, stale } of the Agents tab
+  specQuery: '', // the Specs tab's search (spec 0010 D5)
+  draftsOpen: null, // the Drafts group opened (true) or folded (false) by hand; null: as the model has it (folded past 10 rows)
   workFilters: { agentsOnly: false, finished: false },
   loading: false,
   error: '',
@@ -172,11 +177,15 @@ const forgeName = () => FORGE_NAMES[ui.config && ui.config.forge && ui.config.fo
 const listKey = () => listKeyOf(ui.kind, ui.filters.state);
 const current = () => (ui.kind === 'work' ? ui.work : ui.kind === 'specs' ? specsList() : ui.lists[listKey()]) || null;
 /** The proposals the Proposals menu lists (proposal.js reads them), as a list of the panel's own shape; null before the first answer */
+let merged = { entries: null, items: [] }; // mergeSpecs of the listing last seen: it is asked for many times a paint
 function specsList() {
   const { entries, problem, forgeProblem, at } = proposalListing();
   // One row for a proposal, however many places it is in: its spec PR and the copy in a checkout or a worktree are one (mergeSpecs)
-  return entries ? { items: mergeSpecs(entries), at: at ? new Date(at).toISOString() : '', rate: '', stale: '', problem: problem || forgeProblem || '' } : null;
+  if (entries && merged.entries !== entries) merged = { entries, items: mergeSpecs(entries) };
+  return entries ? { items: merged.items, at: at ? new Date(at).toISOString() : '', rate: '', stale: '', problem: problem || forgeProblem || '' } : null;
 }
+/** What waits on the maintainer now (spec 0010 D1): the specs to decide and the runs that wait on an answer, from what has been read */
+const waitingNow = () => waiting({ specs: specsList() && specsList().items, runs: ui.runs && ui.runs.data ? ui.runs.data.runs : null });
 const groupsShown = () => (ui.work ? filterGroups(ui.work.grouped.groups, ui.workFilters) : []);
 const plural = (n, word, more = `${word}s`) => `${n} ${n === 1 ? word : more}`;
 const kindWords = () => ({ specs: 'spec', pulls: 'pull request', issues: 'issue', threads: 'thread', deploys: 'deploy' })[ui.kind] || 'piece of work';
@@ -228,6 +237,7 @@ async function loadRuns(refresh, { say = true } = {}) {
   const before = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
   const res = await request(runsUrl(refresh), refresh);
   ui.runs = res.ok && Array.isArray(res.body.runs) ? { data: res.body, error: '' } : { data: ui.runs && ui.runs.data, error: failWords(res, 'the runs') };
+  paintWaiting(); // the number follows the runs, whether or not the panel is open
   if (!(ui.runs && ui.runs.data)) return;
   // The map shows the open runs' nodes; a run lit on the map follows its nodes; what changed is said, once the first answer is in
   setRunsOnMap(ui.runs.data.runs);
@@ -308,8 +318,41 @@ async function loadSpecs(token, quiet) {
   ui.loading = false;
   const { entries, problem } = proposalListing();
   if (!entries) ui.error = `Could not load the proposals. ${problem || 'cornfield did not answer.'}`;
-  if (!quiet) announce(ui.error || `${plural(entries.length, 'spec')} shown`);
+  if (!quiet) announce(ui.error || specsShownWords());
   paint();
+}
+
+/** What the Specs tab says when it is read or searched: how many rows show, and how many of them wait on a decision */
+function specsShownWords() {
+  const list = current();
+  if (!list) return 'Looking for proposals';
+  const shown = specGroups(list.items, { query: ui.specQuery }).reduce((n, g) => n + g.shown, 0);
+  if (ui.specQuery.trim() && !shown) return `No spec matches ${ui.specQuery.trim()}`;
+  const decide = waitingNow().specs;
+  return `${plural(shown, 'spec')} shown${decide ? `, ${decide} ${t('toDecide').toLowerCase()}` : ''}`;
+}
+
+/** How often the specs are read again for the number while the page is open (spec 0010 D2: at most every 5 minutes; the server keeps what it read by PR head) */
+export const SPECS_POLL_MS = 5 * 60_000;
+let specsTimer = 0;
+let specsReading = false;
+
+/** Reads the proposals now, quietly (the number and the list follow); one read at a time */
+async function readSpecsQuiet() {
+  if (specsReading) return;
+  specsReading = true;
+  try { await loadProposalList(); } finally { specsReading = false; }
+  paintWaiting();
+}
+
+/** The specs part of the number is read again every `SPECS_POLL_MS`, never while the page is hidden or put away; one timer at most */
+function syncSpecsPoll() {
+  if (specsTimer || !ui.config) return;
+  specsTimer = setTimeout(async () => {
+    specsTimer = 0;
+    if (!pageAway && !(typeof document !== 'undefined' && document.hidden)) await readSpecsQuiet();
+    syncSpecsPoll();
+  }, SPECS_POLL_MS);
 }
 
 /** The counts on the tabs, read quietly the first time the panel opens: the open pull requests and issues (the Threads and Runs counts come from what those tabs read anyway) */
@@ -324,7 +367,7 @@ function primeCounts() {
     });
   }
   if (!primed.has('threads')) { primed.add('threads'); ensureThreadsList(); }
-  if (ui.kind !== 'specs' && !proposalListing().entries) loadProposalList();
+  if (ui.kind !== 'specs') readSpecsQuiet(); // the specs part of the number is read when Work opens (spec 0010 D2)
 }
 const primed = new Set();
 
@@ -1163,6 +1206,7 @@ function findAgain(el) {
   if (el.dataset.forgeDeploy) return `[data-forge-deploy="${el.dataset.forgeDeploy}"]`;
   if (el.dataset.forgeThread) return `[data-forge-thread="${el.dataset.forgeThread}"]`;
   if (el.dataset.forgeNode) return `[data-forge-node="${el.dataset.forgeNode}"]`;
+  if (el.dataset.specGroupToggle) return `[data-spec-group-toggle="${el.dataset.specGroupToggle}"]`;
   if (el.dataset.forgeMerge) return '[data-forge-merge]';
   if (el.dataset.forgeSpec) return `[data-forge-spec="${el.dataset.forgeSpec}"]`;
   if (el.dataset.forgeBuild) return `[data-forge-build="${el.dataset.forgeBuild}"]`;
@@ -1229,13 +1273,55 @@ function paintCounts() {
   const specs = specsList() && specsList().items;
   const runs = ui.runs && ui.runs.data ? ui.runs.data.open : null;
   const counts = { specs: specs ? specs.length : null, pulls: open('pulls|open'), issues: open('issues|open'), threads: ui.config && ui.config.threads === false ? null : open('threads|open'), work: runs };
+  // What waits on you shows as a filled badge on its tab: Specs the specs to decide, Runs the runs that need an answer (spec 0010 D2); with nothing
+  // waiting, the tab shows its plain total like the others. One number a tab, and its name says so.
+  const w = waitingNow();
+  const share = { specs: w.specs, work: w.runs };
   for (const btn of document.querySelectorAll('#forge-panel [data-forge-kind]')) {
-    const n = counts[btn.dataset.forgeKind];
+    const kind = btn.dataset.forgeKind;
     const el = btn.querySelector('.hx-forge-count');
     if (!el) continue;
-    el.hidden = !(btn.dataset.forgeKind in counts); // a tab with no count at all (Deploys) shows none; the others hold their width while empty
+    const waits = share[kind] || 0;
+    const n = waits || counts[kind];
+    el.hidden = !(kind in counts); // a tab with no count at all (Deploys) shows none; the others hold their width while empty
     el.textContent = n ? String(n) : '';
+    // The hook says which it is: a filled badge for what waits on you, a plain count for the total
+    el.dataset.corn = waits ? 'waiting-badge' : 'count';
+    el.classList.toggle('hx-forge-count--waiting', !!waits);
+    const label = btn.querySelector('[data-corn-string]');
+    if (waits && label) btn.setAttribute('aria-label', `${label.textContent}, ${waitingWords(waits)}`); else btn.removeAttribute('aria-label');
   }
+}
+
+/** The one number, wherever it shows: the tabs' badges, the Work button's, and the browser tab's title; called whenever the specs or the runs were read */
+function paintWaiting() {
+  paintCounts();
+  paintButton();
+  paintTitle();
+  paintBarLine();
+  refreshStubs();
+}
+
+/** The proposal bar's line: a run waits on the open proposal (spec 0010 D2) */
+function paintBarLine(open = !!state.proposal) {
+  const run = open && state.proposalSlug && ui.runs && ui.runs.data ? runWaitingOn(ui.runs.data.runs, state.proposalSlug) : null;
+  paintWaitingLine(run, `${state.proposalSource || ''}/${state.proposalSlug || ''}`);
+}
+
+/** Answer, on the proposal bar's line: Work opens on Runs at that run with its reply field focused */
+async function answerFromBar(id) {
+  if (!(await openRunLink(id))) return;
+  const field = $('forge-runs-list').querySelector(`[data-run-reply="${id}"]`);
+  if (field) field.focus();
+}
+
+/** The browser tab's title starts "(3) " while something waits, then the page's own title (the app's configured name, whatever the server wrote) */
+let baseTitle = null;
+function paintTitle() {
+  if (typeof document === 'undefined') return;
+  if (baseTitle === null) baseTitle = document.title.replace(/^\(\d+\) /, '');
+  const n = waitingNow().total;
+  document.title = n > 0 ? `(${n}) ${baseTitle}` : baseTitle;
 }
 
 /** Says (on the panel's top, for the CSS) that the tabs run on past an edge: a fade shows on that side, so Deploys is not simply missing on a phone */
@@ -1274,6 +1360,8 @@ function draw(panel) {
   const specs = ui.kind === 'specs';
   const showing = detailKey();
   $('forge-filters').hidden = notes || ui.kind === 'work' || specs;
+  const searchBox = $('forge-specs-search');
+  if (searchBox) searchBox.hidden = !specs || !!showing;
   $('forge-work-filters').hidden = ui.kind !== 'work';
   $('forge-bar').hidden = !!showing;
   paintChip();
@@ -1294,7 +1382,7 @@ function draw(panel) {
   if (ui.loading && !list) status.textContent = work ? `Loading the work from ${forgeName()} …` : specs ? 'Looking for proposals …' : `Loading ${kindWords()}s from ${forgeName()} …`;
   else if (!list) status.textContent = '';
   else if (work) status.textContent = workStatus(groups, list.at, now());
-  else if (specs) status.textContent = `${plural(list.items.length, 'proposal')}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
+  else if (specs) status.textContent = `${waitingNow().specs ? `${waitingNow().specs} ${t('toDecide').toLowerCase()} \u00b7 ` : ''}${plural(list.items.length, 'proposal')}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
   else status.textContent = `${shown.length} of ${plural(list.items.length, kindWords())}${list.at ? `, as of ${relativeTime(list.at, now())}` : ''}`;
 
   const notice = $('forge-notice');
@@ -1319,7 +1407,10 @@ function draw(panel) {
   if (!list) rows.innerHTML = ui.loading && !(work && !(ui.runs && ui.runs.data)) ? loadingRowsHtml(4) : '';
   else if (specs) {
     const open = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
-    rows.innerHTML = list.items.length ? list.items.map((e) => specRowHtml(e, { current: open })).join('') : empty(emptyWords('specs', forgeName()));
+    const groups = specGroups(list.items, { query: ui.specQuery });
+    rows.innerHTML = groups.length ? specGroupsHtml(groups, { current: open, nowMs: now(), draftsOpen: ui.draftsOpen })
+      : list.items.length ? `<li class="hx-forge-empty hx-faint" data-corn="empty">No spec matches \u201c${escHtml(ui.specQuery.trim())}\u201d. <button type="button" class="hx-btn hx-forge-act" data-corn-kind="quiet" data-action="clear-specs-search">Clear the search</button></li>`
+        : empty(emptyWords('specs', forgeName()));
   }
   else if (work) rows.innerHTML = groups.length ? groupsHtml(groups) : empty(ui.work.grouped.groups.length ? 'No work matches these filters.' : emptyWords('work', forgeName()));
   else rows.innerHTML = shown.length ? shown.map((i) => itemHtml(i)).join('') : empty(list.items.length ? `No ${kindWords()} matches these filters.` : emptyWords(ui.kind, forgeName()));
@@ -1526,7 +1617,13 @@ function paintButton() {
     tag.hidden = !lit;
     tag.textContent = ui.runSel ? 'run' : ui.thread !== null ? `thread #${ui.thread}` : ui.deployItem ? 'deploy' : lit ? `#${ui.selected}` : '';
   }
-  btn.setAttribute('aria-label', `${t('issuesAndPrs')}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
+  const n = waitingNow().total;
+  const badge = $('forge-btn-waiting');
+  if (badge) {
+    badge.hidden = n === 0;
+    badge.textContent = n ? String(n) : '';
+  }
+  btn.setAttribute('aria-label', `${workButtonName(t('issuesAndPrs'), n)}${ui.runSel ? ', a run lit on the map' : ui.thread !== null ? `, thread ${ui.thread} selected` : ui.deployItem ? ', a deploy selected' : lit ? `, pull request ${ui.selected} selected` : ''}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -2009,11 +2106,20 @@ export function openForge({ load = true, tab } = {}) {
     ui.kind = tab;
     ui.filters = defaultFilters(tab);
     ui.actNote = null;
+  } else if (!tab && load && !ui.open) {
+    // Opened by a toggle: on the tab with the oldest thing waiting on you, else the tab used last (spec 0010 D2)
+    const oldest = waitingNow().oldest;
+    if (oldest && oldest !== ui.kind) {
+      ui.kind = oldest;
+      ui.filters = defaultFilters(oldest);
+      ui.actNote = null;
+      paintFilters();
+    }
   }
   ui.open = true;
   panel.inert = false;
   panel.classList.add('forge-open');
-  if (isPhone()) expandSheet('forge');
+  if (isPhone()) { showSheet('forge'); if (tab) expandSheet('forge'); } // a peek; only a link that names a tab (a deep link, "Open the Specs list") opens it expanded
   paintButton();
   const title = $('forge-title');
   title.focus();
@@ -2187,6 +2293,15 @@ function onClick(e) {
     if (ui.kind === 'specs') { paint(); loadList(false, true); announce(current() ? `${plural(current().items.length, 'spec')} shown` : 'Looking for proposals'); } else if (current()) filtersChanged(); else { paint(); loadList(); }
     return;
   }
+  const fold = t.closest('[data-spec-group-toggle]');
+  if (fold) {
+    // Drafts folded behind their header, opened by hand and folded again; the focus stays on the header (findAgain)
+    const drafts = specGroups(specsList() ? specsList().items : [], { query: ui.specQuery }).find((g) => g.key === 'drafts');
+    const folded = ui.draftsOpen === null ? !!(drafts && drafts.collapsed) : !ui.draftsOpen;
+    ui.draftsOpen = folded;
+    paint();
+    return;
+  }
   const pr = t.closest('[data-forge-pr]');
   if (pr) {
     const n = Number(pr.dataset.forgePr);
@@ -2247,6 +2362,14 @@ function onClick(e) {
   if (!action) return;
   if (action.dataset.action === 'close-forge') closeForge();
   else if (action.dataset.action === 'refresh-forge' || action.dataset.action === 'retry-forge') refreshForge();
+  else if (action.dataset.action === 'clear-specs-search') {
+    ui.specQuery = '';
+    const box = $('specs-search');
+    if (box) { box.value = ''; }
+    paint();
+    announce(specsShownWords());
+    if (box) box.focus();
+  }
   else if (action.dataset.action === 'copy-notes') copyNotes();
   else if (action.dataset.action === 'post-notes') { if (ui.notes.confirm) closeNotesConfirm(); else openNotesConfirm(); }
   else if (action.dataset.action === 'confirm-notes') postDraft();
@@ -2321,6 +2444,13 @@ function onInput(e) {
     if (said && !said.ok && e.target.value.trim()) { clearResult(id); showResultIn(e.target.closest('[data-run]') && e.target.closest('[data-run]').querySelector(`[data-run-result="${id}"]`), id); }
     return;
   }
+  if (e.target.id === 'specs-search') {
+    ui.specQuery = e.target.value;
+    paint();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => announce(specsShownWords()), SEARCH_ANNOUNCE_MS);
+    return;
+  }
   if (e.target.id !== 'forge-text') return;
   ui.filters.text = e.target.value;
   filtersChanged(false);
@@ -2380,13 +2510,35 @@ export function initForgePanel(config, opts = {}) {
   const tab = panel.querySelector('[data-forge-kind="threads"]');
   if (tab) tab.hidden = !threadsOn;
   state.threadIndex = threadsOn ? { for: threadsFor, ensure: ensureThreadsList, open: openThread, start: startThread, forge: forgeName } : null;
-  registerSheet('forge', panel);
+  // On a phone Work is a sheet: it opens as a peek and displaces the node panel; folded to a stub it says its title and what waits on you (spec 0010 D7)
+  registerSheet('forge', panel, {
+    stub: () => { const n = waitingNow().total; return { title: t('issuesAndPrs'), badge: n ? String(n) : '', label: workButtonName(t('issuesAndPrs'), n) }; },
+    away: () => closeForge({ restoreFocus: false }),
+  });
   paintFilters();
   paint();
   // The map shows the open runs whether or not the panel is open: read them once now, and again now and then while any is open
   if (config.agents && config.agents.runs) {
     loadRuns(false).then(() => { if (ui.kind === 'work') paint(); }, () => {});
   }
+  // The specs part of what waits on you is read once now and every 5 minutes after (the server keeps it by PR head), and after a review is sent
+  proposalHooks.reviewed = () => { readSpecsQuiet(); };
+  // The proposal bar says so when a run waits on the proposal it shows: drawn with the bar, and again as the runs are read
+  if (!(proposalHooks.bar && proposalHooks.bar.waitingLine)) {
+    const barBefore = proposalHooks.bar;
+    proposalHooks.bar = (open) => { if (barBefore) barBefore(open); paintBarLine(open); };
+    proposalHooks.bar.waitingLine = true;
+  }
+  const bar = $('proposal-bar');
+  if (bar && !bar.dataset.waitingWired) {
+    bar.dataset.waitingWired = '1';
+    bar.addEventListener('click', (e) => {
+      const go = e.target.closest && e.target.closest('[data-waiting-answer]');
+      if (go) { e.preventDefault(); e.stopPropagation(); answerFromBar(go.dataset.waitingAnswer); }
+    }, true);
+  }
+  readSpecsQuiet();
+  syncSpecsPoll();
   if (!wired) {
     wired = true;
     initConnection();
@@ -2417,7 +2569,7 @@ export function initForgePanel(config, opts = {}) {
     }
     offScene = onSceneTouch(onNodesChange);
     // The header's Proposals menu reads the same list: when it is read again the Specs tab and its count follow
-    offListing = onProposalListing(() => { if (ui.open) paint(); });
+    offListing = onProposalListing(() => { paintWaiting(); if (ui.open) paint(); });
     // A node's panel lists the threads that mention it; a click there shows one in this panel
     const drawer = $('spec-drawer');
     if (drawer) drawer.addEventListener('click', (e) => {
@@ -2459,9 +2611,16 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   state.threadIndex = null;
   clearTimeout(runsTimer);
   runsTimer = 0;
+  clearTimeout(specsTimer);
+  specsTimer = 0;
+  specsReading = false;
+  merged = { entries: null, items: [] };
+  resetWaitingLineForTests();
+  if (typeof document !== 'undefined' && baseTitle !== null) document.title = baseTitle;
+  baseTitle = null;
   pageAway = false;
   clearRunsOnMap();
-  Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'specs', filtersOpen: false, filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, selectedOn: '', detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
+  Object.assign(ui, { specQuery: '', draftsOpen: null, runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'specs', filtersOpen: false, filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, selectedOn: '', detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
   resetFeedbackForTests();
   resetConnectionForTests();
 }
