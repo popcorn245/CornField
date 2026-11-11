@@ -18,9 +18,10 @@ export const recordings = (name) => JSON.parse(fs.readFileSync(path.join(CORNFIE
 
 /**
  * @param {Record<string, any>} routes
+ * @param {number} [port] a fixed port (the review rig); 0, the default, is any free one
  * @returns {Promise<{ url: string, requests: { method: string, url: string, headers: http.IncomingHttpHeaders, body: string }[], close: () => Promise<void> }>}
  */
-export async function fakeForge(routes) {
+export async function fakeForge(routes, port = 0) {
   const requests = [];
   let origin = '';
   const fill = (v) => (typeof v === 'string' ? v.replaceAll('{origin}', origin) : v);
@@ -40,7 +41,7 @@ export async function fakeForge(routes) {
       res.end(body);
     });
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
+  await new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(undefined)));
   const address = /** @type {import('node:net').AddressInfo} */ (server.address());
   origin = `http://127.0.0.1:${address.port}`;
   return {

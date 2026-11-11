@@ -1,0 +1,279 @@
+/* retro: a square-cornered brand theme, a test fixture (test/fixtures/themes/retro). Its two fonts come from Google Fonts through `theme.fonts`
+   (see config.json); nothing here is script. Only documented tokens and data-corn hooks are used: what it could not reach is in
+   test/fixtures/big/README.md ("What retro could not reach").
+
+   Cream paper in the light level, deep indigo in the dark one; radius 0, 2px ink borders, hard offset shadows, a red accent,
+   a blue focus ring, a pixel face for titles and a rounded sans for the rest and for anything with digits. */
+
+/* Both levels: shape, type and the accent fill. Dark values follow. */
+:root {
+  --corn-font: "Nunito", ui-rounded, "Trebuchet MS", system-ui, sans-serif;
+  --corn-font-display: "Pixelify Sans", "Courier New", ui-monospace, monospace;
+  /* digits live in Nunito, never in the pixel face */
+  --corn-mono: "Nunito", ui-rounded, system-ui, sans-serif;
+
+  --corn-radius-xs: 0;
+  --corn-radius-sm: 0;
+  --corn-radius: 0;
+  --corn-radius-lg: 0;
+  --corn-radius-pill: 0;
+  --corn-border: 2px;
+  --corn-border-strong: 4px;
+  --corn-focus-width: 3px;
+  --corn-blur: 0px;
+
+  --corn-accent: #c8102e;
+  --corn-accent-hover: #e0203f;
+  --corn-text-on-accent: #fff;
+
+  /* Dark: deep indigo */
+  --corn-ground: #1a1640;
+  --corn-ground-image: none;
+  --corn-surface-1: #251f58;
+  --corn-surface-2: #2f2970;
+  --corn-surface-3: #3d3590;
+  --corn-line: #a79ff0;
+  --corn-line-soft: #3d3590;
+  --corn-shadow: 4px 4px 0 #0a0720;
+  --corn-shadow-sm: 2px 2px 0 #0a0720;
+  --corn-shadow-lg: 6px 6px 0 #0a0720;
+  --corn-shadow-color: #0a0720;
+  --corn-glow: 0px;
+  --corn-scrim: rgba(10, 7, 32, 0.72);
+
+  --corn-text: #fdf3dc;
+  --corn-text-2: #e6dcf8;
+  --corn-text-3: #bdb4e4;
+  --corn-accent-text: #ffa0aa;
+  --corn-focus: #7eb0ff;
+  --corn-brand-gradient: linear-gradient(90deg, #ff5a6e, #ffc400);
+
+  --corn-ok: #4be08a;
+  --corn-warn: #ffd23f;
+  --corn-bad: #ffa0aa;
+  --corn-info: #7ecbff;
+
+  --corn-added: #3ee6c2;
+  --corn-changed: #ffc400;
+  --corn-removed: #ff6b7a;
+  --corn-edit: #b69cff;
+
+  --corn-hue-orange: #ff9a3d;
+  --corn-hue-fuchsia: #f58aff;
+  --corn-hue-pink: #ff8fc0;
+  --corn-hue-lime: #b6f23a;
+
+  /* The map, dark: saturated fills with an ink ring, cream labels */
+  --corn-map-stroke: #0a0720;
+  --corn-map-stroke-width: 2px;
+  --corn-map-label: #fdf3dc;
+  --corn-map-label-halo: #1a1640;
+  --corn-map-selected: #7eb0ff;
+  --corn-map-match: #ffd23f;
+  --corn-map-lit: #ffd23f;
+  --corn-map-edge-ownership: #8f86d8;
+  --corn-map-edge-usage: #6f66c0;
+  --corn-map-edge-flow: #ff9a3d;
+  --corn-map-edge-reads: #3ee6c2;
+  --corn-map-edge-writes: #ff6b7a;
+  --corn-map-edge-calls: #7eb0ff;
+  --corn-map-edge-triggers: #ffd23f;
+  --corn-map-edge-delivers: #f58aff;
+  --corn-map-edge-runs-on: #b6f23a;
+  --corn-map-edge-uses: #ff8fc0;
+  --corn-map-edge-extends: #b69cff;
+  --corn-map-node-root: #ffb000;
+  --corn-map-node-app: #7b61ff;
+  --corn-map-node-page: #19b5ff;
+  --corn-map-node-pkg: #00d1c1;
+  --corn-map-node-core: #00c27a;
+  --corn-map-node-token: #ff3d9a;
+  --corn-map-node-atom: #2be04a;
+  --corn-map-node-molecule: #b24dff;
+  --corn-map-node-tool: #ff5252;
+  --corn-map-node-store: #ff8a00;
+  --corn-map-node-table: #ffe600;
+  --corn-map-node-rom: #ff66e8;
+  --corn-map-node-service: #9cff1a;
+  --corn-map-node-external: #8fa3c2;
+  --corn-map-node-stack: #c2b79a;
+  --corn-map-node-machine: #9c8670;
+  --corn-map-node-container: #e6dec9;
+  --corn-map-node-persona: #ff7a9c;
+  --corn-map-node-device: #00ecd6;
+  --corn-map-node-floor: #b6f23a;
+  --corn-map-node-room: #d2f57a;
+}
+
+/* Light: cream paper and ink, under both of cornfield's light selectors (the two blocks are the same) */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --corn-ground: #fdf3dc;
+    --corn-ground-image: none;
+    --corn-surface-1: #fffaf0;
+    --corn-surface-2: #f7ebcf;
+    --corn-surface-3: #ecdcb5;
+    --corn-line: #1b1636;
+    --corn-line-soft: #d9c9a1;
+    --corn-shadow: 4px 4px 0 #1b1636;
+    --corn-shadow-sm: 2px 2px 0 #1b1636;
+    --corn-shadow-lg: 6px 6px 0 #1b1636;
+    --corn-shadow-color: #1b1636;
+    --corn-glow: 0px;
+    --corn-scrim: rgba(27, 22, 54, 0.45);
+
+    --corn-text: #1b1636;
+    --corn-text-2: #3a3358;
+    --corn-text-3: #534b73;
+    --corn-accent-text: #a10d25;
+    --corn-focus: #1d4ed8;
+    --corn-brand-gradient: linear-gradient(90deg, #c8102e, #b45309);
+
+    --corn-ok: #0b6b3a;
+    --corn-warn: #7a4200;
+    --corn-bad: #b00020;
+    --corn-info: #0a58a8;
+
+    --corn-added: #0d8a7c;
+    --corn-changed: #a87000;
+    --corn-removed: #d12a2a;
+    --corn-edit: #7a4bd1;
+
+    --corn-hue-orange: #b8420a;
+    --corn-hue-fuchsia: #a21caf;
+    --corn-hue-pink: #be185d;
+    --corn-hue-lime: #45710c;
+    --corn-hue-orange-text: #8f3208;
+
+    --corn-glyph-mix: 45%;
+
+    --corn-map-stroke: #1b1636;
+    --corn-map-label: #1b1636;
+    --corn-map-label-halo: #fdf3dc;
+    --corn-map-selected: #1d4ed8;
+    --corn-map-match: #b45309;
+    --corn-map-lit: #c8102e;
+    --corn-map-edge-ownership: #1b1636;
+    --corn-map-edge-usage: #5b4fb0;
+    --corn-map-edge-flow: #c2410c;
+    --corn-map-edge-reads: #0d8a7c;
+    --corn-map-edge-writes: #c8102e;
+    --corn-map-edge-calls: #1d4ed8;
+    --corn-map-edge-triggers: #a87000;
+    --corn-map-edge-delivers: #a21caf;
+    --corn-map-edge-runs-on: #4c7b0f;
+    --corn-map-edge-uses: #be185d;
+    --corn-map-edge-extends: #7a4bd1;
+    --corn-map-node-root: #f29400;
+    --corn-map-node-app: #4b2fe0;
+    --corn-map-node-page: #0b8fe0;
+    --corn-map-node-pkg: #00a89a;
+    --corn-map-node-core: #00995f;
+    --corn-map-node-token: #e0157d;
+    --corn-map-node-atom: #12b92e;
+    --corn-map-node-molecule: #9226e8;
+    --corn-map-node-tool: #e62e2e;
+    --corn-map-node-store: #e87500;
+    --corn-map-node-table: #f2c500;
+    --corn-map-node-rom: #e63ccc;
+    --corn-map-node-service: #7ad100;
+    --corn-map-node-external: #6a7f9f;
+    --corn-map-node-stack: #a79b7c;
+    --corn-map-node-machine: #7d6652;
+    --corn-map-node-container: #cfc4aa;
+    --corn-map-node-persona: #f0507a;
+    --corn-map-node-device: #00c9b4;
+    --corn-map-node-floor: #7ac20f;
+    --corn-map-node-room: #a5d84a;
+  }
+}
+:root[data-theme="light"] {
+  --corn-ground: #fdf3dc;
+  --corn-ground-image: none;
+  --corn-surface-1: #fffaf0;
+  --corn-surface-2: #f7ebcf;
+  --corn-surface-3: #ecdcb5;
+  --corn-line: #1b1636;
+  --corn-line-soft: #d9c9a1;
+  --corn-shadow: 4px 4px 0 #1b1636;
+  --corn-shadow-sm: 2px 2px 0 #1b1636;
+  --corn-shadow-lg: 6px 6px 0 #1b1636;
+  --corn-shadow-color: #1b1636;
+  --corn-glow: 0px;
+  --corn-scrim: rgba(27, 22, 54, 0.45);
+
+  --corn-text: #1b1636;
+  --corn-text-2: #3a3358;
+  --corn-text-3: #534b73;
+  --corn-accent-text: #a10d25;
+  --corn-focus: #1d4ed8;
+  --corn-brand-gradient: linear-gradient(90deg, #c8102e, #b45309);
+
+  --corn-ok: #0b6b3a;
+  --corn-warn: #7a4200;
+  --corn-bad: #b00020;
+  --corn-info: #0a58a8;
+
+  --corn-added: #0d8a7c;
+  --corn-changed: #a87000;
+  --corn-removed: #d12a2a;
+  --corn-edit: #7a4bd1;
+
+  --corn-hue-orange: #b8420a;
+  --corn-hue-fuchsia: #a21caf;
+  --corn-hue-pink: #be185d;
+  --corn-hue-lime: #45710c;
+  --corn-hue-orange-text: #8f3208;
+
+  --corn-glyph-mix: 45%;
+
+  --corn-map-stroke: #1b1636;
+  --corn-map-label: #1b1636;
+  --corn-map-label-halo: #fdf3dc;
+  --corn-map-selected: #1d4ed8;
+  --corn-map-match: #b45309;
+  --corn-map-lit: #c8102e;
+  --corn-map-edge-ownership: #1b1636;
+  --corn-map-edge-usage: #5b4fb0;
+  --corn-map-edge-flow: #c2410c;
+  --corn-map-edge-reads: #0d8a7c;
+  --corn-map-edge-writes: #c8102e;
+  --corn-map-edge-calls: #1d4ed8;
+  --corn-map-edge-triggers: #a87000;
+  --corn-map-edge-delivers: #a21caf;
+  --corn-map-edge-runs-on: #4c7b0f;
+  --corn-map-edge-uses: #be185d;
+  --corn-map-edge-extends: #7a4bd1;
+  --corn-map-node-root: #f29400;
+  --corn-map-node-app: #4b2fe0;
+  --corn-map-node-page: #0b8fe0;
+  --corn-map-node-pkg: #00a89a;
+  --corn-map-node-core: #00995f;
+  --corn-map-node-token: #e0157d;
+  --corn-map-node-atom: #12b92e;
+  --corn-map-node-molecule: #9226e8;
+  --corn-map-node-tool: #e62e2e;
+  --corn-map-node-store: #e87500;
+  --corn-map-node-table: #f2c500;
+  --corn-map-node-rom: #e63ccc;
+  --corn-map-node-service: #7ad100;
+  --corn-map-node-external: #6a7f9f;
+  --corn-map-node-stack: #a79b7c;
+  --corn-map-node-machine: #7d6652;
+  --corn-map-node-container: #cfc4aa;
+  --corn-map-node-persona: #f0507a;
+  --corn-map-node-device: #00c9b4;
+  --corn-map-node-floor: #7ac20f;
+  --corn-map-node-room: #a5d84a;
+}
+
+/* Hooks: the brand's marks, and a pressed look for buttons */
+[data-corn="brand-logo"] { height: 28px; width: 28px; image-rendering: pixelated; }
+[data-corn="brand-wordmark"] { height: 18px; width: auto; image-rendering: pixelated; }
+[data-corn-kind="primary"],
+[data-corn-kind="approve"],
+[data-corn-kind="danger"] { font-family: var(--corn-font-display); box-shadow: var(--corn-shadow-sm); }
+[data-corn-kind]:active { transform: translate(2px, 2px); box-shadow: none; }
+[data-corn="state-pill"] { font-family: var(--corn-font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+[data-corn="row"], [data-corn="run"] { box-shadow: var(--corn-shadow-sm); }
+[data-corn$="-dialog"] { box-shadow: var(--corn-shadow-lg); }

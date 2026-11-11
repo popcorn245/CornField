@@ -1,0 +1,19 @@
+{
+  "theme": {
+    "css": "./tools/cornfield/theme.css",
+    "fonts": [
+      "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Pixelify+Sans:wght@400;600&display=swap"
+    ],
+    "fontHosts": [
+      "fonts.gstatic.com"
+    ]
+  },
+  "brand": {
+    "logo": "./tools/cornfield/logo.svg",
+    "wordmark": "./tools/cornfield/wordmark.svg",
+    "favicon": "./tools/cornfield/logo.svg",
+    "appName": "Arcade",
+    "color": "#c8102e",
+    "background": "#fdf3dc"
+  }
+}
