@@ -174,7 +174,10 @@ describe('step 1: Start a spec, on an issue', () => {
     expect(tab(cancel).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(go);
     tab(go);
-    expect(document.activeElement).toBe(cancel);
+    // it wraps to the first stop, which is the preview region (a scrollable region with tabindex 0 is a stop of the trap now), then on to Cancel
+    expect($('forge-confirm').contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(go);
+    while (document.activeElement !== cancel) tab(document.activeElement);
     $('forge-btn').focus();
     expect(document.activeElement).toBe(cancel);
     key(cancel, 'Escape');
