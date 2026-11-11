@@ -345,11 +345,13 @@ const tint = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, transpar
 const toText = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, var(--corn-text))`;
 
 /** Text tokens: read on the ground and on every surface */
-export const TEXT_TOKENS = Object.freeze(['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-added-text', '--corn-edit-text']);
+export const TEXT_TOKENS = Object.freeze(['--corn-text', '--corn-text-2', '--corn-text-3', '--corn-accent-text', '--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-added-text', '--corn-edit-text',
+  '--corn-run-requested', '--corn-run-claimed', '--corn-run-working', '--corn-run-waiting', '--corn-run-done', '--corn-run-failed', '--corn-run-stopped']);
 /** The tinted backgrounds, with the text that sits on each */
 export const SOFT_PAIRS = Object.freeze([
   ['--corn-ok', '--corn-ok-soft'],
   ['--corn-accent-text', '--corn-accent-soft'], ['--corn-hue-orange-text', '--corn-hue-orange-soft'],
+  ['--corn-run-waiting-ink', '--corn-run-waiting'], // the waiting pill is solid: its word and icon in the ink, on the fill
 ]);
 /** Solid fills that carry `--corn-ground` as their text (a pressed data-flow button, a chip, the What-if toggle, the House chip) */
 export const SOLID_FILLS = Object.freeze(['--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-hue-orange', '--corn-hue-lime', '--corn-added-text', '--corn-edit-text']);
