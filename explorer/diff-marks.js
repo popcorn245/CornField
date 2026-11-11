@@ -28,10 +28,15 @@ export const DIFF_LABEL_ALPHA = 0.6;
 
 /**
  * How much of a node a review greys (issue #232) is left (`--corn-map-grey-alpha: auto`), and the least a greyed disc may differ from the ground it sits on
- * (core/contrast.js checks a theme's `--corn-map-grey` against it): faded, but the map still reads as a map. Its label is at DIFF_LABEL_ALPHA like any dimmed one.
+ * (core/contrast.js checks a theme's `--corn-map-grey` against it): faded, but the map still reads as a map. Its label is at GREY_LABEL_ALPHA (below).
  */
 export const GREY_ALPHA = 0.45;
 export const GREY_MIN_RATIO = 1.5;
+/**
+ * The opacity of a greyed node's label, by ground: near the dimmed-label floor (4.4:1 on the default light ground, 5.2:1 on the dark, 4.75:1 on retro's navy),
+ * so the change's labels are the strongest text on the map. On the dark ground DIFF_LABEL_ALPHA would leave it near 7:1. core/contrast.js checks both.
+ */
+export const GREY_LABEL_ALPHA = Object.freeze({ light: DIFF_LABEL_ALPHA, dark: 0.5 });
 
 /** How a mark differs without colour: the ring's dash (`null` is solid) and whether it is struck through. Four marks, four styles. */
 export const MARK_SHAPES = Object.freeze({

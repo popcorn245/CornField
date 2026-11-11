@@ -395,6 +395,7 @@ export function renderBar() {
   if (whole) { // the pressed look is the one the bar's other chosen buttons have (it holds on hover)
     const on = !!(state.review && state.review.whole);
     whole.setAttribute('aria-pressed', String(on));
+    whole.title = t('showWholeMap'); // the words are short ("Whole map"); the tooltip says it in full, as its name does
     whole.classList.toggle('hx-btn--active', on);
   }
 

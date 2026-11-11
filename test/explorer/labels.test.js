@@ -194,6 +194,32 @@ describe('placeLabels: no two labels touch, in a fixed priority order (spec 0008
   });
 });
 
+describe('placeLabels: what a review greys recedes (issue #232)', () => {
+  it('places a greyed node last, a cluster\'s title included, plain and at the least size', () => {
+    const scene = sc([
+      sn('hub', 0, 0, { type: 'app', greyed: true, labelBold: true, labelSize: 11, labelAlpha: 0.6, r: 20 }),
+      sn('plain', 300, 0, { degree: 9, r: 14 }),
+      sn('gone', 600, 0, { greyed: true, labelAlpha: 0.6 }),
+      sn('changed', 900, 0, { mark: 'changed' }),
+    ]);
+    const placed = placeLabels(scene, 1, { measure });
+    expect(placed.map((p) => p.id)).toEqual(['changed', 'plain', 'hub', 'gone']);
+    const hub = placed.find((p) => p.id === 'hub');
+    expect(hub.bold).toBe(false);
+    expect(hub.px).toBe(11); // no hub's 2px more
+  });
+
+  it('gives a greyed label more room, so far fewer of them are drawn than of the same nodes ungreyed', () => {
+    const row = (greyed) => sc(Array.from({ length: 40 }, (_, i) => sn(`n${i}`, (i % 10) * 70, Math.floor(i / 10) * 30, greyed ? { greyed: true, labelAlpha: 0.6 } : {})));
+    const plain = placeLabels(row(false), 1, { measure }).length;
+    const grey = placeLabels(row(true), 1, { measure }).length;
+    expect(grey).toBeLessThan(plain / 2);
+    // and a greyed label keeps clear of a changed one: it never crowds the change
+    const near = placeLabels(sc([sn('changed', 0, 0, { mark: 'added' }), sn('g', 75, 0, { greyed: true, labelAlpha: 0.6 })]), 1, { measure });
+    expect(near.map((p) => p.id)).toEqual(['changed']);
+  });
+});
+
 describe('labelHit and the layer\'s hit: the label under a screen point (a cluster\'s title)', () => {
   const scene = sc([sn('a', 100, 100, { type: 'app', labelKeep: true, labelSize: 12, labelBold: true }), sn('b', 400, 100)]);
   it('answers with the node whose box holds the point, and null off any box', () => {

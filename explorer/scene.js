@@ -180,7 +180,7 @@ import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
 import { nodeColor } from './css-color.js';
 import { activeSubgraph, kindEdgeWord } from './selection-model.js';
-import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
 //  Constants every renderer shares, so the looks cannot drift apart
@@ -612,11 +612,12 @@ function buildNodes(state, subgraph) {
       selected, match, current, connected,
       degree: node.degree || 0,
       label: shown.label,
-      labelSize: big ? 12 : 11,
-      labelBold: big,
-      labelAlpha: focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
+      labelSize: big && !greyed ? 12 : 11, // a greyed node's label recedes (issue #232): plain, at the least size, placed last (labels.js)
+      labelBold: big && !greyed,
+      labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground
+        : focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
-      labelKeep: LANDMARK_TYPES.includes(shown.type) || selected || match || mark !== 'none' || !!(subgraph && connected),
+      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
       live: !!node.live,
       box: node.box || null,

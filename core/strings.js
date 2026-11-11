@@ -40,6 +40,7 @@ export const STRINGS = Object.freeze({
   approved: 'Approved',
   myEdits: 'My edits',
   showWholeMap: 'Show the whole map',
+  wholeMap: 'Whole map',
   hiddenWhileReviewing: 'hidden while reviewing',
   yourEdits: 'Your edits',
   cancelLanding: 'Cancel landing',

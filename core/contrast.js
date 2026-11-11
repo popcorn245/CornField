@@ -26,7 +26,7 @@ import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
 import { deltaE2000 } from './delta-e.js';
 import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
-import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_MIN_RATIO, markOpacity } from '../explorer/diff-marks.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, GREY_MIN_RATIO, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
 /** WCAG 2.1 AA: text, and large text and user-interface parts */
@@ -679,6 +679,8 @@ function mapGrounds(grounds, base, props) {
 const DIFF_MAP_PAIRS = (mode) => [
   ...['added', 'changed', 'removed', 'edit'].map((m) => [`--corn-map-${m}`, DIFF_MARK_COLORS[mode][m], markOpacity(m), `the ${m} mark on the map, drawn at ${Math.round(markOpacity(m) * 100)}% opacity`]),
   ['--corn-map-label', mode === 'light' ? lightColor('#f8fafc', 'text') : '#f8fafc', DIFF_LABEL_ALPHA, `a label the diff dims, drawn at ${Math.round(DIFF_LABEL_ALPHA * 100)}% opacity`],
+  // a label a review greys (issue #232), where it is fainter than a dimmed one (the dark ground)
+  ...(GREY_LABEL_ALPHA[mode] !== DIFF_LABEL_ALPHA ? [['--corn-map-label', mode === 'light' ? lightColor('#f8fafc', 'text') : '#f8fafc', GREY_LABEL_ALPHA[mode], `a label a review greys, drawn at ${Math.round(GREY_LABEL_ALPHA[mode] * 100)}% opacity`]] : []),
 ];
 
 function diffMapFindings(props, theme, mode, grounds, base) {

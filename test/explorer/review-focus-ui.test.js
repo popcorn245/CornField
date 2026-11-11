@@ -22,7 +22,11 @@ import { setProjectLayers, toggleLayer, toggleAllLayers, renderLayerToggles } fr
 // @ts-expect-error plain JS modules, no declarations
 import { isNodeVisible } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
+import { GREY_LABEL_ALPHA } from '../../explorer/diff-marks.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initScenarioUi, playScenario, stopScenario, clearScenario } from '../../explorer/scenario-ui.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initSearch, setQuery, stepMatch, resetSearchForTests } from '../../explorer/search.js';
 
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -116,6 +120,19 @@ describe('opening a proposal narrows the map to the change', () => {
     expect(by('page-keep').greyed).toBe(true);
     expect(by('page-old').greyed).toBeUndefined();
     expect(by('page-new').greyed).toBeUndefined();
+  });
+
+  it('a greyed node\'s label recedes: a cluster\'s title is plain and at the least size, at the dimmed-label opacity, and not asked for', async () => {
+    fakeHub({ wide });
+    await mount();
+    await openProposal('wide');
+    if (!isNodeVisible(state, state.nodes.find((n) => n.id === 'app-a'))) toggleLayer('app'); // on by hand, for the review
+    const app = render.getScene().nodes.find((n) => n.id === 'app-a');
+    expect(app.greyed).toBe(true);
+    expect(app).toMatchObject({ labelBold: false, labelSize: 11, labelKeep: false, labelAlpha: GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] });
+    expect(GREY_LABEL_ALPHA).toEqual({ light: 0.6, dark: 0.5 }); // 4.4:1 on the default light ground, 5.2:1 on the dark: at or near the dimmed-label floor
+    click(whole()); // the whole map: Diff as it always was, a cluster's title bold again
+    expect(render.getScene().nodes.find((n) => n.id === 'app-a')).toMatchObject({ labelBold: true, labelSize: 12 });
   });
 
   it('hides nothing and says nothing of hiding when the proposal touches every layer', async () => {
@@ -279,6 +296,29 @@ describe('the Layers menu during a review', () => {
     expect(state.activeLayers.service).not.toBe(false);
   });
 
+  it('search still finds a node on a layer the review hid, and choosing it turns that layer on for the review only', async () => {
+    fakeHub({ small });
+    await mount('', JSON.stringify({ tool: false }));
+    initSearch();
+    resetSearchForTests();
+    const saved = localStorage.getItem(STORE);
+    const mine = JSON.stringify(state.activeLayers);
+    await openProposal('small');
+    const svc = state.nodes.find((n) => n.id === 'svc-s');
+    expect(isNodeVisible(state, svc)).toBe(false);
+    setQuery('svc-s');
+    expect(stepMatch(1)).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(isNodeVisible(state, svc)).toBe(true);
+    expect(state.review.manual.service).toBe(true);
+    expect(localStorage.getItem(STORE)).toBe(saved);
+    expect(JSON.stringify(state.activeLayers)).toBe(mine);
+    setQuery('');
+    closeProposal();
+    expect(isNodeVisible(state, svc)).toBe(true); // the viewer had Services on
+    expect(localStorage.getItem(STORE)).toBe(saved);
+  });
+
   it('All and None act on the review, not on the viewer', async () => {
     fakeHub({ small });
     await mount();
@@ -303,7 +343,9 @@ describe('"Show the whole map"', () => {
     expect(b.getAttribute('aria-pressed')).toBe('false');
     expect(b.getAttribute('data-corn')).toBe('whole-map');
     expect(b.closest('.hx-proposal-tools')).not.toBeNull();
-    expect(b.textContent).toBe('Show the whole map');
+    expect(b.textContent).toBe('Whole map'); // short words that read right pressed or not; the name and the tooltip say it in full
+    expect(b.getAttribute('aria-label')).toBe('Show the whole map');
+    expect(b.getAttribute('title')).toBe('Show the whole map');
   });
 
   it('brings back today\'s Diff: every layer the viewer has on, dimmed and coloured, announced; off narrows again; survives Before, Diff and After', async () => {

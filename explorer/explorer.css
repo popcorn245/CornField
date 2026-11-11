@@ -1462,7 +1462,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 @media (prefers-reduced-motion: reduce) { .hx-hold { display: none; } .hx-hold-fill { animation: none; } } /* only the words count down */
 .hx-rc-sub { margin: var(--corn-space-2) 0 var(--corn-space-1); font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text); }
 .hx-proposal-yours { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-text-2); }
-.hx-proposal-tools [aria-pressed="false"] { opacity: 0.8; }
+.hx-proposal-tools [aria-pressed="false"]:not([data-corn="whole-map"]) { opacity: 0.8; } /* My edits off; "Whole map" off is the review's own view, not a faded choice */
 .hx-whatif-row [aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .hx-runner-dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--corn-space-1); border-radius: 50%; background: var(--corn-warn); vertical-align: middle; }
 .hx-runner-dot[hidden] { display: none; }
@@ -1503,3 +1503,10 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 /* ---- The review narrows the map to the change (issue #232) ---- */
 /* A Layers row the review hid: its name with "hidden while reviewing" under it */
 .hx-toggle-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+/* On a desk "Whole map" sits on the title's row, beside the source, so the row of counts, Compare, Edit and More keeps the one line it had: at the
+   control height, drawn over the row's own 24px (the source's) so the bar is no taller. On a phone it stays with Edit, 44px */
+@media (min-width: 768px) {
+  .hx-proposal-tools { display: contents; }
+  .hx-proposal-name, .hx-proposal-source { order: -2; }
+  :where(.hx-proposal-head) [data-corn="whole-map"] { order: -1; margin-block: calc(min(0px, 24px - var(--hx-control-h)) / 2); }
+}

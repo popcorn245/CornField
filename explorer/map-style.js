@@ -179,8 +179,8 @@ function greyAlphaOf(value) {
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
  * @param {string[]} [extra] more colour tokens to read: those of the finer kinds and project layers on the map (`setMapSubjects`)
- * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null, labelMin: number | null}}
- *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth`, `glow` and `labelMin` are null at `auto` or when the value is not one
+ * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null, labelMin: number | null, greyAlpha: number | null}}
+ *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth`, `glow`, `labelMin` and `greyAlpha` are null at `auto` or when the value is not one
  */
 export function readMapTokens(read, extra = []) {
   const values = {};

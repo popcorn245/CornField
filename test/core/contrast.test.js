@@ -304,7 +304,8 @@ describe('the diff marks and dimmed labels on the map (F19, F23)', () => {
 
   it('holds every mark and the dimmed label at 3:1 in light and dark by default, over the darkest and lightest ground', () => {
     const found = run();
-    expect(found).toHaveLength(10);
+    expect(found).toHaveLength(11); // the four marks and the dimmed label in light and dark, and a label a review greys on the dark ground (issue #232)
+    expect(found.filter((f) => /review greys/.test(f.use)).map((f) => f.mode)).toEqual(['dark']);
     for (const f of found) expect(f.ratio, describeFinding(f)).toBeGreaterThanOrEqual(3);
     expect(found.some((f) => f.groundImage)).toBe(true); // the worst case is a glow, not the plain ground
   });
@@ -343,7 +344,7 @@ describe('the default tokens', () => {
   it('resolve every pair, in light and dark, and every one passes, over the ground and its image', () => {
     const all = checkSheets(themes);
     // The fixed pairs, plus the map's four diff marks and a dimmed label (F19, F23); the node fills and labels are counted in their describe below
-    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5) * 2);
+    expect(all.filter((f) => !/^(the fill of|the outline that carries|a node's label)/.test(f.use || '')).length).toBe((contrastPairs().length + 5) * 2 + 1); // + a label a review greys, on the dark ground (issue #232)
     const { fails, unresolved } = contrastProblems(themes);
     expect(fails.map(describeFinding)).toEqual([]);
     expect(unresolved.map(describeFinding)).toEqual([]);
