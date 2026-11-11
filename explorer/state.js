@@ -39,6 +39,10 @@ export const state = {
   /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
   forge: null,
   searchQuery: '',
+  /** The id of the search match the stepping is on (search.js), or null: the map draws its halo and places its label first of the matches */
+  searchCurrent: null,
+  /** The id of the node the pointer is on (input.js): a node with no label is named by a chip while it is */
+  hoverNodeId: null,
 
   isFreeform: false,
   freeformPositions: {},

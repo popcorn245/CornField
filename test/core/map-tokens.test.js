@@ -30,6 +30,13 @@ describe('map tokens the map cannot read', () => {
     expect(w.find((l) => l.includes('--corn-map-glow'))).toMatch(/factor from 0/);
   });
 
+  it('warns about a smallest label under 9px, which the map ignores (spec 0008)', () => {
+    const w = mapTokenWarnings(repoWith(':root { --corn-map-label-min: 7px; }'));
+    expect(w).toHaveLength(1);
+    expect(w[0]).toMatch(/--corn-map-label-min.*"7px".*a size in px from 9 to 24/);
+    expect(mapTokenWarnings(repoWith(':root { --corn-map-label-min: 13px; }'))).toEqual([]);
+  });
+
   it('says nothing for auto, for good values, and for the default font stack given by var()', () => {
     expect(mapTokenWarnings({ root: CORNFIELD, theme: {} })).toEqual([]);
     expect(mapTokenWarnings(repoWith(':root { --corn-map-font: var(--corn-font); --corn-map-edge-width: 2.4px; --corn-map-glow: 0; }'))).toEqual([]);

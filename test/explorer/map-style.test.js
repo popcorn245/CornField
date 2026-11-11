@@ -44,7 +44,7 @@ let versions = 0;
 function styleOf(values = {}, extra = {}) {
   const v = {};
   for (const [k, c] of Object.entries(values)) v[k] = M.cssColor(c);
-  const plain = !Object.keys(v).length && !(extra.icons && extra.icons.anyReady()) && !extra.font && extra.edgeWidth == null && extra.glow == null;
+  const plain = !Object.keys(v).length && !(extra.icons && extra.icons.anyReady()) && !extra.font && extra.edgeWidth == null && extra.glow == null && extra.labelMin == null;
   return { version: ++versions, values: v, strokeWidth: M.DEFAULT_STROKE_WIDTH, icons: null, pixelated: false, plain, ...extra };
 }
 /** A reader of custom properties from a table, as getComputedStyle(...).getPropertyValue would give them */
@@ -57,8 +57,8 @@ describe('the tokens', () => {
     expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
     expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
-    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 3);
-    expect(M.mapTokenNames()).toHaveLength(65); // 62 colours, widths and marks, and the font, the edge width and the glow
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 2 + 2 + 8 + 4);
+    expect(M.mapTokenNames()).toHaveLength(66); // 62 colours, widths and marks, and the font, the edge width, the glow and the smallest label
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -88,9 +88,26 @@ describe('the tokens', () => {
 
   it('reads only the colour tokens that are set, and the width as a length', () => {
     const got = M.readMapTokens(reader({ '--corn-map-node-app': '#112233', '--corn-map-node-page': 'auto', '--corn-map-edge-flow': 'oops', '--corn-map-stroke-width': '3px' }));
-    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null });
+    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null, labelMin: null });
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': 'wide' })).strokeWidth).toBe(M.DEFAULT_STROKE_WIDTH);
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': '0' })).strokeWidth).toBe(0);
+  });
+});
+
+describe('the smallest label (spec 0008 D2, --corn-map-label-min)', () => {
+  const read = (v) => M.readMapTokens(reader(v));
+
+  it('reads a length in px from 9 to 24, and auto, a typo, a wrong unit or anything under 9px as nothing (the map then uses 11px)', () => {
+    expect(read({ '--corn-map-label-min': '13px' }).labelMin).toBe(13);
+    expect(read({ '--corn-map-label-min': '9' }).labelMin).toBe(9);
+    expect(read({ '--corn-map-label-min': '24px' }).labelMin).toBe(24);
+    for (const v of ['auto', '', 'big', '8px', '8.9px', '0', '-12px', '25px', '1em', '99px']) expect(read({ '--corn-map-label-min': v }).labelMin, v).toBeNull();
+  });
+
+  it('puts it on the scene, where the label layer reads it, and draws nothing different at auto', () => {
+    const scene = buildScene(mk());
+    expect(M.styledScene(scene, styleOf({}, { labelMin: null }))).toBe(scene);
+    expect(M.styledScene(scene, styleOf({}, { labelMin: 14 })).labelMin).toBe(14);
   });
 });
 

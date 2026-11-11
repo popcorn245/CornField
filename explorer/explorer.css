@@ -177,7 +177,11 @@ h1, h2, h3, p { margin: 0; }
   .hx-brand { min-width: 0; min-height: 0; }
   .hx-only-wide { display: inline; }
   .hx-only-mobile { display: none; }
-  .hx-search { display: flex; }
+  .hx-search { display: flex; flex: 0 1 260px; width: auto; }
+  /* A narrow desktop (768 to about 900 px, signed in): the search gives up width before it runs over the Layers chip; the left group
+     keeps its own (the right group shrinks, the search down to its min-width) */
+  .hx-header-left { flex: none; }
+  .hx-header-right { flex: 0 1 auto; min-width: 0; }
 }
 /* Not for a desktop: the brand keeps its logo and shows its wordmark; with no wordmark the logo stands alone (the button keeps its name) */
 @media (max-width: 767px) {
@@ -1094,11 +1098,10 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-drawer[data-sheet-state="peek"] .hx-drawer-title { overflow: visible; text-overflow: clip; white-space: normal; }
 }
 
-/* Search with no match (F24): one line under the field, a polite live region. Empty it takes no room. */
+/* Search status (F24, spec 0008): the polite live region by each search field. The count and the list say it on the screen (below), so
+   the region itself is only for a screen reader: it stays in the page, out of sight. */
 .hx-search { position: relative; }
-.hx-search-status { position: absolute; top: calc(100% + var(--corn-space-2)); left: 0; right: 0; z-index: 40; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text); font-size: var(--corn-text-sm); overflow-wrap: anywhere; }
-.hx-search-status:empty { display: none; }
-.hx-mobile-search .hx-search-status { top: calc(100% - var(--corn-space-1)); left: var(--corn-space-3); right: var(--corn-space-3); }
+.hx-search-status { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* The node panel's facts break at word boundaries only (F60): "hook" is never "hoo / k". A long path or name still wraps, at its slashes and dashes, and only as a last resort anywhere. */
 .hx-fact-v { overflow-wrap: break-word; word-break: normal; }
@@ -1174,6 +1177,51 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-offline { position: fixed; top: 64px; /* below the header */ left: 50%; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100% - 32px)); margin: 0; padding: var(--corn-space-2) var(--corn-space-4); border: var(--corn-border-strong) solid var(--corn-warn); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text); box-shadow: var(--corn-shadow); line-height: 1.5; }
 .hx-offline[hidden] { display: none; }
 .hx-offline[data-corn-state="success"] { border-color: var(--corn-ok); }
+
+/* ---------------------------------------------------------------------------
+   Search: the count, the step buttons and the list of what was found (spec 0008 D4)
+   --------------------------------------------------------------------------- */
+.hx-search-steps { display: flex; align-items: center; flex: none; gap: var(--corn-space-1); }
+.hx-search-steps[hidden] { display: none; }
+.hx-search-count { padding: 0 var(--corn-space-2); font-size: var(--corn-text-2xs); color: var(--corn-text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.hx-search-count[data-empty="true"] { color: var(--corn-text); font-weight: 600; }
+.hx-search-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--corn-radius-xs); background: none; color: var(--corn-text-3); }
+.hx-search-btn:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-search-btn:focus-visible, .hx-search-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-offset) * -1); }
+.hx-search:has(.hx-search-steps:not([hidden])) { flex-basis: 340px; }
+/* A narrow desktop leaves the field too little room for the count and three buttons: Previous and Next go (Enter and Shift+Enter, N and P
+   and the list's rows still step), the count and Clear stay */
+@media (min-width: 768px) and (max-width: 959px) {
+  .hx-search [data-action="search-prev"], .hx-search [data-action="search-next"] { display: none; }
+}
+.hx-search-results { position: absolute; top: calc(100% + var(--corn-space-2)); right: 0; z-index: 40; width: min(440px, 92vw); max-height: min(60vh, 560px); overflow-y: auto; padding: var(--corn-space-1) 0; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); box-shadow: var(--corn-shadow); color: var(--corn-text); font-size: var(--corn-text-sm); } /* the ground itself, not a surface: a surface is see-through, and the panel under the list would show in it */
+.hx-search-results[hidden] { display: none; }
+/* The list is part of the header, which sits under the node panel (40): while the list is open the header is over it, so a row is never half under the panel */
+.hx-header:has(.hx-search-results:not([hidden])) { z-index: 46; }
+/* On a phone the list is in the search bar, under the sheets (the dock, 45): while it is open the bar is over them, so a proposal's or the
+   Work sheet never covers rows of it. Without :has() the list stays under the sheets, as the bar always was */
+.hx-mobile-search:has(.hx-search-results:not([hidden])) { z-index: 46; }
+.hx-search-group-title { position: sticky; top: 0; display: flex; justify-content: space-between; gap: var(--corn-space-3); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-1); background: var(--corn-ground); color: var(--corn-text-3); font-size: var(--corn-text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.hx-search-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--corn-space-3); width: 100%; min-height: 28px; padding: var(--corn-space-1) var(--corn-space-3); border: 0; border-left: var(--corn-border-strong) solid transparent; background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
+.hx-search-row:hover, .hx-search-row:focus-visible { background: var(--corn-surface-3); }
+.hx-search-row[aria-current="true"] { border-left-color: var(--corn-accent); background: var(--corn-accent-soft); }
+.hx-search-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hx-search-row-parent { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-search-frame { font-weight: 600; color: var(--corn-text); }
+.hx-search-empty, .hx-search-more { margin: 0; padding: var(--corn-space-2) var(--corn-space-3); color: var(--corn-text-2); overflow-wrap: anywhere; }
+.hx-mobile-search { flex-wrap: wrap; }
+.hx-mobile-search .hx-input { flex: 1 1 0; min-width: 0; }
+.hx-mobile-search::before { top: calc(var(--corn-space-3) + 22px); } /* the magnifier stays by the field when the bar wraps to a second row of steps */
+.hx-mobile-search .hx-search-steps { flex: 1 0 100%; justify-content: flex-end; gap: var(--corn-space-1); }
+.hx-mobile-search .hx-search-count { margin-right: auto; font-size: var(--corn-text-xs); }
+.hx-mobile-search .hx-search-results { top: 100%; left: 0; right: 0; width: auto; max-height: 50vh; border-radius: 0; border-left: 0; border-right: 0; }
+@media (max-width: 767px), (pointer: coarse) {
+  .hx-search-btn { min-width: 44px; min-height: 44px; }
+  .hx-search-row { min-height: 44px; }
+}
+@media (forced-colors: active) {
+  .hx-search-row[aria-current="true"] { border-left-color: Highlight; }
+}
 
 /* ==== the review column (spec 0006, review-column.js): the changes, and the personas with the scenarios that apply to them ==============
    From 768px it is docked on the left of the map under the proposal bar (the free map is what it leaves: sheets.js visibleMapRect);

@@ -12,10 +12,12 @@ import { loadSample } from '../helpers.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  ARROW, CORE_RATIO, DIM_ALPHA, HALO, LABEL_ZOOM,
-  buildScene, createSceneCache, edgePoint, getActiveSubgraph, isNodeVisible, labelAt, packetPoint, parseColor,
+  ARROW, CORE_RATIO, DIM_ALPHA, HALO,
+  buildScene, createSceneCache, edgePoint, getActiveSubgraph, isNodeVisible, packetPoint, parseColor,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scene.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as S from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createPlayer } from '../../explorer/scenario.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -346,57 +348,49 @@ describe('focus, dimming and halos', () => {
   });
 });
 
-describe('label level of detail', () => {
+describe('what the scene says about labels (labels.js decides which fit)', () => {
   const nodes = [node('root', 'root'), node('app', 'app'), node('page', 'page', 50, 0), node('hit', 'page', 90, 0, { label: 'zebra' }), node('kid', 'page', 120, 0), node('tbl', 'table'), node('far', 'page')];
   const edges = [link('app', 'kid')];
   const scene = buildScene(mkState(nodes, edges, { searchQuery: 'zeb' }));
-  const shown = (s     , zoom        ) => s.nodes.map((n     ) => labelAt(n, zoom, s)).map((l     , i        ) => (l ? s.nodes[i].id : null)).filter(Boolean);
 
-  it('says in the scene which nodes keep a label when zoomed out: landmarks and matches', () => {
-    expect(scene.nodes.filter((n     ) => n.labelKeep).map((n     ) => n.id)).toEqual(['root', 'app', 'hit']);
+  it('says in the scene which nodes ask for a label: landmarks and matches', () => {
+    expect(scene.nodes.filter((n) => n.labelKeep).map((n) => n.id)).toEqual(['root', 'app', 'hit']);
   });
 
-  it('labels everything at zoom 0.6 and above', () => {
-    expect(LABEL_ZOOM).toBe(0.6);
-    expect(shown(scene, 0.6)).toEqual(scene.nodes.map((n     ) => n.id));
-    expect(shown(scene, 1)).toHaveLength(scene.nodes.length);
+  it('has no zoom cut-off any more: LABEL_ZOOM and labelAt are gone, the minimum on screen is 11 px (13 for a hub)', () => {
+    expect(S.LABEL_ZOOM).toBeUndefined();
+    expect(S.labelAt).toBeUndefined();
+    expect(S.LABEL_MIN_PX).toBe(11);
+    expect(S.LABEL_MIN_PX + S.HUB_LABEL_EXTRA_PX).toBe(13);
   });
 
-  it('labels only landmarks and matches below 0.6', () => {
-    expect(shown(scene, 0.59)).toEqual(['root', 'app', 'hit']);
+  it('gives each node its base size, 12 for root and app and 11 for the rest, bold for those two, and its edge count and current match', () => {
+    expect(byId(scene, 'app')).toMatchObject({ labelSize: 12, labelBold: true, degree: 0, current: false });
+    expect(byId(scene, 'page')).toMatchObject({ labelSize: 11, labelBold: false });
+    const withDegree = buildScene(mkState([{ ...nodes[1], degree: 7 }, nodes[2]], [], {}));
+    expect(byId(withDegree, 'app').degree).toBe(7);
+    const stepped = buildScene(mkState(nodes, edges, { searchQuery: 'zeb', searchCurrent: 'hit' }));
+    expect(byId(stepped, 'hit')).toMatchObject({ match: true, current: true });
+    expect(byId(scene, 'hit').current).toBe(false);
   });
 
-  it('also keeps the selection and what is connected to it', () => {
-    const focus = buildScene(mkState(nodes, edges, { selectedNode: nodes[1] }));
-    expect(shown(focus, 0.3).sort()).toEqual(['app', 'kid', 'root'].sort());
-    const picked = buildScene(mkState(nodes, edges, { selectedNode: nodes[2] }));
-    expect(shown(picked, 0.3)).toContain('page');
-  });
-
-  it('draws a label below the circle at the base size, 12 for root and app, 11 for the rest, bold for those two', () => {
-    const l = labelAt(byId(scene, 'app'), 1, scene);
-    expect(l).toMatchObject({ text: 'app', x: 0, size: 12, bold: true, color: '#f8fafc', alpha: 1 });
-    expect(l.y).toBe(0 + 20 + 12 + 3);
-    expect(labelAt(byId(scene, 'page'), 1, scene)).toMatchObject({ size: 11, bold: false });
-  });
-
-  it('draws it larger when zoomed out, up to 2.2 times, so it stays readable', () => {
-    expect(labelAt(byId(scene, 'app'), 0.5, scene).size).toBe(Math.round(12 * 1.5)); // 0.75 / 0.5
-    expect(labelAt(byId(scene, 'app'), 0.3, scene).size).toBe(Math.round(12 * 2.2)); // capped
-    expect(labelAt(byId(scene, 'app'), 0.3, scene).y).toBe(20 + 26 + 3);
-    expect(labelAt(byId(scene, 'app'), 0.59, scene).size).toBe(Math.round(12 * (0.75 / 0.59)));
-  });
-
-  it('labels every node in the data-flow view, a little larger when zoomed out', () => {
-    const flowNodes = [node('browser', 'store', 0, 0), node('api', 'app', 100, 0), node('t', 'table', 200, 0)];
-    const flow = { ids: new Set(flowNodes.map((n) => n.id)), edges: [], headers: [], top: -100, tiers: [] };
-    const preset = buildScene(mkState(flowNodes, [], { view: 'dataflow', flow }));
-    expect(preset.preset).toBe(true);
-    for (const zoom of [0.2, 0.4, 0.6, 1]) expect(shown(preset, zoom)).toHaveLength(3);
-    expect(labelAt(byId(preset, 't'), 1, preset).size).toBe(11);
-    expect(labelAt(byId(preset, 't'), 0.8, preset).size).toBe(11);
-    expect(labelAt(byId(preset, 't'), 0.5, preset).size).toBe(Math.round(11 * 1.6)); // 0.8 / 0.5
-    expect(labelAt(byId(preset, 't'), 0.3, preset).size).toBe(Math.round(11 * 1.8)); // capped
+  it('searches names, ids, files, types and kinds (search-model.js), and dims what it did not find to the focus dim', () => {
+    const typed = [node('root', 'root'), node('p1', 'page', 10, 0, { label: '/orders', file: 'src/handlers/list.js' }), node('p2', 'page', 20, 0, { label: '/home' }), node('s1', 'service', 30, 0, { label: 'syncer', kind: 'webhook' })];
+    const find = (q) => buildScene(mkState(typed, [], { searchQuery: q })).nodes.filter((n) => n.match).map((n) => n.id);
+    expect(find('handlers')).toEqual(['p1']); // the file
+    expect(find('routes')).toEqual(['p1', 'p2']); // the type: Pages & Routes
+    expect(find('WEBHOOK')).toEqual(['s1']); // the kind
+    expect(find('services')).toEqual(['s1']); // the type, as its layer's name
+    expect(find('p2')).toEqual(['p2']); // the id
+    const dimmed = buildScene(mkState(typed, [], { searchQuery: 'orders' }));
+    expect(byId(dimmed, 'p1')).toMatchObject({ match: true, alpha: 1 });
+    expect(byId(dimmed, 'p2').alpha).toBe(DIM_ALPHA);
+    expect(byId(dimmed, 'p2').labelAlpha).toBe(DIM_ALPHA);
+    // nothing found: nothing dims (a blank map helps nobody)
+    expect(buildScene(mkState(typed, [], { searchQuery: 'zzzzz' })).nodes.every((n) => n.alpha === 1)).toBe(true);
+    // a match on a layer that is off is not on the map: it does not dim the rest
+    const off = buildScene(mkState(typed, [], { searchQuery: 'syncer', activeLayers: { service: false, page: true } }));
+    expect(off.nodes.every((n) => n.alpha === 1)).toBe(true);
   });
 });
 
