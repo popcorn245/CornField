@@ -78,7 +78,7 @@ function mount() {
         </div>
       </div>
       <p class="hx-review-msg" data-review-msg role="alert" hidden></p>
-      <p class="hx-review-line" data-review-hint role="status" hidden></p>
+      <p class="hx-review-line" id="review-hint" data-review-hint role="status" hidden></p>
 `;
     // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
     q('.hx-review-label').textContent = t('reviewNoteLabel');
@@ -99,7 +99,13 @@ function paint() {
   const status = q('[data-review-status]');
   status.textContent = reviewWords(ui.review, now());
   status.hidden = !status.textContent;
-  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) btn.disabled = ui.busy || !ui.reviewable;
+  // Off for good (not a spec PR's copy) is `disabled`, and the reason is the line next to it, which the buttons point at. While a review is being posted the button
+  // only says it is busy (`aria-disabled`): a `disabled` button drops the focus to the page.
+  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) {
+    btn.disabled = !ui.reviewable;
+    if (ui.busy) btn.setAttribute('aria-disabled', 'true'); else btn.removeAttribute('aria-disabled');
+    if (!ui.reviewable && ui.key) btn.setAttribute('aria-describedby', 'review-hint'); else btn.removeAttribute('aria-describedby');
+  }
   const approve = button('approved');
   if (approve) approve.textContent = t('approve');
   const sendBack = button('notes');
@@ -125,6 +131,9 @@ function openNote() {
   paint();
   if (isPhone()) expandSheet('proposal');
   q('#review-note').focus();
+  // On a phone the keyboard is about to take half the screen: the note and the button that sends it stay in view above it
+  const send = button('notes');
+  if (isPhone() && send && typeof send.scrollIntoView === 'function') send.scrollIntoView({ block: 'nearest' });
 }
 
 /** Cancel: the field closes, what was typed goes, and focus goes back to Send back */
@@ -223,7 +232,11 @@ export async function sendReview(verdict) {
   const wasNoting = ui.noting;
   ui.noting = false;
   paint();
-  if (wasNoting && verdict === 'notes') { const sendBack = button('notes'); if (sendBack) sendBack.focus(); }
+  // The buttons were busy while it posted, not `disabled`, so the focus stayed where it was. Approve keeps it (the status line, a live region,
+  // says "Approved" once; moving the focus onto it would say it twice); when it was lost it goes back to Approve. Send back: the button that opened the note.
+  const lost = !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
+  if (verdict === 'approved') { if (lost) button('approved')?.focus(); }
+  else if (wasNoting || lost) button('notes')?.focus();
   refreshMockups(); // an approval covers the screens as they are now; a send back leaves them not reviewed
   if (verdict === 'notes') clearEdits(); // the edits went with the note; an approval keeps them, they are in the review
   return true;

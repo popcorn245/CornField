@@ -32,6 +32,7 @@ export const STRINGS = Object.freeze({
   sendBackWithNote: 'Send back with this note',
   reviewNoteLabel: 'Note for the drafting agent',
   reviewNotePlaceholder: 'What should change?',
+  openSpecsList: 'Open the Specs list',
   // The Work panel: its tabs run in the order of the loop
   tabSpecs: 'Specs',
   tabPulls: 'PRs',
