@@ -453,6 +453,17 @@ export function watchMapStyle(doc) {
 
 const firstOf = (values, names) => { for (const n of names) if (values[n]) return values[n]; return null; };
 
+/**
+ * The tokens that can fill a node, most specific first (spec 0009 D6): its finer kind, its project layer, its type, its starting group. The one
+ * place the order is written: the map (`compute`) and the Layers menu's dots both read it, so a dot is the fill its row's nodes are drawn in.
+ * @param {{type: string, kind?: unknown, layer?: string | null, group?: string}} node
+ * @returns {string[]}
+ */
+export const fillNames = ({ type, kind, layer, group }) => [kindToken(type, kind), layer ? mapGroupToken(layer) : null, nodeToken(type), groupToken(group || type)].filter(Boolean);
+
+/** The theme's fill for a node of that kind, layer, type and group (`values` of a style), or null: the node then draws its own colour (`auto`) */
+export const fillOf = (values, node) => firstOf(values, fillNames(node));
+
 /** A line's shape in the theme: its width scaled to `--corn-map-edge-width`, its glow and its packet's by `--corn-map-glow` (nothing at `auto`) */
 function shapeEdge(e, style) {
   const scale = style.edgeWidth == null ? 1 : style.edgeWidth / BASE_EDGE_WIDTH;
@@ -486,7 +497,7 @@ function compute(scene, style) {
   const painted = scene.painted || { nodes: new Set(), edges: new Set() };
   const nodes = scene.nodes.map((n) => {
     // Which fill wins, most specific first (spec 0009 D6): the finer kind, the project layer, the type, the starting layer
-    const fill = !painted.nodes.has(n.id) && firstOf(values, [kindToken(n.type, n.kind), n.layer ? mapGroupToken(n.layer) : null, nodeToken(n.type), groupToken(n.group || n.type)].filter(Boolean));
+    const fill = !painted.nodes.has(n.id) && fillOf(values, n);
     const icon = style.icons ? iconKeysFor(n.type, n.kind, n.layer).find((k) => style.icons.get(k)) || null : null; // the same order: kind, layer, type
     const glows = style.glow != null && style.glow !== 1 && n.glow > 0;
     if (!fill && !label && !stroke && !icon && !glows) return n;

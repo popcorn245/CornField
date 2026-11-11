@@ -1420,3 +1420,11 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"], .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50dvh), 50dvh); }
   .hx-dock > .hx-drawer[data-sheet-state="expanded"], .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60dvh), 60dvh); }
 }
+
+/* ---- Layers menu: a dot's outline and a kind's swatch (issue #229) ---- */
+/* A fill under 3:1 on the menu keeps its colour and gets an outline: the map's own (--corn-map-stroke, set inline as --hx-dot-ring) when the theme sets one */
+.hx-dot.is-ringed { outline: var(--corn-border) solid var(--hx-dot-ring, var(--corn-text-3)); outline-offset: 0; }
+/* The swatch before a kind's letters: the theme's --corn-map-kind-<type>-<kind>; decoration, the letters and the name stay */
+.hx-kind-swatch { margin-inline-end: calc(var(--corn-space-1) * -1); }
+.hx-kind-swatch.is-blank { visibility: hidden; }
+/* ---- end: Layers menu dots ---- */

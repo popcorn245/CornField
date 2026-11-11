@@ -14,11 +14,13 @@ import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
-import { layerShows } from './scene.js';
-import { getMapStyle, groupToken, setMapSubjects } from './map-style.js';
+import { groupOf, layerShows } from './scene.js';
+import { STROKE_TOKEN, fillOf, getMapStyle, kindToken, onMapStyleChange, pageReader, setMapSubjects } from './map-style.js';
+import { over, parseColor, contrast } from '../core/color.js';
+import { DARK_GROUND, LIGHT_GROUND } from './theme-model.js';
 import { t } from './strings.js';
 
-/** The dot of each starting row: the colour its nodes are drawn in (a project layer's dot is its nodes' own, or the theme's group token) */
+/** The dot of each starting row when the theme sets no fill for it: the colour its nodes are drawn in (the theme's tokens come first: `rowColor`) */
 const COLORS = {
   app: '#6366f1', pkg: '#06b6d4', page: '#38bdf8', atom: '#10b981', molecule: '#a855f7', token: '#ec4899', tool: '#f43f5e', flow: '#fb923c',
   core: '#14b8a6', store: '#fb923c', table: '#fde047', rom: '#f0abfc', service: '#84cc16', cloud: '#94a3b8', web: '#94a3b8', stack: '#a8a29e',
@@ -77,17 +79,6 @@ export function clickWithLegendMenu(target, act) {
 const defaultOf = (key) => (Object.hasOwn(state.layerDefaults, key) ? state.layerDefaults[key] : !STARTS_OFF.has(key));
 const isOn = (key) => state.activeLayers[key] !== false;
 
-/**
- * A project layer's dot: the theme's `--corn-map-group-<key>`, else the colour of the first node the layer holds (a project layer has no
- * colour of its own in the config: it is the theme's to give, so the contrast check sees it).
- */
-function projectColor(layer) {
-  const set = getMapStyle().values[groupToken(layer.key)];
-  if (set) return set;
-  const first = state.nodes.find((n) => rowKeyOf(state, n) === layer.key);
-  return first ? first.color : NO_COLOR;
-}
-
 const NO_COLOR = '#94a3b8';
 /** A colour as the dot's style may hold it: a hex or an rgb()/rgba() of numbers, else the plain grey. A node's colour is the map's data
  * (a proposal can set it), so it is checked before it reaches a style attribute, and escaped there all the same */
@@ -95,11 +86,50 @@ const SWATCH_RE = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s/]+\))$/i;
 const swatch = (c) => (typeof c === 'string' && SWATCH_RE.test(c.trim()) ? c.trim() : NO_COLOR);
 
 /**
+ * The colour of a row's dot: the fill the map draws for the row's nodes, by the map's own order (map-style.js `fillOf`: the type's or layer's
+ * token, then the starting group's), else the row's built-in colour on this ground (`themed`). `node` is what the row's nodes are: for a
+ * starting row its first type (a row of two types, House, shows the first: the map draws floors and rooms apart, and the row has one dot) and its
+ * key as the group; for a project row its first node's type with the layer. A finer kind's token is left out: a dot is a row's, not a kind's.
+ * A token's value is the theme's text and a node's colour is the project's: both go through `swatch` before they reach a style.
+ */
+function rowColor(node, built) {
+  const fill = fillOf(getMapStyle().values, node);
+  return fill ? swatch(fill) : swatch(themed(swatch(built), state.theme));
+}
+const typeOfRow = (l) => (l.match && l.match.type ? [].concat(l.match.type)[0] : l.key);
+
+/** The ground of the menu: its surface laid over the page, as `--corn-surface-1` and `--corn-ground` say, else the theme's own ground */
+function menuSurface() {
+  const fallback = state.theme === 'light' ? LIGHT_GROUND : DARK_GROUND;
+  const read = pageReader();
+  if (!read) return fallback;
+  const ground = parseColor(read('--corn-ground'));
+  const surface = parseColor(read('--corn-surface-1'));
+  if (!ground[3] || !surface[3]) return fallback;
+  const [r, g, b] = over(surface, over(ground, [0, 0, 0, 1]));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+/** The outline a dot or swatch gets when its fill is under 3:1 on the menu: the map's own outline colour when the theme sets one, else the CSS default (`.is-ringed`). The fill is never changed */
+function ringOf(color, surface) {
+  if (contrast(color, surface) >= 3) return null;
+  const stroke = getMapStyle().values[STROKE_TOKEN];
+  return { stroke: stroke ? swatch(stroke) : '' };
+}
+/** A swatch of `color` on this menu: the fill, a soft glow on a dark ground, and the outline when it is needed. `extra` is more attributes (a kind's is `aria-hidden`) */
+function dot(color, on, surface, extra = '') {
+  const ring = ringOf(color, surface);
+  const glow = on && state.theme !== 'light' && /^#[0-9a-f]{6}$/i.test(color) ? `0 0 8px ${color}90` : 'none';
+  const style = `background-color: ${color}; box-shadow: ${glow}${ring && ring.stroke ? `; --hx-dot-ring: ${ring.stroke}` : ''}`;
+  return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} style="${escHtml(style)}"></span>`;
+}
+
+/**
  * The rows: the project layers that hold a node, then the starting ones in their usual order (`layers.order` first of all), and one more
  * for any node type on this map that none of them covers (a type a plugin or a newer sync adds), so every type present can be turned off.
  * `root` is always shown and has no row. The overlays are the rows with `overlay`: the menu draws them under their own heading.
  */
 function layerRows() {
+  const dotted = (l) => ({ ...l, color: rowColor({ type: typeOfRow(l), group: l.key }, l.color) });
   const held = new Set();
   const left = new Set(); // starting layers a project layer took nodes from
   state.nodes.forEach((n) => {
@@ -109,17 +139,21 @@ function layerRows() {
     const own = startingLayerOf(n);
     if (own !== key) left.add(own);
   });
-  const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, color: projectColor(l) }));
+  const projectDot = (l) => {
+    const first = state.nodes.find((n) => rowKeyOf(state, n) === l.key);
+    return { color: rowColor(first ? { type: first.type, layer: l.key, group: groupOf(first) } : { type: l.key, layer: l.key }, first ? first.color : NO_COLOR) };
+  };
+  const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, ...projectDot(l) }));
   // A starting row a project layer has taken every node from goes (spec 0009 D7, example 3); with no project layer, every starting row stays, as it always was
-  const starting = LAYER_DEFS.filter((l) => !l.overlay && (held.has(l.key) || !left.has(l.key)));
+  const starting = LAYER_DEFS.filter((l) => !l.overlay && (held.has(l.key) || !left.has(l.key))).map(dotted);
   const known = new Set([...LAYER_DEFS.map((l) => l.key), ...state.projectLayers.map((l) => l.key)]);
   const extra = [];
   held.forEach((key) => {
     if (known.has(key)) return;
     known.add(key);
-    extra.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: '#94a3b8', desc: `Nodes of the type ${key}` });
+    extra.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: rowColor({ type: key, group: key }, NO_COLOR), desc: `Nodes of the type ${key}` });
   });
-  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: LAYER_DEFS.filter((l) => l.overlay) };
+  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: LAYER_DEFS.filter((l) => l.overlay).map(dotted) };
 }
 
 /** The chip says how many layers are on: " · 13 of 20". An overlay (Runs in flight) is not a layer: it is not counted */
@@ -194,20 +228,28 @@ function kindsByRow(rowOf) {
     if (!key) return;
     if (!rows.has(key)) rows.set(key, new Map());
     const id = `${n.type}\u0000${n.kind}`;
-    const entry = rows.get(key).get(id) || { kind: n.kind, letters: letters.get(n.type).get(n.kind), n: 0 };
+    const entry = rows.get(key).get(id) || { type: n.type, kind: n.kind, letters: letters.get(n.type).get(n.kind), n: 0 };
     entry.n++;
     rows.get(key).set(id, entry);
   });
   return new Map([...rows].map(([k, m]) => [k, [...m.values()].sort((a, b) => a.kind.localeCompare(b.kind))]));
 }
 
+/** The swatch of a kind: the theme's `--corn-map-kind-<type>-<kind>`, as the map draws that kind, or nothing when the token is unset (the node then has its type's colour, which is the row's dot). Decoration: the letters and the name say which kind it is */
+function kindSwatch(k, surface, pad) {
+  const fill = getMapStyle().values[kindToken(k.type, k.kind)];
+  if (!fill) return pad ? '<span class="hx-dot hx-kind-swatch is-blank" aria-hidden="true"></span>' : ''; // nothing to see, but the letters of the rows stay in line
+  return dot(swatch(fill), true, surface, ' aria-hidden="true"');
+}
+
 /** What a viewer sees as "kinds" for a row: the disclosure button and, when open, the key rows. A key is a key, not a toggle (spec 0009 D5) */
-function kindsHtml(layer, kinds) {
+function kindsHtml(layer, kinds, surface) {
   if (!kinds || !kinds.length) return '';
   const open = openKinds.has(layer.key);
   const id = `layer-kinds-${layer.key}`;
   const words = `${kinds.length} ${kinds.length === 1 ? 'kind' : 'kinds'}`;
-  const list = open ? `<ul class="hx-kind-keys" id="${escHtml(id)}">${kinds.map((k) => `<li class="hx-kind-key" data-corn="kind-key"><span class="hx-kind-letter" aria-hidden="true">${escHtml(k.letters)}</span><span class="hx-kind-name">${escHtml(k.kind)}</span><span class="hx-count" data-corn="count">${k.n}</span></li>`).join('')}</ul>` : '';
+  const padded = kinds.some((k) => getMapStyle().values[kindToken(k.type, k.kind)]);
+  const list = open ? `<ul class="hx-kind-keys" id="${escHtml(id)}">${kinds.map((k) => `<li class="hx-kind-key" data-corn="kind-key">${kindSwatch(k, surface, padded)}<span class="hx-kind-letter" aria-hidden="true">${escHtml(k.letters)}</span><span class="hx-kind-name">${escHtml(k.kind)}</span><span class="hx-count" data-corn="count">${k.n}</span></li>`).join('')}</ul>` : '';
   return `<div class="hx-kinds"><button type="button" class="hx-textbtn hx-kinds-btn" data-action="toggle-layer-kinds" data-layer="${escHtml(layer.key)}" aria-expanded="${open}" aria-controls="${escHtml(id)}" data-corn="layer-kinds" data-corn-kind="quiet">${open ? '▾' : '▸'} ${escHtml(words)}</button>${list}</div>`;
 }
 
@@ -223,8 +265,10 @@ function syncMapSubjects() {
   setMapSubjects({ kinds, layers: state.projectLayers.map((l) => l.key) });
 }
 
+let drawing = false;
 export function renderLayerToggles() {
-  syncMapSubjects();
+  drawing = true;
+  try { syncMapSubjects(); } finally { drawing = false; } // reading the tokens of a new kind may tell the style listener below: this draw already has them
   paintCount();
   const container = document.getElementById('layer-toggles-container');
   if (!container) return;
@@ -244,22 +288,22 @@ export function renderLayerToggles() {
   counts.runs = state.runsMap ? state.runsMap.flight.size : 0;
   const kinds = kindsByRow(rowOf);
   const { layers, overlays } = layerRows();
+  const surface = menuSurface();
 
   const row = (layer) => {
     const on = isOn(layer.key);
-    const color = escHtml(swatch(themed(swatch(layer.color), state.theme))); // the dot is the colour the map draws on this ground
     const shown = byProposal[layer.key] ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">+${byProposal[layer.key]} shown by the proposal</span>` : '';
     return `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">
         <span class="hx-toggle-label">
-          <span class="hx-dot" data-corn="swatch" style="background-color: ${color}; box-shadow: ${on && state.theme !== 'light' ? `0 0 8px ${color}90` : 'none'}"></span>
+          ${dot(swatch(layer.color), on, surface)}
           <span class="hx-toggle-name">${escHtml(layer.label)}</span>${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">${shown}
           <span class="hx-count" data-corn="count">${(UNIT[layer.key] || String)(counts[layer.key] || 0)}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
-      </button>${kindsHtml(layer, kinds.get(layer.key))}`;
+      </button>${kindsHtml(layer, kinds.get(layer.key), surface)}`;
   };
 
   // The focus stays where it was across the redraw: the same row or disclosure, found again by what it names
@@ -341,3 +385,5 @@ export function toggleLayerKinds(key) {
 
 // The dots and the legends are drawn in the theme's colours: drawn again when it changes (theme.js)
 onThemeChange(() => renderLayerToggles());
+// ... and when the map's own tokens change (a named theme, its stylesheet arriving, light and dark): the same signal the map is drawn again on
+onMapStyleChange(() => { if (!drawing) renderLayerToggles(); });
