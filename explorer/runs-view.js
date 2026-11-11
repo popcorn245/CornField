@@ -101,6 +101,19 @@ function answerHtml(ctx, run) {
     <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(t('reply'))}: ${name}"${off}>${ctx.esc(t('reply'))}</button></div>`;
 }
 
+/**
+ * A reply typed to a run that no longer waits (it went on, or was stopped, while the person typed): it was not sent, and it is not lost. The
+ * field stays, with what was typed, so it can be copied, and a line says the run changed; Discard lets it go. '' when nothing was typed.
+ */
+function unsentHtml(ctx, run) {
+  const reply = ctx.replies && ctx.replies.get(run.runId) || '';
+  if (!reply) return '';
+  const id = ctx.esc(run.runId);
+  return `<p class="hx-forge-why" data-corn="message" data-corn-state="failure">This run is now ${ctx.esc(statusWords(run).toLowerCase())} and no longer waits for a reply, so what you typed was not sent. It is kept here to copy.</p>
+    <label class="hx-forge-field" data-corn="field">Your reply, not sent<input type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
+    <div class="hx-run-actions"><button type="button" class="hx-btn hx-forge-act" data-run-discard="${id}" aria-label="Discard: your reply to ${ctx.esc(runName(run, ctx.now))}">Discard</button></div>`;
+}
+
 /** The totals as plain lines (see `totalsLines`), escaped; '' when there are none */
 export function totalsHtml(ctx, lines) {
   return lines.map((l) => `<p class="hx-forge-meta">${ctx.esc(l)}</p>`).join('');
@@ -144,7 +157,7 @@ export function runHtml(ctx, run, all) {
     <p class="hx-forge-meta" id="run-nodes-${ctx.esc(run.runId)}">${names.length ? `Changing ${run.nodesFrom === 'files' ? '' : 'or expected to change '}${ctx.esc(names.join(', '))}` : 'No node on the map yet.'}</p>
     ${retryHtml(ctx, run, all)}
     ${links ? `<p class="hx-forge-meta">${links}</p>` : ''}
-    ${answering ? `${answerHtml(ctx, run)}${result}` : ''}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
+    ${answering ? `${answerHtml(ctx, run)}${result}` : unsentHtml(ctx, run)}${run.answer && !answering ? answeredHtml(ctx, run) : ''}
     <div class="hx-run-actions">${stop}${retry}
       <button type="button" class="hx-btn hx-forge-act" data-run-select="${ctx.esc(run.runId)}" aria-pressed="${lit}" aria-label="${lightWords}: ${name}"${noNodes ? ` disabled title="No node on the map yet, so there is nothing to light" aria-describedby="run-nodes-${ctx.esc(run.runId)}"` : ''}>${lightWords}</button>
       <button type="button" class="hx-btn hx-forge-act" data-run-timeline="${ctx.esc(run.runId)}" aria-expanded="${open}" aria-controls="run-tl-${ctx.esc(run.runId)}">Timeline (${count})</button></div>

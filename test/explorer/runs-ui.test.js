@@ -120,7 +120,7 @@ describe('the words (runs-model.js)', () => {
     expect(aboutWords({ issue: 12 })).toBe('issue #12');
     expect(aboutWords({ proposal: '0040-meals' })).toBe('proposal 0040-meals');
     expect(statusWords({ status: 'stop-requested' })).toBe('Stop requested');
-    expect(runMeta(RUN, NOW)).toBe('asked 1 hour ago by maintainer-one · profile claude · limits 30 min · reported 1,200 tokens, cost $0.40 · checks running');
+    expect(runMeta(RUN, NOW)).toBe('asked 1 hour ago by maintainer-one · profile claude · limits 30 min · reported 1,200 tokens, cost 0.40 · checks running');
     expect(canStop(RUN)).toBe(true);
     expect(canStop({ ...RUN, stopRequested: { by: 'x' } })).toBe(false);
     expect(canStop(QUIET)).toBe(false);
@@ -341,7 +341,7 @@ describe('the runs on the Agents tab', () => {
     await settle();
     expect(server.posts().map((p) => p.url)).toEqual([`/api/agent-runs/${RUN.runId}/stop`]);
     // the result is in the run's own card, by the control that was used, not at the top of a list that may be scrolled away
-    expect(q(`[data-run-result="${RUN.runId}"]`).textContent).toMatch(/Asked code on issue #7, profile claude, asked by maintainer-one to stop\. The runner decides/);
+    expect(q(`[data-run-result="${RUN.runId}"]`).textContent).toMatch(/^Asked this run to stop\. The runner decides/);
     expect(q(`[data-run="${RUN.runId}"]`).contains(q(`[data-run-result="${RUN.runId}"]`))).toBe(true);
     expect(qa('#forge-runs-list > li')[0].textContent).toContain('Stop requested');
     expect(q('[data-forge-stop]')).toBe(null);
@@ -395,9 +395,9 @@ describe('a run that waits for an answer (issue #101)', () => {
     click(q('[data-run-answer="continue"]'));
     await settle();
     expect(server.posts().map((p) => [p.url, JSON.parse(p.init.body)])).toEqual([[`/api/agent-runs/${WAITING.runId}/answer`, { action: 'continue' }]]);
-    expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toMatch(/Answered code on issue #9, asked by maintainer-one: continue\. The runner picks it up/);
+    expect(q(`[data-run-result="${WAITING.runId}"]`).textContent).toMatch(/^Told this run to continue\. The runner picks it up/);
     expect(q('#forge-runs-list > li').textContent).toMatch(/maintainer-one answered: continue\. The runner picks the answer up/);
-    expect(await said()).toMatch(/Answered/);
+    expect(await said()).toMatch(/Told this run to continue/);
     // the reply: empty is not sent; typed text is, once, and the field is empty again
     click(q('[data-run-answer="reply"]'));
     await settle();
@@ -513,11 +513,11 @@ describe('the totals of tokens and cost (CF-27)', () => {
     expect(totalsLines(null)).toEqual([]);
     expect(totalsLines({ all: null, byProposal: [], byDay: [] })).toEqual([]);
     expect(totalsLines({ all: { runs: 1, tokens: 50, cost: null }, byProposal: [], byDay: [{ day: '2026-11-05', runs: 1, tokens: 50, cost: null }] })).toEqual(['Reported in all: 50 tokens over 1 run.', 'Per day (UTC): 2026-11-05 50 tokens (1 run).']);
-    expect(totalsLines({ all: { runs: 2, tokens: null, cost: 0.123456789 } })).toEqual(['Reported in all: cost $0.12 over 2 runs.']);
+    expect(totalsLines({ all: { runs: 2, tokens: null, cost: 0.123456789 } })).toEqual(['Reported in all: cost 0.12 over 2 runs.']);
     expect(totalsLines(TOTALS)).toEqual([
-      'Reported in all: 2,107 tokens, cost $1.30 over 3 runs.',
-      'Per proposal: 0040-meals <b> 2,000 tokens, cost $0.30 (2 runs).',
-      'Per day (UTC): 2026-11-05 7 tokens, cost $1.00 (1 run); 2026-11-04 2,100 tokens, cost $0.30 (2 runs).',
+      'Reported in all: 2,107 tokens, cost 1.30 over 3 runs.',
+      'Per proposal: 0040-meals <b> 2,000 tokens, cost 0.30 (2 runs).',
+      'Per day (UTC): 2026-11-05 7 tokens, cost 1.00 (1 run); 2026-11-04 2,100 tokens, cost 0.30 (2 runs).',
     ]);
   });
 

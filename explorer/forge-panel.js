@@ -75,7 +75,7 @@ import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
-  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, runTone, runName, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
+  RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
 } from './runs-model.js';
 import { runsHtml, totalsHtml, loadingRowsHtml, runPillHtml } from './runs-view.js';
 import { setRunsOnMap, clearRunsOnMap } from './runs-map.js';
@@ -87,8 +87,8 @@ import {
   DRAFTS_URL, notesUrl, sinceChoices, notesSummary, validTag, confirmWords, postedWords, draftRequest,
   threadsUrl, threadUrl, issueUrl, IDEAS_URL, threadKindWords, threadMeta, litForThread, mentionsIndex, ideaRequest, ideaWords,
 } from './forge-panel-model.js';
-import { cornStateAttr, cornState, stateIconHtml } from './corn-state.js';
-import { sayResult, clearResult, resultOf, resetFeedbackForTests } from './feedback.js';
+import { cornStateAttr, stateIconHtml } from './corn-state.js';
+import { sayResult, clearResult, resultOf, showResultIn, resetFeedbackForTests } from './feedback.js';
 import { isOffline, initConnection, notSentWords, resetConnectionForTests } from './connection.js';
 import { proposalListing, onProposalListing, loadProposalList } from './proposal.js';
 import { specRowHtml, mergeSpecs } from './proposal-model.js';
@@ -1129,7 +1129,7 @@ function detailHtml() {
     : '';
 
   const key = lit.changed.size || lit.failing.size
-    ? `<p class="hx-forge-key hx-faint"><span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes <span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names</p>`
+    ? `<p class="hx-forge-key hx-faint">${lit.changed.size ? '<span class="hx-mark-dot hx-mark-dot--changed" aria-hidden="true"></span>a file this pull request changes ' : ''}${lit.failing.size ? '<span class="hx-mark-dot hx-mark-dot--removed" aria-hidden="true"></span>a test a failing check names' : ''}</p>`
     : '';
   // Its run: who is running it, their state, the time and the cost (the runs are read for the Runs tab, and once for the first PR selected)
   const runs = ui.runs && ui.runs.data ? ui.runs.data.runs : null;
@@ -1197,6 +1197,12 @@ function paint() {
   if (back && back !== document.activeElement && !back.closest('[hidden]')) back.focus();
   // Retry was pressed and its notice is gone (the list is being read again): the focus goes to the panel's title, never to the page
   if (had && had.dataset && had.dataset.action === 'retry-forge' && !panel.contains(document.activeElement)) $('forge-title').focus();
+  // A control of a run card that is no longer drawn (the run went on): the focus goes to that run's card, never to the page
+  const hadRun = had && !had.isConnected && had.closest('[data-run]');
+  if (hadRun && !panel.contains(document.activeElement)) {
+    const card = [...panel.querySelectorAll('[data-run]')].find((c) => c.dataset.run === hadRun.dataset.run);
+    if (card) card.focus();
+  }
   // A selection replaces the list: the focus goes to its back control, and returns to the row when it is let go of
   // (a tab changed leaves the focus on the tab)
   const key = detailKey();
@@ -1238,6 +1244,9 @@ function paintTabsMore() {
   if (tabs.scrollLeft > 1) more.push('start');
   if (tabs.scrollWidth - tabs.clientWidth - tabs.scrollLeft > 1) more.push('end');
   if (more.length) top.dataset.more = more.join(' '); else delete top.dataset.more;
+  // A row given the focus is scrolled clear of the fixed top, never left under it (its height changes with the theme and the width)
+  const body = top.parentElement;
+  if (body) body.style.scrollPaddingTop = `${top.offsetHeight}px`;
 }
 
 /** A notice line: its words, and a Retry that reads the tab again (for a failure or an older answer) */
@@ -1358,6 +1367,7 @@ function paintRuns() {
     hand.innerHTML = lines.map((l) => `<li>${escHtml(l)}</li>`).join('');
   }
   const list = $('forge-runs-list');
+  list.setAttribute('aria-busy', String(!data && !!ui.loading));
   if (!data) { list.innerHTML = ui.loading ? loadingRowsHtml(3) : ''; return; }
   patchList(list, data.runs.length ? runsHtml(viewContext(), data.runs) : '<li class="hx-forge-empty hx-faint" data-corn="empty">No agent has been asked for yet. Start one from an issue or a proposal: Issues, then Start an agent.</li>');
 }
@@ -1382,12 +1392,14 @@ function patchList(list, html) {
     const was = keyOf(f) && old.get(keyOf(f));
     if (!was) return f;
     if (was.outerHTML === f.outerHTML) return was;
-    if (!redraw.has(keyOf(f)) && (typing(was) || unsent(was)) && f.querySelector('[data-run-reply]') && was.querySelector('[data-run-reply]')) {
-      // the field stays; only what was said about the last action is brought up to date
-      for (const slot of f.querySelectorAll('[data-run-result]')) { const mine = was.querySelector(`[data-run-result="${slot.dataset.runResult}"]`); if (mine) mine.replaceWith(slot); }
-      // The typed text is in `ui.runReplies` as well, always (every keystroke); a field that differs from it was changed by the page itself (a reply that was sent is emptied)
-      const field = was.querySelector('[data-run-reply]');
-      const theirs = f.querySelector('[data-run-reply]').getAttribute('value') || '';
+    const field = was.querySelector('[data-run-reply]');
+    const twin = field && f.querySelector(`[data-run-reply="${field.dataset.runReply}"]`);
+    if (!redraw.has(keyOf(f)) && (typing(was) || unsent(was)) && twin) {
+      // The field stays (the very element, never taken out of the page, so the focus, caret, selection and a phone's keyboard stay);
+      // everything around it is the new card's, so a state that changed is shown (graftAround)
+      const theirs = twin.getAttribute('value') || '';
+      graftAround(was, field, twin);
+      // The typed text is in `ui.runReplies` as well, always (every keystroke); a field that differs from it was changed by the page itself
       if (field.value !== theirs) field.value = theirs;
       return was;
     }
@@ -1399,6 +1411,33 @@ function patchList(list, html) {
     if (at && keyOf(at) && keyOf(at) === keyOf(node)) at.replaceWith(node); else list.insertBefore(node, at || null);
   });
   while (list.children.length > target.length) list.lastElementChild.remove();
+}
+
+/**
+ * Makes `root` (an old row) what `fresh` (its new drawing) is, except that `keep` (inside `root`) stays the same element in the same place,
+ * standing for `twin` (its match inside `fresh`): at each level from `keep` up to `root`, the parent takes the new parent's attributes and
+ * children, with the kept branch in its place. `keep` itself is never taken out of the page.
+ */
+function graftAround(root, keep, twin) {
+  const sync = (to, from) => {
+    for (const a of [...to.attributes]) if (!from.hasAttribute(a.name) && a.name !== 'value') to.removeAttribute(a.name);
+    for (const a of [...from.attributes]) if (a.name !== 'value' && to.getAttribute(a.name) !== a.value) to.setAttribute(a.name, a.value);
+  };
+  sync(keep, twin);
+  let w = keep;
+  let f = twin;
+  while (w !== root && w.parentElement && f.parentElement) {
+    const wp = w.parentElement;
+    const fp = f.parentElement;
+    sync(wp, fp);
+    const kids = [...fp.childNodes];
+    const at = kids.indexOf(f);
+    for (const n of [...wp.childNodes]) if (n !== w) n.remove();
+    for (const n of kids.slice(0, at)) wp.insertBefore(n, w);
+    for (const n of kids.slice(at + 1)) wp.append(n);
+    w = wp;
+    f = fp;
+  }
 }
 
 /** The one line on whether a runner is polling (pull transport only), in the Runs view and the Start dialog; hidden where it does not apply */
@@ -1895,19 +1934,30 @@ function focusInRun(runId, selectors) {
   if (to.matches('input') && typeof to.setSelectionRange === 'function') to.setSelectionRange(to.value.length, to.value.length); // typing goes on at the end of what is there
 }
 
+/** Back online: a tab that could not be read is read again, so its error does not outlive the cause (the same function each time, added once) */
+function readOnline() {
+  if (ui.open && (ui.error || (ui.runs && ui.runs.error) || ui.detailError || (ui.kind === 'notes' && ui.notes.error))) refreshForge({ quiet: true });
+}
+
+/** Lets go of a reply that was not sent because its run stopped waiting: the field goes, and the focus goes to the run's card */
+function discardReply(runId) {
+  ui.runReplies.delete(runId);
+  redrawRuns.add(runId);
+  paint();
+  focusInRun(runId, []);
+}
+
 /** Asks a run to stop: one POST, then the runs are read again. What it came to is said in the run's own card, and to a screen reader */
 async function stopRun(runId) {
   if (ui.busy) return;
-  const run = runById(runId);
-  const name = run ? runName(run) : 'the run';
   ui.busy = 'stop';
   ui.runNote = null;
   clearResult(runId);
-  announce(`Asking ${name} to stop`);
+  announce('Asking this run to stop'); // the focus is in the run's card, whose controls name it
   paint();
   const res = await post(stopUrl(runId), {});
   ui.busy = '';
-  sayResult(runId, res.status === null ? notSentWords('The stop request') : stopWords(res.status, res.body, name), res.ok);
+  sayResult(runId, res.status === null ? notSentWords('The stop request') : stopWords(res.status, res.body, 'this run'), res.ok);
   await loadRuns(false, { say: false });
   redrawRuns.add(runId);
   paint();
@@ -1929,15 +1979,14 @@ async function answerRun(runId, action) {
   // Where the focus goes back to once it is sent: the reply field after a reply (empty, for the next one), the button after Continue; while the
   // buttons are disabled the focus has nowhere to stay, so it is put back by hand. A run that no longer asks (a Stop) gets its Timeline button
   const back = action === 'reply' ? `[data-run-reply="${runId}"]` : `[data-run-answer="${action}"][data-run-id="${runId}"]`;
-  const name = runName(runById(runId) || { kind: 'run', refs: {} });
   ui.busy = 'answer';
   ui.runNote = null;
-  announce(`Answering ${name}`);
+  announce(action === 'reply' ? 'Sending your reply' : 'Sending your answer');
   paint();
   const res = await post(answerUrl(runId), answerBody(action, text));
   ui.busy = '';
   if (res.ok && action === 'reply') ui.runReplies.delete(runId); // sent: the field is empty for the next; a reply that was not sent stays as it was typed
-  const words = res.status === null ? notSentWords(action === 'reply' ? 'Your reply' : 'The answer') : answerWordsFor(res.status, res.body, name, action);
+  const words = res.status === null ? notSentWords(action === 'reply' ? 'Your reply' : 'The answer') : answerWordsFor(res.status, res.body, 'this run', action);
   sayResult(runId, words, res.ok);
   await loadRuns(false, { say: false });
   redrawRuns.add(runId);
@@ -2183,6 +2232,8 @@ function onClick(e) {
   if (goto) { goToRun(goto.dataset.runGoto); return; }
   const answer = t.closest('[data-run-answer]');
   if (answer) { answerRun(answer.dataset.runId, answer.dataset.runAnswer); return; }
+  const discard = t.closest('[data-run-discard]');
+  if (discard) { discardReply(discard.dataset.runDiscard); return; }
   const pick = t.closest('[data-run-select]');
   if (pick) { selectRun(pick.dataset.runSelect); return; }
   const timeline = t.closest('[data-run-timeline]');
@@ -2267,7 +2318,14 @@ function onChange(e) {
 }
 
 function onInput(e) {
-  if (e.target.dataset && e.target.dataset.runReply) { ui.runReplies.set(e.target.dataset.runReply, e.target.value); return; }
+  if (e.target.dataset && e.target.dataset.runReply) {
+    const id = e.target.dataset.runReply;
+    ui.runReplies.set(id, e.target.value);
+    // "Write a reply first" goes once something is written: a refusal does not outlive what it was about
+    const said = resultOf(id);
+    if (said && !said.ok && e.target.value.trim()) { clearResult(id); showResultIn(e.target.closest('[data-run]') && e.target.closest('[data-run]').querySelector(`[data-run-result="${id}"]`), id); }
+    return;
+  }
   if (e.target.id !== 'forge-text') return;
   ui.filters.text = e.target.value;
   filtersChanged(false);
@@ -2336,6 +2394,7 @@ export function initForgePanel(config, opts = {}) {
   if (!wired) {
     wired = true;
     initConnection();
+    if (typeof window !== 'undefined') window.addEventListener('online', readOnline);
     const tabs = panel.querySelector('.hx-forge-tabs');
     if (tabs) tabs.addEventListener('scroll', paintTabsMore, { passive: true });
     if (typeof window !== 'undefined') window.addEventListener('resize', paintTabsMore);
@@ -2407,6 +2466,6 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   pageAway = false;
   clearRunsOnMap();
   Object.assign(ui, { runSel: null, runTimelines: new Set(), runReplies: new Map(), thread: null, threadDetail: null, threadError: '', litThread: null, idea: freshIdea(), config: null, open: false, kind: 'specs', filtersOpen: false, filters: defaultFilters(), lists: {}, work: null, workFilters: { agentsOnly: false, finished: false }, loading: false, error: '', selected: null, selectedOn: '', detail: null, landing: null, detailError: '', lit: null, deploy: null, deployItem: null, litDeploy: null, nodesSeen: null, busy: '', note: null, confirm: null, actNote: null, notes: freshNotes(), runs: null, runnerSaid: null, runNote: null, agent: null, retrying: false });
-  resetFeedbackForTests(clock);
+  resetFeedbackForTests();
   resetConnectionForTests();
 }

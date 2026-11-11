@@ -149,7 +149,7 @@ describe('the words (runs-model.js)', () => {
       'Requested by maintainer-one under the profile claude', 'Claimed by runner-bot', 'Push seen: abcdef0 on agent/meals', 'Opened pull request #50 by runner-bot', 'Reported working by runner-bot', 'Checks running',
     ]);
     expect(limitRows(A)).toEqual([
-      { name: 'Minutes', limit: '30', reported: 'not reported' }, { name: 'Cost', limit: '$5.00', reported: '$0.40' }, { name: 'Tokens', limit: 'no limit asked', reported: '1,200' },
+      { name: 'Minutes', limit: '30', reported: 'not reported' }, { name: 'Cost', limit: '5.00', reported: '0.40' }, { name: 'Tokens', limit: 'no limit asked', reported: '1,200' },
     ]);
   });
 
@@ -261,7 +261,7 @@ describe('the Runs view', () => {
     expect(a.textContent).toContain('Working');
     expect(a.textContent).toContain('profile claude');
     expect(a.querySelector('.hx-run-limits').textContent).toContain('Cost');
-    expect(a.querySelector('.hx-run-limits').textContent).toContain('limit: $5.00; reported: $0.40');
+    expect(a.querySelector('.hx-run-limits').textContent).toContain('limit: 5.00; reported: 0.40');
     expect(a.textContent).toContain('Checks running');
     expect(a.textContent).toContain('Changing orders');
     expect(a.textContent).toContain(`Collides with ${B.runId} on orders`);

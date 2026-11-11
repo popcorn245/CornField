@@ -17,18 +17,16 @@ import { announce } from './keyboard.js';
 export const RESULT_MS = 6000;
 
 const results = new Map();
-let clock = () => Date.now();
 
 /** Keeps the result of an action under `key` and announces it through the live region */
 export function sayResult(key, text, ok = true) {
-  results.set(key, { text, ok, at: clock() });
+  results.set(key, { text, ok });
   announce(text);
 }
 
 /** The result kept under `key`, or null */
 export function resultOf(key) {
-  const r = results.get(key);
-  return r ? { text: r.text, ok: r.ok } : null;
+  return results.get(key) || null;
 }
 
 /** The next action on `key` begins: its old result goes */
@@ -45,8 +43,7 @@ export function showResultIn(el, key) {
   if (r) el.dataset.cornState = r.ok ? 'success' : 'failure'; else delete el.dataset.cornState;
 }
 
-/** For tests: forget every result, and use `now` for the time */
-export function resetFeedbackForTests(now = () => Date.now()) {
+/** For tests: forget every result */
+export function resetFeedbackForTests() {
   results.clear();
-  clock = now;
 }

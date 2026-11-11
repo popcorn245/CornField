@@ -352,6 +352,8 @@ describe('a pull request lights the map', () => {
     expect($('forge-btn-lit').textContent).toBe('#12');
     expect($('forge-btn').getAttribute('aria-label')).toBe('Work, pull request 12 selected');
     expect(await said()).toBe('Pull request 12, Meals page: 3 files, 2 on the map, 2 nodes lit. 1 check passed.');
+    // the legend names only what is lit: no failing check, no "a test a failing check names" (#189)
+    expect(q('.hx-forge-key').textContent).toBe('a file this pull request changes ');
   });
 
   it('lists every file, one on no node too, each node with a button; and the checks with their words', async () => {
@@ -391,7 +393,7 @@ describe('a pull request lights the map', () => {
     expect(checks[1].querySelector('.hx-forge-lights').textContent).toBe('Names no test file, so lights nothing');
     expect(checks[2].querySelector('.hx-forge-lights')).toBe(null);
     expect(q('.hx-forge-sub').textContent).toBe('Checks: 2 failed, 1 still running');
-    expect(q('.hx-forge-key')).not.toBe(null);
+    expect(q('.hx-forge-key').textContent).toContain('a test a failing check names');
     expect(await said()).toMatch(/1 file, 1 on the map, 2 nodes lit\. 2 failed, 1 still running\.$/);
   });
 
@@ -1170,6 +1172,7 @@ describe('the Work panel: Specs, the Filter chip, the way back', () => {
     expect(draft.querySelector('.hx-forge-state').textContent).toBe('Draft');
     expect(draft.querySelector('.hx-forge-facts').textContent).toContain('−2');
     expect(local.querySelector('.hx-forge-state').textContent).toBe('Local');
+    expect(local.querySelector('.hx-forge-state').dataset.cornState).toBe('draft'); // every state-pill states its state (a proposal only in a checkout is a draft)
     expect(local.querySelector('.hx-forge-facts').textContent).toContain('in worktree w-1');
     expect(broken.querySelector('button')).toBe(null); // one that could not be read opens nothing, and says why
     expect(broken.textContent).toContain('It is not valid JSON.');

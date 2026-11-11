@@ -462,7 +462,22 @@ describe('a failed read of the past reviews (F04)', () => {
     // Retry asks again; once the read works the line goes and the review shows
     s.mock.mockClear();
     fakeServer({ review: APPROVED });
+    q('#review [data-review-retry]').focus();
     click(q('#review [data-review-retry]'));
+    await settle();
+    expect(failLine().hidden).toBe(true);
+    expect(status()).toBe('Approved 1 hour ago');
+    // Retry is gone with its line: the focus goes to the proposal's name, never to the page
+    expect(document.activeElement).toBe(document.getElementById('proposal-title'));
+  });
+
+  it('reads them again when the browser is back online', async () => {
+    fakeServer({ review: APPROVED, reviewGet: 500 });
+    open();
+    await settle();
+    expect(failLine().hidden).toBe(false);
+    fakeServer({ review: APPROVED });
+    window.dispatchEvent(new Event('online'));
     await settle();
     expect(failLine().hidden).toBe(true);
     expect(status()).toBe('Approved 1 hour ago');

@@ -56,9 +56,12 @@ export function runName(run, nowMs) {
   return [`${run.kind} on ${aboutWords(run.refs)}`, run.profile && `profile ${run.profile}`, run.requestedBy && `asked by ${run.requestedBy}`, when].filter(Boolean).join(', ');
 }
 
-/** Cost with its unit and two decimals ("$1.45"); '' when the runner reported none. The runner's currency is not sent: the unit is the dollar sign, and the API keeps the raw number */
+/**
+ * Cost to two decimals with thousands separators ("1.45", "12,500.00"); '' when the runner reported none. The contract's `cost` is in the
+ * runner's own currency and names none (docs/agent-contract.md), so no currency sign is shown: the word "cost" is the unit. The API keeps the raw number.
+ */
 export function formatCost(n) {
-  return typeof n === 'number' && Number.isFinite(n) ? `$${n.toFixed(2)}` : '';
+  return typeof n === 'number' && Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
 }
 
 /** Tokens with thousands separators and the word ("47,000 tokens"); '' when none were reported */
@@ -180,7 +183,7 @@ export function answerBody(action, text) {
 export function answerWordsFor(status, body, runId, action) {
   if (status === null) return 'cornfield did not answer; nothing was sent.';
   if (status === 401) return 'Your sign-in has ended. Sign in again to answer a run.';
-  if (body && body.ok) return action === 'stop' ? `Asked ${runId} to stop. The runner decides what that means.` : `Answered ${runId}: ${action}. The runner picks it up and goes on.`;
+  if (body && body.ok) return action === 'stop' ? `Asked ${runId} to stop. The runner decides what that means.` : action === 'reply' ? `Sent your reply to ${runId}. The runner picks it up and goes on.` : `Told ${runId} to continue. The runner picks it up and goes on.`;
   return (body && body.error) || `The answer was refused (${status}).`;
 }
 
@@ -190,7 +193,7 @@ export function runsStatus(data) {
   return `${data.open} open of ${data.maxOpen} allowed, ${n} ${n === 1 ? 'run' : 'runs'}`;
 }
 
-/** "1,200 tokens, cost $0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
+/** "1,200 tokens, cost 0.42", or '' when nothing was reported: the numbers as sent, never estimated; the cost to 2 decimals (the API keeps it raw) */
 function saidWords(t) {
   return [t.tokens != null && formatTokens(t.tokens), typeof t.cost === 'number' && `cost ${formatCost(t.cost)}`].filter(Boolean).join(', ');
 }

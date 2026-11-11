@@ -107,10 +107,12 @@ export async function openProposal(slug, source = null) {
     if (!res.ok) {
       let why = '';
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      throw new Error(res.status === 404 ? `No proposal called ${slug}${source ? ` in ${source}` : ''}.` : `${slug} could not be opened: ${why || `the server answered ${res.status}.`}`);
+      throw new Error(res.status === 404 ? `No proposal called ${slug}${source ? ` in ${source}` : ''}.` : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
     }
     const found = res.headers.get('X-Proposal-Source');
-    showProposal(await res.json(), { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
+    let item;
+    try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
+    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
@@ -251,7 +253,15 @@ function setMessage(text, isError = false, retry = null) {
       b.dataset.cornKind = 'quiet';
       b.dataset.proposalErrorAction = label.toLowerCase();
       b.textContent = label;
-      b.addEventListener('click', () => act());
+      // The bar is drawn anew either way, so the focus is put somewhere stated: the proposal's name once it opened, the new Retry if it failed
+      // again, the map once the bar is closed; never the page
+      b.addEventListener('click', async () => {
+        const opened = await act();
+        const to = label === 'Close' ? $('graph-canvas') : opened ? $('proposal-title') : document.querySelector('[data-proposal-error-action="retry"]');
+        if (!to) return;
+        if (to.id === 'proposal-title') to.tabIndex = -1;
+        to.focus();
+      });
       msg.append(' ', b);
     }
   }

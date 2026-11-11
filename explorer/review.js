@@ -164,17 +164,31 @@ function onBar(open) {
 }
 
 /** The latest admin review on the proposal's PR, as the server reads it from the comments (none yet is a 404) */
+/** The reviews were read: the failure line goes, and Retry, if it had the focus, hands it to the proposal's name (the status line is a live region: it says the review itself, and is not a place for the focus) */
+function readAgain() {
+  const retried = !!root && root.contains(document.activeElement) && document.activeElement.matches('[data-review-retry]');
+  ui.loadFailed = false;
+  paint();
+  const title = $('proposal-title');
+  if (!retried || !title) return;
+  title.tabIndex = -1;
+  title.focus();
+}
+
+function readOnline() {
+  if (ui.loadFailed && ui.key) loadReview(ui.key);
+}
+
 async function loadReview(key) {
   try {
     const res = await fetch(reviewUrl(), { cache: 'no-store' });
     if (key !== ui.key) return; // another proposal has opened since
-    if (res.status === 404) { ui.loadFailed = false; paint(); return; } // none yet: the server says so with a 404
+    if (res.status === 404) { readAgain(); return; } // none yet: the server says so with a 404
     if (!res.ok) throw new Error(`The server answered ${res.status}.`);
     const found = await res.json();
     if (key !== ui.key) return;
-    ui.loadFailed = false;
     if (found && typeof found.verdict === 'string') ui.review = { verdict: found.verdict, at: found.at };
-    paint();
+    readAgain();
   } catch {
     // Not "no review": the read failed, so the bar says it could not look (with Retry), and the buttons stay as they were
     if (key === ui.key) { ui.loadFailed = true; paint(); }
@@ -184,7 +198,7 @@ async function loadReview(key) {
 function onClick(e) {
   if (ui.busy || !e.target.closest) return;
   if (e.target.closest('[data-review-cancel]')) { closeNote(); return; }
-  if (e.target.closest('[data-review-retry]')) { ui.loadFailed = false; paint(); loadReview(ui.key); return; }
+  if (e.target.closest('[data-review-retry]')) { q('[data-review-loadfail-text]').textContent = 'Reading the reviews again …'; loadReview(ui.key); return; }
   const btn = e.target.closest('[data-review]');
   if (!btn || btn.disabled) return;
   if (btn.dataset.review === 'notes' && !ui.noting) openNote(); // the first press opens the field, the second sends
@@ -266,6 +280,8 @@ export function initReview() {
     if (barBefore) barBefore(open);
     onBar(open);
   };
+  // Back online after a failed read: the reviews are read again (the same function each time, so it is added once)
+  if (typeof window !== 'undefined') window.addEventListener('online', readOnline);
   // "3 minutes ago" moves on without the bar being drawn again
   timer = setInterval(() => { if (ui.review) paint(); }, TICK_MS);
   onBar(!!state.proposal);

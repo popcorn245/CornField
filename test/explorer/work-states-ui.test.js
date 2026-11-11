@@ -179,6 +179,61 @@ describe('a refresh does not disturb a reply being typed (F03)', () => {
     await settle();
     expect(q('[data-run-reply]')).toBe(null);
   });
+
+  it('brings the rest of a card being typed in up to date, and keeps the field', async () => {
+    const server = fakeServer({ runs: [SEVEN[3]] });
+    mount();
+    await openTab('work');
+    const field = q('[data-run-reply]');
+    field.focus();
+    field.value = 'Plan B';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    server.setRuns([{ ...SEVEN[3], report: { ...SEVEN[3].report, note: 'Plan ready, second version' } }]);
+    click(q('[data-action="refresh-forge"]'));
+    await settle();
+    expect(q('[data-run-reply]')).toBe(field);
+    expect(q(`[data-run="${ID(4)}"]`).textContent).toContain('Plan ready, second version');
+  });
+
+  it('keeps what was typed, and says so, when the run stops waiting while a reply is typed', async () => {
+    const server = fakeServer({ runs: [SEVEN[3]] });
+    mount();
+    await openTab('work');
+    const field = q('[data-run-reply]');
+    field.focus();
+    field.value = 'Keep the old page';
+    field.setSelectionRange(5, 8);
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    server.setRuns([{ ...SEVEN[3], status: 'working' }]);
+    click(q('[data-action="refresh-forge"]'));
+    await settle();
+    // the same field, focused, with its text and selection: a phone's keyboard does not close, nothing typed is lost
+    expect(q('[data-run-reply]')).toBe(field);
+    expect(document.activeElement).toBe(field);
+    expect([field.value, field.selectionStart, field.selectionEnd]).toEqual(['Keep the old page', 5, 8]);
+    // and the change is not hidden: the card says Working, says the reply was not sent, and has no Reply button
+    const card = q(`[data-run="${ID(4)}"]`);
+    expect(card.dataset.cornState).toBe('working');
+    expect(card.querySelector('[data-corn="state-pill"]').textContent).toBe('Working');
+    expect(card.querySelector('[data-corn="message"]').textContent).toMatch(/now working and no longer waits for a reply, so what you typed was not sent/);
+    expect(card.querySelector('[data-run-answer]')).toBe(null);
+    // Discard lets it go, and the focus goes to the card
+    click(card.querySelector('[data-run-discard]'));
+    await settle();
+    expect(q('[data-run-reply]')).toBe(null);
+    expect(document.activeElement).toBe(q(`[data-run="${ID(4)}"]`));
+  });
+
+  it('puts the focus on the card, not the page, when a field with nothing typed goes', async () => {
+    const server = fakeServer({ runs: [SEVEN[3]] });
+    mount();
+    await openTab('work');
+    q('[data-run-reply]').focus();
+    server.setRuns([{ ...SEVEN[3], status: 'working' }]);
+    click(q('[data-action="refresh-forge"]'));
+    await settle();
+    expect(document.activeElement).toBe(q(`[data-run="${ID(4)}"]`));
+  });
 });
 
 describe('the seven run states differ without colour (F34)', () => {
@@ -251,6 +306,11 @@ describe('one row for each proposal (F36)', () => {
     expect(mergeSpecs([proposal('x', 'checkout'), proposal('x', 'w-1')]).map((r) => specWhere(r))).toEqual(['in the checkout, and in worktree w-1']);
     // an entry that could not be read is never hidden behind another
     expect(mergeSpecs([proposal('y', 'checkout'), { slug: 'y', source: 'pull/5', pull: { number: 5 }, error: 'It is not valid JSON.' }]).map((r) => r.source)).toEqual(['pull/5', 'checkout']);
+    // the ones that can be reviewed come first, whatever their number: open spec PRs, then drafts on a PR, then local drafts
+    expect(mergeSpecs([proposal('0001-l', 'checkout'), proposal('0090-d', 'pull/8', { pull: { number: 8, draft: true } }), proposal('0099-o', 'pull/9', { pull: { number: 9 } })]).map((r) => r.slug)).toEqual(['0099-o', '0090-d', '0001-l']);
+    // nor a local copy that could not be read behind its PR's row
+    const z = mergeSpecs([{ slug: 'z', source: 'checkout', error: 'It is not valid JSON.' }, proposal('z', 'pull/6', { pull: { number: 6 } })]);
+    expect(z.map((r) => [r.source, r.error || '', r.also || []])).toEqual([['pull/6', '', []], ['checkout', 'It is not valid JSON.', []]]);
   });
 
   it('lists the Specs tab with one row for each, and the count matches the rows', async () => {
@@ -348,6 +408,20 @@ describe('offline is said once, in one place (F38)', () => {
     expect($('forge-runs-note').textContent + $('forge-notice').textContent).toMatch(/You are offline/);
     expect($('forge-runs-note').textContent + $('forge-notice').textContent).not.toMatch(/could not be reached/);
   });
+
+  it('reads a tab that failed again once the browser is back online, so its error goes with the cause', async () => {
+    mount();
+    setOnline(false);
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    openForge({ tab: 'pulls' });
+    await settle();
+    expect($('forge-notice').hidden).toBe(false);
+    setOnline(true);
+    fakeServer({ pulls: [] });
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect($('forge-notice').hidden).toBe(true);
+  });
 });
 
 describe('a result lands by the control, stays, and is announced (F39)', () => {
@@ -362,7 +436,7 @@ describe('a result lands by the control, stays, and is announced (F39)', () => {
     await settle();
     const result = q(`[data-run-result="${ID(4)}"]`);
     expect(result.hidden).toBe(false);
-    expect(result.textContent).toMatch(/^Answered code on issue #4, asked by maintainer-one: reply\./);
+    expect(result.textContent).toMatch(/^Sent your reply to this run\./);
     expect(result.dataset.cornState).toBe('success');
     expect(q(`[data-run="${ID(4)}"]`).contains(result)).toBe(true);
     expect(result.closest('li').querySelector('[data-run-answer="reply"]').compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -374,6 +448,10 @@ describe('a result lands by the control, stays, and is announced (F39)', () => {
     click(q('[data-run-answer="reply"]'));
     await settle();
     expect(q(`[data-run-result="${ID(4)}"]`).textContent).toBe('Write a reply first.');
+    // and a refusal does not outlive what it was about: it goes once something is typed
+    q('[data-run-reply]').value = 'Plan C';
+    q('[data-run-reply]').dispatchEvent(new Event('input', { bubbles: true }));
+    expect(q(`[data-run-result="${ID(4)}"]`).hidden).toBe(true);
     expect(q('#forge-runs-note').hidden).toBe(true); // the top of the list is for what concerns the whole list
   });
 
@@ -413,11 +491,11 @@ describe('a result lands by the control, stays, and is announced (F39)', () => {
 
 describe('cost and tokens are formatted (F40)', () => {
   it('formats cost with a unit and two decimals, and tokens with separators', () => {
-    expect(formatCost(1.4499999999999997)).toBe('$1.45');
-    expect(formatCost(1.7999999999999998)).toBe('$1.80');
-    expect(formatCost(0)).toBe('$0.00');
-    expect(formatCost(null)).toBe('');
-    expect(formatCost(undefined)).toBe('');
+    expect(formatCost(1.4499999999999997)).toBe('1.45');
+    expect(formatCost(1.7999999999999998)).toBe('1.80');
+    expect(formatCost(0)).toBe('0.00');
+    expect(formatCost(1234567.891)).toBe('1,234,567.89'); // very large: grouped, never "1.23e+6"
+    for (const none of [null, undefined, NaN, '1.5']) expect(formatCost(none)).toBe('');
     expect(formatTokens(47000)).toBe('47,000 tokens');
     expect(formatTokens(1)).toBe('1 token');
     expect(formatTokens(1234567)).toBe('1,234,567 tokens');
@@ -426,12 +504,12 @@ describe('cost and tokens are formatted (F40)', () => {
 
   it('is what a run\'s meta line, its limits list and a pull request\'s run line show', () => {
     const run = { ...SEVEN[2], limits: { cost: 2.4999999999999996 } };
-    expect(runMeta(run, NOW)).toContain('limits cost $2.50');
-    expect(runMeta(run, NOW)).toContain('reported 47,000 tokens, cost $1.45');
+    expect(runMeta(run, NOW)).toContain('limits cost 2.50');
+    expect(runMeta(run, NOW)).toContain('reported 47,000 tokens, cost 1.45');
     expect(runMeta(run, NOW)).not.toMatch(/1\.4499/);
-    expect(limitRows(run).find((r) => r.name === 'Cost')).toEqual({ name: 'Cost', limit: '$2.50', reported: '$1.45' });
+    expect(limitRows(run).find((r) => r.name === 'Cost')).toEqual({ name: 'Cost', limit: '2.50', reported: '1.45' });
     expect(limitRows(run).find((r) => r.name === 'Tokens').reported).toBe('47,000');
-    expect(pullRunWords({ ...run, pull: { number: 1 } }, NOW)).toContain('cost $1.45');
+    expect(pullRunWords({ ...run, pull: { number: 1 } }, NOW)).toContain('cost 1.45');
   });
 });
 
