@@ -18,6 +18,7 @@ import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { openStore } from '../../../server/db.js';
 import { fakeForge, recordings } from '../../server/fake-forge.js';
+import { reviewComment, proposalHash } from '../../../server/reviews.js';
 
 export const REPO = 'owner/name';
 export const MAINTAINER = 'maintainer-one';
@@ -34,6 +35,18 @@ const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 export const SPEC_PR_FIRST = 21;
 
 /**
+ * What each spec PR looks like to the maintainer (spec 0010), by its place in slug order, so every group and state of the Specs list shows:
+ *   0 ready, never reviewed, pushed 50 h ago (To decide, and the one with a run waiting)   1 a draft PR (With the agent)
+ *   2 ready, approved, the file unchanged since (Approved)                                 3 ready, sent back after the last push (With the agent)
+ *   4 ready, approved, then the file changed (Changed since approved, To decide)           5 a draft PR
+ * `pushedHoursAgo` dates the head commit; `review` is a comment by the maintainer, as cornfield writes one.
+ */
+export const SPEC_LOOKS = [
+  { pushedHoursAgo: 50 }, { draft: true }, { review: { verdict: 'approved', hoursAgo: 3 } }, { pushedHoursAgo: 3, review: { verdict: 'notes', note: 'Say what happens to the old export first.', hoursAgo: 1 } },
+  { pushedHoursAgo: 20, review: { verdict: 'approved', hoursAgo: 30, stale: true } }, { draft: true },
+];
+
+/**
  * @param {{ repoFiles: Record<string, string>, slugs: string[], port: number, runner?: 'online'|'offline'|'none', dataDir: string }} opts
  *   `repoFiles` maps a repo path to its text (the generated repo's files: the proposals and their mockups are served from it)
  */
@@ -44,12 +57,21 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   const user = (login) => ({ login, html_url: `https://github.example.com/${login}` });
   const pullOf = (s) => {
     const title = JSON.parse(repoFiles[`${FOLDER}/${s.slug}.json`]).title;
-    return { number: s.n, title: `Spec: ${title}`, state: 'open', draft: s.n % 2 === 0, user: user('agent-four'), labels: [{ name: 'spec' }], head: { ref: `spec/${s.slug}`, sha: s.sha }, base: { ref: 'main', sha: sha('main') }, html_url: `https://github.example.com/${REPO}/pull/${s.n}`, created_at: minutesAgo(600 - s.n * 10), updated_at: minutesAgo(30), merged_at: null };
+    return { number: s.n, title: `Spec: ${title}`, state: 'open', draft: !!SPEC_LOOKS[s.n - SPEC_PR_FIRST]?.draft, user: user('agent-four'), labels: [{ name: 'spec' }], head: { ref: `spec/${s.slug}`, sha: s.sha }, base: { ref: 'main', sha: sha('main') }, html_url: `https://github.example.com/${REPO}/pull/${s.n}`, created_at: minutesAgo(600 - s.n * 10), updated_at: minutesAgo(30), merged_at: null };
   };
   const mockupsOf = (slug) => Object.keys(repoFiles).filter((f) => f.startsWith(`${FOLDER}/${slug}/`));
   const state = { runner };
   const comments = new Map(); // issue or PR number -> the comments posted to it since the rig started
   let nextComment = 9900;
+  // The reviews the looks above name, posted as comments (kept in memory, like the ones a maintainer posts while the rig runs)
+  specs.forEach((sp, i) => {
+    const review = SPEC_LOOKS[i]?.review;
+    if (!review) return;
+    const text = repoFiles[`${FOLDER}/${sp.slug}.json`];
+    const at = minutesAgo(review.hoursAgo * 60);
+    const body = reviewComment(sp.slug, { verdict: review.verdict, note: review.note || '', edits: [], ...(review.verdict === 'approved' ? { proposal: review.stale ? '0'.repeat(64) : proposalHash(text) } : {}) }, { login: MAINTAINER });
+    comments.set(sp.n, [{ id: nextComment++, user: user(MAINTAINER), body, html_url: `https://github.example.com/${REPO}/issues/${sp.n}#issuecomment-${nextComment - 1}`, created_at: at, updated_at: at }]);
+  });
   let touchRunner = () => {};
 
   const dispatch = (key, req) => {
@@ -87,7 +109,7 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
       const spec = specs.find((s) => s.n === Number(m[1]));
       if (spec) {
         if (m[2] === '/files') return { body: [{ sha: 'f1', filename: `${FOLDER}/${spec.slug}.json`, status: 'added', additions: 80, deletions: 0, changes: 80 }, ...mockupsOf(spec.slug).map((f, i) => ({ sha: `m${i}`, filename: f, status: 'added', additions: 1, deletions: 0, changes: 1 }))] };
-        if (m[2] === '/commits') return { body: [{ sha: spec.sha, commit: { message: `Spec ${spec.slug}`, author: { name: 'agent-four', date: minutesAgo(40) } }, author: user('agent-four') }] };
+        if (m[2] === '/commits') { const pushed = minutesAgo((SPEC_LOOKS[spec.n - SPEC_PR_FIRST]?.pushedHoursAgo ?? 0.7) * 60); return { body: [{ sha: spec.sha, commit: { message: `Spec ${spec.slug}`, author: { name: 'agent-four', date: pushed }, committer: { date: pushed } }, author: user('agent-four') }] }; }
         return { body: { ...pullOf(spec), mergeable: true, mergeable_state: 'clean', merged: false } };
       }
     }

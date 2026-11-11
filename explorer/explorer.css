@@ -1194,3 +1194,25 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-waiting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); margin: var(--corn-space-2) 0 0; padding: var(--corn-space-1) var(--corn-space-3); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-run-waiting); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); line-height: 1.4; overflow-wrap: anywhere; }
 .hx-waiting-line[hidden] { display: none; }
 @media (max-width: 767px) { .hx-waiting-line .hx-btn { min-height: 44px; min-width: 44px; } }
+
+/* ==========================================================================
+   Sheets on a phone (spec 0010 D7): two at most, one expanded, a stub for the other, and the map keeps 35% of the screen
+   ========================================================================== */
+.hx-sheet-stub { display: none; }
+@media (max-width: 767px) {
+  /* The node panel and Work take turns: the one displaced is hidden, not closed (its node stays selected) */
+  .hx-dock > .hx-sheet[data-sheet-away] { display: none; }
+  /* A stub: one 44px row with the sheet's title and its badge; a tap expands it, and the expanded one folds to a stub in its place */
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] { min-height: 44px; max-height: 44px; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] > :not(.hx-sheet-stub) { display: none !important; }
+  .hx-sheet-stub { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; min-height: 44px; padding: 0 var(--corn-space-1); border: 0; background: none; color: var(--corn-text); font: inherit; font-weight: 600; text-align: left; }
+  .hx-sheet-stub[hidden] { display: none; }
+  .hx-sheet-stub:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); border-radius: var(--corn-radius); }
+  .hx-sheet-stub-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* An expanded sheet is capped so the map keeps 35% of the screen: sheets.js writes `--hx-sheet-cap` (the screen less the map's share, less a stub). Not in a short
+   window (400% zoom), where an open sheet may take the window. */
+@media (max-width: 767px) and (min-height: 481px) {
+  .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"], .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50dvh), 50dvh); }
+  .hx-dock > .hx-drawer[data-sheet-state="expanded"], .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60dvh), 60dvh); }
+}

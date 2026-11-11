@@ -71,7 +71,7 @@ import { render, isNodeVisible } from './render.js';
 import { selectNode, repaintThreads } from './panels.js';
 import { announce, centreOn } from './keyboard.js';
 import { trapTab } from './focusables.js';
-import { isPhone, registerSheet, expandSheet, collapseSheet } from './sheets.js';
+import { isPhone, registerSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from './sheets.js';
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
@@ -1299,6 +1299,7 @@ function paintWaiting() {
   paintButton();
   paintTitle();
   paintBarLine();
+  refreshStubs();
 }
 
 /** The proposal bar's line: a run waits on the open proposal (spec 0010 D2) */
@@ -2118,7 +2119,7 @@ export function openForge({ load = true, tab } = {}) {
   ui.open = true;
   panel.inert = false;
   panel.classList.add('forge-open');
-  if (isPhone()) expandSheet('forge');
+  if (isPhone()) { showSheet('forge'); if (tab) expandSheet('forge'); } // a peek; only a link that names a tab (a deep link, "Open the Specs list") opens it expanded
   paintButton();
   const title = $('forge-title');
   title.focus();
@@ -2509,7 +2510,11 @@ export function initForgePanel(config, opts = {}) {
   const tab = panel.querySelector('[data-forge-kind="threads"]');
   if (tab) tab.hidden = !threadsOn;
   state.threadIndex = threadsOn ? { for: threadsFor, ensure: ensureThreadsList, open: openThread, start: startThread, forge: forgeName } : null;
-  registerSheet('forge', panel);
+  // On a phone Work is a sheet: it opens as a peek and displaces the node panel; folded to a stub it says its title and what waits on you (spec 0010 D7)
+  registerSheet('forge', panel, {
+    stub: () => { const n = waitingNow().total; return { title: t('issuesAndPrs'), badge: n ? String(n) : '', label: workButtonName(t('issuesAndPrs'), n) }; },
+    away: () => closeForge({ restoreFocus: false }),
+  });
   paintFilters();
   paint();
   // The map shows the open runs whether or not the panel is open: read them once now, and again now and then while any is open

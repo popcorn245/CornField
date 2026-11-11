@@ -197,3 +197,32 @@ describe('the proposal bar\'s line', () => {
     expect(waitingLineWords({ report: null })).toBe('A run is waiting on you');
   });
 });
+
+describe('the contract (docs/theming.md)', () => {
+  // @ts-expect-error node builtins
+  const fs = require('node:fs');
+  // @ts-expect-error node builtins
+  const path = require('node:path');
+  const docs = fs.readFileSync(path.resolve(__dirname, '../../docs/theming.md'), 'utf8');
+  const strings = fs.readFileSync(path.resolve(__dirname, '../../core/strings.js'), 'utf8');
+
+  it('lists each new hook once in the hooks table', () => {
+    for (const hook of ['waiting-badge', 'spec-group', 'review-state', 'specs-search', 'run-group', 'waiting-line', 'sheet-stub']) {
+      expect(docs, hook).toMatch(new RegExp(`^\\| [^|]*\`${hook}\`[^|]* \\|`, 'm'));
+    }
+  });
+
+  it('documents the sent-back state, and the groups\' data-group values', () => {
+    expect(docs).toMatch(/^\| `sent-back` \|/m);
+    expect(CORN_STATES).toContain('sent-back');
+    for (const v of ['decide', 'agent', 'approved', 'drafts', 'needs', 'motion', 'finished']) expect(docs, v).toContain(`\`${v}\``);
+  });
+
+  it('has the nine strings keys, with the default words the spec names', () => {
+    const want = { waitingOnYou: 'waiting on you', toDecide: 'To decide', withAgent: 'With the agent', approvedGroup: 'Approved', drafts: 'Drafts', needsYou: 'Needs you', inMotion: 'In motion', finished: 'Finished', answer: 'Answer' };
+    for (const [key, words] of Object.entries(want)) {
+      expect(strings).toContain(`${key}: '${words}'`);
+      expect(docs).toContain(`| \`${key}\` | ${words} |`);
+    }
+  });
+});
