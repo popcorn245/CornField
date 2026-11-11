@@ -15,7 +15,7 @@ import { themed } from './theme-model.js';
 import { onThemeChange } from './theme.js';
 import { NODE_THEMES } from '../core/schema.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
-import { rowKeyOf, shownByProposal } from './layer-model.js';
+import { layerOn, reviewHides, rowKeyOf, shownByProposal } from './layer-model.js';
 import { fillOfNode, groupOf, layerShows } from './scene.js';
 import { STROKE_TOKEN, cssColor, fillOf, getMapStyle, kindToken, onMapStyleChange, pageReader, setMapSubjects } from './map-style.js';
 import { over, parseColor, contrast } from '../core/color.js';
@@ -79,7 +79,8 @@ export function clickWithLegendMenu(target, act) {
 
 /** What a layer is when the viewer has not touched it: the config's `off`, else a starting layer's own default, else on */
 const defaultOf = (key) => (Object.hasOwn(state.layerDefaults, key) ? state.layerDefaults[key] : !STARTS_OFF.has(key));
-const isOn = (key) => state.activeLayers[key] !== false;
+/** Whether a layer is on for what is drawn: the viewer's, or the review's while a proposal is under review (layer-model.js) */
+const isOn = (key) => layerOn(state, key);
 
 const NO_COLOR = '#94a3b8';
 /** A colour as the dot's style may hold it: a hex or an rgb()/rgba() of numbers, else the plain grey. A node's colour is the map's data
@@ -299,11 +300,14 @@ export function renderLayerToggles() {
   const row = (layer) => {
     const on = isOn(layer.key);
     const shown = byProposal[layer.key] ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">+${byProposal[layer.key]} shown by the proposal</span>` : '';
+    // A row the review hid says so under its name (there is no room beside it): it can still be turned on, for the review
+    const hid = !shown && counts[layer.key] && reviewHides(state, layer.key) ? `<span class="hx-faint hx-layer-note" data-corn="layer-note">${escHtml(t('hiddenWhileReviewing'))}</span>` : '';
+    const name = `<span class="hx-toggle-name">${escHtml(layer.label)}</span>`;
     return `
       <button type="button" class="hx-toggle-row${on ? '' : ' is-off'}" data-action="toggle-layer" data-layer="${escHtml(layer.key)}" aria-pressed="${on}" title="${escHtml(layer.desc)}" data-corn="row">
         <span class="hx-toggle-label">
           ${dot(swatch(layer.color), on, surface)}
-          <span class="hx-toggle-name">${escHtml(layer.label)}</span>${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
+          ${hid ? `<span class="hx-toggle-text">${name}${hid}</span>` : name}${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">${shown}
           <span class="hx-count" data-corn="count">${(UNIT[layer.key] || String)(counts[layer.key] || 0)}</span>
@@ -336,7 +340,7 @@ export function renderEdgeKey() {
 export function renderCloudLegend() {
   const el = document.getElementById('cloud-legend');
   if (!el) return;
-  if (state.activeLayers.cloud === false) { el.innerHTML = ''; el.hidden = true; return; }
+  if (!layerOn(state, 'cloud')) { el.innerHTML = ''; el.hidden = true; return; }
   el.hidden = false;
   el.innerHTML = `
     <div class="hx-menu-title" data-corn="menu-title"><span>Cloud: when an outage bites</span></div>
@@ -361,33 +365,96 @@ function say(text) {
 }
 
 /**
- * Turns a layer on or off. `viewer`: the person chose it in the menu, so it is kept in their browser; a layer another part of the app
- * turns on (a deploy that lights a stack) is not a choice of theirs and is not kept.
+ * Sets a layer on or off. `viewer`: the person chose it in the menu, so it is kept in their browser; a layer another part of the app
+ * turns on (a deploy that lights a stack) is not a choice of theirs and is not kept. While a proposal is under review the choice is the review's:
+ * kept for the review only (`state.review.manual`, or `.step` when a playing scenario needs the layer: `scenario`), never in `activeLayers` or the browser.
  */
-export function toggleLayer(key, { viewer = false } = {}) {
-  const on = state.activeLayers[key] === false; // a layer with no entry yet is on, as the toggles show it
-  state.activeLayers[key] = on;
-  if (viewer) { keep(key, on); writeChanges(); }
+export function setLayer(key, on, { viewer = false, scenario = false } = {}) {
+  const review = state.review && state.proposal ? state.review : null;
+  if (review) {
+    (scenario ? review.step : review.manual)[key] = on;
+    review.rev++;
+  } else {
+    state.activeLayers[key] = on;
+    if (viewer) { keep(key, on); writeChanges(); }
+  }
   changed();
   if (viewer) {
     const { layers, overlays } = layerRows();
     const layer = [...layers, ...overlays].find((l) => l.key === key);
     const n = state.nodes.filter((x) => isNodeVisible(x)).length;
-    say(`${layer ? layer.label : key} ${on ? 'on' : 'off'}. ${n} ${n === 1 ? 'node' : 'nodes'} shown.`);
+    say(`${layer ? layer.label : key} ${on ? 'on' : 'off'}${review ? ' for this review' : ''}. ${n} ${n === 1 ? 'node' : 'nodes'} shown.`);
   }
 }
 
-/** All / None: every layer on or off, never an overlay; the root stays drawn */
+/** Flips a layer (what a click on its row does); see `setLayer` */
+export function toggleLayer(key, opts = {}) {
+  setLayer(key, !layerOn(state, key), opts);
+}
+
+/** All / None: every layer on or off, never an overlay; the root stays drawn. During a review it is the review's state that changes, not the viewer's */
 export function toggleAllLayers(on, { viewer = false } = {}) {
   const { layers } = layerRows();
   const keys = new Set([...LAYER_DEFS.filter((l) => !l.overlay).map((l) => l.key), ...state.projectLayers.map((l) => l.key), ...layers.map((l) => l.key)]);
-  keys.forEach((k) => { state.activeLayers[k] = on; if (viewer) keep(k, on); });
-  if (viewer) writeChanges();
+  const review = state.review && state.proposal ? state.review : null;
+  if (review) { keys.forEach((k) => { review.manual[k] = on; }); review.rev++; } else {
+    keys.forEach((k) => { state.activeLayers[k] = on; if (viewer) keep(k, on); });
+    if (viewer) writeChanges();
+  }
   changed();
   if (viewer) {
     const n = state.nodes.filter((x) => isNodeVisible(x)).length;
-    say(`${on ? 'All' : 'No'} layers on. ${n} ${n === 1 ? 'node' : 'nodes'} shown.`);
+    say(`${on ? 'All' : 'No'} layers on${review ? ' for this review' : ''}. ${n} ${n === 1 ? 'node' : 'nodes'} shown.`);
   }
+}
+
+// ---------------------------------------------------------------------------
+//  The review narrows the map to the change (issue #232)
+//  The hiding is the review's, never the viewer's: `state.review` holds it (layer-model.js `layersOf` reads it), `activeLayers` and the saved choices are not touched.
+// ---------------------------------------------------------------------------
+
+/** A proposal is opened: a fresh review ("Show the whole map" off, nothing turned on by hand yet), also when one was already open */
+export function beginReview() {
+  state.review = { whole: false, manual: {}, step: {}, rev: 0 }; // the map and the menu are drawn by the caller, once the proposal is on the map (proposal.js rebuildProposalMap)
+}
+
+/** The proposal is closed: the viewer's own layers are what is drawn again, exactly as they were */
+export function endReview() {
+  if (!state.review) return;
+  state.review = null;
+  touchScene();
+  renderLayerToggles();
+}
+
+/** What a screen reader hears when a review opens and hid layers: "Showing 4 of 22 layers: the ones this proposal changes." Nothing when no layer was hidden */
+export function reviewLayersLine() {
+  if (!state.review || !state.proposal || state.review.whole) return '';
+  const { layers } = layerRows();
+  const held = new Set(state.nodes.map((n) => rowKeyOf(state, n))); // a layer that holds no node has nothing to hide
+  if (!layers.some((l) => held.has(l.key) && reviewHides(state, l.key))) return '';
+  const on = layers.filter((l) => isOn(l.key)).length;
+  return `Showing ${on} of ${layers.length} layers: the ones this proposal changes.`;
+}
+
+/** "Show the whole map": on brings back every layer the viewer has on and the proposal's dimming of the rest (Diff as it always was); off narrows to the change again. Said once, here */
+export function setWholeMap(on) {
+  const review = state.review && state.proposal ? state.review : null;
+  if (!review || review.whole === on) return;
+  review.whole = on;
+  review.rev++;
+  changed();
+  say(on ? 'Showing the whole map.' : (reviewLayersLine() || 'Showing the change: the rest of the map is greyed.'));
+}
+
+/** A scenario ended: the layers it turned on for the review go off again (the focused view comes back). True when there were any */
+export function clearStepLayers() {
+  const review = state.review;
+  if (!review || !Object.keys(review.step).length) return false;
+  review.step = {};
+  review.rev++;
+  touchScene();
+  renderLayerToggles();
+  return true;
 }
 
 /** Opens or closes the kinds of one row ("5 kinds"); the focus stays on its button */

@@ -23,7 +23,7 @@ import { isPhone, visibleMapRect } from './sheets.js';
 import { announce } from './keyboard.js';
 import { flyTo } from './fly.js';
 import { groupOf } from './scene.js';
-import { projectLayerKey } from './layer-model.js';
+import { layerOn, projectLayerKey } from './layer-model.js';
 import { noMatchText, showSearchStatus, updateSearchStatus } from './search-status.js';
 import { countText, moreLine, noMatchLine, searchNodes, stepIndex } from './search-model.js';
 
@@ -176,7 +176,7 @@ function showLayerOf(node) {
   const tries = [projectLayerKey(state, node), groupOf(node), node.type === 'store' || node.type === 'rom' ? 'flow' : null, node.type === 'core' ? 'pkg' : null, node.type === 'core' ? 'core' : null];
   for (const key of tries) {
     if (isNodeVisible(node)) return;
-    if (key && state.activeLayers[key] === false) toggleLayer(key);
+    if (key && !layerOn(state, key)) toggleLayer(key);
   }
 }
 

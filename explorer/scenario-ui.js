@@ -30,9 +30,9 @@ import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from '.
 import { edgeKey } from '../core/proposal.js';
 import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks } from './check.js';
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
-import { toggleLayer, LAYER_DEFS } from './layers.js';
+import { setLayer, clearStepLayers, LAYER_DEFS } from './layers.js';
 import { externalLayer } from './cloud-model.js';
-import { projectLayerKey, shownByProposal } from './layer-model.js';
+import { layerOn, layersOf, projectLayerKey, shownByProposal } from './layer-model.js';
 import { announce } from './keyboard.js';
 import { t } from './strings.js';
 import { currentStepSentence } from './scenario-list-model.js';
@@ -135,7 +135,7 @@ function giveFocusBack() {
 function showOutageLayers(scenario) {
   if (!scenario || !Array.isArray(scenario.down) || !scenario.down.length) return;
   outageLayers(blastRadius(scenario.down, state.nodes, state.edges), state.nodes)
-    .forEach((key) => { if (state.activeLayers[key] === false) toggleLayer(key); });
+    .forEach((key) => { if (!layerOn(state, key)) setLayer(key, true, { scenario: true }); });
 }
 
 /**
@@ -144,12 +144,13 @@ function showOutageLayers(scenario) {
  */
 export function layersHiding(node) {
   if (!node || state.view === 'dataflow' || state.view === 'house') return [];
-  const on = (key) => state.activeLayers[key] !== false;
+  const layers = layersOf(state); // what is drawn: the viewer's layers, or the review's (layer-model.js)
+  const on = (key) => layers[key] !== false;
   const t = node.type;
   if (t === 'root' || shownByProposal(state, node)) return []; // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
   const project = projectLayerKey(state, node); // a project layer that takes the node decides alone (spec 0009 D3), as scene.js layerShows has it
   if (project) return on(project) ? [] : [project];
-  if (t === 'core') return [...(on('core') ? [] : ['core']), ...(state.activeLayers.pkg || state.activeLayers.atom ? [] : ['pkg'])];
+  if (t === 'core') return [...(on('core') ? [] : ['core']), ...(layers.pkg || layers.atom ? [] : ['pkg'])];
   if (t === 'store') return ['flow', 'store'].filter((k) => !on(k));
   if (t === 'rom') return ['rom', 'flow'].filter((k) => !on(k));
   if (t === 'floor' || t === 'room') return on('house') ? [] : ['house'];
@@ -169,7 +170,7 @@ function showStepLayers(scenario) {
   const keys = [];
   for (const id of stepNodeIds(scenario)) for (const key of layersHiding(byId.get(id))) if (!keys.includes(key)) keys.push(key);
   if (!keys.length) return;
-  for (const key of keys) { if (key === 'pkg') state.activeLayers.pkg = false; toggleLayer(key); }
+  for (const key of keys) setLayer(key, true, { scenario: true }); // on, for the review too (state.review.step): stopping the scenario takes it off again
   const names = keys.map((key) => (LAYER_DEFS.find((l) => l.key === key) || (state.projectLayers || []).find((l) => l.key === key) || { label: key }).label);
   announce(`Turned on ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} to show this scenario's steps.`);
 }
@@ -187,6 +188,7 @@ export const getPlayer = () => player;
 /** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view). `keepChecks` while another scenario is about to start */
 export function clearScenario({ keepChecks = false, closing = false } = {}) {
   const had = !!player || !!state.scenario;
+  if (had) clearStepLayers(); // the layers this scenario turned on for a review go off with it: the focused view comes back
   player = null;
   glide = null;
   signature = '';

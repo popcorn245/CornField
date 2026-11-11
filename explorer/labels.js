@@ -69,8 +69,10 @@ const REF = 100;
 /** The grid the placing looks for neighbours in (px) */
 const CELL = 64;
 
-/** Priority tiers, best first */
-const TIER = { selected: 0, current: 1, match: 2, lit: 3, marked: 4, hub: 5, rest: 6 };
+/** Priority tiers, best first. `greyed`: a node a review greys (issue #232), after everything else, a hub's title included */
+const TIER = { selected: 0, current: 1, match: 2, lit: 3, marked: 4, hub: 5, rest: 6, greyed: 7 };
+/** A greyed node's label keeps this many of its own heights clear on every side: the change's labels stand out, and the greyed map is named sparsely */
+export const GREYED_ROOM = 1.5;
 
 /**
  * The smallest label size on screen (px) for a theme's `--corn-map-label-min` (a number, or null for `auto`): a theme may raise the 11 px,
@@ -82,14 +84,16 @@ export const labelMinPx = (value) => (Number.isFinite(value) && value >= LABEL_M
 /** The smallest label size on screen (px) for a scene: the theme's `--corn-map-label-min`, never under 11 */
 export const labelMinOf = (scene) => labelMinPx(scene.labelMin);
 
-const isHub = (node) => LANDMARK_TYPES.includes(node.type);
+/** A cluster's title: bigger and bold, unless a review greys it (then it is a plain label, placed last) */
+const isHub = (node) => LANDMARK_TYPES.includes(node.type) && !node.greyed;
 
 const tierOf = (node, focused) => (node.selected ? TIER.selected
   : node.current ? TIER.current
     : node.match ? TIER.match
       : focused && node.connected ? TIER.lit
         : (node.mark && node.mark !== 'none') || (node.labelKeep && !isHub(node)) ? TIER.marked
-          : isHub(node) ? TIER.hub : TIER.rest);
+          : node.greyed ? TIER.greyed
+            : isHub(node) ? TIER.hub : TIER.rest);
 
 /**
  * Which node labels fit at `zoom`, and where. The whole map, not the view: a box is in zoom-scaled world coordinates (`x * zoom`, no
@@ -118,15 +122,16 @@ export function placeLabels(scene, zoom, opts = {}) {
   const gap = Math.max(GAP_PX, GAP_PX * zoom);
   for (const { node, index, tier } of cands) {
     const hub = isHub(node);
-    const bold = !!node.labelBold || hub;
+    const bold = !node.greyed && (!!node.labelBold || hub); // a greyed node's label is plain, whatever asked for bold
     const px = Math.max(hub ? min + HUB_LABEL_EXTRA_PX : min, node.labelSize * zoom);
     const w = measure ? (measure(node.label, REF, bold) * px) / REF : node.label.length * px * GLYPH;
     const cx = node.x * zoom;
     const baseline = node.y * zoom + node.r * zoom + gap + px;
     const l = cx - w / 2, r = cx + w / 2, t = baseline - px * ASCENT, b = baseline + px * DESCENT;
-    // Touching a placed box, give or take LABEL_PAD: skipped
-    const i0 = Math.floor((l - LABEL_PAD) / CELL), i1 = Math.floor((r + LABEL_PAD) / CELL);
-    const j0 = Math.floor((t - LABEL_PAD) / CELL), j1 = Math.floor((b + LABEL_PAD) / CELL);
+    // Touching a placed box, give or take LABEL_PAD (a greyed node's: GREYED_ROOM of its heights): skipped
+    const pad = tier === TIER.greyed ? LABEL_PAD + px * GREYED_ROOM : LABEL_PAD;
+    const i0 = Math.floor((l - pad) / CELL), i1 = Math.floor((r + pad) / CELL);
+    const j0 = Math.floor((t - pad) / CELL), j1 = Math.floor((b + pad) / CELL);
     let hit = false;
     for (let i = i0; i <= i1 && !hit; i++) {
       for (let j = j0; j <= j1 && !hit; j++) {
@@ -134,7 +139,7 @@ export function placeLabels(scene, zoom, opts = {}) {
         if (!cell) continue;
         for (let k = 0; k < cell.length; k++) {
           const o = cell[k];
-          if (l - LABEL_PAD < o.r && r + LABEL_PAD > o.l && t - LABEL_PAD < o.b && b + LABEL_PAD > o.t) { hit = true; break; }
+          if (l - pad < o.r && r + pad > o.l && t - pad < o.b && b + pad > o.t) { hit = true; break; }
         }
       }
     }

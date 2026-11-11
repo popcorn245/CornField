@@ -74,6 +74,7 @@ import { trapTab } from './focusables.js';
 import { isPhone, registerSheet, expandSheet, collapseSheet, showSheet, refreshStubs } from './sheets.js';
 import { relativeTime } from './review-model.js';
 import { LAYER_DEFS, toggleLayer } from './layers.js';
+import { layerOn } from './layer-model.js';
 import { WORK_URL, groupWork, filterGroups, groupWords, workStatus, markWords } from './agents-model.js';
 import {
   RUNS_URL, runsUrl, stopUrl, runOnThread, threadRunWords, runOnPull, pullRunWords, canRetry, retryRefs, retryWords, limitsFromFields, defaultLimits, LIMIT_KEYS, briefUrl, answerUrl, answerBody, answerWordsFor, KINDS, aboutWords, statusWords, statusWhy, runMeta, canStop, runsStatus, runnerState, runnerWords, triggerNotice, totalsLines, handLines, startBody, startWords, stopWords, confirmStartWords, litOfRun, changeWords,
@@ -494,7 +495,7 @@ export function selectDeploy(id) {
   const turnedOn = [];
   for (const n of litForDeploy(found, state.nodes).nodes) {
     const layer = LAYER_DEFS.find((l) => l.key === n.type);
-    if (layer && state.activeLayers[layer.key] === false) { toggleLayer(layer.key); turnedOn.push(layer.label); }
+    if (layer && !layerOn(state, layer.key)) { toggleLayer(layer.key); turnedOn.push(layer.label); }
   }
   relight();
   $('forge-panel').querySelector('.hx-forge-body').scrollTop = 0; // the deploy's nodes are what was asked for, not the row that was tapped

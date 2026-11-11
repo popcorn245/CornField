@@ -23,7 +23,8 @@
  */
 
 import { state, escHtml } from './state.js';
-import { toggleLayer } from './layers.js';
+import { setLayer } from './layers.js';
+import { layersOf } from './layer-model.js';
 import { mapIndex, personaLabel, planChecks, runChecks, stepVerdict, verdictWords } from './check-model.js';
 import { cornState } from './corn-state.js';
 
@@ -53,7 +54,7 @@ export function openChecks(scenario, onChange = () => {}) {
   if (current && current.scenario && scenario && current.scenario.id === scenario.id) { current.onChange = onChange; replan(scenario); return; }
   closeChecks();
   current = { scenario: null, as: null, nodes: null, plan: null, answer: { status: 'idle' }, controller: null, onChange };
-  if (namesActor(scenario) && state.activeLayers.persona !== true) toggleLayer('persona');
+  if (namesActor(scenario) && layersOf(state).persona !== true) setLayer('persona', true, { scenario: true });
   replan(scenario);
 }
 

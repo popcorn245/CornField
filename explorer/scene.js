@@ -171,7 +171,7 @@ import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-m
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
-import { lettersOf, projectLayerKey, shownByProposal } from './layer-model.js';
+import { greying, lettersOf, projectLayerKey, shownByProposal, layersOf } from './layer-model.js';
 import { NODE_THEMES, shapeOf } from '../core/schema.js';
 import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
@@ -180,7 +180,7 @@ import { lightColor, lightenScene, parseColor } from './theme-model.js';
 import { matchIds } from './search-model.js';
 import { nodeColor } from './css-color.js';
 import { activeSubgraph, kindEdgeWord } from './selection-model.js';
-import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';
 
 // ---------------------------------------------------------------------------
 //  Constants every renderer shares, so the looks cannot drift apart
@@ -275,21 +275,25 @@ const LIGHT_LOOKS = Object.freeze({
 export const MARK_MIN_PX = { ring: 1.8, edge: 1.6, gap: 4 };
 /** How bright what a proposal does not touch is in the Diff view: dim, but still plainly there */
 export const PROPOSAL_DIM_ALPHA = 0.28;
+export { GREY_ALPHA }; // how much of a greyed node is left (diff-marks.js): its colour is taken away at draw time (map-style.js `--corn-map-grey`), a greyed line is faded as Diff fades one (PROPOSAL_DIM_ALPHA)
 
 // ---------------------------------------------------------------------------
 //  Visibility and focus (moved unchanged from render.js)
 // ---------------------------------------------------------------------------
-export function isNodeVisible(state, node) {
+/**
+ * Whether the map draws a node. `viewer`: as the viewer's own layers say, whatever a review has hidden (a list of what could be picked while the review
+ * narrows the map, such as the other end of a what-if edge: the edge, once drawn, brings its two ends' layers on).
+ */
+export function isNodeVisible(state, node, { viewer = false } = {}) {
   if (state.proposal && !showsNode(state.proposalView || 'diff', node)) return false; // Before hides what is added, After what is removed
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
-  return layerShows(state, node) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+  return layerShows(state, node, viewer ? state.activeLayers : layersOf(state)) || shownByProposal(state, node); // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
 }
 
 /** Whether the Layers menu has the node's layer on: a project layer that takes it decides alone, else its starting layer, with the rules each type has */
-export function layerShows(state, node) {
-  const { activeLayers } = state;
+export function layerShows(state, node, activeLayers = layersOf(state)) { // the viewer's layers, or a review's (layer-model.js `layersOf`): the one place that decides
   const project = projectLayerKey(state, node);
   if (project) return activeLayers[project] !== false;
   if (node.type === 'core') return (activeLayers.pkg || activeLayers.atom) && activeLayers.core !== false; // its own row in Layers, and Packages or Atoms
@@ -462,10 +466,11 @@ const FLOW_LIKE = ['flow', 'reads', 'writes', 'runs-on', 'calls', 'triggers', 'd
 const proposalView = (state) => (state.proposal ? state.proposalView || 'diff' : null);
 
 /** Puts a proposal mark on a scene edge: its colour, dash and weight; in Diff what is not marked fades back */
-function styleForProposal(edge, mark, view, gone = false) {
+function styleForProposal(edge, mark, view, gone = false, grey = false) {
   edge.mark = mark;
   if (mark === 'none') {
-    if (view === 'diff') { edge.alpha *= PROPOSAL_DIM_ALPHA; edge.glow = 0; edge.packet = null; }
+    if (view === 'diff' || grey) { edge.alpha *= PROPOSAL_DIM_ALPHA; edge.glow = 0; edge.packet = null; } // Before and After fade it too while a review greys it
+    if (grey) edge.greyed = true; // its colour is taken away at draw time (map-style.js)
     return;
   }
   const look = MARK[mark];
@@ -477,7 +482,9 @@ function styleForProposal(edge, mark, view, gone = false) {
 }
 
 function buildEdges(state, subgraph, reduceMotion) {
-  const { nodes, activeLayers } = state;
+  const { nodes } = state;
+  const activeLayers = layersOf(state);
+  const grey = greying(state);
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const preset = state.view === 'dataflow';
   const out = [];
@@ -537,7 +544,7 @@ function buildEdges(state, subgraph, reduceMotion) {
       if (preset || FLOW_LIKE.includes(edge.kind)) flow(edge, source, target);
       else out.push(linkEdge(edge, source, target, subgraph));
     }
-    for (let i = first; i < out.length; i++) styleForProposal(out[i], mark, view, mark === 'edit' && applied.editOp === 'removed');
+    for (let i = first; i < out.length; i++) styleForProposal(out[i], mark, view, mark === 'edit' && applied.editOp === 'removed', grey);
   });
   return out;
 }
@@ -561,7 +568,8 @@ function buildNodes(state, subgraph) {
   const searching = !!found && nodes.some((n) => found.has(n.id) && isNodeVisible(state, n)); // with no match on the map nothing dims: it would only be a blank map
   const out = [];
   const view = proposalView(state);
-  const focus = view === 'diff' ? touchedIds(nodes, viewEdgesOf(state)) : null;
+  const grey = greying(state); // a review greys what the change does not involve, in Before and After as in Diff
+  const focus = view === 'diff' || (view && grey) ? touchedIds(nodes, viewEdgesOf(state)) : null;
 
   nodes.forEach((node) => {
     if (!isNodeVisible(state, node)) return;
@@ -579,7 +587,8 @@ function buildNodes(state, subgraph) {
     // A search's matches are what the reader asked for: a selection's focus does not dim them, so each keeps its label (spec 0008 D4)
     let alpha = subgraph && !connected && !(searching && match) ? DIM_ALPHA : 1;
     if (searching && !match && !selected && !(subgraph && connected)) alpha = DIM_ALPHA; // a search dims what it did not find, as a focus does
-    if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, PROPOSAL_DIM_ALPHA);
+    const greyed = grey && !!focus && !focus.touched.has(node.id);
+    if (focus && !focus.touched.has(node.id)) alpha = Math.min(alpha, greyed ? GREY_ALPHA : PROPOSAL_DIM_ALPHA);
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
     // A finer kind (spec 0009): its letters, drawn in the node's core by the renderers (kind-letters.js), and the project layer that takes the node
@@ -599,14 +608,16 @@ function buildNodes(state, subgraph) {
       glow: connected && alpha >= 0.5 ? (big ? 15 : 9) : 0,
       halo: match ? 'match' : selected ? 'selected' : child ? 'child' : 'none',
       mark,
+      ...(greyed ? { greyed: true } : {}), // not involved in the change: its colour is taken away at draw time, glyph and letters stay (map-style.js)
       selected, match, current, connected,
       degree: node.degree || 0,
       label: shown.label,
-      labelSize: big ? 12 : 11,
-      labelBold: big,
-      labelAlpha: focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
+      labelSize: big && !greyed ? 12 : 11, // a greyed node's label recedes (issue #232): plain, at the least size, placed last (labels.js)
+      labelBold: big && !greyed,
+      labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground
+        : focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
-      labelKeep: LANDMARK_TYPES.includes(shown.type) || selected || match || mark !== 'none' || !!(subgraph && connected),
+      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
       live: !!node.live,
       box: node.box || null,
@@ -733,6 +744,7 @@ export function buildScene(state, opts = {}) {
   };
   if (state.view === 'house') decorateHouseScene(scene, state); // its bands and tray as lanes, rooms unlabelled (house-model.js)
   if (state.scenario) emphasiseScenario(scene, state.scenario, opts);
+  scene.greying = scene.nodes.some((n) => n.greyed) || scene.edges.some((e) => e.greyed);
   const colours = { nodes: scene.nodes.map((n) => n.color), edges: scene.edges.map((e) => e.color) };
   if (state.scenario) paintOutage(scene, outageFor(state.scenario, state.nodes, state.edges)); // CLOUD-07: red, amber, violet by when the outage bites
   if (state.scenario) paintVerdict(scene, state.scenario); // PHY-10: red, green or amber by the step's permission check

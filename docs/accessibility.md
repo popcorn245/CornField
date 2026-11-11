@@ -41,7 +41,7 @@ Drawing an edge in a what-if edit is a drag on the map. Without one: turn on Edi
 
 ## What is said, and when
 
-The map's one polite live region says what the eyes would see change, once each and never on a background refresh: when a proposal has loaded, its title and what it holds ("Opened Meals: 4 changes, 3 scenarios for 2 personas."); the view on a switch ("After view"); a change row's node ("page-old, removed. The map is on it."); an undo or a redo and what it was ("Undid: Added the page “/one” under tasks"); and "Paused", "Resumed" or "Playing" for the scenario player (each step is said as it comes, as the list words it: "Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.").
+The map's one polite live region says what the eyes would see change, once each and never on a background refresh: when a proposal has loaded, its title and what it holds ("Opened Meals: 4 changes, 3 scenarios for 2 personas."); the view on a switch ("After view"); a change row's node ("page-old, removed. The map is on it."); an undo or a redo and what it was ("Undid: Added the page “/one” under tasks"); and, once when a proposal opens and hid layers, "Showing 4 of 22 layers: the ones this proposal changes." (the "Show the whole map" switch says "Showing the whole map." and what it narrows to again); and "Paused", "Resumed" or "Playing" for the scenario player (each step is said as it comes, as the list words it: "Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.").
 
 ## Colour, shape and size
 

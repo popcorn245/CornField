@@ -14,6 +14,7 @@
  */
 
 import { state } from './state.js';
+import { layerOn } from './layer-model.js';
 import { render, onPaint } from './render.js';
 import { overlayOf } from './runs-model.js';
 import { flowReduceMotion } from './flows.js';
@@ -40,7 +41,7 @@ const reducedMotion = () => (reduce === null ? flowReduceMotion : reduce);
 export function setReducedMotionForTests(on) { reduce = on; }
 
 /** Whether the layer is on */
-export const runsLayerOn = () => state.activeLayers[RUNS_LAYER] !== false;
+export const runsLayerOn = () => layerOn(state, RUNS_LAYER); // the viewer's layer, or the review's (layer-model.js)
 
 /** Hands the map the runs the API listed: what pulses and what collides is worked out here, and the map is drawn again */
 export function setRunsOnMap(runs) {

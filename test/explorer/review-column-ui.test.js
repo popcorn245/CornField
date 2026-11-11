@@ -15,7 +15,9 @@ import { setMap } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initProposals, showProposal } from '../../explorer/proposal.js';
 // @ts-expect-error plain JS modules, no declarations
-import { initScenarioUi, clearScenario, tickScenario, getPlayer } from '../../explorer/scenario-ui.js';
+import { initScenarioUi, clearScenario, stopScenario, tickScenario, getPlayer } from '../../explorer/scenario-ui.js';
+// @ts-expect-error plain JS modules, no declarations
+import { layerOn } from '../../explorer/layer-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initReviewColumn, resetReviewColumnForTests, setPullHead, shareRoom } from '../../explorer/review-column.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -327,19 +329,33 @@ describe('choosing a step goes to it (D4, D6)', () => {
 });
 
 describe('a step on a layer that is off (#212)', () => {
-  const withOther = () => robot({ scenarios: [{ id: 'plan', title: 'An adult plans a meal', actor: 'adult', steps: [{ node: 'page-meals', text: 'The page opens.' }, { node: 'table-u', text: 'The row is read.' }] }] });
+  // tool-u is on the Dev Tools layer, which nothing in the proposal touches: the review hides it, whatever the viewer had (issue #232)
+  const withOther = () => robot({ scenarios: [{ id: 'plan', title: 'An adult plans a meal', actor: 'adult', steps: [{ node: 'page-meals', text: 'The page opens.' }, { node: 'tool-u', text: 'The row is read.' }] }] });
 
-  it('says so in the list, and choosing it turns the layer on so the step can be followed', () => {
-    state.baseNodes.push(node('table-u', 'table', 700, 300)); // a table the proposal does not touch
-    state.activeLayers.table = false;
+  it('says so in the list, and choosing it turns the layer on for the review so the step can be followed', () => {
+    state.baseNodes.push(node('tool-u', 'tool', 700, 300)); // a tool the proposal does not touch
     open(withOther());
     click(qa('.hx-sc-row')[0]);
-    const step = qa('[data-corn="step"]')[1]; // table-u is on the Tables layer, which is off
+    const step = qa('[data-corn="step"]')[1]; // tool-u is on the Dev Tools layer, which the review hid
     expect(step.textContent).toContain('Layer off: shown when played');
-    expect(step.getAttribute('aria-label')).toMatch(/^Step 2 of 2, as Adult: table-u, on a layer that is off\. The row is read\./);
+    expect(step.getAttribute('aria-label')).toMatch(/^Step 2 of 2, as Adult: tool-u, on a layer that is off\. The row is read\./);
     click(step);
-    expect(state.activeLayers.table).toBe(true);
+    expect(layerOn(state, 'tool')).toBe(true);
+    expect(state.activeLayers.tool).not.toBe(false); // the viewer's own layers are not written
     expect(qa('[data-corn="step"]')[1].textContent).not.toContain('Layer off');
+  });
+
+  it('says it of a layer the viewer had off too, and gives it back when the scenario stops', () => {
+    state.baseNodes.push(node('tool-u', 'tool', 700, 300));
+    state.activeLayers.tool = false;
+    open(withOther());
+    click(qa('.hx-sc-row')[0]);
+    click(qa('[data-corn="step"]')[1]);
+    expect(layerOn(state, 'tool')).toBe(true);
+    expect(state.activeLayers.tool).toBe(false);
+    stopScenario();
+    expect(layerOn(state, 'tool')).toBe(false);
+    state.activeLayers.tool = true;
   });
 
   it('does not say it of a node the proposal itself changes: a review draws its own change whatever the layer (spec 0009 D3)', () => {
@@ -354,15 +370,15 @@ describe('a step on a layer that is off (#212)', () => {
   });
 
   it('names the project layer that takes the node, which decides alone (spec 0009 D3)', () => {
-    state.baseNodes.push(node('table-u', 'table', 700, 300));
-    state.projectLayers = [{ key: 'data', label: 'Data', match: { type: 'table' } }];
-    state.activeLayers.data = false; // the starting Tables layer is on, and does not count
+    state.baseNodes.push(node('tool-u', 'tool', 700, 300));
+    state.projectLayers = [{ key: 'data', label: 'Data', match: { type: 'tool' } }];
+    state.activeLayers.data = false; // the starting Dev Tools layer is on, and does not count
     try {
       open(withOther());
       click(qa('.hx-sc-row')[0]);
       expect(qa('[data-corn="step"]')[1].textContent).toContain('Layer off: shown when played');
       click(qa('[data-corn="step"]')[1]);
-      expect(state.activeLayers.data).toBe(true);
+      expect(layerOn(state, 'data')).toBe(true);
     } finally { state.projectLayers = []; delete state.activeLayers.data; }
   });
 });

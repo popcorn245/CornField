@@ -26,7 +26,7 @@ import { MAX_THEME_BYTES, cssProblems, withoutComments } from './theme.js';
 import { MIN_SHAPE_DELTA_E, NODE_SHAPES, NODE_THEMES } from './schema.js';
 import { deltaE2000 } from './delta-e.js';
 import { LAYER_KEY_RE, MAX_KEY, mapFillNames, parseKindToken } from './layers.js';
-import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, markOpacity } from '../explorer/diff-marks.js';
+import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, GREY_MIN_RATIO, markOpacity } from '../explorer/diff-marks.js';
 import { lightColor } from '../explorer/theme-model.js';
 
 /** WCAG 2.1 AA: text, and large text and user-interface parts */
@@ -586,6 +586,15 @@ function mapFindings(props, theme, mode, grounds, extra = []) {
     out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries ${what}, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
   }
   // Labels are text: the colour against the ground, and against the halo under it (the halo is the ground's own colour at `auto`)
+  // What a review greys, when the theme sets the colour (issue #232): readable as a colour, and at its faded strength still told from the ground. `auto` is each tone with its hue taken away (a test holds it)
+  const grey = mapToken(props, '--corn-map-grey');
+  if (grey.problem) out.push({ ...base, fg: '--corn-map-grey', bg: GROUND, min: GREY_MIN_RATIO, kind: 'ui', use: 'a node the review greys', problem: grey.problem });
+  else if (grey.color) {
+    const alphaText = props.has('--corn-map-grey-alpha') ? substitute(props.get('--corn-map-grey-alpha'), props).trim() : '';
+    const a = /^\d*\.?\d+$/.test(alphaText) && +alphaText >= 0.1 && +alphaText <= 1 ? +alphaText : GREY_ALPHA;
+    const w = worstOnGrounds([grey.color[0], grey.color[1], grey.color[2], grey.color[3] * a], grounds);
+    out.push({ ...base, fg: '--corn-map-grey', bg: GROUND, min: GREY_MIN_RATIO, kind: 'ui', use: `a node the review greys, left at ${Math.round(a * 100)}% opacity`, fgValue: w.fgValue, bgValue: w.bgValue, ratio: w.ratio, ...(w.image ? { groundImage: true } : {}) });
+  }
   const label = mapToken(props, '--corn-map-label');
   const haloTok = mapToken(props, '--corn-map-label-halo');
   const labelColor = label.color || (label.problem ? null : readColor(mode === 'light' ? lightColor('#f8fafc') : '#f8fafc'));
@@ -670,6 +679,8 @@ function mapGrounds(grounds, base, props) {
 const DIFF_MAP_PAIRS = (mode) => [
   ...['added', 'changed', 'removed', 'edit'].map((m) => [`--corn-map-${m}`, DIFF_MARK_COLORS[mode][m], markOpacity(m), `the ${m} mark on the map, drawn at ${Math.round(markOpacity(m) * 100)}% opacity`]),
   ['--corn-map-label', mode === 'light' ? lightColor('#f8fafc', 'text') : '#f8fafc', DIFF_LABEL_ALPHA, `a label the diff dims, drawn at ${Math.round(DIFF_LABEL_ALPHA * 100)}% opacity`],
+  // a label a review greys (issue #232), where it is fainter than a dimmed one (the dark ground)
+  ...(GREY_LABEL_ALPHA[mode] !== DIFF_LABEL_ALPHA ? [['--corn-map-label', mode === 'light' ? lightColor('#f8fafc', 'text') : '#f8fafc', GREY_LABEL_ALPHA[mode], `a label a review greys, drawn at ${Math.round(GREY_LABEL_ALPHA[mode] * 100)}% opacity`]] : []),
 ];
 
 function diffMapFindings(props, theme, mode, grounds, base) {

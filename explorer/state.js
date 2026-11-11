@@ -72,6 +72,14 @@ export const state = {
   layerDefaults: {},
 
   /**
+   * The review of the open proposal, which narrows the map to the change (issue #232; explorer/layer-model.js `layersOf`): null with no proposal open,
+   * else `{ whole, manual, step, rev }`. `whole`: "Show the whole map" is on, the map is as Diff always was. `manual`: layers the reviewer turned on or
+   * off by hand in this review, `step`: the ones a playing scenario turned on (both `{ key: boolean }`). `rev` moves with each change.
+   * None of it is the viewer's: `activeLayers` and the saved choices (layers.js) are never written while it is set.
+   */
+  review: null,
+
+  /**
    * The map as the last `setMap` (view.js) was handed it, before the live layer is laid in: the base
    * copies, or a proposal applied over them. `nodes` and `edges` are these plus the live ones.
    */

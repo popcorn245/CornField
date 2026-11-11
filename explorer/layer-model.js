@@ -9,10 +9,13 @@
  *  - `shownByProposal(state, node)`: a node the open proposal touches is always drawn, whatever its layer says, so a review never hides its
  *    own change.
  *
+ *  - `touchedLayerKeys`, `reviewLayers`, `layersOf`, `layerOn`, `reviewHides` (issue #232): while a proposal is under review the map is narrowed to the
+ *    change. The layers the proposal does not touch are off for the review; the viewer's own state (`state.activeLayers`) is never written.
+ *
  * The matching itself is core/layers.js (data only); this file only hands it the map's ownership line.
  */
 
-import { kindLetters, layerKeyOf, parentIndex, projectLayerOf } from '../core/layers.js';
+import { STARTING_LAYERS, kindLetters, layerKeyOf, parentIndex, projectLayerOf } from '../core/layers.js';
 import { touchedIds } from './proposal-model.js';
 
 /** Asks the ownership line of the map the state holds, only when a layer matches by `parent` */
@@ -57,3 +60,90 @@ export function lettersOf(state, node) {
   const t = hit.map.get(node.type);
   return (t && t.get(node.kind)) || '';
 }
+
+// ---------------------------------------------------------------------------
+//  The review narrows the map to the change (issue #232)
+// ---------------------------------------------------------------------------
+
+/** Layers a touched layer cannot show without (scene.js `layerShows`): Core needs Packages, Stores and ROM need Data Flow */
+const NEEDS = Object.freeze({ core: ['pkg'], store: ['flow'], rom: ['flow'] });
+const marked = (item) => !!item && !!item.mark && item.mark !== 'none';
+
+/**
+ * The keys of the layers a proposal touches: the layer of every node it marks (added, changed, removed, or a what-if edit) and of both ends of an
+ * edge it marks, the Data Flow overlay when a marked edge is a flow, the Runs overlay when a touched node has a run in flight, and what a touched
+ * layer cannot be drawn without (`NEEDS`). The root has no layer. Pure: the map, what the layers are, the runs.
+ * @param {{ nodes: {id: string, mark?: string}[], edges: {from: string, to: string, kind?: string, mark?: string}[], rowOf: (node: object) => string | null, flight?: { has(id: string): boolean } | null }} map
+ * @returns {Set<string>}
+ */
+export function touchedLayerKeys({ nodes, edges, rowOf, flight = null }) {
+  const { touched } = touchedIds(nodes, edges);
+  const keys = new Set();
+  for (const n of nodes) {
+    if (!touched.has(n.id)) continue;
+    const key = rowOf(n);
+    if (key) { keys.add(key); for (const need of NEEDS[key] || []) keys.add(need); }
+    if (flight && flight.has(n.id)) keys.add('runs');
+  }
+  for (const e of edges) if (marked(e) && e.kind === 'flow') keys.add('flow');
+  return keys;
+}
+
+/**
+ * The layers a review shows, from the viewer's own (`active`), as a new map. Untouched layers are off and touched ones on (a layer the viewer had
+ * off comes on for the review); then what the reviewer did by hand (`manual`) and what a playing scenario turned on (`step`). With `whole` the map
+ * is the viewer's as it always was, with only the hand and the scenario laid over it. `universe`: every layer key the menu knows.
+ * @param {{ active: Record<string, boolean>, touched: Set<string>, universe: Iterable<string>, review: { whole?: boolean, manual?: Record<string, boolean>, step?: Record<string, boolean> } }} a
+ * @returns {Record<string, boolean>}
+ */
+export function reviewLayers({ active, touched, universe, review }) {
+  const out = { ...active };
+  if (!review.whole && touched.size) for (const key of universe) out[key] = touched.has(key); // a proposal that touches no layer has nothing to narrow the map to: it is left whole
+  Object.assign(out, review.manual || {}, review.step || {});
+  return out;
+}
+
+const layerKeysMemo = new WeakMap();
+/** The touched layer keys of the open proposal's map: kept while the map, the runs and the layers' ownership are the same */
+function touchedLayers(state) {
+  const nodes = state.nodes;
+  const edges = state.edges || [];
+  const flight = state.runsMap ? state.runsMap.flight : null;
+  const hit = layerKeysMemo.get(nodes);
+  if (hit && hit.edges === edges && hit.n === nodes.length && hit.e === edges.length && hit.flight === flight && hit.project === state.projectLayers) return hit;
+  const touched = touchedLayerKeys({ nodes, edges, rowOf: (n) => rowKeyOf(state, n), flight });
+  const universe = new Set([...STARTING_LAYERS.map((l) => l.key), ...(state.projectLayers || []).map((l) => l.key), ...nodes.map((n) => rowKeyOf(state, n)).filter(Boolean)]);
+  const made = { edges, n: nodes.length, e: edges.length, flight, project: state.projectLayers, touched, universe };
+  layerKeysMemo.set(nodes, made);
+  return made;
+}
+
+const layersMemo = new WeakMap();
+/**
+ * The layers the map is drawn with: `state.activeLayers` itself with no review open, else the review's (`reviewLayers`). Every reader of a layer's
+ * state for what is drawn goes through this, so the review's hiding is decided in one place.
+ */
+export function layersOf(state) {
+  const review = state.review;
+  if (!review || !state.proposal) return state.activeLayers;
+  const hit = layersMemo.get(review);
+  if (hit && hit.rev === review.rev && hit.version === state.sceneVersion && hit.active === state.activeLayers && hit.nodes === state.nodes) return hit.out;
+  const { touched, universe } = touchedLayers(state);
+  const out = reviewLayers({ active: state.activeLayers, touched, universe, review });
+  layersMemo.set(review, { rev: review.rev, version: state.sceneVersion, active: state.activeLayers, nodes: state.nodes, out });
+  return out;
+}
+
+/** Whether a layer is on for what is drawn (a layer with no entry is on, as the menu shows it) */
+export const layerOn = (state, key) => layersOf(state)[key] !== false;
+
+/** Whether the review hid this layer, which the viewer has on: the row says so, and the reviewer may turn it on for the review */
+export function reviewHides(state, key) {
+  const r = state.review;
+  if (!r || !state.proposal || r.whole) return false;
+  if (state.activeLayers[key] === false || Object.hasOwn(r.manual || {}, key) || Object.hasOwn(r.step || {}, key)) return false;
+  return layersOf(state)[key] === false;
+}
+
+/** Whether the greying is on: a review is open, the whole map is not asked for, and the proposal involves something (a proposal that changes nothing greys nothing: scene.js, map-style.js) */
+export const greying = (state) => !!state.review && !!state.proposal && !state.review.whole && touchedBy(state).size > 0;

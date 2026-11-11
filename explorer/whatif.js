@@ -21,7 +21,7 @@
  */
 
 import { state, touchScene, onSceneTouch, nameOf, nodeById, escHtml } from './state.js';
-import { render, isNodeVisible } from './render.js';
+import { render, isNodeVisible, isNodeVisibleToViewer } from './render.js';
 import { hooks, rebuildProposalMap, closeProposal, focusChange } from './proposal.js';
 import { t } from './strings.js';
 import { getPlayer, playScenario, stopScenario, tickScenario } from './scenario-ui.js';
@@ -637,7 +637,7 @@ function removalIndex(op, match) {
 const EDGE_TO_MAX = 300;
 function edgeToHtml(n) {
   const others = state.nodes
-    .filter((o) => o.id !== n.id && isNodeVisible(o) && kindOfMark(o) !== 'removed')
+    .filter((o) => o.id !== n.id && isNodeVisibleToViewer(o) && kindOfMark(o) !== 'removed') // a review narrows the map, but what the viewer has on can be picked: the edge brings its ends' layers on
     .sort((a, b) => String(a.label).localeCompare(String(b.label)))
     .slice(0, EDGE_TO_MAX);
   if (!others.length) return '';
