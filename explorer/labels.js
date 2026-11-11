@@ -40,6 +40,8 @@
  * @property {'center'} align
  * @property {string} family      CSS font-family
  * @property {boolean} [strike]   a line through the text: a node a proposal removes
+ * @property {number} [px]         a node's label: its size on screen (px)
+ * @property {boolean} [screen]   a node's label at its minimum size: drawn in screen space at `px`, so the font stays one string while the zoom changes (a changing font string is the slow part of drawing text)
  */
 
 import { EDGE_LABEL_SIZE, FONT_EDGE, FONT_NODE, HUB_LABEL_EXTRA_PX, LABEL_MIN_FLOOR, LABEL_MIN_PX, LANDMARK_TYPES, looksFor } from './scene.js';
@@ -87,7 +89,7 @@ const tierOf = (node, focused) => (node.selected ? TIER.selected
  * @param {number} zoom
  * @param {{measure?: (text: string, size: number, bold: boolean) => number}} [opts]
  *   `measure`: the width of a text at that font size (px); default: an estimate from its length
- * @returns {{index: number, id: string, rank: number, tier: number, px: number, bold: boolean, size: number, x: number, y: number, label: object, l: number, t: number, r: number, b: number}[]}
+ * @returns {{index: number, id: string, rank: number, tier: number, px: number, bold: boolean, size: number, x: number, y: number, node: object, l: number, t: number, r: number, b: number}[]}
  *   in priority order: `rank` is the place in it
  */
 export function placeLabels(scene, zoom, opts = {}) {
@@ -101,7 +103,8 @@ export function placeLabels(scene, zoom, opts = {}) {
   });
   cands.sort((a, b) => a.tier - b.tier || b.node.r - a.node.r || (b.node.degree || 0) - (a.node.degree || 0) || a.index - b.index);
 
-  const grid = new Map();
+  const grid = new Map(); // cell -> the placed boxes that reach it; the key is a number (a string key per cell was most of the time)
+  const cellKey = (i, j) => (i + 8192) * 16384 + (j + 8192);
   const placed = [];
   const gap = Math.max(GAP_PX, GAP_PX * zoom);
   for (const { node, index, tier } of cands) {
@@ -118,21 +121,25 @@ export function placeLabels(scene, zoom, opts = {}) {
     let hit = false;
     for (let i = i0; i <= i1 && !hit; i++) {
       for (let j = j0; j <= j1 && !hit; j++) {
-        const cell = grid.get(`${i},${j}`);
-        if (cell) hit = cell.some((o) => l - LABEL_PAD < o.r && r + LABEL_PAD > o.l && t - LABEL_PAD < o.b && b + LABEL_PAD > o.t);
+        const cell = grid.get(cellKey(i, j));
+        if (!cell) continue;
+        for (let k = 0; k < cell.length; k++) {
+          const o = cell[k];
+          if (l - LABEL_PAD < o.r && r + LABEL_PAD > o.l && t - LABEL_PAD < o.b && b + LABEL_PAD > o.t) { hit = true; break; }
+        }
       }
     }
     if (hit) continue;
     const item = {
-      index, id: node.id, rank: placed.length, tier, px, bold, size: px / zoom, x: node.x, y: node.y + node.r + (gap + px) / zoom,
-      label: { text: node.label, color: node.labelColor, alpha: node.labelAlpha, strike: node.labelStrike, base: node.labelSize },
-      l, t, r, b,
+      index, id: node.id, rank: placed.length, tier, px, bold, screen: node.labelSize * zoom <= (hub ? min + HUB_LABEL_EXTRA_PX : min), size: px / zoom, x: node.x, y: node.y + node.r + (gap + px) / zoom,
+      node, l, t, r, b,
     };
     placed.push(item);
     const ci0 = Math.floor(l / CELL), ci1 = Math.floor(r / CELL), cj0 = Math.floor(t / CELL), cj1 = Math.floor(b / CELL);
     for (let i = ci0; i <= ci1; i++) for (let j = cj0; j <= cj1; j++) {
-      const key = `${i},${j}`;
-      (grid.get(key) || grid.set(key, []).get(key)).push(item);
+      const key = cellKey(i, j);
+      const cell = grid.get(key);
+      if (cell) cell.push(item); else grid.set(key, [item]);
     }
   }
   return placed;
@@ -179,65 +186,81 @@ export function chooseLabels(scene, camera, viewport, opts = {}) {
   const family = scene.labelFont || FONT_NODE;
   for (const p of inView) {
     const k = Math.max(1, 1 / zoom); // the outline keeps its weight on screen (3.5 px) when zoomed out, and grows with the map when zoomed in
-    out.push({ kind: 'node', id: p.id, text: p.label.text, x: p.x, y: p.y, size: p.size, bold: p.bold, italic: false, color: p.label.color, alpha: p.label.alpha, outline: outline.node ? { color: outline.node.color, width: outline.node.width * k } : null, align: 'center', family, strike: !!p.label.strike });
+    out.push({ kind: 'node', id: p.id, text: p.node.label, x: p.x, y: p.y, size: p.size, bold: p.bold, italic: false, color: p.node.labelColor, alpha: p.node.labelAlpha, outline: outline.node ? { color: outline.node.color, width: outline.node.width * k } : null, align: 'center', family, strike: !!p.node.labelStrike, px: p.px, screen: p.screen });
   }
 
   // The chip: a node with no label, named while the pointer is on it
   if (hover) {
     const node = scene.nodes.find((n) => n.id === hover);
     if (node && node.label && !placed.some((p) => p.id === hover && inView.includes(p))) {
-      const size = labelMinOf(scene) / zoom;
+      const px = labelMinOf(scene);
       const above = camera.y + node.y * zoom - node.r * zoom > 40; // room above it, else below
-      const y = above ? node.y - node.r - (GAP_PX + 2) / zoom : node.y + node.r + (GAP_PX + 2) / zoom + size;
-      out.push({ kind: 'chip', id: node.id, text: node.label, x: node.x, y, size, bold: false, italic: false, color: (scene.nodes.find((n) => n.connected) || node).labelColor, alpha: 1, outline: outline.node, align: 'center', family, strike: false });
+      const y = above ? node.y - node.r - (GAP_PX + 2) / zoom : node.y + node.r + (GAP_PX + 2 + px) / zoom;
+      out.push({ kind: 'chip', id: node.id, text: node.label, x: node.x, y, size: px / zoom, px, screen: true, bold: false, italic: false, color: (scene.nodes.find((n) => n.connected) || node).labelColor, alpha: 1, outline: outline.node, align: 'center', family, strike: false });
     }
   }
   return out;
 }
 
-const fontOf = (t) => `${t.italic ? 'italic ' : ''}${t.bold ? 'bold ' : ''}${t.size}px ${t.family}`;
+const fontOf = (t) => `${t.italic ? 'italic ' : ''}${t.bold ? 'bold ' : ''}${t.screen ? t.px : t.size}px ${t.family}`;
 
-/** The chip behind a hovered node's name: a rounded box in the label outline's colour, over everything else */
-function drawChip(ctx, t, zoom) {
+/** Where an item goes on the canvas: `ox`, `oy` and `k`, from world to the context (the world pass draws under the camera's transform, so `{0, 0, 1}`; the screen pass under none) */
+const WORLD = { ox: 0, oy: 0, k: 1 };
+
+/** The chip behind a hovered node's name: a rounded box in the label outline's colour, over everything else (drawn in screen space) */
+function drawChip(ctx, t, v) {
   ctx.font = fontOf(t);
-  const pad = 4 / zoom;
+  const pad = 4;
   const w = ctx.measureText(t.text).width + pad * 2;
-  const h = t.size * (ASCENT + DESCENT) + pad;
-  const x = t.x - w / 2, y = t.y - t.size * ASCENT - pad / 2;
+  const h = t.px * (ASCENT + DESCENT) + pad;
+  const tx = v.ox + t.x * v.k, ty = v.oy + t.y * v.k;
+  const x = tx - w / 2, y = ty - t.px * ASCENT - pad / 2;
   ctx.globalAlpha = 1;
   ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, 4 / zoom); else ctx.rect(x, y, w, h);
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, 4); else ctx.rect(x, y, w, h);
   ctx.fillStyle = t.outline ? t.outline.color : 'rgba(9, 13, 22, 0.95)';
   ctx.fill();
-  ctx.lineWidth = 1 / zoom;
+  ctx.lineWidth = 1;
   ctx.strokeStyle = t.color;
   ctx.stroke();
   ctx.textAlign = t.align;
   ctx.fillStyle = t.color;
-  ctx.fillText(t.text, t.x, t.y);
+  ctx.fillText(t.text, tx, ty);
 }
 
-function drawItem(ctx, t, zoom = 1) {
-  if (t.kind === 'chip') { drawChip(ctx, t, zoom); return; }
-  ctx.globalAlpha = t.alpha;
-  ctx.font = fontOf(t);
-  ctx.textAlign = t.align;
+/**
+ * What the context was last set to while one draw runs: setting a font, a width or a colour is not free, and a map of hundreds of
+ * labels at one size repeats the same few values. `pen` is reset at the start of every draw (and where the context is saved and restored).
+ */
+function newPen() { return { font: '', alpha: -1, fill: '', stroke: '', width: -1, align: '' }; }
+
+/** Draws one item at `v` (WORLD under the camera's transform, or the screen's own `{ ox: camera.x, oy: camera.y, k: zoom }` under none) */
+function drawItem(ctx, t, pen, v = WORLD) {
+  if (t.kind === 'chip') { drawChip(ctx, t, v); return; }
+  if (pen.alpha !== t.alpha) { ctx.globalAlpha = t.alpha; pen.alpha = t.alpha; }
+  const font = fontOf(t);
+  if (pen.font !== font) { ctx.font = font; pen.font = font; }
+  if (pen.align !== t.align) { ctx.textAlign = t.align; pen.align = t.align; }
+  const x = v.ox + t.x * v.k, y = v.oy + t.y * v.k;
   if (t.outline) {
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = t.outline.color;
-    ctx.lineWidth = t.outline.width;
-    ctx.strokeText(t.text, t.x, t.y);
+    const width = t.outline.width * v.k;
+    if (pen.stroke !== t.outline.color) { ctx.strokeStyle = t.outline.color; pen.stroke = t.outline.color; }
+    if (pen.width !== width) { ctx.lineWidth = width; pen.width = width; }
+    ctx.strokeText(t.text, x, y);
   }
-  ctx.fillStyle = t.color;
-  ctx.fillText(t.text, t.x, t.y);
+  if (pen.fill !== t.color) { ctx.fillStyle = t.color; pen.fill = t.color; }
+  ctx.fillText(t.text, x, y);
   if (t.strike) {
     const half = ctx.measureText(t.text).width / 2;
+    const size = t.screen ? t.px : t.size * v.k;
     ctx.beginPath();
-    ctx.moveTo(t.x - half, t.y - t.size * 0.32);
-    ctx.lineTo(t.x + half, t.y - t.size * 0.32);
+    ctx.moveTo(x - half, y - size * 0.32);
+    ctx.lineTo(x + half, y - size * 0.32);
     ctx.strokeStyle = t.color;
     ctx.lineWidth = 1.4;
     ctx.stroke();
+    pen.stroke = t.color; pen.width = 1.4; // the strike left its own colour and width on the context
   }
 }
 
@@ -345,15 +368,19 @@ export function createLabelLayer(canvas, opts = {}) {
       // The placing is for the whole map at this zoom: kept while the scene, the zoom and the style stay (a pan, a hover), made again when one changes
       if (!samePlacing) kept = placeLabels(scene, camera.zoom, { measure });
       const items = chooseLabels(scene, camera, { width, height }, { measure, hover, placed: kept });
-      let covered = !items.some((t) => t.kind === 'edge');
-      items.forEach((t) => {
-        if (t.kind === 'chip') return;
-        if (!covered && t.kind === 'node') { coverWithNodes(ctx, scene.nodes); covered = true; }
-        drawItem(ctx, t, camera.zoom);
-      });
-      if (!covered) coverWithNodes(ctx, scene.nodes);
-      items.forEach((t) => { if (t.kind === 'chip') drawItem(ctx, t, camera.zoom); }); // over everything, the circles included
+      // The lane text and the selection's edge labels, then the circles cut out of them (only when there are edge labels), then the node labels
+      let pen = newPen();
+      let edges = false;
+      for (const t of items) { if (t.kind === 'lane' || t.kind === 'edge') { drawItem(ctx, t, pen); if (t.kind === 'edge') edges = true; } }
+      if (edges) { coverWithNodes(ctx, scene.nodes); pen = newPen(); }
+      for (const t of items) if (t.kind === 'node' && !t.screen) drawItem(ctx, t, pen); // a label that grows with the map: the camera's transform
       ctx.restore();
+      // A label at its minimum size is drawn in screen space at a whole font size, whatever the zoom: the font string does not change as the
+      // zoom does, and text is what costs in a frame; then the chip, over everything
+      const screen = { ox: camera.x, oy: camera.y, k: camera.zoom };
+      pen = newPen();
+      for (const t of items) if (t.kind === 'node' && t.screen) drawItem(ctx, t, pen, screen);
+      for (const t of items) if (t.kind === 'chip') drawItem(ctx, t, pen, screen);
       return true;
     },
 

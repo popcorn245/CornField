@@ -369,6 +369,38 @@ describe('createLabelLayer', () => {
     expect(ctx.log).toContainEqual(['set:textAlign', 'center']);
   });
 
+  it('draws a label at its minimum size in screen space at 11 px whatever the zoom, so the font string never changes with the zoom (spec 0008 D2)', () => {
+    const { ctx, layer } = make();
+    const fonts = new Set();
+    for (const zoom of [0.1, 0.13, 0.2, 0.31, 0.5, 0.77, 1]) {
+      ctx.log.length = 0;
+      layer.draw(sc([sn('a', 100, 100), sn('b', 900, 400, { type: 'app', labelBold: true, labelSize: 12 })]), { x: 7, y: 9, zoom });
+      for (const c of ctx.log) if (c[0] === 'set:font' && !/100px/.test(c[1])) fonts.add(c[1]); // (the 100 px ones measure text)
+      // the text is where the camera puts it, in px: x = 7 + 100 * zoom, the baseline under the disc
+      const at = ctx.log.find((c) => c[0] === 'fillText' && c[1] === 'a');
+      expect(at[2]).toBeCloseTo(7 + 100 * zoom);
+      expect(at[3]).toBeCloseTo(9 + 100 * zoom + 10 * zoom + Math.max(3, 3 * zoom) + 11);
+    }
+    expect([...fonts].sort()).toEqual([`11px ${FONT_NODE}`, `bold 13px ${FONT_NODE}`]);
+  });
+
+  it('names a hovered node that has no room for its label with a chip, drawn last, in screen space', () => {
+    const { ctx, layer } = make();
+    const s = sc([sn('a', 100, 100), sn('b', 100, 100)]);
+    expect(layer.draw(s, { x: 0, y: 0, zoom: 1 }, { hover: 'b' })).toBe(true);
+    const ops = ctx.log;
+    const texts = ops.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+    expect(texts).toEqual(['a', 'b']); // the chip's text is the last thing drawn
+    const chip = ops.findIndex((c) => c[0] === 'rect' || c[0] === 'roundRect');
+    expect(chip).toBeGreaterThan(-1);
+    expect(ops.findIndex((c) => c[0] === 'fillText' && c[1] === 'a')).toBeLessThan(chip);
+    // moving the pointer off redraws without it, and the same hover again draws nothing
+    ctx.log.length = 0;
+    expect(layer.draw(s, { x: 0, y: 0, zoom: 1 }, { hover: 'b' })).toBe(false);
+    expect(layer.draw(s, { x: 0, y: 0, zoom: 1 }, {})).toBe(true);
+    expect(ctx.log.filter((c) => c[0] === 'fillText').map((c) => c[1])).toEqual(['a']);
+  });
+
   it('draws nothing it should not: the circles, edges and grid are the renderer\'s', () => {
     const { ctx, layer } = make();
     layer.draw(scene(), CAM);

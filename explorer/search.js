@@ -299,6 +299,8 @@ export function initSearch() {
     if (box) box.addEventListener('focusout', (e) => onFocusOut(e, field));
     const list = listOf(field);
     if (list) {
+      // A press on a row keeps the focus where it is (some browsers do not focus a button they press): the field would lose it and shut the list before the click
+      list.addEventListener('mousedown', (e) => { if (e.target.closest && e.target.closest('[data-corn="search-result"]')) e.preventDefault(); });
       list.addEventListener('click', onListClick);
       list.addEventListener('keydown', (e) => onListKey(e, field));
     }
