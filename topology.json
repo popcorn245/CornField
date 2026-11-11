@@ -2008,6 +2008,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
+    },
+    {
+      "id": "page-doc-docs-reviews-0-34-design-review",
+      "type": "page",
+      "label": "/docs/reviews/0.34-design-review",
+      "file": "docs/reviews/0.34-design-review.md",
+      "summary": "The 0.34 design review",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The 0.34 design review (docs/reviews/0.34-design-review.md)."
     }
   ],
   "edges": [
@@ -6422,6 +6432,10 @@
       "label": "imports"
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-reviews-0-34-design-review"
+    },
+    {
       "from": "core-explorer-proposal",
       "to": "core-explorer-camera",
       "dashed": true,
@@ -6440,5 +6454,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T08:29:27.609Z"
+  "updatedAt": "2026-11-11T08:57:20.800Z"
 }
