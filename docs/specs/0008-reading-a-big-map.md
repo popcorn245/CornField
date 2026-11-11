@@ -1,6 +1,6 @@
 # Spec 0008: reading a big map (layout, labels, search, selection, edge kinds, type shapes)
 
-Status: **proposed**. Its proposal is [`proposals/0008-reading-a-big-map.json`](proposals/0008-reading-a-big-map.json).
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0008-reading-a-big-map.json`](proposals/0008-reading-a-big-map.json).
 
 Issues: [#172](https://github.com/popcorn245/CornField/issues/172) (F23), [#173](https://github.com/popcorn245/CornField/issues/173) (F24), [#174](https://github.com/popcorn245/CornField/issues/174) (F25), [#176](https://github.com/popcorn245/CornField/issues/176) (F28), [#177](https://github.com/popcorn245/CornField/issues/177) (F29), [#218](https://github.com/popcorn245/CornField/issues/218) (the whole map fits but is mostly empty), from the 0.34 design review and its fixes.
 
@@ -179,6 +179,8 @@ At 390, search takes the header; the list covers at most half the screen:
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-11:** the maintainer took every recommendation below.
 
 1. **Pack the clusters by size** (D1), so Fit is 1.6 to 2.3 times as close and the single ring people know becomes a packed disc? Recommendation: **yes**.
 2. **Should search read descriptions?** Recommendation: **no**. Names, ids, files, types and kinds; revisit if you miss it.

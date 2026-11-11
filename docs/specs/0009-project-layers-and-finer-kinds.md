@@ -1,6 +1,6 @@
 # Spec 0009: a project defines its own layers, and finer kinds show
 
-Status: **proposed**. Its proposal is [`proposals/0009-project-layers-and-finer-kinds.json`](proposals/0009-project-layers-and-finer-kinds.json).
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0009-project-layers-and-finer-kinds.json`](proposals/0009-project-layers-and-finer-kinds.json).
 
 Issues: [#150](https://github.com/popcorn245/CornField/issues/150) (F27), [#175](https://github.com/popcorn245/CornField/issues/175) (F26), from the 0.34 design review.
 
@@ -165,6 +165,8 @@ At 390 the menu spans the screen; the node panel's badge carries the kind:
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-11:** the maintainer took every recommendation below.
 
 1. **One layer per node, the first project layer that takes it** (D3), rather than a node in several layers? Recommendation: **yes**.
 2. **No colour in the config**: a project layer's colour comes from the theme (`--corn-map-group-<key>`), else its nodes keep their type's colour? Recommendation: **yes**.

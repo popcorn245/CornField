@@ -1,6 +1,6 @@
 # Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone)
 
-Status: **proposed**. Its proposal is [`proposals/0010-what-is-waiting-on-me.json`](proposals/0010-what-is-waiting-on-me.json).
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0010-what-is-waiting-on-me.json`](proposals/0010-what-is-waiting-on-me.json).
 
 Issues: [#182](https://github.com/popcorn245/CornField/issues/182) (F34, the surfacing part), [#184](https://github.com/popcorn245/CornField/issues/184) (F36), [#193](https://github.com/popcorn245/CornField/issues/193) (F45), from the 0.34 design review.
 
@@ -132,6 +132,8 @@ At 390, during a review: (A) both at peek, (B) Work expanded, (C) the review exp
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-11:** the maintainer took every recommendation below.
 
 1. **The number counts specs to decide and runs waiting, nothing else** (not failed runs, not drafts)? Recommendation: **yes**.
 2. **A spec you sent back leaves your count** until the agent pushes again? Recommendation: **yes**.
