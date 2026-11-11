@@ -12,6 +12,7 @@ import { compressResponse, pickEncoding, isCompressible } from '../../server/com
 
 const BIG = JSON.stringify({ items: Array.from({ length: 400 }, (_, i) => ({ id: `node-${i}`, label: `A node called ${i}` })) });
 
+const SHARED = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' }; // a constant a route sends again and again
 let server;
 let port;
 
@@ -25,6 +26,7 @@ beforeAll(async () => {
     if (url === '/png') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from(BIG)); }
     if (url === '/svg') { res.writeHead(200, { 'Content-Type': 'image/svg+xml' }); return res.end(BIG); }
     if (url === '/events') { res.writeHead(200, { 'Content-Type': 'text/event-stream' }); return res.end(BIG); }
+    if (url === '/shared') { res.writeHead(200, SHARED); return res.end(BIG); }
     if (url === '/small') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': 12 }); return res.end('{"ok":true}\n'); }
     if (url === '/already') { res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }); return res.end(zlib.gzipSync(BIG)); }
     if (url === '/notmodified') { res.writeHead(304, { 'Content-Type': 'application/json', ETag: 'W/"abc"' }); return res.end(); }
@@ -116,6 +118,14 @@ describe('compressResponse', () => {
     expect(nm.raw.length).toBe(0);
     expect(nm.headers.vary).toMatch(/Accept-Encoding/i);
     expect(nm.headers['content-encoding']).toBeUndefined();
+  });
+
+  it('never changes headers the caller keeps for the next response', async () => {
+    expect((await ask('/shared', 'gzip')).headers['content-encoding']).toBe('gzip');
+    expect(SHARED).toEqual({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+    const plain = await ask('/shared', undefined);
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    expect(plain.raw.toString()).toBe(BIG);
   });
 
   it('answers HEAD with the encoding and no body', async () => {

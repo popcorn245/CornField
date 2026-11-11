@@ -69,7 +69,10 @@ export function compressResponse(req, res) {
   };
 
   res.writeHead = (status, ...rest) => {
-    const extra = rest.find((x) => x && typeof x === 'object');
+    // The caller's headers may be a constant it sends again (server.js JSON_HEADERS): change a copy, never that
+    const at = rest.findIndex((x) => x && typeof x === 'object');
+    if (at >= 0 && !Array.isArray(rest[at])) rest[at] = { ...rest[at] };
+    const extra = at >= 0 ? rest[at] : undefined;
     if (!decided) {
       decided = true;
       const type = header(extra, 'content-type');
