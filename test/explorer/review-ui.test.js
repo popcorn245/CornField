@@ -75,8 +75,8 @@ const $ = (id        ) => document.getElementById(id)               ;
 const q = (sel        ) => document.querySelector(sel)               ;
 const click = (el         ) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => setTimeout(r, 0)); };
-const approveBtn = () => q('#proposal-bar [data-review="approved"]')                     ;
-const sendBackBtn = () => q('#proposal-bar [data-review="notes"]')                     ;
+const approveBtn = () => q('#review-decision [data-review="approved"]')                     ;
+const sendBackBtn = () => q('#review-decision [data-review="notes"]')                     ;
 const noteBox = () => $('review-note')                       ;
 const status = () => q('#review [data-review-status]').textContent ;
 const msg = () => q('#review [data-review-msg]');
@@ -153,16 +153,17 @@ afterEach(() => {
 });
 
 describe('the buttons', () => {
-  it('are on the proposal toolbar, in plain words, with the note just before them, and not there with no proposal', () => {
+  it('are the review column\'s foot (the decision), in plain words, with the note just before them, and not there with no proposal', () => {
     expect($('review').hidden).toBe(true);
     open();
     expect($('review').hidden).toBe(false);
-    expect($('review').closest('#proposal-body')).not.toBeNull();
-    // in the toolbar, just before Send back: Tab goes from the note to Cancel, then to "Send back with this note"
+    expect($('review').closest('#review-decision')).not.toBeNull();
+    // in the decision, just before Send back: Tab goes from the note to Cancel, then to "Send back with this note"
     expect($('review').nextElementSibling).toBe(q('.hx-proposal-actions'));
     expect($('review').compareDocumentPosition(sendBackBtn()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(q('.hx-proposal-head').contains(approveBtn())).toBe(true);
-    expect(q('.hx-proposal-head').contains(sendBackBtn())).toBe(true);
+    expect($('review-decision').contains(approveBtn())).toBe(true);
+    expect($('review-decision').contains(sendBackBtn())).toBe(true);
+    expect(q('.hx-proposal-head').contains(approveBtn())).toBe(false);
     expect(noteOpen()).toBe(false); // the note opens only when Send back is pressed
     expect(approveBtn().textContent .trim()).toBe('Approve');
     expect(sendBackBtn().textContent .trim()).toBe('Send back');

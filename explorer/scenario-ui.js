@@ -14,16 +14,15 @@
  * scenario costs nothing, a hidden tab stops the loop, and under prefers-reduced-motion the steps
  * still change but the packet does not travel and the camera jumps.
  *
- * The scenario list: a `Scenarios · N` disclosure that appears whenever `state.proposal.scenarios`
- * is not empty (TOPO-09 sets `state.proposal`; this follows it through `onSceneTouch`). It sits as
- * a row inside the proposal bar, and at the stage's corner when there is no bar.
+ * The scenario list is the review column's (review-column.js): this module plays what it hands over and tells it where the
+ * player is (`onPlayerChange`), so the list can follow.
  *
  * On a phone (sheets.js, TOPO-18) the bar is a bottom sheet in `#sheet-dock`: a peek (title, step
  * counter and text) until expanded, and the camera follows a step into the part of the map the
  * sheets leave free.
  */
 
-import { state, touchScene, onSceneTouch } from './state.js';
+import { state, touchScene } from './state.js';
 import { render, ensureFlowLoop, addFrameClient, isNodeVisible, getMinZoom } from './render.js';
 import { flowReduceMotion } from './flows.js';
 import { registerSheet, unregisterSheet, collapseAllSheets, visibleMapRect, onCoveredChange } from './sheets.js';
@@ -31,8 +30,13 @@ import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from '.
 import { edgeKey } from '../core/proposal.js';
 import { checksVersion, closeChecks, decorateSnapshot, openChecks, paintChecks } from './check.js';
 import { blastRadius, outageLayers, outageScenario } from './outage-model.js';
-import { toggleLayer } from './layers.js';
+import { toggleLayer, LAYER_DEFS } from './layers.js';
+import { externalLayer } from './cloud-model.js';
+import { projectLayerKey, shownByProposal } from './layer-model.js';
 import { announce } from './keyboard.js';
+import { t } from './strings.js';
+import { currentStepSentence } from './scenario-list-model.js';
+import { personaFor, personaLabel } from './check-model.js';
 
 /** A frame that arrives later than this (a tab that was hidden) counts as this long */
 const MAX_FRAME_MS = 250;
@@ -43,7 +47,9 @@ let player = null;
 let bar = null;
 let signature = '';
 let glide = null; // { to: {x, y, zoom}, last: nowMs|null }
-let list = null;
+let held = false; // the viewer took hold of the map since the step began: the camera is theirs until the next step
+let framedFor = -1; // the player bar's height when the camera last followed the step
+let barWatch = null; // a ResizeObserver on the bar: when it grows (a check's line arrives), the step is followed again
 
 const $stage = () => (state.canvas ? state.canvas.parentElement : null);
 
@@ -54,39 +60,40 @@ const $stage = () => (state.canvas ? state.canvas.parentElement : null);
 /**
  * Plays a scenario on the map, replacing any that is playing.
  * @param {import('./scenario.js').Scenario} scenario
- * @param {{ autoplay?: boolean, stepMs?: number | 'manual' }} [opts] `autoplay` false opens it paused on the first step;
- *   `stepMs` is a speed for this scenario in place of the viewer's saved one
+ * @param {{ autoplay?: boolean, stepMs?: number | 'manual', step?: number, focus?: boolean }} [opts] `autoplay` false opens it paused on the first step;
+ *   `step` opens it on that step (paused); `stepMs` is a speed for this scenario in place of the viewer's saved one;
+ *   `focus` false leaves the keyboard focus where it is (the review column's step list keeps it)
  * @returns {ReturnType<typeof createPlayer>} the player, for a caller that wants to drive it
  */
 export function playScenario(scenario, opts = {}) {
   const opener = openerOf();
-  const takeFocus = isKeyboardish(); // checked now: the list row that was pressed goes with the list
-  clearScenario();
+  const takeFocus = isKeyboardish() && opts.focus !== false; // checked now: whatever was pressed may go with the markup
+  clearScenario({ keepChecks: true });
   returnTo = opener;
   const speed = opts.stepMs ?? readSpeed();
   player = createPlayer(scenario, { stepMs: speed, maxFrameMs: MAX_FRAME_MS });
+  if (Number.isFinite(opts.step) && opts.step > 0) player.goTo(opts.step);
   showBar(speed);
-  openChecks(scenario, () => { sync(); render(); }); // PHY-10: one batch of permission checks for the scenario (check.js)
+  openChecks(scenario, () => { sync(); render(); }); // PHY-10: one batch of permission checks for the scenario (check.js); the same scenario already open in the list keeps its answers
   showOutageLayers(scenario);
-  if (opts.autoplay !== false) player.play();
+  showStepLayers(scenario);
+  if (opts.autoplay !== false && !(opts.step > 0)) player.play();
   sync(true);
   render();
   ensureFlowLoop();
-  // Whatever started it (a row of the list, which goes) is gone: focus goes to the player's play and pause button, the first control of what opened
-  if (opts.focus !== false && bar && takeFocus) {
+  // Whatever started it may be gone: focus goes to the player's play and pause button, the first control of what opened
+  if (takeFocus && bar) {
     const toggle = bar.querySelector('[data-action=scenario-toggle]');
     if (toggle && !toggle.disabled) toggle.focus(); else bar.querySelector('[data-action=scenario-next]')?.focus();
   }
   return player;
 }
 
-/** What had the focus when a scenario started, to give it back when the scenario closes: the toolbar's Play button when the start came from it or its list */
+/** What had the focus when a scenario started, to give it back when the scenario closes (a control of another panel, say) */
 let returnTo = null;
 function openerOf() {
   const active = document.activeElement;
-  const play = document.getElementById('proposal-play');
-  if (active && active !== document.body && (active === play || active.closest?.('#proposal-scenarios'))) return play;
-  if (active && active !== document.body && !active.closest?.('.hx-player') && active !== state.canvas) return active;
+  if (active && active !== document.body && !active.closest?.('.hx-player') && !active.closest?.('#review-column') && active !== state.canvas) return active;
   return null;
 }
 
@@ -96,7 +103,19 @@ function isKeyboardish() {
   return !!active && active !== document.body && !typingIn(active);
 }
 
-/** Closing the player by the viewer's own act: the focus goes back to what started it (Play), else to Play, else to the map (on a phone Play is folded away in the peek) */
+/** Who knows where the focus goes when the player closes: the review column's step list (review-column.js) gives the step the player was on */
+let closeFocus = null;
+export function setCloseFocus(fn) { closeFocus = typeof fn === 'function' ? fn : null; }
+
+/** Who is told when the player moves: `fn(snapshot)` on each change of step, play state or answer, and `fn(null)` when it closes */
+const playerListeners = new Set();
+export function onPlayerChange(fn) {
+  playerListeners.add(fn);
+  return () => playerListeners.delete(fn);
+}
+const notify = (snap) => { for (const fn of playerListeners) fn(snap); };
+
+/** Closing the player by the viewer's own act: the focus goes back to the step it was on in the list, else to what started it, else to the map */
 function giveFocusBack() {
   const to = returnTo;
   returnTo = null;
@@ -105,7 +124,7 @@ function giveFocusBack() {
     el.focus();
     return document.activeElement === el; // a control the stylesheet hides takes no focus
   };
-  if (took(to) || took(document.getElementById('proposal-play'))) return;
+  if (took(closeFocus && closeFocus()) || took(to)) return;
   took(state.canvas);
 }
 
@@ -119,6 +138,42 @@ function showOutageLayers(scenario) {
     .forEach((key) => { if (state.activeLayers[key] === false) toggleLayer(key); });
 }
 
+/**
+ * The Layers keys that hide a node, or [] when no layer does (#212). Only what Layers decides: the Flow and House views and
+ * Before or After draw their own sets, and a layer would not change them.
+ */
+export function layersHiding(node) {
+  if (!node || state.view === 'dataflow' || state.view === 'house') return [];
+  const on = (key) => state.activeLayers[key] !== false;
+  const t = node.type;
+  if (t === 'root' || shownByProposal(state, node)) return []; // a proposal's own nodes are drawn whatever their layer says (spec 0009 D3)
+  const project = projectLayerKey(state, node); // a project layer that takes the node decides alone (spec 0009 D3), as scene.js layerShows has it
+  if (project) return on(project) ? [] : [project];
+  if (t === 'core') return [...(on('core') ? [] : ['core']), ...(state.activeLayers.pkg || state.activeLayers.atom ? [] : ['pkg'])];
+  if (t === 'store') return ['flow', 'store'].filter((k) => !on(k));
+  if (t === 'rom') return ['rom', 'flow'].filter((k) => !on(k));
+  if (t === 'floor' || t === 'room') return on('house') ? [] : ['house'];
+  const key = t === 'external' ? externalLayer(node) : t;
+  return on(key) ? [] : [key];
+}
+
+/** The nodes a scenario's steps name: a node step's node, both ends of an edge step */
+const stepNodeIds = (scenario) => (Array.isArray(scenario?.steps) ? scenario.steps : []).flatMap((st) => (st?.edge ? [st.edge.from, st.edge.to] : st && st.node !== undefined ? [st.node] : []));
+
+/**
+ * A step on a layer that is off cannot be followed: the camera has nothing to go to (#212). Playing a scenario turns on the layers
+ * its steps are drawn on, as an outage turns on what it hits, and says which.
+ */
+function showStepLayers(scenario) {
+  const byId = new Map(state.nodes.map((n) => [n.id, n]));
+  const keys = [];
+  for (const id of stepNodeIds(scenario)) for (const key of layersHiding(byId.get(id))) if (!keys.includes(key)) keys.push(key);
+  if (!keys.length) return;
+  for (const key of keys) { if (key === 'pkg') state.activeLayers.pkg = false; toggleLayer(key); }
+  const names = keys.map((key) => (LAYER_DEFS.find((l) => l.key === key) || (state.projectLayers || []).find((l) => l.key === key) || { label: key }).label);
+  announce(`Turned on ${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]} to show this scenario's steps.`);
+}
+
 /** The cloud panel's Play button (CLOUD-07): plays "X is down" for a cloud node, generated from the map (outage-model.js) */
 export function playOutage(id) {
   const node = state.nodes.find((n) => n.id === id);
@@ -129,25 +184,32 @@ export function playOutage(id) {
 /** The player of the scenario on the map, or null */
 export const getPlayer = () => player;
 
-/** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view) */
-export function clearScenario() {
+/** Ends the scenario without touching the picture: for callers that rebuild it themselves (selecting a node, switching view). `keepChecks` while another scenario is about to start */
+export function clearScenario({ keepChecks = false, closing = false } = {}) {
+  const had = !!player || !!state.scenario;
   player = null;
   glide = null;
   signature = '';
   state.scenario = null;
-  closeChecks();
+  if (!keepChecks) closeChecks();
+  if (barWatch) { barWatch.disconnect(); barWatch = null; }
   if (bar) { unregisterSheet('player'); bar.remove(); bar = null; }
-  refreshList();
+  if (had && (!keepChecks || closing)) notify(null);
 }
+
+/** Who keeps a closed scenario's checks: the review column, while its steps are open in the list (their verdicts stay there) */
+let keepChecksOnClose = null;
+export function setKeepChecksOnClose(fn) { keepChecksOnClose = typeof fn === 'function' ? fn : null; }
 
 /** Ends the scenario and redraws the map without it */
 export function stopScenario() {
   if (!player && !state.scenario) return;
-  const hadFocus = !!bar && bar.contains(document.activeElement);
-  clearScenario();
+  const hadFocus = (!!bar && bar.contains(document.activeElement)) || !!document.activeElement?.closest?.('#review-column'); // in the player, or in the list that follows it
+  const keep = !!player && !!keepChecksOnClose && keepChecksOnClose(player.scenario().id); // the list still shows its steps: their verdicts stay
+  clearScenario({ keepChecks: keep, closing: true });
   touchScene();
   render();
-  if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone
+  if (hadFocus || document.activeElement === document.body) giveFocusBack(); // focus was in the player, which is gone: it goes to the step the player was on
   else returnTo = null;
 }
 
@@ -162,9 +224,10 @@ function sync(force = false) {
     const stepChanged = force || next.split('|')[0] !== signature.split('|')[0];
     signature = next;
     touchScene();
-    if (stepChanged) followStep(snap);
+    if (stepChanged) { held = false; followStep(snap); }
   }
   updateBar(snap);
+  if (changed) notify({ id: snap.id, index: snap.index, total: snap.total, done: snap.done, playing: snap.playing, checks: checksVersion() });
   return changed;
 }
 
@@ -176,6 +239,7 @@ function followStep(snap) {
   state.nodes.forEach((n) => { if (isNodeVisible(n)) visible.set(n.id, n); });
   // The step must be in the part of the map nothing covers: not under the proposal bar, the node panel, the player or (on a phone) the sheets
   const rect = visibleMapRect();
+  framedFor = bar ? bar.offsetHeight : 0;
   const target = cameraFor({ node: snap.current.node, edge: snap.current.edge, at: snap.current.at, text: snap.current.text }, state.camera, rect, visible, 60, getMinZoom());
   if (!target) return;
   if (flowReduceMotion) { Object.assign(state.camera, target); glide = null; render(); return; } // reduced motion: jump, do not fly
@@ -222,19 +286,27 @@ function showBar(speed) {
   bar.dataset.corn = 'scenario-player';
   bar.setAttribute('role', 'region');
   bar.setAttribute('aria-label', 'Scenario player');
+  // One bar (spec 0006 D6): Previous, Pause or Play, Next; "2 of 4 · As Adult · the step's text · Allowed"; the speed and Close.
+  // The scenario's name is the title (heard, and shown on a phone's open sheet); the list beside the map has it open and the step marked.
   bar.innerHTML = `
-    <div class="hx-player-head">
-      <span class="hx-player-title"></span>
+    <span class="hx-player-title hx-sr-only"></span>
+    <div class="hx-player-controls" role="group">
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-prev" data-action="scenario-prev" data-peek-ok><span class="hx-player-label"></span></button>
+      <button type="button" class="hx-btn hx-btn--active hx-player-toggle" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"><span class="hx-player-label"></span></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next" data-action="scenario-next" data-peek-ok><span class="hx-player-label"></span></button>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-player-next-scenario" data-action="scenario-next-scenario" data-peek-ok hidden></button>
+    </div>
+    <p class="hx-player-text"><span class="hx-player-count" data-corn="count"></span><span class="hx-player-sep" aria-hidden="true"> · </span><span class="hx-player-who"></span><span class="hx-player-step"></span></p>
+    <span class="hx-player-says hx-sr-only" role="status" aria-live="polite"></span>
+    <div class="hx-player-side">
       <select data-corn="control" class="hx-player-speed" data-action="scenario-speed" aria-label="Time for each step" title="Time for each step">${SPEED_CHOICES.map((c) => `<option value="${c.value}">${c.label}</option>`).join('')}</select>
       <button type="button" class="hx-close" data-action="scenario-close" aria-label="Close the scenario" data-corn-kind="icon">✕</button>
     </div>
-    <p class="hx-player-text" aria-live="polite"><span class="hx-player-count" data-corn="count"></span> · <span class="hx-player-step"></span></p>
-    <div class="hx-player-controls">
-      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-prev" data-peek-ok>◀ Previous</button>
-      <button type="button" class="hx-btn hx-btn--active" data-action="scenario-toggle" data-peek-ok data-corn-kind="primary"></button>
-      <button data-corn-kind="secondary" type="button" class="hx-btn" data-action="scenario-next" data-peek-ok>Next ▶</button>
-    </div>
     <div class="hx-player-track" data-corn="scenario-track" aria-hidden="true"><span class="hx-player-fill" data-corn="scenario-fill"></span></div>`;
+  bar.querySelector('.hx-player-controls').setAttribute('aria-label', t('steps'));
+  bar.querySelector('.hx-player-prev .hx-player-label').textContent = t('previousStep');
+  bar.querySelector('.hx-player-next .hx-player-label').textContent = t('nextStep');
+  bar.querySelector('.hx-player-next-scenario').textContent = t('nextScenario');
   bar.addEventListener('click', (e) => {
     const button = e.target.closest('[data-action]');
     if (button) act(button.dataset.action);
@@ -242,14 +314,23 @@ function showBar(speed) {
   const menu = bar.querySelector('.hx-player-speed');
   menu.value = String(speed);
   menu.addEventListener('change', (e) => chooseSpeed(e.target.value));
-  // On a phone the bar is a sheet in the dock, above the node panel; it opens as a peek and the others fold, so the map shows
+  // On a phone the bar is a sheet in the dock, above the node panel; it opens as a peek (one row) and the others fold, so the map shows
   const dock = document.getElementById('sheet-dock');
   const drawer = document.getElementById('spec-drawer');
   if (dock && drawer && drawer.parentElement === dock) dock.insertBefore(bar, drawer);
   else (dock || stage).appendChild(bar);
   registerSheet('player', bar);
   collapseAllSheets();
+  // The bar grows once it has more to say (a step's check, its As row): the step it framed would now be under it, so it is followed again
+  if (typeof ResizeObserver === 'function') {
+    barWatch = new ResizeObserver(() => { if (bar && player && state.scenario && !held && bar.offsetHeight !== framedFor) followStep(player.snapshot()); });
+    barWatch.observe(bar);
+  }
 }
+
+/** Who knows the scenario after this one, in the order the list reads (review-column.js): `fn(scenarioId)` gives the scenario or null */
+let nextScenarioOf = null;
+export function setNextScenario(fn) { nextScenarioOf = typeof fn === 'function' ? fn : null; }
 
 // The viewer's speed: a setting of theirs, kept for the next scenario and the next visit
 function readSpeed() {
@@ -270,6 +351,12 @@ function chooseSpeed(value) {
 function act(action) {
   if (!player) return;
   if (action === 'scenario-close') return stopScenario();
+  if (action === 'scenario-next-scenario') {
+    // the end of a scenario: nothing advances by itself; this is the reviewer's choice, and it starts the next one in the list's order
+    const next = nextScenarioOf ? nextScenarioOf(player.scenario().id) : null;
+    if (next) playScenario(next);
+    return;
+  }
   if (action === 'scenario-toggle') {
     const s = player.snapshot();
     if (s.playing) player.pause(); else player.play();
@@ -289,14 +376,27 @@ function updateBar(snap) {
   // this runs every frame: a live region is written only when its words change, so a step is said once, not once a frame
   const put = (cls, text) => { const el = q(cls); if (el.textContent !== text) el.textContent = text; };
   put('.hx-player-title', snap.title);
+  bar.setAttribute('aria-label', `Scenario player: ${snap.title}`);
   put('.hx-player-count', `${Math.min(snap.index + 1, Math.max(snap.total, 1))} of ${snap.total}`);
-  put('.hx-player-step', snap.current.text);
+  const actor = snap.current.actor ? personaLabel(personaFor(state.nodes, snap.current.actor)) || snap.current.actor : '';
+  put('.hx-player-who', actor && !snap.done ? `As ${actor} · ` : '');
+  put('.hx-player-step', snap.done ? 'Played to the end' : snap.current.text);
+  bar.dataset.done = String(!!snap.done);
   const toggle = q('[data-action=scenario-toggle]');
-  toggle.textContent = snap.playing ? 'Pause' : snap.done ? 'Play again' : 'Play';
+  const label = snap.playing ? t('pause') : snap.done ? t('playAgain') : t('play');
+  put('[data-action=scenario-toggle] .hx-player-label', label);
+  toggle.dataset.state = snap.playing ? 'playing' : snap.done ? 'done' : 'paused';
   toggle.disabled = snap.total === 0 || snap.manual;
   toggle.title = snap.manual ? 'The time for each step is Manual: use Next' : '';
   q('[data-action=scenario-prev]').disabled = snap.index === 0 && !snap.done;
-  q('[data-action=scenario-next]').disabled = snap.done || snap.total === 0;
+  const next = q('[data-action=scenario-next]');
+  next.disabled = snap.done || snap.total === 0;
+  // at the end: Play again and Next scenario (the next one in the list's order); nothing carries on by itself
+  const following = snap.done && nextScenarioOf ? nextScenarioOf(snap.id) : null;
+  q('[data-action=scenario-next-scenario]').hidden = !following;
+  next.hidden = !!following;
+  // the one polite line: a step as the list says it ("Step 2 of 3, as Adult: checkout page, Added. You pay. Allowed.")
+  put('.hx-player-says', snap.done ? `${snap.title}: played to the end.` : currentStepSentence({ snap, nodes: state.nodes, edges: state.edges, words: { notChecked: t('notChecked') } }));
   const fill = snap.total ? Math.round(((snap.done ? snap.total : snap.index + snap.progress) / snap.total) * 1000) / 10 : 0;
   if (fill !== lastFill) { lastFill = fill; q('.hx-player-fill').style.width = `${fill}%`; }
   paintChecks(bar, snap);
@@ -314,9 +414,9 @@ function typingIn(target) {
 function onKeydown(e) {
   if (e.key === 'Escape' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) {
     if (player && !typingIn(e.target) && !otherPopupOpen()) { e.preventDefault(); stopScenario(); return; } // Escape closes the scenario; focus goes back to Play
-    if (!player && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); closeList(true); return; }
   }
   if (!player || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+  if ((e.key === ' ' || e.code === 'Space') && e.target.closest?.('#review-column')) return; // Space on a step or a row presses it
   const action = e.key === ' ' || e.code === 'Space' ? 'scenario-toggle' : e.key === 'ArrowLeft' ? 'scenario-prev' : e.key === 'ArrowRight' ? 'scenario-next' : null;
   if (!action) return;
   e.preventDefault(); // space on a focused button would press it as well
@@ -331,98 +431,6 @@ function otherPopupOpen() {
 /** Some browsers press a focused button on the key's release, so a space the player took must not reach it */
 function onKeyup(e) {
   if (player && (e.key === ' ' || e.code === 'Space') && !typingIn(e.target)) e.preventDefault();
-}
-
-// ---------------------------------------------------------------------------
-//  The scenario list
-// ---------------------------------------------------------------------------
-/** The open proposal's scenarios, with the maintainer's what-if edits in (`state.effectiveProposal`) when there are any */
-const proposalScenarios = () => {
-  const p = state.effectiveProposal || state.proposal;
-  return p && Array.isArray(p.scenarios) ? p.scenarios : [];
-};
-
-/**
- * Where the list goes: a row of the open proposal's bar, under its title row, so the list
- * opens in the bar's own flow and the bar grows to hold it (as a second box at the stage's corner
- * it opened underneath the bar and was covered). Without a bar it is a box at the stage's corner.
- */
-function mountList() {
-  const body = document.getElementById('proposal-body');
-  const stage = $stage();
-  if (!body) {
-    if (stage && list.parentElement !== stage) stage.appendChild(list);
-  } else if (list.parentElement !== body) {
-    const summary = document.getElementById('proposal-summary');
-    if (summary && summary.parentElement === body) body.insertBefore(list, summary);
-    else body.appendChild(list);
-  }
-}
-
-const wiredPlay = new WeakSet();
-
-/** The toolbar's Play button: shown while the open proposal has scenarios and none plays; with one it plays it, with several it opens the list */
-function paintPlay(show) {
-  const btn = document.getElementById('proposal-play');
-  if (!btn) return;
-  btn.hidden = !show;
-  // with one scenario Play plays it, so it expands nothing
-  if (proposalScenarios().length > 1) btn.setAttribute('aria-expanded', String(!!list && !list.hidden)); else btn.removeAttribute('aria-expanded');
-  if (wiredPlay.has(btn)) return;
-  wiredPlay.add(btn);
-  btn.addEventListener('click', () => {
-    const scenarios = proposalScenarios();
-    if (scenarios.length === 1) playScenario(scenarios[0]);
-    else if (list) {
-      if (list.hidden) { list.hidden = false; btn.setAttribute('aria-expanded', 'true'); list.querySelector('button')?.focus(); } // the first row of what opened
-      else closeList(false);
-    }
-  });
-}
-
-/** Folds the scenario list back onto Play; `refocus` gives Play the focus (Escape from inside the list) */
-function closeList(refocus) {
-  if (list) list.hidden = true;
-  const btn = document.getElementById('proposal-play');
-  if (!btn) return;
-  btn.setAttribute('aria-expanded', 'false');
-  if (refocus) btn.focus();
-}
-
-/** Shows or hides the Play button and its list to match the open proposal's scenarios (and hides them while one plays: the player is the control then) */
-export function refreshList() {
-  const stage = $stage();
-  const scenarios = proposalScenarios();
-  const show = !!stage && scenarios.length > 0 && !player;
-  if (!show) { if (list) { list.remove(); list = null; } paintPlay(false); return; }
-  const key = scenarios.map((s) => `${s.id}\u0000${s.title}\u0000${(s.steps || []).length}`).join('\u0001');
-  if (list && list.dataset.key === key) { mountList(); paintPlay(true); return; }
-  const wasOpen = !!list && !list.hidden;
-  if (list) list.remove();
-  list = document.createElement('div');
-  list.id = 'proposal-scenarios';
-  list.className = 'hx-scenarios glass';
-  list.dataset.corn = 'scenario-list';
-  list.dataset.key = key;
-  list.hidden = !!document.getElementById('proposal-play') && (!wasOpen || scenarios.length < 2); // behind Play when the toolbar has one
-  scenarios.forEach((s) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'hx-scenarios-item';
-    button.dataset.corn = 'row';
-    button.dataset.scenario = s.id;
-    const steps = (s.steps || []).length;
-    button.textContent = `${s.title} · ${steps} ${steps === 1 ? 'step' : 'steps'}`;
-    list.appendChild(button);
-  });
-  list.addEventListener('click', (e) => {
-    const button = e.target.closest('[data-scenario]');
-    if (!button) return;
-    const scenario = proposalScenarios().find((s) => s.id === button.dataset.scenario);
-    if (scenario) playScenario(scenario);
-  });
-  mountList();
-  paintPlay(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -474,10 +482,8 @@ export function initScenarioUi() {
   wired = true;
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('keyup', onKeyup);
-  onSceneTouch(refreshList);
   // A sheet that opened or closed changes what the map shows: keep the step in view
   onCoveredChange(() => { if (player && state.scenario) followStep(player.snapshot()); });
   // Taking hold of the map (a drag, the wheel, a pinch) ends the camera's glide: the camera is theirs
-  for (const type of ['pointerdown', 'wheel', 'touchstart', 'mousedown']) document.addEventListener(type, (e) => { if (e.target === state.canvas) glide = null; }, { passive: true, capture: true });
-  refreshList();
+  for (const type of ['pointerdown', 'wheel', 'touchstart', 'mousedown']) document.addEventListener(type, (e) => { if (e.target === state.canvas) { glide = null; held = true; } }, { passive: true, capture: true });
 }

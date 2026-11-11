@@ -33,7 +33,9 @@ let version = 0;
 
 /** Hands the tool its checker (main.js, from the plugin); none means every checked step reads "Not checked" */
 export function initChecks(opts = {}) {
-  checker = opts.checker || null;
+  const next = opts.checker || null;
+  if (next !== checker) closeChecks(); // answers asked of another checker are not this one's
+  checker = next;
 }
 
 /** Changes whenever a verdict may have: scenario-ui.js puts it in the player's signature, so an answer redraws the step */
@@ -47,11 +49,16 @@ const namesActor = (scenario) => !!scenario && (!!scenario.actor || (Array.isArr
  * @param {() => void} onChange called when an answer arrives or the As menu moved (scenario-ui.js syncs and redraws)
  */
 export function openChecks(scenario, onChange = () => {}) {
+  // the scenario that is already being checked (opened in the list, now played): its answers stay, only who is told changes
+  if (current && current.scenario && scenario && current.scenario.id === scenario.id) { current.onChange = onChange; replan(scenario); return; }
   closeChecks();
   current = { scenario: null, as: null, nodes: null, plan: null, answer: { status: 'idle' }, controller: null, onChange };
   if (namesActor(scenario) && state.activeLayers.persona !== true) toggleLayer('persona');
   replan(scenario);
 }
+
+/** The id of the scenario being checked (a player's or the list's), or null */
+export const checkedScenarioId = () => (current && current.scenario ? current.scenario.id : null);
 
 /** The scenario closed: nothing more is asked or shown */
 export function closeChecks() {
@@ -125,21 +132,18 @@ export function scenarioVerdicts() {
 
 /** The pill in the head, the line under the text, and the As row under the controls: only on the bar of a scenario that names an actor, so any other bar is as it was */
 function mountControls(bar) {
-  const head = bar.querySelector('.hx-player-head');
-  const title = bar.querySelector('.hx-player-title');
+  // the pill ends the step's line; the reason is a line of its own under the bar's row, with the As row (the player is one bar: spec 0006 D6)
   const pill = document.createElement('span');
   pill.className = 'hx-player-verdict';
   pill.dataset.corn = 'state-pill';
   pill.hidden = true;
-  if (head && title) title.after(pill); else bar.prepend(pill);
+  const text = bar.querySelector('.hx-player-text');
+  if (text) text.append(' ', pill); else bar.prepend(pill);
 
   const line = document.createElement('p');
   line.className = 'hx-player-check';
   line.dataset.corn = 'scenario-check';
-  line.setAttribute('aria-live', 'polite');
   line.hidden = true;
-  const text = bar.querySelector('.hx-player-text');
-  if (text) text.after(line); else bar.appendChild(line);
 
   const row = document.createElement('div');
   row.className = 'hx-player-as';
@@ -147,8 +151,8 @@ function mountControls(bar) {
     <label class="hx-player-as-label">As <select data-corn="control" class="hx-player-speed hx-player-as-menu" data-check="as" aria-label="Act every step as"></select></label>
     <button data-corn-kind="secondary" type="button" class="hx-btn" data-check="recheck">Check again</button>
     <span class="hx-player-as-sum hx-faint"></span>`;
-  const controls = bar.querySelector('.hx-player-controls');
-  if (controls) controls.after(row); else bar.appendChild(row);
+  const track = bar.querySelector('.hx-player-track');
+  if (track) { track.before(line); track.before(row); } else { bar.appendChild(line); bar.appendChild(row); }
 
   row.querySelector('[data-check=as]').addEventListener('change', (e) => chooseActor(e.target.value));
   row.querySelector('[data-check=recheck]').addEventListener('click', recheck);
@@ -209,7 +213,7 @@ export function paintChecks(bar, snap) {
   const line = bar.querySelector('.hx-player-check');
   const row = bar.querySelector('.hx-player-as');
   if (!pill || !line || !row) return;
-  const words = verdictWords(snap.verdict);
+  const words = snap.done ? null : verdictWords(snap.verdict); // at the end there is no step to say a verdict of
   pill.hidden = !words;
   line.hidden = !words;
   if (words) {

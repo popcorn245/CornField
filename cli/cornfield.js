@@ -26,7 +26,7 @@ import { loadConfig, loadDerivers } from '../core/config.js';
 import { deriveTopology } from '../core/derive.js';
 import { planSync, placeholderCounts } from '../core/sync.js';
 import { validateRepo, readTopology } from '../core/validate.js';
-import { proposalProblems, proposalStatus, summarize } from '../core/proposal.js';
+import { proposalProblems, proposalStatus, summarize, personaWarnings } from '../core/proposal.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
@@ -181,6 +181,9 @@ async function proposal(flags, file) {
   const { items, summary } = proposalStatus(topology, p);
   console.log(`\n  Against ${config.topology}: ${summary.landed} landed · ${summary.pending} pending · ${summary.diverged} diverged${summary.live ? ` · ${summary.live} live` : ''}${building ? ' (the build has begun)' : ''}`);
   for (const i of items) console.log(`  ${i.status.padEnd(8)} ${i.op.padEnd(6)} ${i.kind.padEnd(4)} ${i.key}`);
+  const warnings = personaWarnings(topology, p);
+  if (warnings.length) console.log('');
+  for (const w of warnings) console.log(w);
   console.log('\nThe proposal is valid.\n');
   return 0;
 }

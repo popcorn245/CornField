@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * The scenario player in a DOM (TOPO-10): the bar, the keyboard, the camera, the list of a
- * proposal's scenarios and the demo. The renderer is a stub (there is no canvas in CI) and the test
+ * The scenario player in a DOM (TOPO-10): the bar, the keyboard, the camera, what the review column
+ * needs of it (spec 0006) and the demo. The renderer is a stub (there is no canvas in CI) and the test
  * is the frame loop: it hands `tickScenario` the time it wants.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -16,7 +16,7 @@ import { setRenderer } from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, sheetState, expandSheet, measureCovered } from '../../explorer/sheets.js';
 import {
-  clearScenario, demoScenario, getPlayer, initScenarioUi, maybeStartDemo, playScenario, refreshList, stopScenario, tickScenario, wantsFrames,
+  clearScenario, demoScenario, getPlayer, initScenarioUi, maybeStartDemo, onPlayerChange, playScenario, setCloseFocus, setNextScenario, stopScenario, tickScenario, wantsFrames,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario-ui.js';
 
@@ -77,9 +77,40 @@ describe('the bar', () => {
     expect(bar().getAttribute('role')).toBe('region');
     expect(q('.hx-player-title').textContent).toBe('Saving a meal');
     expect(text()).toBe('1 of 4 · The page opens.');
-    expect([...bar().querySelectorAll('button:not(.hx-sheet-handle)')].map((b) => b.textContent .trim())).toEqual(['✕', '◀ Previous', 'Play', 'Next ▶']);
+    // one bar: Previous, Pause or Play, Next, then the speed and Close (the glyphs are drawn by the stylesheet, so the names are the words)
+    expect([...bar().querySelectorAll('button:not(.hx-sheet-handle):not([hidden])')].map((b) => b.textContent .trim())).toEqual(['Previous', 'Play', 'Next', '✕']);
     expect(q('[data-action=scenario-close]').getAttribute('aria-label')).toBe('Close the scenario');
-    expect(q('.hx-player-text').getAttribute('aria-live')).toBe('polite');
+    // the one polite line is the step as the list says it, not the visible line again
+    expect(q('.hx-player-text').hasAttribute('aria-live')).toBe(false);
+    expect(q('.hx-player-says').getAttribute('aria-live')).toBe('polite');
+    expect(q('.hx-player-says').textContent).toBe('Step 1 of 4: a. The page opens.');
+    expect(bar().getAttribute('aria-label')).toBe('Scenario player: Saving a meal');
+  });
+
+  it('is one row under the map to the right of the review column, and a phone\'s peek keeps Previous, Pause, Next and Close in a row of 44px targets', () => {
+    const css = fs.readFileSync(path.join(here, '../../explorer', 'explorer.css'), 'utf8');
+    expect(css).toMatch(/\.hx-player \{ position: absolute; left: calc\(var\(--hx-col-w, 0px\) \+ 24px\); right: 12px; bottom: 12px;/);
+    expect(css).toMatch(/\.hx-stage:has\(\.hx-review-column:not\(\[hidden\]\)\) \{ --hx-col-w: 400px; \}/);
+    expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-controls\):not\(\.hx-player-text\):not\(\.hx-player-side\)/);
+    expect(css).toMatch(/\.hx-player-controls \.hx-btn \{ min-height: 44px; min-width: 44px;/);
+  });
+
+  it('ends with "Played to the end", Play again and Next scenario; nothing carries on by itself', () => {
+    const second = scenario({ id: 't', title: 'Another' });
+    setNextScenario((id) => (id === 's' ? second : null));
+    playScenario(scenario(), { autoplay: false });
+    expect(q('[data-action=scenario-next-scenario]').hidden).toBe(true);
+    for (let i = 0; i < 4; i++) click('scenario-next');
+    expect(text()).toBe('4 of 4 · Played to the end');
+    expect(q('[data-action=scenario-toggle]').textContent).toBe('Play again');
+    expect(q('[data-action=scenario-next-scenario]').hidden).toBe(false);
+    expect(q('[data-action=scenario-next-scenario]').textContent).toBe('Next scenario');
+    frames(0, 3000);
+    expect(getPlayer().scenario().id).toBe('s'); // time passes: it is still this one
+    click('scenario-next-scenario');
+    expect(q('.hx-player-title').textContent).toBe('Another');
+    expect(getPlayer().snapshot().index).toBe(0);
+    setNextScenario(null);
   });
 
   it('puts the player\'s snapshot in state.scenario and rebuilds the scene when something moved', () => {
@@ -429,6 +460,80 @@ describe('the camera', () => {
     expect(state.camera.y).toBeCloseTo((600 - 108) / 2 - 2005, 5); // centred in what the bar leaves (a node's label hangs below it: 5 px of that)
   });
 
+  it('follows the step again when the bar grows after framing it (a check\'s line arrives), unless the viewer took hold of the map', () => {
+    const watchers = [];
+    vi.stubGlobal('ResizeObserver', class { constructor(fn) { this.fn = fn; this.els = []; watchers.push(this); } observe(el) { this.els.push(el); } disconnect() { this.gone = true; this.els = []; } });
+    const grew = () => watchers.filter((w) => w.els.includes(bar())).forEach((w) => w.fn());
+    const rect = (top        , bottom        ) => () => ({ top, bottom, left: 0, right: 800, width: 800, height: bottom - top, x: 0, y: top });
+    state.canvas.getBoundingClientRect = rect(0, 600);
+    playScenario(scenario(), { autoplay: false });
+    let h = 80;
+    Object.defineProperty(bar(), 'offsetHeight', { get: () => h, configurable: true });
+    bar().getBoundingClientRect = () => rect(600 - h, 600)();
+    click('scenario-next'); click('scenario-next'); click('scenario-next'); // the far node, framed above an 80px bar
+    for (let t = 16; t < 3000 && wantsFrames(); t += 16) tickScenario(t);
+    const y = () => state.camera.y + 2000 * state.camera.zoom;
+    expect(y()).toBeCloseTo((600 - 88) / 2 - 5, 5);
+    h = 300; // the bar grew: the step would be under it
+    grew();
+    for (let t = 4000; t < 7000 && wantsFrames(); t += 16) tickScenario(t);
+    expect(y()).toBeCloseTo((600 - 308) / 2 - 5, 5);
+    // once the viewer has moved the map, a change of the bar leaves the camera to them
+    state.canvas.dispatchEvent(new Event('pointerdown'));
+    h = 120;
+    grew();
+    expect(wantsFrames()).toBe(false);
+    clearScenario();
+    expect(watchers.filter((w) => !w.gone && w.els.length)).toHaveLength(0);
+  });
+
+  it('turns on the layer of a step that is on a layer that is off, says so once, and goes to it (#212)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    state.nodes.push({ id: 'tbl', type: 'table', x: 3000, y: 2000, r: 20, color: '#fff', label: 'orders' });
+    state.activeLayers = { ...(state.activeLayers || {}), table: false };
+    const rect = (top        , bottom        ) => () => ({ top, bottom, left: 0, right: 800, width: 800, height: bottom - top, x: 0, y: top });
+    state.canvas.getBoundingClientRect = rect(0, 600);
+    playScenario(scenario({ steps: [{ node: 'a', text: 'Opens.' }, { node: 'tbl', text: 'The row is read.' }] }), { autoplay: false });
+    expect(state.activeLayers.table).toBe(true);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(live.textContent).toBe('Turned on Tables to show this scenario\'s steps.');
+    click('scenario-next');
+    for (let t = 16; t < 3000 && wantsFrames(); t += 16) tickScenario(t);
+    expect(state.camera.x + 3000 * state.camera.zoom).toBeCloseTo(400, 0); // the camera went to it
+    live.remove();
+  });
+
+  it('turns on the project layer that takes a step\'s node, not the starting layer it would have been on (spec 0009 D3)', async () => {
+    const live = document.createElement('p');
+    live.id = 'map-announcer';
+    document.body.appendChild(live);
+    const before = { layers: state.activeLayers, project: state.projectLayers };
+    state.nodes.push({ id: 'tbl2', type: 'table', x: 3000, y: 2000, r: 20, color: '#fff', label: 'orders' });
+    state.projectLayers = [{ key: 'data', label: 'Data <b>', match: { type: 'table' } }];
+    state.activeLayers = { ...(state.activeLayers || {}), table: true, data: false };
+    try {
+      playScenario(scenario({ steps: [{ node: 'a', text: 'Opens.' }, { node: 'tbl2', text: 'The row is read.' }] }), { autoplay: false });
+      expect(state.activeLayers.data).toBe(true); // the project layer decides alone
+      await new Promise((r) => setTimeout(r, 50));
+      expect(live.textContent).toBe('Turned on Data <b> to show this scenario\'s steps.'); // its own label, as text
+      // and with the project layer on, the starting layer being off hides nothing: no layer to turn on
+      state.activeLayers = { ...state.activeLayers, table: false };
+      clearScenario();
+      live.textContent = '';
+      playScenario(scenario({ steps: [{ node: 'tbl2', text: 'The row is read.' }] }), { autoplay: false });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(state.activeLayers.table).toBe(false);
+      expect(live.textContent).not.toContain('Turned on');
+    } finally {
+      clearScenario();
+      state.activeLayers = before.layers; state.projectLayers = before.project;
+      state.nodes.splice(state.nodes.findIndex((n) => n.id === 'tbl2'), 1);
+      live.remove();
+    }
+  });
+
   it('is the user\'s again as soon as they take hold of the map', () => {
     playScenario(scenario(), { autoplay: false });
     click('scenario-next'); click('scenario-next'); click('scenario-next');
@@ -438,129 +543,49 @@ describe('the camera', () => {
   });
 });
 
-describe('the list of a proposal\'s scenarios', () => {
-  const proposal = () => ({ title: 'P', scenarios: [scenario({ id: 'one', title: 'First walk' }), scenario({ id: 'two', title: 'Second walk', steps: [{ node: 'a', text: 'only' }] })] });
-
-  it('is not there without a proposal, or with a proposal that has none', () => {
-    touchScene();
-    expect(q('.hx-scenarios')).toBeNull();
-    state.proposal = { title: 'P' };
-    touchScene();
-    expect(q('.hx-scenarios')).toBeNull();
-    state.proposal = { title: 'P', scenarios: [] };
-    touchScene();
-    expect(q('.hx-scenarios')).toBeNull();
-  });
-
-  it('appears when the proposal has scenarios, naming each with its step count', () => {
-    state.proposal = proposal();
-    touchScene();
-    expect([...document.querySelectorAll('.hx-scenarios-item')].map((b) => b.textContent)).toEqual(['First walk · 4 steps', 'Second walk · 1 step']);
-  });
-
-  it('is the same element until the scenarios change', () => {
-    state.proposal = proposal();
-    touchScene();
-    const list = q('.hx-scenarios');
-    touchScene();
-    expect(q('.hx-scenarios')).toBe(list);
-    state.proposal = { ...proposal(), scenarios: [proposal().scenarios[0]] };
-    touchScene();
-    expect(q('.hx-scenarios')).not.toBe(list);
-    expect(document.querySelectorAll('.hx-scenarios-item')).toHaveLength(1);
-  });
-
-  it('plays the one that is clicked, gives way to the bar while it plays, and comes back on close', () => {
-    state.proposal = proposal();
-    touchScene();
-    (document.querySelectorAll('.hx-scenarios-item')[1]               ).click();
-    expect(q('.hx-player-title').textContent).toBe('Second walk');
-    expect(q('.hx-scenarios')).toBeNull();
+describe('what the review column needs of the player (spec 0006)', () => {
+  it('opens paused on the step it is given, and says where the player is: on a step, at the end, and when it closes', () => {
+    const seen = [];
+    const stop = onPlayerChange((snap) => seen.push(snap && { id: snap.id, index: snap.index, done: snap.done }));
+    const player = playScenario(scenario(), { step: 2 });
+    expect(player.snapshot().index).toBe(2);
+    expect(player.snapshot().playing).toBe(false); // choosing a step never starts the walk
+    expect(seen[seen.length - 1]).toMatchObject({ index: 2, done: false });
+    click('scenario-next');
+    expect(seen[seen.length - 1]).toMatchObject({ index: 3 });
+    click('scenario-next');
+    expect(seen[seen.length - 1]).toMatchObject({ done: true });
     click('scenario-close');
-    expect(q('.hx-scenarios')).not.toBeNull();
+    expect(seen[seen.length - 1]).toBeNull();
+    stop();
   });
 
-  it('refreshList can be called by whoever sets the proposal, without touching the scene', () => {
-    state.proposal = proposal();
-    const v = state.sceneVersion;
-    refreshList();
-    expect(q('.hx-scenarios')).not.toBeNull();
-    expect(state.sceneVersion).toBe(v);
-  });
-});
-
-describe('the list with the proposal bar open', () => {
-  const proposal = () => ({ title: 'P', scenarios: [scenario({ id: 'one', title: 'First walk' }), scenario({ id: 'two', title: 'Second walk' })] });
-  const BAR = '<section id="proposal-bar" class="hx-proposal-bar glass"><div id="proposal-body"><div class="hx-proposal-head"></div><p id="proposal-summary" class="hx-proposal-summary"></p><div id="whatif"></div></div></section>';
-  const PLAY = '<button type="button" id="proposal-play" hidden>Play</button>';
-  const withBar = () => { q('.hx-stage').insertAdjacentHTML('beforeend', BAR); };
-  const css = fs.readFileSync(path.join(here, '../../explorer', 'explorer.css'), 'utf8');
-  const rule = (selector        ) => css.split('\n').find((l) => l.startsWith(`${selector} {`)) || '';
-
-  it('opens inside the bar, in its flow under the title row, so the bar grows instead of covering it', () => {
-    withBar();
-    state.proposal = proposal();
-    touchScene();
-    const list = q('.hx-scenarios');
-    expect(q('#proposal-body').contains(list)).toBe(true);
-    expect(list.previousElementSibling .className).toBe('hx-proposal-head');
-    expect(list.nextElementSibling .id).toBe('proposal-summary');
-    // a stage sibling at the corner is what was covered by the bar
-    expect(q('.hx-stage').querySelector(':scope > .hx-scenarios')).toBeNull();
-  });
-
-  it('is laid out in the bar\'s flow: the stylesheet keeps it from being positioned on the stage', () => {
-    expect(rule('.hx-proposal-bar .hx-scenarios')).toMatch(/position:\s*static/);
-    expect(rule('.hx-proposal-bar .hx-scenarios')).toMatch(/max-width:\s*none/);
-    // the stage corner it takes when there is no bar stays as it was
-    expect(rule('.hx-scenarios')).toMatch(/position:\s*absolute/);
-  });
-
-  it('plays the picked scenario from there and comes back into the bar on close', () => {
-    withBar();
-    state.proposal = proposal();
-    touchScene();
-    (document.querySelectorAll('.hx-scenarios-item')[1]               ).click();
-    expect(q('.hx-player-title').textContent).toBe('Second walk');
-    expect(q('.hx-scenarios')).toBeNull();
+  it('leaves the focus where it is when asked, and gives it back to the place the list names when it closes', () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const home = document.createElement('button');
+    document.body.appendChild(home);
+    outside.focus();
+    setCloseFocus(() => home);
+    playScenario(scenario(), { autoplay: false, focus: false });
+    expect(document.activeElement).toBe(outside);
+    (q('[data-action=scenario-close]')                     ).focus();
     click('scenario-close');
-    expect(q('#proposal-body').contains(q('.hx-scenarios'))).toBe(true);
+    expect(document.activeElement).toBe(home);
+    setCloseFocus(null);
+    outside.remove();
+    home.remove();
   });
 
-  it('is behind a Play button: one scenario plays at once, several open the list', () => {
-    q('.hx-stage').insertAdjacentHTML('beforeend', BAR.replace('<div class="hx-proposal-head"></div>', `<div class="hx-proposal-head">${PLAY}</div>`));
-    const play = q('#proposal-play');
-    expect(play.hidden).toBe(true);
-    state.proposal = proposal();
-    touchScene();
-    expect(play.hidden).toBe(false);
-    expect(q('.hx-scenarios').hidden).toBe(true);
-    expect(play.getAttribute('aria-expanded')).toBe('false');
-    play.click();
-    expect(q('.hx-scenarios').hidden).toBe(false);
-    expect(play.getAttribute('aria-expanded')).toBe('true');
-    play.click();
-    expect(q('.hx-scenarios').hidden).toBe(true);
-    state.proposal = { title: 'P', scenarios: [scenario({ id: 'only', title: 'Only walk' })] };
-    touchScene();
-    expect(play.hasAttribute('aria-expanded')).toBe(false); // one scenario: Play plays it, it expands nothing
-    play.click();
-    expect(q('.hx-player-title').textContent).toBe('Only walk');
-    expect(play.hidden).toBe(true); // the player is the control while it plays
-  });
-
-  it('moves into the bar when it appears after the list, and back onto the stage when it goes', () => {
-    state.proposal = proposal();
-    touchScene();
-    const list = q('.hx-scenarios');
-    expect(list.parentElement .className).toBe('hx-stage');
-    withBar();
-    refreshList();
-    expect(q('.hx-scenarios')).toBe(list);
-    expect(list.parentElement .id).toBe('proposal-body');
-    q('#proposal-bar').remove();
-    refreshList();
-    expect(list.parentElement .className).toBe('hx-stage');
+  it('Space on a control of the review column presses it, and does not play or pause the walk', () => {
+    document.body.insertAdjacentHTML('beforeend', '<aside id="review-column"><button type="button" id="a-step">step</button></aside>');
+    playScenario(scenario(), { autoplay: false });
+    const before = getPlayer().snapshot().playing;
+    const ev = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    document.getElementById('a-step').dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(getPlayer().snapshot().playing).toBe(before);
+    document.getElementById('review-column').remove();
   });
 });
 

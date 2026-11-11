@@ -58,10 +58,10 @@ const slugOf = () => state.proposalSlug || null;
 const keyOf = () => (state.proposal && slugOf() ? `${state.proposalSource || ''}/${slugOf()}` : null);
 const reviewUrl = () => `/proposals/${encodeURIComponent(slugOf())}/review${state.proposalSource ? `?source=${encodeURIComponent(state.proposalSource)}` : ''}`;
 const q = (sel) => (root ? root.querySelector(sel) : null);
-/** The toolbar's own buttons: Send back and Approve (index.html) */
-const button = (verdict) => document.querySelector(`#proposal-bar [data-review="${verdict}"]`);
+/** The decision's buttons, in the review column's foot: Send back and Approve (index.html) */
+const button = (verdict) => document.querySelector(`#review-decision [data-review="${verdict}"]`);
 
-/** The status line, the note field and the lines under them; added to the toolbar once, just before Send back and Approve, so Tab goes from the note to Cancel and then to "Send back with this note" (on a phone it sits under the counts, above the two buttons; from 768px CSS gives it a row under the toolbar) */
+/** The status line, the note field and the lines under them; added to the decision (the review column's foot) once, just before Send back and Approve, so Tab goes from the note to Cancel and then to "Send back with this note" */
 function mount() {
   const body = $('proposal-body');
   if (!body) return null;
@@ -86,10 +86,10 @@ function mount() {
     // The words are set as text and attributes, never parsed as HTML (a brand's `strings`, explorer/strings.js)
     q('.hx-review-label').textContent = t('reviewNoteLabel');
     q('#review-note').setAttribute('placeholder', t('reviewNotePlaceholder'));
-    const actions = body.querySelector('.hx-proposal-actions');
+    // In the decision, the column's foot: the status and the note above Send back and Approve
+    const actions = document.querySelector('#review-decision .hx-proposal-actions');
     if (actions) actions.before(root); else body.prepend(root);
-    const bar = $('proposal-bar');
-    (bar || root).addEventListener('click', onClick);
+    ($('review-decision') || $('proposal-bar') || root).addEventListener('click', onClick);
     root.addEventListener('input', () => { if (ui.message) { ui.message = ''; paint(); } });
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ui.noting) { e.stopPropagation(); closeNote(); } });
   }
@@ -112,7 +112,7 @@ function paint() {
   q('[data-review-loadfail-text]').textContent = ui.loadFailed ? `Could not load this proposal's reviews.${isOffline() ? ' You are offline.' : ''} It may already be approved or sent back; try again before you decide.` : '';
   // Off for good (not a spec PR's copy) is `disabled`, and the reason is the line next to it, which the buttons point at. While a review is being posted the button
   // only says it is busy (`aria-disabled`): a `disabled` button drops the focus to the page.
-  for (const btn of document.querySelectorAll('#proposal-bar [data-review]')) {
+  for (const btn of document.querySelectorAll('#review-decision [data-review]')) {
     btn.disabled = !ui.reviewable;
     if (ui.busy) btn.setAttribute('aria-disabled', 'true'); else btn.removeAttribute('aria-disabled');
     if (!ui.reviewable && ui.key) btn.setAttribute('aria-describedby', 'review-hint'); else btn.removeAttribute('aria-describedby');

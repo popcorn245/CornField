@@ -30,13 +30,6 @@
         "desc": "The built-in glyph per node type, drawn in the node's core through the same path as theme.icons, and the silhouette per family."
       },
       {
-        "id": "persona-maintainer",
-        "label": "Maintainer",
-        "type": "persona",
-        "parent": "root",
-        "desc": "An archetype: the one maintainer who reads the map and decides specs, at a desk or on a phone. Never a real person."
-      },
-      {
         "id": "persona-household-reader",
         "label": "Household reader",
         "type": "persona",
