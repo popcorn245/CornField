@@ -471,7 +471,8 @@ button.hx-proposal-item:focus-visible { outline: var(--corn-focus-width) solid v
 /* The glyphs are drawn, not said: the names are the words (an empty alternative after the slash keeps a screen reader from reading them) */
 .hx-player-prev::before { content: "◀" / ""; margin-right: var(--corn-space-2); }
 .hx-player-next::after { content: "▶" / ""; margin-left: var(--corn-space-2); }
-.hx-player-toggle[data-state="playing"]::before { content: "⏸" / ""; margin-right: var(--corn-space-2); }
+/* the pause mark is drawn (two bars), not a character: not every font has one */
+.hx-player-toggle[data-state="playing"]::before { content: "" / ""; display: inline-block; box-sizing: border-box; width: 0.7em; height: 0.9em; margin-right: var(--corn-space-2); border-left: 0.22em solid currentColor; border-right: 0.22em solid currentColor; }
 .hx-player-toggle[data-state="paused"]::before { content: "▶" / ""; margin-right: var(--corn-space-2); }
 .hx-player-toggle[data-state="done"]::before { content: "↻" / ""; margin-right: var(--corn-space-2); }
 .hx-player-controls .hx-btn:disabled { opacity: 0.4; cursor: default; }
@@ -1236,7 +1237,7 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-rc-section[hidden] { display: none; }
   .hx-rc-lists { display: flex; flex-direction: column; }
   .hx-change-list { display: flex; }
-  .hx-rc-foot { position: sticky; bottom: 0; padding: var(--corn-space-3) 0 0; background: var(--corn-surface-1); }
+  .hx-rc-foot { padding: var(--corn-space-3) 0 0; } /* after both lists, in the sheet's own flow: nothing overlaps the rows above it */
   .hx-rc-foot .hx-proposal-actions { margin-left: 0; width: 100%; }
   .hx-step { min-height: 44px; }
   .hx-sc-row, .hx-rc-tab { min-height: 44px; }
