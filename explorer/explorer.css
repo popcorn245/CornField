@@ -1488,5 +1488,6 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-forge-head, .hx-drawer-head { min-height: var(--corn-panel-head-height); }
 
 /* The controls of a bar that had no height of their own */
-:where(.hx-forge-head, .hx-player-controls, .hx-player-as) .hx-btn, :where(.hx-header) .hx-live-chip { height: var(--hx-control); }
+/* (the waiting line's Answer is in the proposal bar too, so it is the bar's height; it is a strip's action elsewhere, at its own size) */
+:where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn, :where(.hx-header) .hx-live-chip { height: var(--hx-control); }
 /* ==== end of the panel head and control height ============================================================================================ */

@@ -91,12 +91,13 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
     ['the proposal bar: Edit and My edits', '.hx-proposal-tools .hx-btn', 'height'],
     ['the proposal bar: the more button', '.hx-proposal-more .hx-btn--icon', 'height'],
     ['the decision foot: Send back and Approve', '.hx-proposal-actions .hx-btn', 'height'],
-    ['the player: Previous, Play and Next', ':where(.hx-forge-head, .hx-player-controls, .hx-player-as) .hx-btn', 'height'],
+    ['the player: Previous, Play and Next', ':where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn', 'height'],
     ['the player: the speed', '.hx-player-speed', 'height'],
     ['the player: Close', '.hx-player .hx-close', 'height'],
     ['the Work panel: Close', '.hx-close', 'height'],
 
     ['the Work panel: a tab', '.hx-forge-tab', 'min-height'],
+    ['the proposal bar: Answer, in the line that says a run waits on you', ':where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn', 'height'],
     ['the account menu: the named theme select', '.hx-account-select', 'height'],
   ];
   for (const [what, sel, prop] of READS) {
