@@ -83,6 +83,61 @@ function ringPack(items, { first = 110, gap = 76, spacing = 90 } = {}) {
   return { offsets, radii };
 }
 
+/**
+ * A cluster's whole pack: `children` in rings around the centre, and a child that has children of its own (a store
+ * owning 46 outside services) gets its own rings, placed on an outer ring of this cluster with room for them.
+ * `kidsOf(node)` says who hangs under a node. Returns `{ children, offsets, radii, subs, extent }`: `subs[i]` is the
+ * child i's own pack (or null), `extent` how far the whole thing reaches from the centre.
+ */
+function packTree(children, kidsOf, spacingOf, byOrder, seen = new Set()) {
+  const withSub = [];
+  const plain = [];
+  children.forEach((c) => {
+    const kids = seen.has(c.id) ? [] : kidsOf(c);
+    if (!kids.length) { plain.push(c); return; }
+    seen.add(c.id);
+    const sub = packTree(kids.sort(byOrder), kidsOf, spacingOf, byOrder, seen);
+    withSub.push({ c, sub, fp: sub.extent });
+  });
+  withSub.sort((a, b) => b.fp - a.fp);
+  const pack = ringPack(plain, { spacing: spacingOf(children) });
+  const out = {
+    children: [...plain], offsets: [...pack.offsets], radii: pack.radii, subs: plain.map(() => null),
+    extent: pack.radii.length ? pack.radii[pack.radii.length - 1] + 40 : 0,
+  };
+  if (withSub.length) {
+    const lastR = pack.radii.length ? pack.radii[pack.radii.length - 1] : 0;
+    const fpMax = withSub[0].fp;
+    const arc = withSub.reduce((sum, w) => sum + 2 * w.fp + 30, 0);
+    const r = Math.max(110, lastR + fpMax + 40, arc / (2 * Math.PI));
+    let a = -Math.PI / 2;
+    withSub.forEach((w) => {
+      const share = ((2 * w.fp + 30) / arc) * Math.PI * 2;
+      const mid = a + share / 2;
+      out.children.push(w.c);
+      out.offsets.push({ x: Math.cos(mid) * r, y: Math.sin(mid) * r });
+      out.subs.push(w.sub);
+      a += share;
+    });
+    out.bigRadius = r;
+    out.extent = Math.max(out.extent, r + fpMax);
+  }
+  return out;
+}
+
+/** Puts a pack's children (and theirs) around (ox, oy); a child's own rings are added to `clusters` */
+function placePack(pack, ox, oy, clusters) {
+  pack.children.forEach((c, i) => {
+    c.x = ox + pack.offsets[i].x;
+    c.y = oy + pack.offsets[i].y;
+    const sub = pack.subs[i];
+    if (sub) {
+      clusters.push({ x: c.x, y: c.y, radii: sub.radii });
+      placePack(sub, c.x, c.y, clusters);
+    }
+  });
+}
+
 export function computeOrbitalLayout() {
   touchScene(); // positions and rings change
   const { nodes, edges } = state;
@@ -102,9 +157,9 @@ export function computeOrbitalLayout() {
 
   const isData = (n) => DATA_TYPES.includes(n.type);
   const hasChildren = new Set(Object.values(parentMap));
-  // A data store with tables of its own is a cluster like an app; other data rings the root
+  // A data store with children of its own (tables, outside services) is a cluster like an app; other data rings the root
   const isHub = (n) => n.id !== 'root' && (isData(n)
-    ? n.type === 'store' && hasChildren.has(n.id) && !parentMap[n.id]
+    ? n.type === 'store' && hasChildren.has(n.id) && (!parentMap[n.id] || parentMap[n.id] === 'root')
     : parentMap[n.id] === 'root' || (!parentMap[n.id] && ['app', 'pkg', 'tool', 'external', 'stack'].includes(n.type)));
   const hubs = nodes.filter(isHub);
   const hubIds = new Set(hubs.map((h) => h.id));
@@ -124,15 +179,15 @@ export function computeOrbitalLayout() {
   const coreExtent = data.length ? dataR + 50 : 60;
   if (data.length) LAYOUT.rings.push({ x: 0, y: 0, r: dataR });
 
-  // 2. Pack each hub's children (relative to the hub)
+  // 2. Pack each hub's children (relative to the hub). A child with children of its own (a store that owns the
+  //    outside services) gets rings of its own, and they count in the cluster's extent.
+  const kidsOf = (n) => (n.id === 'root' ? [] : nodes.filter((k) => parentMap[k.id] === n.id && !hubIds.has(k.id) && !isData(k) && k.id !== 'root'));
+  const spacingOf = (list) => Math.min(170, Math.max(84, ...list.map((c) => labelWidth(c) * 0.8 + 26)));
   const packs = new Map();
   hubs.forEach((hub) => {
     const children = nodes.filter((n) => parentMap[n.id] === hub.id && !hubIds.has(n.id)).sort(byTypeThenLabel);
     if (!children.length) return;
-    const spacing = Math.min(170, Math.max(84, ...children.map((c) => labelWidth(c) * 0.8 + 26)));
-    const pack = ringPack(children, { spacing });
-    const extent = pack.radii[pack.radii.length - 1] + 40;
-    packs.set(hub.id, { children, ...pack, extent });
+    packs.set(hub.id, packTree(children, kidsOf, spacingOf, byTypeThenLabel, new Set([hub.id])));
   });
 
   // 3. Hubs with children around the core, arc proportional to cluster size
@@ -143,19 +198,21 @@ export function computeOrbitalLayout() {
   const hubR = Math.max(coreExtent + maxExtent + GAP, need / (2 * Math.PI));
   let angle = -Math.PI / 2;
   big.forEach((hub) => {
-    const { extent, children, offsets, radii } = packs.get(hub.id);
-    const share = ((2 * extent + GAP) / need) * Math.PI * 2;
+    const pack = packs.get(hub.id);
+    const share = ((2 * pack.extent + GAP) / need) * Math.PI * 2;
     const a = angle + share / 2;
     hub.x = Math.cos(a) * hubR;
     hub.y = Math.sin(a) * hubR;
-    children.forEach((c, i) => { c.x = hub.x + offsets[i].x; c.y = hub.y + offsets[i].y; });
-    LAYOUT.clusters.push({ x: hub.x, y: hub.y, radii });
+    LAYOUT.clusters.push({ x: hub.x, y: hub.y, radii: pack.radii });
+    placePack(pack, hub.x, hub.y, LAYOUT.clusters);
     angle += share;
   });
   if (big.length) LAYOUT.rings.push({ x: 0, y: 0, r: hubR });
 
-  // 4. Childless hubs on an outer ring
-  const leaves = hubs.filter((h) => !packs.has(h.id)).sort(byTypeThenLabel);
+  // 4. Childless hubs on an outer ring, and with them any node that has no parent and is none of the above
+  //    (it would otherwise sit on the centre, under whatever else is there)
+  const homeless = nodes.filter((n) => n.id !== 'root' && !parentMap[n.id] && !isData(n) && !hubIds.has(n.id));
+  const leaves = [...hubs.filter((h) => !packs.has(h.id)), ...homeless].sort(byTypeThenLabel);
   const leafSpacing = Math.max(120, ...leaves.map((n) => labelWidth(n) + 30));
   const leafR = Math.max(hubR + maxExtent + 90, (leaves.length * leafSpacing) / (2 * Math.PI));
   leaves.forEach((n, i) => {
@@ -165,13 +222,17 @@ export function computeOrbitalLayout() {
   });
   if (leaves.length) LAYOUT.rings.push({ x: 0, y: 0, r: leafR });
 
-  // Anything left (a child of a non-hub) sits just outside its parent
-  nodes.forEach((n) => {
-    const p = parentMap[n.id] && nodes.find((x) => x.id === parentMap[n.id]);
-    if (!p || hubIds.has(p.id) || p.id === 'root' || isData(n) || hubIds.has(n.id)) return;
-    const d = Math.hypot(p.x, p.y) || 1;
-    n.x = p.x + (p.x / d) * 70;
-    n.y = p.y + (p.y / d) * 70;
+  // Anything still on the centre is a child of a node the passes above did not pack (a child of a data node, say):
+  // it goes in rings around its parent, never on one point
+  const stuck = nodes.filter((n) => n.id !== 'root' && n.x === 0 && n.y === 0 && parentMap[n.id]);
+  const byParent = new Map();
+  stuck.forEach((n) => { (byParent.get(parentMap[n.id]) || byParent.set(parentMap[n.id], []).get(parentMap[n.id])).push(n); });
+  byParent.forEach((list, pid) => {
+    const p = nodes.find((x) => x.id === pid);
+    if (!p || (p.x === 0 && p.y === 0 && pid !== 'root')) return;
+    const pack = ringPack(list.sort(byTypeThenLabel), { first: 80, spacing: spacingOf(list) });
+    list.forEach((n, i) => { n.x = p.x + pack.offsets[i].x; n.y = p.y + pack.offsets[i].y; });
+    LAYOUT.clusters.push({ x: p.x, y: p.y, radii: pack.radii });
   });
 }
 

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX } from '../../explorer/camera.js';
+import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX, ZOOM_FLOOR } from '../../explorer/camera.js';
 
 
 const toWorld = (c     , sx        , sy        ) => ({ x: (sx - c.x) / c.zoom, y: (sy - c.y) / c.zoom });
@@ -73,5 +73,27 @@ describe('pinchCamera', () => {
     expect(viaPinch.x).toBeCloseTo(viaZoom.x, 8);
     expect(viaPinch.y).toBeCloseTo(viaZoom.y, 8);
     expect(viaPinch.zoom).toBeCloseTo(viaZoom.zoom, 8);
+  });
+});
+
+describe('the zoom floor of a big map (F22)', () => {
+  it('goes as low as the map needs, never above the default floor, never below the absolute one', () => {
+    expect(clampZoom(0.01, 0.04)).toBe(0.04);
+    expect(clampZoom(0.5, 0.04)).toBe(0.5);
+    expect(clampZoom(0.1, 0.9)).toBe(ZOOM_MIN); // a small map keeps the default
+    expect(clampZoom(0.0001, 0.00001)).toBe(ZOOM_FLOOR);
+  });
+
+  it('zooms out to the map\'s floor by wheel and by pinch', () => {
+    const cam = { x: 0, y: 0, zoom: 1 };
+    let z = cam;
+    for (let i = 0; i < 80; i++) z = zoomAbout(z, 0.88, 100, 100, 0.04);
+    expect(z.zoom).toBeCloseTo(0.04, 10);
+    expect(pinchCamera(pinchStart(cam, 400, { x: 0, y: 0 }), 4, { x: 0, y: 0 }, 0.04).zoom).toBeCloseTo(0.04, 10);
+  });
+
+  it('never zooms in when asked to zoom out, even from below the floor', () => {
+    expect(zoomAbout({ x: 0, y: 0, zoom: 0.03 }, 0.88, 10, 10, 0.05).zoom).toBeLessThanOrEqual(0.03);
+    expect(zoomAbout({ x: 0, y: 0, zoom: 0.03 }, 1.12, 10, 10, 0.05).zoom).toBeGreaterThanOrEqual(0.05);
   });
 });
