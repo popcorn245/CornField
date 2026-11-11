@@ -213,6 +213,8 @@ The map itself (the nodes, edges and labels on the canvas) takes its own `--corn
 | **Status** (only ever means status) | |
 | `--corn-ok`, `--corn-warn`, `--corn-bad`, `--corn-info` | a state, as text, a dot or a solid fill (light) |
 | `--corn-ok-soft` | the same for ok, as a tinted background |
+| `--corn-run-requested`, `--corn-run-claimed`, `--corn-run-working`, `--corn-run-waiting`, `--corn-run-done`, `--corn-run-failed`, `--corn-run-stopped` | the seven states of an agent run, as the colour of its pill (its word, its icon and its border). They are aliases of the status colours above (requested is `--corn-text-3`, stopped `--corn-text-2`); set one to give a state its own. They are checked as text on every surface |
+| `--corn-run-waiting-ink` | the text and icon of the **waiting** pill, which is solid (a run that needs the maintainer stands out most); `--corn-ground` by default. Checked on `--corn-run-waiting` |
 | **Diff** (shared with the map) | |
 | `--corn-added`, `--corn-changed`, `--corn-removed`, `--corn-edit` | what a proposal adds, changes, removes, and a what-if edit; the defaults of the map's marks (`explorer/diff-marks.js`), chosen so every one is 3:1 over the darkest and lightest ground the map draws, in both levels, at the opacity it is drawn at; the legend matches the map (light) |
 | `--corn-added-text`, `--corn-edit-text` | added and edit as text: the mark mixed 60% with `--corn-text`, so it reads on either ground |
@@ -395,12 +397,17 @@ One small set, whatever word the forge, the runner or the model uses underneath;
 
 | Value | What it means | Where |
 |---|---|---|
-| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`) | `state-pill`, `proposal-source` |
-| `queued`, `running`, `waiting` | not started yet; under way; waiting on a person (or gone quiet) | `run`, `state-pill` |
-| `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped; a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
+| `open`, `draft`, `merged`, `closed` | a pull request, an issue or a thread (a branch with no pull request yet is `draft`, and so is a proposal only in a checkout or a worktree, the Specs tab's "Local") | `state-pill`, `proposal-source` |
+| `requested`, `claimed`, `working`, `waiting` | a run that is asked for and not picked up yet; picked up by a runner; being worked on; waiting on a person (or gone quiet). Each has its own colour token (`--corn-run-<state>`) | `run`, `state-pill` |
+| `done`, `failed`, `stopped` | how a run ended: it finished, it failed, it was stopped (a run asked to stop is `stopped` too); a check or deploy that was skipped is `done`, a cancelled one `stopped` | `run`, `state-pill` |
+| `queued`, `running` | a check or deploy that has not started, and one under way (a run is never either: it has the four above) | `state-pill` |
 | `success`, `failure` | a result: a check, a deploy, a scenario's verdict, a mockup's review (approved, or its file is gone); a notice that went well, a message about a problem | `state-pill`, `notice`, `message` |
 
 A mockup that is not reviewed yet, or has changed since, is `waiting`. `failed` is only ever a run; `failure` is only ever a result.
+
+**Changed for a theme that styles runs.** Before this release a run's `data-corn-state` was `queued` (asked for, or picked up by a runner) or `running` (being worked on). It is now `requested`, `claimed` or `working`: a rule on `[data-corn="run"][data-corn-state="queued"]` or a run's `state-pill` with `queued` becomes `requested` and `claimed`, and `running` becomes `working`. `queued` and `running` still mean a check or a deploy, so a rule that styled those keeps working. The seven run states also have colour tokens (`--corn-run-<state>`): setting those is simpler than a selector per state.
+
+**A state is never told by colour alone.** A run's or a check's pill says the state in a word and draws a `state-icon` inside it, a shape of its own: a dashed ring (requested, queued), a ring with a dot (claimed), an arc that turns (working, running), a warning triangle (waiting, solid and heavier than the rest, since it needs the maintainer), a tick (done, success), a cross (failed, failure), a square that does not move (stopped), a dash (skipped) and a slashed ring (cancelled). A theme may restyle the icon (`[data-corn="state-icon"]`) or hide it, but the word stays. A button is never drawn as a pill: a pill is a status, and a button has a square corner.
 
 ## The hooks
 
@@ -469,6 +476,10 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `section` | a section of the node panel |
 | `badge` | a badge: the node panel's kind (type · host), the "Agent" mark |
 | `state-pill` | a state word (`data-corn-state`) |
+| `state-icon` | the icon inside a run's or a check's `state-pill`: a shape for each state, drawn in the pill's colour |
+| `result` | what an action came to, under the control that was used (a run's Reply, Continue or Stop; Copy spec); it stays until the next action and is also announced |
+| `work-top` | the Work panel's title row and tabs, which stay in place while a list scrolls (and show a fade where the tabs run off a phone's screen) |
+| `skeleton`, `empty` | a list's placeholder rows while it loads (they hold the list's height); what a list says when it has nothing, and how to make something |
 | `field` | a labelled form field, its control inside |
 | `notice`, `message` | a notice in a panel; a status line under a form (`data-corn-state="success"` or `"failure"`) |
 

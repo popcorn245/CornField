@@ -52,6 +52,7 @@ function fakeServer(opts                                                        
     calls.push({ method, url, headers, body: parsed });
     const u = new URL(url, 'http://localhost');
     if (u.pathname === '/proposals/0013-meals/review') {
+      if (method === 'GET' && opts.reviewGet) return json(opts.reviewGet, { error: 'The forge did not answer.' });
       if (method === 'GET') return review ? json(200, review) : json(404, { error: 'No review yet' });
       if (opts.putStatus && opts.putStatus >= 400) return json(opts.putStatus, { error: opts.putError || 'Nope' });
       review = { version: 1, ...parsed, at: new Date(clock).toISOString() };
@@ -427,7 +428,7 @@ describe('when the server says no', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
     click(approveBtn());
     await settle();
-    expect(msg().textContent).toMatch(/not posted.*Failed to fetch/);
+    expect(msg().textContent).toBe('cornfield did not answer. Your approval was not sent; what you typed is kept.'); // no answer is said as such, never as the runtime's own words
     expect(approveBtn().disabled).toBe(false);
   });
 
@@ -457,5 +458,74 @@ describe('sendReview', () => {
     const s = fakeServer();
     expect(await sendReview('approved')).toBe(false);
     expect(s.calls).toEqual([]);
+  });
+});
+
+describe('a failed read of the past reviews (F04)', () => {
+  const failLine = () => q('#review [data-review-loadfail]');
+  const APPROVED = { version: 1, verdict: 'approved', note: '', edits: [], at: new Date(T0 - 60 * 60_000).toISOString() };
+
+  it('says so with Retry, and never shows an approved proposal as unreviewed', async () => {
+    const s = fakeServer({ review: APPROVED, reviewGet: 500 });
+    open();
+    await settle();
+    expect(failLine().hidden).toBe(false);
+    expect(failLine().textContent).toMatch(/^Could not load this proposal's reviews\./);
+    expect(failLine().textContent).toMatch(/may already be approved or sent back/);
+    expect(q('#review [data-review-retry]').textContent).toBe('Retry');
+    expect(status()).toBe(''); // it says nothing of a review it could not read, rather than "no review"
+    // Retry asks again; once the read works the line goes and the review shows
+    s.mock.mockClear();
+    fakeServer({ review: APPROVED });
+    q('#review [data-review-retry]').focus();
+    click(q('#review [data-review-retry]'));
+    await settle();
+    expect(failLine().hidden).toBe(true);
+    expect(status()).toBe('Approved 1 hour ago');
+    // Retry is gone with its line: the focus goes to the proposal's name, never to the page
+    expect(document.activeElement).toBe(document.getElementById('proposal-title'));
+  });
+
+  it('reads them again when the browser is back online', async () => {
+    fakeServer({ review: APPROVED, reviewGet: 500 });
+    open();
+    await settle();
+    expect(failLine().hidden).toBe(false);
+    fakeServer({ review: APPROVED });
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect(failLine().hidden).toBe(true);
+    expect(status()).toBe('Approved 1 hour ago');
+  });
+
+  it('says so when the server cannot be reached at all, and not at a 404, which is "no review yet"', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    open();
+    await settle();
+    expect(failLine().hidden).toBe(false);
+    fakeServer({ review: null });
+    open(robot(), '0013-meals', 'pull/24');
+    await settle();
+    expect(failLine().hidden).toBe(true); // a 404 is "none yet", not a failure
+  });
+});
+
+describe('offline (F38)', () => {
+  const setOnline = (on         ) => Object.defineProperty(navigator, 'onLine', { value: on, configurable: true });
+  afterEach(() => setOnline(true));
+
+  it('keeps the note when Send back gets no answer, says it was not sent and that you are offline, and does not blame the server', async () => {
+    open();
+    setOnline(false);
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    typeNote('Smaller, please.');
+    click(sendBackBtn());
+    await settle();
+    expect(msg().textContent).toBe('You are offline. Your send back was not sent; what you typed is kept. Try again when you are back.');
+    expect(noteBox().value).toBe('Smaller, please.');
+    // Approve next: the line is about Approve, not left over from Send back
+    click(approveBtn());
+    await settle();
+    expect(msg().textContent).toMatch(/^You are offline\. Your approval was not sent/);
   });
 });

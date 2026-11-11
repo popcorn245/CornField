@@ -35,6 +35,7 @@ import { reviewWords } from './review-model.js';
 import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
 import { announce } from './keyboard.js';
 import { t } from './strings.js';
+import { isOffline } from './connection.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -76,10 +77,12 @@ export function onProposalListing(fn) {
 /** Asks the server for the proposals it can serve */
 export async function loadProposalList() {
   try {
-    const res = await fetch('/proposals', { cache: 'no-store' });
-    if (!res.ok) throw new Error(`GET /proposals answered ${res.status}`);
-    const body = await res.json();
-    if (!Array.isArray(body)) throw new Error('GET /proposals did not answer with a list');
+    let res;
+    try { res = await fetch('/proposals', { cache: 'no-store' }); } catch { throw new Error(isOffline() ? 'You are offline.' : 'cornfield could not be reached. Check that it is still running.'); }
+    if (!res.ok) throw new Error(`The server could not list them (error ${res.status}).`);
+    let body;
+    try { body = await res.json(); } catch { throw new Error('cornfield sent a list this page could not read.'); }
+    if (!Array.isArray(body)) throw new Error('cornfield sent something that is not a list of proposals.');
     listing = body;
     listingProblem = null;
     const said = res.headers.get('X-Proposals-Forge-Error');
@@ -87,7 +90,7 @@ export async function loadProposalList() {
   } catch (err) {
     listing = null;
     forgeProblem = null;
-    listingProblem = err.message || String(err);
+    listingProblem = err.message || 'cornfield did not answer.'; // always a plain sentence made above, never a parser's or a runtime's own words
   }
   listingAt = Date.now();
   renderMenu();
@@ -104,23 +107,27 @@ export async function openProposal(slug, source = null) {
   const token = ++openToken;
   setMessage(`Opening ${slug} …`);
   try {
-    const res = await fetch(`/proposals/${encodeURIComponent(slug)}.json${source ? `?source=${encodeURIComponent(source)}` : ''}`, { cache: 'no-store' });
+    let res;
+    try { res = await fetch(`/proposals/${encodeURIComponent(slug)}.json${source ? `?source=${encodeURIComponent(source)}` : ''}`, { cache: 'no-store' }); } catch { throw new Error(isOffline() ? `${slug} could not be opened: you are offline.` : `${slug} could not be opened: cornfield could not be reached.`); }
     if (!res.ok) {
       let why = '';
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : why || `The server answered ${res.status}.`);
+      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
       err.notFound = res.status === 404;
       throw err;
     }
     const found = res.headers.get('X-Proposal-Source');
-    showProposal(await res.json(), { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
+    let item;
+    try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
+    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true });
     // said once, here: a proposal opens on a person's asking, never on a background refresh
     announce(openedWords($('proposal-title').textContent, summarize(state.proposal), state.proposalView));
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
     // Said plainly, with the ways on: the Specs list, and the same name under another source when the list has one
-    setMessage(err.message || String(err), true, err.notFound ? [specsWay()] : []);
+    // (a failure that is not "no such proposal" can be asked for again, or let go of: Retry and Close)
+    setMessage(err.message || `${slug} could not be opened.`, true, err.notFound ? [specsWay()] : [{ label: 'Retry', way: 'retry', slug, source }, { label: 'Close', way: 'close' }]);
     if (err.notFound && token === openToken) {
       await loadProposalList();
       const sources = new Set((Array.isArray(listing) ? listing : []).map((e) => e && e.source));
@@ -621,7 +628,7 @@ const ACTIONS = {
   'toggle-proposal-mode': () => toggleMode(),
   'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),
   'toggle-proposal-changes': () => toggleChanges(),
-  'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(el.dataset.slug, el.dataset.source || null) : openSpecs()),
+  'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'retry' ? retryOpen(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'close' ? closeAfterFailure() : openSpecs()),
   'proposal-focus': (el) => focusChange(el.dataset.kind, el.dataset.key),
 };
 
@@ -634,6 +641,22 @@ function onClick(e) {
   // Any click outside the picker closes it
   const wrap = $('proposal-wrap');
   if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
+}
+
+/** Retry, after a proposal failed to open: the bar is drawn anew either way, so the focus goes somewhere stated, the proposal's name once it opened or the new Retry if it failed again */
+async function retryOpen(slug, source) {
+  const opened = await openProposal(slug, source);
+  const to = opened ? $('proposal-title') : document.querySelector('#proposal-ways [data-way="retry"]');
+  if (!to) return;
+  if (opened) to.tabIndex = -1;
+  to.focus();
+}
+
+/** Close, after a proposal failed to open: the bar goes, and the focus goes to the map, never the page */
+function closeAfterFailure() {
+  closeProposal();
+  const map = $('graph-canvas');
+  if (map) map.focus();
 }
 
 /** A bad link's way on: the Work panel's Specs tab when there is one, else the header's Proposals menu */

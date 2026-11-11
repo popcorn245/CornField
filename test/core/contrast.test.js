@@ -411,7 +411,7 @@ describe('a brand theme that fails', () => {
     const r = contrastProblems([{ theme: 'standard', sheets: [tokens, ':root{--corn-text-2: oklch(70% 0.1 200); --corn-map-fill: auto; --corn-map-x: var(--corn-map-fill)}'] }]);
     expect(r.fails).toEqual([]);
     expect(r.unresolved.length).toBeGreaterThan(0);
-    expect(r.unresolved.every((f) => f.fg === '--corn-text-2')).toBe(true);
+    expect(r.unresolved.every((f) => f.fg === '--corn-text-2' || f.fg === '--corn-run-stopped')).toBe(true);
     expect(describeFinding(r.unresolved[0])).toMatch(/could not be checked: --corn-text-2 is "oklch\(70% 0\.1 200\)": oklch\(\) is not a colour cornfield reads/);
   });
 });
