@@ -2058,6 +2058,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The `<head>` lines a page of cornfield's takes from the config: the brand's favicon and tab colour, the theme's font stylesheets and stylesheets, the named themes on `<html>`. (server/page-head.js)"
+    },
+    {
+      "id": "core-core-map-tokens",
+      "label": "map-tokens.js",
+      "type": "core",
+      "file": "core/map-tokens.js",
+      "summary": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map's non-colour tokens, as `cornfield validate` reads them: `--corn-map-font`, `--corn-map-edge-width` and `--corn-map-glow`. (core/map-tokens.js)"
     }
   ],
   "edges": [
@@ -6590,7 +6600,29 @@
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-sign-in",
       "dashed": true
+    },
+    {
+      "from": "pkg-core",
+      "to": "core-core-map-tokens"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-core-contrast",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-explorer-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-validate",
+      "to": "core-core-map-tokens",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T08:48:01.790Z"
+  "updatedAt": "2026-11-11T08:59:02.122Z"
 }
