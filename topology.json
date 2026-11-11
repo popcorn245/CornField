@@ -2010,6 +2010,16 @@
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
     },
     {
+      "id": "page-doc-docs-reviews-0-34-design-review",
+      "type": "page",
+      "label": "/docs/reviews/0.34-design-review",
+      "file": "docs/reviews/0.34-design-review.md",
+      "summary": "The 0.34 design review",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "The 0.34 design review (docs/reviews/0.34-design-review.md)."
+    },
+    {
       "id": "core-explorer-focus-room",
       "label": "focus-room.js",
       "type": "core",
@@ -6456,6 +6466,10 @@
       "label": "imports"
     },
     {
+      "from": "app-docs",
+      "to": "page-doc-docs-reviews-0-34-design-review"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-focus-room"
     },
@@ -6578,5 +6592,5 @@
       "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T08:47:45.736Z"
+  "updatedAt": "2026-11-11T08:48:01.790Z"
 }
