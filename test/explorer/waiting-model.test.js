@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  specStateOf, waitingSpecs, specGroups, specMatches, runGroupOf, waitingRuns, runGroups, waiting, waitingWords, workButtonName, groupCountWords, specStateWords, waitingSinceOf,
+  specStateOf, waitingSpecs, specGroups, specMatches, runGroupOf, waitingRuns, runGroups, waiting, waitingWords, workButtonName, groupCountWords, specStateWords, waitingSinceOf, runWaitingOn, waitingLineWords, LINE_NOTE_MAX,
   SPEC_STATES, SPEC_STATE_CORN, SPEC_STATE_WORDS, DRAFTS_OPEN_MAX,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/waiting-model.js';
@@ -179,5 +179,21 @@ describe('D6: the Runs groups', () => {
     expect(g[0].items).toHaveLength(1);
     expect(g[0].items[0].kind).toBe('compare');
     expect(g[0].count).toBe(2);
+  });
+});
+
+describe('the proposal bar\'s line', () => {
+  const run = (id, slug, status = 'waiting', h = 3, note = 'Plan ready: approve to build, or say what to change.') => ({ runId: id, status, open: status === 'waiting', refs: { proposal: slug }, requestedAt: ago(h), timeline: [], report: { note } });
+  it('finds the run waiting on this proposal (the one waiting longest), and none for another proposal, a stopped run or a run that is not waiting', () => {
+    const runs = [run('a', '0042-x', 'waiting', 2), run('b', '0042-x', 'waiting', 9), run('c', '0043-y'), run('d', '0042-x', 'working'), { ...run('e', '0042-x'), stopRequested: { by: 'x' } }];
+    expect(runWaitingOn(runs, '0042-x').runId).toBe('b');
+    expect(runWaitingOn(runs, '0044-z')).toBeNull();
+    expect(runWaitingOn(runs, '')).toBeNull();
+    expect(runWaitingOn(null, '0042-x')).toBeNull();
+  });
+  it('says what the run asked, cut when long, and says only that a run waits when it said nothing', () => {
+    expect(waitingLineWords(run('a', 'x'))).toBe('A run is waiting on you: Plan ready: approve to build, or say what to change.');
+    expect(waitingLineWords(run('a', 'x', 'waiting', 1, 'w'.repeat(500))).length).toBeLessThanOrEqual('A run is waiting on you: '.length + LINE_NOTE_MAX);
+    expect(waitingLineWords({ report: null })).toBe('A run is waiting on you');
   });
 });

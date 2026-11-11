@@ -260,3 +260,28 @@ export function specStateWords(entry, nowMs) {
     default: return '';
   }
 }
+
+// ---------------------------------------------------------------------------
+//  The proposal bar's line
+// ---------------------------------------------------------------------------
+
+/** The open run waiting on an answer that is about proposal `slug`, the one that has waited longest; null when none is */
+export function runWaitingOn(runs, slug) {
+  if (!slug) return null;
+  const mine = waitingRuns(runs).filter((r) => r.refs && r.refs.proposal === slug);
+  return mine.sort((a, b) => (waitingSinceOf(a) ?? Infinity) - (waitingSinceOf(b) ?? Infinity))[0] || null;
+}
+
+/** The longest the runner's question is shown in the bar's line, in characters */
+export const LINE_NOTE_MAX = 90;
+
+/**
+ * The bar's line: "A run is waiting on you: Plan ready: approve to build, or say what to change". The runner's own words are cut to
+ * `LINE_NOTE_MAX` characters (the whole of it is in the run's card) and are data: the caller sets them as text.
+ * @param {{ report?: { note?: string } | null }} run
+ */
+export function waitingLineWords(run) {
+  const note = run && run.report && typeof run.report.note === 'string' ? run.report.note.replace(/\s+/g, ' ').trim() : '';
+  const cut = note.length > LINE_NOTE_MAX ? `${note.slice(0, LINE_NOTE_MAX - 1).trimEnd()}\u2026` : note;
+  return `A run is waiting on you${cut ? `: ${cut}` : ''}`;
+}

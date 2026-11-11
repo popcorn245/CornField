@@ -94,7 +94,8 @@ import { isOffline, initConnection, notSentWords, resetConnectionForTests } from
 import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
 import { mergeSpecs } from './proposal-model.js';
 import { t } from './strings.js';
-import { waiting, specGroups, workButtonName, waitingWords } from './waiting-model.js';
+import { waiting, specGroups, workButtonName, waitingWords, runWaitingOn } from './waiting-model.js';
+import { paintWaitingLine, resetWaitingLineForTests } from './waiting-line.js';
 import { specGroupsHtml } from './waiting-view.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1297,6 +1298,20 @@ function paintWaiting() {
   paintCounts();
   paintButton();
   paintTitle();
+  paintBarLine();
+}
+
+/** The proposal bar's line: a run waits on the open proposal (spec 0010 D2) */
+function paintBarLine(open = !!state.proposal) {
+  const run = open && state.proposalSlug && ui.runs && ui.runs.data ? runWaitingOn(ui.runs.data.runs, state.proposalSlug) : null;
+  paintWaitingLine(run, `${state.proposalSource || ''}/${state.proposalSlug || ''}`);
+}
+
+/** Answer, on the proposal bar's line: Work opens on Runs at that run with its reply field focused */
+async function answerFromBar(id) {
+  if (!(await openRunLink(id))) return;
+  const field = $('forge-runs-list').querySelector(`[data-run-reply="${id}"]`);
+  if (field) field.focus();
 }
 
 /** The browser tab's title starts "(3) " while something waits, then the page's own title (the app's configured name, whatever the server wrote) */
@@ -2503,6 +2518,20 @@ export function initForgePanel(config, opts = {}) {
   }
   // The specs part of what waits on you is read once now and every 5 minutes after (the server keeps it by PR head), and after a review is sent
   proposalHooks.reviewed = () => { readSpecsQuiet(); };
+  // The proposal bar says so when a run waits on the proposal it shows: drawn with the bar, and again as the runs are read
+  if (!(proposalHooks.bar && proposalHooks.bar.waitingLine)) {
+    const barBefore = proposalHooks.bar;
+    proposalHooks.bar = (open) => { if (barBefore) barBefore(open); paintBarLine(open); };
+    proposalHooks.bar.waitingLine = true;
+  }
+  const bar = $('proposal-bar');
+  if (bar && !bar.dataset.waitingWired) {
+    bar.dataset.waitingWired = '1';
+    bar.addEventListener('click', (e) => {
+      const go = e.target.closest && e.target.closest('[data-waiting-answer]');
+      if (go) { e.preventDefault(); e.stopPropagation(); answerFromBar(go.dataset.waitingAnswer); }
+    }, true);
+  }
   readSpecsQuiet();
   syncSpecsPoll();
   if (!wired) {
@@ -2581,6 +2610,7 @@ export function resetForgePanelForTests(clock = () => Date.now()) {
   specsTimer = 0;
   specsReading = false;
   merged = { entries: null, items: [] };
+  resetWaitingLineForTests();
   if (typeof document !== 'undefined' && baseTitle !== null) document.title = baseTitle;
   baseTitle = null;
   pageAway = false;

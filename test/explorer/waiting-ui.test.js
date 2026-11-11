@@ -311,6 +311,46 @@ describe('D6: the Runs groups', () => {
   });
 });
 
+describe('the proposal bar\'s line', () => {
+  const waitingRun = RUN(1, 'waiting', { refs: { proposal: '0042-x' }, report: { state: 'waiting', at: ago(1), by: 'r', note: 'Plan ready <b>approve</b> to build', url: null, tokens: null, cost: null }, timeline: [{ kind: 'report', at: ago(1) }] });
+  const showBar = async () => {
+    const { hooks } = await import('../../explorer/proposal.js');
+    Object.assign(state, { proposal: {}, proposalSlug: '0042-x', proposalSource: 'pull/42' });
+    hooks.bar(true);
+    return hooks;
+  };
+  it('says a run is waiting on the open proposal, escapes the runner\'s words, and Answer opens Runs at it with the reply field focused', async () => {
+    fakeServer({ runs: [waitingRun], proposals: [] });
+    mount();
+    await settle();
+    const hooks = await showBar();
+    const line = q('[data-corn="waiting-line"]');
+    expect(line.hidden).toBe(false);
+    expect(line.textContent).toContain('A run is waiting on you: Plan ready <b>approve</b> to build');
+    expect(line.querySelector('b')).toBe(null);
+    expect(line.querySelector('[data-waiting-answer]').textContent).toBe('Answer');
+    expect(line.closest('#proposal-body')).not.toBe(null);
+    click(line.querySelector('[data-waiting-answer]'));
+    await settle();
+    expect(q('[data-forge-kind="work"]').getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).toBe(q(`[data-run-reply="${ID(1)}"]`));
+    hooks.bar(false);
+    expect(line.hidden).toBe(true);
+    Object.assign(state, { proposal: null, proposalSlug: null, proposalSource: null });
+  });
+
+  it('is not there for another proposal', async () => {
+    fakeServer({ runs: [waitingRun], proposals: [] });
+    mount();
+    await settle();
+    const { hooks } = await import('../../explorer/proposal.js');
+    Object.assign(state, { proposal: {}, proposalSlug: '0099-other', proposalSource: 'pull/99' });
+    hooks.bar(true);
+    expect(q('[data-corn="waiting-line"]').hidden).toBe(true);
+    Object.assign(state, { proposal: null, proposalSlug: null, proposalSource: null });
+  });
+});
+
 describe('what idle costs', () => {
   it('reads the proposals once at load, the runs once, and then only the runs each 60 s and the proposals each 5 minutes', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

@@ -1189,3 +1189,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-forge-gtoggle { min-height: 44px; }
   .hx-forge-unread .hx-btn { min-height: 44px; }
 }
+
+/* The proposal bar's line when a run waits on the open proposal (spec 0010 D2): one line under the buttons, in the waiting colour's own mark (a left edge and its words), then Answer */
+.hx-waiting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); margin: var(--corn-space-2) 0 0; padding: var(--corn-space-1) var(--corn-space-3); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-run-waiting); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-waiting-line[hidden] { display: none; }
+@media (max-width: 767px) { .hx-waiting-line .hx-btn { min-height: 44px; min-width: 44px; } }
