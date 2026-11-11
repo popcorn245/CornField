@@ -19,7 +19,8 @@
  */
 
 import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
-import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld } from './render.js';
+import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld, getMinZoom } from './render.js';
+import { frameNodes, largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from './camera.js';
 import { setMap } from './view.js';
 import { closeDrawer, selectNode } from './panels.js';
 import { edgePoint, looksFor } from './scene.js';
@@ -27,10 +28,11 @@ import { onThemeChange } from './theme.js';
 import { looksWith, onMapStyleChange } from './map-style.js';
 import {
   PROPOSAL_VIEWS, MARKS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds,
+  sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
 } from './proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
 import { reviewWords } from './review-model.js';
-import { collapseSheet } from './sheets.js';
+import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
 import { t } from './strings.js';
 import { isOffline } from './connection.js';
 
@@ -43,8 +45,9 @@ const $ = (id) => document.getElementById(id);
  *  - `beforeClose()`   returns false to keep the proposal open (it is asking whether to keep the edits)
  *  - `closed()`   the proposal was closed
  *  - `bar(open)`   the bar was drawn: redraw the editing controls
+ *  - `openSpecs()`   the Work panel's Specs tab, for a bad link's way on (forge-panel.js sets it; without it the header's Proposals menu opens)
  */
-export const hooks = { effective: null, mark: null, beforeClose: null, closed: null, bar: null };
+export const hooks = { effective: null, mark: null, beforeClose: null, closed: null, bar: null, openSpecs: null };
 
 /** Whether the open proposal's source goes in the address (see `showProposal`) */
 let pinnedSource = false;
@@ -100,6 +103,7 @@ export async function loadProposalList() {
  * @returns {Promise<boolean>} whether it opened
  */
 export async function openProposal(slug, source = null) {
+  const token = ++openToken;
   setMessage(`Opening ${slug} …`);
   try {
     let res;
@@ -107,7 +111,9 @@ export async function openProposal(slug, source = null) {
     if (!res.ok) {
       let why = '';
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      throw new Error(res.status === 404 ? `No proposal called ${slug}${source ? ` in ${source}` : ''}.` : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
+      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
+      err.notFound = res.status === 404;
+      throw err;
     }
     const found = res.headers.get('X-Proposal-Source');
     let item;
@@ -116,10 +122,22 @@ export async function openProposal(slug, source = null) {
     return true;
   } catch (err) {
     console.error('Opening the proposal failed', err);
-    setMessage(err.message || `${slug} could not be opened.`, true, () => openProposal(slug, source));
+    // Said plainly, with the ways on: the Specs list, and the same name under another source when the list has one
+    // (a failure that is not "no such proposal" can be asked for again, or let go of: Retry and Close)
+    setMessage(err.message || `${slug} could not be opened.`, true, err.notFound ? [specsWay()] : [{ label: 'Retry', way: 'retry', slug, source }, { label: 'Close', way: 'close' }]);
+    if (err.notFound && token === openToken) {
+      await loadProposalList();
+      const sources = new Set((Array.isArray(listing) ? listing : []).map((e) => e && e.source));
+      if (token === openToken) setMessage(notFoundWords(slug, source, sources), true, [...otherCopies(listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay()]);
+    }
     return false;
   }
 }
+
+/** The way on every bad link offers: the list of specs */
+const specsWay = () => ({ label: t('openSpecsList'), way: 'specs' });
+/** Which `openProposal` is the latest, so a slow answer never writes over a newer one */
+let openToken = 0;
 
 /**
  * Puts a parsed proposal on the map. The map's nodes and edges become `applyProposal(base, proposal)`.
@@ -161,10 +179,10 @@ export function rebuildProposalMap(effective = hooks.effective ? hooks.effective
     applied = { nodes: state.baseNodes.map((n) => ({ ...n, mark: 'none' })), edges: state.baseEdges.map((e) => ({ ...e, mark: 'none' })) };
   }
   swapMap(applied.nodes, applied.edges);
+  renderBar(); // first: the fit below leaves out what the bar covers, so the bar must be laid out
   if (fit) fitToChange();
   render();
   ensureFlowLoop();
-  renderBar();
 }
 
 /** Closes the proposal: the plain map comes back, as it was, and the address loses `?proposal=` */
@@ -209,9 +227,23 @@ function swapMap(nodes, edges) {
   touchScene();
 }
 
+/**
+ * Frames what the proposal changes (nodes added, changed or removed, and both ends of a changed edge; not what they connect to) in the part of the
+ * map nothing covers (the bar, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
+ * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than FRAME_ZOOM_MIN shows,
+ * the biggest part of it that fits there is framed, not the whole at a zoom where it is a speck (the change list reaches the rest). A proposal that changes nothing drawn shows the whole map.
+ */
 function fitToChange() {
-  const { near, touched } = touchedIds(state.nodes, viewEdges());
-  fitGraphToViewport(fitPadding(), touched.size ? near : null);
+  const { touched } = touchedIds(state.nodes, viewEdges());
+  const items = state.nodes.filter((n) => touched.has(n.id) && isNodeVisible(n));
+  const rect = visibleMapRect();
+  const opts = { padding: fitPadding(), maxZoom: 1, minZoom: getMinZoom() };
+  // The whole change when it fits at FRAME_ZOOM_MIN or closer; else the biggest part of it that does (camera.js)
+  const group = largestGroup(items, rect, { ...opts, minZoom: Math.max(opts.minZoom, FRAME_ZOOM_MIN) });
+  const cam = items.length ? frameNodes(group, rect, opts) : null;
+  if (!cam) { fitGraphToViewport(fitPadding()); return; }
+  Object.assign(state.camera, cam);
+  render();
 }
 
 /** `?proposal=` (and `source`, `proposalView`) follow the open proposal, without a new history entry; other parameters stay */
@@ -234,8 +266,8 @@ function syncAddress() {
 //  The bar: title, counts chip, Before / Diff / After, problems, Close
 // ---------------------------------------------------------------------------
 
-/** One line in the bar instead of a proposal: while one opens, or why it did not */
-function setMessage(text, isError = false, retry = null) {
+/** One line in the bar instead of a proposal: while one opens, or why it did not (with `ways`, the buttons that go on from there) */
+function setMessage(text, isError = false, ways = []) {
   const bar = $('proposal-bar');
   if (!bar) return;
   bar.hidden = false;
@@ -244,27 +276,52 @@ function setMessage(text, isError = false, retry = null) {
   const msg = $('proposal-message');
   msg.hidden = false;
   msg.textContent = text;
-  // A proposal that failed to open can be asked for again, or let go of: the bar has nothing else to press
-  if (isError && retry) {
-    for (const [label, act] of [['Retry', retry], ['Close', closeProposal]]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'hx-btn hx-btn--quiet';
-      b.dataset.cornKind = 'quiet';
-      b.dataset.proposalErrorAction = label.toLowerCase();
-      b.textContent = label;
-      // The bar is drawn anew either way, so the focus is put somewhere stated: the proposal's name once it opened, the new Retry if it failed
-      // again, the map once the bar is closed; never the page
-      b.addEventListener('click', async () => {
-        const opened = await act();
-        const to = label === 'Close' ? $('graph-canvas') : opened ? $('proposal-title') : document.querySelector('[data-proposal-error-action="retry"]');
-        if (!to) return;
-        if (to.id === 'proposal-title') to.tabIndex = -1;
-        to.focus();
-      });
-      msg.append(' ', b);
-    }
+  const box = $('proposal-ways');
+  if (!box) return;
+  box.hidden = ways.length === 0;
+  box.innerHTML = ways.map((w) => `<button type="button" class="hx-btn" data-action="proposal-way" data-way="${escHtml(w.way)}"${w.slug ? ` data-slug="${escHtml(w.slug)}"` : ''}${w.source ? ` data-source="${escHtml(w.source)}"` : ''} data-peek-ok data-corn-kind="quiet">${escHtml(w.label)}</button>`).join('');
+}
+
+// ---------------------------------------------------------------------------
+//  Which copy is open: the chip after the title
+// ---------------------------------------------------------------------------
+
+/** The spec PRs read for the chip, by number: `{ pull, checks }` of `GET /api/forge/pulls/<n>`; kept, so a proposal opened again shows it at once and then asks again */
+const pullInfo = new Map();
+/** The proposal the PR was last asked for (`source/slug`): asked again when another opens, not each time the bar is drawn */
+let pullAskedFor = null;
+
+const safeHref = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
+
+/** The chip says which copy is under review: a PR (number, draft or open, the checks in words) linking to it, or a local draft and where. It only tells. */
+function paintSource() {
+  const chip = $('proposal-source');
+  if (!chip) return;
+  const source = state.proposal ? state.proposalSource : null;
+  chip.hidden = !source;
+  if (!source) return;
+  const n = pullNumberOf(source);
+  const known = n ? pullInfo.get(n) : null;
+  const entry = n && Array.isArray(listing) ? listing.find((e) => e.slug === state.proposalSlug && e.source === source) : null;
+  const words = sourceChip(source, (known && known.pull) || (entry && entry.pull) || null, known ? known.checks : null);
+  chip.textContent = words.text;
+  if (words.state) chip.dataset.cornState = words.state; else delete chip.dataset.cornState;
+  const href = safeHref(words.href);
+  if (href) { chip.setAttribute('href', href); chip.setAttribute('target', '_blank'); chip.setAttribute('rel', 'noreferrer'); chip.title = 'Open this pull request'; } else {
+    chip.removeAttribute('href'); chip.removeAttribute('target'); chip.removeAttribute('rel'); chip.title = words.label;
   }
+  const key = `${source}/${state.proposalSlug}`;
+  if (n && pullAskedFor !== key) { pullAskedFor = key; loadPullInfo(n); }
+}
+
+/** Reads the PR's state and checks once for this opening of the bar (the server keeps its own short cache); a forge that cannot say leaves the chip as it is */
+async function loadPullInfo(n) {
+  try {
+    const res = await fetch(`/api/forge/pulls/${n}`);
+    const body = res.ok ? await res.json() : null;
+    if (body && body.ok !== false && body.pull) pullInfo.set(n, { pull: body.pull, checks: Array.isArray(body.checks) ? body.checks : null });
+  } catch { /* no forge, or not signed in: the chip keeps what it has */ }
+  if (state.proposal && pullNumberOf(state.proposalSource) === n) paintSource();
 }
 
 /** The problems a proposal has, as the bar lists them (at most `max`, then "and N more") */
@@ -291,6 +348,7 @@ export function renderBar() {
   $('proposal-body').hidden = false;
   const p = state.proposal;
   $('proposal-title').textContent = (p && typeof p.title === 'string' && p.title) || state.proposalSlug || 'Proposal';
+  paintSource();
   const summary = $('proposal-summary');
   summary.textContent = (p && typeof p.summary === 'string' && p.summary) || '';
   const title = $('proposal-title');
@@ -338,26 +396,32 @@ function renderChanges() {
   list.innerHTML = rows.join('') || '<p class="hx-faint">This proposal changes nothing on the map.</p>';
 }
 
-function toggleChanges() {
+function toggleChanges(refocus = false) {
   const list = $('proposal-changes');
   if (!list) return;
   list.hidden = !list.hidden;
   $('proposal-summary').hidden = list.hidden || !$('proposal-summary').textContent;
   $('proposal-chip').setAttribute('aria-expanded', String(!list.hidden));
+  // The list sits after the toolbar's buttons in the page, so focus goes into it when it opens (its first row), and back to the chip when it closes by Escape
+  if (!list.hidden) { if (!isPhone()) list.querySelector('button')?.focus(); } else if (refocus) $('proposal-chip').focus();
 }
 
-/** Picks a row of the changes list: select it, centre on it, and make sure the current view shows it */
+/**
+ * Picks a row of the changes list: select it, centre it in the part of the map the open list, the node panel and (on a phone) the sheets leave free,
+ * at a zoom where its label reads, and make sure the current view shows it
+ */
 function focusChange(kind, key) {
   const item = kind === 'edge' ? state.edges.find((e) => edgeKey(e) === key) : state.nodes.find((n) => n.id === key);
   if (!item) return;
   const ends = (kind === 'edge' ? [state.nodes.find((n) => n.id === item.from), state.nodes.find((n) => n.id === item.to)] : [item]).filter(Boolean);
   if (!ends.length) return;
   if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff'); // Before or After hides what it removes or adds
-  const at = { x: ends.reduce((s, n) => s + n.x, 0) / ends.length, y: ends.reduce((s, n) => s + n.y, 0) / ends.length };
-  state.camera.x = state.width / 2 - at.x * state.camera.zoom;
-  state.camera.y = state.height / 2 - at.y * state.camera.zoom;
   if (kind === 'edge') showEdgePanel(item);
   else selectNode(item);
+  // The panel is open now, so what it covers is known
+  const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
+  if (cam) Object.assign(state.camera, cam);
+  render();
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +623,7 @@ const ACTIONS = {
   'toggle-proposal-mode': () => toggleMode(),
   'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),
   'toggle-proposal-changes': () => toggleChanges(),
+  'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'retry' ? retryOpen(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'close' ? closeAfterFailure() : openSpecs()),
   'proposal-focus': (el) => focusChange(el.dataset.kind, el.dataset.key),
 };
 
@@ -570,12 +635,79 @@ function onClick(e) {
   if (moreOpen() && !(target && target.dataset.action === 'toggle-proposal-more')) closeMore(!!(target && target.closest('#proposal-more-menu')));
   // Any click outside the picker closes it
   const wrap = $('proposal-wrap');
-  if (menuOpen() && wrap && !wrap.contains(e.target)) closeMenu();
+  if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
+}
+
+/** Retry, after a proposal failed to open: the bar is drawn anew either way, so the focus goes somewhere stated, the proposal's name once it opened or the new Retry if it failed again */
+async function retryOpen(slug, source) {
+  const opened = await openProposal(slug, source);
+  const to = opened ? $('proposal-title') : document.querySelector('#proposal-ways [data-way="retry"]');
+  if (!to) return;
+  if (opened) to.tabIndex = -1;
+  to.focus();
+}
+
+/** Close, after a proposal failed to open: the bar goes, and the focus goes to the map, never the page */
+function closeAfterFailure() {
+  closeProposal();
+  const map = $('graph-canvas');
+  if (map) map.focus();
+}
+
+/** A bad link's way on: the Work panel's Specs tab when there is one, else the header's Proposals menu */
+function openSpecs() {
+  if (hooks.openSpecs) { hooks.openSpecs(); return; }
+  if (!menuOpen()) toggleMenu();
 }
 
 function onKey(e) {
   if (e.key === 'Escape' && menuOpen()) closeMenu();
   onMoreKey(e);
+  // Escape inside the list of changes folds it back onto its chip
+  const list = $('proposal-changes');
+  if (e.key === 'Escape' && !e.defaultPrevented && list && !list.hidden && list.contains(document.activeElement)) { e.preventDefault(); toggleChanges(true); }
+  if (e.key === 'Tab' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) tabThroughList(e);
+}
+
+/** The lists the toolbar opens, each after the button that opens it: the changes (the counts) and the scenarios (Play) */
+const OPENERS = [['proposal-chip', 'proposal-changes'], ['proposal-play', 'proposal-scenarios']];
+const TABBABLE = 'button, a[href], input, select, textarea, summary, [tabindex]';
+const canTab = (el) => el.tabIndex >= 0 && !el.disabled && !el.closest('[hidden]') && (typeof el.checkVisibility !== 'function' || el.checkVisibility());
+const tabbables = (root) => [...root.querySelectorAll(TABBABLE)].filter(canTab);
+
+/**
+ * An open list sits in the page under the whole toolbar, so Tab would reach it only after Approve and ⋯ (WCAG 2.4.3). The bar's Tab order is
+ * the page's with each open list moved to right after the button that opened it: Tab goes from the button into the list, from its last row on
+ * to the toolbar's next control, and Shift+Tab the same way back. Where that order and the page's agree, the browser moves the focus itself.
+ */
+function tabThroughList(e) {
+  const bar = $('proposal-bar');
+  if (!bar || bar.hidden) return;
+  const open = OPENERS.map(([b, l]) => [$(b), $(l)]).filter(([btn, list]) => btn && list && !list.hidden && bar.contains(list) && canTab(btn));
+  if (!open.length) return;
+  const all = tabbables(bar);
+  let order = all.filter((el) => !open.some(([, list]) => list.contains(el)));
+  for (const [btn, list] of open) {
+    const at = order.indexOf(btn);
+    if (at >= 0) order = [...order.slice(0, at + 1), ...all.filter((el) => list.contains(el)), ...order.slice(at + 1)];
+  }
+  const active = document.activeElement;
+  let to = null;
+  if (active && bar.contains(active)) {
+    const i = order.indexOf(active);
+    if (i < 0) return;
+    const next = order[i + (e.shiftKey ? -1 : 1)];
+    const natural = all[all.indexOf(active) + (e.shiftKey ? -1 : 1)];
+    if (next === natural) return;
+    if (next) to = next;
+    else if (!e.shiftKey) to = tabbables(document).find((el) => !bar.contains(el) && (bar.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) || null; // out of the bar, past the list's rows
+  } else if (e.shiftKey && active) {
+    // Coming back into the bar from after it: its last control in this order, not the last row of a list
+    const page = tabbables(document);
+    const prev = page[page.indexOf(active) - 1];
+    if (prev && bar.contains(prev) && prev !== order[order.length - 1]) to = order[order.length - 1];
+  }
+  if (to) { e.preventDefault(); to.focus(); }
 }
 
 /** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
@@ -607,7 +739,12 @@ export async function initProposals() {
   renderBar();
 
   const asked = parseProposalQuery(location.search);
-  if (!asked) return false;
+  if (!asked) {
+    // A link whose `proposal` is not a proposal's name: said plainly (the value as text, never markup or a link), with the Specs list
+    const bad = malformedLinkWords(location.search);
+    if (bad) setMessage(bad, true, [specsWay()]);
+    return false;
+  }
   const ok = await openProposal(asked.slug, asked.source);
   if (ok && asked.view) setProposalView(asked.view);
   return ok;

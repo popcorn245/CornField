@@ -222,7 +222,7 @@ describe('/?proposal=<slug>', () => {
     fakeHub(LISTING, {});
     expect(await mount('?proposal=nope')).toBe(false);
     expect($('proposal-bar').hidden).toBe(false);
-    expect($('proposal-message').textContent).toContain('No proposal called nope');
+    expect($('proposal-message').textContent).toContain('There is no proposal called nope');
     expect($('proposal-body').hidden).toBe(true);
     expect(state.proposal).toBeNull();
     expect(state.nodes).toHaveLength(base.nodes.length);
@@ -234,11 +234,11 @@ describe('/?proposal=<slug>', () => {
     expect(await mount('?proposal=0013-meals')).toBe(false);
     expect($('proposal-message').textContent).toMatch(/^0013-meals could not be opened: cornfield sent a file this page could not read\./);
     expect($('proposal-message').textContent).not.toMatch(/JSON|position/);
-    const retry = $('proposal-message').querySelector('[data-proposal-error-action="retry"]');
+    const retry = $('proposal-ways').querySelector('[data-way="retry"]');
     retry.focus();
     retry.click();
     for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
-    expect(document.activeElement).toBe($('proposal-message').querySelector('[data-proposal-error-action="retry"]')); // failed again: the new Retry
+    expect(document.activeElement).toBe($('proposal-ways').querySelector('[data-way="retry"]')); // failed again: the new Retry
   });
 
   it('ignores a slug that cannot be a file name without asking the hub', async () => {

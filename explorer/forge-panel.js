@@ -90,7 +90,7 @@ import {
 import { cornStateAttr, stateIconHtml } from './corn-state.js';
 import { sayResult, clearResult, resultOf, showResultIn, resetFeedbackForTests } from './feedback.js';
 import { isOffline, initConnection, notSentWords, resetConnectionForTests } from './connection.js';
-import { proposalListing, onProposalListing, loadProposalList } from './proposal.js';
+import { proposalListing, onProposalListing, loadProposalList, hooks as proposalHooks } from './proposal.js';
 import { specRowHtml, mergeSpecs } from './proposal-model.js';
 import { t } from './strings.js';
 
@@ -2373,6 +2373,7 @@ export function initForgePanel(config, opts = {}) {
   const panel = $('forge-panel');
   if (!config || !config.forge || !config.signIn || !panel) return false;
   ui.config = config;
+  proposalHooks.openSpecs = () => openForge({ tab: 'specs' }); // a bad proposal link's way on
   if (opts.clock) now = opts.clock;
   for (const toggle of document.querySelectorAll('[data-action="toggle-forge"]')) toggle.hidden = false;
   panel.hidden = false;

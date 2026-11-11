@@ -6520,6 +6520,24 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-connection"
     },
@@ -6576,5 +6594,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T09:29:35.124Z"
+  "updatedAt": "2026-11-11T09:35:49.540Z"
 }

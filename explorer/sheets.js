@@ -15,6 +15,7 @@
 
 import { state } from './state.js';
 import { createSheetModel } from './sheet-model.js';
+import { freeRect } from './camera.js';
 
 /** The width below which the sheets apply (matches the CSS) */
 export const PHONE_QUERY = '(max-width: 767px)';
@@ -90,6 +91,31 @@ export function measureCovered() {
     listeners.forEach((fn) => fn());
   }
   return covered;
+}
+
+/**
+ * The part of the map nothing covers, in the canvas's own CSS px: what the camera should frame a node into.
+ * On a phone the dock's sheets cover the bottom; from 768px the proposal bar covers the top (and the change list it grows to hold),
+ * the node panel the right, the Work panel the left and the scenario player the bottom. Without a layout (no page) it is the whole canvas.
+ * @returns {{ x: number, y: number, width: number, height: number }}
+ */
+export function visibleMapRect() {
+  const covers = { top: 0, bottom: 0, left: 0, right: 0 };
+  const canvas = state.canvas;
+  const shown = (el) => !!el && !el.hidden && el.isConnected;
+  if (isPhone()) covers.bottom = measureCovered() + 8;
+  else if (canvas && typeof canvas.getBoundingClientRect === 'function') {
+    const c = canvas.getBoundingClientRect();
+    const bar = $('proposal-bar');
+    if (shown(bar)) covers.top = Math.max(0, bar.getBoundingClientRect().bottom - c.top) + 8;
+    const drawer = $('spec-drawer');
+    if (shown(drawer) && drawer.classList.contains('drawer-open')) covers.right = drawer.offsetWidth; // its width, not its box: it slides in
+    const forge = $('forge-panel');
+    if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
+    const player = document.querySelector('.hx-player');
+    if (shown(player)) covers.bottom = Math.max(0, c.bottom - player.getBoundingClientRect().top) + 8;
+  }
+  return freeRect(state.width || 0, state.height || 0, covers);
 }
 
 // ---------------------------------------------------------------------------

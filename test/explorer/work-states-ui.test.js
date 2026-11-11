@@ -278,6 +278,9 @@ describe('the seven run states differ without colour (F34)', () => {
     }
     expect(css).toMatch(/\.hx-forge-state--waiting \{[^}]*background: var\(--corn-run-waiting\)/);
     expect(docs).toContain('`--corn-run-waiting-ink`');
+    // the section is whole: no merge marker or comment cut in two swallows the first rule after it
+    expect(css).not.toMatch(/^(<{7}|={7}|>{7})/m);
+    expect(css).toMatch(/\/\* =+\n {3}The Work panel's states/);
     // a node button is not drawn as a pill, and nothing animates under reduced motion
     expect(css).toMatch(/\.hx-forge-node \{[^}]*border-radius: var\(--corn-radius-sm\)/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ \.hx-state-spin \{ animation: none/);
