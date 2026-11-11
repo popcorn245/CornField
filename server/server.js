@@ -55,9 +55,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { browserSources, BUILTIN_SOURCES, parseDuration, specPollMs, triggersOf, DEFAULTS, hookWants, ideaLabel, runnerQuietAfterMs } from '../core/config.js';
 import { CLOUD_FILE } from '../core/cloud.js';
-import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, clientBrand, colorOf, manifestOf } from '../core/brand.js';
+import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, clientBrand, manifestOf } from '../core/brand.js';
 import { clientStrings } from '../core/strings.js';
-import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, fontOrigins, fontUrl, themeAssetFile, themeAssetPath } from '../core/theme.js';
+import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, fontOrigins, themeAssetFile, themeAssetPath } from '../core/theme.js';
 import { decodePath, inside, notFound, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
@@ -75,18 +75,20 @@ import { createLander } from './lander.js';
 import { createSpecPoll } from './spec-poll.js';
 import { createRunnerWatch } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
+import { brandHead, escapeHtml, themeHead, themeHtmlTag } from './page-head.js';
 
 export const CORNFIELD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXPLORER_DIR = path.join(CORNFIELD_DIR, 'explorer');
 /** The pure core modules the explorer imports (no Node built-ins, no files): the only ones of core/ served */
 export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.js', 'text.js', 'mentions.js', 'color.js', 'strings.js'];
+/** The explorer files the sign-in pages load: cornfield's tokens, their own stylesheet and the script that applies Light or Dark. Served without a session. */
+const SIGN_IN_FILES = new Set(['/explorer/tokens.css', '/explorer/sign-in.css', '/explorer/theme-boot.js']);
 /** cornfield's own browser sources, by request path */
 const BROWSER_PLUGINS = new Map(Object.values(BUILTIN_SOURCES).map((p) => [p, path.join(CORNFIELD_DIR, p)]));
 const PKG = JSON.parse(fs.readFileSync(path.join(CORNFIELD_DIR, 'package.json'), 'utf8'));
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
 const sendJson = (res, status, body) => { res.writeHead(status, JSON_HEADERS); res.end(JSON.stringify(body)); };
-const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /** The import map the page carries: the config's (repo-local modules a source needs) */
 function importMapOf(config) {
@@ -105,35 +107,6 @@ function cspOf(importMap, theme) {
     "default-src 'self'", `script-src 'self'${hash}`, `style-src 'self' 'unsafe-inline'${style.map((o) => ` ${o}`).join('')}`, "img-src 'self' data: blob:",
     "connect-src 'self'", `font-src 'self'${font.map((o) => ` ${o}`).join('')}`, "object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", "form-action 'self'",
   ].join('; ');
-}
-
-/** The config's theme names that may reach the page: plain ones only (core/theme.js THEME_NAME), and the default when it is one of them */
-function themeNamesOf(theme) {
-  const names = Object.keys(theme.names || {}).filter((n) => THEME_NAME.test(n));
-  return { names, fallback: theme.default && names.includes(theme.default) ? theme.default : null };
-}
-
-/** `<html>` with the named themes on it, for theme-boot.js to read before the first paint */
-function themeHtmlTag(theme) {
-  const { names, fallback } = themeNamesOf(theme);
-  return names.length ? `<html lang="en" data-theme-names="${names.join(' ')}"${fallback ? ` data-theme-default="${fallback}"` : ''}>` : '<html lang="en">';
-}
-
-/**
- * The links that go after cornfield's own stylesheets, in this order: the allow-listed font stylesheets, the repo's theme.css, and the
- * default named theme. explorer/index.html includes theme-boot.js once, after these, so it points that link at the viewer's choice
- * before the first paint. Always links, never inlined CSS.
- */
-function themeHead(theme) {
-  const out = [];
-  for (const f of theme.fonts || []) {
-    const u = fontUrl(f);
-    if (u) out.push(`<link rel="stylesheet" href="${escapeHtml(u.href)}" referrerpolicy="no-referrer" />`);
-  }
-  if (theme.css) out.push('<link rel="stylesheet" href="/cornfield/theme.css" data-corn-theme="css" />');
-  const { names, fallback } = themeNamesOf(theme);
-  if (names.length) out.push(`<link rel="stylesheet" id="cf-theme-name-css"${fallback ? ` href="/cornfield/theme/${fallback}.css"` : ''} data-corn-theme="name" />`);
-  return out.join('\n  ');
 }
 
 /** The theme files the config names, by the path they are served at: `Map<'/cornfield/theme.css' | '/cornfield/theme/<name>.css', rel>` */
@@ -191,20 +164,6 @@ function sendThemeAsset(req, res, config, reqPath) {
 /** The brand images the config names, by the path they are served at: `Map<'/cornfield/brand/<key>.<ext>', rel>` */
 function brandFilesOf(config) {
   return new Map(brandImages(config.brand).map((i) => [i.url, i.rel]));
-}
-
-/**
- * The `<head>` lines of a brand: the favicon, the manifest (always, so any cornfield installs as an app; fetched with the sign-in
- * cookie, since the page is behind it) and the tab colour
- */
-function brandHead(brand) {
-  const out = [];
-  const favicon = brandImages(brand).find((i) => i.key === 'favicon');
-  if (favicon) out.push(`<link rel="icon" href="${escapeHtml(favicon.url)}" type="${favicon.type}" />`);
-  out.push(`<link rel="manifest" href="${MANIFEST_PATH}" crossorigin="use-credentials" />`);
-  const color = colorOf(brand && brand.color);
-  if (color) out.push(`<meta name="theme-color" content="${escapeHtml(color)}" />`);
-  return out.join('\n  ');
 }
 
 /** The page's title: the repo's, then the app's name (cornfield, unless the brand names the app) */
@@ -444,6 +403,14 @@ export function createCornfieldServer(config, opts = {}) {
     const runner = runnerRoute(reqPath);
     if (runner && !(reqPath === REQUESTS_PATH && req.method !== 'GET' && req.method !== 'HEAD')) return serveRunnerCall(req, res, runner, url, { config, auth, runs, now: opts.now });
     if (reqPath === REQUESTS_PATH) return serveAgentCall(req, res, { config, auth, runs, now: opts.now });
+    // The look of the sign-in pages (cornfield's tokens and its sign-in stylesheet, the repo's theme, fonts and brand images) answers without a
+    // session: a visitor sees the brand before they are in. Presentation files only, never data (docs/sign-in.md, "What answers without a session")
+    if (auth.enabled && (req.method === 'GET' || req.method === 'HEAD')) {
+      if (themeFile.has(reqPath)) return sendTheme(req, res, config, themeFile.get(reqPath), reqPath);
+      if (reqPath.startsWith(THEME_ASSET_PREFIX)) return sendThemeAsset(req, res, config, reqPath);
+      if (brandFile.has(reqPath)) return sendBrand(req, res, config, brandFile.get(reqPath), reqPath);
+      if (SIGN_IN_FILES.has(reqPath)) return sendFile(req, res, path.join(EXPLORER_DIR, path.basename(reqPath)), reqPath);
+    }
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;
     const signedIn = gate.session ? { login: gate.session.login } : false;

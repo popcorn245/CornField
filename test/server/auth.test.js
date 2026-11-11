@@ -197,7 +197,7 @@ describe('sign-in with GitHub, and the guard', () => {
     const page = await get('/x?a="><script>alert(1)</script>&b=\'', { accept: 'text/html' });
     expect(page.status).toBe(401);
     expect(page.body).not.toContain('<script>alert');
-    const href = /<a class="button" href="([^"]*)">Sign in/.exec(page.body);
+    const href = /<a class="cf-button" data-corn-kind="primary" href="([^"]*)">Sign in/.exec(page.body);
     expect(href && href[1]).toMatch(/^\/auth\/start\?return=[^"<>']*$/);
     const signIn = await get(`/auth/sign-in?return=${encodeURIComponent('/?issue=4&q="x"')}`);
     expect(signIn.body).toContain('href="/auth/start?return=%2F%3Fissue%3D4%26q%3D%2522x%2522"');
@@ -303,12 +303,13 @@ describe('sign-in with GitHub, and the guard', () => {
     const page = await get('/', { cookie });
     expect(page.status).toBe(403);
     expect(page.headers['content-type']).toMatch(/^text\/html/);
-    expect(page.body).toContain('This is the dev dashboard');
-    expect(page.body).toContain('ask a maintainer');
+    expect(page.body).toContain('for the people who look after the project');
+    expect(page.body).toContain('ask one of them');
+    expect(page.body).not.toContain('dev dashboard');
     expect(page.body).toContain('reader-two');
     expect(page.body).toContain('action="/auth/sign-out"');
     const api = await get('/topology.json', { cookie });
-    expect([api.status, JSON.parse(api.body)]).toEqual([403, { ok: false, error: 'This is the dev dashboard; ask a maintainer.' }]);
+    expect([api.status, JSON.parse(api.body)]).toEqual([403, { ok: false, error: 'Only maintainers can open this; ask one.' }]);
     expect(JSON.parse((await get('/auth/me', { cookie })).body)).toMatchObject({ login: 'reader-two', admin: false });
   });
 
@@ -347,7 +348,7 @@ describe('sign-in with GitHub, and the guard', () => {
     expect(page.headers['content-type']).toMatch(/^text\/html/);
     expect(page.body).toContain('Sign in with GitHub');
     expect(page.body).toContain('href="/auth/start"');
-    expect(page.body).not.toContain('<script');
+    expect(page.body).not.toMatch(/<script(?![^>]*\ssrc="\/explorer\/)/); // no inline script: only the explorer's own theme-boot.js
     expect(page.headers['content-security-policy']).toMatch(/default-src 'self'/);
     expect(JSON.parse((await get('/topology.json')).body)).toEqual({ ok: false, error: 'Sign in first.' });
     // A page a browser opens anywhere is the sign-in page, too
