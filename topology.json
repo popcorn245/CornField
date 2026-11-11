@@ -2028,6 +2028,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0009: a project defines its own layers, and finer kinds show (docs/specs/0009-project-layers-and-finer-kinds.md)."
+    },
+    {
+      "id": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "type": "page",
+      "label": "/docs/specs/0010-what-is-waiting-on-me",
+      "file": "docs/specs/0010-what-is-waiting-on-me.md",
+      "summary": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0010: what is waiting on me (the Specs list, waiting runs, and Work on a phone) (docs/specs/0010-what-is-waiting-on-me.md)."
     }
   ],
   "edges": [
@@ -6463,7 +6473,26 @@
       "from": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
       "to": "page-doc-docs-specs-0008-reading-a-big-map",
       "dashed": true
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0010-what-is-waiting-on-me"
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-vision",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-specs-0008-reading-a-big-map",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0010-what-is-waiting-on-me",
+      "to": "page-doc-docs-specs-0009-project-layers-and-finer-kinds",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-11T08:17:46.027Z"
+  "updatedAt": "2026-11-11T08:20:14.900Z"
 }
