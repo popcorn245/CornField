@@ -1,6 +1,6 @@
 # Spec 0007: the decision: what Approve and Send back do, and when
 
-Status: **proposed**. Its proposal is [`proposals/0007-the-decision.json`](proposals/0007-the-decision.json): what this adds and changes on cornfield's own map, with scenarios that name personas.
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0007-the-decision.json`](proposals/0007-the-decision.json): what this adds and changes on cornfield's own map, with scenarios that name personas.
 
 Issues: [#152](https://github.com/popcorn245/CornField/issues/152) Approve fires at once on a draft PR with checks still running, says nothing first, and drops an open what-if edit (F01); [#166](https://github.com/popcorn245/CornField/issues/166) what-if: a new node lands off screen, the counts ignore it, and there is no view without your edits (F17); [#183](https://github.com/popcorn245/CornField/issues/183) "No runner online" is a faint line inside the Runs tab, and Approve says nothing (F35). All three come from the 0.34 design review.
 
@@ -176,6 +176,8 @@ At 390×844: an open PR, checks passed, `approveLands` on, after pressing Approv
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-11:** the maintainer took every recommendation below.
 
 Each has a recommendation, so "yes to all" is an answer.
 

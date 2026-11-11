@@ -1,6 +1,6 @@
 # Spec 0006: scenarios and personas in review
 
-Status: **proposed**. Its proposal is [`proposals/0006-scenarios-and-personas.json`](proposals/0006-scenarios-and-personas.json): what this adds and changes on cornfield's own map, with scenarios that name personas.
+Status: **approved** (maintainer, in chat, 2026-11-11: "Approve all 5 go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not built yet. Its proposal is [`proposals/0006-scenarios-and-personas.json`](proposals/0006-scenarios-and-personas.json): what this adds and changes on cornfield's own map, with scenarios that name personas.
 
 Issues: [#149](https://github.com/popcorn245/CornField/issues/149) scenarios sit behind Play, and nothing says who a scenario is for (F09); [#162](https://github.com/popcorn245/CornField/issues/162) no way to read a scenario's steps as a list, and no complete non-visual path through a review (F13). Both come from the 0.34 design review.
 
@@ -177,6 +177,8 @@ At 390×844, the sheet expanded on Scenarios, the same step playing:
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-11:** the maintainer took every recommendation below.
 
 Each has a recommendation, so "yes to all" is an answer.
 
