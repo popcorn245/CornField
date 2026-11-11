@@ -67,7 +67,7 @@ const toPull = (p) => ({
 });
 
 /** @returns {import('./forge.js').PullCommit} */
-const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '' });
+const toCommit = (c) => ({ sha: String(c.sha ?? ''), message: typeof c.commit?.message === 'string' ? c.commit.message : '', date: c.commit?.committer?.date ?? c.commit?.author?.date ?? null });
 
 const FILE_STATUS = { added: 'added', copied: 'added', removed: 'removed', renamed: 'renamed', modified: 'modified', changed: 'modified', unchanged: 'modified' };
 /** @returns {import('./forge.js').PullFile} */

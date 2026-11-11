@@ -12,7 +12,7 @@ import { flowSummary } from './flows.js';
 import { clearScenario } from './scenario-ui.js';
 import { kindOfMark, fieldRows, MARK_WORDS } from './proposal-model.js';
 import { nodeMockupsHtml } from './mockups-model.js';
-import { collapseSheet, isPhone, measureCovered, onCoveredChange } from './sheets.js';
+import { collapseSheet, isPhone, measureCovered, onCoveredChange, showSheet } from './sheets.js';
 import { panIntoView } from './camera.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { cloudPanelHtml } from './cloud-model.js';
@@ -282,6 +282,7 @@ export async function selectNode(node) {
   $('spec-drawer').classList.add('drawer-open');
   $('spec-drawer').inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
   $('drawer-backdrop').hidden = false;
+  showSheet('drawer'); // on a phone it takes Work's place (the node sheet and Work take turns), and comes back from away when its node is tapped again
   keepSelectedInView();
 }
 

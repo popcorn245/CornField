@@ -739,7 +739,7 @@ describe('the issues and PRs panel', () => {
     expect(document.activeElement).toBe($('forge-title'));
     expect([...$('forge-panel').querySelectorAll('button, select, input, a[href]')].every((el) => el.tabIndex >= 0)).toBe(true);
     await settle(40);
-    expect($('map-announcer').textContent).toBe('3 specs shown');
+    expect($('map-announcer').textContent).toBe('3 specs shown, 1 to decide');
     key($('forge-title'), 'Escape');
     expect(document.activeElement).toBe(btn);
     expect($('forge-panel').inert).toBe(true);

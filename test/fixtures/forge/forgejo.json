@@ -76,8 +76,8 @@
   },
   "GET /repos/owner/name/pulls/12/commits?limit=50": {
     "body": [
-      { "sha": "c100000000000000000000000000000000000000", "commit": { "message": "Add the meals page" } },
-      { "sha": "c200000000000000000000000000000000000000", "commit": { "message": "Wire it up\n\nCornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF" } }
+      { "sha": "c100000000000000000000000000000000000000", "commit": { "message": "Add the meals page", "author": { "date": "2026-10-17T09:00:00Z" }, "committer": { "date": "2026-10-17T09:30:00Z" } } },
+      { "sha": "c200000000000000000000000000000000000000", "commit": { "message": "Wire it up\n\nCornfield-Run: run-01JC8Z3Q5M7VXK2RT9N4B6HDEF", "author": { "date": "2026-10-17T09:40:00Z" } } }
     ]
   },
   "GET /repos/owner/name/pulls/12/files?limit=50": {

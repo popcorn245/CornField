@@ -1155,3 +1155,66 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
 .hx-offline { position: fixed; top: 64px; /* below the header */ left: 50%; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100% - 32px)); margin: 0; padding: var(--corn-space-2) var(--corn-space-4); border: var(--corn-border-strong) solid var(--corn-warn); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text); box-shadow: var(--corn-shadow); line-height: 1.5; }
 .hx-offline[hidden] { display: none; }
 .hx-offline[data-corn-state="success"] { border-color: var(--corn-ok); }
+
+/* ==========================================================================
+   What is waiting on you (spec 0010): the one number's badge, the Specs groups, each row's review state, the search, the Runs headings
+   ========================================================================== */
+
+/* The badge: filled, in the waiting colour the solid waiting pill already uses, so one number looks the same on the Work button and on the tabs */
+.hx-waiting-badge, .hx-forge-count--waiting { border-radius: var(--corn-radius-pill); background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); font-weight: 700; }
+.hx-waiting-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; height: 1.6em; padding: 0 var(--corn-space-1); font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; font-size: var(--corn-text-xs); line-height: 1; }
+.hx-waiting-badge[hidden] { display: none; }
+/* On a tab the badge keeps the count's own width (the tab does not move when a count becomes a badge): its fill reaches past the digits into the tab's own
+   right padding, by a margin that gives the room back (content-box, so the padding is added to the count's 2ch and the margin takes exactly that away
+   again), and keeps the tab's gap from its word on the left */
+.hx-forge-tab .hx-forge-count.hx-forge-count--waiting, .hx-forge-tab[aria-pressed="true"] .hx-forge-count.hx-forge-count--waiting { box-sizing: content-box; padding: 0 var(--corn-space-1); margin: 0 calc(var(--corn-space-1) * -2) 0 0; text-align: center; background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); }
+.hx-work .hx-waiting-badge { margin-right: calc(var(--corn-space-2) * -1); }
+
+/* A group of the Specs list: its header says who must act and how many; Drafts past ten rows fold behind it */
+.hx-spec-group > .hx-forge-list { margin: 0; padding: 0; }
+.hx-spec-group > .hx-forge-list[hidden] { display: none; }
+.hx-forge-gtoggle { display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hx-forge-gtoggle::before { content: '\25B8'; font-size: var(--corn-text-xs); }
+.hx-forge-gtoggle[aria-expanded="true"]::before { content: '\25BE'; }
+.hx-forge-gtoggle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+/* A Runs heading is an item of the flat list, so a run's card (and a reply typed in it) is never moved into a section */
+.hx-run-heading { list-style: none; margin: var(--corn-space-3) 0 var(--corn-space-1); }
+.hx-run-heading:first-child { margin-top: 0; }
+/* A spec sent back is not a colour alone: a dashed edge and a turning arrow, and its words */
+.hx-forge-state--sent-back { color: var(--corn-run-stopped); border-style: dashed; }
+.hx-forge-reviewed { color: var(--corn-text-2); }
+.hx-forge-unread { margin: var(--corn-space-1) 0 0; color: var(--corn-bad); overflow-wrap: anywhere; }
+.hx-forge-specsearch { margin: 0 0 var(--corn-space-2); }
+.hx-forge-specsearch[hidden] { display: none; }
+.hx-forge-specsearch .hx-forge-field { width: 100%; }
+@media (max-width: 767px) {
+  .hx-forge-gtoggle { min-height: 44px; }
+  .hx-forge-unread .hx-btn { min-height: 44px; }
+}
+
+/* The proposal bar's line when a run waits on the open proposal (spec 0010 D2): one line under the buttons, in the waiting colour's own mark (a left edge and its words), then Answer */
+.hx-waiting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); margin: var(--corn-space-2) 0 0; padding: var(--corn-space-1) var(--corn-space-3); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-run-waiting); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-waiting-line[hidden] { display: none; }
+@media (max-width: 767px) { .hx-waiting-line .hx-btn { min-height: 44px; min-width: 44px; } }
+
+/* ==========================================================================
+   Sheets on a phone (spec 0010 D7): two at most, one expanded, a stub for the other, and the map keeps 35% of the screen
+   ========================================================================== */
+.hx-sheet-stub { display: none; }
+@media (max-width: 767px) {
+  /* The node panel and Work take turns: the one displaced is hidden, not closed (its node stays selected) */
+  .hx-dock > .hx-sheet[data-sheet-away] { display: none; }
+  /* A stub: one 44px row with the sheet's title and its badge; a tap expands it, and the expanded one folds to a stub in its place */
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] { min-height: 44px; max-height: 44px; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] > :not(.hx-sheet-stub) { display: none !important; }
+  .hx-sheet-stub { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; min-height: 44px; padding: 0 var(--corn-space-1); border: 0; background: none; color: var(--corn-text); font: inherit; font-weight: 600; text-align: left; }
+  .hx-sheet-stub[hidden] { display: none; }
+  .hx-sheet-stub:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); border-radius: var(--corn-radius); }
+  .hx-sheet-stub-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* An expanded sheet is capped so the map keeps 35% of the screen: sheets.js writes `--hx-sheet-cap` (the screen less the map's share, less a stub). Not in a short
+   window (400% zoom), where an open sheet may take the window. */
+@media (max-width: 767px) and (min-height: 481px) {
+  .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"], .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50dvh), 50dvh); }
+  .hx-dock > .hx-drawer[data-sheet-state="expanded"], .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60dvh), 60dvh); }
+}

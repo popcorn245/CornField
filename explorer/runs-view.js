@@ -9,9 +9,11 @@
  */
 
 import { relativeTime } from './review-model.js';
-import { runTone, canRetry, aboutWords, runName, statusWords, statusWhy, runMeta, canStop, canAnswer, groupRuns, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
+import { runTone, canRetry, aboutWords, runName, statusWords, statusWhy, runMeta, canStop, canAnswer, compareTitle, limitRows, checksWords, timelineWords, nodeLabels, collisionWords, answerWords } from './runs-model.js';
 import { cornState, cornStateAttr, stateIconHtml } from './corn-state.js';
 import { t } from './strings.js';
+import { runGroups } from './waiting-model.js';
+import { runGroupHeadingHtml } from './waiting-view.js';
 
 
 /**
@@ -174,17 +176,18 @@ export function runHtml(ctx, run, all) {
 }
 
 /**
- * The list: runs on their own and compares, as the items of the list.
+ * The list, in groups (spec 0010 D6): Needs you (oldest question first), In motion, Finished (each newest first), each starting with a heading that
+ * says how many; runs on their own and compares are the items. The headings are items of the one flat list, so a run's card is never moved into a section.
  * @param {ViewContext} ctx
  * @param {object[]} runs
  */
 export function runsHtml(ctx, runs) {
-  return groupRuns(runs).map((g) => {
+  return runGroups(runs).map((group) => runGroupHeadingHtml(group) + group.items.map((g) => {
     if (g.kind === 'run') return runHtml(ctx, g.run, runs);
     const id = `cmp-${g.runs[0].runId}`;
     return `<li class="hx-run-group" data-key="${ctx.esc(id)}"><section class="hx-run-compare" aria-labelledby="${ctx.esc(id)}">
       <h4 class="hx-run-compare-title" id="${ctx.esc(id)}">${ctx.esc(compareTitle(g.runs))}</h4>
       <p class="hx-forge-meta hx-faint">The same request under each profile, side by side.</p>
       <ul class="hx-run-columns" aria-label="${ctx.esc(g.runs.length)} profiles compared">${g.runs.map((r) => runHtml(ctx, r, runs)).join('')}</ul></section></li>`;
-  }).join('');
+  }).join('')).join('');
 }

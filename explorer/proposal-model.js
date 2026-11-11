@@ -19,7 +19,8 @@
  */
 
 import { escHtml } from './state.js';
-import { markStateAttr } from './corn-state.js';
+import { markStateAttr, stateIconHtml } from './corn-state.js';
+import { specStateOf, specStateWords, SPEC_STATE_WORDS, SPEC_STATE_CORN } from './waiting-model.js';
 
 export const PROPOSAL_VIEWS = ['before', 'diff', 'after'];
 
@@ -221,9 +222,6 @@ export function proposalPanelHtml(item) {
 //  A proposal as a row of the Work panel's Specs tab
 // ---------------------------------------------------------------------------
 
-/** What a listing entry's state pill says: its spec PR's state, or "Local" for a proposal that is only in a checkout or a worktree */
-export const specState = (entry) => (entry.pull ? (entry.pull.draft ? 'Draft' : 'Open') : 'Local');
-
 /** Where a listing entry is, as a line of meta: "PR #11", or the checkout or worktree it is in; a proposal that is also somewhere else says so ("PR #11, and a copy in the checkout") */
 export function specWhere(entry) {
   const place = (source) => (source === 'checkout' ? 'the checkout' : `worktree ${source}`);
@@ -260,22 +258,28 @@ export function mergeSpecs(entries) {
 }
 
 /**
- * One row: title, a state pill, a line of what it is for, and the meta (spec number, where it is, +added ~changed −removed, scenarios).
- * A proposal that could not be read is a row that says why and opens nothing. Same `open-proposal` action as the Proposals menu's row.
- * @param {{ slug: string, source: string, title?: string, summary?: string, spec?: string, pull?: {number: number, draft?: boolean}, counts?: {added?: number, changed?: number, removed?: number, scenarios?: number}, errors?: number, error?: string }} entry
- * @param {{ current?: {slug: string, source: string} | null }} [opts] the proposal that is open now
+ * One row: title, a pill that says its review state (To decide, Changed since approved, Sent back, Approved, Draft PR, Local, spec 0010 D4),
+ * who and when beside it ("Approved by maintainer-one \u00b7 2 hours ago", "Waiting 2 days"), a line of what it is for, and the meta (spec number,
+ * where it is, +added ~changed \u2212removed, scenarios). A review that could not be read says so, with a way to try again, and never looks
+ * unreviewed. A proposal that could not be read is a row that says why and opens nothing. Same `open-proposal` action as the Proposals menu's row.
+ * What the forge said (a login, a date) is escaped; the pill's state is one of a fixed list.
+ * @param {{ slug: string, source: string, title?: string, summary?: string, spec?: string, pull?: {number: number, draft?: boolean}, review?: object | null, counts?: {added?: number, changed?: number, removed?: number, scenarios?: number}, errors?: number, error?: string }} entry
+ * @param {{ current?: {slug: string, source: string} | null, nowMs?: number }} [opts] the proposal that is open now; the clock
  */
-export function specRowHtml(entry, { current = null } = {}) {
+export function specRowHtml(entry, { current = null, nowMs = Date.now() } = {}) {
   const head = `<span class="hx-forge-title">${escHtml(entry.title || entry.slug)}</span>`;
   if (entry.error) {
     return `<li class="hx-forge-item"><div class="hx-forge-row hx-forge-spec" data-corn="row">${head}<span class="hx-forge-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-forge-meta">${escHtml(specWhere(entry))}</span></div></li>`;
   }
-  const state = specState(entry);
-  const tone = ` data-corn-state="${state === 'Open' ? 'open' : 'draft'}"`; // a proposal only in a checkout is a draft too, as a branch with no pull request is
+  const { state } = specStateOf(entry);
+  const corn = SPEC_STATE_CORN[state];
+  const pill = `<span class="hx-forge-state hx-forge-state--${corn}" data-corn="review-state" data-corn-state="${corn}">${stateIconHtml(corn)}${escHtml(SPEC_STATE_WORDS[state])}</span>`;
   const c = entry.counts || {};
+  const said = specStateWords(entry, nowMs);
   const meta = [
     entry.spec ? `<span>spec ${escHtml(entry.spec)}</span>` : '',
     `<span>${escHtml(specWhere(entry))}</span>`,
+    said ? `<span class="hx-forge-reviewed">${escHtml(said)}</span>` : '',
     c.added ? `<span class="hx-forge-add" title="${c.added} added">+${c.added}</span>` : '',
     c.changed ? `<span class="hx-forge-chg" title="${c.changed} changed">~${c.changed}</span>` : '',
     c.removed ? `<span class="hx-forge-del" title="${c.removed} removed">\u2212${c.removed}</span>` : '',
@@ -283,9 +287,10 @@ export function specRowHtml(entry, { current = null } = {}) {
     entry.errors ? `<span class="hx-warn">${entry.errors} ${entry.errors === 1 ? 'problem' : 'problems'}</span>` : '',
   ].filter(Boolean).join('');
   const mine = !!current && current.slug === entry.slug && (current.source === entry.source || (Array.isArray(entry.also) && entry.also.includes(current.source)));
+  const unread = state === 'unknown' ? `<p class="hx-forge-meta hx-forge-unread" data-corn="message" data-corn-state="failure">${escHtml(entry.review && entry.review.error ? entry.review.error : 'The forge could not be asked.')} <button type="button" class="hx-btn hx-forge-act" data-corn-kind="quiet" data-action="retry-forge" aria-label="Try again: ${escHtml(entry.title || entry.slug)}">Try again</button></p>` : '';
   return `<li class="hx-forge-item"><button type="button" class="hx-forge-row hx-forge-spec" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" aria-pressed="${mine}" data-corn="row">`
-    + `<span class="hx-forge-line">${head}<span class="hx-forge-state hx-forge-state--${state === 'Draft' ? 'draft' : state === 'Open' ? 'open' : 'neutral'}" data-corn="state-pill"${tone}>${state}</span></span>`
-    + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button></li>`;
+    + `<span class="hx-forge-line">${head}${pill}</span>`
+    + `${entry.summary ? `<span class="hx-forge-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-forge-meta hx-forge-facts">${meta}</span></button>${unread}</li>`;
 }
 
 // ---------------------------------------------------------------------------
