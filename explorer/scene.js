@@ -243,8 +243,8 @@ export function isNodeVisible(state, node) {
   if (state.view === 'dataflow') return !!state.flow && state.flow.ids.has(node.id);
   if (state.view === 'house') return houseShowsNode(state, node); // the House view (spec 0029, PHY-11) draws its own set: house-model.js
   if (node.type === 'root') return true;
-  if (node.type === 'core') return activeLayers.pkg || activeLayers.atom;
-  if (node.type === 'store') return activeLayers.flow !== false;
+  if (node.type === 'core') return (activeLayers.pkg || activeLayers.atom) && activeLayers.core !== false; // its own row in Layers, and Packages or Atoms
+  if (node.type === 'store') return activeLayers.flow !== false && activeLayers.store !== false; // its own row, and Data Flow
   if (node.type === 'rom') return activeLayers.rom !== false && activeLayers.flow !== false;
   if (node.type === 'floor' || node.type === 'room') return activeLayers.house !== false; // the House layer (spec 0029)
   if (node.type === 'external') return activeLayers[externalLayer(node)] !== false; // the Cloud and Public web layers (spec 0031)

@@ -94,7 +94,43 @@ describe('renderer-canvas2d', () => {
     r.draw(buildScene(mk({ selectedNode: nodes[2] })), { x: 0, y: 0, zoom: 1 }, 0);
     const sets = (ctx.log          ).filter((c) => c[0] === 'set:shadowBlur' || c[0] === 'set:globalAlpha').map((c) => `${c[0].slice(4)}=${c[1]}`);
     expect(sets).toContain('globalAlpha=0.07'); // the nodes outside the focus
-    expect(sets).toContain('shadowBlur=9'); // the selected page
+    // a glow is a soft disc behind the node, never a shadowBlur (a blur per node and edge is what made a tap take seconds: F30)
+    expect(sets.some((x     ) => x.startsWith('shadowBlur'))).toBe(false);
+    const sel = buildScene(mk({ selectedNode: nodes[2] })).nodes.find((n     ) => n.glow);
+    expect(ctx.log.some((c     ) => c[0] === 'arc' && Math.abs(c[3] - (sel.r + sel.glow * 0.7)) < 1e-9)).toBe(true); // the selected page's halo
+  });
+
+  it('draws the lines of a scene with packets once, and only the packets again while nothing but time moves (F30)', () => {
+    const layerCtx = recordingCtx();
+    vi.stubGlobal('OffscreenCanvas', class { width = 1; height = 1; getContext() { return layerCtx; } });
+    try {
+      const ctx = recordingCtx();
+      const r = createCanvas2dRenderer(fakeCanvas(ctx));
+      r.resize(800, 600, 1);
+      const scene = buildScene(mk({ selectedNode: nodes[1] }));
+      expect(scene.edges.some((e     ) => e.packet)).toBe(true);
+      const camera = { x: 0, y: 0, zoom: 1 };
+      r.draw(scene, camera, 0);
+      const strokesOnce = names(layerCtx).filter((n     ) => n === 'stroke').length;
+      expect(strokesOnce).toBeGreaterThan(0); // the lines went to the layer
+      expect(names(ctx)).toContain('drawImage');
+      layerCtx.log.length = 0; ctx.log.length = 0;
+      r.draw(scene, camera, 500); // only the time moved
+      expect(names(layerCtx)).not.toContain('stroke');
+      expect(names(ctx)).not.toContain('quadraticCurveTo');
+      expect(names(ctx)).toContain('drawImage');
+      expect((ctx.log          ).some((c     ) => c[0] === 'arc' && c[3] === 3.5)).toBe(true); // the packet still moved
+      r.draw(scene, { x: 5, y: 0, zoom: 1 }, 600); // the camera moved: the lines are drawn again
+      expect(names(layerCtx)).toContain('stroke');
+      // A new scene (a selection, a layer, the theme, a proposal or a scenario step all build one) draws the lines again
+      const again = (fn) => { fn(); layerCtx.log.length = 0; r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 700); return names(layerCtx).includes('stroke'); };
+      const scene2 = buildScene(mk({ selectedNode: nodes[1], sceneVersion: 2 })); // the same selection, built again
+      expect(again(() => {})).toBe(true);
+      layerCtx.log.length = 0;
+      r.draw(scene2, { x: 5, y: 0, zoom: 1 }, 800);
+      expect(names(layerCtx)).not.toContain('stroke'); // and then holds
+      expect(again(() => r.resize(390, 844, 3))).toBe(true); // a resize or a new device pixel ratio
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('moves a packet with the time it is given and builds nothing', () => {
