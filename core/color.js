@@ -93,10 +93,18 @@ function hslToRgb(h, s, l) {
   return [f(0) * 255, f(8) * 255, f(4) * 255];
 }
 
-/** The arguments of rgb()/hsl(), comma or space syntax, as [a, b, c, alpha?] strings; null when the shape is wrong */
+/**
+ * The arguments of rgb()/hsl() as [a, b, c, alpha?] strings, in one of the two shapes a browser reads: commas throughout (`1, 2, 3, 0.5`), or
+ * spaces with the alpha after a slash (`1 2 3 / 0.5`). Null for any other shape (`1 2 3 4`, `1, 2 3`), which the browser does not draw either.
+ */
 function fnParts(args) {
-  const parts = args.trim().split(/\s*[,/]\s*|\s+/).filter(Boolean);
-  return parts.length === 3 || parts.length === 4 ? parts : null;
+  const t = args.trim();
+  if (t.includes(',')) {
+    const parts = t.split(/\s*,\s*/);
+    return (parts.length === 3 || parts.length === 4) && parts.every((p) => p && !/[\s/]/.test(p)) ? parts : null;
+  }
+  const m = /^(\S+)\s+(\S+)\s+([^\s/]+)(?:\s*\/\s*(\S+))?$/.exec(t);
+  return m && !m.slice(1, 4).some((p) => p.includes('/')) ? m.slice(1, m[4] === undefined ? 4 : 5) : null;
 }
 
 /** @returns {number[] | null} */

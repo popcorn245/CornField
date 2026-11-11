@@ -104,3 +104,20 @@ describe('cornfield validate: nodeColorWarnings', () => {
     expect(quoted('\u{1F600}'.repeat(50)).length).toBeLessThan(100); // cut by character, not through a surrogate pair
   });
 });
+
+describe('core/color.js reads what a browser reads (#231): validate and the map agree', () => {
+  it('reads all 148 CSS named colours, in any case, as the browser does', async () => {
+    // @ts-expect-error plain JS module, no declarations
+    const { readColor, toHex } = await import('../../core/color.js');
+    for (const [name, hex] of [['hotpink', '#ff69b4'], ['RebeccaPurple', '#663399'], ['lightgoldenrodyellow', '#fafad2'], ['darkslategrey', '#2f4f4f'], ['orange', '#ffa500']]) {
+      expect([name, toHex(readColor(name))]).toEqual([name, hex]);
+    }
+    expect(readColor('bluee')).toBeNull();
+  });
+  it('reads rgb() and hsl() only in the shapes a browser draws: commas throughout, or spaces with a slash before the alpha', async () => {
+    // @ts-expect-error plain JS module, no declarations
+    const { readColor } = await import('../../core/color.js');
+    for (const ok of ['rgb(1,2,3)', 'rgba(1, 2, 3, .5)', 'rgb(1 2 3 / 50%)', 'rgb(1 2 3/.5)', 'hsl(210 50% 40% / 0.5)', 'hsl(10, 50%, 50%)']) expect([ok, !!readColor(ok)]).toEqual([ok, true]);
+    for (const no of ['rgb(1 2 3 4)', 'rgb(1, 2 3)', 'rgb(1, 2, 3 / .5)', 'rgb(1 2 3 /)', 'rgb(1 2/3)']) expect([no, readColor(no)]).toEqual([no, null]);
+  });
+});
