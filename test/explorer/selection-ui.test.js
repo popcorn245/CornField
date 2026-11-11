@@ -178,3 +178,16 @@ describe('the camera (D6)', () => {
     expect(key('f').defaultPrevented).toBe(false);
   });
 });
+
+describe('accessibility (axe)', () => {
+  it('finds nothing wrong with the lines by kind, the switch, Frame them and the Key', async () => {
+    const { default: axe } = await import('axe-core');
+    mount();
+    await selectNode(pick('app'));
+    $('drawer-lines').querySelector('[data-lines-kind="ownership"]').click(); // a chip pressed: its list is open too
+    expect($('drawer-lines').querySelector('[data-corn="lines-switch"]')).not.toBeNull();
+    expect($('edge-key').querySelectorAll('svg[data-corn="swatch"]').length).toBeGreaterThan(5);
+    const r = await axe.run({ include: [['#drawer-lines'], ['#edge-key']] }, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] }, rules: { 'color-contrast': { enabled: false } } });
+    expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`)).toEqual([]);
+  });
+});
