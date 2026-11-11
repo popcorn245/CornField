@@ -60,7 +60,7 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     return { number: s.n, title: `Spec: ${title}`, state: 'open', draft: !!SPEC_LOOKS[s.n - SPEC_PR_FIRST]?.draft, user: user('agent-four'), labels: [{ name: 'spec' }], head: { ref: `spec/${s.slug}`, sha: s.sha }, base: { ref: 'main', sha: sha('main') }, html_url: `https://github.example.com/${REPO}/pull/${s.n}`, created_at: minutesAgo(600 - s.n * 10), updated_at: minutesAgo(30), merged_at: null };
   };
   const mockupsOf = (slug) => Object.keys(repoFiles).filter((f) => f.startsWith(`${FOLDER}/${slug}/`));
-  const state = { runner };
+  const state = { runner, checks: new Map() }; // `checks`: a spec PR's checks as the rig was told (GET /__rig/checks?pr=21&state=passed|running|failed|none); unset is one passed, one running
   const comments = new Map(); // issue or PR number -> the comments posted to it since the rig started
   let nextComment = 9900;
   // The reviews the looks above name, posted as comments (kept in memory, like the ones a maintainer posts while the rig runs)
@@ -80,6 +80,12 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     const target = key.slice(space + 1);
     const url = new URL(target, 'http://x');
     const p = decodeURIComponent(url.pathname);
+    if (p === '/__rig/checks') {
+      const pr = Number(url.searchParams.get('pr'));
+      const want = url.searchParams.get('state');
+      if (specs.some((x) => x.n === pr) && ['passed', 'running', 'failed', 'none', 'default'].includes(want)) { if (want === 'default') state.checks.delete(pr); else state.checks.set(pr, want); }
+      return { body: { checks: Object.fromEntries(state.checks) } };
+    }
     if (p === '/__rig/runner') {
       if (['online', 'offline', 'none'].includes(url.searchParams.get('state'))) { state.runner = /** @type {any} */ (url.searchParams.get('state')); touchRunner(); }
       return { body: { runner: state.runner } };
@@ -122,7 +128,18 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
       if (text !== undefined) return { headers: { 'content-type': 'application/vnd.github.raw; charset=utf-8' }, body: text };
     }
     if (method === 'GET' && (m = new RegExp(`^/repos/${REPO}/commits/([0-9a-f]{40})/(check-runs|status)$`).exec(rest)) && specs.some((s) => s.sha === m[1])) {
-      return m[2] === 'status' ? { body: { state: 'success', statuses: [], total_count: 0 } } : { body: { total_count: 2, check_runs: [{ id: 51, name: 'validate', status: 'completed', conclusion: 'success', html_url: `https://github.example.com/${REPO}/actions/runs/9/job/51`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/51`, app: { slug: 'github-actions' } }, { id: 52, name: 'docs', status: 'in_progress', conclusion: null, html_url: `https://github.example.com/${REPO}/actions/runs/9/job/52`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/52`, app: { slug: 'github-actions' } }] } };
+      if (m[2] === 'status') return { body: { state: 'success', statuses: [], total_count: 0 } };
+      const spec = specs.find((x) => x.sha === m[1]);
+      const mode = state.checks.get(spec.n) || 'default';
+      const run = (id, name, status, conclusion) => ({ id, name, status, conclusion, html_url: `https://github.example.com/${REPO}/actions/runs/9/job/${id}`, details_url: `https://github.example.com/${REPO}/actions/runs/9/job/${id}`, app: { slug: 'github-actions' } });
+      const sets = {
+        default: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'in_progress', null)],
+        passed: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'completed', 'success')],
+        running: [run(51, 'validate', 'completed', 'success'), run(52, 'docs', 'in_progress', null)],
+        failed: [run(51, 'validate', 'completed', 'success'), run(53, 'lint', 'completed', 'failure')],
+        none: [],
+      };
+      return { body: { total_count: sets[mode].length, check_runs: sets[mode] } };
     }
     // everything else: the recorded answers, as the server tests use them
     const recordedKey = `${method} ${rest}${url.search}`;

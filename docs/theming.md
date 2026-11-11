@@ -580,7 +580,7 @@ strings: { approve: 'Ship it', sendBack: 'Not yet', tabPulls: 'Builds' }
 
 **The Work panel's keys changed** (CF-42, the panel's tabs run in the order of the loop): `tabSpecs` is new, `tabAgents` is now `tabRuns` (Runs), and `tabNotes` is gone, because Release notes is no longer a tab but a "Release notes …" action at the foot of the PRs list. `tabPulls` keeps its name and now says "PRs". A config that still sets `tabAgents` or `tabNotes` is refused by `cornfield validate` with the key named, so rename `tabAgents` to `tabRuns` and delete `tabNotes`. With the panel on, the account menu's Proposals entry (`proposals-button`, `proposals-menu`) is hidden, since Specs lists the same proposals; without a forge or a sign-in there is no panel, and the entry is how the proposals are reached.
 
-Only labels a brand would want to voice are keys (about seventy). Sentences of help text, status lines and the forge's own errors stay as they are.
+Only labels a brand would want to voice are keys (about eighty). Sentences of help text, status lines and the forge's own errors stay as they are.
 
 <!-- strings:start -->
 | Key | Default |
@@ -604,6 +604,14 @@ Only labels a brand would want to voice are keys (about seventy). Sentences of h
 | `approve` | Approve |
 | `sendBack` | Send back |
 | `sendBackWithNote` | Send back with this note |
+| `approveAnyway` | Approve anyway |
+| `sendBackAnyway` | Send back anyway |
+| `undo` | Undo |
+| `approved` | Approved |
+| `myEdits` | My edits |
+| `yourEdits` | Your edits |
+| `cancelLanding` | Cancel landing |
+| `queueIt` | Queue it |
 | `reviewNoteLabel` | Note for the drafting agent |
 | `reviewNotePlaceholder` | What should change? |
 | `openSpecsList` | Open the Specs list |
@@ -639,13 +647,6 @@ Only labels a brand would want to voice are keys (about seventy). Sentences of h
 | `landIt` | Land it |
 | `startAgent` | Start an agent |
 | `askRunner` | Ask the runner |
-| `approveAnyway`, `sendBackAnyway` | the button while a question is asked in place: Approve anyway, Send back anyway |
-| `undo` | Undo, beside the button of a held press (5 seconds before anything is sent) |
-| `approved` | what Approve reads once an approval stands at the PR's head |
-| `myEdits` | the toggle beside Before / Diff / After that shows the map without your what-if edits |
-| `yourEdits` | the first group of the change list, "Your edits · 1": your what-if edits, counted apart from the proposal's changes |
-| `cancelLanding` | Cancel landing, in the decision foot while a landing waits |
-| `queueIt` | Queue it: what Ask the runner reads while no runner is online |
 | `startAgain` | Start again |
 | `stop` | Stop |
 | `continueRun` | Continue |

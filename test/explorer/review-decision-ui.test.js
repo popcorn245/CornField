@@ -21,6 +21,8 @@ import { initWhatIf, resetWhatIfForTests, getEdits } from '../../explorer/whatif
 // @ts-expect-error plain JS modules, no declarations
 import { initReview, resetReviewForTests, sendReview, TOKEN_KEY } from '../../explorer/review.js';
 // @ts-expect-error plain JS modules, no declarations
+import { yoursText } from '../../explorer/proposal-model.js';
+// @ts-expect-error plain JS modules, no declarations
 import { HOLD_MS } from '../../explorer/decision-model.js';
 
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
@@ -538,5 +540,71 @@ describe('what reading the facts costs', () => {
     open(robot(), '0013-meals', 'checkout');
     await advance(60_000);
     expect(s.reads()).toEqual([]);
+  });
+});
+
+describe('seeing the proposal without your edits, and counting them apart (D5)', () => {
+  const mine = () => $('proposal-myedits');
+  const chip = () => $('proposal-chip').textContent;
+  it('the toggle shows only when there are edits', async () => {
+    await openAndRead();
+    expect(mine().hidden).toBe(true);
+    addNode('/extra');
+    expect(mine().hidden).toBe(false);
+    expect(mine().getAttribute('aria-pressed')).toBe('true');
+    expect(mine().textContent).toBe('My edits');
+  });
+  it('off draws the proposal as written, keeps the edits, and Approve and Send back still carry them', async () => {
+    const s = await openAndRead();
+    addNode('/extra');
+    expect(state.nodes.some((n) => n.label === '/extra')).toBe(true);
+    click(mine());
+    expect(mine().getAttribute('aria-pressed')).toBe('false');
+    expect(state.nodes.some((n) => n.label === '/extra')).toBe(false);
+    expect(getEdits()).toHaveLength(1);
+    expect(line().textContent).toContain('Your 1 edit goes in the comment');
+    pressApprove();
+    await advance(HOLD_MS);
+    expect(s.puts()[0].body.edits).toHaveLength(1);
+    click(mine());
+    expect(state.nodes.some((n) => n.label === '/extra')).toBe(true);
+  });
+  it('off, the Edit tools say to turn it on, and change nothing', async () => {
+    await openAndRead();
+    addNode('/extra');
+    click($('proposal-edit'));
+    click(mine());
+    click(tool('add-node'));
+    expect(q('#whatif [data-msg="toolbar"]').textContent).toBe('Turn My edits on to edit.');
+    expect(q('[data-form="node"]')).toBeNull();
+    expect(getEdits()).toHaveLength(1);
+  });
+  it('the counts never mix: the proposal\'s stay the proposal\'s, the edits are "yours"', async () => {
+    await openAndRead();
+    const before = chip();
+    addNode('/extra');
+    expect(chip()).toContain(before);
+    expect(chip()).toContain('yours: +1 node');
+    click(mine());
+    expect(chip()).toContain('yours: +1 node (hidden)');
+    expect(yoursText([{ op: 'add-node' }, { op: 'add-node' }, { op: 'add-edge' }, { op: 'reword-step' }])).toBe('yours: +2 nodes, +1 edge, 1 step changed');
+    expect(yoursText([])).toBe('');
+  });
+  it('"Your edits · 1" is the first group of the change list, and Changes counts only the proposal\'s', async () => {
+    await openAndRead();
+    const before = q('#rc-changes-h [data-corn="count"]').textContent;
+    addNode('/extra');
+    const groups = [...document.querySelectorAll('#rc-changes > *')].map((el) => el.tagName);
+    expect(groups.slice(0, 3)).toEqual(['H3', 'H4', 'UL']);
+    expect(q('#rc-changes h4').textContent).toContain('Your edits');
+    expect(q('#rc-changes-h [data-corn="count"]').textContent).toBe(before);
+  });
+  it('a new node comes into view, said once', async () => {
+    await openAndRead();
+    const spy = vi.spyOn(Element.prototype, 'setAttribute');
+    addNode('/extra');
+    spy.mockRestore();
+    await advance(100);
+    expect(document.getElementById('map-announcer')?.textContent || '').toMatch(/\/extra/);
   });
 });

@@ -2347,6 +2347,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field… (explorer/search.js)"
+    },
+    {
+      "id": "core-explorer-decision-model",
+      "label": "decision-model.js",
+      "type": "core",
+      "file": "explorer/decision-model.js",
+      "summary": "The pure half of the decision (spec 0007): what the line above Approve says in this exact state (D1), whether a press is allowed, asks first or is refused (D2), the words of the hold (D3) and of wh…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of the decision (spec 0007): what the line above Approve says in this exact state (D1), whether a press is allowed, asks first or is refused (D2), the words of the hold (D3) and of wh… (explorer/decision-model.js)"
+    },
+    {
+      "id": "core-server-decision",
+      "label": "decision.js",
+      "type": "core",
+      "file": "server/decision.js",
+      "summary": "The facts the line above Approve is made from (spec 0007 D1): `GET /proposals/<slug>/decision?source=pull/<n>`, for the maintainer who is signed in, like the review routes.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The facts the line above Approve is made from (spec 0007 D1): `GET /proposals/<slug>/decision?source=pull/<n>`, for the maintainer who is signed in, like the review routes. (server/decision.js)"
     }
   ],
   "edges": [
@@ -7700,7 +7720,87 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-decision-model"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-decision"
+    },
+    {
+      "from": "core-explorer-decision-model",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-decision-model",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-decision-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-review-column",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-whatif",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-decision",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-decision",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-submit-review",
+      "to": "core-server-decision",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-11T19:10:41.509Z"
+  "updatedAt": "2026-11-11T19:31:36.896Z"
 }

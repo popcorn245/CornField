@@ -1441,8 +1441,8 @@ a.hx-proposal-source:focus-visible { outline: var(--corn-focus-width) solid var(
   .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-decision-line { display: none; } /* the note's sheet shows the send back line under the note, not Approve's */
 }
 @media (prefers-reduced-motion: reduce) { .hx-hold { display: none; } .hx-hold-fill { animation: none; } } /* only the words count down */
-.hx-rc-sub { margin: var(--corn-space-2) 0 var(--corn-space-1); font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-edit-text, var(--corn-text)); }
-.hx-proposal-yours { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-edit-text, var(--corn-text-2)); }
+.hx-rc-sub { margin: var(--corn-space-2) 0 var(--corn-space-1); font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text); }
+.hx-proposal-yours { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-text-2); }
 .hx-proposal-tools [aria-pressed="false"] { opacity: 0.8; }
 .hx-whatif-row [aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .hx-runner-dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--corn-space-1); border-radius: 50%; background: var(--corn-warn); vertical-align: middle; }

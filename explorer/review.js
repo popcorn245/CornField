@@ -182,7 +182,7 @@ function paint() {
   // The line is Approve's description (the question while one is asked); not on a PR it is the reason for both buttons
   const line = q('[data-review-line]');
   line.textContent = ui.key ? d.line : '';
-  line.hidden = !ui.key;
+  line.hidden = !ui.key || !!askText; // the question takes the line's place while one is asked
   const ask = q('[data-review-ask]');
   if (ask.textContent !== askText) ask.textContent = askText;
   ask.hidden = !askText;
