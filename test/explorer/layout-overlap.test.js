@@ -82,6 +82,51 @@ describe('a node with children of its own under a hub', () => {
   });
 });
 
+describe('odd shapes', () => {
+  const N = (id, type, r = 18) => ({ id, type, r, label: `${type} ${id}` });
+  const E = (from, to) => ({ from, to });
+  const kids = (p, n, type = 'external') => ({ nodes: Array.from({ length: n }, (_, i) => N(`${p}-${i}`, type)), edges: Array.from({ length: n }, (_, i) => E(p, `${p}-${i}`)) });
+  const map = (...parts) => {
+    const all = [{ nodes: [N('root', 'root', 30), N('tool', 'tool', 22), N('app', 'app', 24)], edges: [E('root', 'tool'), E('root', 'app')] }, kids('app', 12, 'page'), ...parts];
+    return { nodes: all.flatMap((p) => p.nodes), edges: all.flatMap((p) => p.edges) };
+  };
+  const parents = (n, k) => Array.from({ length: n }, (_, i) => [{ nodes: [N(`p${i}`, 'service', 20)], edges: [E('tool', `p${i}`)] }, kids(`p${i}`, k)]).flat();
+
+  it.each([1, 2, 7, 50, 300])('a non-hub parent with %i children', (k) => {
+    lay(map({ nodes: [N('st', 'store', 20)], edges: [E('tool', 'st')] }, kids('st', k)));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  // Their packs sit on one ring a chord apart, not an arc: with three or more large ones the arc was not enough
+  it.each([[2, 300], [3, 40], [3, 300], [5, 150], [7, 300]])('%i non-hub parents side by side, %i children each', (n, k) => {
+    lay(map(...parents(n, k)));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  it('children that have children, three levels down', () => {
+    const mid = parents(4, 5);
+    const deep = Array.from({ length: 4 }, (_, i) => Array.from({ length: 5 }, (_, j) => kids(`p${i}-${j}`, 6))).flat();
+    lay(map(...mid, ...deep));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  it('nodes with no parent, with and without children of their own', () => {
+    lay(map({ nodes: ['page', 'service', 'external', 'table', 'atom'].map((t, i) => N(`o${i}`, t)), edges: [] }, kids('o0', 10, 'service')));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  it('a parent that is not on the map, and a loop of parents, do not pile on the centre', () => {
+    lay(map({ nodes: [N('d1', 'page'), N('d2', 'page'), N('c1', 'service'), N('c2', 'service')], edges: [E('ghost', 'd1'), E('ghost', 'd2'), E('c1', 'c2'), E('c2', 'c1')] }, kids('c1', 5)));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+
+  it('children and grandchildren of a node on the data ring', () => {
+    lay(map({ nodes: [N('rom', 'rom'), N('st', 'store'), N('tb', 'table'), N('tb2', 'table')], edges: [E('tool', 'st'), E('st', 'tb')] },
+      kids('rom', 3, 'page'), kids('rom-0', 4), kids('rom-1', 4), kids('tb', 9, 'page'), kids('tb-0', 5)));
+    expect(overlaps(state.nodes)).toEqual([]);
+  });
+});
+
 describe.each([[1440, 900], [390, 844]])('the fit at %i x %i', (w, h) => {
   beforeAll(() => {
     lay(makeBig({ seed: 245 }).topology);
