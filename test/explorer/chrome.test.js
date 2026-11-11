@@ -230,7 +230,9 @@ describe('numbers have a hook and a face (F51)', () => {
   });
 
   it('sets numbers in --corn-font-num, with tabular figures', () => {
-    expect(css).toMatch(/\.hx-count, [^{]*\.hx-forge-count[^{]*\.hx-num \{ font-family: var\(--corn-font-num\); font-variant-numeric: tabular-nums; \}/);
+    expect(css).toMatch(/\.hx-count, [^{]*\.hx-forge-count[^{]*\.hx-row-meta \{ font-family: var\(--corn-font-num\); font-variant-numeric: tabular-nums; \}/);
+    // and no earlier rule still names the code face for them (it would only be overridden)
+    for (const sel of ['.hx-count', '.hx-forge-lit', '.hx-ms']) expect(css, sel).not.toMatch(new RegExp(`\\n\\${sel} \\{[^}]*--corn-mono`));
   });
 });
 
@@ -254,6 +256,8 @@ describe('what a flat brand reaches (F49) and what never clips or moves (F54, F5
     expect(rule('.hx-input')).not.toContain('url(');
     expect(css).toMatch(/\.hx-mobile-search::before \{[^}]*background: var\(--corn-text-3\);[^}]*mask:/);
     expect(css).toMatch(/\.hx-proposal-mode::after \{[^}]*background: currentColor;[^}]*mask:/);
+    // Forced colours repaint backgrounds: the two masked icons take the system text colour there, or they would vanish
+    expect(css).toMatch(/@media \(forced-colors: active\) \{\s*\.hx-mobile-search::before, \.hx-proposal-mode::after \{ background: CanvasText; \}/);
     expect(css).not.toMatch(/\.hx-proposal-mode::after \{[^}]*border:/);
     expect(css).not.toMatch(/\.hx-proposal-mode::after \{[^}]*border-width/);
   });

@@ -130,7 +130,7 @@ h1, h2, h3, p { margin: 0; }
 .hx-work { display: inline-flex; align-items: center; gap: var(--corn-space-2); height: 32px; padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 600; white-space: nowrap; }
 .hx-work:hover { background: var(--corn-surface-3); color: var(--corn-text); }
 .hx-work[aria-expanded="true"] { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); }
-.hx-forge-lit { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: var(--corn-ground); color: var(--corn-warn); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); }
+.hx-forge-lit { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: var(--corn-ground); color: var(--corn-warn); font-size: var(--corn-text-2xs); }
 
 /* The account button: the initial of who is signed in (a menu glyph when nobody is) */
 .hx-account-btn { display: inline-flex; align-items: center; gap: var(--corn-space-3); height: 32px; padding: 0 var(--corn-space-2) 0 var(--corn-space-1); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); }
@@ -286,7 +286,7 @@ h1, h2, h3, p { margin: 0; }
 .hx-toggle-row.is-off .hx-dot { transform: scale(0.75); opacity: 0.4; }
 .hx-toggle-name { font-size: var(--corn-text-xs); font-weight: 500; color: var(--corn-text-2); }
 .hx-toggle-row.is-off .hx-toggle-name { color: var(--corn-text-3); text-decoration: line-through; }
-.hx-count { padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-xs); background: var(--corn-surface-3); color: var(--corn-text-2); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); }
+.hx-count { padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-xs); background: var(--corn-surface-3); color: var(--corn-text-2); font-size: var(--corn-text-2xs); }
 .hx-toggle-row.is-off .hx-count { background: color-mix(in srgb, var(--corn-ground) 40%, transparent); color: var(--corn-text-3); }
 .hx-tick { font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-ok); }
 .hx-toggle-row.is-off .hx-tick { color: var(--corn-text-3); }
@@ -362,7 +362,7 @@ h1, h2, h3, p { margin: 0; }
 .hx-field { width: 100%; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text-2); font-family: var(--corn-mono); font-size: var(--corn-text-xs); }
 .hx-sim-result { font-size: var(--corn-text-xs); }
 .hx-error-text { padding-top: var(--corn-space-3); color: var(--corn-bad); }
-.hx-ms { width: 56px; flex: none; text-align: right; font-family: var(--corn-mono); color: var(--corn-hue-fuchsia); }
+.hx-ms { width: 56px; flex: none; text-align: right; color: var(--corn-hue-fuchsia); }
 .hx-file { padding: calc(var(--corn-space-1) / 2) 0; }
 
 .hx-sandbox { display: flex; flex-direction: column; gap: var(--corn-space-4); padding: var(--corn-space-5); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); }
@@ -1019,7 +1019,11 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
 /* The Work tabs scroll sideways: a tab brought into view stops short of the edge by the strip's own padding */
 .hx-forge-tabs { scroll-padding-inline: var(--corn-space-4); }
 /* Numbers shown as data take the number face (a brand sets --corn-font-num; digits in a pixel face misread) */
-.hx-count, .hx-layers-count, .hx-forge-count, .hx-forge-lit, .hx-player-count, .hx-ms, .hx-row-meta, .hx-num { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+.hx-count, .hx-layers-count, .hx-forge-count, .hx-forge-lit, .hx-player-count, .hx-ms, .hx-row-meta { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+/* Windows high contrast (forced colours) repaints backgrounds, which would leave a masked icon the colour of the page: draw it in the text colour */
+@media (forced-colors: active) {
+  .hx-mobile-search::before, .hx-proposal-mode::after { background: CanvasText; }
+}
 /* No panel, sheet or menu slides, and nothing fades or grows, for a viewer who asked for less motion */
 @media (prefers-reduced-motion: reduce) {
   .hx-drawer, .hx-forge, .hx-input, .hx-btn, .hx-dot, .hx-sheet, .hx-menu, .hx-dock > .hx-sheet { transition: none; animation: none; }
