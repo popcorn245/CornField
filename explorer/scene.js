@@ -544,9 +544,9 @@ export const groupOf = (node) => (node.type === 'floor' || node.type === 'room' 
 /**
  * A node's fill before any theme token: its own `color` when that is a colour the browser reads, else its type's fill in NODE_THEMES (the
  * built-in the map's fill order ends on, core/layers.js `mapFillNames`). Checked here, once, so WebGL and Canvas 2D are given the same valid
- * fill and project data never reaches a shader or a `fillStyle` unchecked.
+ * fill and project data never reaches a shader or a `fillStyle` unchecked. The Layers menu's dot of a project layer reads it too (layers.js).
  */
-const fillOfNode = (node) => nodeColor(node.color) ?? (NODE_THEMES[node.type] || NODE_THEMES.external).color;
+export const fillOfNode = (node) => nodeColor(node.color) ?? (NODE_THEMES[node.type] || NODE_THEMES.external).color;
 
 function buildNodes(state, subgraph) {
   const { nodes, selectedNode, searchQuery } = state;

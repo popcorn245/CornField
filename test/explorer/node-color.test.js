@@ -81,3 +81,31 @@ describe('buildScene: a node with a colour the browser reads', () => {
     expect(sceneOf('rgb(51, 102, 153)').nodes[0].color).toBe('rgb(51, 102, 153)');
   });
 });
+
+describe('a proposal\'s node colour goes through the same check (#231)', () => {
+  const nodes = [
+    { id: 'add', type: 'table', x: 0, y: 0, r: 20, label: 'add', mark: 'added', color: '#12345' },
+    { id: 'chg', type: 'table', x: 50, y: 0, r: 20, label: 'chg', mark: 'changed', color: '#336699', before: { color: 'bluee' } },
+    { id: 'bad', type: 'service', x: 99, y: 0, r: 20, label: 'bad', mark: 'changed', color: 'url(https://evil/x.png)', before: { color: '#336699' } },
+  ];
+  const sceneIn = (proposalView) => buildScene({
+    nodes, edges: [], view: 'orbit', flow: null, rings: { rings: [], clusters: [] }, selectedNode: null, searchQuery: '', isFreeform: false,
+    activeLayers: { ...layers, service: true }, scenario: null, sceneVersion: 1, theme: 'dark', proposal: { id: 'p' }, proposalView,
+  });
+  const colours = (view) => Object.fromEntries(sceneIn(view).nodes.map((n) => [n.id, n.color]));
+  it('Diff and After draw what the proposal sets, checked; Before draws what was there, checked', () => {
+    for (const view of ['diff', 'after']) expect(colours(view)).toMatchObject({ add: typeFill, chg: '#336699', bad: NODE_THEMES.service.color });
+    expect(colours('before')).toMatchObject({ chg: typeFill, bad: '#336699' });
+  });
+});
+
+describe('a theme token still beats a node\'s own colour, good, bad or missing (core/layers.js mapFillNames)', () => {
+  let version = 100;
+  const style = (values) => ({ version: ++version, values, strokeWidth: 1.5, icons: null, pixelated: false, plain: false });
+  it.each([['#336699'], ['#12345'], [undefined], ['hotpink']])('colour %s', (color) => {
+    const s = sceneOf(color, { kind: 'audit' });
+    expect(M.styledScene(s, style({ '--corn-map-node-table': '#abcdef' })).nodes[0].color).toBe('#abcdef');
+    expect(M.styledScene(s, style({ '--corn-map-group-table': '#123456' })).nodes[0].color).toBe('#123456');
+    expect(M.styledScene(s, style({ '--corn-map-node-table': '#abcdef', '--corn-map-kind-table-audit': '#fedcba' })).nodes[0].color).toBe('#fedcba');
+  });
+});

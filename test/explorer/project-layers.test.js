@@ -10,6 +10,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadSample, explorerPage } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
+import { parseColor, themed } from '../../explorer/theme-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { NODE_THEMES } from '../../core/schema.js';
+// @ts-expect-error plain JS modules, no declarations
 import { buildTopology, EXAMPLE_LAYERS } from '../fixtures/big/make.js';
 // @ts-expect-error plain JS modules, no declarations
 import { state } from '../../explorer/state.js';
@@ -357,13 +361,14 @@ describe('a hostile config cannot reach markup, a style or a selector', () => {
     expect(row('constructor').querySelector('[data-corn="layer-note"]')).toBeNull();
     expect(row('constructor').textContent).not.toContain('function');
   });
-  it('a node colour that is not a colour never reaches the dot\'s style (a project layer\'s dot is its first node\'s colour)', () => {
+  it('a node colour that is not a colour never reaches the dot\'s style: a project layer\'s dot is its first node\'s fill, its type\'s when the colour is bad (#231)', () => {
     for (const theme of ['dark', 'light']) {
       const odd = [node('root', 'root'), node('a', 'service', { kind: 'timer', color: 'red" onmouseover="alert(1)" data-x="' })];
       Object.assign(state, { nodes: odd, edges: [], theme, view: 'orbit', runsMap: null, proposal: null });
       setProjectLayers({ add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] });
       expect(document.querySelector('#layer-toggles-container [onmouseover]'), theme).toBeNull();
-      expect(row('ok').querySelector('[data-corn="swatch"]').getAttribute('style')).toContain('#94a3b8'.slice(0, theme === 'dark' ? 7 : 1));
+      const want = parseColor(themed(NODE_THEMES.service.color, theme));
+      expect(parseColor(row('ok').querySelector('[data-corn="swatch"]').style.backgroundColor).map(Math.round), theme).toEqual(want.map(Math.round));
     }
   });
   it('a label with a line break is refused whole', () => {

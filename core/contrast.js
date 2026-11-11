@@ -310,7 +310,7 @@ function origin(props, name) {
   return at;
 }
 
-const READS = 'hex, rgb(), hsl(), color-mix(in srgb, …), transparent and the basic colour names';
+const READS = 'hex, rgb(), hsl(), color-mix(in srgb, …), transparent and the CSS named colours';
 
 /**
  * A token (`--corn-text`) or a value (`color-mix(…)`) as `[r, g, b, a]`, or `{ problem }` naming the custom property that could not

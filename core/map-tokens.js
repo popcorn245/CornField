@@ -89,23 +89,83 @@ export function layerTokenWarnings(config, map) {
   return out;
 }
 
-/** How many bad node colours are named one by one: past this, one line counts the rest */
+/** How many node colours are named one by one, per kind of line: past this, one line counts the rest */
 export const MAX_NODE_COLOR_WARNINGS = 10;
 const SHOWN_CHARS = 40;
 
+/** What JSON leaves as it is but a terminal must not get raw: DEL and the C1 controls, and the invisible and bidirectional marks */
+const UNSEEN = new RegExp('[\\u007f-\\u009f\\u00ad\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]', 'g');
+
 /**
- * A warning per node whose own `color` is not one the map can draw (a typo, `#12345`, an empty string, a number): the map draws that node in its
- * type's fill instead (explorer/scene.js `buildScene`). Named as text (quoted, cut to SHOWN_CHARS), at most MAX_NODE_COLOR_WARNINGS lines, then a count.
- * Validate has no browser, so it reads with core/color.js: hex of 3, 4, 6 or 8 digits, rgb()/rgba(), hsl()/hsla(), transparent, the basic colour names,
- * color-mix(in srgb). The browser reads more (every named colour, hwb(), lab(), oklch(), color(), color-mix in other spaces), so a node colour in one of
- * those is warned here though the browser draws it: the stricter side, and only a warning.
+ * Project text as a terminal may print it: JSON-quoted (so a line break, an escape character and every other C0 control is `\n`, `\u001b`,
+ * ...), cut to `max` characters, and with the controls JSON leaves alone made visible too (DEL, the C1 controls such as U+009B, which some
+ * terminals read as an escape, and the invisible and bidirectional marks that could make a line read as something it is not).
+ * @param {unknown} v
+ * @param {number} [max]
+ * @returns {string}
+ */
+export function quoted(v, max = SHOWN_CHARS) {
+  let t;
+  try { t = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v); } catch { t = String(v); }
+  const chars = Array.from(t);
+  if (chars.length > max) t = `${chars.slice(0, max).join('')}...`;
+  return JSON.stringify(t).replace(UNSEEN, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** Colour functions a current browser reads that core/color.js does not work out (it reads rgb() and hsl() only in their plainer forms) */
+const UNCHECKED_FN = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i;
+/** The CSS system colours (CSS Color 4, with the deprecated ones browsers still read): the map draws them, in the colour the device gives */
+const SYSTEM_COLORS = new Set(('accentcolor accentcolortext activetext buttonborder buttonface buttontext canvas canvastext field fieldtext graytext highlight '
+  + 'highlighttext linktext mark marktext selecteditem selecteditemtext visitedtext activeborder activecaption appworkspace background buttonhighlight '
+  + 'buttonshadow captiontext inactiveborder inactivecaption inactivecaptiontext infobackground infotext menu menutext scrollbar threeddarkshadow '
+  + 'threedface threedhighlight threedlightshadow threedshadow window windowframe windowtext').split(' '));
+
+/**
+ * How `cornfield validate` can speak of a node's own `color`, which the map checks in the browser (explorer/css-color.js `nodeColor`):
+ * - `ok`: core/color.js reads it (hex, rgb(), hsl(), the 148 names, transparent, color-mix in srgb), so the browser does too;
+ * - `unchecked`: the shape of a colour a current browser reads that core/color.js cannot work out (`oklch()`, `lab()`, `hwb()`, `color()`,
+ *   `color-mix()` in another space, rgb()/hsl() in a newer form, a system colour): the map draws it if it is valid, else the type's fill;
+ * - `bad`: no browser's map draws it (a typo, `#12345`, an empty string, a number, `currentcolor`, `var()`, `light-dark()`, which a canvas
+ *   does not read, text over MAX_NODE_COLOR_CHARS): the map draws the type's fill.
+ * @param {unknown} value a node's `color`, not undefined
+ * @returns {'ok' | 'unchecked' | 'bad'}
+ */
+export function nodeColorClass(value) {
+  if (typeof value !== 'string' || value.length > MAX_NODE_COLOR_CHARS) return 'bad';
+  const s = value.trim();
+  if (!s || /currentcolor|light-dark\(|var\(|env\(|attr\(/i.test(s)) return 'bad'; // the map never draws these (explorer/css-color.js)
+  if (readColor(s)) return 'ok';
+  if (UNCHECKED_FN.test(s) && s.endsWith(')')) return 'unchecked';
+  return SYSTEM_COLORS.has(s.toLowerCase()) ? 'unchecked' : 'bad';
+}
+
+const nodesWithColor = (map, kind) => ((map && map.nodes) || []).filter((n) => n && n.color !== undefined && nodeColorClass(n.color) === kind);
+const capped = (nodes, line, rest) => {
+  const out = nodes.slice(0, MAX_NODE_COLOR_WARNINGS).map(line);
+  if (nodes.length > MAX_NODE_COLOR_WARNINGS) out.push(rest(nodes.length - MAX_NODE_COLOR_WARNINGS, nodes.length));
+  return out;
+};
+
+/**
+ * A warning per node whose own `color` no browser's map draws (nodeColorClass `bad`): the map draws that node in its type's fill instead
+ * (explorer/scene.js `buildNodes`). The id and the value are printed as quoted text (`quoted`), at most MAX_NODE_COLOR_WARNINGS lines, then a count.
  * @param {{ nodes?: { id?: unknown, color?: unknown }[] } | null} map the committed map
  * @returns {string[]}
  */
 export function nodeColorWarnings(map) {
-  const bad = ((map && map.nodes) || []).filter((n) => n && n.color !== undefined && !(typeof n.color === 'string' && n.color.length <= MAX_NODE_COLOR_CHARS && readColor(n.color)));
-  const text = (v) => { const t = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v); return JSON.stringify(t.length > SHOWN_CHARS ? `${t.slice(0, SHOWN_CHARS)}...` : t); };
-  const out = bad.slice(0, MAX_NODE_COLOR_WARNINGS).map((n) => `node ${text(n.id)} has color ${text(n.color)}, which is not a colour the map reads: it draws in its type's fill. Write #rrggbb, rgb(), rgba() or hsl().`);
-  if (bad.length > MAX_NODE_COLOR_WARNINGS) out.push(`${bad.length - MAX_NODE_COLOR_WARNINGS} more nodes have a color the map does not read (${bad.length} in all): they draw in their type's fill.`);
-  return out;
+  return capped(nodesWithColor(map, 'bad'),
+    (n) => `node ${quoted(n.id)} has color ${quoted(n.color)}, which is not a colour the map reads: it draws in its type's fill. Write #rrggbb, rgb(), rgba() or hsl().`,
+    (more, all) => `${more} more nodes have a color the map does not read (${all} in all): they draw in their type's fill.`);
+}
+
+/**
+ * A note per node whose own `color` validate cannot check (nodeColorClass `unchecked`: `oklch()`, `lab()`, a system colour, ...). Not a
+ * warning: a current browser draws a valid one, and only an invalid one falls back to the type's fill. Same form and cap as the warnings.
+ * @param {{ nodes?: { id?: unknown, color?: unknown }[] } | null} map the committed map
+ * @returns {string[]}
+ */
+export function nodeColorNotes(map) {
+  return capped(nodesWithColor(map, 'unchecked'),
+    (n) => `node ${quoted(n.id)} has color ${quoted(n.color)}, which validate cannot check: a current browser draws it if it is a valid colour, else the node draws in its type's fill.`,
+    (more, all) => `${more} more nodes have a color validate cannot check (${all} in all).`);
 }

@@ -182,12 +182,14 @@ describe('a colour never becomes markup', () => {
     show({ nodes: odd, __layers: { add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] } });
     expect(document.querySelector('#layer-toggles-container [onmouseover]')).toBeNull();
     expect(dotOf('ok').style.backgroundColor).not.toContain('onmouseover');
+    same(fillOfDot(dotOf('ok')), mapFill('a')); // the map draws that node in its type's fill (#231), and so does its dot
   });
-  it('a node colour that only looks like one (five hex digits, an rgb() of a thousand numbers) is the grey, and short', () => {
-    for (const bad of ['#12345', `rgb(${'1,'.repeat(4999)}1)`, 'rgb(1, 2, 3); background: url(x)']) {
+  it('a node colour that only looks like one (five hex digits, an rgb() of a thousand numbers) is its type\'s fill, as on the map (#231), and short', () => {
+    for (const bad of ['#12345', `rgb(${'1,'.repeat(4999)}1)`, 'rgb(1, 2, 3); background: url(x)', '', 42, null]) {
       const odd = [node('root', 'root'), node('a', 'service', { kind: 'timer', color: bad })];
       show({ nodes: odd, __layers: { add: [{ key: 'ok', label: 'Ok', match: { type: 'service' } }] } });
-      same(fillOfDot(dotOf('ok')), parseColor('#94a3b8'));
+      same(fillOfDot(dotOf('ok')), parseColor(NODE_THEMES.service.color));
+      same(fillOfDot(dotOf('ok')), mapFill('a'));
       expect(dotOf('ok').getAttribute('style').length).toBeLessThan(120);
     }
   });

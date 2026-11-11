@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 // @ts-expect-error plain JS module, no declarations
-import { mapTokenWarnings, nodeColorWarnings, MAX_NODE_COLOR_WARNINGS } from '../../core/map-tokens.js';
+import { mapTokenWarnings, nodeColorClass, nodeColorNotes, nodeColorWarnings, quoted, MAX_NODE_COLOR_WARNINGS } from '../../core/map-tokens.js';
 import { CORNFIELD } from '../helpers.js';
 
 const dirs = [];
@@ -66,7 +66,41 @@ describe('cornfield validate: nodeColorWarnings', () => {
     expect(w).toHaveLength(MAX_NODE_COLOR_WARNINGS + 1);
     expect(w.at(-1)).toContain('990 more');
   });
-  it('is stricter than the browser: a colour name or oklch() the browser reads is warned about', () => {
-    expect(nodeColorWarnings(map(['hotpink', 'oklch(60% 0.1 200)']))).toHaveLength(2);
+  it('never says a colour the browser draws falls back: every CSS name is read, and the forms only a browser works out get a note, not a warning', () => {
+    // The 148 names, any case: the browser draws each, so validate is quiet
+    expect(nodeColorWarnings(map(['hotpink', 'RebeccaPurple', 'cornflowerblue', 'lightgoldenrodyellow', 'darkslategrey']))).toEqual([]);
+    expect(nodeColorNotes(map(['hotpink', 'rebeccapurple']))).toEqual([]);
+    // Drawn by a current browser, but not worked out here: a note that says so, never the warning
+    const modern = ['oklch(60% 0.1 200)', 'oklab(0.6 0.1 0.1)', 'lab(50% 20 30)', 'lch(50% 30 200)', 'hwb(10 20% 30%)', 'color(display-p3 1 0 0)',
+      'color-mix(in oklch, red, blue)', 'rgb(from red r g b)', 'hsl(120 50 50)', 'hsl(0.5turn 50% 50%)', 'rgb(none 0 0)', 'Canvas', 'ButtonText'];
+    for (const c of modern) expect([c, nodeColorClass(c)]).toEqual([c, 'unchecked']);
+    expect(nodeColorWarnings(map(modern))).toEqual([]);
+    const notes = nodeColorNotes(map(modern));
+    expect(notes).toHaveLength(MAX_NODE_COLOR_WARNINGS + 1);
+    expect(notes[0]).toBe('node "n0" has color "oklch(60% 0.1 200)", which validate cannot check: a current browser draws it if it is a valid colour, else the node draws in its type\'s fill.');
+    expect(notes.at(-1)).toContain('3 more');
+    for (const n of notes) expect(n).not.toContain('it draws in its type\'s fill.');
+  });
+  it('keeps the firm warning for what no browser\'s map draws', () => {
+    const bad = ['#12345', 'bluee', '', '   ', 'not a colour', 'currentcolor', 'var(--x)', 'light-dark(red, blue)', 'color-mix(in srgb, currentcolor, red)', 'auto', 'inherit', 'url(x)', 'expression(alert(1))', 'oklch(60% 0.1 200', 'x'.repeat(10000)];
+    for (const c of bad) expect([c.slice(0, 30), nodeColorClass(c)]).toEqual([c.slice(0, 30), 'bad']);
+    for (const c of [7, null, {}, ['#fff'], true]) expect(nodeColorClass(c)).toBe('bad');
+    expect(nodeColorWarnings(map(['bluee', '#12345']))).toEqual([
+      'node "n0" has color "bluee", which is not a colour the map reads: it draws in its type\'s fill. Write #rrggbb, rgb(), rgba() or hsl().',
+      'node "n1" has color "#12345", which is not a colour the map reads: it draws in its type\'s fill. Write #rrggbb, rgb(), rgba() or hsl().',
+    ]);
+    expect(nodeColorNotes(map(bad))).toEqual([]);
+  });
+  it('prints a node\'s id and colour as inert text: no escape sequence, line break, C1 control or bidi mark reaches the terminal raw', () => {
+    const evil = '\u001b]0;pwned\u0007\u001b[2J\r\nwarning: all good\u009b31m\u202etxt.exe\u007f';
+    const [w] = nodeColorWarnings({ nodes: [{ id: evil, color: evil }] });
+    expect(w).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e]/);
+    expect(w).toContain('\\u001b');
+    expect(w).toContain('\\u009b');
+    expect(w).toContain('\\u202e');
+    expect(w.split('\n')).toHaveLength(1);
+    expect(quoted('a"b')).toBe('"a\\"b"');
+    expect(quoted({ a: 1 })).toBe('"{\\"a\\":1}"');
+    expect(quoted('\u{1F600}'.repeat(50)).length).toBeLessThan(100); // cut by character, not through a surrogate pair
   });
 });

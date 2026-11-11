@@ -15,7 +15,7 @@ import { onThemeChange } from './theme.js';
 import { NODE_THEMES } from '../core/schema.js';
 import { STARTING_LAYERS, clientLayers, kindLetters, orderRows, startingLayerOf } from '../core/layers.js';
 import { rowKeyOf, shownByProposal } from './layer-model.js';
-import { groupOf, layerShows } from './scene.js';
+import { fillOfNode, groupOf, layerShows } from './scene.js';
 import { STROKE_TOKEN, cssColor, fillOf, getMapStyle, kindToken, onMapStyleChange, pageReader, setMapSubjects } from './map-style.js';
 import { over, parseColor, contrast } from '../core/color.js';
 import { DARK_GROUND, LIGHT_GROUND } from './theme-model.js';
@@ -146,7 +146,7 @@ function layerRows() {
   });
   const projectDot = (l) => {
     const first = state.nodes.find((n) => rowKeyOf(state, n) === l.key);
-    return { color: rowColor(first ? { type: first.type, layer: l.key, group: groupOf(first) } : { type: l.key, layer: l.key }, first ? first.color : NO_COLOR) };
+    return { color: rowColor(first ? { type: first.type, layer: l.key, group: groupOf(first) } : { type: l.key, layer: l.key }, first ? fillOfNode(first) : NO_COLOR) };
   };
   const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, ...projectDot(l) }));
   // A starting row a project layer has taken every node from goes (spec 0009 D7, example 3); with no project layer, every starting row stays, as it always was
