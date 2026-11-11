@@ -13,6 +13,20 @@ import { EXPLORER } from '../helpers.js';
 
 const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
+/** A selector list split at its top-level commas (not those inside :where(…) or :is(…)) */
+function splitList(head) {
+  const out = []; let depth = 0; let cur = '';
+  for (const ch of head) {
+    if (ch === '(') depth++; else if (ch === ')') depth--;
+    if (ch === ',' && !depth) { out.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  return out.concat(cur.trim()).filter(Boolean);
+}
+/** A selector's specificity as [ids, classes, types], what is inside :where() counting nothing */
+function specificity(sel) {
+  const s = sel.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, '').replace(/::?[a-z-]+\(|\)/g, (m) => (m === ')' ? '' : m.startsWith('::') ? ' ' : ' .x '));
+  return [(s.match(/#[\w-]+/g) || []).length, (s.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length, (s.match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length];
+}
 /** Every rule as { selectors, body, media }, in file order, the at-rules they sit in flattened to a string */
 function rules(text) {
   const out = [];
@@ -26,7 +40,7 @@ function rules(text) {
       while (j < src.length && depth) { if (src[j] === '{') depth++; else if (src[j] === '}') depth--; j++; }
       const body = src.slice(open + 1, j - 1);
       if (head.startsWith('@media')) walk(body, `${media} ${head}`.trim());
-      else if (!head.startsWith('@')) out.push({ selectors: head.split(',').map((s) => s.trim()), body, media });
+      else if (!head.startsWith('@')) out.push({ selectors: splitList(head), body, media });
       i = j;
     }
   };
@@ -66,8 +80,8 @@ describe('the panel title is one style', () => {
   });
 });
 
-describe('a bar\'s controls are one height, --corn-control-height', () => {
-  const TOKEN = 'var(--corn-control-height)';
+describe('a bar\'s controls are one height, --corn-control-height (read through --hx-control, never under 44px on a phone)', () => {
+  const TOKEN = 'var(--hx-control)';
   // [what, selector, property]: the controls of the header, the proposal bar, the decision foot, the player and the Work panel's top row
   const READS = [
     ['the header: the Layers chip', '.hx-layers-chip', 'height'],
@@ -77,12 +91,11 @@ describe('a bar\'s controls are one height, --corn-control-height', () => {
     ['the proposal bar: Edit and My edits', '.hx-proposal-tools .hx-btn', 'height'],
     ['the proposal bar: the more button', '.hx-proposal-more .hx-btn--icon', 'height'],
     ['the decision foot: Send back and Approve', '.hx-proposal-actions .hx-btn', 'height'],
-    ['the player: Previous, Play and Next', '.hx-player-controls .hx-btn', 'height'],
-    ['the player: Check again, beside the "As" menu', '.hx-player-as .hx-btn', 'height'],
+    ['the player: Previous, Play and Next', ':where(.hx-forge-head, .hx-player-controls, .hx-player-as) .hx-btn', 'height'],
     ['the player: the speed', '.hx-player-speed', 'height'],
     ['the player: Close', '.hx-player .hx-close', 'height'],
     ['the Work panel: Close', '.hx-close', 'height'],
-    ['the Work panel: Refresh', '.hx-forge-head .hx-btn', 'height'],
+
     ['the Work panel: a tab', '.hx-forge-tab', 'min-height'],
     ['the account menu: the named theme select', '.hx-account-select', 'height'],
   ];
@@ -93,10 +106,26 @@ describe('a bar\'s controls are one height, --corn-control-height', () => {
   it('makes a segmented control one height outside as well: its buttons are the token less the frame', () => {
     for (const sel of ['.hx-seg-btn', '.hx-view-btn', '.hx-account-seg-btn']) expect(declared(sel, 'height'), sel).toBe('var(--hx-seg-inner)');
     const inner = declared(':root', '--hx-seg-inner');
-    expect(inner).toContain('var(--corn-control-height)');
+    expect(inner).toContain('var(--hx-control)');
     expect(inner).toContain('var(--corn-border)');
     // the frame is two thirds of a step of padding and two borders, so the outside of the control is the token
     for (const sel of ['.hx-seg', '.hx-view', '.hx-account-seg']) expect(declared(sel, 'padding'), sel).toBe('calc(var(--corn-space-1) / 2)');
+  });
+
+  it('reads the token only through --hx-control, which a phone floors at 44px: a brand that sets the token on :root (36px, say) cannot shrink a phone\'s targets', () => {
+    expect(declared(':root', '--hx-control')).toBe('var(--corn-control-height)');
+    const phone = ALL.filter((r) => /max-width: 767px/.test(r.media) && r.selectors.includes(':root') && /--hx-control\s*:/.test(r.body));
+    expect(phone.map((r) => r.body.trim())).toEqual(['--hx-control: max(44px, var(--corn-control-height));']);
+    // no other rule reads the token itself, so none can bypass the floor
+    const direct = ALL.filter((r) => /var\(--corn-control-height\)/.test(r.body) && !/--hx-control\s*:/.test(r.body));
+    expect(direct.map((r) => r.selectors.join(', '))).toEqual([]);
+  });
+
+  it('gives its rules no more weight than one class (an ancestor is in :where()), so a brand\'s [data-corn] hook still wins', () => {
+    const block = css.slice(css.indexOf(':root { --hx-control'));
+    const heavy = rules(block).flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
+    expect(heavy).toEqual([]);
+    expect(block).not.toMatch(/!important/);
   });
 
   it('writes no literal height of 24 to 36px on a control of those bars outside a phone\'s media query', () => {
@@ -123,21 +152,38 @@ describe('the panels share their padding and head height', () => {
 describe('a label is one style, the small uppercase kind', () => {
   const LABEL = ['font-size: var(--corn-text-2xs)', 'font-weight: 700', 'text-transform: uppercase', 'letter-spacing: 0.05em'];
   it('is the same on the menu title, the sandbox title, a field, the search groups and a persona', () => {
-    for (const sel of ['.hx-menu-title', '.hx-sandbox-title', '.hx-forge-field', '.hx-search-group-title', '.hx-persona-name']) {
+    for (const sel of ['.hx-menu-title', '.hx-sandbox-title', '.hx-forge-field', '.hx-search-group-title']) {
       const r = ALL.filter((x) => !x.media && x.selectors.includes(sel)).map((x) => x.body).join(';');
       for (const d of LABEL) expect(r, `${sel} ${d}`).toContain(d);
     }
   });
+
+  it('leaves a persona\'s name in its own words (sentence case, as since 0.39.0): it names people, it is not a label', () => {
+    const r = ALL.filter((x) => x.selectors.includes('.hx-persona-name')).map((x) => x.body).join(';');
+    expect(r).not.toContain('text-transform');
+    expect(r).toContain('font-size: var(--corn-text-xs)');
+  });
 });
 
-describe('"pressed" is one look: the accent fill, its text and a heavier weight', () => {
+describe('"pressed" is one look: the accent fill and its text, with no shadow', () => {
   it('is the same on the View switch, the Before / Diff / After control and the theme control', () => {
     for (const sel of ['.hx-view-btn[aria-pressed="true"]', '.hx-account-seg-btn[aria-pressed="true"]', '.hx-seg-btn[aria-pressed="true"]']) {
       const r = ALL.filter((x) => !x.media && x.selectors.includes(sel)).map((x) => x.body).join(';');
       expect(r, sel).toContain('background: var(--corn-accent)');
       expect(r, sel).toContain('color: var(--corn-text-on-accent)');
-      expect(r, sel).toContain('font-weight: 600');
       expect(r, sel).not.toContain('box-shadow');
     }
+  });
+
+  it('keeps Before / Diff / After at one weight pressed or not, so the words do not change width and the bar does not move', () => {
+    const r = ALL.filter((x) => x.selectors.some((s) => /^\.hx-seg-btn(\.is-on|\[aria-pressed="true"\])$/.test(s))).map((x) => x.body).join(';');
+    expect(r).not.toMatch(/font-weight/);
+  });
+});
+
+describe('the header fits a narrow desktop', () => {
+  it('shows the live chip as its dot from 768 to 1023px, where its words ran the header 100px past the page', () => {
+    const r = ALL.filter((x) => /min-width: 768px\) and \(max-width: 1023px/.test(x.media) && x.selectors.includes('.hx-live-chip-text'));
+    expect(r.map((x) => x.body.trim())).toEqual(['display: none;']);
   });
 });

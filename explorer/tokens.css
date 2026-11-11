@@ -308,7 +308,8 @@
   color-scheme: light;
 }
 
-/* A phone's density: controls are 44px tall (the target), and a panel pads by 16px under 640px. A brand that sets either token sets it again under the same query */
+/* A phone's density: controls are 44px tall (the target), and a panel pads by 16px under 640px. explorer.css floors a phone's control at 44px whatever
+   a brand sets (max(44px, …)); a brand that sets --corn-panel-pad on :root sets a phone's too, unless it sets it again under the same query */
 @media (max-width: 767px) { :root { --corn-control-height: 44px; } }
 @media (max-width: 639px) { :root { --corn-panel-pad: var(--corn-space-5); } }
 
