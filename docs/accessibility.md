@@ -33,9 +33,20 @@ Elsewhere:
 | The Work toggle and panel | `Enter` opens the panel with the focus on its title, `Escape` closes it, back on the toggle; the tabs are buttons in a group, the one shown pressed; a selection replaces the list and takes the focus to its back control, which gives it back to the row; what it loaded, selected and lit, deploys included, is said; its Release notes (an action at the foot of the PRs list) have a read-only draft you can focus and select, Copy, and a confirm step that takes the focus and gives it back ([issues-and-prs.md](issues-and-prs.md), [deploys.md](deploys.md)) |
 | A mockup of a proposal | `Enter` on its button in the node's panel opens it in a window that takes the focus and is announced (its title, and where it stands with the review); `Tab` stays inside, `Escape` or Close shuts it and the focus goes back to the button. A picture's alt text is its title. |
 | The scenario player | `Space` plays and pauses, `Left` and `Right` step (the map leaves those keys to it while a scenario plays) |
+| A dialog (Review tokens, Start an agent, the confirm step, a mockup) | `Tab` and `Shift+Tab` go round every control in it, selects, text areas, links and scrollable regions included (one list, [explorer/focusables.js](../explorer/focusables.js), is what every trap asks), and `Escape` leaves it |
 | A proposal's what-if edits | `Ctrl+Z` undoes, `Ctrl+Shift+Z` or `Ctrl+Y` redoes, `Escape` backs out of a form or a drawing |
 
 Drawing an edge in a what-if edit is a drag on the map. Without one: turn on Edit in the proposal toolbar, select the first node, then in its panel under "Try a change" pick the other end from "Edge to" and press "Draw an edge". The same form opens as at the end of a drag, with the focus on it.
+
+## What is said, and when
+
+The map's one polite live region says what the eyes would see change, once each and never on a background refresh: when a proposal has loaded, its title, counts and view ("Proposal Meals: 1 node, 1 edge added, 1 node changed, 1 node removed. Diff view."); the view on a switch ("After view"); a change row's node ("page-old, removed. The map is on it."); an undo or a redo and what it was ("Undid: Added the page “/one” under tasks"); and "Paused", "Resumed" or "Playing" for the scenario player (each step is said as it comes).
+
+## Colour, shape and size
+
+- A proposal's four marks differ without colour: added is a dashed ring, changed a solid ring, removed a faded ring with its label struck through, and your own what-if edit a dotted ring. The legend ("Proposal marks") says so, and so do the dots in the bar and the change list.
+- Every mark is 3:1 against the darkest and lightest ground the map draws, in light and dark, at the opacity it is drawn at; a label a diff dims is 3:1 as well (`cornfield validate` holds both for any theme).
+- On a phone, or a coarse pointer, every control is 44 by 44 (the drawn size may be smaller: the hit area counts), and a change row is 28px tall at a desk. The counts say what they count ("4 nodes, 2 edges added").
 
 ## A walkthrough
 
