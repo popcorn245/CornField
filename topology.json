@@ -2008,6 +2008,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "`fileUrl(forge, path, ref)`: where a node's file is on the forge's web site, or null. (explorer/file-url.js)"
+    },
+    {
+      "id": "core-explorer-connection",
+      "label": "connection.js",
+      "type": "core",
+      "file": "explorer/connection.js",
+      "summary": "Whether the browser is online, said once and in one place.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Whether the browser is online, said once and in one place. (explorer/connection.js)"
+    },
+    {
+      "id": "core-explorer-feedback",
+      "label": "feedback.js",
+      "type": "core",
+      "file": "explorer/feedback.js",
+      "summary": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
     }
   ],
   "edges": [
@@ -6420,7 +6440,63 @@
       "to": "core-explorer-capped",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-connection"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-feedback"
+    },
+    {
+      "from": "core-explorer-connection",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-feedback",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-review",
+      "to": "core-explorer-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-runs-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-10T22:00:49.574Z"
+  "updatedAt": "2026-11-11T08:37:22.816Z"
 }
