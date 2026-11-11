@@ -482,6 +482,8 @@ function colorsIn(text, depth) {
 const MAP_GROUPS_OF = (type) => (type === 'floor' || type === 'room' ? ['house'] : type === 'external' ? ['cloud', 'web'] : [type]);
 /** A node's outline and label are drawn on the map's own canvas: a fill under 3:1 needs the outline (WCAG 1.4.11) to be seen */
 export const MAP_FILL_MIN = MIN_UI;
+/** "a" or "an", for the type named after it (an atom, an app, a table) */
+const anOf = (word) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
 /** What a map colour token holds: a colour, `auto` (the map keeps its own), or a problem naming why it cannot be read */
 function mapToken(props, name) {
   if (!props.has(name)) return { auto: true };
@@ -527,21 +529,21 @@ function mapFindings(props, theme, mode, grounds) {
         if (t.color) { name = n; fill = t.color; break; }
       }
       const label = type === 'external' ? `${type}, in the ${group} group` : type;
-      if (problem) { out.push({ ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of a ${label} node`, problem }); continue; }
+      if (problem) { out.push({ ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of ${anOf(label)} ${label} node`, problem }); continue; }
       const own = !fill;
       if (own) { name = names[0]; fill = readColor(mode === 'light' ? lightColor(NODE_THEMES[type].color) : NODE_THEMES[type].color); }
       const shown = own ? `${name}, auto: the node's own colour` : name;
       const f = worstOnGrounds(fill, grounds);
-      const finding = { ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of a ${label} node`, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) };
+      const finding = { ...base, fg: name, bg: GROUND, min: MAP_FILL_MIN, kind: 'ui', use: `the fill of ${anOf(label)} ${label} node`, fgValue: f.fgValue, bgValue: f.bgValue, ratio: f.ratio, ...(f.image ? { groundImage: true } : {}) };
       if (f.ratio >= MAP_FILL_MIN || !strokeOn) {
-        out.push(f.ratio >= MAP_FILL_MIN ? finding : { ...finding, fg: shown, use: `the fill of a ${label} node; set --corn-map-stroke, an outline at ${MAP_FILL_MIN}:1 on the fill and on the ground, or a deeper fill` });
+        out.push(f.ratio >= MAP_FILL_MIN ? finding : { ...finding, fg: shown, use: `the fill of ${anOf(label)} ${label} node; set --corn-map-stroke, an outline at ${MAP_FILL_MIN}:1 on the fill and on the ground, or a deeper fill` });
         continue;
       }
       // Under 3:1: acceptable only when the outline is itself 3:1 against both the fill and the ground
       const onGround = worstOnGrounds(stroke.color, grounds);
       const onFill = ratio(luminance(over(stroke.color, over(fill, ground))), luminance(over(fill, ground)));
       const weakest = onGround.ratio <= onFill ? { r: onGround.ratio, on: '--corn-ground', value: onGround.bgValue } : { r: onFill, on: name, value: toHex(over(fill, ground)) };
-      out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of a ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
+      out.push({ ...base, fg: '--corn-map-stroke', bg: weakest.on, min: MAP_FILL_MIN, kind: 'ui', use: `the outline that carries the fill of ${anOf(label)} ${label} node, which is ${fmt(f.ratio)} on its own`, fgValue: onGround.fgValue, bgValue: weakest.value, ratio: weakest.r });
     }
   }
   // Labels are text: the colour against the ground, and against the halo under it (the halo is the ground's own colour at `auto`)
