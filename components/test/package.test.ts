@@ -4,6 +4,7 @@
  * the version they carry and the size budget. Nothing here needs a browser; `npm run build` runs first in CI, and this builds when dist/ is not there.
  */
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,6 +18,10 @@ import { declarationsOf, defaultTokensCss, parseRules } from '../scripts/tokens.
 import { analyzeComponents, typesFor, writeTypes } from '../scripts/types.mjs';
 // @ts-expect-error plain JS
 import { measure } from '../scripts/size-budget.mjs';
+// @ts-expect-error plain JS
+import { MANIFEST, SAFE_PATH, SERVED, distFiles, writeManifest } from '../scripts/manifest.mjs';
+// @ts-expect-error plain JS
+import { releaseProblems } from '../scripts/release-guard.mjs';
 
 const PACKAGE = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const REPO = path.resolve(PACKAGE, '..');
@@ -215,7 +220,7 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect(JSON.parse(read('version.json'))).toEqual({ name: '@popcorn245/cornfield-components', cornfield: root.version });
     const own = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
     expect(own.version).toBe(root.version); // the package number moves with cornfield's: a release sets both
-    expect(own.private).toBe(true); // not published yet
+    expect(own.private).toBeUndefined(); // publishable: the release publishes it when the maintainer has added the npm token (RELEASING.md)
   });
 
   it('ships tokens.css, the same text the elements add to a page, at zero specificity', () => {
@@ -234,5 +239,105 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect(Object.keys(budget).sort()).toEqual(['corn-map', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
+  });
+});
+
+describe('the manifest: the files the cornfield server may serve (D11)', () => {
+  beforeAll(() => {
+    if (!fs.existsSync(path.join(dist, MANIFEST))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
+  }, 120_000);
+  const manifest = () => JSON.parse(fs.readFileSync(path.join(dist, MANIFEST), 'utf8'));
+
+  it('lists every file of dist/ but itself, with its size and hash, and the version it was built for', () => {
+    const m = manifest();
+    expect(m.name).toBe('@popcorn245/cornfield-components');
+    expect(m.cornfield).toBe(JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version);
+    expect(m.files.map((f: { path: string }) => f.path)).toEqual(distFiles(dist));
+    for (const f of m.files as Array<{ path: string; bytes: number; sha256: string }>) {
+      const body = fs.readFileSync(path.join(dist, f.path));
+      expect(f.bytes, f.path).toBe(body.length);
+      expect(f.sha256, f.path).toBe(createHash('sha256').update(body).digest('hex'));
+    }
+    expect(m.files.map((f: { path: string }) => f.path)).toEqual(expect.arrayContaining(['index.js', 'corn-map.js', 'tokens.css', 'version.json', 'types/index.d.ts']));
+  });
+
+  it('names only files the server will serve: plain names, no dotfile, and .js .css .json .d.ts .map', () => {
+    for (const f of manifest().files as Array<{ path: string }>) {
+      expect(SAFE_PATH.test(f.path), f.path).toBe(true);
+      expect(SERVED.test(f.path), f.path).toBe(true);
+    }
+    expect(SAFE_PATH.test('../x.js')).toBe(false);
+    expect(SAFE_PATH.test('.hidden.js')).toBe(false);
+    expect(SAFE_PATH.test('a/.b.js')).toBe(false);
+    expect(SAFE_PATH.test('/abs.js')).toBe(false);
+    expect(SERVED.test('a.html')).toBe(false);
+  });
+
+  it('is refused when a build leaves something the server could not serve', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-manifest-'));
+    fs.writeFileSync(path.join(tmp, 'a.js'), 'x');
+    fs.writeFileSync(path.join(tmp, 'b.html'), 'x');
+    expect(() => writeManifest(tmp, { name: 'x', version: '1.0.0' })).toThrow(/b\.html/);
+  });
+});
+
+describe('what is published (D11)', () => {
+  const own = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
+  beforeAll(() => {
+    if (!fs.existsSync(path.join(dist, MANIFEST))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
+  }, 120_000);
+
+  it('is a public package of the right name, licence and repository, which bundlers must not tree-shake away', () => {
+    expect(own.name).toBe('@popcorn245/cornfield-components');
+    expect(own.private).toBeUndefined();
+    expect(own.license).toBe('MIT');
+    expect(own.publishConfig).toEqual({ access: 'public', provenance: true });
+    expect(own.repository).toEqual({ type: 'git', url: 'git+https://github.com/popcorn245/CornField.git', directory: 'components' });
+    expect(own.files).toEqual(['dist']);
+    expect(own.type).toBe('module');
+    expect(own.sideEffects).toBe(true); // importing a module registers its custom element: a bundler that thinks it unused would drop the element
+    expect(own.types).toBe('dist/types/index.d.ts');
+    expect(own.scripts.prepublishOnly).toBe('node scripts/release-guard.mjs');
+    expect(fs.readFileSync(path.join(PACKAGE, 'LICENSE'), 'utf8')).toBe(fs.readFileSync(path.join(REPO, 'LICENSE'), 'utf8'));
+  });
+
+  it('packs exactly: dist/ as built, the licence, the readme and package.json, and no source, test, script, demo or map', () => {
+    const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: PACKAGE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const packed: string[] = JSON.parse(out)[0].files.map((f: { path: string }) => f.path).sort();
+    const expected = ['LICENSE', 'README.md', 'package.json', `dist/${MANIFEST}`, ...distFiles(dist).map((f: string) => `dist/${f}`)].sort();
+    expect(packed).toEqual(expected);
+    for (const f of packed) expect(f, f).toMatch(/^(?:LICENSE|README\.md|package\.json|dist\/[\w./-]+\.(?:js|css|json|d\.ts))$/);
+    expect(packed.some((f) => /\.map$|^(?:src|test|scripts|demo)\//.test(f))).toBe(false);
+  }, 30_000);
+
+  describe('the release guard (prepublishOnly)', () => {
+    const fixture = (version = '0.48.0', built = version) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-guard-'));
+      const pkg = path.join(root, 'components');
+      fs.mkdirSync(path.join(pkg, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'cornfield', version }));
+      fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@popcorn245/cornfield-components', version }));
+      for (const f of ['version.json', 'manifest.json']) fs.writeFileSync(path.join(pkg, 'dist', f), JSON.stringify({ cornfield: built }));
+      return { root, pkg };
+    };
+    const release = { CORNFIELD_RELEASE: '1', CORNFIELD_RELEASE_TAG: 'v0.48.0' };
+
+    it('lets the release workflow\'s publish through: the tag, the package, cornfield and the build all say the same version', () => {
+      const { root, pkg } = fixture();
+      expect(releaseProblems({ cwd: pkg, env: release, root: pkg, repo: root })).toEqual([]);
+    });
+    it('refuses a publish by hand, from another folder, for another tag, or of a build made for another version', () => {
+      const { root, pkg } = fixture();
+      expect(releaseProblems({ cwd: pkg, env: {}, root: pkg, repo: root }).join('\n')).toMatch(/CORNFIELD_RELEASE is not 1/);
+      expect(releaseProblems({ cwd: root, env: release, root: pkg, repo: root }).join('\n')).toMatch(/not from the components/);
+      expect(releaseProblems({ cwd: pkg, env: { ...release, CORNFIELD_RELEASE_TAG: 'v0.47.0' }, root: pkg, repo: root }).join('\n')).toMatch(/release tag/);
+      const stale = fixture('0.48.0', '0.1.0');
+      expect(releaseProblems({ cwd: stale.pkg, env: release, root: stale.pkg, repo: stale.root }).join('\n')).toMatch(/dist\/version\.json says "0\.1\.0", not 0\.48\.0/);
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'cornfield', version: '0.1.0' }));
+      expect(releaseProblems({ cwd: pkg, env: release, root: pkg, repo: root }).join('\n')).toMatch(/cornfield's package\.json says 0\.1\.0/);
+    });
+    it('refuses the real package as it stands on main (0.1.0, no tag), and its script runs the guard', () => {
+      expect(releaseProblems({ env: { CORNFIELD_RELEASE: '1' } }).join('\n')).toMatch(/release tag/);
+    });
   });
 });

@@ -1,6 +1,6 @@
 # Releasing cornfield
 
-A release publishes the Docker image to GHCR (`ghcr.io/popcorn245/cornfield`) and the package to npm as both `cornfield` and `@popcorn245/cornfield`. Nobody tags by hand: every merge to `main` is released by [semantic-release](https://semantic-release.gitbook.io/) in the release workflow ([.github/workflows/release.yml](.github/workflows/release.yml)), when the commits since the last tag call for one. The workflow is **off** until it is switched on.
+A release publishes the Docker image to GHCR (`ghcr.io/popcorn245/cornfield`) and the package to npm as both `cornfield` and `@popcorn245/cornfield`, and builds the web components under the same version (the image serves them; npm gets them as `@popcorn245/cornfield-components` once the token below is set). Nobody tags by hand: every merge to `main` is released by [semantic-release](https://semantic-release.gitbook.io/) in the release workflow ([.github/workflows/release.yml](.github/workflows/release.yml)), when the commits since the last tag call for one. The workflow is **off** until it is switched on.
 
 ## Switching it on (once)
 
@@ -31,7 +31,8 @@ The workflow, on a merge to `main` with `CORNFIELD_RELEASE` on:
 
 1. **check:** `npm ci`, the tests and `cornfield validate`. Nothing is tagged when they fail.
 2. **version:** semantic-release works out the version, tags the merge commit itself `v0.2.0` (a tag-only push: nothing is committed to `main`) and makes the GitHub release, whose notes are the record of the release (`## [0.2.0] - 2026-10-20`, then Added / Fixed / Changed, a line per pull request). It publishes nothing itself. The tag is the only record of a version: `package.json` on `main` keeps the version last set by hand (0.1.0).
-3. **image** and **npm**, in the same run (a tag pushed with `GITHUB_TOKEN` starts no other workflow), from the new tag, with the version set in `package.json` from it first (`npm version --no-git-tag-version`): the image is pushed as `0.2.0`, `0.2` and `latest`, and both npm names are published with a provenance attestation, by trusted publishing (or the `NPM_TOKEN` secret until it is set up: see below). Both start only when step 2 made a release.
+3. **image** and **npm**, in the same run (a tag pushed with `GITHUB_TOKEN` starts no other workflow), from the new tag, with the version set in `package.json` from it first (`npm version --no-git-tag-version`): the image is pushed as `0.2.0`, `0.2` and `latest`, and both npm names are published with a provenance attestation, by trusted publishing (or the `NPM_TOKEN` secret until it is set up: see below). Both start only when step 2 made a release. The image's [Dockerfile](Dockerfile) has a builder stage that builds the web components (`components/`) with that version, and keeps only their `dist/`; the image serves them at `/cornfield/components/`.
+4. **components**, in the same run, from the same tag: sets the version in `package.json` and in `components/package.json` (`npm version --no-git-tag-version`), runs `npm ci` and `npm run build` in `components/` (so `dist/version.json`, `dist/manifest.json` and the `version` export say `0.2.0`), fails unless the tag, the package, `version.json`, `manifest.json` and `index.js` all say the same, prints what `npm pack --dry-run` would send, and then publishes `@popcorn245/cornfield-components` to npm **only if the `NPM_TOKEN` secret is set**. Without it the job prints one line saying the package was built and checked but not published, and succeeds: the release, the image and the npm job are not touched by it. Starts only when step 2 made a release.
 
 semantic-release and its plugins run with `npx` at exact versions pinned in the workflow; none of them is one of cornfield's dependencies.
 
@@ -74,6 +75,18 @@ npm pkg set name=@popcorn245/cornfield
 npm publish --access public --provenance=false
 git checkout -- package.json package-lock.json
 ```
+
+## The web components on npm
+
+`@popcorn245/cornfield-components` is wired and **not armed**: the release's `components` job publishes it when the repository secret `NPM_TOKEN` exists, and says it did not when it does not. To arm it, once:
+
+1. On npmjs.com create an **access token** that can publish to the `@popcorn245` scope: a *granular access token* with **Read and write** on packages and scopes **`@popcorn245`** (the scope covers the new name `@popcorn245/cornfield-components`, which does not exist until its first publish), or an automation token of an account that owns the scope. It is the same secret the root packages' first publish uses ([above](#npm-from-a-token-to-trusted-publishing)): one token for the scope serves all three names.
+2. In the repository: **Settings → Secrets and variables → Actions → Repository secrets → New repository secret**, name `NPM_TOKEN`, value the token. (Not a variable: a variable is printed in logs.)
+3. The next release publishes it, with a provenance attestation. The workflow never prints the token, and the job's only permissions are `contents: read` and `id-token: write`.
+
+After the first publish you can do what the root packages do: name `release.yml` as the package's trusted publisher on npmjs.com (Packages → `@popcorn245/cornfield-components` → Settings → Trusted Publisher; fields as [above](#npm-from-a-token-to-trusted-publishing), allowed action `npm publish`) and remove the token. The job installs the npm that trusted publishing needs.
+
+A package published by hand is refused by `prepublishOnly` ([components/scripts/release-guard.mjs](components/scripts/release-guard.mjs)) unless it runs in `components/` with `CORNFIELD_RELEASE=1` and `CORNFIELD_RELEASE_TAG=v<version>` set, with `package.json`, `dist/version.json` and `dist/manifest.json` all saying that version: a build made for another version cannot be published under this one's number.
 
 ## Release notes for a person
 
