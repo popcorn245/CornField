@@ -532,6 +532,40 @@ describe('the forge actions', () => {
     expect(writes).toEqual(['PUT /pulls/12/merge', 'POST /actions/jobs/42/rerun']);
   });
 
+  it('behind a TLS-terminating proxy that passes the Host on: the https Origin is taken, an http one of the same host is not (#238)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-actions-tls-'));
+    const tls = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: dir } });
+    Object.assign(tls, { forge: { type: 'github', url: fake.url, repo: 'owner/name' }, publicUrl: 'https://cornfield.example.test' });
+    const server = await start(tls, { env: ENV, now: () => clock });
+    try {
+      // what the proxy sends on: the public Host, over plain http to cornfield
+      const via = (method, target, { headers = {}, body } = {}) => raw(server.port, method, target, { headers: { host: 'cornfield.example.test', ...headers }, body });
+      const started = await via('GET', '/auth/start');
+      const to = new URL(started.headers.location);
+      const stateCookie = started.headers['set-cookie'].find((c) => c.startsWith('__Host-cornfield-oauth=')).split(';')[0];
+      const back = await via('GET', `/auth/callback?code=c-maint&state=${to.searchParams.get('state')}`, { headers: { cookie: stateCookie } });
+      expect(back.status, back.text).toBe(303);
+      const mine = back.headers['set-cookie'].find((c) => c.startsWith('__Host-cornfield=')).split(';')[0];
+      const merge = (headers) => {
+        const text = JSON.stringify({ sha: ABC });
+        return via('POST', '/api/forge/pulls/12/merge', { headers: { cookie: mine, 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(text)), ...headers }, body: text });
+      };
+      const plain = await merge({ origin: 'http://cornfield.example.test' });
+      expect([plain.status, plain.json.error]).toEqual([403, 'Do this from cornfield\'s own page.']);
+      expect((await merge({ origin: 'http://cornfield.example.test', host: 'cornfield.example.test:443' })).status).toBe(403);
+      expect(wrote()).toEqual([]);
+      clock += 10_000;
+      expect((await merge({ origin: 'https://cornfield.example.test', 'sec-fetch-site': 'same-origin' })).status).toBe(200);
+      clock += 10_000;
+      // a proxy that keeps `:443` in the Host is the same origin
+      const kept = await merge({ origin: 'https://cornfield.example.test', host: 'cornfield.example.test:443' });
+      expect(kept.json?.error).not.toBe('Do this from cornfield\'s own page.');
+    } finally {
+      await server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('Forgejo lands the same way: through the same checks, at the head, with its own token', async () => {
     const routes = { 'POST /login/oauth/access_token': () => ({ body: { access_token: MAINT, token_type: 'bearer' } }) };
     for (const [key, answer] of Object.entries(recordings('forgejo'))) {
