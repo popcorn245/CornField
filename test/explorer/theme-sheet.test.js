@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { absolutizeUrls, blockOf, derivedOf, selectorParts, tokenBlocks, tokensFor } from '../../explorer/engine/theme-sheet.js';
+import { absolutizeUrls, blockOf, derivedOf, readCapped, selectorParts, tokenBlocks, tokensFor } from '../../explorer/engine/theme-sheet.js';
 
 /** A rule as CSSOM has it */
 const rule = (selectorText, decls) => {
@@ -52,12 +52,36 @@ describe('what a copied value may hold', () => {
     expect(absolutizeUrls('url("/cornfield/theme/assets/bg.png")', 'https://map.example.com')).toBe('url("https://map.example.com/cornfield/theme/assets/bg.png")');
     expect(absolutizeUrls("url('/cornfield/theme/assets/bg.png')", 'https://example.com/cornfield')).toBe('url("https://example.com/cornfield/cornfield/theme/assets/bg.png")');
     expect(absolutizeUrls('url(assets/a.png)', 'https://map.example.com')).toBe('url("https://map.example.com/assets/a.png")');
-    expect(absolutizeUrls('url(https://cdn.test/a.png)', 'https://map.example.com')).toBe('url("https://cdn.test/a.png")');
+    expect(absolutizeUrls('url(https://map.example.com/cornfield/theme/assets/a.png)', 'https://map.example.com')).toBe('url("https://map.example.com/cornfield/theme/assets/a.png")');
     expect(absolutizeUrls('linear-gradient(#000, #fff), url("/a.png")', 'https://m.test')).toBe('linear-gradient(#000, #fff), url("https://m.test/a.png")');
     expect(absolutizeUrls('url("data:image/svg+xml,%3Csvg%3E")', 'https://m.test')).toBe('url("data:image/svg+xml,%3Csvg%3E")');
     expect(absolutizeUrls('url("javascript:alert(1)")', 'https://m.test')).toBe(null);
     expect(absolutizeUrls('url("ftp://x.test/a")', 'https://m.test')).toBe(null);
     expect(absolutizeUrls('12px', 'https://m.test')).toBe('12px');
+  });
+  it('names nothing but the server: another origin, //host, another port or scheme, a data: URL that is not an image are refused', () => {
+    const base = 'https://map.example.com';
+    for (const v of [
+      'url(https://cdn.test/a.png)', 'url("//evil.test/a.png")', 'url(https://map.example.com:8443/a.png)', 'url(http://map.example.com/a.png)',
+      'url("data:text/html,<script>1</script>")', 'url(data:application/javascript,1)', 'linear-gradient(#000, #fff), url(https://evil.test/x.png)',
+      'url("/ok.png"), url(https://evil.test/x.png)', 'src("https://evil.test/x.png")',
+    ]) expect(absolutizeUrls(v, base), v).toBe(null);
+    expect(absolutizeUrls('url("data:image/png;base64,AAAA")', base)).toBe('url("data:image/png;base64,AAAA")');
+    expect(absolutizeUrls('src("/cornfield/theme/assets/a.woff2")', base)).toBe('src("https://map.example.com/cornfield/theme/assets/a.woff2")');
+  });
+  it('reads a url( written with CSS escapes as the browser does, and refuses it rather than rewrite it', () => {
+    const base = 'https://map.example.com';
+    for (const v of ['u\\72l(https://evil.test/x.png)', '\\75 rl(https://evil.test/x.png)', 'u\\rl(/ok.png)', 'image\\-set("https://evil.test/x.png" 1x)']) expect(absolutizeUrls(v, base), v).toBe(null);
+    expect(absolutizeUrls('"\\2014"', base)).toBe('"\\2014"'); // an escape that loads nothing stays
+  });
+  it('reads the strings of an image-set() as addresses (a custom property keeps them as written), and refuses what else loads', () => {
+    const base = 'https://map.example.com';
+    expect(absolutizeUrls('image-set("https://evil.test/x.png" 1x)', base)).toBe(null);
+    expect(absolutizeUrls('-webkit-image-set(\'//evil.test/x.png\' 1x)', base)).toBe(null);
+    expect(absolutizeUrls('image-set("/cornfield/theme/assets/a.png" 1x, url(/cornfield/theme/assets/b.png) 2x)', base)).toBe('image-set("https://map.example.com/cornfield/theme/assets/a.png" 1x, url("https://map.example.com/cornfield/theme/assets/b.png") 2x)');
+    expect(absolutizeUrls('url(https://evil.test/x.png', base)).toBe(null); // a url( left open runs to the end of the value
+    expect(absolutizeUrls('image(https://evil.test/x.png)', base)).toBe(null);
+    expect(absolutizeUrls('var(--nope, url(https://evil.test/x.png))', base)).toBe(null);
   });
 });
 
@@ -113,5 +137,16 @@ describe('what is read from a parsed sheet: only the --corn-* tokens of the root
     expect(Object.fromEntries(tokensFor([derived, theme], 'dark'))).toEqual({ '--corn-ok-soft': 'color-mix(in srgb, var(--corn-ok) 14%, transparent)', '--corn-ok': '#118833' });
     const own = tokenBlocks(sheet(rule(':root', { '--corn-ok-soft': '#cfc' })));
     expect(tokensFor([derived, own], 'dark').get('--corn-ok-soft')).toBe('#cfc');
+  });
+});
+
+describe('how much of a theme is read', () => {
+  it('reads a theme within the limit, and stops reading one that is larger as soon as it is: it never holds it whole', async () => {
+    expect(await readCapped(new Response(':root { --corn-accent: #000; }'), 100)).toBe(':root { --corn-accent: #000; }');
+    let pulled = 0;
+    const endless = new ReadableStream({ pull(c) { pulled++; c.enqueue(new TextEncoder().encode('a'.repeat(1024))); } });
+    await expect(readCapped(new Response(endless), 10 * 1024, '/cornfield/theme.css')).rejects.toThrow('/cornfield/theme.css is larger than 10240 characters');
+    expect(pulled).toBeLessThan(20);
+    await expect(readCapped(new Response('x', { headers: { 'Content-Length': String(10 ** 9) } }), 100)).rejects.toThrow(/larger/);
   });
 });

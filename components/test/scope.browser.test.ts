@@ -447,6 +447,33 @@ describe('the server\'s theme (use-theme)', () => {
     expect(map(host).shadowRoot!.adoptedStyleSheets.every((s) => ![...s.cssRules].some((r) => r.cssText.includes('letter-spacing')))).toBe(true);
   });
 
+  it('names nothing but the server: a theme that points at another origin in every way CSS can load leaves no trace of it, and that origin is asked nothing', async () => {
+    const away = (await (await fetch('/fake/origin.json')).json()).origin as string;
+    await fetch('/fake/other-hits.json'); // forget what came before
+    const host = await page(`<corn-scope id="s" src="${at('leaky')}" theme="dark" use-theme><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
+    const scope = host.querySelector('#s') as HTMLElement;
+    const el = map(host);
+    await until(() => scope.style.getPropertyValue('--corn-accent') === '#0a7d3b' && lit(el) > 0);
+    await frames(3);
+    await sleep(600);
+    // the tokens: what named another origin was not copied
+    const tokens = [...scope.style].map((p) => `${p}: ${scope.style.getPropertyValue(p)}`).join('\n');
+    expect(tokens).not.toContain(away);
+    expect(tokens).not.toMatch(/\\|image-set|open-token/);
+    for (const t of ['--corn-ground-image', '--corn-surface-1', '--corn-surface-2', '--corn-surface-3', '--corn-shadow', '--corn-line']) expect(scope.style.getPropertyValue(t), t).toBe('');
+    // the sheet in the piece: every rule and declaration that named it is gone, at every depth; the rest applies, and the server's own asset is absolute
+    const sheet = el.shadowRoot!.adoptedStyleSheets.find((s) => [...s.cssRules].some((r) => r.cssText.includes('rgb(1, 2, 3)')))!;
+    expect(sheet).toBeTruthy();
+    const text = (rules: CSSRuleList): string => [...rules].map((r) => r.cssText).join('\n');
+    expect(text(sheet.cssRules)).not.toContain(away);
+    expect(text(sheet.cssRules)).toContain(`url("${at('leaky')}/cornfield/theme/assets/ok.png")`);
+    const stage = el.shadowRoot!.querySelector('[data-corn="map-stage"]')!;
+    expect(getComputedStyle(stage).outlineColor).toBe('rgb(0, 128, 0)');
+    for (const prop of ['background-image', 'border-image-source', 'list-style-image', 'cursor', 'mask-image']) expect(getComputedStyle(stage).getPropertyValue(prop), prop).not.toContain(away);
+    // and the other origin was asked nothing at all
+    expect(await (await fetch('/fake/other-hits.json')).json()).toEqual([]);
+  });
+
   it('is off unless asked for: no theme request, no tokens', async () => {
     const before = performance.getEntriesByType('resource').length;
     const host = await page(`<corn-scope id="s" src="${at('hostile')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);

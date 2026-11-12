@@ -19,6 +19,12 @@
  *                    The `fonts` links of the server's page (Google Fonts) are not in the theme file and are not reached either.
  *   a relative `url()` would be resolved against the host page; the ones in a value that is copied, or in a rule of the sheet, are made absolute
  *                    against the server (a `url()` is the only thing rewritten, and in the parsed declaration, not in the text).
+ *
+ * WHAT A THEME MAY LOAD. Only what is on the server's own origin (its `/cornfield/theme/assets/…`) and `data:` images, which is all a theme the server
+ * accepts may name (core/theme.js). A CSS image is fetched with the host page's cookies for its own site, so a reference to another origin would make
+ * the host page's visitors ask that origin, as themselves: every declaration, token and rule that names one (in `url()`, `src()`, an `image-set()`
+ * string, written with CSS escapes, at any depth of the sheet: `@media`, nesting, `@keyframes`, `@font-face`, `@property`) is dropped before the sheet
+ * is adopted anywhere. The text is read no further than MAX_THEME_TEXT characters.
  */
 
 /** The longest theme text read, in characters (the server refuses a file over 256 KB) */
@@ -78,21 +84,77 @@ export function blockOf(selector, media, name = null) {
   return null;
 }
 
-/** Makes the `url()`s of a declaration's value absolute against `base`; a url that is not http(s) or `data:` (or cannot be read) is dropped by returning null */
-export function absolutizeUrls(value, base) {
-  let ok = true;
-  const out = String(value).replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s"']*))\s*\)/gi, (_all, a, b, c) => {
-    const ref = a ?? b ?? c ?? '';
-    if (/^data:/i.test(ref)) return `url("${ref.replace(/"/g, '%22')}")`;
-    try {
-      // a path that begins with a slash is the server's own (`/cornfield/theme/assets/x.png`): under the base's path when it has one
-      const at = new URL(base);
-      const u = ref.startsWith('/') && !ref.startsWith('//') ? new URL(at.pathname.replace(/\/+$/, '') + ref, at) : new URL(ref, `${base}/`);
-      if (u.protocol !== 'https:' && u.protocol !== 'http:') { ok = false; return ''; }
-      return `url("${u.href.replace(/"/g, '%22')}")`;
-    } catch { ok = false; return ''; }
+/** A `data:` URL a theme may name: an image (core/theme.js allows the same on the server) */
+const DATA_IMAGE = /^data:image\/(?:png|gif|webp|avif|svg\+xml)[;,]/i;
+/** What can load something: `url(`, `src(`, `image(` and `image-set(` (and `-webkit-image-set(`), read after CSS escapes are undone */
+const LOADS = /(?<![\w-])(?:url|src|image|(?:-webkit-)?image-set)\(/i;
+const REF = /(?<![\w-])(url|src)\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s"']*))\s*\)/gi;
+const STRING = /"([^"]*)"|'([^']*)'/g;
+
+/** CSS escapes undone, as a browser's tokenizer reads them (`u\72l(` and `\75 rl(` are `url(`) */
+export function unescapeCss(text) {
+  return String(text).replace(/\\([0-9a-f]{1,6})\s?|\\([^\n])/gi, (_m, hex, ch) => {
+    if (hex) { const cp = parseInt(hex, 16); return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '\ufffd'; }
+    return ch;
   });
-  return ok ? out : null;
+}
+
+/**
+ * Where a reference of the theme leads, made absolute against the server, or null when the theme may not name it: only the server's own origin
+ * (its `/cornfield/theme/assets/…`, under the base's path when it has one) and a `data:` image. Another origin, another scheme, `//host`: null.
+ * The server refuses such a theme too (core/theme.js), so a theme that names one did not come from a cornfield that checked it.
+ */
+function placeOf(ref, base) {
+  if (DATA_IMAGE.test(ref)) return ref;
+  try {
+    const at = new URL(base);
+    // a path that begins with a slash is the server's own (`/cornfield/theme/assets/x.png`): under the base's path when it has one
+    const u = ref.startsWith('/') && !ref.startsWith('//') ? new URL(at.pathname.replace(/\/+$/, '') + ref, at) : new URL(ref, `${base}/`);
+    if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.origin !== at.origin) return null;
+    return u.href;
+  } catch { return null; }
+}
+
+/**
+ * A declaration's value with every reference it may load made absolute against the server, or null when it names one the theme may not (another
+ * origin, another scheme), or one that cannot be read safely: a `url(` written with CSS escapes, a `url(` that is not closed, or anything else that
+ * loads (`image()`, `src()`) in a form that is not plain. The strings of an `image-set()` are references too. A value that loads nothing is returned
+ * as it was.
+ * @param {string} value
+ * @param {string} base the server's base address (`https://map.example.com`, or with a path)
+ * @returns {string | null}
+ */
+export function absolutizeUrls(value, base) {
+  const text = String(value);
+  const plain = unescapeCss(text);
+  if (!LOADS.test(plain)) return text;
+  if (plain !== text && LOADS.test(plain.replace(STRING, '""'))) return null; // escapes in what loads: not rewritten, dropped
+  if (!base) return null;
+  let ok = true;
+  let out = text.replace(REF, (_all, fn, a, b, c) => {
+    const place = placeOf(a ?? b ?? c ?? '', base);
+    if (place === null) { ok = false; return ''; }
+    return `${fn.toLowerCase()}("${place.replace(/["\\\n]/g, (ch) => encodeURIComponent(ch))}")`;
+  });
+  // Every function that loads must have been one of those: `url(` left open, `image(` (or `src(`) in any other form, refuse the value
+  const loads = (out.replace(/(?<![\w-])(?:url|src)\("[^"]*"\)/gi, '').match(new RegExp(LOADS.source, 'gi')) || []).filter((f) => !/image-set\($/i.test(f));
+  if (!ok || loads.length) return null;
+  // The strings of an image-set() are addresses too (Chrome keeps them as written in a custom property)
+  if (/(?:-webkit-)?image-set\(/i.test(out)) {
+    out = out.replace(/((?:-webkit-)?image-set\()([^]*)$/i, (_all, head, rest) => head + rest.replace(STRING, (_s, a, b) => {
+      const place = placeOf(a ?? b ?? '', base);
+      if (place === null) { ok = false; return '""'; }
+      return `"${place.replace(/["\\\n]/g, (ch) => encodeURIComponent(ch))}"`;
+    }));
+    if (!ok) return null;
+  }
+  return out;
+}
+
+/** Whether every reference in a value is already absolute on the server's origin, or a `data:` image (what `absolutizeUrls` leaves) */
+function refsSettled(text, base) {
+  const fixed = absolutizeUrls(text, base);
+  return fixed !== null && fixed === text;
 }
 
 /**
@@ -112,7 +174,7 @@ export function tokenBlocks(sheet, { name = null, base = '' } = {}) {
       if (!TOKEN.test(prop)) continue;
       let value = style.getPropertyValue(prop).trim();
       if (!value || value.length > MAX_VALUE) continue;
-      if (/url\(/i.test(value)) { value = base ? absolutizeUrls(value, base) : value; if (value === null) continue; }
+      if (base || LOADS.test(unescapeCss(value))) { value = base ? absolutizeUrls(value, base) : null; if (value === null) continue; } // a token that loads is the server's, or not copied
       blocks[into].set(prop, value);
     }
   };
@@ -153,6 +215,36 @@ export function derivedOf(defaults) {
   const out = { base: new Map(), light: new Map(), dark: new Map() };
   for (const key of Object.keys(out)) for (const [k, v] of defaults[key]) if (/var\(/.test(v)) out[key].set(k, v);
   return out;
+}
+
+/**
+ * The text of an answer, read no further than `max` characters: a larger one is refused as soon as it is seen to be (its `Content-Length`, or the
+ * bytes as they come), so a theme of any size never sits whole in the page's memory.
+ * @param {Response} res
+ * @param {number} max
+ * @param {string} [what] what the message names
+ */
+export async function readCapped(res, max, what = 'the answer') {
+  const tooBig = () => new Error(`${what} is larger than ${max} characters`);
+  const declared = Number(res.headers && res.headers.get ? res.headers.get('content-length') : NaN);
+  if (Number.isFinite(declared) && declared > max * 4) throw tooBig(); // UTF-8: at most four bytes a character
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const text = await res.text();
+    if (text.length > max) throw tooBig();
+    return text;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    if (text.length > max) { reader.cancel().catch(() => {}); throw tooBig(); }
+  }
+  text += decoder.decode();
+  if (text.length > max) throw tooBig();
+  return text;
 }
 
 /**
@@ -212,9 +304,7 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
     // The theme answers a listed origin without a session and without Allow-Credentials: asked for without credentials
     const res = await inst.fetch(path, { credentials: 'omit', signal });
     if (!res.ok) throw new Error(`GET ${path} answered ${res.status}`);
-    const text = await res.text();
-    if (text.length > MAX_THEME_TEXT) throw new Error(`${path} is larger than ${MAX_THEME_TEXT} characters`);
-    return text;
+    return readCapped(res, MAX_THEME_TEXT, path);
   };
 
   const theme = {
@@ -245,7 +335,7 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
         if (!sheet) { say('failed', { reason: 'constructable stylesheets are not available' }); return; }
         // One sheet, the standard theme first and the named one after it (it is the stronger: it names the theme on the root)
         sheet.replaceSync([standard, named].filter((x) => x !== null).join('\n'));
-        fixUrls(sheet, inst.base);
+        settleSheet(sheet, inst.base);
         layers = [];
         const parse = (text, nm) => {
           const probe = new win.CSSStyleSheet();
@@ -319,21 +409,36 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
   return theme;
 }
 
-/** Makes the `url()` of every declaration of the style rules of a sheet absolute against the server (in the parsed declaration; a `url()` that cannot be is removed) */
-function fixUrls(sheet, base) {
-  const visit = (rules) => {
-    for (const rule of Array.from(rules)) {
-      if (rule.style && rule.selectorText !== undefined) {
+/**
+ * Makes every reference the sheet loads the server's, in the parsed rules (never in the text): each declaration of each rule, at any depth
+ * (`@media`, `@supports`, `@layer`, `@container`, `@scope`, nested rules, the frames of a `@keyframes`, a `@font-face`), is made absolute against
+ * the server, and one that names another origin, another scheme or an escaped `url(` is removed. A rule whose text still names something that is
+ * not settled (a shorthand with a `var()` that the declarations do not show, an `@property` whose initial value loads) is removed whole.
+ */
+function settleSheet(sheet, base) {
+  const visit = (group) => {
+    const rules = group.cssRules;
+    for (let i = rules.length - 1; i >= 0; i--) {
+      const rule = rules[i];
+      if (rule.cssRules) visit(rule);
+      if (rule.style) {
         const style = rule.style;
-        for (const prop of Array.from({ length: style.length }, (_x, i) => style[i])) {
+        for (const prop of Array.from({ length: style.length }, (_x, k) => style[k])) {
           const value = style.getPropertyValue(prop);
-          if (!/url\(/i.test(value)) continue;
+          if (!LOADS.test(unescapeCss(value))) continue;
           const fixed = absolutizeUrls(value, base);
           if (fixed === null) style.removeProperty(prop);
           else if (fixed !== value) style.setProperty(prop, fixed, style.getPropertyPriority(prop));
         }
-      } else if (rule.cssRules && rule.constructor && /Media|Supports|Layer|Container/.test(rule.constructor.name)) visit(rule.cssRules);
+      }
+      // What the declarations did not show (a shorthand waiting on a var(), an @property, an @import a browser kept): the rule goes. What is
+      // inside it was settled first, so a group's text is its own conditions and what is left in it
+      const own = rule.cssText;
+      if (own && LOADS.test(unescapeCss(own)) && !refsSettled(own, base)) {
+        if (typeof rule.keyText === 'string' && typeof group.deleteRule === 'function' && group.findRule) group.deleteRule(rule.keyText);
+        else group.deleteRule(i);
+      }
     }
   };
-  visit(sheet.cssRules);
+  visit(sheet);
 }
