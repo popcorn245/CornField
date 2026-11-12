@@ -41,7 +41,7 @@
  *   onDecision ({ outcome, proposal, source, open, review })  the server took a review (the instance's `decision`, said once, after the answer)
  *   onAuth ({ status, signIn, during })  a sign-in is needed: `during` is 'load', 'proposal', 'facts', 'review', 'send' or 'landing'; `signIn` is the server's sign-in
  *   onError ({ kind, message })  `not-listed`, `offline`, `server`, `address`, `version`, `theme` (engine/source.js `errorOf`) or `proposal` (it did not open)
- * onReady (above) is said once, when the map is drawn and the proposal asked for is open, or has said why it is not.
+ * onReady (above) is said once, with the first frame of the map that shows the proposal asked for open, or the bar saying why it is not.
  *
  * What a host hears is on the instance too (instance.js): `selection`, `proposal`, `decision`, `auth`, `scenario:player`; the callbacks above are those, made plain.
  *
@@ -146,7 +146,22 @@ export function mount(root, inst, options = {}) {
   let mapDrawn = false;
   let settled = true;
   let readyFired = false;
-  const sayReady = () => { if (readyFired || ended || !mapDrawn || !settled) return; readyFired = true; if (options.onReady) options.onReady(); };
+  let readyWaiting = false;
+  /** Said with the frame that shows it: the map's next paint after the proposal opened (or said why not), so what the bar says is what the map shows */
+  const sayReady = () => {
+    if (readyFired || readyWaiting || ended || !mapDrawn || !settled) return;
+    const map = inst.map;
+    if (!map || typeof map.onPaint !== 'function') { readyFired = true; if (options.onReady) options.onReady(); return; }
+    readyWaiting = true;
+    const off = map.onPaint(() => {
+      off();
+      readyWaiting = false;
+      if (readyFired || ended || !settled) return; // another proposal was asked for since: it says ready when it is there
+      readyFired = true;
+      if (options.onReady) options.onReady();
+    });
+    map.render();
+  };
 
   // -- the pieces, in the order the page mounts them: the map first, the node panel, the bar, the column, the decision in the column's foot -----
   const at = markersIn(doc, box);

@@ -132,7 +132,7 @@ export class CornReview {
   /** The permission checker for the scenarios, a module the host imported itself: `{ check(items, { signal }) }`. A config never names one that is loaded (D10); with none, a checked step reads "Not checked". */
   @Prop() checker?: { check(items: unknown[], options?: { signal?: AbortSignal }): unknown; apps?: unknown; max?: number } | null;
 
-  /** The map is drawn and the proposal asked for is open (or has said why it is not): once per time the element is connected */
+  /** The first frame is drawn that shows the proposal asked for open, its title on the bar (or the bar saying why it is not): once per time the element is connected */
   @Event() cornReady!: EventEmitter<void>;
 
   /** The selection changed, whoever changed it: a click, a key, `node` or `focusNode()`. Once per change. */

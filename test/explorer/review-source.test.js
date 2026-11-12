@@ -118,6 +118,19 @@ describe('a review with a src (D1, D6)', () => {
     piece.destroy();
   });
 
+  it('onReady comes with the frame that shows it: after the proposal opened, the bar has its title and the map has painted since', async () => {
+    const order = [];
+    const { piece, root, calls } = make({
+      src: BASE, proposal: '0002-checkout',
+      onNavigate: (d) => { order.push(`navigate ${d.change}`); piece.inst.map.onPaint(() => { if (!order.includes('paint after open')) order.push('paint after open'); }); },
+      onReady: () => { order.push(`ready title=${root.querySelector('#proposal-title').textContent}`); calls.ready++; },
+    });
+    await until(() => calls.ready === 1);
+    expect(order).toEqual(['navigate opened', 'paint after open', `ready title=${proposal.title}`]);
+    // and it waits for a proposal asked for since: a second name opens, the first's frame does not say it
+    piece.destroy();
+  });
+
   it('shows "Loading the map" in the status card while it reads, with the hooks and parts a map has', async () => {
     let release;
     const gate = new Promise((r) => { release = r; });
