@@ -102,8 +102,8 @@ export class CornReview {
   /** The base address of a cornfield server, `https://map.example.com` (an http(s) origin with an optional path): the review reads the config and the map from there, opens the proposal, and sends its decision, with the signed-in maintainer's session. Another value is refused, and said in the box and in `cornError`. Read when the element connects: a new `src` makes a new review. */
   @Prop() src?: string;
 
-  /** The proposal to review: its name (`0042-retire-the-old-export`), which the review reads from the server, or, as a property only, the proposal object itself (shown for reading: a decision needs the name). Not reflected. */
-  @Prop() proposal?: string | { [key: string]: unknown } | null;
+  /** The proposal to review: its name (`0042-retire-the-old-export`), which the review reads from the server, or, as a property only, the proposal object itself (shown for reading: a decision needs the name). It follows the reviewer: null once they close it in the bar, the name of a copy they open from it. Not reflected. */
+  @Prop({ mutable: true }) proposal?: string | { [key: string]: unknown } | null;
 
   /** Which copy of the proposal: `checkout`, `pull/31` (a spec PR) or a worktree's name; with none the server answers with the first it lists */
   @Prop() source?: string | null;
@@ -193,6 +193,9 @@ export class CornReview {
       },
       onNavigate: (detail: CornNavigateDetail) => {
         if (detail.view) { this.view = detail.view; delete this.changes.view; } // the reviewer's own choice: the property follows it, and it is not passed back
+        // the same for the proposal: closed in the bar, or another copy opened from it; an object handed in has no name and stays the object
+        if (detail.change === 'closed') { this.proposal = null; delete this.changes.proposal; }
+        if (detail.change === 'opened' && detail.proposal) { this.proposal = detail.proposal; delete this.changes.proposal; }
         this.cornNavigate.emit(detail);
       },
       onDecision: (detail: CornDecisionDetail) => this.cornDecision.emit(detail),

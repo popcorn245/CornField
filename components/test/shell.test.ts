@@ -71,6 +71,21 @@ describe('the shell holds no behaviour (D1)', () => {
     }
   });
 
+  /** The page's own things a shell would reach for to do something by itself: none is in a shell (the one read of the page's address, for the sign-in's way back, is handed to the piece as it is) */
+  const PAGE_REACH = /\b(fetch|document|window|globalThis|self|history|location|navigator|localStorage|sessionStorage|indexedDB|setTimeout|setInterval|requestAnimationFrame|queueMicrotask|XMLHttpRequest|WebSocket|EventSource|eval|Function|innerHTML|outerHTML|insertAdjacentHTML|addEventListener|dispatchEvent|querySelector|querySelectorAll|getElementById|attachShadow|import)\b/g;
+  const reachesPage = (code: string) => code
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/[^'"`\n]*$/gm, '')
+    .replace(/^import .*$/gm, '')
+    .replace("pageUrl: () => (typeof location === 'undefined' ? '' : location.href)", 'pageUrl')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, "''")
+    .match(PAGE_REACH) || [];
+
+  it('reaches nothing of the page by itself: no fetch, document, window, timer, storage, listener or markup of its own (the piece does all of it)', () => {
+    for (const { name, file } of sources) expect(reachesPage(fs.readFileSync(file, 'utf8')), name).toEqual([]);
+    // and the check is not blind: each way a shell could do something by itself is caught
+    for (const bad of ["onDecision: (d) => { fetch('/x'); }", 'onReady: () => setTimeout(() => this.cornReady.emit(), 0)', 'this.el.shadowRoot.innerHTML = this.src;', "window.addEventListener('message', () => {})", 'location.assign(detail.signIn)', "document.title = 'x'", "import('./x.js')"]) expect(reachesPage(bad), bad).not.toEqual([]);
+  });
+
   it('the check is not blind: it refuses the engine\'s other modules, the bridges, a package and a helper of the package\'s own', () => {
     const from = path.join(dir, 'corn-map', 'corn-map.tsx');
     for (const spec of ['../../../../explorer/engine/render.js', '../../../../explorer/state.js', '../../../../explorer/instance.js', 'lodash', '../../util', '../../../../explorer/pieces/../state.js']) expect(allowed(spec, from), spec).toBe(false);
@@ -366,6 +381,38 @@ describe('<corn-review>', () => {
     expect(el.node).toBe(b);
     expect(el.getAttribute('node')).toBe(b);
     expect(selected.at(-1)).toEqual({ id: b, kind: 'node', source: 'api' });
+  });
+
+  it('proposal follows the reviewer as view does: Close in the bar sets it to null, once; the host setting it again opens it, said once, never echoed', async () => {
+    const json = (body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json', ...headers } });
+    const fetched = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const u = new URL(String(input));
+      if (u.pathname === '/cornfield/config.json') return json({ name: 'cornfield', version: '0.0.0', strings: {}, layers: { add: [], off: [], order: [] }, theme: null });
+      if (u.pathname === '/topology.json') return json(topology());
+      if (u.pathname === '/proposals/0002-checkout.json') return json(checkout, { 'X-Proposal-Source': 'checkout' });
+      return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+    });
+    const el = await made('<corn-review src="https://map.example.com" proposal="0002-checkout"></corn-review>');
+    const navigated: Array<{ proposal: string | null; change: string }> = [];
+    el.addEventListener('cornNavigate', (e) => navigated.push((e as CustomEvent).detail));
+    for (let i = 0; i < 60 && !q(el, '#proposal-title')?.textContent; i++) await frames(1);
+    expect(q(el, '#proposal-title')?.textContent).toBe(checkout.title);
+    expect(navigated).toEqual([{ proposal: '0002-checkout', source: null, view: 'diff', change: 'opened' }]);
+    el.proposal = '0002-checkout'; // the value it has: nothing happens
+    await frames(3);
+    expect(navigated).toHaveLength(1);
+    q(el, '[data-action="close-proposal"]')!.click();
+    await frames(3);
+    expect(el.proposal).toBeNull();
+    expect(navigated.slice(1)).toEqual([{ proposal: null, source: null, view: null, change: 'closed' }]);
+    const asked = fetched.mock.calls.length;
+    el.proposal = '0002-checkout'; // the host opens it again
+    for (let i = 0; i < 60 && navigated.length < 3; i++) await frames(1);
+    await frames(3);
+    expect(navigated.slice(2)).toEqual([{ proposal: '0002-checkout', source: null, view: 'diff', change: 'opened' }]);
+    expect(el.proposal).toBe('0002-checkout');
+    expect(fetched.mock.calls.slice(asked).map(([u]) => new URL(String(u)).pathname)).toEqual(['/proposals/0002-checkout.json']);
+    fetched.mockRestore();
   });
 
   it('its events bubble and cross the shadow root, and have fit(), focusNode() and refresh(), each answering with a promise', async () => {
