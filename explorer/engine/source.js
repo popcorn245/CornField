@@ -64,13 +64,14 @@ export function parseSource(src) {
 
 /** The numbers of a version, or null */
 const parts = (v) => {
-  const m = /^\s*v?(\d+)\.(\d+)\.(\d+)/.exec(String(v == null ? '' : v));
+  const m = /^\s*v?(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:[-+][0-9A-Za-z.-]{1,64})?\s*$/.exec(String(v == null ? '' : v));
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 };
 
 /**
  * What differs between two cornfield versions: the major, the minor (a different minor of the same major) or only the patch. A version that is
- * not `x.y.z` (a dev build, none at all) cannot be compared: 'unknown'.
+ * not `x.y.z` (with an optional `-pre` or `+build`; a dev build, none at all, or anything else after it) cannot be compared: 'unknown', and is never
+ * shown, so what the version notice repeats of the server is only ever a version.
  * @returns {'same' | 'patch' | 'minor' | 'major' | 'unknown'}
  */
 export function compareVersions(a, b) {
@@ -284,7 +285,7 @@ export function createSource(inst, { version = '', pageUrl = () => '', onConfig 
     applyConfig(inst, config);
     if (own.strings) useStrings(config);
     const drift = compareVersions(version, config.version);
-    if (version && (drift === 'minor' || drift === 'major')) source.say({ state: 'version', server: String(config.version), package: version, drift });
+    if (version && (drift === 'minor' || drift === 'major')) source.say({ state: 'version', server: String(config.version).trim(), package: version, drift });
     onConfig(config);
   }
 

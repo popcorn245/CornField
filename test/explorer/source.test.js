@@ -64,7 +64,9 @@ describe('versions (D11)', () => {
     expect(compareVersions('v1.0.0-rc.1', '1.0.0')).toBe('same');
   });
   it('cannot compare what is not x.y.z', () => {
-    for (const bad of ['', 'dev', undefined, null, '1.2']) { expect(compareVersions('0.1.0', bad)).toBe('unknown'); expect(compareVersions(bad, '0.1.0')).toBe('unknown'); }
+    for (const bad of ['', 'dev', undefined, null, '1.2', '9.0.0<img src=x onerror=alert(1)>', '9.0.0 and more', '9.0.0-<b>', '1'.repeat(12) + '.0.0']) { expect(compareVersions('0.1.0', bad), String(bad)).toBe('unknown'); expect(compareVersions(bad, '0.1.0')).toBe('unknown'); }
+    expect(compareVersions('0.1.0', 'v1.0.0-rc.1')).toBe('major');
+    expect(compareVersions('0.1.0', ' 0.2.0+build.7 ')).toBe('minor');
   });
 });
 
