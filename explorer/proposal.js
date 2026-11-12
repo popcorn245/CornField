@@ -591,6 +591,7 @@ export function showEdgePanel(edge) {
   $('drawer-file-btn').hidden = true;
   $('drawer-run-btn').hidden = true;
   $('spec-drawer').classList.add('drawer-open');
+  $('spec-drawer').inert = false; // closed, the panel is inert (MAP-02): open for an edge, its links and its Close are reached as a node's are
   $('drawer-backdrop').hidden = false;
   touchScene();
   render();

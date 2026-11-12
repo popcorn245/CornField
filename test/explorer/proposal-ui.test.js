@@ -510,6 +510,24 @@ describe('marked edges', () => {
     expect(state.selectedEdge).toBeNull();
   });
 
+  it('can be used once open for an edge: not inert, its From link selects the node, Close closes it, again after a node', async () => {
+    fakeHub(LISTING, { '0013-meals': good });
+    await mount('?proposal=0013-meals');
+    const edge = state.edges.find((e     ) => e.kind === 'writes');
+    showEdgePanel(edge);
+    expect($('spec-drawer').inert).toBe(false); // an inert panel takes no click and no focus: its links and Close were out of reach
+    click(document.querySelector('#spec-drawer [data-action="select-node"]'));
+    expect(state.selectedNode && state.selectedNode.id).toBe(edge.from);
+    expect(state.selectedEdge).toBeNull();
+    showEdgePanel(edge); // open for the edge again, after the panel showed a node
+    expect($('spec-drawer').inert).toBe(false);
+    expect($('drawer-badge').textContent).toBe('Edge');
+    click(document.querySelector('#spec-drawer [data-action="close-drawer"]'));
+    expect(state.selectedEdge).toBeNull();
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect($('spec-drawer').inert).toBe(true);
+  });
+
   it('has none in the Before view', async () => {
     fakeHub(LISTING, { '0013-meals': good });
     await mount('?proposal=0013-meals');
