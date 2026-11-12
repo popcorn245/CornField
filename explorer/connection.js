@@ -8,6 +8,8 @@
  */
 
 import { announce } from './keyboard.js';
+import { pageInstance } from './state.js';
+import { notSentWords as wordsFor } from './engine/connection.js';
 
 export const OFFLINE_WORDS = 'You are offline. Nothing is sent until you are back; what you have typed is kept.';
 export const ONLINE_WORDS = 'You are back online.';
@@ -21,9 +23,7 @@ let hideTimer = 0;
 export const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 /** The words for an action that got no answer: offline, it was not sent (and what was typed is still there); online, the server did not answer */
-export function notSentWords(what) {
-  return isOffline() ? `You are offline. ${what} was not sent; what you typed is kept. Try again when you are back.` : `cornfield did not answer. ${what} was not sent; what you typed is kept.`;
-}
+export const notSentWords = (what) => wordsFor(pageInstance(), what);
 
 function paint(said) {
   const el = document.getElementById('offline-banner');

@@ -16,6 +16,7 @@
  *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
+ *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onHide(fn): the few window facts the review needs
  *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
@@ -36,6 +37,16 @@
  *   layers          (none)  a layer went on or off, or the layers were set (engine/layers.js): live.js starts or stops the live layer, a search moves its matches
  *   search          { query, current }  the search's query or its current match changed (pieces/search.js)
  *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js)
+ *   proposal        { change: 'opened' | 'view' | 'closed', slug, source, pinSource, view, proposal }  the open proposal changed (engine/proposal.js; the page writes the address from it)
+ *   proposal:draw   { open }  the bar and the review column draw again; proposal:bar { open }: they have, so what sits on the bar draws again
+ *   proposal:mark   { applied, effective, proposal }  before the map is laid out (the what-if editor marks its edits)
+ *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal; proposal:listing: the list the server gave was read
+ *   proposal:pull-head sha  the open proposal's PR was read; proposal:waiting { run, key }: a run waits on it (the bar's waiting line); proposal:waiting-reset
+ *   scenario:player { id, index, total, done, playing, checks } | null  the scenario player moved, or closed (engine/player.js)
+ *   changes:paint   (none)  the review column's lists were drawn again; changes:peek text: its count line, for a phone's peek
+ *   decision        { outcome: 'approved' | 'notes', review, slug, source, open }  the server took the review, after it answered (pieces/decision.js);
+ *                   `open`: false when another proposal was opened, or this one closed, while it was sent
+ *   auth            { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
  *   source          { state, … }  where a scope's or a map's load from a cornfield server is (engine/source.js lists the states: loading, ready, sign-in,
  *                   not-allowed, offline, server, address, version); pieces/status.js shows it and pieces/scope.js turns it into `cornAuth` and `cornError`
  *   theme           { state: 'loading' | 'ready' | 'failed' | 'none' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`; 'none': taken back out): the map reads its tokens again
@@ -46,6 +57,9 @@
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
+ *   node:show-edge  { edge }  show this edge in the panel (engine/proposal.js `showEdge`)
+ *   changes:show    'changes' | 'scenarios'  the review column shows that section; proposal:focus-title: the focus goes to the proposal's name
+ *   whatif:clear    (none)  the edits went with a note; mockups:refresh: an approval covers the screens as they are now; whatif:edits-changed: the edits changed
  *   node:show       { node, frame }  show this node in the panel (engine/selection.js `selectNode`, once the scene is up to date); node:close: close it;
  *                   node:focus: the focus goes into the open panel (Enter on the map)
  *   layers:redraw   (none)  draw the Layers menu again (engine/layers.js: a layer, the nodes or a review changed)
@@ -59,6 +73,10 @@
  *                           (live.js does); live:hydrate (emit) el: its photos
  *   forge:can-start (none)  can a run be started from here? -> boolean; forge:start (emit) { slug, returnTo }: open the Start dialog
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
+ *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
+ *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
+ *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
+ *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
  *
  *   What input.js asks of the page (requests, not news of a change; the page decides what each means):
  *   select          node    a tap on a node; `background`: a tap on the bare map; `grab`: a hand took the camera
@@ -248,11 +266,28 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
     /** The device pixel ratio now */
     dpr: () => (win && win.devicePixelRatio) || 1,
     /** Whether the tab is hidden */
-    hidden: () => !!(doc && doc.hidden),
+    hidden: () => !!(doc && (doc.hidden || doc.visibilityState === 'hidden')),
     /** Calls `fn` when the tab is shown again; the one document-level fact an instance needs. Removed by destroy(). */
     onShown(fn) {
       if (!doc) return () => {};
-      return inst.listen(doc, 'visibilitychange', () => { if (!doc.hidden) fn(); });
+      return inst.listen(doc, 'visibilitychange', () => { if (!inst.hidden()) fn(); });
+    },
+    /** Whether the browser says it has no network (`navigator.onLine === false`) */
+    offline: () => !!(win && win.navigator && win.navigator.onLine === false),
+    /** Calls `fn(offline)` when the browser goes offline (true) or comes back (false). Removed by destroy(). */
+    onNetwork(fn) {
+      if (!win) return () => {};
+      const offs = [inst.listen(win, 'offline', () => fn(true)), inst.listen(win, 'online', () => fn(false))];
+      return () => offs.forEach((off) => off());
+    },
+    /** Calls `fn()` when the window gets the focus again. Removed by destroy(). */
+    onWindowFocus: (fn) => (win ? inst.listen(win, 'focus', () => fn()) : () => {}),
+    /** Calls `fn()` when the page is going away (a tab closed, a reload). Removed by destroy(). */
+    onPageHide: (fn) => (win ? inst.listen(win, 'pagehide', () => fn()) : () => {}),
+    /** Calls `fn()` when the tab is hidden. Removed by destroy(). */
+    onHide(fn) {
+      if (!doc) return () => {};
+      return inst.listen(doc, 'visibilitychange', () => { if (inst.hidden()) fn(); });
     },
     /** A small key-value store (the browser's localStorage, which may be blocked): what a viewer's own choices are kept in */
     store: {
@@ -287,6 +322,8 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
       if (!slots.has(key)) slots.set(key, make(inst));
       return slots.get(key);
     },
+    /** Whether `destroy()` has run: an answer that arrives after it (a fetch in flight) is not wanted */
+    get ended() { return destroyed; },
     /** Removes every listener, observer and timer the instance's modules set up and releases the renderer's GPU context. Safe to call twice. */
     destroy() {
       if (destroyed) return;

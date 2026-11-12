@@ -4,11 +4,10 @@
  * A bridge (spec 0011 D2 and D3, step 4): the node panel is now a piece (pieces/node-panel.js) and choosing a node is the instance's
  * (engine/selection.js). This file keeps the old names for the modules that are not yet on an instance (forge-panel.js, house.js, proposal.js,
  * review-column.js, page.js), bound to the page's instance, and answers for the unconverted neighbours the piece asks (the live layer's
- * block, the Start dialog, the end of a playing scenario). It goes when the last of those callers is converted.
+ * block, the Start dialog). It goes when the last of those callers is converted.
  */
 
 import { pageInstance } from './state.js';
-import { clearScenario } from './scenario-ui.js';
 import { liveSection, hydrateLivePhotos } from './live.js';
 import { canStartAgent, openProposalStart } from './forge-panel.js';
 import { selectNode as select, clearSelection } from './engine/selection.js';
@@ -19,7 +18,6 @@ export const LINES_CAP = CAP;
 
 // What the node panel asks of neighbours that are not on an instance yet, answered for the page's instance
 const page = pageInstance();
-page.on('scenario:clear', () => { clearScenario(); });
 page.on('live:section', (node) => liveSection(node));
 page.on('live:hydrate', (el) => { hydrateLivePhotos(el); });
 page.on('forge:can-start', () => canStartAgent());

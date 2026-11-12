@@ -93,7 +93,7 @@ Chromium resolves `*.localhost` to this machine, so two names are two origins th
 
 ## The components
 
-cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there are two: [`<corn-map>`](#properties-events-and-methods) and [`<corn-scope>`](#corn-scope-and-src-reading-a-cornfield-server), which reads a cornfield server for the pieces inside it.
+cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there are two: [`<corn-map>`](#properties-events-and-methods) and [`<corn-scope>`](#corn-scope-and-src-reading-a-cornfield-server), which reads a cornfield server for the pieces inside it (`<corn-scope>` and a map's `src` come with the release after 0.48.0).
 
 ### Getting the components
 
@@ -155,7 +155,7 @@ import '@popcorn245/cornfield-components/corn-map';     // registers <corn-map>
 import '@popcorn245/cornfield-components/corn-scope';   // registers <corn-scope>; '@popcorn245/cornfield-components' registers every component
 ```
 
-**Published from the next release once the maintainer adds the npm token** ([RELEASING.md](../RELEASING.md#the-web-components-on-npm)); until then the package is built in every release but not on npm, and the server is the way. The package has the same files as above (`dist/`), the type declarations (`types` in its `exports`), and `"sideEffects": true`: importing a module is what registers its custom element, so a bundler must not drop an `import '…/corn-map'` that uses nothing from it (`true` tells it not to).
+**On npm since 0.48.0**, published by each release with a provenance attestation ([RELEASING.md](../RELEASING.md#the-web-components-on-npm)). The package has the same files as above (`dist/`), the type declarations (`types` in its `exports`), and `"sideEffects": true`: importing a module is what registers its custom element, so a bundler must not drop an `import '…/corn-map'` that uses nothing from it (`true` tells it not to).
 
 **One version.** The components are released with cornfield under the same number: `@popcorn245/cornfield-components@0.48.0` is the build of cornfield `0.48.0`, the one that cornfield's image serves, and `version.json`, the `version` export and the package say the same. Each release builds them with the version it just made. For a page that talks to a server, use the server's copy; if you install the package, keep it at your server's version: a scope or a map with `src` shows a notice when the two differ by a minor or more ([versions](#what-the-person-sees-and-what-is-said)).
 

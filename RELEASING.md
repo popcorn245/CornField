@@ -78,13 +78,18 @@ git checkout -- package.json package-lock.json
 
 ## The web components on npm
 
-`@popcorn245/cornfield-components` is wired and **not armed**, and is **not on npm**: the release's `components` job publishes it when the repository secret `NPM_TOKEN` exists (or, once the name has been published, by trusted publishing), and otherwise says it did not. To arm it, once:
+`@popcorn245/cornfield-components` **is on npm**, first published by the 0.48.0 release. The repository secret `NPM_TOKEN`, which the root packages' first publish used, was already there, so the release's `components` job published it at once, with a provenance attestation. Each release publishes it again under the new number.
 
-1. On npmjs.com create an **access token** that can publish to the `@popcorn245` scope: a *granular access token* with **Read and write** on packages and scopes **`@popcorn245`** (the scope covers the new name `@popcorn245/cornfield-components`, which does not exist until its first publish), or an automation token of an account that owns the scope. It is the same secret the root packages' first publish uses ([above](#npm-from-a-token-to-trusted-publishing)): one token for the scope serves all three names.
-2. In the repository: **Settings → Secrets and variables → Actions → Repository secrets → New repository secret**, name `NPM_TOKEN`, value the token. (Not a variable: a variable is printed in logs.)
-3. The next release publishes it, with a provenance attestation. The workflow never prints the token, and the job's only permissions are `contents: read` and `id-token: write`.
+How the job decides, so that nothing is published by accident and nothing stops quietly:
 
-After the first publish you can do what the root packages do: name `release.yml` as the package's trusted publisher on npmjs.com (Packages → `@popcorn245/cornfield-components` → Settings → Trusted Publisher; fields as [above](#npm-from-a-token-to-trusted-publishing), allowed action `npm publish`) and then remove the token. Set up all **three** trusted publishers (`cornfield`, `@popcorn245/cornfield`, `@popcorn245/cornfield-components`) before you delete `NPM_TOKEN`: once the name is on npm the job publishes without the token, by trusted publishing, and fails with `ENEEDAUTH` if the package names no trusted publisher (as the npm job does), rather than stopping quietly. The job installs the npm that trusted publishing needs.
+- **`NPM_TOKEN` is set:** it publishes (npm tries trusted publishing first and falls back to the token).
+- **No token, and the name is on npm:** it publishes by trusted publishing, as the npm job does.
+- **No token, and the name has never been published:** it says so and succeeds. This was the state before 0.48.0, and is the state of a fork.
+- **The registry cannot say which:** it fails, and publishes nothing.
+
+The workflow never prints the token, and the job's only permissions are `contents: read` and `id-token: write`. A token for a fork needs **Read and write** on packages and scopes for its own scope, added under **Settings → Secrets and variables → Actions → Repository secrets** as `NPM_TOKEN` (not a variable: a variable is printed in logs).
+
+Now that it is published you can do what the root packages do: name `release.yml` as the package's trusted publisher on npmjs.com (Packages → `@popcorn245/cornfield-components` → Settings → Trusted Publisher; fields as [above](#npm-from-a-token-to-trusted-publishing), allowed action `npm publish`) and then remove the token. Set up all **three** trusted publishers (`cornfield`, `@popcorn245/cornfield`, `@popcorn245/cornfield-components`) before you delete `NPM_TOKEN`: once the name is on npm the job publishes without the token, by trusted publishing, and fails with `ENEEDAUTH` if the package names no trusted publisher (as the npm job does), rather than stopping quietly. The job installs the npm that trusted publishing needs.
 
 A package published by hand is refused by `prepublishOnly` ([components/scripts/release-guard.mjs](components/scripts/release-guard.mjs)) unless it runs in `components/` with `CORNFIELD_RELEASE=1` and `CORNFIELD_RELEASE_TAG=v<version>` set, with `package.json`, `dist/version.json` and `dist/manifest.json` all saying that version: a build made for another version cannot be published under this one's number.
 

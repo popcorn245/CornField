@@ -771,4 +771,4 @@ The node panel read two more words that are gone: `propsTitle` ("Properties & At
 
 ## The old `--hx-*` names
 
-`tokens.css` keeps the old names as aliases for one release, so `scene.js`, `proposal.js` (which writes `--hx-mark-*` on `:root` for the map's own ground) and any plugin CSS keep working: `--hx-indigo: var(--corn-accent-text)`, `--hx-line: var(--corn-line)`, `--hx-mark-added: var(--corn-added)`, and so on. **The aliases go in the next minor release.** Write `--corn-*` in new CSS.
+`tokens.css` keeps the old names as aliases for one release, so `scene.js`, the proposal's bar (`explorer/pieces/proposal.js`, which writes `--hx-mark-*` on the instance's token element, `:root` on cornfield's page, for the map's own ground) and any plugin CSS keep working: `--hx-indigo: var(--corn-accent-text)`, `--hx-line: var(--corn-line)`, `--hx-mark-added: var(--corn-added)`, and so on. **The aliases go in the next minor release.** Write `--corn-*` in new CSS.

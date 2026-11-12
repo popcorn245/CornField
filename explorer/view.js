@@ -165,3 +165,6 @@ export function syncViewUi() {
   pageInstance().emit('view', state.view); // the Layers chip dims while the data-flow view is on (pieces/layers.js)
   syncHint(); // the hint's words for this view and pointer, and whether it shows (hint.js)
 }
+
+// The proposal asks the page to lay the map out again from the nodes and edges it hands over (engine/proposal.js): this module is not on an instance yet
+pageInstance().on('map:set', ({ nodes, edges }) => { setMap(nodes, edges); return true; });
