@@ -250,11 +250,12 @@ function sectionsOf(inst) {
 
   /** "Threads": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the Work panel */
   function threadsSection(node) {
-    const index = state.threadIndex;
+    // The Work panel answers (threads:index) when threads are on and a maintainer is signed in; nobody answering is no Threads section
+    const index = inst.ask('threads:index', node.id);
     if (!index) return '';
-    const threads = index.for(node.id);
-    // "Start a thread about this" shows whenever threads are on and a maintainer is signed in (the panel only sets `start` then)
-    const start = index.start ? `<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-textact" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge())}, with this node mentioned">Start a thread about this</button>` : '';
+    const threads = index.threads;
+    // "Start a thread about this" shows whenever threads are on and a maintainer is signed in (the panel only answers then)
+    const start = index.start ? `<button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-textact" data-thread-start="${escHtml(node.id)}" aria-label="Start a thread about this: opens the New idea form for ${escHtml(index.forge)}, with this node mentioned">Start a thread about this</button>` : '';
     if (!threads || !threads.length) return start;
     const rows = threads.map((th) => {
       const count = Number(th.comments) || 0;
@@ -410,7 +411,7 @@ export function mount(root, inst, options = {}) {
     <div id="drawer-threads">${sections.threadsSection(node)}</div>
     ${sections.diffSection(node)}`;
     addParts(metaList);
-    if (state.threadIndex) state.threadIndex.ensure();
+    inst.emit('threads:ensure'); // the Work panel reads the threads once, for "Mentioned in"
     inst.emit('live:hydrate', own('drawer-live'));
 
     // The actions: Open file (the node's file on the forge) is the primary one; with an address too, Open route is the quiet one.
@@ -513,6 +514,15 @@ export function mount(root, inst, options = {}) {
     // The panel's ✕: the focus would be left on a hidden button, so it goes back to the map
     if (target.dataset.action === 'close-drawer' && state.canvas) scope.timeout(() => state.canvas.focus(), 0);
   });
+  // A thread listed in the panel opens in the Work panel, and "Start a thread about this" opens its New idea form (the Work panel hears both)
+  scope.listen(drawer, 'click', (e) => {
+    const open = e.target.closest && e.target.closest('[data-thread-open]');
+    if (open) { inst.emit('thread:open', { number: Number(open.dataset.threadOpen) }); return; }
+    const start = e.target.closest && e.target.closest('[data-thread-start]');
+    if (start && state.selectedNode) inst.emit('thread:start', { node: state.selectedNode });
+  });
+  // The threads that mention nodes changed (the list was read, or the map changed): the section is drawn again
+  scope.on('threads:changed', () => repaintThreads());
   // The dim layer behind the panel: on a phone a tap there folds the panel to its peek; elsewhere it closes it
   scope.listen(backdrop, 'click', (e) => {
     if (isPhone(inst)) { onBackdrop(inst, e); return; }

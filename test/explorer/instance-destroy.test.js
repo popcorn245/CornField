@@ -36,6 +36,8 @@ import { HOLD_MS } from '../../explorer/decision-model.js';
 import { initKeyboard } from '../../explorer/engine/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode } from '../../explorer/engine/selection.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as workPiece from '../../explorer/pieces/work.js';
 
 const protoWith = (obj, key) => { let p = obj; while (p && !Object.prototype.hasOwnProperty.call(p, key)) p = Object.getPrototypeOf(p); return p; };
 
@@ -493,5 +495,146 @@ describe('the review pieces: proposal bar, change list with the player, decision
     await opening.catch(() => {});
     expect(root.querySelector('#proposal-bar')).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('the Work panel', () => {
+  const NOW = Date.parse('2026-10-19T12:00:00Z');
+  const ago = (h) => new Date(NOW - h * 3_600_000).toISOString();
+  const json = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
+  const CONFIG = { forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } };
+  const PULL = { number: 7, title: 'Seven', state: 'open', draft: false, author: { login: 'a' }, labels: [], head: { ref: 'b', sha: 'sha7' }, base: { ref: 'main' }, url: 'https://git.example.test/pull/7', createdAt: ago(5), updatedAt: ago(4), mergedAt: null };
+  const RUN = { kind: 'code', profile: null, refs: { issue: 3 }, open: true, requestedBy: 'm', requestedAt: ago(5), via: 'dashboard', limits: null, stopRequested: null, checks: null, pull: null, nodes: [], timeline: [], report: null, answer: null, runId: 'run-01JC8Z3Q5M7VXK2RT9N4B6HD03', status: 'working' };
+  /** A server that answers at once, but holds the Issues list back until `release()`; every request is kept */
+  function server() {
+    const calls = [];
+    const held = [];
+    const fetch = vi.fn((url, init = {}) => {
+      const u = new URL(url, 'http://localhost');
+      calls.push(`${init.method || 'GET'} ${u.pathname}`);
+      const answer = (() => {
+        if (u.pathname === '/api/agent-runs') return json(200, { ok: true, runs: [RUN], open: 1, maxOpen: 10, profiles: ['fast'], limits: {} });
+        if (u.pathname === '/proposals') return json(200, []);
+        if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at: ago(0.01), rate: '', items: [PULL] });
+        if (u.pathname === '/api/forge/pulls/7') return json(200, { ok: true, at: ago(0.01), rate: '', pull: PULL, files: [], checks: [{ id: 'run:1', name: 'test', state: 'success', url: null, rerunnable: false }] });
+        return json(200, { ok: true, at: ago(0.01), rate: '', items: [] });
+      })();
+      if (u.pathname === '/api/forge/issues') return new Promise((resolve) => held.push(() => resolve(answer)));
+      return Promise.resolve(answer);
+    });
+    return { calls, fetch, release: () => { while (held.length) held.pop()(); } };
+  }
+  const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  const settle = () => vi.advanceTimersByTimeAsync(0);
+
+  /** A panel as a component would make it: a bare root, no map, no node panel, no proposal */
+  function make(srv) {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const inst = createInstance({ root, fetch: srv.fetch });
+    const said = [];
+    inst.on('announce', (text) => said.push(text));
+    const work = workPiece.mount(root, inst, { config: CONFIG, clock: () => NOW });
+    return { root, inst, work, said };
+  }
+
+  /** Everything half done: the Start dialog open, a pull request's confirm step open, the Issues list on its way, the runs poll and the specs poll armed */
+  async function halfDone(one, dialog = 'confirm') {
+    const q = (sel) => one.root.querySelector(sel);
+    one.work.openForge({ tab: 'pulls' });
+    await settle();
+    click(q('[data-forge-pr="7"]'));
+    await settle();
+    if (dialog === 'confirm') click(q('[data-forge-merge]'));
+    one.work.openForge({ tab: 'issues' }); // the Issues list is asked for and not answered
+    await settle();
+    if (dialog === 'agent') await one.work.openProposalStart('0042-x'); // (the two dialogs are modal: one is open at a time)
+    return q;
+  }
+
+  it('has things to take back: listeners, a poll, markup', async () => {
+    const srv = server();
+    const one = make(srv);
+    await settle();
+    await halfDone(one);
+    const s = snapshot();
+    expect(s.listeners).toBeGreaterThan(8);
+    expect(s.timers).toBeGreaterThan(0);
+    expect(one.root.querySelector('#forge-confirm').hidden).toBe(false);
+    one.work.destroy();
+    expect(one.root.children).toHaveLength(0);
+    const again = make(srv);
+    await settle();
+    await halfDone(again, 'agent');
+    expect(again.root.querySelector('#agent-start').hidden).toBe(false);
+    again.work.destroy();
+    expect(again.root.children).toHaveLength(0);
+    srv.release();
+  });
+
+  it('mounted and destroyed 50 times with a dialog open, a poll due, a fetch in flight and a confirm half done, leaves nothing and fires nothing afterwards', async () => {
+    const baseline = snapshot();
+    const srv = server();
+    const ones = [];
+    for (let i = 0; i < 50; i++) {
+      const one = make(srv);
+      await settle();
+      await halfDone(one, i % 2 ? 'agent' : 'confirm');
+      one.work.destroy();
+      one.root.remove();
+      ones.push(one);
+    }
+    await vi.advanceTimersByTimeAsync(200); // the announcer's own timer
+    expect(snapshot()).toEqual(baseline);
+    // what arrives after the end (the held list, the poll's turn, every timer) asks for nothing and says nothing
+    const asked = srv.calls.length;
+    const said = ones.map((one) => one.said.length);
+    srv.release();
+    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    expect(srv.calls.length).toBe(asked);
+    expect(ones.map((one) => one.said.length)).toEqual(said);
+    expect(document.querySelectorAll('#forge-panel, #forge-confirm, #agent-start, #forge-btn, #run-overlay')).toHaveLength(0);
+    expect(snapshot()).toEqual(baseline);
+  });
+
+  it('is what does it: 10 panels mounted and not destroyed leave listeners and timers behind', async () => {
+    const baseline = snapshot();
+    const srv = server();
+    for (let i = 0; i < 10; i++) { const one = make(srv); await settle(); await halfDone(one, i % 2 ? 'agent' : 'confirm'); }
+    expect(snapshot().listeners).toBeGreaterThan(baseline.listeners);
+    expect(snapshot().timers).toBeGreaterThan(baseline.timers);
+    srv.release();
+  });
+
+  it('works alone in a bare root, with no map, no node panel and no proposal: every tab opens and nothing throws', async () => {
+    const srv = server();
+    const one = make(srv);
+    await settle();
+    const q = (sel) => one.root.querySelector(sel);
+    for (const tab of ['specs', 'pulls', 'issues', 'threads', 'work', 'deploys']) {
+      one.work.openForge({ tab });
+      await settle();
+      srv.release();
+      await settle();
+      expect(q(`[data-forge-kind="${tab}"]`).getAttribute('aria-pressed')).toBe('true');
+    }
+    click(q('[data-forge-kind="pulls"]'));
+    await settle();
+    click(q('[data-forge-pr="7"]'));
+    await settle();
+    expect(q('#forge-detail').textContent).toContain('Seven');
+    click(q('[data-action="clear-forge-pr"]'));
+    click(q('[data-forge-kind="threads"]'));
+    await settle();
+    click(q('#idea-open'));
+    expect(q('#idea-form').hidden).toBe(false);
+    // the node panel's questions are answered with no node panel there, and a thread opened from nowhere is a thread opened
+    expect(one.inst.ask('threads:index', 'nobody')).toMatchObject({ forge: 'GitHub', start: true });
+    expect(one.inst.ask('forge:can-start')).toBe(true);
+    one.inst.emit('thread:open', { number: 5 });
+    await settle();
+    expect(q('#forge-detail').hidden).toBe(false);
+    one.work.destroy();
+    one.inst.destroy();
   });
 });

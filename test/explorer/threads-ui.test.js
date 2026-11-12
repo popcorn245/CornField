@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
-import { state } from '../../explorer/state.js';
+import { state, pageInstance } from '../../explorer/state.js';
 import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
@@ -196,7 +196,7 @@ describe('the Threads tab', () => {
     const server = fakeServer();
     mount({ threads: false });
     expect(q('[data-forge-kind="threads"]').hidden).toBe(true);
-    expect(state.threadIndex).toBe(null);
+    expect(pageInstance().ask('threads:index', 'x')).toBeUndefined(); // the node panel is told nothing: no Threads section
     openForge({ tab: 'pulls' });
     await settle();
     selectNode(MAP.nodes[2]);

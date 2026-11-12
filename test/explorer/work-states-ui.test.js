@@ -34,8 +34,13 @@ import { approvalWarning, emptyWords } from '../../explorer/forge-panel-model.js
 // @ts-expect-error plain JS modules, no declarations
 import { OFFLINE_WORDS, ONLINE_WORDS, resetConnectionForTests } from '../../explorer/connection.js';
 // @ts-expect-error plain JS modules, no declarations
-import { resetFeedbackForTests, RESULT_MS } from '../../explorer/feedback.js';
+import { resetFeedback, RESULT_MS } from '../../explorer/engine/feedback.js';
+// @ts-expect-error plain JS modules, no declarations
+import { pageInstance as feedbackPage } from '../../explorer/state.js';
+const resetFeedbackForTests = () => resetFeedback(feedbackPage());
 import { explorerPage } from '../helpers.js';
+// @ts-expect-error plain JS modules, no declarations
+import { ensurePagePieces } from '../../explorer/page-pieces.js';
 
 import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
@@ -534,6 +539,7 @@ describe('Can\'t land yet says what to do next (F41)', () => {
 describe('the panel\'s top stays, and a phone shows the tabs run on (F42)', () => {
   it('has the title row and the tabs together in one fixed top, in the markup and the CSS', () => {
     document.body.innerHTML = body;
+    ensurePagePieces(); // the panel is the Work piece's markup (pieces/work-markup.js)
     const top = q('[data-corn="work-top"]');
     expect(top.classList.contains('hx-forge-top')).toBe(true);
     expect(top.contains(q('.hx-forge-head'))).toBe(true);

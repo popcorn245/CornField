@@ -40,6 +40,8 @@ import * as changesPiece from '../../explorer/pieces/changes.js';
 import * as decisionPiece from '../../explorer/pieces/decision.js';
 // @ts-expect-error plain JS modules, no declarations
 import { HOLD_MS } from '../../explorer/decision-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as workPiece from '../../explorer/pieces/work.js';
 
 const sample = loadSample();
 /** Two different maps: all of the sample, and the sample without its pages (and the edges that touch them) */
@@ -54,13 +56,13 @@ const SIZE = { width: 800, height: 600 };
 const measure = { save() {}, restore() {}, font: '', measureText: (s) => ({ width: String(s).length * 6 }) };
 
 /** A map mounted in a root of its own, with the renderer replaced by one that records what it was asked to draw */
-function mount(name, topology, tokens = {}) {
+function mount(name, topology, tokens = {}, extra = {}) {
   const root = document.createElement('div');
   root.id = `root-${name}`;
   for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
   root.innerHTML = '<div class="hx-stage"><canvas id="graph-canvas"></canvas><canvas id="label-canvas"></canvas></div>';
   document.body.append(root);
-  const inst = createInstance({ root });
+  const inst = createInstance({ root, ...extra });
   const canvas = inst.el('graph-canvas');
   const stage = canvas.parentElement;
   Object.defineProperty(stage, 'clientWidth', { value: SIZE.width });
@@ -295,7 +297,7 @@ describe('two instances in one document', () => {
   it('hands out what the map and the page use, and nothing more (spec 0011: the simplest thing; a later step adds what it needs)', () => {
     const inst = createInstance({ root: document.body });
     expect(Object.keys(inst).sort()).toEqual([
-      'active', 'ask', 'attach', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'ended', 'fetch', 'hidden', 'listen', 'offline', 'on', 'onHide', 'onNetwork', 'onPageHide', 'onSceneTouch', 'onShown',
+      'active', 'ask', 'attach', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'ended', 'fetch', 'hidden', 'listen', 'offline', 'on', 'onHide', 'onNetwork', 'onPageFocus', 'onPageHide', 'onPageShow', 'onResize', 'onSceneTouch', 'onShown',
       'onWindowFocus', 'own', 'reducedMotion', 'release', 'root', 'setSelection', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
     ]);
     inst.destroy();
@@ -699,5 +701,161 @@ describe('two instances, each with its own proposal bar, change list, player and
     expect(B.state.proposal).not.toBeNull();
     expect(q(b, '#proposal-bar').hidden).toBe(false);
     expect(q(b, '#review-column').hidden).toBe(false);
+  });
+});
+
+describe('two Work panels in one document (step 6)', () => {
+  const NOW = Date.parse('2026-10-19T12:00:00Z');
+  const ago = (h) => new Date(NOW - h * 3_600_000).toISOString();
+  const ID = (n) => `run-01JC8Z3Q5M7VXK2RT9N4B6HD${String(n).padStart(2, '0')}`;
+  const json = (status, data) => ({ ok: status < 400, status, headers: new Headers(), json: async () => data });
+  const pull = (n, title) => ({ number: n, title, state: 'open', draft: false, author: { login: 'agent-four' }, labels: [], head: { ref: `b${n}`, sha: `sha${n}` }, base: { ref: 'main' }, url: `https://git.example.test/pull/${n}`, createdAt: ago(5), updatedAt: ago(4), mergedAt: null });
+  const waitingRun = (n) => ({ kind: 'code', profile: null, refs: { issue: n }, open: true, requestedBy: 'maintainer-one', requestedAt: ago(5), via: 'dashboard', limits: null, stopRequested: null, checks: null, pull: null, nodes: [], timeline: [], report: { state: 'waiting', at: ago(1), by: 'r', note: `Plan ${n} ready`, url: null, tokens: null, cost: null }, answer: null, runId: ID(n), status: 'waiting' });
+  /** One panel's own server: its own pull requests and its own run, and what it was sent */
+  const server = (name, n) => {
+    const calls = [];
+    const fetch = vi.fn(async (url, init = {}) => {
+      const u = new URL(url, 'http://localhost');
+      calls.push({ method: init.method || 'GET', path: u.pathname + u.search, body: init.body ? JSON.parse(String(init.body)) : undefined });
+      if (u.pathname === '/api/agent-runs') return json(200, { ok: true, runs: [waitingRun(n)], open: 1, maxOpen: 10, profiles: [], limits: {} });
+      if (u.pathname === '/proposals') return json(200, []);
+      if (u.pathname === '/api/forge/pulls') return json(200, { ok: true, at: ago(0.01), rate: '', items: [pull(n, `Pull of ${name}`)] });
+      if (u.pathname === `/api/forge/pulls/${n}`) return json(200, { ok: true, at: ago(0.01), rate: '', pull: pull(n, `Pull of ${name}`), files: [], checks: [{ id: 'run:1', name: 'test', state: 'success', url: null, rerunnable: false }] });
+      if (u.pathname === `/api/forge/pulls/${n}/merge`) return json(200, { ok: true, merged: true });
+      if (u.pathname === `/api/agent-runs/${ID(n)}/answer`) return json(200, { ok: true, run: { ...waitingRun(n), status: 'working', answer: { action: 'continue', at: ago(0), by: 'maintainer-one' } } });
+      if (['/api/forge/issues', '/api/forge/threads', '/api/forge/deploys'].includes(u.pathname)) return json(200, { ok: true, at: ago(0.01), rate: '', items: [] });
+      return json(404, { ok: false, error: 'No such thing.', code: 'not-found' });
+    });
+    return { calls, fetch };
+  };
+  const CONFIG = { forge: { type: 'github', url: 'https://git.example.test', repo: 'owner/name' }, signIn: { login: 'maintainer-one' }, agents: { runs: true } };
+  let a; let b; let sa; let sb;
+  const q = (one, sel) => one.root.querySelector(sel);
+  const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  const settle = () => vi.advanceTimersByTimeAsync(0);
+  const panelOn = (name, topology, n) => {
+    const srv = server(name, n);
+    const one = mount(name, topology, {}, { fetch: srv.fetch });
+    const work = workPiece.mount(one.root, one.inst, { config: CONFIG, clock: () => NOW });
+    return { ...one, work, srv };
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    a = panelOn('alpha', topologyA(), 21);
+    b = panelOn('beta', topologyB(), 22);
+    sa = a.srv; sb = b.srv;
+    await settle();
+  });
+  afterEach(() => { a.work.destroy(); b.work.destroy(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('each has its own markup, its own button and its own count, with the same ids twice in the document', () => {
+    expect(document.querySelectorAll('#forge-panel')).toHaveLength(2);
+    expect(document.querySelectorAll('#forge-btn')).toHaveLength(2);
+    expect(q(a, '#forge-btn').hidden).toBe(false);
+    expect(q(a, '#forge-btn-waiting').textContent).toBe('1');
+    for (const one of [a, b]) for (const el of one.root.querySelectorAll('[data-corn]')) expect(el.getAttribute('part'), el.outerHTML.slice(0, 80)).toBe(el.getAttribute('data-corn'));
+  });
+
+  it('opening one, switching its tabs and opening a pull request there changes nothing in the other, and each asks only its own server', async () => {
+    const before = b.root.innerHTML;
+    click(q(a, '#forge-btn'));
+    await settle();
+    expect(q(a, '#forge-panel').classList.contains('forge-open')).toBe(true);
+    expect(q(b, '#forge-panel').classList.contains('forge-open')).toBe(false);
+    click(q(a, '[data-forge-kind="pulls"]'));
+    await settle();
+    expect(q(a, '#forge-list').textContent).toContain('Pull of alpha');
+    click(q(a, '[data-forge-pr="21"]'));
+    await settle();
+    expect(q(a, '#forge-detail').hidden).toBe(false);
+    expect(q(a, '#forge-detail').textContent).toContain('Pull of alpha');
+    expect(a.state.forgeLit).not.toBeNull();
+    expect(b.state.forgeLit).toBeNull();
+    expect(b.root.innerHTML).toBe(before);
+    expect(sb.calls.filter((c) => c.path.startsWith('/api/forge/pulls'))).toEqual([]);
+    expect(sa.calls.some((c) => c.path === '/api/forge/pulls/21')).toBe(true);
+    expect(sa.calls.some((c) => c.path.includes('22'))).toBe(false);
+  });
+
+  it('the confirm step of one is the one\'s: it holds the focus there, and the other has none open', async () => {
+    click(q(a, '#forge-btn'));
+    click(q(b, '#forge-btn'));
+    click(q(a, '[data-forge-kind="pulls"]'));
+    await settle();
+    click(q(a, '[data-forge-pr="21"]'));
+    await settle();
+    click(q(a, '[data-forge-merge]'));
+    expect(q(a, '#forge-confirm').hidden).toBe(false);
+    expect(q(b, '#forge-confirm').hidden).toBe(true);
+    expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
+    // a focus that lands elsewhere in A's root is brought back, and so is one in B's: B is behind A's scrim like the rest of the page
+    q(a, '#forge-title').focus();
+    expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
+    q(b, '#forge-title').focus();
+    expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
+    expect(b.inst.active()).toBe(null);
+    q(a, '#forge-confirm').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(q(a, '#forge-confirm').hidden).toBe(true);
+    expect(sa.calls.filter((c) => c.method === 'POST')).toEqual([]);
+  });
+
+  it('answering a waiting run in one sends one answer to its server and leaves the other\'s run waiting', async () => {
+    click(q(a, '#forge-btn'));
+    click(q(a, '[data-forge-kind="work"]'));
+    await settle();
+    expect(q(a, '#forge-runs-list').textContent).toContain('Plan 21 ready');
+    expect(q(b, '#forge-btn-waiting').textContent).toBe('1');
+    click(q(a, `[data-run-answer="continue"][data-run-id="${ID(21)}"]`));
+    await settle();
+    expect(sa.calls.filter((c) => c.method === 'POST').map((c) => [c.path, c.body])).toEqual([[`/api/agent-runs/${ID(21)}/answer`, { action: 'continue' }]]);
+    expect(sb.calls.filter((c) => c.method !== 'GET')).toEqual([]);
+    expect(q(b, '#forge-runs-list').textContent).not.toContain('Plan 22');
+  });
+
+  it('each says what waits in its own words, and a host\'s words for one are not the other\'s', () => {
+    a.inst.strings.issuesAndPrs = 'Tasks';
+    a.work.update({ config: CONFIG });
+    expect(a.inst.strings.issuesAndPrs).toBe('Tasks');
+    expect(b.inst.strings.issuesAndPrs).toBeUndefined();
+  });
+});
+
+describe('the pieces with no Work panel beside them (a review mounts none)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('the node panel shows no Threads and no Start a run, the bar no Answer, the account menu its Proposals entry, and nothing throws', async () => {
+    const one = mount('lone', topologyA());
+    const panel = nodePanel.mount(one.root, one.inst);
+    const bar = proposalPiece.mount(one.root, one.inst);
+    Object.assign(one.state, { proposal: { title: 'x' }, proposalSlug: '0042-x', proposalSource: 'pull/42' });
+    selectNode(one.inst, one.state.nodes[0]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(one.root.querySelector('#drawer-threads').textContent.trim()).toBe('');
+    expect(one.root.querySelector('[data-thread-open], [data-thread-start]')).toBe(null);
+    expect(one.root.querySelector('#drawer-run-btn').hidden).toBe(true);
+    one.inst.emit('proposal:bar', { open: true });
+    const answer = one.root.querySelector('[data-waiting-answer]');
+    expect(!answer || !!answer.closest('[hidden]')).toBe(true);
+    expect(one.root.querySelector('#proposal-wrap').hidden).toBe(false);
+    // what the Work panel would hear is said to nobody
+    expect(() => {
+      one.inst.emit('thread:open', { number: 5 });
+      one.inst.emit('thread:start', { node: one.state.nodes[0] });
+      one.inst.emit('work:answer', { run: 'run-x' });
+      one.inst.emit('threads:ensure');
+      one.inst.emit('forge:start', { slug: '0042-x', returnTo: '#drawer-run-btn' });
+    }).not.toThrow();
+    expect(one.inst.ask('work:on')).toBeUndefined();
+    bar.destroy();
+    panel.destroy();
+    one.inst.destroy();
   });
 });

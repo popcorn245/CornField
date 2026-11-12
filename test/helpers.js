@@ -15,10 +15,11 @@ import { markup as mapMarkup, KEYS_HELP_WITH_PANEL } from '../explorer/pieces/ma
 import { markup as proposalMarkup } from '../explorer/pieces/proposal.js';
 import { markup as changesMarkup } from '../explorer/pieces/changes.js';
 import { markup as decisionMarkup } from '../explorer/pieces/decision.js';
+import { markup as workMarkup } from '../explorer/pieces/work-markup.js';
 
 const PIECE_MARKUP = {
   'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, map: () => mapMarkup({ keysHelp: KEYS_HELP_WITH_PANEL }),
-  proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup,
+  proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup, work: workMarkup,
 };
 
 export const CORNFIELD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

@@ -21,9 +21,10 @@ import * as search from './pieces/search.js';
 import * as proposal from './pieces/proposal.js';
 import * as changes from './pieces/changes.js';
 import * as decision from './pieces/decision.js';
+import * as work from './pieces/work.js';
 
 /** The pieces of the page, in the order they are mounted (the node panel registers its sheet; search and the Layers menu follow the map) */
-const PIECES = { 'node-panel': nodePanel, layers, search, proposal, changes, decision }; // (the decision's place is inside the changes piece's column: it follows it)
+const PIECES = { 'node-panel': nodePanel, layers, search, proposal, changes, decision, work }; // (the decision's place is inside the changes piece's column: it follows it)
 const mounted = new Map(); // name -> { handle, markers: Comment[] }
 const optionsOf = new Map(); // name -> what the page tells a piece besides its places (a checker, a clock)
 
@@ -37,6 +38,23 @@ function markersOf(doc, name) {
     if (node.data.startsWith(prefix)) found[node.data.slice(prefix.length)] = node;
   }
   return found;
+}
+
+/**
+ * The Work panel says what waits on the maintainer (`work:waiting`); the browser tab's title is the page's, so the page puts "(3) " before its own
+ * title while something waits. A host app keeps its own title and does not listen.
+ */
+let titleOff = null;
+let baseTitle = null;
+function keepTitle(inst) {
+  if (titleOff) titleOff();
+  titleOff = inst.on('work:waiting', ({ total }) => {
+    const doc = inst.doc;
+    if (!doc) return;
+    if (baseTitle === null) baseTitle = doc.title.replace(/^\(\d+\) /, '');
+    doc.title = total > 0 ? `(${total}) ${baseTitle}` : baseTitle;
+    if (!(total > 0)) baseTitle = null;
+  });
 }
 
 /** The places of a piece the page mounts itself (the map: page.js), by slot: `{ stage: Comment }` */
@@ -58,6 +76,7 @@ export function ensurePagePieces() {
     if (!markers.length) continue;
     pageMap(); // the pieces follow the page's map: it is there before they are
     mounted.set(name, { handle: piece.mount(doc.body, inst, { ...(optionsOf.get(name) || {}), slots }), markers });
+    if (name === 'work') keepTitle(inst);
   }
   return Object.fromEntries([...mounted].map(([name, { handle }]) => [name, handle]));
 }
@@ -80,7 +99,7 @@ export function mergePagePieceOptions(name, patch) {
   if (have) have.handle.update(patch);
 }
 
-/** The page's mounted piece by name ('node-panel', 'layers', 'search', 'proposal', 'changes', 'decision'), or null; `anywhere`: mounted at the end of the body when the page has no place for it */
+/** The page's mounted piece by name ('node-panel', 'layers', 'search', 'proposal', 'changes', 'decision', 'work'), or null; `anywhere`: mounted at the end of the body when the page has no place for it */
 export function pagePiece(name, { anywhere = false } = {}) {
   ensurePagePieces();
   // A caller that needs the piece whether or not the page has a place for it (a test drives the scenario player on a bare stage) has it at the end of the body

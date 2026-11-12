@@ -25,7 +25,8 @@
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
  *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
- *   forge-panel.js  the issues and PRs panel, when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half
+ *   pieces/work.js  the Work panel (a piece, with a part per tab in pieces/work-*.js), when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half;
+ *                   forge-panel.js is the page's way in to it (initForgePanel, the deep links)
  *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
 
@@ -59,7 +60,6 @@ import { initTheme, setThemeChoice } from './theme.js';
 import { initAccountMenu } from './account-menu.js';
 import { watchHeaderFit } from './header-fit.js';
 import { watchHint } from './hint.js';
-import { watchFocusRoom } from './focus-room.js';
 
 /** The instance and its map: made by `startPage`, the one of this document */
 let inst;
@@ -189,7 +189,7 @@ export function startPage() {
   syncViewUi();
   // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
   // The config is read and applied by engine/source.js, as a scope does it; a page opened without the server reads as no config
-  const configReady = fetchConfig(inst).catch(() => ({})).then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyConfig(inst, config); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+  const configReady = fetchConfig(inst).catch(() => ({})).then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); applyConfig(inst, config); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
   loadTopology().then(async (ok) => {
     if (!ok) return;
     // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

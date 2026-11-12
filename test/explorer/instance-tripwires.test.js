@@ -83,12 +83,38 @@ export const CONVERTED = [
   // The one-tag review: the composed piece and the engine function that gives an instance its map (spec 0011 D3, D4)
   'pieces/review.js',
   'engine/topology.js',
+  // Step 6 (spec 0011 D2 and D3): the Work panel (its shell, a part per tab and the two dialogs) and what it stands on
+  'pieces/work.js',
+  'pieces/work-markup.js',
+  'pieces/work-common.js',
+  'pieces/work-data.js',
+  'pieces/work-specs.js',
+  'pieces/work-prs.js',
+  'pieces/work-issues.js',
+  'pieces/work-threads.js',
+  'pieces/work-runs.js',
+  'pieces/work-deploys.js',
+  'pieces/work-notes.js',
+  'pieces/work-confirm.js',
+  'pieces/work-agent.js',
+  'pieces/work-paint.js',
+  'pieces/work-events.js',
+  'forge-panel-model.js',
+  'waiting-view.js',
+  'runs-model.js',
+  'runs-view.js',
+  'agents-model.js',
+  'runs-map.js',
+  'focusables.js',
+  'focus-room.js',
+  'corn-state.js',
+  '../core/mentions.js',
 ];
 
 /** What the not-yet-converted modules import in place of an instance: no converted module may */
 const BRIDGES = [
   'state.js', 'render.js', 'map-style.js', 'layout.js', // step 1
-  'hint.js', 'fly.js', 'feedback.js', 'keyboard.js', 'sheets.js', 'panels.js', 'layers.js', 'search.js', 'search-status.js', 'flows.js', 'page-pieces.js', 'proposal.js', 'review-column.js', 'scenario-ui.js', 'check.js', 'review.js', 'waiting-line.js', 'connection.js', 'page-address.js', // step 5; // step 4 (strings.js is a bridge too, but it imports nothing of the page: the pure models read their words through it, and the converted modules import those)
+  'hint.js', 'fly.js', 'keyboard.js', 'sheets.js', 'panels.js', 'layers.js', 'search.js', 'search-status.js', 'flows.js', 'page-pieces.js', 'proposal.js', 'review-column.js', 'scenario-ui.js', 'check.js', 'review.js', 'connection.js', 'page-address.js', 'forge-panel.js', // step 5; // step 4 (strings.js is a bridge too, but it imports nothing of the page: the pure models read their words through it, and the converted modules import those)
 ];
 
 /** The code of a module: comments and the contents of nothing else removed, so a word in a sentence trips nothing */

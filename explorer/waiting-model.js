@@ -36,26 +36,26 @@ export const RUN_GROUPS = Object.freeze([
 ]);
 
 /** The words of a Specs group's header (a repo may say them in its own voice: `strings`) */
-export function specGroupTitle(key) {
+export function specGroupTitle(key, say = t) {
   switch (key) {
-    case 'decide': return t('toDecide');
-    case 'agent': return t('withAgent');
-    case 'approved': return t('approvedGroup');
-    default: return t('drafts');
+    case 'decide': return say('toDecide');
+    case 'agent': return say('withAgent');
+    case 'approved': return say('approvedGroup');
+    default: return say('drafts');
   }
 }
 
 /** The words of a Runs group's header */
-export function runGroupTitle(key) {
+export function runGroupTitle(key, say = t) {
   switch (key) {
-    case 'needs': return t('needsYou');
-    case 'motion': return t('inMotion');
-    default: return t('finished');
+    case 'needs': return say('needsYou');
+    case 'motion': return say('inMotion');
+    default: return say('finished');
   }
 }
 
 /** The words of the proposal bar's button that goes to the run waiting on the proposal */
-export const answerWord = () => t('answer');
+export const answerWord = (say = t) => say('answer');
 
 /** Drafts past this many rows are collapsed behind their header (D3) */
 export const DRAFTS_OPEN_MAX = 10;
@@ -230,10 +230,10 @@ export function waiting({ specs, runs } = {}) {
 }
 
 /** "3 waiting on you" (the Work button's name, spoken: "Work, 3 waiting on you"), or '' when nothing waits */
-export const waitingWords = (n) => (n > 0 ? `${n} ${t('waitingOnYou')}` : '');
+export const waitingWords = (n, say = t) => (n > 0 ? `${n} ${say('waitingOnYou')}` : '');
 
 /** The Work button's accessible name: its label, then what waits ("Work, 3 waiting on you") */
-export const workButtonName = (label, n) => (n > 0 ? `${label}, ${waitingWords(n)}` : label);
+export const workButtonName = (label, n, say = t) => (n > 0 ? `${label}, ${waitingWords(n, say)}` : label);
 
 /** What a group's header says: "To decide · 2", or "To decide · 2 of 6" while a search narrows it */
 export const groupCountWords = (g) => (g.shown === g.total ? String(g.total) : `${g.shown} of ${g.total}`);

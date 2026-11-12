@@ -42,14 +42,11 @@ describe('the old hooks, as listeners of the page instance', () => {
     expect(n).toBe(1);
   });
 
-  it('the asks answer through them: effective, beforeClose and openSpecs', () => {
+  it('the asks answer through them: effective and beforeClose (the Work panel answers work:open-specs itself, pieces/work.js)', () => {
     hooks.effective = (p) => ({ ...p, edited: true });
     hooks.beforeClose = () => false;
-    hooks.openSpecs = () => {};
     expect(inst.ask('proposal:effective', { title: 'x' })).toEqual({ title: 'x', edited: true });
     expect(inst.ask('proposal:before-close')).toBe(false);
-    expect(inst.ask('work:open-specs')).toBe(true);
-    hooks.openSpecs = null;
-    expect(inst.ask('work:open-specs')).toBeUndefined();
+    expect(inst.ask('work:open-specs')).toBeUndefined(); // nobody answers without the Work panel: the bar opens its own menu
   });
 });

@@ -1404,7 +1404,7 @@
       "label": "forge-panel.js",
       "type": "core",
       "file": "explorer/forge-panel.js",
-      "summary": "The Work panel (CF-07, CF-42, spec 0001 section 4; it began as the issues and PRs panel): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop.",
+      "summary": "A bridge (spec 0011 D2 and D3, step 6): the Work panel is a piece on the instance (pieces/work.js, with a part per tab in pieces/work-*.js) and its pure half is forge-panel-model.js.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The issues and PRs panel (CF-07, spec 0001 section 4): the repo's pull requests and issues, from whichever forge the config names, read through the server (`/api/forge/…`, server/forge-routes.js; t… (explorer/forge-panel.js)"
@@ -2070,16 +2070,6 @@
       "desc": "Whether the browser is online, said once and in one place. (explorer/connection.js)"
     },
     {
-      "id": "core-explorer-feedback",
-      "label": "feedback.js",
-      "type": "core",
-      "file": "explorer/feedback.js",
-      "summary": "A bridge (spec 0011 D2, step 4): the results of actions now live on the instance (engine/feedback.js).",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
-    },
-    {
       "id": "core-core-map-tokens",
       "label": "map-tokens.js",
       "type": "core",
@@ -2178,16 +2168,6 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0007: the decision: what Approve and Send back do, and when (docs/specs/0007-the-decision.md)."
-    },
-    {
-      "id": "core-explorer-waiting-line",
-      "label": "waiting-line.js",
-      "type": "core",
-      "file": "explorer/waiting-line.js",
-      "summary": "A bridge (spec 0011 D3, step 5): the one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2) is part of the proposal's bar (pieces/proposal.js).",
-      "r": 20,
-      "color": "#14b8a6",
-      "desc": "The one line under the proposal bar's buttons when a run is waiting on the open proposal (spec 0010 D2): \"A run is waiting on you: Plan ready: approve to build, … · Answer\". (explorer/waiting-line.js)"
     },
     {
       "id": "core-explorer-waiting-model",
@@ -2867,6 +2847,156 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The review as one piece (spec 0011 D3, D4, D8): the engine half of the coming `<corn-review>`. (explorer/pieces/review.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-agent",
+      "label": "work-agent.js",
+      "type": "core",
+      "file": "explorer/pieces/work-agent.js",
+      "summary": "The Start an agent dialog (a modal dialog over a scrim).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Start an agent dialog (a modal dialog over a scrim). (explorer/pieces/work-agent.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-common",
+      "label": "work-common.js",
+      "type": "core",
+      "file": "explorer/pieces/work-common.js",
+      "summary": "What the parts of the Work piece (pieces/work.js and work-*.js) share and that holds nothing of one mount: words, small pure helpers, and the shape of the two forms' state.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the parts of the Work piece (pieces/work.js and work-*.js) share and that holds nothing of one mount: words, small pure helpers, and the shape of the two forms' state. (explorer/pieces/work-common.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-confirm",
+      "label": "work-confirm.js",
+      "type": "core",
+      "file": "explorer/pieces/work-confirm.js",
+      "summary": "The confirm step: landing a pull request, starting a spec, opening a build issue (a modal dialog over a scrim).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The confirm step: landing a pull request, starting a spec, opening a build issue (a modal dialog over a scrim). (explorer/pieces/work-confirm.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-data",
+      "label": "work-data.js",
+      "type": "core",
+      "file": "explorer/pieces/work-data.js",
+      "summary": "The Work panel's asking: every request, the list a tab shows, what a selection lights on the map, the counts read quietly.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work panel's asking: every request, the list a tab shows, what a selection lights on the map, the counts read quietly. (explorer/pieces/work-data.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-deploys",
+      "label": "work-deploys.js",
+      "type": "core",
+      "file": "explorer/pieces/work-deploys.js",
+      "summary": "The Deploys tab: the list and a deploy's detail, lit on the map.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Deploys tab: the list and a deploy's detail, lit on the map. (explorer/pieces/work-deploys.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-events",
+      "label": "work-events.js",
+      "type": "core",
+      "file": "explorer/pieces/work-events.js",
+      "summary": "Opening and closing the panel, and what a click, a change, an input and a key in it do.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Opening and closing the panel, and what a click, a change, an input and a key in it do. (explorer/pieces/work-events.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-issues",
+      "label": "work-issues.js",
+      "type": "core",
+      "file": "explorer/pieces/work-issues.js",
+      "summary": "The Issues tab and the deep link to an issue (its rows are drawn with the PRs' in work-prs.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Issues tab and the deep link to an issue (its rows are drawn with the PRs' in work-prs.js). (explorer/pieces/work-issues.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-markup",
+      "label": "work-markup.js",
+      "type": "core",
+      "file": "explorer/pieces/work-markup.js",
+      "summary": "The Work piece's markup (spec 0011 D3), moved out of explorer/index.html unchanged: the Work button (its stand-in stays in the header, held equal to this by test/explorer/page-pieces.test.js), the …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work piece's markup (spec 0011 D3), moved out of explorer/index.html unchanged: the Work button (its stand-in stays in the header, held equal to this by test/explorer/page-pieces.test.js), the … (explorer/pieces/work-markup.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-notes",
+      "label": "work-notes.js",
+      "type": "core",
+      "file": "explorer/pieces/work-notes.js",
+      "summary": "Release notes: the draft for a tag, Copy, and Post as draft.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Release notes: the draft for a tag, Copy, and Post as draft. (explorer/pieces/work-notes.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-paint",
+      "label": "work-paint.js",
+      "type": "core",
+      "file": "explorer/pieces/work-paint.js",
+      "summary": "Drawing the panel from its state: tabs, counts, filters, the list, the detail, the Work button.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Drawing the panel from its state: tabs, counts, filters, the list, the detail, the Work button. (explorer/pieces/work-paint.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-prs",
+      "label": "work-prs.js",
+      "type": "core",
+      "file": "explorer/pieces/work-prs.js",
+      "summary": "The PRs tab: the list rows, a pull request's detail (files, checks, merge, rerun, landing) and the lights it puts on the map.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The PRs tab: the list rows, a pull request's detail (files, checks, merge, rerun, landing) and the lights it puts on the map. (explorer/pieces/work-prs.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-runs",
+      "label": "work-runs.js",
+      "type": "core",
+      "file": "explorer/pieces/work-runs.js",
+      "summary": "The Runs tab: the groups, a run, Stop, answer, the brief, the poll, and the runs on the map.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Runs tab: the groups, a run, Stop, answer, the brief, the poll, and the runs on the map. (explorer/pieces/work-runs.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-specs",
+      "label": "work-specs.js",
+      "type": "core",
+      "file": "explorer/pieces/work-specs.js",
+      "summary": "The Specs tab: the proposals the server finds, merged into one row each, and the number of those that wait on a decision.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Specs tab: the proposals the server finds, merged into one row each, and the number of those that wait on a decision. (explorer/pieces/work-specs.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work-threads",
+      "label": "work-threads.js",
+      "type": "core",
+      "file": "explorer/pieces/work-threads.js",
+      "summary": "The Threads tab: the list, a thread's messages, and the New idea form.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Threads tab: the list, a thread's messages, and the New idea form. (explorer/pieces/work-threads.js)"
+    },
+    {
+      "id": "core-explorer-pieces-work",
+      "label": "work.js",
+      "type": "core",
+      "file": "explorer/pieces/work.js",
+      "summary": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, …",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, … (explorer/pieces/work.js)"
     }
   ],
   "edges": [
@@ -4892,42 +5022,6 @@
     },
     {
       "from": "core-explorer-forge-panel",
-      "to": "core-explorer-forge-panel-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-keyboard",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-review-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
       "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
@@ -5147,12 +5241,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-agents-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-server-forge-routes",
       "to": "core-server-proposal-pulls",
       "dashed": true,
@@ -5215,12 +5303,6 @@
     {
       "from": "pkg-server",
       "to": "core-server-deploys"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-layers",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-server-forge-routes",
@@ -6057,12 +6139,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-runs-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-runs-model",
       "to": "core-explorer-review-model",
       "dashed": true,
@@ -6320,38 +6396,8 @@
       "to": "core-explorer-runs-view"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-runs-map",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-runs-view",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-runs-map",
-      "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-runs-map",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-runs-map",
       "to": "core-explorer-runs-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-runs-map",
-      "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
     },
@@ -6549,12 +6595,6 @@
       "to": "core-explorer-corn-state"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-corn-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-mockups-model",
       "to": "core-explorer-corn-state",
       "dashed": true,
@@ -6640,12 +6680,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-plugins",
       "to": "core-explorer-strings",
       "dashed": true,
@@ -6668,26 +6702,8 @@
       "to": "core-explorer-capped"
     },
     {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-forge-panel",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "pkg-explorer",
       "to": "core-explorer-account-menu"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-proposal-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-proposal",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "pkg-explorer",
@@ -6756,12 +6772,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-focusables",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-mockups",
       "to": "core-explorer-focusables",
       "dashed": true,
@@ -6801,10 +6811,6 @@
       "to": "core-explorer-connection"
     },
     {
-      "from": "pkg-explorer",
-      "to": "core-explorer-feedback"
-    },
-    {
       "from": "core-explorer-connection",
       "to": "core-explorer-keyboard",
       "dashed": true,
@@ -6813,12 +6819,6 @@
     {
       "from": "core-explorer-forge-panel",
       "to": "core-explorer-connection",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-feedback",
       "dashed": true,
       "label": "imports"
     },
@@ -7033,33 +7033,11 @@
     },
     {
       "from": "pkg-explorer",
-      "to": "core-explorer-waiting-line"
-    },
-    {
-      "from": "pkg-explorer",
       "to": "core-explorer-waiting-model"
     },
     {
       "from": "pkg-explorer",
       "to": "core-explorer-waiting-view"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-waiting-line",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-waiting-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-waiting-view",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-explorer-proposal-model",
@@ -7100,12 +7078,6 @@
     {
       "from": "core-explorer-waiting-view",
       "to": "core-explorer-proposal-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-waiting-view",
-      "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
     },
@@ -7529,12 +7501,6 @@
       "dashed": true
     },
     {
-      "from": "core-explorer-forge-panel",
-      "to": "core-explorer-layer-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-runs-map",
       "to": "core-explorer-layer-model",
       "dashed": true,
@@ -7770,12 +7736,6 @@
     {
       "from": "core-explorer-page",
       "to": "core-explorer-engine-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
-      "to": "core-explorer-focus-room",
       "dashed": true,
       "label": "imports"
     },
@@ -8148,18 +8108,6 @@
     {
       "from": "core-explorer-engine-strings",
       "to": "core-core-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-feedback",
-      "to": "core-explorer-engine-feedback",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-feedback",
-      "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
     },
@@ -9263,18 +9211,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-waiting-line",
-      "to": "core-explorer-page-pieces",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-waiting-line",
-      "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "pkg-explorer",
       "to": "core-explorer-engine-source"
     },
@@ -9540,7 +9476,649 @@
       "to": "core-explorer-engine-topology",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-agent"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-common"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-confirm"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-data"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-deploys"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-events"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-issues"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-markup"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-notes"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-paint"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-prs"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-runs"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-specs"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work-threads"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-work"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-engine-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-forge-panel",
+      "to": "core-explorer-pieces-work",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-pieces-work",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-agent",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-agent",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-agent",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-common",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-common",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-common",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-confirm",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-confirm",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-confirm",
+      "to": "core-explorer-focusables",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-confirm",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-data",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-data",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-data",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-data",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-deploys",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-events",
+      "to": "core-explorer-agents-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-events",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-events",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-events",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-issues",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-markup",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-notes",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-notes",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-agents-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-runs-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-paint",
+      "to": "core-explorer-waiting-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-runs-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-prs",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-agents-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-runs-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-runs",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-specs",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-specs",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-specs",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-review-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work-threads",
+      "to": "core-explorer-runs-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-focus-room",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-agent",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-confirm",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-data",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-deploys",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-events",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-issues",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-markup",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-notes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-paint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-prs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-runs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-specs",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-pieces-work-threads",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-runs-map",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-work",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-waiting-view",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T15:49:56.331Z"
+  "updatedAt": "2026-11-12T16:25:54.320Z"
 }

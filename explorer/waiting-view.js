@@ -5,7 +5,7 @@
  * headings. Pure: no DOM, no clock of its own. Every word from the forge is escaped (a row's own markup is proposal-model.js `specRowHtml`).
  */
 
-import { escHtml } from './state.js';
+import { escapeHtml as escHtml } from '../core/text.js';
 import { specRowHtml } from './proposal-model.js';
 import { specGroupTitle, runGroupTitle, groupCountWords } from './waiting-model.js';
 
@@ -13,12 +13,12 @@ import { specGroupTitle, runGroupTitle, groupCountWords } from './waiting-model.
  * The Specs tab's groups, each a heading with its count and its rows. Drafts past ten rows are folded behind a button on the header
  * (`draftsOpen` says whether the person opened it). With a search, a group's count reads "2 of 6".
  * @param {ReturnType<import('./waiting-model.js').specGroups>} groups
- * @param {{ current?: { slug: string, source: string } | null, nowMs?: number, draftsOpen?: boolean | null }} [opts]
+ * @param {{ current?: { slug: string, source: string } | null, nowMs?: number, draftsOpen?: boolean | null, say?: (key: string) => string }} [opts]
  */
-export function specGroupsHtml(groups, { current = null, nowMs = Date.now(), draftsOpen = null } = {}) {
+export function specGroupsHtml(groups, { current = null, nowMs = Date.now(), draftsOpen = null, say } = {}) {
   return groups.map((g) => {
     const id = `spec-group-${g.key}`;
-    const words = `${specGroupTitle(g.key)} · ${groupCountWords(g)}`;
+    const words = `${specGroupTitle(g.key, say)} · ${groupCountWords(g)}`;
     const foldable = g.key === 'drafts' && g.total > 10 && g.shown === g.total; // not while a search narrows it: then it is open
     const folded = foldable && (draftsOpen === null ? g.collapsed : !draftsOpen);
     const title = foldable
@@ -31,7 +31,7 @@ export function specGroupsHtml(groups, { current = null, nowMs = Date.now(), dra
 }
 
 /** The heading that starts a group of the Runs list: "Needs you · 1". It is an item of the flat list (a run's card is never moved into a section) */
-export function runGroupHeadingHtml(g) {
+export function runGroupHeadingHtml(g, say) {
   const id = `run-group-${g.key}`;
-  return `<li class="hx-run-heading" data-key="${id}" data-corn="run-group" data-group="${escHtml(g.key)}"><h4 class="hx-forge-gtitle" id="${id}">${escHtml(`${runGroupTitle(g.key)} · ${g.count}`)}</h4></li>`;
+  return `<li class="hx-run-heading" data-key="${id}" data-corn="run-group" data-group="${escHtml(g.key)}"><h4 class="hx-forge-gtitle" id="${id}">${escHtml(`${runGroupTitle(g.key, say)} · ${g.count}`)}</h4></li>`;
 }

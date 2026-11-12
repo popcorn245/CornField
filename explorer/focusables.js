@@ -28,7 +28,7 @@ export function trapTab(e, root) {
   const stops = focusableIn(root);
   e.preventDefault();
   if (!stops.length) return true;
-  const at = stops.indexOf(document.activeElement);
+  const at = stops.indexOf(root.getRootNode().activeElement); // the focus in the dialog's own tree: a shadow root's, not the host's
   const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at === -1 || at === stops.length - 1 ? 0 : at + 1);
   stops[next].focus();
   return true;

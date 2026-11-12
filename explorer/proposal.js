@@ -9,7 +9,7 @@
  * as a listener of the instance (one registration per hook: assigning again takes the last one back), so a chain that wraps `hooks.bar` still works:
  *
  *   hooks.effective  -> ask proposal:effective       hooks.mark -> event proposal:mark           hooks.beforeClose -> ask proposal:before-close
- *   hooks.closed     -> event proposal {closed}      hooks.bar  -> event proposal:bar            hooks.openSpecs   -> ask work:open-specs
+ *   hooks.closed     -> event proposal {closed}      hooks.bar  -> event proposal:bar
  *   hooks.reviewed   -> event decision
  */
 
@@ -30,7 +30,6 @@ const ADAPT = {
   beforeClose: (fn) => ['proposal:before-close', () => fn()],
   closed: (fn) => ['proposal', ({ change }) => { if (change === 'closed') fn(); }],
   bar: (fn) => ['proposal:bar', ({ open }) => { fn(open); }],
-  openSpecs: (fn) => ['work:open-specs', () => { fn(); return true; }],
   reviewed: (fn) => ['decision', ({ open }) => { if (open !== false) fn(); }], // as before: not when another proposal was opened while it was sent
 };
 const kept = {};
