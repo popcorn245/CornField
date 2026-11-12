@@ -289,7 +289,11 @@ export function createMapStyle(inst) {
   };
   let current = compose();
 
+  let ended = false;
+  inst.own(() => { ended = true; listeners.clear(); }); // the instance's end: an icon that arrives later tells nobody
+
   const changed = () => {
+    if (ended) return;
     version++;
     current = compose();
     listeners.forEach((fn) => fn(current));

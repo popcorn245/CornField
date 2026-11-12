@@ -32,7 +32,9 @@ export function createMap(inst, opts = {}) {
   if (inst.map) return inst.map;
   const { state } = inst;
   const measureCovered = opts.measureCovered || (() => state.coveredBottom || 0);
-  const mapStyle = () => mapStyleOf(inst).get();
+  const mapStyle = mapStyleOf(inst).get; // looked up once: a renderer and the labels call it on every draw
+  /** The map has ended (destroy): nothing draws, nothing asks for a frame, no renderer is made again, whoever calls */
+  let ended = false;
 
   // -------------------------------------------------------------------------
   //  Visibility and focus (decided in scene.js)
@@ -254,13 +256,13 @@ export function createMap(inst, opts = {}) {
 
   /** Something changed (the camera, the scene, the size): draw it in the next animation frame, once however often this is called */
   function render() {
-    if (!state.canvas) return;
+    if (ended || !state.canvas) return;
     scheduler.markDirty();
   }
 
   /** Draws right now, for a caller that needs the pixels this instant (a test, a screenshot) */
   function renderNow() {
-    if (!state.canvas) return;
+    if (ended || !state.canvas) return;
     scheduler.drawNow();
   }
 
@@ -280,6 +282,7 @@ export function createMap(inst, opts = {}) {
 
   /** Ends the map: no frame is waiting, the renderer's GPU context and the label layer are released, nothing is called again */
   function destroy() {
+    ended = true;
     scheduler.cancel();
     // the end of this map: the renderer gives its WebGL context back too (`release`); a swap (setRenderer) only destroys, so the next renderer on the canvas has a live one
     if (renderer) { if (renderer.release) renderer.release(); else renderer.destroy(); renderer = null; rendererCanvas = null; }
@@ -311,15 +314,15 @@ export function createMap(inst, opts = {}) {
     renderNow,
     addFrameClient,
     /** Runs `job` at the start of the next frame, once however often it is queued, then draws (unless `{ draw: false }`): input.js coalesces pointer events with it */
-    queueFrameWork: (job, o) => scheduler.queue(job, o),
+    queueFrameWork: (job, o) => { if (!ended) scheduler.queue(job, o); },
     /** How many frames ran and how many of them drew (for tests and the bench) */
     frameStats: () => ({ frames: scheduler.frames, draws: scheduler.draws }),
     /** Stops (`true`) or resumes (`false`) every frame the page asks for itself, so a bench's scripted draws (`renderNow`) are the only ones */
-    holdFrames: (on) => scheduler.hold(on),
+    holdFrames: (on) => { if (!ended) scheduler.hold(on); },
     /** Forgets the frame that is waiting, if any (for tests that fake the clock) */
     cancelFrame: () => scheduler.cancel(),
     /** Start animating if allowed: asks for a frame, which draws and goes on only while a packet is on screen, motion is allowed and the visitor is active */
-    ensureFlowLoop: () => scheduler.wake(),
+    ensureFlowLoop: () => { if (!ended) scheduler.wake(); },
     destroy,
   };
   inst.map = map;

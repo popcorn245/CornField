@@ -170,6 +170,38 @@ describe('inst.destroy()', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('what arrives after it (a theme icon still loading) draws nothing and asks for no frame', async () => {
+    const { inst, map } = make();
+    let arrive;
+    const redraws = vi.fn(() => map.render());
+    mapStyleOf(inst).onChange(redraws); // as the page shell does: a change of style draws again
+    mapStyleOf(inst).setIcons({ icons: { app: '/cornfield/theme/assets/app.png' } }, { load: () => new Promise((res) => { arrive = res; }) });
+    await Promise.resolve();
+    vi.advanceTimersByTime(40);
+    const frames = map.frameStats().frames;
+    const contexts = live.contexts;
+    inst.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+    arrive({ width: 8, height: 8, naturalWidth: 8, naturalHeight: 8 }); // the image comes in after the map has ended
+    await Promise.resolve();
+    await Promise.resolve();
+    map.render(); // and a module that is not told calls the map
+    map.ensureFlowLoop();
+    vi.advanceTimersByTime(1000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(map.frameStats().frames).toBe(frames);
+    expect(live.contexts).toBe(contexts); // no renderer made again on the ended canvas
+    expect(redraws).toHaveBeenCalledTimes(1); // when setIcons started, not when the image arrived
+  });
+
+  it('a frame reads the style without asking the instance for it (no slot lookup on the draw path)', () => {
+    const { inst, map } = make();
+    const slot = vi.spyOn(inst, 'slot');
+    for (let i = 0; i < 10; i++) { map.fitGraphToViewport(20 + i); map.renderNow(); }
+    expect(slot).not.toHaveBeenCalled();
+    inst.destroy();
+  });
+
   it('runs every clean-up it was given, last first, and one that throws does not stop the rest', () => {
     const inst = createInstance({ root: document.body });
     const order = [];
