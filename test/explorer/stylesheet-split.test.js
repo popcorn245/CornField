@@ -62,6 +62,14 @@ describe('every piece has a file, and the page links each once', () => {
     expect(at('css/page.css')).toBeLessThan(at('house.css'));
   });
 
+  it('links them in the one order the cascade was checked in, so a reorder is a decision made here', () => {
+    // Rules that set one property at equal specificity on one element are in a few pairs of files, and the later file wins: sheets.css's dock rules
+    // must come after node-panel.css and before work.css (below); base.css's control rules before every piece that restyles a control; page.css
+    // last. The list is the one the split was compared with, element by element, against the one file (spec 0011 D8)
+    expect(linkedPieces()).toEqual(['base.css', 'header.css', 'layers.css', 'search.css', 'account.css', 'live.css', 'map.css', 'node-panel.css', 'proposal.css',
+      'changes.css', 'decision.css', 'whatif.css', 'dialogs.css', 'sheets.css', 'work.css', 'page.css']);
+  });
+
   it('keeps the order the one file had where it is the cascade: the sheets after the node panel and before the Work panel', () => {
     // a phone's dock rules (`.hx-dock > *`, `.hx-sheet-handle`) used to sit after the node panel's base rules and before the Work panel's, whose later
     // `pointer-events: none` and `touch-action` they were written to lose to: swapping the files changes what a closed sheet takes
@@ -114,7 +122,7 @@ describe('position: fixed is only where it cannot move without changing the page
   for (const file of pieces) {
     const raw = readPiece(file);
     const masked = raw.replace(/\/\*[\s\S]*?\*\//g, (c) => ' '.repeat(c.length)); // same offsets, the comments blanked
-    for (const m of masked.matchAll(/position:\s*fixed/g)) {
+    for (const m of masked.matchAll(/position\s*:\s*fixed/gi)) {
       // the rule it is in: the selector before the `{` that opened it, and the text between the previous `}` / `{` and that selector (where the comment is)
       const open = masked.lastIndexOf('{', m.index);
       const start = Math.max(masked.lastIndexOf('}', open - 1), masked.lastIndexOf('{', open - 1)) + 1;
@@ -139,7 +147,8 @@ describe('a size rule is a container query on the piece\'s own box', () => {
   for (const file of pieces) {
     const all = rules(strip(readPiece(file)));
     it(`${file}: every width or height @media is on the allow-list (none is)`, () => {
-      const bad = all.flatMap((r) => r.ctx).filter((c) => c.startsWith('@media') && /\b(min|max)-(width|height)|\b(width|height)\s*[<>]|aspect-ratio|orientation/.test(c));
+      // any feature that names a width or a height (min-, max-, device-, a range either way round), an aspect ratio or an orientation
+      const bad = all.flatMap((r) => r.ctx).filter((c) => /^@media/i.test(c) && /\b(width|height|aspect-ratio|orientation)\b/i.test(c));
       expect([...new Set(bad)].filter((c) => !(MEDIA_ALLOWED[file] || []).includes(c))).toEqual([]);
     });
 
