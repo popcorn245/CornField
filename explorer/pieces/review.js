@@ -68,12 +68,12 @@ import { mount as mountProposal } from './proposal.js';
 import { mount as mountChanges } from './changes.js';
 import { mount as mountDecision } from './decision.js';
 import { setTopology, layoutMap, setMap } from '../engine/topology.js';
-import { closeProposal, rebuildProposalMap } from '../engine/proposal.js';
+import { closeProposal, rebuildProposalMap, setMessage } from '../engine/proposal.js';
 import { measureCovered, setPhoneBox } from '../engine/sheets.js';
 import { setProjectLayers } from '../engine/layers.js';
 import { applyStrings, setStrings } from '../engine/strings.js';
 import { withParts } from '../engine/piece.js';
-import { PROPOSAL_VIEWS } from '../proposal-model.js';
+import { PROPOSAL_VIEWS, isProposalName, notANameWords } from '../proposal-model.js';
 import { parseSource, signInUrl } from '../engine/source-address.js';
 import { NOTHING_TO_DECIDE } from '../decision-model.js';
 
@@ -192,6 +192,16 @@ export function mount(root, inst, options = {}) {
     current.held = false;
     const view = current.proposalView;
     if (typeof wanted === 'string' && blocked) { settled = true; sayReady(); return undefined; } // there is no server to ask
+    if (typeof wanted === 'string' && serverless) {
+      // No server at all (no `src`, `base` or `fetch`): a name is never asked of the page's own origin in its place. Said in the bar, as a name not found is.
+      const message = isProposalName(wanted) ? `${wanted} cannot be opened here: there is no cornfield server to read it from (the review has no src).` : notANameWords(wanted);
+      current.shown = null;
+      setMessage(inst, message, true, []);
+      inst.emit('proposal:failed', { slug: wanted, source: current.source, status: 0, notFound: false, message });
+      settled = true;
+      sayReady();
+      return undefined;
+    }
     if (typeof wanted === 'string') {
       // The proposal that is open already, asked for again by its name (a host that heard `cornNavigate` and set what it said): nothing opens again, and the copy
       // the server found is the same one whether or not the name carries it

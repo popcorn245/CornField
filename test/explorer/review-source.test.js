@@ -259,6 +259,52 @@ describe('a proposal that cannot be opened (D1)', () => {
   });
 });
 
+describe('a proposal\'s name stays one path segment on the server (D9)', () => {
+  const ODD = ['..', '.', '../review', '../../cornfield/config', 'a/b', '0002-checkout/..', '0002-checkout?x=1', '0002-checkout#x', '%2e%2e', '..%2Freview', 'http://evil.test/0002-checkout', '//evil.test/x', ' 0002-checkout', '0002-checkout\\..', '<img src=x onerror="window.__x=1">', 'a'.repeat(201), '-leading-dash'];
+  it('a value that is not a proposal\'s name is never put in a request: said in the bar as text, onError proposal, nothing decided', async () => {
+    for (const value of ODD) {
+      const { piece, root, calls, srv } = make({ src: BASE, proposal: value });
+      await until(() => calls.error.length > 0 && calls.ready === 1);
+      expect(srv.log.filter((r) => r.path.startsWith('/proposals') || !['/cornfield/config.json', '/topology.json'].includes(r.path))).toEqual([]);
+      expect(calls.error).toEqual([{ kind: 'proposal', message: expect.stringMatching(/is not a proposal's name\.$/) }]);
+      expect(root.querySelector('#proposal-message').textContent).toBe(calls.error[0].message);
+      expect(root.querySelector('img')).toBeNull();
+      const approve = root.querySelector('[data-review="approved"]');
+      expect(!approve || !!approve.closest('[hidden]')).toBe(true); // no decision: nothing is open
+      piece.destroy();
+    }
+    expect(window.__x).toBeUndefined();
+  });
+
+  it('the engine refuses it too, before any request (cornfield\'s page filters its links already; a listing or a host does not)', async () => {
+    const { createInstance } = await import('../../explorer/instance.js');
+    const { openProposal } = await import('../../explorer/engine/proposal.js');
+    const fetch = vi.fn(() => Promise.reject(new Error('never')));
+    const inst = createInstance({ base: BASE, fetch });
+    const failed = [];
+    inst.on('proposal:failed', (d) => failed.push(d));
+    for (const value of ['..', 'a/b', '', null, 42]) expect(await openProposal(inst, value)).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(failed.map((d) => d.message)).toEqual(['\u201c..\u201d is not a proposal\'s name.', '\u201ca/b\u201d is not a proposal\'s name.', 'That is not a proposal\'s name.', 'That is not a proposal\'s name.', '\u201c42\u201d is not a proposal\'s name.']);
+  });
+
+  it('with no src (and no base or fetch) a name is never asked of the page\'s own origin in its place: said, and nothing is sent', async () => {
+    const fetch = vi.fn(() => Promise.reject(new Error('never')));
+    vi.stubGlobal('fetch', fetch);
+    const { piece, root, calls } = make({ proposal: '0002-checkout', topology: topology(), fetch: undefined });
+    await until(() => calls.error.length > 0 && calls.ready === 1);
+    await sleep(50);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(calls.error).toEqual([{ kind: 'proposal', message: '0002-checkout cannot be opened here: there is no cornfield server to read it from (the review has no src).' }]);
+    expect(root.querySelector('#proposal-message').textContent).toBe(calls.error[0].message);
+    // a proposal handed in as an object still shows, for reading, with no request
+    piece.update({ proposal });
+    await until(() => !!root.querySelector('#proposal-title')?.textContent);
+    expect(fetch).not.toHaveBeenCalled();
+    piece.destroy();
+  });
+});
+
 describe('a decision the server refuses (D9)', () => {
   it('shows the same card and link, and onAuth carries what was refused; the facts read again are said once, a press every time', async () => {
     const { piece, root, calls } = make({ src: BASE, proposal: '0002-checkout', source: 'pull/2' }, server({ facts401: 401 }));

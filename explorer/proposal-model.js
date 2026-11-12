@@ -84,6 +84,22 @@ export const openedWords = (title, counts, view) => `Proposal ${title}: ${barCou
 export const jumpWords = (markWord, name) => `${name}, ${String(markWord).toLowerCase()}. The map is on it.`;
 
 const SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+/** The longest name the server takes for a proposal (server/submit-review.js) */
+const MAX_NAME = 200;
+
+/**
+ * Whether `name` can be a proposal's name: a file name in the proposals folder (what the server's routes take), so it is one path segment and never
+ * `.` or `..`: it starts with a letter or a digit and holds only letters, digits, `.`, `_` and `-`. A name that is not one is never asked for.
+ * @param {unknown} name
+ */
+export const isProposalName = (name) => typeof name === 'string' && name.length <= MAX_NAME && SLUG.test(name);
+
+/** What to say of a value that was given as a proposal's name and is not one; shown as text, cut to 60 characters */
+export function notANameWords(raw) {
+  const text = String(raw ?? '');
+  const shown = text.length > 60 ? `${text.slice(0, 59)}\u2026` : text;
+  return shown.trim() ? `\u201c${shown}\u201d is not a proposal's name.` : 'That is not a proposal\'s name.';
+}
 
 /**
  * What `/?proposal=<slug>&source=<where>&proposalView=<view>` asks for, or null when it does not
@@ -320,8 +336,7 @@ export function malformedLinkWords(search) {
   if (!params.has('proposal')) return null;
   const raw = params.get('proposal') || '';
   if (SLUG.test(raw)) return null;
-  const shown = raw.length > 60 ? `${raw.slice(0, 59)}\u2026` : raw;
-  return shown.trim() ? `This link does not name a proposal: \u201c${shown}\u201d is not a proposal's name.` : 'This link does not name a proposal.';
+  return raw.trim() ? `This link does not name a proposal: ${notANameWords(raw)}` : 'This link does not name a proposal.';
 }
 
 /**

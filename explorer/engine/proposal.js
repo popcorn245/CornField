@@ -36,7 +36,7 @@
 import { edgePoint } from '../scene.js';
 import { frameNodes } from '../camera.js';
 import { largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from '../camera-frame.js';
-import { PROPOSAL_VIEWS, MARK_WORDS, touchedIds, viewWords, jumpWords, notFoundWords, otherCopies } from '../proposal-model.js';
+import { PROPOSAL_VIEWS, MARK_WORDS, touchedIds, viewWords, jumpWords, notFoundWords, otherCopies, isProposalName, notANameWords } from '../proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems } from '../../core/proposal.js';
 import { beginReview, endReview, redrawLayers, reviewLayersLine } from './layers.js';
 import { visibleMapRect, collapseSheet } from './sheets.js';
@@ -119,6 +119,14 @@ export const messageOf = (inst) => memory(inst).message;
 export async function openProposal(inst, slug, source = null) {
   const m = memory(inst);
   const token = ++m.openToken;
+  // A value that is not a proposal's name (`..`, a path, a URL, markup: a host's `proposal` or a link) is never put in a request: it would not stay one
+  // segment of `/proposals/<name>` (a decision's `/proposals/../review` is `/review`). Said in the bar, as a name that is not found is.
+  if (!isProposalName(slug)) {
+    const message = notANameWords(slug);
+    setMessage(inst, message, true, []);
+    inst.emit('proposal:failed', { slug, source, status: 0, notFound: false, message });
+    return false;
+  }
   setMessage(inst, `Opening ${slug} …`);
   try {
     let res;
