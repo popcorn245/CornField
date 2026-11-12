@@ -160,7 +160,6 @@ describe('inst.destroy()', () => {
     map.onPaint(draws);
     inst.destroy();
     inst.destroy();
-    expect(inst.destroyed).toBe(true);
     const frames = map.frameStats().frames;
     canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 20, bubbles: true }));
     canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));

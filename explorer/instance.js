@@ -10,10 +10,13 @@
  *   inst.fetch      `fetch` bound to that base; inst.url(path) is a served path made absolute against it
  *   inst.strings    the words the host overrides (key -> text)
  *   inst.touchScene / onSceneTouch   a change the picture is built from, and who follows it
- *   inst.on / emit  the other changes a piece tells its neighbours of (`mapstyle`, `select`, `background`, `grab` ...), per instance
- *   inst.el / qs    an element of the instance, found inside its root and never by document id
+ *   inst.on / emit  what a piece tells its neighbours, per instance. input.js emits `select` (a tap on a node: the page decides what selecting
+ *                   means), `background` (a tap on the bare map) and `grab` (a hand took the camera). These are requests, not news of a change:
+ *                   a selection made by keyboard or search emits nothing here
+ *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs
- *   inst.slot       what a module keeps for this instance (the renderer, the caches), made on first use
+ *   inst.slot       what a module keeps for this instance (its map style), made on first use
+ *   inst.map        the map (engine/render.js createMap sets it)
  *   inst.destroy()  runs every clean-up, so nothing the instance set up outlives it
  *
  * A module that is "on the instance" takes `inst` and reads nothing global: no shared state, no `document.getElementById`, no
@@ -33,13 +36,14 @@ const ABSOLUTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
  * @param {Record<string, string>} [opts.strings] the host's own words
  * @param {object} [opts.state] a state object to adopt instead of a new one (state.js hands the page's to the page instance)
  */
-export function createInstance({ root = null, base = '', fetch: fetchImpl, strings = {}, state } = {}) {
+export function createInstance({ root = null, base = '', fetch: fetchOpt, strings = {}, state } = {}) {
   const doc = root ? (root.nodeType === 9 ? /** @type {Document} */ (root) : root.ownerDocument) : null;
   const win = doc ? doc.defaultView : null;
   const events = new Map();
   const cleanups = [];
   const slots = new Map();
   let destroyed = false;
+  const fetchImpl = fetchOpt;
 
   const on = (name, fn) => {
     let set = events.get(name);
@@ -51,8 +55,8 @@ export function createInstance({ root = null, base = '', fetch: fetchImpl, strin
   /** A served path made absolute against the base; anything already absolute (or no base) is returned as it was */
   const url = (path) => {
     const p = String(path);
-    if (!inst.base || ABSOLUTE.test(p)) return p;
-    return new URL(p, inst.base).href;
+    if (!base || ABSOLUTE.test(p)) return p;
+    return new URL(p, base).href;
   };
 
   /** The element whose computed style holds the tokens: the document's own for a page, else the root itself (a shadow root's host) */
@@ -67,25 +71,14 @@ export function createInstance({ root = null, base = '', fetch: fetchImpl, strin
     doc,
     win,
     base,
-    /** The host's own words (key -> text). The same object for the instance's life: `setStrings` changes it in place */
+    /** The host's own words (key -> text); nothing on the map reads them yet (the pieces of step 4 will) */
     strings: { ...strings },
-    setStrings(next) {
-      for (const k of Object.keys(inst.strings)) delete inst.strings[k];
-      Object.assign(inst.strings, next || {});
-    },
     state: state || createState(),
 
     url,
     fetch(input, init) {
-      const f = inst.fetchImpl || globalThis.fetch;
+      const f = fetchImpl || globalThis.fetch;
       return f(typeof input === 'string' ? url(input) : input, init);
-    },
-    fetchImpl,
-    /** Sets what the instance was not given when it was made (state.js makes the page's before page.js runs, because modules that are not yet converted register with it as they load) */
-    configure(next = {}) {
-      if (next.base !== undefined) inst.base = next.base;
-      if (next.fetch !== undefined) inst.fetchImpl = next.fetch;
-      if (next.strings !== undefined) inst.setStrings(next.strings);
     },
 
     // -- what changed -----------------------------------------------------------------------------------------------------------
@@ -106,8 +99,6 @@ export function createInstance({ root = null, base = '', fetch: fetchImpl, strin
     // -- the instance's own elements ----------------------------------------------------------------------------------------------
     /** The element with this id inside the root, or null (ids are only unique inside one root) */
     el: (id) => (root ? root.querySelector(`[id="${String(id).replace(/["\\]/g, '\\$&')}"]`) : null),
-    qs: (selector) => (root ? root.querySelector(selector) : null),
-    qsa: (selector) => (root ? [...root.querySelectorAll(selector)] : []),
 
     // -- what the viewer prefers --------------------------------------------------------------------------------------------------
     /** A reader of the computed custom properties at the root (`(name) => value`), or null where there is no page */
@@ -155,9 +146,6 @@ export function createInstance({ root = null, base = '', fetch: fetchImpl, strin
       if (!slots.has(key)) slots.set(key, make(inst));
       return slots.get(key);
     },
-    /** The slot's value if it has been made, else undefined */
-    peek: (key) => slots.get(key),
-    get destroyed() { return destroyed; },
     /** Removes every listener, observer and timer the instance's modules set up and releases the renderer's GPU context. Safe to call twice. */
     destroy() {
       if (destroyed) return;
@@ -172,7 +160,6 @@ export function createInstance({ root = null, base = '', fetch: fetchImpl, strin
     // -- the map as the state holds it ----------------------------------------------------------------------------------------------
     /** The edges the current view draws and the selection walks */
     viewEdges: () => (inst.state.view === 'dataflow' && inst.state.flow ? inst.state.flow.edges : inst.state.edges),
-    nodeById: (id) => inst.state.nodes.find((n) => n.id === id),
   };
   return inst;
 }

@@ -243,8 +243,8 @@ describe('two instances in one document', () => {
   it('a change of style in one instance draws that map again and not the other', () => {
     const seenA = vi.fn();
     const seenB = vi.fn();
-    A.inst.on('mapstyle', seenA);
-    B.inst.on('mapstyle', seenB);
+    mapStyleOf(A.inst).onChange(seenA);
+    mapStyleOf(B.inst).onChange(seenB);
     A.root.style.setProperty('--corn-map-node-app', 'rgb(9, 9, 9)');
     mapStyleOf(A.inst).refresh();
     expect(seenA).toHaveBeenCalledTimes(1);
@@ -262,6 +262,15 @@ describe('two instances in one document', () => {
     mapStyleOf(inst).setIcons({ icons: { app: '/cornfield/theme/assets/app.png' } }, { load: (u) => { urls.push(u); return Promise.reject(new Error('no')); }, warn() {} });
     // the default loader resolves against the base; a custom one is handed the served path as written
     expect(urls).toEqual([]);
+    inst.destroy();
+  });
+
+  it('hands out what the map and the page use, and nothing more (spec 0011: the simplest thing; a later step adds what it needs)', () => {
+    const inst = createInstance({ root: document.body });
+    expect(Object.keys(inst).sort()).toEqual([
+      'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'fetch', 'hidden', 'listen', 'on', 'onSceneTouch', 'onShown', 'own', 'reducedMotion',
+      'root', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
+    ]);
     inst.destroy();
   });
 

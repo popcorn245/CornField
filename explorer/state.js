@@ -8,7 +8,7 @@
  *   `state`           the page instance's state object (the same object: `pageInstance().state === state`)
  *   `touchScene`, `onSceneTouch`, `viewEdges`, `nodeById`, `nameOf`   the page instance's, under their old names
  *   `pageInstance()`  the page's instance, for a module that is being converted (or a bridge, explorer/render.js, map-style.js, layout.js);
- *                     `startPageInstance()` is page.js's one call that finishes it
+ *                     `startPageInstance()` is page.js's one call that claims it
  *
  * To convert a module: take `inst` as an argument (or from the piece that mounts it), read `inst.state`, call `inst.touchScene()`, find elements
  * with `inst.el(id)`, listen with `inst.listen(root, ...)`, and drop the import of this file; add it to the converted list of
@@ -35,13 +35,12 @@ export function pageInstance() {
 }
 
 /**
- * Called once by page.js: the instance of this document, with the base address, the fetch and the strings the page gives it. There is only ever one
- * (`pageInstance()` above): this finishes it, and does not make a second.
+ * Called once by page.js: the instance of this document. There is only ever one (`pageInstance()` above), made with the defaults cornfield's page
+ * wants (its own origin, the global fetch, no strings of a host's); this hands it over, and does not make a second.
  */
-export function startPageInstance({ root, base, fetch: fetchImpl, strings }) {
+export function startPageInstance({ root }) {
   const inst = pageInstance();
   if (root !== inst.root) throw new Error('The page instance is over the document it was first asked for');
-  inst.configure({ base, fetch: fetchImpl, strings });
   return inst;
 }
 

@@ -297,7 +297,6 @@ export function createMapStyle(inst) {
     version++;
     current = compose();
     listeners.forEach((fn) => fn(current));
-    inst.emit('mapstyle', current);
   };
 
   const store = {

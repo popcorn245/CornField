@@ -197,7 +197,7 @@ async function runPageBench(frames, zoomFactor, sync) {
  * @returns {ReturnType<typeof startPageInstance>} the page's instance
  */
 export function startPage() {
-  inst = startPageInstance({ root: document, base: '' }); // the one instance of this document, the document its root; state.js hands the modules that are not yet on an instance its state
+  inst = startPageInstance({ root: document }); // the one instance of this document, the document its root; state.js hands the modules that are not yet on an instance its state
   map = createMap(inst, { measureCovered }); // the camera, the scene and the frame loop of this instance (engine/render.js)
   const mapStyle = mapStyleOf(inst);
   initTheme(); // light or dark, before the first scene is built (theme.js)
