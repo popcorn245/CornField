@@ -550,6 +550,83 @@ describe('the server\'s theme (use-theme)', () => {
   });
 });
 
+describe('the scope protocol in a real page', () => {
+  const nodesOf = async (el: Piece) => { const ids: string[] = []; for (const id of ['alpha', 'one']) { await el.focusNode(id); if (el.node === id) ids.push(id); } return ids; };
+
+  it('a piece inside another component\'s closed shadow root finds the scope around that component; a scope put around it later cannot find it (as the docs say)', async () => {
+    if (!customElements.get('x-closed-host')) {
+      customElements.define('x-closed-host', class extends HTMLElement {
+        connectedCallback() {
+          if ((this as any).done) return;
+          (this as any).done = true;
+          const root = this.attachShadow({ mode: 'closed' });
+          root.innerHTML = `<corn-map renderer="canvas2d" style="${SIZE}"></corn-map>`;
+          (this as any).inner = root.querySelector('corn-map');
+        }
+      });
+    }
+    const host = await page(`<corn-scope src="${at('other')}"><x-closed-host></x-closed-host></corn-scope>`);
+    const inner = (host.querySelector('x-closed-host') as any).inner as Piece;
+    await inner.componentOnReady();
+    await until(() => !!canvasOf(inner) && lit(inner) > 0);
+    expect(await nodesOf(inner)).toEqual(['one']); // the scope's server's map
+    // a scope added around it afterwards: the walk does not enter a closed root, so the piece stays where it was
+    const late = document.createElement('main');
+    late.innerHTML = '<x-closed-host></x-closed-host>';
+    document.body.append(late);
+    const alone = (late.querySelector('x-closed-host') as any).inner as Piece;
+    await alone.componentOnReady();
+    await frames(2);
+    const wrap = document.createElement('corn-scope');
+    wrap.setAttribute('src', at('other'));
+    late.append(wrap);
+    await (wrap as any).componentOnReady();
+    await sleep(500);
+    expect(lit(alone)).toBe(0);
+  });
+
+  it('nested scopes: the nearest answers; the outer one\'s server is not asked for that piece', async () => {
+    const host = await page(`<corn-scope src="${at('ok')}"><corn-scope src="${at('other')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope></corn-scope>`);
+    const el = map(host);
+    await until(() => lit(el) > 0);
+    expect(await nodesOf(el)).toEqual(['one']);
+  });
+
+  it('a scope moved in the page ends its instance and makes a new one; its map takes it and draws again, and says cornReady once more', async () => {
+    listen();
+    const host = await page(`<div id="from"><corn-scope src="${at('ok')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope></div><div id="to"></div>`);
+    const el = map(host);
+    await until(() => lit(el) > 0);
+    const first = canvasOf(el);
+    const ready = events.filter((e) => e.type === 'cornReady' && e.target === 'corn-scope').length;
+    host.querySelector('#to')!.append(host.querySelector('corn-scope')!);
+    await until(() => canvasOf(el) !== first && lit(el) > 0);
+    await until(() => events.filter((e) => e.type === 'cornReady' && e.target === 'corn-scope').length === ready + 1);
+    expect(await nodesOf(el)).toEqual(['alpha']);
+  });
+
+  it('src changing mid-load: the old server\'s reads are aborted, its answer is never used, and nothing is said for it', async () => {
+    listen();
+    const signals: Array<{ url: string; signal?: AbortSignal }> = [];
+    const real = window.fetch;
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => { signals.push({ url: String(input), signal: init?.signal ?? undefined }); return real(input, init); }) as typeof fetch;
+    try {
+      const host = await page(`<corn-scope src="${at('slow')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
+      await sleep(100);
+      (host.querySelector('corn-scope') as Piece).src = at('other');
+      const el = map(host);
+      await until(() => lit(el) > 0);
+      await sleep(900); // the slow server has answered by now
+      const slow = signals.filter((s) => s.url.includes('/fake/slow/'));
+      expect(slow.length).toBeGreaterThan(0);
+      for (const s of slow) expect(s.signal?.aborted, s.url).toBe(true);
+      expect(await nodesOf(el)).toEqual(['one']);
+      expect(events.filter((e) => e.type === 'cornReady' && e.target === 'corn-scope')).toHaveLength(1);
+      expect(kinds()).toEqual([]);
+    } finally { window.fetch = real; }
+  });
+});
+
 describe('the end', () => {
   it('a scope or a map removed while a read is in flight ends it, and says nothing afterwards', async () => {
     listen();
