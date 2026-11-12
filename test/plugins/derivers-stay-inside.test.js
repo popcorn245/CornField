@@ -88,6 +88,30 @@ describe('the repo reader', () => {
     expect(io.walk('', () => true)).toEqual([]);
   });
 
+  linked('refuses a link out written with a trailing slash, and keeps ./ for the root', () => {
+    fs.symlinkSync(outside(), path.join(repo, 'dir'));
+    put('a.txt', 'a\n');
+    const io = repoReader(repo);
+    for (const p of ['dir/', 'dir//', 'dir/.', './dir/']) {
+      expect(io.exists(p)).toBe(false);
+      expect(io.isDir(p)).toBe(false);
+      expect(io.list(p)).toEqual([]);
+    }
+    expect(io.list('./')).toEqual(['a.txt', 'dir']);
+    expect(io.isDir('./')).toBe(true);
+  });
+
+  linked('does not take a path a caller adds to what walk gave it for a file the walk found', () => {
+    put('src/a.js', 'a\n');
+    fs.symlinkSync(outside('m.py'), path.join(repo, 'f.py'));
+    const io = repoReader(repo);
+    const found = io.walk('src');
+    found.push('f.py', '../outside/m.py');
+    expect(io.read('src/a.js')).toBe('a\n');
+    expect(() => io.read('f.py')).toThrow(/is outside the repo/);
+    expect(() => io.read('../outside/m.py')).toThrow(/is outside the repo/);
+  });
+
   linked('works on a repo reached through a symlink, and on links that stay inside', () => {
     put('real/a/x.txt', 'ok\n');
     fs.symlinkSync('real/a', path.join(repo, 'in'));
@@ -202,6 +226,17 @@ describe('a config path that leaves the repo', () => {
     }
   });
 
+  linked('is a warning for a CI workflow file that links out, and the sync goes on', async () => {
+    put('src/a.js', 'export const a = 1;\n');
+    fs.mkdirSync(path.join(repo, '.github/workflows'), { recursive: true });
+    fs.symlinkSync(outside('Caddyfile'), path.join(repo, '.github/workflows/out.yml'));
+    fs.symlinkSync('gone.yml', path.join(repo, '.github/workflows/none.yml'));
+    const res = await derive([{ deriver: starter, options: { packages: ['src'] } }, { deriver: cloud, options: {} }]);
+    expect(res.warnings).toContain('cloud: .github/workflows/out.yml is a link to somewhere outside the repo; it is not read.');
+    expect(res.warnings).toContain('cloud: .github/workflows/none.yml is a link to nothing; it is not read.');
+    noMarker(res);
+  });
+
   it('is refused by world: file', async () => {
     const res = await derive([{ deriver: world, options: { file: '../outside/world.json' } }]);
     expect(res.problems).toEqual([outsideWritten('world', '../outside/world.json')]);
@@ -287,6 +322,32 @@ describe('a page from a symlinked folder that stays in the repo', () => {
     const validate = cli('validate');
     expect(validate.stdout + validate.stderr).not.toContain('is not in the repo');
     expect(validate.status).toBe(0);
+  });
+
+  it('is no help to a node file in a repo without links: validate holds it to the repo\'s own paths', () => {
+    put('docs/a.md', '# A\n');
+    put('README.md', '# R\n');
+    const io = repoReader(repo);
+    const files = ['.', './', 'docs/', 'docs//a.md', './docs/a.md', 'docs/./a.md', 'docs/a.md/', 'README.md/x', 'node_modules', 'a\u0000b'];
+    const errors = missingPaths({ nodes: files.map((file, i) => ({ id: `n${i}`, file })), edges: [] }, new Set(['docs', 'docs/a.md', 'README.md']), reachable(io));
+    expect(errors).toHaveLength(files.length);
+  });
+
+  linked('keeps validate from reading the cloud or personas file through a link out', () => {
+    put('README.md', '# R\n');
+    put('cornfield.config.js', "export default { derivers: ['docs', 'personas', 'cloud'] };\n");
+    put('topology.cloud.json', JSON.stringify({ version: 1, services: [{ id: MARKER.toLowerCase(), label: MARKER, roles: ['runtime'], desc: MARKER, breaks: 'b', plan: { tier: 'free' }, match: { hosts: [HOST] } }] }), outside());
+    put('topology.personas.json', JSON.stringify({ version: 1, personas: [{ id: 'p', label: MARKER, role: MARKER }] }), outside());
+    fs.symlinkSync(outside('topology.cloud.json'), path.join(repo, 'topology.cloud.json'));
+    fs.symlinkSync(outside('topology.personas.json'), path.join(repo, 'topology.personas.json'));
+    const sync = cli('sync');
+    const validate = cli('validate');
+    expect(sync.status).toBe(0);
+    expect(validate.status).toBe(0);
+    for (const out of [sync.stdout, sync.stderr, validate.stdout, validate.stderr, fs.readFileSync(path.join(repo, 'topology.json'), 'utf8')]) {
+      expect(out).not.toContain(MARKER);
+      expect(out).not.toContain('outside-marker');
+    }
   });
 
   linked('still fails validate for a node file that is gone, or that a link takes out of the repo', () => {
