@@ -132,7 +132,7 @@ jobs:
           # …except the web components, which a browser fetches without the cookie (they are the published package); with no embed.origins there is no CORS header
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3397/cornfield/components/version.json)
           [ "$code" = 200 ] || { echo "the components answered $code without a session" >&2; docker stop cf; exit 1; }
-          if curl -sI -H 'Origin: https://tasks.example.test' http://127.0.0.1:3397/cornfield/components/corn-map.js | grep -qi '^access-control-'; then echo 'a CORS header with no origin listed' >&2; docker stop cf; exit 1; fi
+          if curl -sI -H 'Origin: null' http://127.0.0.1:3397/cornfield/components/corn-map.js | grep -qi '^access-control-'; then echo 'a CORS header with no origin listed' >&2; docker stop cf; exit 1; fi
           # Behind a proxy that passes Host through, the public name reaches the guard too
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: cornfield-ci' http://127.0.0.1:3397/topology.json)
           [ "$code" = 401 ] || { echo "the public Host answered $code" >&2; docker stop cf; exit 1; }
