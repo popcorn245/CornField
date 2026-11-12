@@ -35,6 +35,11 @@ export const MAX_ENTRIES = 20000;
 const MAX_WALKS = 16;
 const DAY_MS = 86_400_000;
 
+/** Whether real path `real` is `dir` or under it, by whole segments (`/x/repo-other` is not under `/x/repo`); server/files.js `inside` holds the same rule for files */
+const under = (dir, real) => {
+  const r = path.relative(dir, real);
+  return r === '' || (r !== '..' && !r.startsWith(`..${path.sep}`) && !path.isAbsolute(r));
+};
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 const countNewlines = (text) => { let n = 0; for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) n++; return n; };
 const turn = () => new Promise((resolve) => setImmediate(resolve));
@@ -94,13 +99,23 @@ export function createProposalLister({ fs = fsp, concurrency = CONCURRENCY, maxE
     const { cache } = state;
     const seen = new Set();
     const base = path.resolve(where.root);
+    // A fake `fs` (a test's) may not have `realpath`: the real one answers then
+    const realpath = (p) => (fs.realpath ?? fsp.realpath).call(fs, p);
+    let realBase;
+    try { realBase = await realpath(base); } catch { return []; }
     const maxAgeMs = where.worktreeMaxAgeDays > 0 ? where.worktreeMaxAgeDays * DAY_MS : null;
     const clock = where.now || now;
 
-    /** The proposal files directly in `dir`, each with its lstat; a folder that is not there has none */
-    async function scan(dir) {
+    /**
+     * The proposal files directly in `dir`, each with its lstat; a folder that is not there has none, nor has one whose real path is not
+     * under `within` (a real path: the repo's, or the worktree's). The files are named by the real folder, which is what was checked.
+     */
+    async function scan(dir, within) {
       let names;
       try {
+        const real = await io(() => realpath(dir));
+        if (!under(within, real)) return [];
+        dir = real;
         names = await io(() => fs.readdir(dir));
       } catch { return []; }
       const wanted = names.filter((name) => PROPOSAL_FILE.test(name) && !name.endsWith('.review.json'));
@@ -147,21 +162,25 @@ export function createProposalLister({ fs = fsp, concurrency = CONCURRENCY, maxE
 
     const out = [];
     const proposals = where.proposals;
-    const checkoutFiles = await scan(path.join(base, proposals));
+    const checkoutFiles = await scan(path.join(base, proposals), realBase);
     const checkoutRecs = new Map();
     await Promise.all(checkoutFiles.map(async (f) => checkoutRecs.set(f.name, await recordOf(f))));
     if (!only || only === 'checkout') for (const f of checkoutFiles) out.push({ slug: f.slug, source: 'checkout', file: f.file, parsed: checkoutRecs.get(f.name).parsed });
 
     if (where.worktrees && only !== 'checkout') {
-      const dir = path.join(base, where.worktrees);
+      let dir = path.join(base, where.worktrees);
       let entries = [];
       try {
-        entries = await io(() => fs.readdir(dir, { withFileTypes: true }));
+        const real = await io(() => realpath(dir));
+        if (under(realBase, real)) { // a worktrees folder that is a link out of the repo holds none
+          dir = real;
+          entries = await io(() => fs.readdir(dir, { withFileTypes: true }));
+        }
       } catch { /* no worktrees here */ }
       // A worktree called "checkout" would be taken for the checkout itself: not listed
       const names = entries.filter((w) => w.isDirectory() && w.name !== 'checkout' && (!only || w.name === only)).map((w) => w.name).sort();
       await Promise.all(names.map(async (name) => {
-        const files = await scan(path.join(dir, name, proposals));
+        const files = await scan(path.join(dir, name, proposals), path.join(dir, name));
         if (maxAgeMs !== null && files.length && clock() - Math.max(...files.map((f) => f.mtimeMs)) > maxAgeMs) return;
         await Promise.all(files.map(async (f) => {
           const rec = await recordOf(f, checkoutRecs.get(f.name) || null);

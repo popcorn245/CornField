@@ -64,6 +64,24 @@ describe('openStore', () => {
     expect(fs.statSync(path.join(dataDir, DB_FILE)).mode & 0o777).toBe(0o600);
   });
 
+  it.skipIf(process.platform === 'win32')('opens no file that is a link (the file, or one SQLite keeps beside it), and changes nothing where it leads', () => {
+    const dataDir = path.join(tmp, 'data');
+    const target = path.join(tmp, 'elsewhere.txt');
+    fs.mkdirSync(dataDir);
+    for (const name of [DB_FILE, `${DB_FILE}-wal`, `${DB_FILE}-shm`]) {
+      fs.writeFileSync(target, 'OUTSIDE-MARKER-db-2f7c');
+      fs.chmodSync(target, 0o644);
+      fs.symlinkSync(target, path.join(dataDir, name));
+      expect(() => openStore(dataDir)).toThrow(/not a plain file/);
+      expect(fs.readFileSync(target, 'utf8')).toBe('OUTSIDE-MARKER-db-2f7c');
+      expect(fs.statSync(target).mode & 0o777).toBe(0o644);
+      fs.rmSync(path.join(dataDir, name));
+    }
+    fs.symlinkSync(path.join(tmp, 'not-there.db'), path.join(dataDir, DB_FILE)); // a dangling link: SQLite would make the file where it leads
+    expect(() => openStore(dataDir)).toThrow(/not a plain file/);
+    expect(fs.existsSync(path.join(tmp, 'not-there.db'))).toBe(false);
+  });
+
   it('opens an old file with its rows kept, and the same file again with nothing to do', () => {
     writeOldFile(tmp);
     db = openStore(tmp);

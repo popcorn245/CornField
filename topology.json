@@ -5472,12 +5472,6 @@
     },
     {
       "from": "core-server-forge-routes",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-forge-routes",
       "to": "core-server-proposals",
       "dashed": true,
       "label": "imports"
@@ -6109,12 +6103,6 @@
     },
     {
       "from": "core-server-spec-poll",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-spec-poll",
       "to": "core-server-threads",
       "dashed": true,
       "label": "imports"
@@ -6498,12 +6486,6 @@
     {
       "from": "core-server-agent-runs",
       "to": "core-core-mentions",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-agent-runs",
-      "to": "core-core-validate",
       "dashed": true,
       "label": "imports"
     },
@@ -10454,7 +10436,30 @@
       "from": "page-doc-docs-cloud",
       "to": "page-doc-docs-derivers",
       "dashed": true
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-spec-poll",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T22:45:25.944Z"
+  "updatedAt": "2026-11-12T23:32:04.793Z"
 }

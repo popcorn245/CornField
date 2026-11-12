@@ -41,7 +41,7 @@ import { isMaintainer } from './forge.js';
 import { listPullProposals } from './proposal-pulls.js';
 import { gatherThreads, snapshotOf, POLL_LIMIT } from './threads.js';
 import { hookWants, threadsOn, triggersOf, THREAD_EVENTS } from '../core/config.js';
-import { readTopology } from '../core/validate.js';
+import { readMap } from './files.js';
 
 /** How long after start the first look is made: soon, so the repo's silent first look is not left to the first interval */
 export const FIRST_MS = 15_000;
@@ -105,7 +105,7 @@ export function createSpecPoll({ config, where, auth, hooks, runs = null, specs 
   /** The checkout's nodes, for a hook's `nodes` to be the ones a mention resolves to; none when there is no map */
   function mapNodes() {
     try {
-      const topology = readTopology(config);
+      const topology = readMap(config); // only a map really inside the repo (server/files.js `inside`)
       return topology && Array.isArray(topology.nodes) ? topology.nodes : [];
     } catch {
       return [];
