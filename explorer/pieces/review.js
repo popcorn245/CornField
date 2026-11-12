@@ -25,6 +25,7 @@
  *   strings    the host's own words (core/strings.js keys): the instance speaks in them
  *   theme      'light' | 'dark' | 'auto' (the map's ground), checker (a plugin's checker for the scenarios), now (the decision's clock)
  *   base, fetch, tokens, renderer, onSelect, onReady   as pieces/map.js; `renderer` is read at mount only (a canvas that is replaced loses the edge picking)
+ *   label      the box's accessible name (a region; 'Proposal review' by default), read at mount
  *
  * What a host hears is on the instance already (instance.js): `selection`, `proposal`, `decision`, `auth`, `scenario:player`. This piece adds nothing.
  *
@@ -105,6 +106,9 @@ export function mount(root, inst, options = {}) {
   const box = doc.createElement('div');
   box.setAttribute('data-corn', 'review');
   box.setAttribute('part', 'review');
+  // A named region: a screen reader finds the review as one place in the host's page (its headings start at h2: the proposal's title and the node's)
+  box.setAttribute('role', 'region');
+  box.setAttribute('aria-label', typeof options.label === 'string' && options.label.trim() ? options.label.trim() : 'Proposal review');
   box.innerHTML = withParts(LAYOUT);
   root.append(box);
 

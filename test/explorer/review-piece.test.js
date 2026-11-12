@@ -67,6 +67,9 @@ describe('its layout: one root, with the places the cross-piece lookups expect',
     const box = el.firstElementChild;
     expect(box.getAttribute('data-corn')).toBe('review');
     expect(box.getAttribute('part')).toBe('review');
+    expect(box.getAttribute('role')).toBe('region');
+    expect(box.getAttribute('aria-label')).toBe('Proposal review');
+    expect(make({ label: ' Spec review ' }).el.firstElementChild.getAttribute('aria-label')).toBe('Spec review');
     for (const id of ['sheet-dock', 'proposal-bar', 'proposal-body', 'review-column', 'spec-drawer', 'drawer-backdrop', 'graph-canvas', 'map-announcer', 'review-decision']) {
       expect(piece.inst.el(id), id).toBeTruthy();
       expect(box.contains(piece.inst.el(id)), id).toBe(true);
