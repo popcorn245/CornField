@@ -59,6 +59,9 @@ export function labelWidth(inst, node) {
 const DATA_TYPES = ['store', 'table', 'rom'];
 const CHILD_TYPE_ORDER = ['core', 'atom', 'molecule', 'token', 'page', 'service', 'external', 'stack', 'table', 'store', 'tool', 'app', 'pkg'];
 
+/** How deep packTree nests a cluster's own clusters (a real map nests a few levels) */
+const PACK_DEPTH = 64;
+
 /** Concentric rings of `items` around (0, 0): returns the offsets and the radii used */
 function ringPack(items, { first = 110, gap = 76, spacing = 90 } = {}) {
   const offsets = [];
@@ -90,14 +93,16 @@ function ringPack(items, { first = 110, gap = 76, spacing = 90 } = {}) {
  * `kidsOf(node)` says who hangs under a node. Returns `{ children, offsets, radii, subs, extent }`: `subs[i]` is the
  * child i's own pack (or null), `extent` how far the whole thing reaches from the centre.
  */
-function packTree(children, kidsOf, spacingOf, byOrder, seen = new Set()) {
+function packTree(children, kidsOf, spacingOf, byOrder, seen = new Set(), depth = 0) {
   const withSub = [];
   const plain = [];
   children.forEach((c) => {
-    const kids = seen.has(c.id) ? [] : kidsOf(c);
+    // Deeper than PACK_DEPTH a child is packed as a leaf, and its own children are placed around it after (the last pass of layoutOrbit): a map
+    // nested thousands deep is laid out, never a stack overflow
+    const kids = seen.has(c.id) || depth >= PACK_DEPTH ? [] : kidsOf(c);
     if (!kids.length) { plain.push(c); return; }
     seen.add(c.id);
-    const sub = packTree(kids.sort(byOrder), kidsOf, spacingOf, byOrder, seen);
+    const sub = packTree(kids.sort(byOrder), kidsOf, spacingOf, byOrder, seen, depth + 1);
     withSub.push({ c, sub, fp: sub.extent });
   });
   withSub.sort((a, b) => b.fp - a.fp);
