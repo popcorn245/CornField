@@ -117,6 +117,24 @@ describe('sameOrigin', () => {
     // DNS rebinding: a page on evil.example resolved to this machine sends Origin and Host that match each other
     expect(sameOrigin(req({ host: 'evil.example:3333', origin: 'http://evil.example:3333', 'sec-fetch-site': 'same-origin' }))).toBe(false);
   });
+  it('with a public origin, Origin must carry its scheme (#238); without one only the host is compared', () => {
+    const pub = 'https://cornfield.example.org';
+    const host = 'cornfield.example.org';
+    expect(sameOrigin(req({ host, origin: pub, 'sec-fetch-site': 'same-origin' }), host, [], pub)).toBe(true);
+    expect(sameOrigin(req({ host, origin: 'http://cornfield.example.org' }), host, [], pub)).toBe(false); // same host, the other scheme
+    expect(sameOrigin(req({ host, origin: 'http://cornfield.example.org' }), host, [], null)).toBe(true); // no public origin: the scheme cannot be known
+    expect(sameOrigin(req({ host, origin: 'https://other.example.org' }), host, [], pub)).toBe(false);
+    // a public URL with a port: the Host carries it, and the Origin has to say the same
+    const pubPort = 'https://cornfield.example.org:8443';
+    expect(sameOrigin(req({ host: `${host}:8443`, origin: pubPort }), host, [], pubPort)).toBe(true);
+    expect(sameOrigin(req({ host: `${host}:8443`, origin: 'http://cornfield.example.org:8443' }), host, [], pubPort)).toBe(false);
+    expect(sameOrigin(req({ host: `${host}:8443`, origin: pub }), host, [], pubPort)).toBe(false);
+    // loopback names with no public URL behave as before, and with one they still do (only the public host is held to the scheme)
+    expect(sameOrigin(req({ host: 'localhost:3333', origin: 'http://localhost:3333' }), null, [], null)).toBe(true);
+    expect(sameOrigin(req({ host: '127.0.0.1:3333', origin: 'http://127.0.0.1:3333' }), null, [], null)).toBe(true);
+    expect(sameOrigin(req({ host: 'localhost:3333', origin: 'http://localhost:3333' }), host, [], pub)).toBe(true);
+    expect(sameOrigin(req({ host: '127.0.0.1:3333', origin: 'http://127.0.0.1:3333' }), host, [], pub)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

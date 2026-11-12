@@ -310,9 +310,10 @@ export function createCornfieldServer(config, opts = {}) {
   const brandFile = brandFilesOf(config);
   const repoModules = repoModuleDirs(config);
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
+  const publicOrigin = config.publicUrl ? new URL(config.publicUrl).origin : null;
   // The sibling origins that may read and decide a review as the signed-in maintainer (server/embed.js): none unless `embed.origins` lists some
   const embed = createEmbed(config.embed?.origins ?? []);
-  const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost, embedOrigins: embed.origins };
+  const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost, publicOrigin, embedOrigins: embed.origins };
   const fixtureCache = new Map();
   // What the line above Approve says an approval does besides posting (spec 0007 D1, server/decision.js): landing, and the run a trigger asks for
   const approvalRun = triggersOf(config).find(([event]) => event === 'spec.approved');
@@ -476,9 +477,9 @@ export function createCornfieldServer(config, opts = {}) {
     const signedIn = gate.session ? { login: gate.session.login } : false;
 
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
-    if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost })) return;
-    if (await serveRunRoutes(req, res, reqPath, { config, auth, runs, session: gate.session, now: opts.now, publicHost })) return;
-    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost, embedOrigins: embed.origins })) return;
+    if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost, publicOrigin })) return;
+    if (await serveRunRoutes(req, res, reqPath, { config, auth, runs, session: gate.session, now: opts.now, publicHost, publicOrigin })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost, publicOrigin, embedOrigins: embed.origins })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;

@@ -104,8 +104,11 @@ function ownHostName(host, publicHost) {
  * @param {import('node:http').IncomingMessage} req
  * @param {string|null} [publicHost] the host of the configured public URL, which is the server's own too
  * @param {readonly string[]} [embedOrigins] the listed sibling origins (config `embed.origins`) a request may also come from; only for the review PUT and the Undo of a landing
+ * @param {string|null} [publicOrigin] the configured public URL's origin (scheme, host, port). A request that arrives under the public host must carry exactly this
+ *   `Origin`, scheme included. Without one (loopback, no public URL) only the host is compared: behind a proxy the scheme cannot be known. A request that
+ *   arrives under another of the machine's own names (`localhost`, an address) keeps the host comparison, as before.
  */
-export function sameOrigin(req, publicHost = null, embedOrigins = []) {
+export function sameOrigin(req, publicHost = null, embedOrigins = [], publicOrigin = null) {
   const host = req.headers.host;
   if (typeof host !== 'string' || !ownHostName(host, publicHost)) return false;
   // The two writes a listed sibling origin may make pass their list here (server/embed.js `listedWrite`); every other caller passes none
@@ -115,7 +118,9 @@ export function sameOrigin(req, publicHost = null, embedOrigins = []) {
   if (origin === undefined && site === undefined) return false;
   if (origin !== undefined) {
     try {
-      if (new URL(origin).host !== host.toLowerCase()) return false;
+      const given = new URL(origin);
+      if (given.host !== host.toLowerCase()) return false;
+      if (publicOrigin && publicHost && new URL(`http://${host}`).hostname === String(publicHost).toLowerCase() && given.protocol !== new URL(publicOrigin).protocol) return false; // host and port equal the Host header's (above), so with the public port in it this is the exact origin
     } catch {
       return false; // `null`, or not a URL
     }
@@ -282,7 +287,7 @@ async function getDecision(res, where, forgeFor, signedIn, slug, n, fresh) {
 
 /** PUT /proposals/<slug>/review?source=pull/<n>: posts the review as a comment on the PR, as the signed-in maintainer */
 async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
-  if (!sameOrigin(req, where.publicHost, where.embedOrigins ?? [])) {
+  if (!sameOrigin(req, where.publicHost, where.embedOrigins ?? [], where.publicOrigin ?? null)) {
     req.resume();
     return send(res, 403, { error: 'A review is only taken from cornfield\'s own page' });
   }
