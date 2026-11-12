@@ -626,14 +626,24 @@ export function createWebglRenderer(canvas, opts = {}) {
 
     draw,
 
-    destroy() {
-      canvas.removeEventListener('webglcontextlost', onLost);
-      canvas.removeEventListener('webglcontextrestored', onRestored);
-      if (gpu && !lost) destroyGpu(gl, gpu);
-      gpu = null;
-      // Give the context back: a browser keeps only a handful of live ones, and a map that is made and ended (a component) must not use them up
-      try { const lose = !lost && gl.getExtension ? gl.getExtension('WEBGL_lose_context') : null; if (lose) lose.loseContext(); } catch { /* already gone */ }
-      lost = true;
+    /** Frees what this renderer made on the GPU. The canvas keeps its context: a canvas hands out one WebGL context for its life, so a renderer
+     * made after this one on the same canvas (a renderer switch) draws with that same context, which must still be alive */
+    destroy,
+
+    /** destroy(), then gives the context back: a browser keeps only a handful of live ones. Only for the end of the canvas's map (engine/render.js
+     * `map.destroy()`): a context lost on purpose cannot be had again from that canvas */
+    release() {
+      const wasLost = lost;
+      destroy();
+      try { const lose = !wasLost && gl.getExtension ? gl.getExtension('WEBGL_lose_context') : null; if (lose) lose.loseContext(); } catch { /* already gone */ }
     },
   };
+
+  function destroy() {
+    canvas.removeEventListener('webglcontextlost', onLost);
+    canvas.removeEventListener('webglcontextrestored', onRestored);
+    if (gpu && !lost) destroyGpu(gl, gpu);
+    gpu = null;
+    lost = true; // draws nothing more
+  }
 }

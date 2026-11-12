@@ -281,7 +281,8 @@ export function createMap(inst, opts = {}) {
   /** Ends the map: no frame is waiting, the renderer's GPU context and the label layer are released, nothing is called again */
   function destroy() {
     scheduler.cancel();
-    if (renderer) { renderer.destroy(); renderer = null; rendererCanvas = null; }
+    // the end of this map: the renderer gives its WebGL context back too (`release`); a swap (setRenderer) only destroys, so the next renderer on the canvas has a live one
+    if (renderer) { if (renderer.release) renderer.release(); else renderer.destroy(); renderer = null; rendererCanvas = null; }
     if (labelLayer) { labelLayer.destroy(); labelLayer = null; labelLayerCanvas = null; }
     paintHooks.clear();
     frameClients.clear();

@@ -142,6 +142,18 @@ describe('inst.destroy()', () => {
     expect(s.timers).toBeGreaterThan(0);
   });
 
+  it('a renderer swapped on the same canvas keeps the canvas\'s context alive; only the end of the map gives it back', () => {
+    const { inst, map, canvas } = make();
+    const gl = canvas.getContext('webgl2'); // the one context the canvas hands out, to every renderer made on it
+    const drawsBefore = gl.log.filter((c) => c[0].startsWith('draw')).length;
+    map.setRenderer(createRenderer(canvas, { mapStyle: mapStyleOf(inst).get })); // a renderer switch: the old one is destroyed
+    expect(live.lost).toBe(0); // a context lost on purpose could never be had again from this canvas: the new renderer would draw nothing
+    map.renderNow();
+    expect(gl.log.filter((c) => c[0].startsWith('draw')).length).toBeGreaterThan(drawsBefore);
+    inst.destroy();
+    expect(live.lost).toBe(1);
+  });
+
   it('is safe to call twice, and after it nothing answers: no frame, no event, no draw', () => {
     const { inst, map, canvas } = make();
     const draws = vi.fn();
