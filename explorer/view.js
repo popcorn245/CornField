@@ -14,7 +14,7 @@ import { orderAddedLast } from './proposal-model.js';
 import { renderLayerToggles } from './layers.js';
 import { clearScenario } from './scenario-ui.js';
 import { measureParams } from './bench.js';
-import { mergeLive } from './live-model.js';
+import { mergeLive, placeLiveNodes } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
 import { syncHint } from './hint.js';
 import { ensurePagePieces } from './page-pieces.js';
@@ -84,7 +84,7 @@ export function setMap(nodes, edges) {
 /** Where the nodes sit: the House view's plan here (house-model.js, PHY-11), every other view the engine's one layout (engine/topology.js `layoutMap`) */
 function applyLayout() {
   if (state.view === 'house') { computeDegreeCentrality(); applyHouseLayout(state); return; }
-  layoutMap(pageInstance());
+  layoutMap(pageInstance(), { placeLive: placeLiveNodes }); // the live layer is the page's (live-model.js): the engine places it with this
 }
 
 /** Switches between 'orbit' and 'dataflow'; the camera refits and the preset button follows */

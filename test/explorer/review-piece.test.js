@@ -207,8 +207,10 @@ describe('engine/topology.js: the one function the map piece and this piece call
 
   it('is the one layout: cornfield\'s page (view.js) lays nothing out of its own but the House view', () => {
     const view = fs.readFileSync(`${EXPLORER}/view.js`, 'utf8');
-    expect(view).toMatch(/layoutMap\(pageInstance\(\)\)/);
-    for (const own of ['layoutOrbit', 'computeLaneLayout', 'pinLanes', 'placeAddedNodes', 'placeLiveNodes']) expect(view, own).not.toMatch(new RegExp(`\\b${own}\\b`));
+    expect(view).toMatch(/layoutMap\(pageInstance\(\), \{ placeLive: placeLiveNodes \}\)/);
+    for (const own of ['layoutOrbit', 'computeLaneLayout', 'pinLanes', 'placeAddedNodes']) expect(view, own).not.toMatch(new RegExp(`\\b${own}\\b`));
+    // and the engine carries no live layer of the page's (every <corn-map> would)
+    expect(fs.readFileSync(`${EXPLORER}/engine/topology.js`, 'utf8')).not.toMatch(/from '\.\.\/live-model\.js'/);
   });
 });
 
