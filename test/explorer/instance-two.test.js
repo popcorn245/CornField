@@ -653,6 +653,44 @@ describe('two instances, each with its own proposal bar, change list, player and
     expect(calls.some((c) => c.method !== 'GET' && c.url.includes('0022'))).toBe(false);
   });
 
+  it('Approve in one while a hold counts down in the other: each sends its own, at its own time; Undo in one leaves the other\'s hold', async () => {
+    const said = [];
+    a.inst.on('decision', (d) => said.push(['a', d.slug]));
+    b.inst.on('decision', (d) => said.push(['b', d.slug]));
+    click(q(a, '[data-review="approved"]'));
+    await vi.advanceTimersByTimeAsync(2000);
+    click(q(b, '[data-review="approved"]'));
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('true');
+    // B's Undo, while A still holds
+    click(q(b, '[data-review-undo]'));
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('false');
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    click(q(b, '[data-review="approved"]')); // and again: B's hold now ends 2 s after A's
+    await vi.advanceTimersByTimeAsync(HOLD_MS - 2000 + 100);
+    expect(calls.filter((c) => c.method === 'PUT').map((c) => c.url)).toEqual(['/proposals/0021-alpha/review?source=pull%2F21']);
+    expect(said).toEqual([['a', '0021-alpha']]);
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('true');
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(calls.filter((c) => c.method === 'PUT').map((c) => c.url)).toEqual(['/proposals/0021-alpha/review?source=pull%2F21', '/proposals/0022-beta/review?source=pull%2F22']);
+    expect(said).toEqual([['a', '0021-alpha'], ['b', '0022-beta']]);
+    expect(q(a, '[data-review-verdict]').textContent).toBe('Approved');
+    expect(q(b, '[data-review-verdict]').textContent).toBe('Approved');
+  });
+
+  it('the same proposal open in both: a press in one holds and sends there only, and Escape in the other stops nothing', async () => {
+    b.proposal.update({ proposal: a.pr, slug: '0021-alpha', source: 'pull/21', sha256: '21'.repeat(32) });
+    await vi.advanceTimersByTimeAsync(0);
+    click(q(a, '[data-review="approved"]'));
+    q(b, '#review-note').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('false');
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 100);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    expect(q(a, '[data-review-verdict]').textContent).toBe('Approved');
+    expect(q(b, '[data-review-verdict]').textContent).toBe(''); // it reads its own reviews; the page that did not press says nothing it was not told
+  });
+
   it('closing one proposal leaves the other open', () => {
     a.proposal.update({ proposal: null });
     expect(A.state.proposal).toBeNull();

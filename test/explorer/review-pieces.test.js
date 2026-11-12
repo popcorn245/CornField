@@ -417,3 +417,67 @@ describe('what a host hands in is data', () => {
     expect(window.__pwned).toBeUndefined();
   });
 });
+
+describe('each piece alone, in a root with nothing of the others', () => {
+  /** A root with the map's canvas only: no dock, no bar, no node panel, no column */
+  function bare() {
+    make({ fetch: server() });
+    root.querySelector('#sheet-dock').remove();
+  }
+  const show = () => inst.emit('proposal:draw', { open: true });
+  // a listener that throws is reported, not thrown back at dispatchEvent: catch both ways
+  let errors;
+  let spy;
+  const onError = (e) => errors.push(e.error || e.message);
+  beforeEach(() => { errors = []; window.addEventListener('error', onError); spy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(a.join(' '))); });
+  afterEach(() => { window.removeEventListener('error', onError); spy.mockRestore(); expect(errors).toEqual([]); });
+
+  it('the decision alone: opened, pressed, held, undone and sent, with no bar, no column and no editor', async () => {
+    bare();
+    const decision = decisionPiece.mount(root, inst);
+    Object.assign(inst.state, { proposal: proposal(), proposalSlug: '0099-new', proposalSource: 'pull/21', proposalSha256: 'c'.repeat(64) });
+    decision.update();
+    await vi.advanceTimersByTimeAsync(0);
+    const approve = root.querySelector('[data-review="approved"]');
+    approve.click();
+    root.querySelector('[data-review-undo]').click();
+    approve.click();
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 300);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    root.querySelector('[data-review-retry]').click(); // asks the bar for the focus: nobody answers
+    decision.destroy();
+  });
+
+  it('the change list alone: a scenario opened, a step chosen and played, keys, Escape and a close, with no bar, no dock and no node panel', async () => {
+    bare();
+    const changes = changesPiece.mount(root, inst);
+    const { showProposal } = await import('../../explorer/engine/proposal.js');
+    showProposal(inst, proposal(), { slug: '0099-new', source: 'pull/21' });
+    show();
+    root.querySelector('[data-action="scenario-open"]').click();
+    root.querySelector('[data-action="scenario-step"]').click();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(root.querySelector('.hx-player')).toBeTruthy();
+    root.querySelector('[data-action="scenario-toggle"]').click();
+    await vi.advanceTimersByTimeAsync(1500);
+    inst.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    inst.root.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(root.querySelector('.hx-player')).toBeNull();
+    root.querySelector('.hx-change-row').click();
+    changes.destroy();
+  });
+
+  it('the bar alone: opened, Before / Diff / After, Whole map, the ⋯ menu and Close, with no column, no decision and no dock', async () => {
+    bare();
+    const bar = proposalPiece.mount(root, inst);
+    bar.update({ proposal: proposal(), slug: '0099-new', source: 'pull/21' });
+    await vi.advanceTimersByTimeAsync(0);
+    for (const v of ['before', 'after', 'diff']) root.querySelector(`[data-action="proposal-view"][data-view="${v}"]`).click();
+    root.querySelector('#proposal-whole').click();
+    root.querySelector('[data-action="review-show-scenarios"]')?.click();
+    root.querySelector('[data-action="toggle-proposal-more"]').click();
+    root.querySelector('[data-action="close-proposal"]').click();
+    expect(inst.state.proposal).toBeNull();
+    bar.destroy();
+  });
+});
