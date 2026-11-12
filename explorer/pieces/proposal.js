@@ -418,7 +418,9 @@ export function mount(root, inst, options = {}) {
     if (go) { e.preventDefault(); e.stopPropagation(); inst.emit('work:answer', { run: go.dataset.waitingAnswer }); }
   }, true);
   // With the Work panel on, its Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without it (no forge, or no sign-in)
-  scope.on('work:available', ({ on }) => { const wrap = own('proposal-wrap'); if (wrap) wrap.hidden = !!on; });
+  const proposalsEntry = (workOn) => { const wrap = own('proposal-wrap'); if (wrap) wrap.hidden = !!workOn; };
+  scope.on('work:available', ({ on }) => proposalsEntry(on));
+  if (inst.ask('work:on')) proposalsEntry(true); // the Work panel started before this piece was mounted: it said so to nobody
   scope.listen(inst.root, 'keydown', (e) => {
     if (e.key === 'Escape' && menuOpen()) closeMenu();
     onMoreKey(e);

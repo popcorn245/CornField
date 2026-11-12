@@ -55,7 +55,7 @@
  *                   and tells `host` to ask again when the root is free
  *   attach:released (none)  the piece that had the instance's root (`attach`) gave it back
  *   work:waiting    { total }  what waits on the maintainer changed (specs to decide plus runs that need an answer; pieces/work.js): the page puts the number before its title
- *   work:available  { on }  the Work panel started (a forge in the config and somebody signed in): the account menu's Proposals entry is only for a cornfield without it
+ *   work:available  { on }  the Work panel started (a forge in the config and somebody signed in), or ended: the account menu's Proposals entry is only for a cornfield without it
  *   runs:map        { active }  runs are on the map, or none is (pieces/work.js, runs-map.js): the Layers menu shows its legend while there are
  *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work panel opens the thread, or its New idea form)
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
@@ -80,6 +80,7 @@
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
  *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
+ *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)
  *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the Work panel opens on Runs at that run, its reply field focused
  *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
  *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played

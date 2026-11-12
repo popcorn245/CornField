@@ -1,12 +1,15 @@
 // @vitest-environment happy-dom
 /**
- * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended (spec 0011 D2, D3).
+ * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended, and the order it is mounted in
+ * beside the proposal piece (spec 0011 D2, D3).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
 import { createInstance } from '../../explorer/instance.js';
 // @ts-expect-error plain JS modules, no declarations
 import * as workPiece from '../../explorer/pieces/work.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as proposalPiece from '../../explorer/pieces/proposal.js';
 
 const NOW = Date.parse('2026-10-19T12:00:00Z');
 const ago = (h) => new Date(NOW - h * 3_600_000).toISOString();
@@ -111,5 +114,48 @@ describe('the Work piece, once it has ended', () => {
     expect(root.querySelectorAll('[data-corn="run-mark"]')).toHaveLength(1);
     second.destroy();
     inst.destroy();
+  });
+});
+
+describe('the Work piece and the proposal piece, in either order', () => {
+  const entryHidden = (root) => root.querySelector('#proposal-wrap').hidden;
+
+  it('hides the Proposals entry when the panel started first, and shows it again when the panel ends', async () => {
+    const srv = server();
+    const one = make(srv);
+    await settle();
+    expect(one.work.isOn()).toBe(true);
+    const bar = proposalPiece.mount(one.root, one.inst); // mounted after `work:available` was said
+    expect(entryHidden(one.root)).toBe(true);
+    one.work.destroy();
+    expect(entryHidden(one.root)).toBe(false);
+    bar.destroy();
+    one.inst.destroy();
+  });
+
+  it('hides it when the proposal piece came first', async () => {
+    const srv = server();
+    const root = document.createElement('div');
+    document.body.append(root);
+    const inst = createInstance({ root, fetch: srv.fetch });
+    const bar = proposalPiece.mount(root, inst);
+    expect(entryHidden(root)).toBe(false);
+    const work = workPiece.mount(root, inst, { config: CONFIG, clock: () => NOW });
+    expect(entryHidden(root)).toBe(true);
+    work.destroy();
+    bar.destroy();
+    inst.destroy();
+  });
+
+  it('answers work:open-specs (a bad proposal link\'s way on) by opening on Specs', async () => {
+    const srv = server();
+    const one = make(srv);
+    await settle();
+    expect(one.inst.ask('work:open-specs')).toBe(true);
+    expect(one.work.isForgeOpen()).toBe(true);
+    expect(one.q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
+    one.work.destroy();
+    expect(one.inst.ask('work:open-specs')).toBeUndefined();
+    one.inst.destroy();
   });
 });

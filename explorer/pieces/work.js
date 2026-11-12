@@ -130,6 +130,8 @@ export function mount(root, inst, options = {}) {
 
   // -- the panel starts once the config says there is a forge and somebody is signed in ---------------------------------------------------
   let on = false;
+  // A piece mounted after the panel started asks rather than waits for `work:available` (the proposal piece hides its Proposals entry)
+  scope.on('work:on', () => on);
 
   /** Starts the panel for `config`; with no forge in it, or nobody signed in, the button and the panel stay hidden. Returns whether it is on. */
   function start(config) {
@@ -229,6 +231,7 @@ export function mount(root, inst, options = {}) {
     runsMap.destroy();
     inst.emit('proposal:waiting-reset');
     inst.emit('work:waiting', { total: 0 });
+    if (on) inst.emit('work:available', { on: false }); // the account menu's Proposals entry is the way to the proposals again
     try { unregisterSheet(inst, 'forge', false); } catch { /* it was never registered */ }
     scope.destroy();
     for (const el of made) el.remove();
