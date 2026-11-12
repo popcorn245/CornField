@@ -2437,6 +2437,26 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0011: cornfield in another app (the interface as web components) (docs/specs/0011-cornfield-in-another-app.md)."
+    },
+    {
+      "id": "core-server-embed",
+      "label": "embed.js",
+      "type": "core",
+      "file": "server/embed.js",
+      "summary": "Letting a listed sibling app in (spec 0011 D9).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Letting a listed sibling app in (spec 0011 D9). (server/embed.js)"
+    },
+    {
+      "id": "page-doc-docs-embedding",
+      "type": "page",
+      "label": "/docs/embedding",
+      "file": "docs/embedding.md",
+      "summary": "Embedding: letting another app of yours in",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Embedding: letting another app of yours in (docs/embedding.md)."
     }
   ],
   "edges": [
@@ -8138,7 +8158,48 @@
       "from": "page-doc-docs-specs-0011-cornfield-in-another-app",
       "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-embed"
+    },
+    {
+      "from": "core-server-auth",
+      "to": "core-server-embed",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-proposals",
+      "to": "core-server-embed",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-embed",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-embedding"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-proposals",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T06:29:01.295Z"
+  "updatedAt": "2026-11-12T06:40:38.140Z"
 }
