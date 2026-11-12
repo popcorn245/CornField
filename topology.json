@@ -9404,7 +9404,13 @@
       "from": "page-doc-docs-embedding",
       "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
       "dashed": true
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T14:47:42.060Z"
+  "updatedAt": "2026-11-12T14:49:07.794Z"
 }
