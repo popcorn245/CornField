@@ -753,8 +753,11 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `errorTitle` | The map could not be loaded |
 | `retry` | Retry |
 | `sourceLoading` | Loading the map … |
-| `sourceSignIn` | Sign in to cornfield |
+| `sourceSignedOut` | You are not signed in to cornfield |
 | `sourceSignInText` | This map is behind cornfield's sign-in. |
+| `sourceNotMaintainer` | This map is for the project's maintainers |
+| `sourceNotMaintainerText` | You are signed in to cornfield, but not as a maintainer. |
+| `sourceSignIn` | Sign in to cornfield |
 | `sourceNotListed` | This page is not listed by that cornfield |
 | `sourceNotListedHint` | Add this origin to embed.origins on the server: |
 | `sourceOffline` | The map cannot be reached |

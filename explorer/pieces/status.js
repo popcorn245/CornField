@@ -1,9 +1,9 @@
 /**
  * @module explorer/pieces/status
  *
- * What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet "Loading", "Sign in to cornfield" with a
- * real link to the server's sign-in, "This page is not listed by that cornfield" with the origin it should list, offline with Retry, a server's own
- * error, a `src` that is not an address, and the notice that the package and the server are different versions. It is engine markup, mounted by the
+ * What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet "Loading", "You are not signed in to
+ * cornfield" (or, for a 403, "This map is for the project's maintainers") with a real link "Sign in to cornfield" to the server's sign-in, "This page
+ * is not listed by that cornfield" with the origin it should list, offline with Retry, a server's own error, a `src` that is not an address, and the notice that the package and the server are different versions. It is engine markup, mounted by the
  * map piece inside its stage (pieces/map.js); a shell holds none of it. Words are `strings` keys (core/strings.js), each element has a `data-corn`
  * hook and so a `part`, and nothing here is built from data except through `escapeHtml`, `textContent` and a link checked to be http(s).
  *
@@ -26,7 +26,10 @@ const STATE_OF = Object.freeze({ loading: 'running', 'sign-in': 'waiting', 'not-
 function wordsOf(inst, detail) {
   switch (detail.state) {
     case 'loading': return { title: t(inst, 'sourceLoading'), text: '' };
-    case 'sign-in': return { title: t(inst, 'sourceSignIn'), text: t(inst, 'sourceSignInText'), link: detail.signIn };
+    // What is the case is the title (signed out, or signed in as someone who is not a maintainer: a 403); what to do is the link
+    case 'sign-in': return detail.status === 403
+      ? { title: t(inst, 'sourceNotMaintainer'), text: t(inst, 'sourceNotMaintainerText'), link: detail.signIn }
+      : { title: t(inst, 'sourceSignedOut'), text: t(inst, 'sourceSignInText'), link: detail.signIn };
     case 'not-allowed': return { title: t(inst, 'sourceNotListed'), text: t(inst, 'sourceNotListedHint'), origin: detail.origin, retry: true };
     case 'offline': return { title: t(inst, 'sourceOffline'), text: t(inst, 'sourceOfflineText'), retry: true };
     case 'server': return { title: t(inst, 'errorTitle'), text: detail.message || '', retry: true };

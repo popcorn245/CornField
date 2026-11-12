@@ -84,11 +84,6 @@ describe('a corn-map with a src (a private scope)', () => {
 
 describe('what the person sees when it cannot (and says once)', () => {
   const live = (el: Element) => el.shadowRoot!.querySelector('[data-corn="source-announcer"]') as HTMLElement;
-  function said(el: Element) {
-    const heard: string[] = [];
-    new MutationObserver(() => heard.push(live(el).textContent || '')).observe(live(el), { childList: true, characterData: true, subtree: true });
-    return heard;
-  }
 
   it('sign-in needed (401): the title, a real link to the server\'s sign-in that returns to this page, target _top, and cornAuth', async () => {
     listen();
@@ -111,7 +106,10 @@ describe('what the person sees when it cannot (and says once)', () => {
     expect(auth.detail).toEqual({ status: 401, signIn: link.href });
     expect(auth.target).toBe('corn-map');
     expect(document.activeElement).toBe(button); // focus is not stolen
-    expect(live(el).textContent).toContain('Sign in to cornfield');
+    expect(live(el).textContent).toBe("You are not signed in to cornfield. This map is behind cornfield's sign-in.");
+    expect(el.shadowRoot!.querySelector('[data-corn="source-title"]')!.textContent).toBe('You are not signed in to cornfield');
+    expect(link.textContent).toBe('Sign in to cornfield'); // the title says what is the case, the link what to do
+    expect(link.getBoundingClientRect().height).toBeGreaterThanOrEqual(44); // a target a finger can take
     expect(location.href).not.toContain('/auth/'); // the component never navigates the window
   });
 
@@ -189,20 +187,55 @@ describe('what the person sees when it cannot (and says once)', () => {
     expect(card(el)!.getAttribute('data-corn-state')).toBe('failure');
   });
 
-  it('a live region says each state once: loading, then the refusal; the same refusal again says itself again only for a server error', async () => {
-    const host = document.createElement('main');
-    host.innerHTML = `<corn-map renderer="canvas2d" style="${SIZE}" src="${at('auth')}"></corn-map>`;
-    document.body.append(host);
+  it('a live region says each state once, through a whole signed-out-then-signed-in flow, and the focus is never taken', async () => {
+    await fetch('/fake/gate/close');
+    const button = document.createElement('button');
+    button.textContent = 'the host\'s own';
+    document.body.append(button);
+    button.focus();
+    const heard: string[] = [];
+    /** Every text the polite region is given, from the moment the element is in the page */
+    const watch = (el: Element) => new MutationObserver((list) => {
+      for (const m of list) {
+        const node = (m.target.nodeType === 1 ? m.target : m.target.parentElement) as Element | null;
+        const region = node && node.closest('[data-corn="source-announcer"]');
+        if (region && m.type === 'childList' && region.textContent) heard.push(region.textContent);
+      }
+    }).observe(el.shadowRoot!, { subtree: true, childList: true, characterData: true });
+    const open = (src: string) => {
+      const host = document.createElement('main');
+      host.innerHTML = `<corn-map renderer="canvas2d" style="${SIZE}" src="${src}"></corn-map>`;
+      document.body.append(host);
+      watch(map(host));
+      return host;
+    };
+    // signed out: the load, then the sign-in
+    const first = open(at('gate'));
+    await until(() => text(map(first)).includes('Sign in to cornfield'));
+    await sleep(300);
+    expect(heard).toEqual(['Loading the map …', "You are not signed in to cornfield. This map is behind cornfield's sign-in."]);
+    expect(document.activeElement).toBe(button);
+    // signed in, and back on the page (a new page load is a new element): the load is said once, the map drawn says nothing
+    await fetch('/fake/gate/open');
+    first.remove();
+    const second = open(at('gate'));
+    await until(() => !!canvasOf(map(second)) && !card(map(second)) && lit(map(second)) > 0);
+    await sleep(300);
+    expect(heard).toEqual(['Loading the map …', "You are not signed in to cornfield. This map is behind cornfield's sign-in.", 'Loading the map …']);
+    expect(document.activeElement).toBe(button);
+    const region = live(map(second));
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    expect(region.getAttribute('role')).toBe('status');
+    await fetch('/fake/gate/close');
+  });
+
+  it('a 403 (signed in, not a maintainer) says so, and the link is still the way to sign in as one', async () => {
+    const host = await page(`<corn-map renderer="canvas2d" style="${SIZE}" src="${at('forbidden')}"></corn-map>`);
     const el = map(host);
-    await el.componentOnReady();
-    await until(() => text(el).includes('Sign in'));
-    const heard = said(el);
-    el.src = at('auth') + '/';
-    await until(() => text(el).includes('Sign in'));
-    await sleep(100);
-    expect(heard.filter((t) => t.includes('Sign in to cornfield')).length).toBeLessThanOrEqual(2);
-    expect(live(el).getAttribute('aria-live')).toBe('polite');
-    expect(live(el).getAttribute('role')).toBe('status');
+    await until(() => text(el).includes("This map is for the project's maintainers"));
+    const parts = [...card(el)!.querySelectorAll('p, a, button')].map((n) => n.textContent);
+    expect(parts).toEqual(["This map is for the project's maintainers", 'You are signed in to cornfield, but not as a maintainer.', 'Sign in to cornfield']);
+    expect(card(el)!.getAttribute('data-corn-state')).toBe('waiting');
   });
 
   it('every element of the status has a hook and a part of the same name', async () => {
@@ -213,17 +246,24 @@ describe('what the person sees when it cannot (and says once)', () => {
     expect([...el.shadowRoot!.querySelectorAll('[data-corn^="source-"]')].map((n) => n.getAttribute('data-corn'))).toEqual(expect.arrayContaining(['source-status', 'source-title', 'source-text', 'source-sign-in', 'source-announcer']));
   });
 
-  it('axe finds nothing on the sign-in, not-listed and offline cards, dark and light', async () => {
+  it('axe finds nothing on any state, dark and light: loading, sign in (401 and 403), not listed, offline, a server error, a bad address, the version notice, a second map', async () => {
     const other = (await (await fetch('/fake/origin.json')).json()).origin as string;
-    for (const theme of ['dark', 'light']) for (const src of [at('auth'), other, 'http://127.0.0.1:1']) {
+    const { version } = await import('../src/index');
+    const [major] = version.split('.').map(Number);
+    const cases: Array<[string, string, (host: HTMLElement) => boolean]> = [
+      ['loading', `<corn-map renderer="canvas2d" style="${SIZE}" src="${at('slow')}"></corn-map>`, (h) => card(map(h))?.getAttribute('data-corn-state') === 'running'],
+      ...[at('auth'), at('forbidden'), other, 'http://127.0.0.1:1', at('error'), 'ftp://x.test'].map((src): [string, string, (host: HTMLElement) => boolean] => [src, `<corn-map renderer="canvas2d" style="${SIZE}" src="${src}"></corn-map>`, (h) => !!card(map(h)) && card(map(h))!.getAttribute('data-corn-state') !== 'running']),
+      ['version', `<corn-scope id="v"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`, (h) => { const sc = h.querySelector('#v') as any; if (!sc.config) { sc.config = { version: `${major + 1}.0.0` }; sc.topology = { nodes: [{ id: 'a', type: 'app' }], edges: [] }; } return !!map(h).shadowRoot!.querySelector('[data-corn="source-notice"]:not([hidden])'); }],
+      ['second map', `<corn-scope src="${at('ok')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map><corn-map id="b" renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`, (h) => !!card(h.querySelector('#b')!)],
+    ];
+    for (const theme of ['dark', 'light']) for (const [name, html, ready] of cases) {
       const host = document.createElement('main');
-      host.innerHTML = `<corn-map renderer="canvas2d" theme="${theme}" style="${SIZE}" src="${src}"></corn-map>`;
+      host.innerHTML = html.replace(/<corn-map /g, `<corn-map theme="${theme}" `);
       document.body.append(host);
-      const el = map(host);
-      await el.componentOnReady();
-      await until(() => !!card(el) && card(el)!.getAttribute('data-corn-state') !== 'running');
+      await Promise.all([...host.querySelectorAll('corn-scope, corn-map')].map((el) => (el as Piece).componentOnReady()));
+      await until(() => ready(host));
       const result = await axe.run(host, { resultTypes: ['violations'], runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] } });
-      expect(result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`)), `${theme} ${src}`).toEqual([]);
+      expect(result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(' ')}`)), `${theme} ${name}`).toEqual([]);
       host.remove();
     }
   });

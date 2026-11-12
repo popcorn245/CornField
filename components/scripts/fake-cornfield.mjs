@@ -5,6 +5,7 @@
 //   /fake/ok/…         a signed-in maintainer: config (version = this package's), topology, theme
 //   /fake/other/…      the same server with another map (three nodes), for two scopes on one page
 //   /fake/auth/…       401 on every gated read, as a signed-out visitor
+//   /fake/forbidden/…  403 on every gated read, as a signed-in visitor who is not a maintainer
 //   /fake/error/…      500
 //   /fake/slow/…       as ok, after 600 ms
 //   /fake/plugins/…    a config that names plugin modules (sources) and a link and a brand with a script scheme: none may become script
@@ -75,6 +76,7 @@ export function fakeCornfield(version) {
     if (name === 'gate' && route === '/close') { gateOpen = false; return json(res, 200, { ok: true }); }
     const gated = route === '/cornfield/config.json' || route === '/topology.json';
     if (name === 'auth' && gated) return json(res, 401, { ok: false, error: 'Sign in first.' });
+    if (name === 'forbidden' && gated) return json(res, 403, { ok: false, error: 'Only maintainers can open this; ask one.' });
     if (name === 'gate' && gated && !gateOpen) return json(res, 401, { ok: false, error: 'Sign in first.' });
     if (name === 'error' && gated) return json(res, 500, { error: 'boom' });
     if (name === 'slow') await sleep(600);

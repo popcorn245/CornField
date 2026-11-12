@@ -35,7 +35,7 @@ const words = () => (card().hidden ? '' : card().textContent);
 
 describe('the words (strings keys with defaults)', () => {
   it('holds a default for every word the states say, as one line of plain text', () => {
-    for (const key of ['sourceLoading', 'sourceSignIn', 'sourceSignInText', 'sourceNotListed', 'sourceNotListedHint', 'sourceOffline', 'sourceOfflineText', 'sourceBadAddress', 'sourceVersion', 'sourceSecondMap']) expect(typeof STRINGS[key], key).toBe('string');
+    for (const key of ['sourceLoading', 'sourceSignedOut', 'sourceSignIn', 'sourceSignInText', 'sourceNotMaintainer', 'sourceNotMaintainerText', 'sourceNotListed', 'sourceNotListedHint', 'sourceOffline', 'sourceOfflineText', 'sourceBadAddress', 'sourceVersion', 'sourceSecondMap']) expect(typeof STRINGS[key], key).toBe('string');
     expect(STRINGS.sourceSignIn).toBe('Sign in to cornfield');
     expect(STRINGS.sourceNotListed).toBe('This page is not listed by that cornfield');
   });
@@ -47,9 +47,9 @@ describe('the words (strings keys with defaults)', () => {
     expect(code).not.toMatch(/Sign in to cornfield|not listed by that/); // the words are the table's
   });
   it('speaks in the instance\'s own voice', () => {
-    setStrings(inst, { sourceSignIn: 'Connect to Tasks', sourceSignInText: 'Please connect.' });
+    setStrings(inst, { sourceSignedOut: 'Not connected to Tasks', sourceSignIn: 'Connect to Tasks', sourceSignInText: 'Please connect.' });
     expect(cardHtml(inst, { state: 'sign-in', status: 401, signIn: 'https://map.example.com/auth/start' })).toContain('Connect to Tasks');
-    expect(announcement(inst, { state: 'sign-in' })).toBe('Connect to Tasks. Please connect.');
+    expect(announcement(inst, { state: 'sign-in', status: 401 })).toBe('Not connected to Tasks. Please connect.');
   });
 });
 
@@ -75,6 +75,25 @@ describe('each state', () => {
     expect(link.getAttribute('data-corn-kind')).toBe('primary');
     expect(card().getAttribute('data-corn-state')).toBe('waiting');
     expect(words()).toContain("This map is behind cornfield's sign-in.");
+  });
+  it('sign in: the title says what is the case and the link what to do, never the same sentence twice in a row (401 signed out, 403 not a maintainer)', () => {
+    const source = createSource(inst, {});
+    mount(stage, inst, {});
+    const signIn = 'https://map.example.com/auth/start';
+    source.say({ state: 'sign-in', status: 401, signIn });
+    const title = () => card().querySelector('[data-corn="source-title"]').textContent;
+    const link = () => card().querySelector('a').textContent;
+    expect(title()).toBe('You are not signed in to cornfield');
+    expect(link()).toBe('Sign in to cornfield');
+    expect(live().textContent).toBe("You are not signed in to cornfield. This map is behind cornfield's sign-in.");
+    source.say({ state: 'sign-in', status: 403, signIn });
+    expect(title()).toBe("This map is for the project's maintainers");
+    expect(card().querySelector('[data-corn="source-text"]').textContent).toBe('You are signed in to cornfield, but not as a maintainer.');
+    expect(link()).toBe('Sign in to cornfield');
+    // in reading order, no element says what the one before it said
+    const order = [...card().querySelectorAll('p, a, button')].map((n) => n.textContent.trim());
+    for (let i = 1; i < order.length; i++) expect(order[i]).not.toBe(order[i - 1]);
+    expect(new Set(order).size).toBe(order.length);
   });
   it('not listed: the origin it should list in a code element, and Retry', () => {
     const source = createSource(inst, {});
