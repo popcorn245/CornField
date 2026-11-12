@@ -31,7 +31,8 @@
 
 import { CLOUD_FILE, deriveCloud, EVIDENCE_KINDS } from '../../core/cloud.js';
 import { hostsIn } from './hosts.js';
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { fileOptionProblem, leavesRepo, outsideProblem } from '../../core/repo.js';
+import { quote } from '../../core/text.js';
 import { caddyEvidence, dockerfileSources, imageRef, workflowSources } from './sources.js';
 
 const WORKFLOW_DIRS = ['.github/workflows', '.forgejo/workflows'];
@@ -128,7 +129,7 @@ export default {
     // A workflow file that is a link out of the repo, or to nothing, is not read (core/repo.js): said, and left out
     const workflowFiles = WORKFLOW_DIRS.flatMap((dir) => ctx.list(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => `${dir}/${f}`)).filter((file) => {
       if (ctx.exists(file)) return true;
-      warnings.push(`cloud: ${file} ${ctx.inside(file) ? 'is a link to nothing' : 'is a link to somewhere outside the repo'}; it is not read.`);
+      warnings.push(`cloud: ${quote(file, { bare: true })} ${ctx.inside(file) ? 'is a link to nothing' : 'is a link to somewhere outside the repo'}; it is not read.`);
       return false;
     });
     if (workflowFiles.length) {
@@ -152,8 +153,9 @@ export default {
 
     // Caddyfiles the config names
     for (const { file, from } of options.caddyfiles || []) {
-      if (leavesRepo(ctx, file)) { problems.push(outsideProblem('cloud', file)); continue; }
-      if (!ctx.exists(file)) { warnings.push(`cloud: caddyfile ${file} does not exist.`); continue; }
+      const bad = fileOptionProblem(ctx, 'cloud', 'caddyfiles[].file', file);
+      if (bad) { problems.push(bad); continue; }
+      if (!ctx.exists(file)) { warnings.push(`cloud: caddyfile ${quote(file)} does not exist.`); continue; }
       for (const e of caddyEvidence(ctx.read(file))) add({ ...e, from, when: 'renew', file });
     }
 

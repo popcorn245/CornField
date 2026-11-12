@@ -199,7 +199,7 @@ describe('the compose deriver on a repo', () => {
   it('reads only the files and Caddyfiles the options name', async () => {
     const out = await derive(root, { files: ['stacks/edge/compose.yaml'], caddyfiles: [] });
     expect(out.nodes.map((n) => n.id)).toEqual(['stack-front-door', 'container-caddy', 'container-db']);
-    await expect(derive(root, { files: ['nope/compose.yml'] })).rejects.toThrow(/compose file nope\/compose.yml does not exist/);
+    await expect(derive(root, { files: ['nope/compose.yml'] })).rejects.toThrow(/compose file "nope\/compose.yml" does not exist/);
   });
 
   it('says which files are one stack, and which YAML is broken', async () => {

@@ -8,9 +8,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { quote } from './text.js';
 
 /** Folders a walk never goes into */
 export const SKIP_DIRS = new Set(['node_modules', '.git', '.claude', '.worktrees', 'dist', 'coverage', '.cornfield']);
+
+/** What a reader throws for a path whose real path is outside the repo: it names the path as given, as a JSON string, never where it leads */
+export const outsideError = (rel) => Object.assign(new Error(`${quote(String(rel))} is outside the repo.`), { code: 'EOUTSIDE' });
 
 /**
  * The readers for a repo root. Every path is relative to the root with forward slashes.
@@ -65,12 +69,11 @@ export function repoReader(root) {
     if (st.isSymbolicLink()) return { link: true, ok: insideAbs(at), st };
     return { link: false, ok: at === rootAt || folderInside(path.dirname(at)), st };
   };
-  const outside = (rel) => Object.assign(new Error(`${JSON.stringify(String(rel))} is outside the repo.`), { code: 'EOUTSIDE' });
   const read = (rel) => {
     while (pending.length) for (const f of pending.pop()) walked.add(f);
     if (!walked.has(rel)) {
       const m = look(rel);
-      if (m && !m.ok) throw outside(rel);
+      if (m && !m.ok) throw outsideError(rel);
     }
     return fs.readFileSync(abs(rel), 'utf8').replace(/\r\n/g, '\n');
   };
@@ -148,7 +151,51 @@ export function leavesRepo(io, p) {
  * @param {string} who the deriver's name
  * @param {unknown} p
  */
-export const outsideProblem = (who, p) => `${who}: ${JSON.stringify(p)} is outside the repo; only files and folders of the repo are read.`;
+export const outsideProblem = (who, p) => `${who}: ${quote(p)} is outside the repo; only files and folders of the repo are read.`;
+
+/**
+ * The problem `validate` fails on for a config value that names a folder where a file is wanted (`''`, `.` and `src/` are folders).
+ * @param {string} who the deriver's name
+ * @param {string} option the option, as the config spells it (`caddyfiles`, `specs[].file`)
+ * @param {unknown} p
+ */
+export const notFileProblem = (who, option, p) => `${who}: options.${option} ${quote(p)} is a folder, not a file.`;
+
+/**
+ * What is wrong with a config value that must name a file of the repo, or null: it leaves the repo (`outsideProblem`), or is a folder
+ * (`notFileProblem`). A file that is not there is the deriver's own word. `io` is a repo reader.
+ * @param {{ inside: (rel: string) => boolean, isDir: (rel: string) => boolean }} io
+ * @param {string} who
+ * @param {string} option
+ * @param {unknown} p
+ * @returns {string | null}
+ */
+export function fileOptionProblem(io, who, option, p) {
+  if (leavesRepo(io, p)) return outsideProblem(who, p);
+  if (typeof p === 'string' && io.isDir(p)) return notFileProblem(who, option, p);
+  return null;
+}
+
+/**
+ * A list of paths a config names, each place once: `a`, `./a`, `a/`, `a/.` and `a/../a` are one place, and so are `` and `.` (the
+ * repo itself). The first spelling stays; a later one is dropped, as the deriver would read the same place twice. `key` picks the path of an entry.
+ * @template T
+ * @param {T[]} list
+ * @param {(entry: T) => unknown} [key]
+ * @returns {T[]}
+ */
+export function eachPlaceOnce(list, key = (e) => e) {
+  const seen = new Set();
+  return list.filter((e) => {
+    const p = key(e);
+    if (typeof p !== 'string') return true;
+    const at = path.posix.normalize(p.replace(/^\.\/+/, '') || '.').replace(/\/+$/, '');
+    const k = at === '.' ? '' : at;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
 
 /**
  * For `missingPaths`: whether a path `repoPaths` does not list is in the repo all the same, because a symlink on its way

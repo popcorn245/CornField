@@ -122,7 +122,7 @@ describe('the openapi deriver', () => {
 
   it('says what is wrong: a missing file, broken JSON, a file that is no API description', async () => {
     const root = repo({ 'openapi.json': '{', 'other.json': { hello: 1 } });
-    await expect(derive(root, { file: 'nope.yaml' })).rejects.toThrow(/API description nope.yaml does not exist/);
+    await expect(derive(root, { file: 'nope.yaml' })).rejects.toThrow(/API description "nope.yaml" does not exist/);
     await expect(derive(root, { file: 'openapi.json' })).rejects.toThrow(/openapi.json is not valid JSON/);
     await expect(derive(root, { file: 'other.json' })).rejects.toThrow(/neither an OpenAPI document/);
     expect(await derive(repo({ 'README.md': 'no API' }))).toMatchObject({ nodes: [], edges: [] });

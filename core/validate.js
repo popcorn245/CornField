@@ -22,10 +22,11 @@ import { PERSONAS_FILE, validatePersonas } from './personas.js';
 import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
-import { reachable, repoPaths, repoReader } from './repo.js';
+import { leavesRepo, outsideError, outsideProblem, reachable, repoPaths, repoReader } from './repo.js';
 import { checkThemeContrast } from './contrast.js';
 import { layerTokenWarnings, mapTokenWarnings, nodeColorNotes, nodeColorWarnings, quoted } from './map-tokens.js';
 import { layersMapWarnings } from './layers.js';
+import { quote } from './text.js';
 import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
 import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeIconFileProblems, themeUrlTarget } from './theme.js';
 
@@ -48,7 +49,7 @@ export function validateThemeFiles(config) {
   let base;
   try { base = fs.realpathSync(config.root); } catch { return errors; }
   for (const { key, rel } of themeFiles(config.theme)) {
-    const where = `theme.${key} (${rel})`;
+    const where = `theme.${key} (${quote(rel, { bare: true })})`;
     const file = path.resolve(config.root, rel);
     let real;
     try { real = fs.realpathSync(file); } catch { errors.push(`${where} does not exist.`); continue; }
@@ -64,7 +65,7 @@ export function validateThemeFiles(config) {
       if (target.problem) { errors.push(`${where} ${target.problem}`); continue; }
       if (target.asset) {
         const found = themeAssetFile(config.root, config.theme, target.asset);
-        if ('problem' in found) errors.push(`${where} url(${ref.slice(0, 80)}): ${found.problem}`);
+        if ('problem' in found) errors.push(`${where} url(${quote(ref.slice(0, 80), { bare: true })}): ${found.problem}`);
       }
     }
   }
@@ -84,7 +85,7 @@ export function validateBrandFiles(config) {
     const rel = config.brand && config.brand[key];
     if (typeof rel !== 'string') continue;
     const found = brandAssetFile(config.root, rel);
-    if ('problem' in found) errors.push(`brand.${key} (${rel}) ${found.problem}`);
+    if ('problem' in found) errors.push(`brand.${key} (${quote(rel, { bare: true })}) ${found.problem}`);
   }
   return errors;
 }
@@ -184,13 +185,19 @@ export function validateTopology(topology, { requireExternalKind = true } = {}) 
  * @returns {string[]} one line per problem, naming the file
  */
 export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
-  if (!fs.existsSync(dir)) return [];
+  // Read through the repo's reader (core/repo.js): a proposal, or a mockup, that is a link out of the repo is not read, and nothing quotes from it
+  const io = repoReader(root);
+  const posix = (p) => p.split(path.sep).join('/');
+  const dirRel = posix(path.relative(root, dir)) || '.';
+  if (leavesRepo(io, dirRel)) return [outsideProblem('proposals', dirRel)];
+  if (!io.exists(dirRel)) return [];
   const problems = [];
-  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.json') && !f.endsWith('.review.json')).sort()) {
-    const where = path.relative(root, path.join(dir, file)).split(path.sep).join('/');
+  for (const file of io.list(dirRel).filter((f) => f.endsWith('.json') && !f.endsWith('.review.json'))) {
+    const rel = path.posix.join(dirRel, file);
+    const where = posix(path.relative(root, path.join(dir, file)));
     let proposal;
     try {
-      proposal = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      proposal = JSON.parse(io.read(rel));
     } catch (err) {
       problems.push(`${where} is not valid JSON: ${err.message}`);
       continue;
@@ -200,8 +207,8 @@ export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
     // A mockup the proposal lists must be a file beside it, so a typo fails here and not only in the explorer
     for (const m of mockupsOf(proposal)) {
       let ok = false;
-      try { ok = fs.statSync(path.join(dir, ...m.path.split('/'))).isFile(); } catch { ok = false; }
-      if (!ok) problems.push(`${where}: mockups[${m.index}].path: "${m.path}" is not a file in ${path.relative(root, dir).split(path.sep).join('/') || '.'}.`);
+      try { const at = path.posix.join(dirRel, ...m.path.split('/')); ok = io.exists(at) && !io.isDir(at); } catch { ok = false; }
+      if (!ok) problems.push(`${where}: mockups[${m.index}].path: ${quote(m.path)} is not a file in ${dirRel}.`);
     }
   }
   return problems;
@@ -246,9 +253,10 @@ export function validateCloudNodes(topology, root) {
 
 /** The committed map of a repo, or null when there is none yet */
 export function readTopology(config) {
-  const file = path.join(config.root, config.topology);
-  if (!fs.existsSync(file)) return null;
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  const io = repoReader(config.root); // a map that leads out of the repo is not read: it is refused, not taken for a missing one (sync would write a new map over it)
+  if (io.exists(config.topology)) return JSON.parse(io.read(config.topology));
+  if (!io.inside(config.topology)) throw outsideError(config.topology);
+  return null;
 }
 
 /**

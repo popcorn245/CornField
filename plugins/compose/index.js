@@ -35,7 +35,8 @@
  */
 
 import { caddyRoutes, labelsOf, traefikRoutes } from './routes.js';
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { eachPlaceOnce, fileOptionProblem } from '../../core/repo.js';
+import { quote } from '../../core/text.js';
 
 export const COMPOSE_NAMES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 const CADDYFILE = /(?:^|\/)(?:Caddyfile|[\w.-]+\.caddyfile)$/i;
@@ -89,8 +90,12 @@ const targetPort = (p) => {
 /** The compose files: the config's, else the first compose name in each folder */
 function composeFiles(ctx, options, problems) {
   if (Array.isArray(options.files)) {
-    const named = options.files.filter((f) => !(leavesRepo(ctx, f) && problems.push(outsideProblem('compose', f))));
-    for (const f of named) if (!ctx.exists(f)) throw new Error(`compose file ${f} does not exist.`);
+    const named = eachPlaceOnce(options.files).filter((f) => {
+      const bad = fileOptionProblem(ctx, 'compose', 'files', f);
+      if (bad) problems.push(bad);
+      return !bad;
+    });
+    for (const f of named) if (!ctx.exists(f)) throw new Error(`compose file ${quote(f)} does not exist.`);
     return named;
   }
   const found = ctx.walk('', (f) => COMPOSE_NAMES.includes(f.slice(f.lastIndexOf('/') + 1)));
@@ -122,15 +127,15 @@ const compose = {
     const stacks = [];
     for (const file of files) {
       let doc;
-      try { doc = yaml.load(ctx.read(file)); } catch (err) { throw new Error(`${file} is not valid YAML: ${err.message}`); }
+      try { doc = yaml.load(ctx.read(file)); } catch (err) { throw new Error(`${quote(file, { bare: true })} is not valid YAML: ${quote(err.message, { bare: true })}`); }
       if (!doc || typeof doc !== 'object' || !doc.services || typeof doc.services !== 'object' || Array.isArray(doc.services)) {
-        warnings.push(`compose: ${file} has no services; it is left out.`);
+        warnings.push(`compose: ${quote(file, { bare: true })} has no services; it is left out.`);
         continue;
       }
       const dir = dirOf(file);
       const name = typeof doc.name === 'string' && doc.name ? doc.name : dir ? dir.slice(dir.lastIndexOf('/') + 1) : slug(ctx.config?.title || 'stack');
       const id = `stack-${slug(name)}`;
-      if (stacks.some((s) => s.id === id)) throw new Error(`${file} and ${stacks.find((s) => s.id === id).file} are both stack "${name}": give one a top-level name.`);
+      if (stacks.some((s) => s.id === id)) throw new Error(`${quote(file, { bare: true })} and ${quote(stacks.find((s) => s.id === id).file, { bare: true })} are both stack ${quote(name)}: give one a top-level name.`);
       const services = Object.entries(doc.services).map(([svc, def]) => {
         const d = def && typeof def === 'object' ? def : {};
         const labels = { ...labelsOf(d.labels), ...labelsOf(d.deploy && d.deploy.labels) };
@@ -170,17 +175,18 @@ const compose = {
         for (const r of traefikRoutes(svc.name, svc.labels, svc.firstPort)) routes.push({ ...r, stack: s, from: s.file });
       }
     }
-    const caddyfiles = Array.isArray(options.caddyfiles) ? options.caddyfiles : ctx.walk('', (f) => CADDYFILE.test(f));
+    const caddyfiles = Array.isArray(options.caddyfiles) ? eachPlaceOnce(options.caddyfiles) : ctx.walk('', (f) => CADDYFILE.test(f));
     const outside = new Set();
     for (const file of caddyfiles) {
-      if (leavesRepo(ctx, file)) { problems.push(outsideProblem('compose', file)); continue; }
-      if (!ctx.exists(file)) { warnings.push(`compose: caddyfile ${file} does not exist.`); continue; }
+      const bad = fileOptionProblem(ctx, 'compose', 'caddyfiles', file);
+      if (bad) { problems.push(bad); continue; }
+      if (!ctx.exists(file)) { warnings.push(`compose: caddyfile ${quote(file)} does not exist.`); continue; }
       const here = dirOf(file);
       for (const r of caddyRoutes(ctx.read(file))) {
         const serving = stacks.filter((s) => s.services.some((x) => x.name === r.service || x.containerName === r.service));
         const stack = serving.find((s) => s.dir === here) || (serving.length === 1 ? serving[0] : null);
         if (!stack) {
-          if (serving.length > 1) warnings.push(`compose: ${file} sends ${r.host} to "${r.service}", a service of ${serving.map((s) => s.name).join(' and ')}; it is left out.`);
+          if (serving.length > 1) warnings.push(`compose: ${quote(file, { bare: true })} sends ${quote(r.host, { bare: true })} to ${quote(r.service)}, a service of ${serving.map((s) => quote(s.name, { bare: true })).join(' and ')}; it is left out.`);
           else outside.add(r.host);
           continue;
         }
@@ -188,7 +194,7 @@ const compose = {
         routes.push({ ...r, service: svc.name, stack, from: file });
       }
     }
-    if (outside.size) warnings.push(`compose: ${outside.size} routed host(s) go to something that is not a compose service, and are left out: ${[...outside].sort().join(', ')}.`);
+    if (outside.size) warnings.push(`compose: ${outside.size} routed host(s) go to something that is not a compose service, and are left out: ${[...outside].sort().map((h) => quote(h, { bare: true })).join(', ')}.`);
 
     // 3. An app per host, and its runs-on edge to each stack that serves it
     const committed = (ctx.map && ctx.map.nodes) || [];
@@ -208,7 +214,7 @@ const compose = {
       const made = appFor(host, ctx.nodes || []);
       const id = made ? made.id : appFor(host, committed)?.id || `app-${slug(host)}`;
       if (!made) {
-        if (taken.has(id)) throw new Error(`two routed hosts make app "${id}": ${host} is one of them.`);
+        if (taken.has(id)) throw new Error(`two routed hosts make app ${quote(id)}: ${quote(host, { bare: true })} is one of them.`);
         taken.add(id);
         nodes.push({ id, label: host, type: 'app', url: `${rs[0].scheme}://${host}`, upstreams: [...new Set(rs.map((r) => r.upstream))], stack: rs[0].stack.name, deployed: true });
         edges.push({ from: parentOf(id) || parent, to: id });
