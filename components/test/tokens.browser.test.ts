@@ -57,6 +57,23 @@ describe('the default tokens', () => {
   });
 });
 
+describe('a map inside a shadow root of the page\'s own (a host app\'s component)', () => {
+  it('still gets the defaults (they go on the document, where :root is), and its theme attribute still forces a mode', async () => {
+    document.adoptedStyleSheets = []; // as on a page no corn-* element has visited
+    class Shell extends HTMLElement { constructor() { super(); this.attachShadow({ mode: 'open' }); } }
+    if (!customElements.get('test-shell')) customElements.define('test-shell', Shell);
+    const shell = document.createElement('test-shell');
+    document.body.append(shell);
+    const el = await mountMap({}, { parent: shell.shadowRoot as unknown as Element });
+    expect(tokenOf(el, GROUND)).toBe(DARK);
+    el.setAttribute('theme', 'light');
+    await frames(2);
+    expect(tokenOf(el, GROUND)).toBe(LIGHT);
+    const ours = (root: Document | ShadowRoot) => root.adoptedStyleSheets.filter((x) => (x as any)[Symbol.for('cornfield.default-tokens')]).length;
+    expect([ours(document), ours(shell.shadowRoot!)]).toEqual([1, 1]);
+  });
+});
+
 describe('a host overrides them with an ordinary rule', () => {
   it('on :root, even one with the least specificity a rule can have', async () => {
     const el = await mountMap();

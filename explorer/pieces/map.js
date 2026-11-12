@@ -22,7 +22,7 @@
  *   base, fetch, strings   for a piece that makes its own instance
  *   slots      { stage: Node }: the place the elements go before (cornfield's page: the marker in its stage). Without it they go in a stage of their own in `root`
  *   keysHelp   the words the canvas is described by; default KEYS_HELP. cornfield's page, which has the node panel and Freeform, says KEYS_HELP_WITH_PANEL
- *   tokens     the default `--corn-*` tokens (CSS text) to add, once, to the document or shadow root the map's host is in (adopt-tokens.js)
+ *   tokens     the default `--corn-*` tokens (CSS text) to add, once, to the document, and to the shadow root the map's host is in if it is in one (adopt-tokens.js)
  *   measureCovered   () => px of the bottom of the map something covers (the page's phone sheets); default none
  *   onSelect   ({ id, kind, source, from?, to? }) once per change of the selection, from the instance's `selection` event, whoever made it:
  *              kind 'node' (id: the node's), 'edge' (id: 'from->to', and from, to), or null with id null (cleared); source as the event says
@@ -85,7 +85,13 @@ export function mount(root, inst, options = {}) {
   const ownsInstance = !inst;
   if (ownsInstance) inst = createInstance({ root, base: options.base || '', fetch: options.fetch, strings: options.strings });
   const { state } = inst;
-  if (options.tokens) adoptDefaultTokens(hostRootOf(root), options.tokens);
+  if (options.tokens) {
+    // The defaults go on the document, whose :root every element inherits from (through every shadow root); where the map's host sits in a
+    // shadow root of the page's own, that root gets the sheet too, for the rules on the element's `theme` attribute, which match only there
+    const where = hostRootOf(root);
+    if (where) adoptDefaultTokens(where.nodeType === 9 ? where : where.ownerDocument, options.tokens);
+    if (where && where.nodeType === 11) adoptDefaultTokens(where, options.tokens);
+  }
   /** What the piece set up, undone by destroy() (the instance's own end runs it too, if the piece is still there) */
   const scope = scopeOf(inst);
   const rendererOf = (v) => (v === 'canvas2d' ? 'canvas2d' : 'auto');
