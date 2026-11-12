@@ -18,7 +18,7 @@
  * Switching the view never moves a node: all three draw the same positions.
  */
 
-import { escHtml } from './state.js';
+import { escapeHtml as escHtml } from '../core/text.js';
 import { markStateAttr, stateIconHtml } from './corn-state.js';
 import { specStateOf, specStateWords, SPEC_STATE_WORDS, SPEC_STATE_CORN } from './waiting-model.js';
 

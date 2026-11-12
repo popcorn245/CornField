@@ -45,7 +45,7 @@
  */
 
 import { FONT_EDGE, FONT_NODE, HUB_LABEL_EXTRA_PX, LABEL_MIN_FLOOR, LABEL_MIN_PX, LANDMARK_TYPES, looksFor } from './scene.js';
-import { getMapStyle, styledScene } from './map-style.js';
+import { PLAIN_STYLE, styledScene } from './engine/map-style.js';
 
 /** At most this many node labels in view at a time (lane text and selection edge labels are extra); the placing itself never needs it */
 export const MAX_LABELS = 400;
@@ -314,14 +314,14 @@ export function labelHit(placed, camera, x, y) {
 /**
  * A transparent 2D canvas that draws the chosen labels over the map
  * @param {HTMLCanvasElement} canvas
- * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`);
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `mapStyle`: where the theme's map tokens come from (the instance's: `mapStyleOf(inst).get`; none: no theme);
  *   a node's label colour is the theme's `--corn-map-label`, and the outline under every label its `--corn-map-label-halo`, when it sets them
  * @returns {{hit: (x: number, y: number) => string|null, draw: (scene: import('./scene.js').Scene, camera: import('./scene.js').Camera, extras?: {hover?: string|null}) => boolean, resize: (width: number, height: number, dpr: number) => void, destroy: () => void}}
  *   `draw` returns whether it painted: false when the camera, the scene, the size and the hovered node were unchanged; `extras.hover` is the
  *   node the pointer is on (named by a chip when it has no label)
  */
 export function createLabelLayer(canvas, opts = {}) {
-  const styleOf = opts.mapStyle || getMapStyle;
+  const styleOf = opts.mapStyle || (() => PLAIN_STYLE);
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0, dpr = 1;
   let lastScene = null, lastVersion, lastX, lastY, lastZoom, lastStyle, lastHover;

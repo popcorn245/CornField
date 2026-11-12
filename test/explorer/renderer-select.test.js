@@ -38,10 +38,11 @@ describe('createRenderer', () => {
     expect(canvas.siblings).toEqual([]);
   });
 
-  it('reads the preference from the page address by default', () => {
+  it('never reads the page address: the page shell reads it (rendererPreference) and hands it in', () => {
     vi.stubGlobal('location', { search: '?renderer=canvas2d' });
     const canvas = fakeCanvas({ webgl2: fakeGl(), '2d': recordingCtx() });
-    expect(createRenderer(canvas).kind).toBe('canvas2d');
+    expect(createRenderer(canvas).kind).not.toBe('canvas2d'); // an address that asks for canvas2d changes nothing here
+    expect(createRenderer(fakeCanvas({ webgl2: fakeGl(), '2d': recordingCtx() }), { prefer: rendererPreference('?renderer=canvas2d') }).kind).toBe('canvas2d');
   });
 
   it('no WebGL2 context: the Canvas 2D renderer on the canvas, no stand-in canvas', () => {

@@ -163,10 +163,11 @@
  *   `performance.now()`; it alone moves the packets, so an animated frame needs no new scene.
  * @property {(width: number, height: number, dpr: number) => void} resize
  *   CSS px size of the viewport and the device pixel ratio; the renderer sizes its surface.
- * @property {() => void} destroy  releases what it holds
+ * @property {() => void} destroy  releases what it holds, but not the canvas's context: another renderer may be made on the same canvas
+ * @property {() => void} [release]  destroy(), and the canvas's GPU context with it (WebGL): only when the canvas's map ends
  */
 
-import { flowStyleOf } from './flows.js';
+import { flowStyleOf } from './flow-style.js';
 import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-model.js';
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';

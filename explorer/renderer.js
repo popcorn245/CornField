@@ -2,8 +2,8 @@
  * @module explorer/renderer
  *
  * Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2
- * context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference
- * renderer. main.js hands the result to render.js `setRenderer`.
+ * context and the caller does not ask for `canvas2d` (cornfield's page reads `?renderer=canvas2d` from its address, page.js; this module
+ * never reads the address), otherwise the Canvas 2D reference renderer. The page shell hands the result to the map's `setRenderer`.
  *
  * HOW THE MAP IS LAYERED
  *
@@ -49,24 +49,26 @@ function addStandIn(canvas) {
 
 /**
  * @param {HTMLCanvasElement} canvas the map canvas; it must not have a 2d context yet
- * @param {{prefer?: 'canvas2d'|'webgl2'|null, makeStandIn?: (canvas: HTMLCanvasElement) => HTMLCanvasElement}} [opts]
- *   `prefer`: default from the page's query string. `makeStandIn`: for tests.
+ * @param {{prefer?: 'canvas2d'|'webgl2'|null, makeStandIn?: (canvas: HTMLCanvasElement) => HTMLCanvasElement, mapStyle?: () => import('./engine/map-style.js').MapStyle}} [opts]
+ *   `prefer`: what the caller was asked for (`rendererPreference(search)`); none means WebGL2 when there is one. `makeStandIn`: for tests.
+ *   `mapStyle`: where the theme's map tokens come from, the instance's (`mapStyleOf(inst).get`).
  * @returns {import('./scene.js').Renderer}
  */
 export function createRenderer(canvas, opts = {}) {
-  const prefer = opts.prefer !== undefined ? opts.prefer : rendererPreference(globalThis.location && globalThis.location.search);
-  if (prefer === 'canvas2d') return createCanvas2dRenderer(canvas);
+  const prefer = opts.prefer || null;
+  const style = opts.mapStyle ? { mapStyle: opts.mapStyle } : {};
+  if (prefer === 'canvas2d') return createCanvas2dRenderer(canvas, style);
 
   let gl = null;
   try { gl = canvas.getContext('webgl2', CONTEXT_ATTRS); } catch { /* treated as no WebGL2 */ }
-  if (!gl) return createCanvas2dRenderer(canvas);
+  if (!gl) return createCanvas2dRenderer(canvas, style);
 
   try {
-    return createWebglRenderer(canvas, { gl });
+    return createWebglRenderer(canvas, { gl, ...style });
   } catch (err) {
     console.warn(`WebGL2 renderer unavailable, drawing with Canvas 2D: ${err.message}`);
     const standIn = (opts.makeStandIn || addStandIn)(canvas);
-    const full = createCanvas2dRenderer(standIn);
+    const full = createCanvas2dRenderer(standIn, style);
     return { ...full, destroy() { full.destroy(); standIn.remove(); } };
   }
 }

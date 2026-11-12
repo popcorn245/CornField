@@ -357,7 +357,7 @@
       "label": "layout.js",
       "type": "core",
       "file": "explorer/layout.js",
-      "summary": "Where every node sits.",
+      "summary": "A bridge (spec 0011 D2, step 1): where every node sits is now laid out by engine/layout.js, on an instance.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Where every node sits. (explorer/layout.js)"
@@ -387,7 +387,7 @@
       "label": "main.js",
       "type": "core",
       "file": "explorer/main.js",
-      "summary": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol…",
+      "summary": "The topology explorer's entry point (explorer/index.html loads only this module).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The topology explorer's entry point (explorer/index.html loads only this module): finds the canvas, wires the header, the Layers menu and the side panel to the modules that do the work, loads topol… (explorer/main.js)"
@@ -447,7 +447,7 @@
       "label": "render.js",
       "type": "core",
       "file": "explorer/render.js",
-      "summary": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets.",
+      "summary": "A bridge (spec 0011 D2, step 1): the map's camera, scene cache and frame loop now live in engine/render.js, one per instance (`createMap(inst)`).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The thin module the rest of the explorer calls: the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets. (explorer/render.js)"
@@ -477,7 +477,7 @@
       "label": "renderer.js",
       "type": "core",
       "file": "explorer/renderer.js",
-      "summary": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer.",
+      "summary": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the caller does not ask for `canvas2d` (cornfield's page reads `?renderer=canvas2d` from it…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Chooses the renderer for the map canvas (spec 0012 A2): WebGL2 when the canvas gives a WebGL2 context and the address does not say `?renderer=canvas2d`, otherwise the Canvas 2D reference renderer. (explorer/renderer.js)"
@@ -577,7 +577,7 @@
       "label": "state.js",
       "type": "core",
       "file": "explorer/state.js",
-      "summary": "The explorer's one shared, mutable state object.",
+      "summary": "The hand-over from the one shared state to instances (spec 0011 D2).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The explorer's one shared, mutable state object. (explorer/state.js)"
@@ -1954,7 +1954,7 @@
       "label": "map-style.js",
       "type": "core",
       "file": "explorer/map-style.js",
-      "summary": "The map's styling from the theme (docs/theming.md, \"The map\").",
+      "summary": "A bridge (spec 0011 D2, step 1): the map's styling now lives in engine/map-style.js, one style per instance.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map's styling from the theme (docs/theming.md, \"The map\"). (explorer/map-style.js)"
@@ -2457,6 +2457,76 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Embedding: letting another app of yours in (docs/embedding.md)."
+    },
+    {
+      "id": "core-explorer-engine-layout",
+      "label": "layout.js",
+      "type": "core",
+      "file": "explorer/engine/layout.js",
+      "summary": "Where every node sits.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where every node sits. (explorer/engine/layout.js)"
+    },
+    {
+      "id": "core-explorer-engine-map-style",
+      "label": "map-style.js",
+      "type": "core",
+      "file": "explorer/engine/map-style.js",
+      "summary": "The map's styling from the theme (docs/theming.md, \"The map\").",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map's styling from the theme (docs/theming.md, \"The map\"). (explorer/engine/map-style.js)"
+    },
+    {
+      "id": "core-explorer-engine-render",
+      "label": "render.js",
+      "type": "core",
+      "file": "explorer/engine/render.js",
+      "summary": "The map of one instance (spec 0011 D2): the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map of one instance (spec 0011 D2): the camera (fit, zoom, screen to world), the scene cache and the loop that animates flow packets. (explorer/engine/render.js)"
+    },
+    {
+      "id": "core-explorer-flow-style",
+      "label": "flow-style.js",
+      "type": "core",
+      "file": "explorer/flow-style.js",
+      "summary": "How a flow edge is styled: its colour and label per kind (scene.js turns that into the curve, arrowhead and packet a renderer draws).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "How a flow edge is styled: its colour and label per kind (scene.js turns that into the curve, arrowhead and packet a renderer draws). (explorer/flow-style.js)"
+    },
+    {
+      "id": "core-explorer-instance-state",
+      "label": "instance-state.js",
+      "type": "core",
+      "file": "explorer/instance-state.js",
+      "summary": "What an instance holds: the explorer's state object, one per instance (instance.js `createInstance`).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What an instance holds: the explorer's state object, one per instance (instance.js `createInstance`). (explorer/instance-state.js)"
+    },
+    {
+      "id": "core-explorer-instance",
+      "label": "instance.js",
+      "type": "core",
+      "file": "explorer/instance.js",
+      "summary": "The engine as something a page can make more than one of (spec 0011 D2).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The engine as something a page can make more than one of (spec 0011 D2). (explorer/instance.js)"
+    },
+    {
+      "id": "core-explorer-page",
+      "label": "page.js",
+      "type": "core",
+      "file": "explorer/page.js",
+      "summary": "cornfield's own page: the shell that mounts the engine in the document (spec 0011 D1, D2).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "cornfield's own page: the shell that mounts the engine in the document (spec 0011 D1, D2). (explorer/page.js)"
     }
   ],
   "edges": [
@@ -3074,31 +3144,7 @@
     },
     {
       "from": "core-explorer-input",
-      "to": "core-explorer-layout",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-input",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-input",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-input",
       "to": "core-explorer-spatial",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-input",
-      "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
     },
@@ -3181,114 +3227,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-bench",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-check",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-house",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-input",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-layout",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-live",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-plugins",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-proposal",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-renderer",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-review",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-scenario-ui",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-view",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-whatif",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-outage-model",
       "to": "core-explorer-cloud-model",
       "dashed": true,
@@ -3349,12 +3287,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-proposal-model",
-      "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-proposal",
       "to": "core-core-proposal",
       "dashed": true,
@@ -3410,43 +3342,7 @@
     },
     {
       "from": "core-explorer-render",
-      "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
-      "to": "core-explorer-frame",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
-      "to": "core-explorer-labels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
-      "to": "core-explorer-renderer-canvas2d",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
-      "to": "core-explorer-scene",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
       "to": "core-explorer-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
-      "to": "core-explorer-spatial",
       "dashed": true,
       "label": "imports"
     },
@@ -3579,12 +3475,6 @@
     {
       "from": "core-explorer-scene",
       "to": "core-explorer-cloud-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-scene",
-      "to": "core-explorer-flows",
       "dashed": true,
       "label": "imports"
     },
@@ -4587,12 +4477,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-theme",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-proposal",
       "to": "core-explorer-theme",
       "dashed": true,
@@ -4669,12 +4553,6 @@
     {
       "from": "core-explorer-keyboard",
       "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-keyboard",
       "dashed": true,
       "label": "imports"
     },
@@ -4943,12 +4821,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-forge-panel",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-scene",
       "to": "core-explorer-forge-panel-model",
       "dashed": true,
@@ -5051,12 +4923,6 @@
     {
       "from": "pkg-server",
       "to": "core-server-mockups"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-mockups",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-explorer-mockups-model",
@@ -5533,12 +5399,6 @@
     {
       "from": "pkg-server",
       "to": "core-server-throttle"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-review-tokens",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-explorer-review-tokens-model",
@@ -6516,12 +6376,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-deep-link",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "pkg-core",
       "to": "core-core-theme"
     },
@@ -6672,49 +6526,7 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-labels",
-      "to": "core-explorer-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-map-style",
-      "to": "core-core-schema",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-map-style",
-      "to": "core-explorer-scene",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-map-style",
-      "to": "core-explorer-theme-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-proposal",
-      "to": "core-explorer-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-renderer-canvas2d",
-      "to": "core-explorer-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-renderer-webgl",
       "to": "core-explorer-map-style",
       "dashed": true,
       "label": "imports"
@@ -6820,12 +6632,6 @@
       "to": "core-explorer-account-menu"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-account-menu",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-forge-panel",
       "to": "core-explorer-proposal-model",
       "dashed": true,
@@ -6867,12 +6673,6 @@
     },
     {
       "from": "core-explorer-panels",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-render",
       "to": "core-explorer-camera",
       "dashed": true,
       "label": "imports"
@@ -7101,30 +6901,6 @@
     {
       "from": "core-explorer-hint",
       "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-focus-room",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-header-fit",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-hint",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
-      "to": "core-explorer-house-model",
       "dashed": true,
       "label": "imports"
     },
@@ -7416,12 +7192,6 @@
       "to": "core-explorer-scenario-list-model"
     },
     {
-      "from": "core-explorer-main",
-      "to": "core-explorer-review-column",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-proposal",
       "to": "core-explorer-review-column",
       "dashed": true,
@@ -7640,12 +7410,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-map-style",
-      "to": "core-core-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-renderer-canvas2d",
       "to": "core-explorer-kind-letters",
       "dashed": true,
@@ -7717,24 +7481,12 @@
     },
     {
       "from": "core-explorer-input",
-      "to": "core-explorer-fly",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-input",
       "to": "core-explorer-scene",
       "dashed": true,
       "label": "imports"
     },
     {
       "from": "core-explorer-keyboard",
-      "to": "core-explorer-search",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-main",
       "to": "core-explorer-search",
       "dashed": true,
       "label": "imports"
@@ -8084,12 +7836,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-map-style",
-      "to": "core-explorer-css-color",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-scene",
       "to": "core-explorer-css-color",
       "dashed": true,
@@ -8204,7 +7950,395 @@
       "from": "page-doc-docs-sign-in",
       "to": "page-doc-docs-issues-and-prs",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-layout"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-map-style"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-render"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-flow-style"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-instance-state"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-instance"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-page"
+    },
+    {
+      "from": "core-explorer-engine-map-style",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-style",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-style",
+      "to": "core-explorer-css-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-style",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-style",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-frame",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-labels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-renderer-canvas2d",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-render",
+      "to": "core-explorer-spatial",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-flow-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-input",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-instance",
+      "to": "core-explorer-instance-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-labels",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layout",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-main",
+      "to": "core-explorer-page",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-map-style",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-account-menu",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-bench",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-check",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-deep-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-engine-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-focus-room",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-forge-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-header-fit",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-house-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-house",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-input",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-live",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-mockups",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-panels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-plugins",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-renderer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-review-column",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-review-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-review",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-scenario-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-search",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-theme",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-whatif",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-render",
+      "to": "core-explorer-engine-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-canvas2d",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-renderer-webgl",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-flow-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-state",
+      "to": "core-explorer-instance-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-state",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T07:34:50.794Z"
+  "updatedAt": "2026-11-12T08:21:57.171Z"
 }

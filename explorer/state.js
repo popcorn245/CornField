@@ -1,191 +1,52 @@
 /**
  * @module explorer/state
  *
- * The explorer's one shared, mutable state object. ES module bindings cannot be reassigned
- * from another module, so everything that more than one module reads or writes lives here as a
- * property: the topology, which layers are on, the camera, the selection, the view.
+ * The hand-over from the one shared state to instances (spec 0011 D2). The explorer used to be one program per document with one shared,
+ * mutable `state`; it now runs as an instance (instance.js), and cornfield's page makes exactly one (page.js). The modules that are on an
+ * instance take it as an argument and import nothing from here. The ones that are not yet keep importing this file and work as they did:
+ *
+ *   `state`           the page instance's state object (the same object: `pageInstance().state === state`)
+ *   `touchScene`, `onSceneTouch`, `viewEdges`, `nodeById`, `nameOf`   the page instance's, under their old names
+ *   `pageInstance()`  the page's instance, for a module that is being converted (or a bridge, explorer/render.js, map-style.js, layout.js);
+ *                     `startPageInstance()` is page.js's one call that claims it
+ *
+ * To convert a module: take `inst` as an argument (or from the piece that mounts it), read `inst.state`, call `inst.touchScene()`, find elements
+ * with `inst.el(id)`, listen with `inst.listen(root, ...)`, and drop the import of this file; add it to the converted list of
+ * test/explorer/instance-tripwires.test.js. When no module imports a bridge or this file any more, delete them.
  */
 
-// The one escaper: the server serves this file (core/text.js), beside the explorer's own
 import { escapeHtml } from '../core/text.js';
+import { createInstance } from './instance.js';
+import { createState } from './instance-state.js';
 
-/** The map canvas, and a 2d context used only to measure text (layout.js), set by main.js before anything draws */
-export const state = {
-  canvas: /** @type {HTMLCanvasElement|null} */ (null),
-  ctx: /** @type {CanvasRenderingContext2D|null} */ (null),
-  /** The transparent canvas stacked over `canvas` that draws every label (labels.js); null = no labels */
-  labelCanvas: /** @type {HTMLCanvasElement|null} */ (null),
-  width: 0,
-  height: 0,
-  /** Height (px) of the bottom of the map the phone's sheets cover (sheets.js); 0 on a desktop. The fit and the scenario camera leave it out. */
-  coveredBottom: 0,
+/** The page's state: one object, made at import time so a module that reads it while it loads finds it filled */
+export const state = createState();
 
-  /** topology.json: every node has x/y assigned by layout.js (the file stores no positions) */
-  nodes: [],
-  edges: [],
-
-  /** 'orbit' (the whole map), 'dataflow' (the preset: browser -> servers -> API -> tables -> services -> outside) or 'house' (the House preset, PHY-11) */
-  view: 'orbit',
-  /** What the data-flow preset shows, built by flows.js buildDataFlow() when the topology loads */
-  flow: null,
-  /** The orbital rings layout.js drew the positions on */
-  rings: { rings: [], clusters: [] },
-
-  /** 'dark' or 'light': the ground the map is drawn for (theme.js keeps it, from the system and the toggle); a change must `touchScene()` */
-  theme: 'dark',
-
-  camera: { x: 0, y: 0, zoom: 1 },
-  selectedNode: null,
-  /** The node panel's "Include its children's lines" switch (spec 0008 D5): off, a selection lights one hop; on, the children's neighbours too. Kept across selections */
-  throughChildren: false,
-  /** The edge kind the panel chose to light alone (selection-model.js), or null for every kind; a new selection clears it */
-  selectedKind: null,
-  /** The config's `forge` (`{ type, url, repo, baseBranch? }`), or null: where a node's file is opened (file-url.js) */
-  forge: null,
-  searchQuery: '',
-  /** The id of the search match the stepping is on (search.js), or null: the map draws its halo and places its label first of the matches */
-  searchCurrent: null,
-  /** The id of the node the pointer is on (input.js): a node with no label is named by a chip while it is */
-  hoverNodeId: null,
-
-  isFreeform: false,
-  freeformPositions: {},
-
-  /**
-   * Layer key -> on. The infra layer is its own view, so it starts off, and so do the physical world's
-   * (spec 0029): machines, containers, devices, the house and people. Turning one of the live ones on
-   * (live-model.js LIVE_LAYERS) is what first loads the live layer.
-   */
-  activeLayers: {
-    app: true, pkg: true, page: true, atom: true, molecule: true, token: true, tool: true,
-    flow: true, table: true, rom: true, service: true, cloud: true, web: true, stack: false,
-    machine: false, container: false, device: false, house: false, persona: false,
-  },
-
-  /**
-   * The project's own layers (spec 0009): `{ key, label, desc?, match }` in `add` order, as the config sent them (core/layers.js); a node is
-   * in the first one whose match it meets (explorer/layer-model.js). `layerOrder` is the config's `order`; `layerDefaults` what each layer is
-   * when the viewer has not touched it (layers.js `setProjectLayers`). Empty with no `layers` in the config: the menu is then the starting set.
-   */
-  projectLayers: [],
-  layerOrder: [],
-  layerDefaults: {},
-
-  /**
-   * The review of the open proposal, which narrows the map to the change (issue #232; explorer/layer-model.js `layersOf`): null with no proposal open,
-   * else `{ whole, manual, step, rev }`. `whole`: "Show the whole map" is on, the map is as Diff always was. `manual`: layers the reviewer turned on or
-   * off by hand in this review, `step`: the ones a playing scenario turned on (both `{ key: boolean }`). `rev` moves with each change.
-   * None of it is the viewer's: `activeLayers` and the saved choices (layers.js) are never written while it is set.
-   */
-  review: null,
-
-  /**
-   * The map as the last `setMap` (view.js) was handed it, before the live layer is laid in: the base
-   * copies, or a proposal applied over them. `nodes` and `edges` are these plus the live ones.
-   */
-  mapNodes: [],
-  mapEdges: [],
-
-  /**
-   * The live layer (live.js, spec 0029 section 4), in memory only and never stored anywhere: the
-   * runner's snapshot `{ status, answer, error, lastOkAt }` and what merging it found: `counts`
-   * (persona id -> accounts), `other` (accounts no persona counts), `linked` (node id -> its
-   * inventory item). null until a live layer is first turned on.
-   */
-  live: null,
-
-  /**
-   * The House view (house.js, house-model.js, spec 0029 section 7): its settings (`floor`, `phone`, `software`, the
-   * rooms opened past their "+N", the plugin's default plan) and what its last layout found (what it shows, its bands
-   * and tray, the fit, each thing's floor). null until the view is first opened.
-   */
-  house: null,
-
-  /**
-   * The map as topology.json holds it: never laid out, never changed. `nodes` and `edges` above are
-   * copies of these (or `applyProposal` of them while a proposal is open), which is what makes
-   * Before, After and closing a proposal exact.
-   */
-  baseNodes: [],
-  baseEdges: [],
-
-  /**
-   * The proposal open on the map (proposal.js, spec 0012 B2): the parsed file or null. While it is
-   * set, `nodes` and `edges` are `applyProposal(base, proposal)`: each carries `mark` (and `before`,
-   * `why` when changed or removed). `proposalView` is what scene.js shows of that: 'before' | 'diff' |
-   * 'after'. `proposalSource` is where it was found ('checkout' or a worktree name), `proposalSlug` its
-   * file name without `.json`, `proposalErrors` what `validateProposal` found against the base.
-   */
-  proposal: null,
-  proposalView: 'diff',
-  proposalSource: null,
-  /** The open proposal's file as the server sent it, its SHA-256 (X-Proposal-Sha256), or null: a review names it, so a push since is refused (spec 0007) */
-  proposalSha256: null,
-  proposalSlug: null,
-  proposalErrors: [],
-  /** Where each of the open proposal's mockups stands with the review, by position: 'approved' | 'changed' | 'unreviewed' | 'missing' (mockups.js; none read yet is empty) */
-  mockupStates: {},
-  /**
-   * The proposal the map is drawn from: `proposal` with what-if edits folded in (whatif.js, TOPO-11), or `proposal` itself
-   * when there are none; null with no proposal open. `proposal` is never changed: it is the robot's file.
-   */
-  effectiveProposal: null,
-  /** The maintainer's what-if edits to the open proposal, and what Undo took back (whatif-model.js): `{ edits, undone }` */
-  whatIf: { edits: [], undone: [] },
-  /** The My edits toggle is off: the map is drawn from the proposal as written, the edits are kept and still go with a review (whatif.js, spec 0007 D5) */
-  whatIfOff: false,
-  /** A marked edge picked on the map (nodes are `selectedNode`): the panel shows it, the scene does not change */
-  selectedEdge: null,
-
-  /**
-   * The scenario being played on the map: the player's snapshot (scenario.js `ScenarioSnapshot`:
-   * index, playing, done, visited, current, progress ...) or null. The ROM simulation's walk is one.
-   * scenario-ui.js owns it; scene.js lights it, and an outage's `down` its blast radius (outage-model.js).
-   */
-  scenario: null,
-
-  /**
-   * What the selected pull request lights (forge-panel.js, forge-panel-model.js `litFor`): `{ changed, failing }`, sets of
-   * node ids (the nodes its files are; the nodes of the tests a failing check names), or null with none selected.
-   */
-  forgeLit: null,
-
-  /**
-   * The runs on the map (explorer/runs-map.js): `{ flight: Map<nodeId, runId[]>, collide: Map<nodeId, runId[]>, runs }` for the open runs'
-   * nodes, or null when there are none. The map's marks over the nodes are drawn from it.
-   */
-  runsMap: null,
-
-  /**
-   * Which threads mention which nodes (forge-panel.js, docs/threads.md), for a node's panel: `{ for(nodeId) -> thread[] | null,
-   * ensure(), open(number) }`, or null when threads are off or there is no forge. `for` answers null until the list has been
-   * read; `ensure` reads it (once) and repaints the panel's "Threads"; `open` shows a thread in the issues and PRs panel.
-   */
-  threadIndex: null,
-
-  /**
-   * Changes whenever anything the scene is built from changes (scene.js). render.js rebuilds the
-   * scene only when this moved: never for a camera change or a packet frame.
-   */
-  sceneVersion: 0,
-};
+let page = null;
 
 /**
- * Call after changing anything a picture is built from: the topology or its layout (positions, radii,
- * a dragged node), the layers, the selection, the search, the view, a playing scenario, and
- * later a proposal. Not for the camera, and not for time.
+ * The page's instance. It is made the first time anything asks, because modules that are not yet converted register with it while they load
+ * (layers.js follows the map's style), before page.js has run. A test that drives one module on its own gets the same plain instance over the
+ * global document, if there is one, holding the same `state`.
  */
-export function touchScene() {
-  state.sceneVersion++;
-  sceneListeners.forEach((fn) => fn());
+export function pageInstance() {
+  if (!page) page = createInstance({ state, root: typeof document !== 'undefined' ? document : null });
+  return page;
 }
 
-const sceneListeners = new Set();
-/** Calls `fn` after every touchScene(): for UI that follows what the scene is built from (the scenario list follows `state.proposal`). Returns how to stop. */
-export function onSceneTouch(fn) {
-  sceneListeners.add(fn);
-  return () => sceneListeners.delete(fn);
+/**
+ * Called once by page.js: the instance of this document. There is only ever one (`pageInstance()` above), made with the defaults cornfield's page
+ * wants (its own origin, the global fetch, no strings of a host's); this hands it over, and does not make a second.
+ */
+export function startPageInstance({ root }) {
+  const inst = pageInstance();
+  if (root !== inst.root) throw new Error('The page instance is over the document it was first asked for');
+  return inst;
 }
+
+export const touchScene = () => pageInstance().touchScene();
+/** Calls `fn` after every touchScene(): for UI that follows what the scene is built from (the scenario list follows `state.proposal`). Returns how to stop. */
+export const onSceneTouch = (fn) => pageInstance().onSceneTouch(fn);
 
 /** The edges the current view draws and the selection walks */
 export function viewEdges() {
