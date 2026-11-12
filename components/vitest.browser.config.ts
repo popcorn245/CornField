@@ -24,7 +24,9 @@ export default defineConfig({
       headless: true,
       // Reduced motion on: the map's flow packets are still, so a picture is the same picture twice
       provider: playwright({
-        launchOptions: executablePath ? { executablePath, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] } : { channel: 'chrome' },
+        // A 2d canvas drawn on the GPU is moved to the CPU by Chrome at a moment that depends on timing, and the two draw a few pixels apart,
+        // so a test comparing pictures would compare which frame the move came on: the 2d canvas stays on the CPU, and a picture is the same picture
+        launchOptions: executablePath ? { executablePath, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-accelerated-2d-canvas'] } : { channel: 'chrome', args: ['--disable-accelerated-2d-canvas'] },
         contextOptions: { reducedMotion: 'reduce' },
       }),
       commands: { colorScheme, viewport },
