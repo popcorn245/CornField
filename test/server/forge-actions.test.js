@@ -441,6 +441,16 @@ describe('the forge actions', () => {
       expect((await act(12, 'merge', { sha: ABC })).status).not.toBe(429);
     });
 
+    it('still counts the maintainer\'s own attempts from cornfield\'s page: past sixty a minute it is 429 and nothing more is written down', async () => {
+      const before = rows().length;
+      const statuses = [];
+      for (let i = 0; i < 62; i++) statuses.push((await act(12, 'merge', {})).status); // no sha: refused (400) and written down, before the twenty-a-minute throttle
+      expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
+      expect(statuses.slice(60)).toEqual([429, 429]);
+      expect(rows()).toHaveLength(before + 60);
+      expect(wrote()).toEqual([]);
+    });
+
     it('answers a body that is too large at once, and does not read the rest', async () => {
       const res = await new Promise((resolve, reject) => {
         const req = http.request({ host: '127.0.0.1', port: srv.port, method: 'POST', path: '/api/forge/pulls/12/merge', agent: false, headers: { cookie, origin: origin(), 'sec-fetch-site': 'same-origin', 'content-type': 'application/json', 'content-length': String(10 * 1024 * 1024) } }, (answer) => {

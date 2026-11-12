@@ -623,6 +623,15 @@ describe('the review API', () => {
       expect(rows().slice(before).filter((r) => r.status === 403).map((r) => [r.action, r.request])).toEqual([['review-token', { op: 'revoke', id: 1, refused: 'origin', origin: 'https://sibling.example', site: 'same-site' }]]);
     });
 
+    it('still count the maintainer\'s own changes from cornfield\'s page: past sixty a minute it is 429 and nothing more is written down', async () => {
+      const before = rows().length;
+      const statuses = [];
+      for (let i = 0; i < 62; i++) statuses.push((await page('POST', '/api/review-tokens/999/revoke', {})).status);
+      expect(statuses.slice(0, 60).every((s) => s === 404)).toBe(true); // no such token: refused and written down
+      expect(statuses.slice(60)).toEqual([429, 429]);
+      expect(rows()).toHaveLength(before + 60);
+    });
+
     it('cannot be made with a review token: a token does one thing', async () => {
       const { secret } = await mint();
       const body = JSON.stringify({ label: 'child' });

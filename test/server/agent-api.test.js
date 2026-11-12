@@ -476,6 +476,15 @@ describe('the agent API', () => {
       expect(own.status, own.text).toBe(201);
     });
 
+    it('still count the maintainer\'s own changes from cornfield\'s page: past sixty a minute it is 429 and nothing more is written down', async () => {
+      const before = rows().length;
+      const statuses = [];
+      for (let i = 0; i < 62; i++) statuses.push((await page('POST', '/api/agent-runs/run-01JC8Z3Q5M7VXK2RT9N4B6HDEF/stop', {})).status);
+      expect(statuses.slice(0, 60).every((s) => s === 404)).toBe(true); // no such run: refused and written down
+      expect(statuses.slice(60)).toEqual([429, 429]);
+      expect(rows()).toHaveLength(before + 60);
+    });
+
     it('refuse a POST that is not from cornfield\'s own page (not counted; a row at most once a minute), or not JSON (a row); GET needs nothing more than the sign-in', async () => {
       const text = JSON.stringify(code());
       const foreign = await raw(srv.port, 'POST', '/api/agent-runs', { headers: { cookie, origin: 'https://evil.example', 'content-type': 'application/json', 'content-length': String(text.length) }, body: text });
