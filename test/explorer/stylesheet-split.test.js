@@ -6,7 +6,8 @@
  *   - no `position: fixed`, but the few marked on purpose below (a dialog and a phone's menu: a native <dialog> takes them in a later step);
  *   - no width or height `@media`: a size rule is a container query on `corn-box` (the piece's box) or `corn-page` (the screen's height);
  *   - index.html links every file, once, in an order that is the cascade (it is the order the one file had).
- * And what keeps cornfield's page the same: page.css makes the body and the stage the containers those queries ask.
+ * And what keeps cornfield's page the same: page.css makes the body, and nothing else, the container those queries ask, and hands the pieces the
+ * window's 1vh (`--hx-vh`) for the heights explorer.css wrote in vh.
  */
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
@@ -155,10 +156,44 @@ describe('a size rule is a container query on the piece\'s own box', () => {
     });
   }
 
-  it('has page.css name the two containers: the body for the screen and for what sits outside the stage, the stage for the rest', () => {
-    const page = readPiece('page.css');
-    expect(page).toMatch(/body\s*\{[^}]*container:\s*corn-page corn-box\s*\/\s*size/);
-    expect(page).toMatch(/\.hx-stage\s*\{[^}]*container:\s*corn-box\s*\/\s*inline-size/);
+  it('has page.css make the body the one container: the screen\'s box for every piece on the page', () => {
+    expect(strip(readPiece('page.css'))).toMatch(/(^|\})\s*body\s*\{[^}]*container:\s*corn-page corn-box\s*\/\s*size/);
+  });
+
+  it('makes nothing else a container, so a fixed box keeps the window as its containing block in the browsers that gave a container layout containment', () => {
+    // Before mid-2024 (Chrome and Edge before 129, and Safari and Firefox of that time) `container-type` also meant `contain: layout`: the container
+    // became the containing block of its `position: fixed` descendants and a stacking context. The stage holds fixed boxes (the offline notice, a
+    // phone's backdrop), so as a container it would move them under the header; the body is the window's box, so it moves nothing
+    const sheets = [...pieceFiles().map((f) => [f, readPiece(f)]), ...['house.css', 'tokens.css'].map((f) => [f, fs.readFileSync(path.join(EXPLORER_DIR, f), 'utf8')])];
+    const found = [];
+    for (const [file, text] of sheets) {
+      for (const r of rules(strip(text))) {
+        if (/(^|;|\s)(container|container-type|container-name|contain)\s*:/.test(r.body)) found.push(`${file}: ${r.selectors.join(', ')}`);
+      }
+    }
+    expect(found).toEqual(['page.css: body']);
+  });
+
+  it('hands the pieces the window\'s 1vh for each height explorer.css wrote in vh, with the piece\'s own box as the fallback', () => {
+    expect(strip(readPiece('page.css'))).toMatch(/(^|\})\s*body\s*\{[^}]*--hx-vh:\s*1vh;/);
+    // [file, selector, property, value]: on the page these are the window's vh as they were (a phone's tallest window), not the body's 100dvh
+    const VH = [
+      ['account.css', '.hx-account-menu .hx-menu--proposals', 'max-height', 'calc(40 * var(--hx-vh, 1cqh))'],
+      ['whatif.css', '.hx-whatif-panel', 'max-height', 'min(calc(40 * var(--hx-vh, 1cqh)), 320px)'],
+      ['dialogs.css', '.hx-mockup-dialog', 'max-height', 'calc(100 * var(--hx-vh, 1cqh) - 32px)'],
+      ['dialogs.css', '.hx-mockup-frame', 'height', 'min(560px, calc(100 * var(--hx-vh, 1cqh) - 140px))'],
+      ['search.css', '.hx-search-results', 'max-height', 'min(calc(60 * var(--hx-vh, 1cqh)), 560px)'],
+      ['search.css', '.hx-mobile-search .hx-search-results', 'max-height', 'calc(50 * var(--hx-vh, 1cqh))'],
+    ];
+    for (const [file, sel, prop, value] of VH) {
+      const r = rules(strip(readPiece(file))).find((x) => x.selectors.includes(sel) && !x.ctx.length);
+      expect(r, `${file} ${sel}`).toBeTruthy();
+      const m = new RegExp(`(^|;)\\s*${prop}\\s*:\\s*([^;]+)`).exec(r.body);
+      expect(m && m[2].trim(), `${file} ${sel} ${prop}`).toBe(value);
+    }
+    // and nothing else reads it: every other screen height is the body's (it was dvh, which is what the body is)
+    const readers = pieces.flatMap((f) => rules(strip(readPiece(f))).filter((r) => /--hx-vh/.test(r.body)).map((r) => `${f} ${r.selectors.join(', ')}`));
+    expect(readers.length).toBe(VH.length);
   });
 
   it('keeps the stage-wide properties the panels read in page.css, where a width rule may still be a media query', () => {

@@ -5,13 +5,19 @@
  * and the two overlays that belong to the page, not to a piece (the offline notice, the bench readout). The page is the one place a width rule
  * stays a media query: the stage is as wide as the window here.
  *
- * Two containers are named here, and only here, for the pieces' container queries:
- *   corn-box   the piece's own box. The body (the header, the search bar and the dialogs are inside it) and the stage (the map, the panels and the
- *              sheets are inside it) are both as wide as the window, so every width rule lays the page out exactly as the window's width did.
- *              The nearest one wins: the stage for what is in it, the body for the rest.
- *   corn-page  the body, with its height too: for the few rules that ask the height of the screen (a sheet's cap, a short window).
- * `container-type: inline-size` here adds no layout containment in today's browsers, so the stacking of the header, the sheets and the panels is
- * what it was; if one ever does, the header's z-index values below are where it would show.
+ * One element is the query container the pieces' container queries ask, and only the body: `container: corn-page corn-box / size`.
+ *   corn-box   the piece's own box, for a width rule. The body is as wide as the window, and everything on the page is in it (the header, the
+ *              search bar, the stage with the map, the panels and the sheets, the dialogs), so every width rule falls where the window's did.
+ *   corn-page  the same box, with its height, for the few rules that ask the height of the screen (a sheet's cap, a short window).
+ * The stage is NOT a container, on purpose. Browsers from before mid-2024 (Chrome and Edge before 129, Safari and Firefox of that time)
+ * gave a query container layout containment as well: it became the containing block of its `position: fixed` descendants and a stacking
+ * context. The stage holds two fixed boxes, the offline notice and a phone's tap-away backdrop: in the stage they would move down by the
+ * header's height, and the backdrop would leave the header live under an open sheet. The body is the size of the window at its top left, and
+ * everything is in it, so the same containment on the body moves nothing on the page (spec 0011 D8; docs/theming.md says which browsers).
+ *
+ * `--hx-vh` is the window's 1vh, handed to the pieces: a piece reads `calc(40 * var(--hx-vh, 1cqh))` where explorer.css said `40vh`, so the page
+ * is exactly as it was on a phone whose toolbar comes and goes (vh is the tallest window there, cqh the body's 100dvh), and a piece in another
+ * app, where nothing sets it, falls back to its own box.
  */
 body {
   margin: 0;
@@ -29,13 +35,14 @@ body {
   user-select: none;
   touch-action: none;
   container: corn-page corn-box / size;
+  --hx-vh: 1vh;
 }
 
 /* theme.pixelated (docs/config.md#theme): <html data-pixelated> becomes a property that inherits, even into a shadow root (base.css reads it) */
 :root[data-pixelated] { --hx-pixelated: pixelated; }
 
-/* The stage: the map and what lies over it. A container, so the pieces in it size by its width (the page is as wide as the window) */
-.hx-stage { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; container: corn-box / inline-size; }
+/* The stage: the map and what lies over it. Not a container (above): the pieces in it ask the body, which is as wide */
+.hx-stage { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; }
 @media (min-width: 768px) {
   /* The panel's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number (the Runs view's compare widens it, below) */
   .hx-stage { --hx-forge-w: min(400px, calc(100% - 24px)); }

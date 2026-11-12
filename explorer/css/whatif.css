@@ -14,7 +14,7 @@
 .hx-whatif-msg { margin: var(--corn-space-2) 0 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-removed) 12%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-removed) 35%, transparent); color: var(--corn-bad); line-height: 1.4; }
 .hx-whatif-msg[hidden], .hx-whatif-hint[hidden], .hx-whatif-notice[hidden], .hx-whatif-panel[hidden] { display: none; }
 .hx-whatif-notice { margin: var(--corn-space-2) 0 0; color: var(--corn-warn); }
-.hx-whatif-panel { margin-top: var(--corn-space-3); padding: var(--corn-space-3) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-edit) 25%, transparent); max-height: min(40cqh, 320px); overflow: auto; }
+.hx-whatif-panel { margin-top: var(--corn-space-3); padding: var(--corn-space-3) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-edit) 25%, transparent); max-height: min(calc(40 * var(--hx-vh, 1cqh)), 320px); overflow: auto; }
 .hx-whatif-form { display: flex; flex-direction: column; gap: var(--corn-space-2); }
 .hx-whatif-field { display: flex; align-items: center; gap: var(--corn-space-3); color: var(--corn-text-2); }
 .hx-whatif-field > select, .hx-whatif-field > .hx-whatif-input { flex: 1; min-width: 0; }

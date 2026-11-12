@@ -50,7 +50,7 @@
            and the list's rows still step), the count and Clear stay */
   .hx-search [data-action="search-prev"], .hx-search [data-action="search-next"] { display: none; }
 }
-.hx-search-results { position: absolute; top: calc(100% + var(--corn-space-2)); right: 0; z-index: 40; width: min(440px, 92cqw); max-height: min(60cqh, 560px); overflow-y: auto; padding: var(--corn-space-1) 0; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); box-shadow: var(--corn-shadow); color: var(--corn-text); font-size: var(--corn-text-sm); } /* the ground itself, not a surface: a surface is see-through, and the panel under the list would show in it */
+.hx-search-results { position: absolute; top: calc(100% + var(--corn-space-2)); right: 0; z-index: 40; width: min(440px, 92cqw); max-height: min(calc(60 * var(--hx-vh, 1cqh)), 560px); overflow-y: auto; padding: var(--corn-space-1) 0; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); box-shadow: var(--corn-shadow); color: var(--corn-text); font-size: var(--corn-text-sm); } /* the ground itself, not a surface: a surface is see-through, and the panel under the list would show in it */
 .hx-search-results[hidden] { display: none; }
 /* The list is part of the header, which sits under the node panel (40): while the list is open the header is over it, so a row is never half under the panel */
 .hx-header:has(.hx-search-results:not([hidden])) { z-index: 46; }
@@ -70,7 +70,7 @@
 .hx-mobile-search::before { top: calc(var(--corn-space-3) + 22px); } /* the magnifier stays by the field when the bar wraps to a second row of steps */
 .hx-mobile-search .hx-search-steps { flex: 1 0 100%; justify-content: flex-end; gap: var(--corn-space-1); }
 .hx-mobile-search .hx-search-count { margin-right: auto; font-size: var(--corn-text-xs); }
-.hx-mobile-search .hx-search-results { top: 100%; left: 0; right: 0; width: auto; max-height: 50cqh; border-radius: 0; border-left: 0; border-right: 0; }
+.hx-mobile-search .hx-search-results { top: 100%; left: 0; right: 0; width: auto; max-height: calc(50 * var(--hx-vh, 1cqh)); border-radius: 0; border-left: 0; border-right: 0; }
 @container corn-box (max-width: 767px) {
   .hx-search-btn { min-width: 44px; min-height: 44px; }
   .hx-search-row { min-height: 44px; }

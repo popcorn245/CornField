@@ -7,13 +7,13 @@
  */
 .hx-confirm-title, .hx-mockup-title { font-family: var(--corn-font-display); }
 /* fixed (spec 0011 D8): a modal over the whole window, centred on it. It cannot be placed in a piece's box without changing the page; it becomes a native <dialog>, in the top layer, in a later step */
-.hx-mockup-dialog { position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: var(--corn-space-3); width: min(960px, calc(100cqw - 32px)); max-height: calc(100cqh - 32px); padding: var(--corn-space-4) var(--corn-space-4) var(--corn-space-4); border-radius: var(--corn-radius-lg); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); color: var(--corn-text); box-shadow: var(--corn-shadow), 0 0 0 100cqmax var(--corn-scrim); }
+.hx-mockup-dialog { position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: var(--corn-space-3); width: min(960px, calc(100cqw - 32px)); max-height: calc(100 * var(--hx-vh, 1cqh) - 32px); padding: var(--corn-space-4) var(--corn-space-4) var(--corn-space-4); border-radius: var(--corn-radius-lg); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); color: var(--corn-text); box-shadow: var(--corn-shadow), 0 0 0 100cqmax var(--corn-scrim); }
 .hx-mockup-dialog:focus { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
 .hx-mockup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-4); }
 .hx-mockup-title { margin: 0; font-size: var(--corn-text-base); font-weight: 600; color: var(--corn-text); }
 .hx-mockup-stage { min-height: 0; overflow: auto; display: flex; justify-content: center; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-mockup-ground); }
 .hx-mockup-img { display: block; max-width: 100%; height: auto; object-fit: contain; }
-.hx-mockup-frame { display: block; width: 100%; height: min(560px, calc(100cqh - 140px)); border: 0; background: var(--corn-mockup-ground); }
+.hx-mockup-frame { display: block; width: 100%; height: min(560px, calc(100 * var(--hx-vh, 1cqh) - 140px)); border: 0; background: var(--corn-mockup-ground); }
 /* fixed (spec 0011 D8): the scrim of a modal over the whole window; a native <dialog> and its ::backdrop take its place in a later step */
 .hx-confirm-scrim { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: var(--corn-space-5); background: var(--corn-scrim); }
 .hx-confirm-scrim[hidden] { display: none; }

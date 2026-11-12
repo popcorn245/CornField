@@ -13,7 +13,8 @@
    control (View, Before / Diff / After, the theme choice) is the control height outside; its buttons are that less the frame (the padding and the
    two borders), or the full height in a narrow box, where each button is the 44px target and the frame is outside it. They are set on every element
    rather than on :root, so they exist inside a shadow root too; a container query cannot style its own container, so the container's own rules
-   (the stage's, the body's) read none of them. */
+   (the body's) reads none of them. A height that explorer.css wrote in `vh` reads `var(--hx-vh, 1cqh)`: page.css sets `--hx-vh` to the window's 1vh,
+   so cornfield's page is as it was on a phone whose toolbar comes and goes, and a piece elsewhere sizes from its own box. */
 * { --hx-control-h: var(--corn-control-height); --hx-seg-inner: calc(var(--hx-control-h) - var(--corn-space-1) - 2 * var(--corn-border)); }
 @container corn-box (max-width: 767px) {
   * { --hx-control-h: max(44px, var(--corn-control-height)); --hx-seg-inner: var(--hx-control-h); }
