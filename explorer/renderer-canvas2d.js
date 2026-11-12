@@ -394,7 +394,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
     if (layer) return layer;
     try {
       layer = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(canvas.width || 1, canvas.height || 1)
-        : typeof document !== 'undefined' ? document.createElement('canvas') : null;
+        : canvas.ownerDocument ? canvas.ownerDocument.createElement('canvas') : null;
       layerCtx = layer && layer.getContext ? layer.getContext('2d') : null;
     } catch { layerCtx = null; }
     if (!layerCtx) layer = null;
