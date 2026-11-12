@@ -31,7 +31,7 @@ const ADAPT = {
   closed: (fn) => ['proposal', ({ change }) => { if (change === 'closed') fn(); }],
   bar: (fn) => ['proposal:bar', ({ open }) => { fn(open); }],
   openSpecs: (fn) => ['work:open-specs', () => { fn(); return true; }],
-  reviewed: (fn) => ['decision', () => { fn(); }],
+  reviewed: (fn) => ['decision', ({ open }) => { if (open !== false) fn(); }], // as before: not when another proposal was opened while it was sent
 };
 const kept = {};
 const stops = {};

@@ -283,6 +283,23 @@ describe('the decision says what happened, and navigates nothing', () => {
     const put = calls.find((c) => c.method === 'PUT');
     expect(JSON.parse(put.init.body).edits).toEqual([]);
   });
+
+  it('a review answered after another proposal opened says so (`open: false`), and names the one it was for', async () => {
+    let answer;
+    const late = new Promise((r) => { answer = r; });
+    const { bar } = await open({ '/proposals/0099-new/review': (method) => (method === 'PUT' ? late : res(404, { error: 'none' })) });
+    const heard = [];
+    inst.on('decision', (d) => heard.push(d));
+    approve().click();
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 300); // the PUT is in flight
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    bar.update({ proposal: { ...proposal(), title: 'Another' }, slug: '0098-other', source: 'pull/22' });
+    answer(res(200, { verdict: 'approved', at: new Date().toISOString(), by: 'maintainer-one' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(heard).toHaveLength(1);
+    expect(heard[0]).toMatchObject({ outcome: 'approved', slug: '0099-new', source: 'pull/21', open: false });
+    expect(root.querySelector('[data-review-verdict]').textContent).toBe(''); // the foot is the other proposal's
+  });
 });
 
 describe('an edge is the node panel\'s', () => {

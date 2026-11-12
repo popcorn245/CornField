@@ -31,8 +31,9 @@
  *   mount(root, inst, options) -> { update, destroy, ... }
  *
  * What it tells (`inst.on`):
- *   decision  { outcome: 'approved' | 'notes', review, slug, source }  the server took the review: `review` is what it answered (verdict, at, by, posted…).
- *             Said after the answer, never before; the piece never navigates the window itself (the page, or a host, answers the event)
+ *   decision  { outcome: 'approved' | 'notes', review, slug, source, open }  the server took the review: `review` is what it answered (verdict, at, by, posted…).
+ *             Said after the answer, never before; the piece never navigates the window itself (the page, or a host, answers the event). `open` is false
+ *             when another proposal was opened, or this one closed, while the review was being sent: `slug` and `source` name the one it was for
  *   auth      { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
  * `proposal:focus-title` (a Retry that worked: the focus goes to the proposal's name, which the bar owns). What it follows: `proposal:bar` (the bar was drawn: start again for another proposal), `changes:paint` (the line follows what was played),
  * `whatif:edits-changed`. What it asks of a neighbour that may not be there (nobody answering is a no): `changes:played-line`, `whatif:edits`
@@ -543,6 +544,8 @@ export function mount(root, inst, options = {}) {
     ui.busy = true;
     paint();
     const key = ui.key;
+    const slug = slugOf(); // the proposal the review is for, read now: another may be open by the time the server answers
+    const source = state.proposalSource || null;
     const body = frozen.body || reviewBody(verdict, note, edits());
     const describe = inst.ask('whatif:describe');
     const sentLines = verdict === 'notes' && Array.isArray(describe) ? describe : [];
@@ -578,9 +581,7 @@ export function mount(root, inst, options = {}) {
       return false;
     }
     ui.busy = false;
-    const slug = slugOf();
-    const source = state.proposalSource || null;
-    if (key !== ui.key) { inst.emit('decision', { outcome: verdict, review: saved, slug, source }); return true; } // another proposal opened while it was being saved: it is saved, the foot is not this one's any more
+    if (key !== ui.key) { inst.emit('decision', { outcome: verdict, review: saved, slug, source, open: false }); return true; } // another proposal opened while it was being saved: it is saved, the foot is not this one's any more (`open: false`: the page's Work panel does not read its list again then, as before)
     ui.review = { verdict: saved.verdict, at: saved.at, current: saved.verdict === 'approved' };
     ui.hint = verdict === 'approved' ? editsHint(verdict, body.edits.length) : '';
     // The same approval stood already (another tab, or a send that was retried): the server posted nothing, and the page says so
@@ -597,7 +598,7 @@ export function mount(root, inst, options = {}) {
     const lost = !active || active === inst.doc.body || !active.isConnected || active.hidden;
     if (verdict === 'approved') { if (lost) button('approved')?.focus(); }
     else if (wasNoting || lost) button('notes')?.focus();
-    inst.emit('decision', { outcome: verdict, review: saved, slug, source }); // what waits on you changed: the count is read again (spec 0010)
+    inst.emit('decision', { outcome: verdict, review: saved, slug, source, open: true }); // what waits on you changed: the count is read again (spec 0010)
     inst.emit('mockups:refresh'); // an approval covers the screens as they are now; a send back leaves them not reviewed
     if (verdict === 'notes') inst.emit('whatif:clear'); // the edits went with the note; an approval keeps them, they are in the review
     loadFacts({ fresh: true }); // an approval can have started a landing: Cancel landing shows

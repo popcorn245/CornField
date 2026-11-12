@@ -43,7 +43,8 @@
  *   proposal:pull-head sha  the open proposal's PR was read; proposal:waiting { run, key }: a run waits on it (the bar's waiting line); proposal:waiting-reset
  *   scenario:player { id, index, total, done, playing, checks } | null  the scenario player moved, or closed (engine/player.js)
  *   changes:paint   (none)  the review column's lists were drawn again; changes:peek text: its count line, for a phone's peek
- *   decision        { outcome: 'approved' | 'notes', review, slug, source }  the server took the review, after it answered (pieces/decision.js)
+ *   decision        { outcome: 'approved' | 'notes', review, slug, source, open }  the server took the review, after it answered (pieces/decision.js);
+ *                   `open`: false when another proposal was opened, or this one closed, while it was sent
  *   auth            { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
