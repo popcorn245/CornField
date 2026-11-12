@@ -19,6 +19,9 @@ export default defineConfig({
   test: {
     include: ['test/**/*.browser.test.ts'],
     testTimeout: 60_000,
+    // One file at a time: files run side by side share one browser, a page that is not in front gets its frames late, and the tests that
+    // wait for a steady picture would take a frame that has not come yet for a steady one
+    fileParallelism: false,
     browser: {
       enabled: true,
       headless: true,
