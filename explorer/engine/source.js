@@ -32,6 +32,7 @@
 import { setStrings } from './strings.js';
 import { setProjectLayers } from './layers.js';
 import { mapStyleOf } from './map-style.js';
+import { sessionInit } from './connection.js';
 
 export const CONFIG_PATH = '/cornfield/config.json';
 export const TOPOLOGY_PATH = '/topology.json';
@@ -117,20 +118,11 @@ export class SourceError extends Error {
 }
 
 /**
- * Whether `path`, made absolute as `inst.fetch` makes it, is on the origin of the instance's base: only a request there carries the maintainer's
- * session. The same rule as engine/connection.js `credentialed` (an absolute URL or a `//host` path on another origin goes without credentials).
- */
-export function underBase(inst, path) {
-  if (!inst.base) return false;
-  try { return new URL(inst.url(String(path)), inst.base).origin === new URL(inst.base).origin; } catch { return false; }
-}
-
-/**
- * The fetch options of a read: a request to the base's own origin is made with the maintainer's session (`credentials: 'include'`), the page's own
- * is read as `fetch` reads it. `init` is what the call adds; nothing is added where there is nothing to add (the page's request is unchanged).
+ * The fetch options of a read: the maintainer's session goes only to the base's own origin, by engine/connection.js `sessionInit` (one rule for
+ * every read and write of a piece); the page's own request is read as `fetch` reads it. Nothing is added where there is nothing to add.
  */
 function optionsOf(inst, path, init, signal) {
-  const out = underBase(inst, path) ? { credentials: 'include', ...init } : { ...init };
+  const out = { ...sessionInit(inst, path, init) };
   if (signal) out.signal = signal;
   return Object.keys(out).length ? out : undefined;
 }

@@ -6,6 +6,9 @@
  * in flight. The browser proof (test/fixtures/big/scope-proof.mjs) holds the same against a real server.
  */
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { EXPLORER } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createInstance } from '../../explorer/instance.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -148,6 +151,19 @@ describe('a server of another origin (a base) is asked with the session', () => 
       ['https://example.com/other/topology.json', 'include'],
       ['https://example.com/cornfield/topology.json', 'include'],
     ]);
+  });
+  it('keeps the one rule engine/connection.js keeps: a read of the source and credentialed() send the same options, and the rule is written once', async () => {
+    const { credentialed } = await import('../../explorer/engine/connection.js');
+    for (const base of ['https://example.com/cornfield', 'https://example.com', '']) {
+      const a = server({ [CONFIG_PATH]: json({}), '/cornfield/cornfield/config.json': json({}) });
+      const b = server({});
+      await fetchConfig(createInstance({ base, fetch: a.fetch })).catch(() => {});
+      await credentialed(createInstance({ base, fetch: b.fetch }))(CONFIG_PATH, { cache: 'no-store' }).catch(() => {});
+      expect(a.calls[0], base).toEqual(b.calls[0]);
+    }
+    const code = fs.readFileSync(path.join(EXPLORER, 'engine', 'source.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(code).not.toMatch(/credentials:\s*'include'/);
+    expect(code).toMatch(/import \{ sessionInit \} from '\.\/connection\.js'/);
   });
   it('tells a refusal to sign in from a missing answer', async () => {
     const inst = createInstance({ base: BASE, fetch: server({ [CONFIG_PATH]: json({ ok: false }, 401), '/topology.json': json({}, 403), '/x': 'refuse' }).fetch });
