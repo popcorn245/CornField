@@ -207,6 +207,16 @@ export function mount(root, inst, options = {}) {
     const tabs = panel.querySelector('.hx-forge-tabs');
     if (tabs) scope.listen(tabs, 'scroll', fn.paintTabsMore, { passive: true });
     scope.own(inst.onResize(() => fn.paintTabsMore()));
+    // The strip's fade and the top's height follow their own size too: a phone's sheet expanding shows the tabs (they were not laid out in the
+    // peek), and a host's box resizes without the window doing so (F42)
+    const Observer = inst.win && inst.win.ResizeObserver;
+    const top = panel.querySelector('.hx-forge-top');
+    if (Observer && top && tabs) {
+      const seen = new Observer(() => { if (!ctx.dead) fn.paintTabsMore(); });
+      seen.observe(top);
+      seen.observe(tabs);
+      scope.own(() => seen.disconnect());
+    }
     scope.listen(panel, 'click', fn.onClick);
     scope.listen(panel, 'change', fn.onChange);
     scope.listen(panel, 'input', fn.onInput);

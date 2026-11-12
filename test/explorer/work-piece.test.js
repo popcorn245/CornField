@@ -222,3 +222,28 @@ describe('the focus trap in a root that is not the document', () => {
     });
   }
 });
+
+describe('the tab strip\'s fade (F42)', () => {
+  it('follows the strip\'s own size: a phone sheet expanding, or a host\'s box resized, with no window resize', async () => {
+    const seen = [];
+    vi.stubGlobal('ResizeObserver', class { constructor(cb) { this.cb = cb; seen.push(this); } observe() {} disconnect() { this.cb = null; } });
+    try {
+      const srv = server();
+      const one = make(srv);
+      await settle();
+      const tabs = one.q('.hx-forge-tabs');
+      const top = one.q('.hx-forge-top');
+      expect(top.dataset.more).toBeUndefined(); // drawn while nothing was laid out
+      Object.defineProperty(tabs, 'scrollWidth', { configurable: true, value: 500 });
+      Object.defineProperty(tabs, 'clientWidth', { configurable: true, value: 360 });
+      Object.defineProperty(top, 'offsetHeight', { configurable: true, value: 125 });
+      for (const o of seen) if (o.cb) o.cb([]);
+      expect(top.dataset.more).toBe('end');
+      expect(top.parentElement.style.scrollPaddingTop).toBe('125px');
+      one.work.destroy();
+      expect(seen.every((o) => o.cb === null)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
