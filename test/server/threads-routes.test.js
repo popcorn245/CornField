@@ -330,11 +330,22 @@ describe('the threads routes', () => {
     it('counts every attempt against the ceiling before anything is written down', async () => {
       const before = rows().length;
       let last;
-      for (let i = 0; i < ATTEMPTS_PER_MINUTE + 5; i++) last = await post({ title: '' }, { headers: { origin: 'https://evil.example.org' } });
+      for (let i = 0; i < ATTEMPTS_PER_MINUTE + 5; i++) last = await post({ title: '' });
       expect(last.status).toBe(429);
       // the refused ones past the ceiling left no row
-      expect(rows().length - before).toBeLessThanOrEqual(ATTEMPTS_PER_MINUTE);
+      expect(rows().length - before).toBe(ATTEMPTS_PER_MINUTE);
       expect(written()).toEqual([]);
+    });
+
+    it('a same-site page cannot use up the maintainer\'s write budget: refused cross-origin ideas are not counted (#237), one row a minute', async () => {
+      const before = rows().length;
+      for (let i = 0; i < ATTEMPTS_PER_MINUTE + 5; i++) {
+        const res = await post({ title: 'From a sibling' }, { headers: { origin: 'https://sibling.example.org', 'sec-fetch-site': 'same-site' } });
+        expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
+      }
+      expect(written()).toEqual([]);
+      expect((await post({ title: 'Mine' })).status).toBe(201);
+      expect(rows().slice(before).filter((r) => r.status === 403).map((r) => r.request)).toEqual([{ action: 'idea', refused: 'origin', origin: 'https://sibling.example.org', site: 'same-site' }]);
     });
   });
 });

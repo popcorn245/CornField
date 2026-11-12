@@ -656,6 +656,28 @@ describe('landing on approval', () => {
       expect((await page('POST', '/api/forge/pulls/40/landing/cancel')).status).toBe(404);
     });
 
+    it('a same-site page cannot use up the maintainer\'s write budget: refused cross-origin cancels are not counted (#237)', async () => {
+      world.checks = [check('test', 'in_progress', null)];
+      await boot();
+      await approveByButton();
+      await until('waiting', () => timer.waiting().length === 1);
+      for (let i = 0; i < 62; i++) {
+        const res = await page('POST', '/api/forge/pulls/40/landing/cancel', undefined, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } });
+        expect([res.status, res.json]).toEqual([403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' }]);
+      }
+      expect(landings()[0].state).toBe('pending');
+      // the maintainer's own cancel still goes through
+      expect((await page('POST', '/api/forge/pulls/40/landing/cancel')).status).toBe(200);
+    });
+
+    it('still counts the maintainer\'s own cancels: past sixty a minute it is 429', async () => {
+      await boot();
+      const statuses = [];
+      for (let i = 0; i < 62; i++) statuses.push((await page('POST', '/api/forge/pulls/41/landing/cancel')).status);
+      expect(statuses.slice(0, 60).every((s) => s === 404)).toBe(true); // nothing is waiting on #41
+      expect(statuses.slice(60)).toEqual([429, 429]);
+    });
+
     it('takes a cancel from cornfield\'s own page only, and from a signed-in session only', async () => {
       world.checks = [check('test', 'in_progress', null)];
       await boot();

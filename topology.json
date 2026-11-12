@@ -7947,6 +7947,11 @@
       "dashed": true
     },
     {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-engine-layout"
     },
@@ -8335,5 +8340,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T07:10:07.079Z"
+  "updatedAt": "2026-11-12T08:21:57.171Z"
 }

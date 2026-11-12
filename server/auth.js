@@ -862,7 +862,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     }
     // /auth/sign-out
     req.resume();
-    if (!sameOrigin(req, publicHost)) return send(res, 403, { ok: false, error: 'Sign out from cornfield\'s own page.' });
+    if (!sameOrigin(req, publicHost, [], publicUrl.origin)) return send(res, 403, { ok: false, error: 'Sign out from cornfield\'s own page.' });
     const row = await rowOf(req);
     if (row) await endRow(row);
     return redirect(res, '/auth/sign-in', [clearSession]);

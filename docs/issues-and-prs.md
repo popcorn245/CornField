@@ -45,7 +45,7 @@ The build issue is found again by the forge's search for the proposal's name (Gi
 
 **What a collaborator with write access can still do.** On both forges, someone with write access can edit or delete other people's issues and comments. They could paste the build marker into an existing maintainer's issue, so step 2 reports that issue as the one already made instead of opening a new one; or delete a maintainer's later Send back, so an earlier approval of the *same* file becomes the latest review again. Neither makes anything: the confirm step shows the issue found, or who approved and when, before anything is done. An edited review comment, and an approval of a different version of the file, never count. Give write access only to people you trust with the repo.
 
-Both steps go through the checks of the table below (method, signed in, flood, maintainer now, same origin, JSON and 4 KB, twice, state) and are rows in the audit as `spec` (target `owner/name#<issue>`) and `build` (target `owner/name#<pull>/<proposal>`). Text from the forge or from a proposal (a node's label, a `why`) goes into the new issue only as a code span or with its markup, mentions and references turned into entities, so a proposal cannot ping anyone or close an issue from there.
+Both steps go through the checks of the table below (method, signed in, same origin, flood, JSON and 4 KB, twice, maintainer now, state) and are rows in the audit as `spec` (target `owner/name#<issue>`) and `build` (target `owner/name#<pull>/<proposal>`). Text from the forge or from a proposal (a node's label, a `why`) goes into the new issue only as a code span or with its markup, mentions and references turned into entities, so a proposal cannot ping anyone or close an issue from there.
 
 ## Land a green pull request, re-run a failed check
 
@@ -58,16 +58,17 @@ Every answer is a line in the panel and is said through the live region ("Pull r
 
 ### What the server checks again
 
-The page is never trusted. Each action is a `POST` to cornfield's own server, which refuses in this order, in words, and writes the refusal down:
+The page is never trusted. Each action is a `POST` to cornfield's own server, which refuses in this order, in words, and (from the flood ceiling on) writes the refusal down:
 
 | | Refused when | Answer |
 |---|---|---|
 | Method | not `POST` | 405 |
 | Signed in | no session (or no sign-in configured: nobody to act as) | 401 (403) |
-| Flood | more than 60 attempts of any kind in a minute by one person: refused **without** writing a row, so a page on a sibling subdomain (same-site, so the cookie rides along) cannot grow the audit table | 429, with `Retry-After` |
-| Maintainer | the guard says reader; and again, at that moment, the forge says the permission is no longer admin or maintain | 403 |
-| Origin | the request is not from a page of this server (`Origin` and `Sec-Fetch-Site`, the `Host`), is not JSON, or is larger than 4 KB (answered at once, the rest not read) | 403, 415, 413 |
+| Origin | the request is not from a page of this server (`Origin` and `Sec-Fetch-Site`, the `Host`; with a public URL, an `Origin` under its host must carry its scheme too). A page on a sibling subdomain is same-site, so the cookie rides along: its refusal is **not counted** toward the flood ceiling below, so it cannot use up your budget, and is written down at most once a minute per person | 403 |
+| Flood | more than 60 attempts of any kind in a minute by one person: refused **without** writing a row, so a flood cannot grow the audit table | 429, with `Retry-After` |
+| Body | not JSON, or larger than 4 KB (answered at once, the rest not read) | 415, 413 |
 | Twice | the same action on the same target is already running or was asked in the last 5 seconds; more than 20 actions in a minute | 429, with `Retry-After` |
+| Maintainer | the guard says reader; and again, at that moment, the forge says the permission is no longer admin or maintain | 403 |
 | State | the pull request is not open, is a draft, a check is not green, or the forge says it is not ready (above) | 409 |
 | Head | the commit the page showed is not the pull request's head now (somebody pushed): look again | 409 |
 | Re-run | the check is not on that head, has not failed (or been cancelled), or the forge cannot run it again | 409 |

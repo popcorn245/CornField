@@ -256,7 +256,7 @@ async function servePlan(req, res, act, url, ctx) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, session: { userId: string, login: string } | null, publicHost?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, session: { userId: string, login: string } | null, publicHost?: string | null, publicOrigin?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
@@ -366,7 +366,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
  * POST /api/forge/release-drafts: the notes since a tag, kept by the forge as a draft release.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {{ config: any, session: any, auth: any, publicHost?: string | null }} ctx
+ * @param {{ config: any, session: any, auth: any, publicHost?: string | null, publicOrigin?: string | null }} ctx
  * @param {string} name the forge's name, for the words
  */
 async function postDraft(req, res, ctx, name) {
@@ -376,7 +376,7 @@ async function postDraft(req, res, ctx, name) {
     req.resume();
     return say(405, { ok: false, error: 'A release draft is posted with POST.' }, { Allow: 'POST' });
   }
-  if (!sameOrigin(req, ctx.publicHost ?? null)) {
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
     req.resume();
     return say(403, { ok: false, error: 'A release draft is only posted from cornfield\'s own page.', code: 'forbidden' });
   }

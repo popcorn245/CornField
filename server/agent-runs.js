@@ -615,7 +615,8 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
    * `refusal(err)`, server/submit-review.js); resolves with the run and the comment that is the request.
    * @param {RequestContext} ctx
    * @param {{ body: unknown, problem?: { status: number, message: string } }} input `problem`: something already wrong with the request
-   *   itself (not same-origin, not JSON, too large): refused here, after the flood count and with a row, like every other refusal
+   *   itself (not JSON, too large): refused here, after the flood count and with a row, like every other refusal. A request not from
+   *   cornfield's own page never gets here: the route refuses it before anything is counted (server/agent-api.js)
    */
   async function request(ctx, { body, problem }) {
     const { who, via = null } = ctx;

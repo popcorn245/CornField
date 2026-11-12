@@ -352,7 +352,7 @@ describe('the forge actions', () => {
   });
 
   describe('where from, and how often', () => {
-    it('refuses a request from another origin, whatever header says so, and writes each down', async () => {
+    it('refuses a request from another origin, whatever header says so, before it is counted; one row a minute says so', async () => {
       const before = rows().length;
       const tries = [
         { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
@@ -362,12 +362,13 @@ describe('the forge actions', () => {
       ];
       for (const headers of tries) {
         const res = await act(12, 'merge', { sha: ABC }, { headers });
-        expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
-        clock += 10_000;
+        expect([res.status, res.json]).toEqual([403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' }]);
+        clock += 61_000; // past the minute of the row before
       }
       expect(wrote()).toEqual([]);
       expect(rows()).toHaveLength(before + 4);
-      expect(last()).toMatchObject({ action: 'merge', status: 403 });
+      expect(last()).toMatchObject({ action: 'merge', target: 'owner/name#12', status: 403, request: { action: 'merge', number: 12, refused: 'origin', origin: null, site: null }, answer: { code: 'forbidden' } });
+      expect(rows().at(-4).request).toMatchObject({ origin: 'https://evil.example', site: 'cross-site' });
     });
 
     it('refuses a wrong Host before any route (DNS rebinding)', async () => {
@@ -426,11 +427,25 @@ describe('the forge actions', () => {
       expect(statuses.slice(20)).toEqual([429, 429]);
     });
 
-    it('writes nothing down past sixty attempts a minute: a same-site page cannot grow the audit table', async () => {
+    it('a same-site page cannot use up the maintainer\'s budget or grow the audit table: refused writes are not counted (#237)', async () => {
+      const before = rows().length;
+      for (let i = 0; i < 62; i++) {
+        const res = await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } });
+        expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
+      }
+      // one row for the minute, whatever the count: such a page cannot grow the audit table
+      expect(rows()).toHaveLength(before + 1);
+      expect(last()).toMatchObject({ action: 'merge', status: 403, request: { refused: 'origin', origin: 'https://sibling.example', site: 'same-site' } });
+      expect(wrote()).toEqual([]);
+      // the maintainer's own write is not rate limited: it reaches the forge's checks (409 as in the ceiling test above), not a 429
+      expect((await act(12, 'merge', { sha: ABC })).status).not.toBe(429);
+    });
+
+    it('still counts the maintainer\'s own attempts from cornfield\'s page: past sixty a minute it is 429 and nothing more is written down', async () => {
       const before = rows().length;
       const statuses = [];
-      for (let i = 0; i < 62; i++) statuses.push((await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } })).status);
-      expect(statuses.slice(0, 60).every((s) => s === 403)).toBe(true);
+      for (let i = 0; i < 62; i++) statuses.push((await act(12, 'merge', {})).status); // no sha: refused (400) and written down, before the twenty-a-minute throttle
+      expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
       expect(statuses.slice(60)).toEqual([429, 429]);
       expect(rows()).toHaveLength(before + 60);
       expect(wrote()).toEqual([]);
@@ -515,6 +530,40 @@ describe('the forge actions', () => {
     await act(13, 'rerun', { sha: DEF, check: 'run:42' });
     const writes = fake.requests.filter((r) => r.method !== 'GET' && !r.url.startsWith('/login/')).map((r) => `${r.method} ${r.url.replace(GH, '')}`);
     expect(writes).toEqual(['PUT /pulls/12/merge', 'POST /actions/jobs/42/rerun']);
+  });
+
+  it('behind a TLS-terminating proxy that passes the Host on: the https Origin is taken, an http one of the same host is not (#238)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-actions-tls-'));
+    const tls = await loadConfig(SAMPLE, { env: { CORNFIELD_DATA: dir } });
+    Object.assign(tls, { forge: { type: 'github', url: fake.url, repo: 'owner/name' }, publicUrl: 'https://cornfield.example.test' });
+    const server = await start(tls, { env: ENV, now: () => clock });
+    try {
+      // what the proxy sends on: the public Host, over plain http to cornfield
+      const via = (method, target, { headers = {}, body } = {}) => raw(server.port, method, target, { headers: { host: 'cornfield.example.test', ...headers }, body });
+      const started = await via('GET', '/auth/start');
+      const to = new URL(started.headers.location);
+      const stateCookie = started.headers['set-cookie'].find((c) => c.startsWith('__Host-cornfield-oauth=')).split(';')[0];
+      const back = await via('GET', `/auth/callback?code=c-maint&state=${to.searchParams.get('state')}`, { headers: { cookie: stateCookie } });
+      expect(back.status, back.text).toBe(303);
+      const mine = back.headers['set-cookie'].find((c) => c.startsWith('__Host-cornfield=')).split(';')[0];
+      const merge = (headers) => {
+        const text = JSON.stringify({ sha: ABC });
+        return via('POST', '/api/forge/pulls/12/merge', { headers: { cookie: mine, 'content-type': 'application/json', 'content-length': String(Buffer.byteLength(text)), ...headers }, body: text });
+      };
+      const plain = await merge({ origin: 'http://cornfield.example.test' });
+      expect([plain.status, plain.json.error]).toEqual([403, 'Do this from cornfield\'s own page.']);
+      expect((await merge({ origin: 'http://cornfield.example.test', host: 'cornfield.example.test:443' })).status).toBe(403);
+      expect(wrote()).toEqual([]);
+      clock += 10_000;
+      expect((await merge({ origin: 'https://cornfield.example.test', 'sec-fetch-site': 'same-origin' })).status).toBe(200);
+      clock += 10_000;
+      // a proxy that keeps `:443` in the Host is the same origin
+      const kept = await merge({ origin: 'https://cornfield.example.test', host: 'cornfield.example.test:443' });
+      expect(kept.json?.error).not.toBe('Do this from cornfield\'s own page.');
+    } finally {
+      await server.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('Forgejo lands the same way: through the same checks, at the head, with its own token', async () => {
