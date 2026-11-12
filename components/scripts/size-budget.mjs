@@ -1,0 +1,48 @@
+// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, and of corn-map with its engine (what corn-map.js pulls in besides the
+// runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
+//   node scripts/size-budget.mjs [--record]
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { PACKAGE } from './shared.mjs';
+
+const TOLERANCE = 0.05;
+const dist = join(PACKAGE, 'dist');
+const budgetFile = join(PACKAGE, 'size-budget.json');
+const gz = (file) => gzipSync(readFileSync(join(dist, file)), { level: 9 }).length;
+
+/** The files an entry loads, found through the static imports of each: `chunks/runtime-…` is the runtime, the rest is the entry's own */
+function reach(entry, seen = new Set()) {
+  if (seen.has(entry)) return seen;
+  seen.add(entry);
+  const text = readFileSync(join(dist, entry), 'utf8');
+  for (const m of text.matchAll(/(?:from|import)\s*["']\.\/?((?:chunks\/)?[\w.-]+\.js)["']/g)) reach(m[1].startsWith('chunks/') || m[1].includes('/') ? m[1] : (entry.startsWith('chunks/') ? `chunks/${m[1]}` : m[1]), seen);
+  return seen;
+}
+
+/** What the build measures now, in bytes of gzip (level 9) */
+export function measure() {
+  const runtime = readdirSync(join(dist, 'chunks')).find((f) => f.startsWith('runtime-'));
+  if (!runtime) throw new Error('no runtime chunk in dist/chunks');
+  const files = [...reach('corn-map.js')];
+  const own = files.filter((f) => !f.startsWith('chunks/runtime-'));
+  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own.reduce((sum, f) => sum + gz(f), 0) };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const now = measure();
+  if (process.argv.includes('--record')) {
+    writeFileSync(budgetFile, `${JSON.stringify({ unit: 'bytes, gzip level 9', tolerance: TOLERANCE, budget: now }, null, 2)}\n`);
+    console.log('recorded', now);
+  } else {
+    const { budget, tolerance = TOLERANCE } = JSON.parse(readFileSync(budgetFile, 'utf8'));
+    let failed = false;
+    for (const [name, limit] of Object.entries(budget)) {
+      const size = now[name];
+      const over = size > limit * (1 + tolerance);
+      console.log(`${name}: ${size} B gzip (budget ${limit}, limit ${Math.floor(limit * (1 + tolerance))})${over ? '  OVER' : ''}`);
+      if (over) failed = true;
+    }
+    if (failed) { console.error('The build is more than 5% over its size budget. If the growth is on purpose, run `npm run size:record` and say why in the commit.'); process.exit(1); }
+  }
+}

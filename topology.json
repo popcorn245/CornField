@@ -2679,6 +2679,36 @@
       "desc": "Search as a piece (spec 0011 D3; spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, un… (explorer/pieces/search.js)"
     },
     {
+      "id": "core-explorer-flow-build",
+      "label": "flow-build.js",
+      "type": "core",
+      "file": "explorer/flow-build.js",
+      "summary": "The data-flow preset's fold (pure: no state, no DOM), so a piece that runs on an instance (explorer/pieces/map.js) can build the preset without importing flows.js, which still reads the page's shar…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The data-flow preset's fold (pure: no state, no DOM), so a piece that runs on an instance (explorer/pieces/map.js) can build the preset without importing flows.js, which still reads the page's shar… (explorer/flow-build.js)"
+    },
+    {
+      "id": "core-explorer-pieces-adopt-tokens",
+      "label": "adopt-tokens.js",
+      "type": "core",
+      "file": "explorer/pieces/adopt-tokens.js",
+      "summary": "The default `--corn-*` tokens for a page that has no cornfield stylesheet of its own (spec 0011 D7).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The default `--corn-*` tokens for a page that has no cornfield stylesheet of its own (spec 0011 D7). (explorer/pieces/adopt-tokens.js)"
+    },
+    {
+      "id": "core-explorer-pieces-map",
+      "label": "map.js",
+      "type": "core",
+      "file": "explorer/pieces/map.js",
+      "summary": "The map as a piece (spec 0011 D3): its two canvases, the help for its keys and its announcer, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it where index.ht…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)… (explorer/pieces/map.js)"
+    },
+    {
       "id": "core-explorer-engine-checks",
       "label": "checks.js",
       "type": "core",
@@ -7671,12 +7701,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-fly",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-focus-room",
       "dashed": true,
       "label": "imports"
@@ -7708,12 +7732,6 @@
     {
       "from": "core-explorer-page",
       "to": "core-explorer-house",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
-      "to": "core-explorer-input",
       "dashed": true,
       "label": "imports"
     },
@@ -8157,12 +8175,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-engine-selection",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-page-pieces",
       "dashed": true,
       "label": "imports"
@@ -8506,6 +8518,124 @@
     {
       "from": "core-explorer-engine-piece",
       "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-flow-build"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-adopt-tokens"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-map"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-flow-build",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-pieces-map",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-flow-build",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-input",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-renderer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-pieces-adopt-tokens",
       "dashed": true,
       "label": "imports"
     },
@@ -9052,5 +9182,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T11:32:17.764Z"
+  "updatedAt": "2026-11-12T12:43:07.680Z"
 }

@@ -31,18 +31,16 @@
 
 import { state, startPageInstance } from './state.js';
 import { createMap } from './engine/render.js';
-import { createRenderer, rendererPreference } from './renderer.js';
+import { rendererPreference } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './engine/layout.js';
 import { measureCovered } from './sheets.js';
-import { stopFlight } from './fly.js';
 import { setProjectLayers } from './layers.js';
 import { closeDrawer } from './panels.js';
-import { selectNode, clearSelection } from './engine/selection.js';
-import { ensurePagePieces, mergePagePieceOptions } from './page-pieces.js';
+import { ensurePagePieces, mergePagePieceOptions, pieceSlots } from './page-pieces.js';
 import { maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
-import { bindCanvasInput } from './input.js';
+import { mount as mountMap, KEYS_HELP_WITH_PANEL } from './pieces/map.js';
 import { keepAddress, openFromAddress } from './page-address.js';
 import './proposal.js'; // the old names the modules not yet on an instance use (hooks)
 import { initReview } from './review.js'; // what the decision asks of the what-if editor and the mockups
@@ -174,27 +172,20 @@ export function startPage() {
   map = createMap(inst, { measureCovered }); // the camera, the scene and the frame loop of this instance (engine/render.js)
   const mapStyle = mapStyleOf(inst);
   initTheme(); // light or dark, before the first scene is built (theme.js)
-  mapStyle.watch(); // the map reads --corn-map-* from the theme, and again when it changes (engine/map-style.js)
-  mapStyle.onChange(() => render());
-  state.canvas = $('graph-canvas');
-  state.labelCanvas = $('label-canvas');
-  // A 2d context that only measures text (layout.js labelWidth): the map canvas may be WebGL, and a
-  // canvas that gave a WebGL context can never give a 2d one
-  state.ctx = document.createElement('canvas').getContext('2d');
-  // WebGL2, or Canvas 2D when it is missing or the address says ?renderer=canvas2d (the address is read here, not by the renderer)
-  map.setRenderer(createRenderer(state.canvas, { prefer: rendererPreference(window.location.search), mapStyle: mapStyle.get }));
+  // The map piece (pieces/map.js, also what <corn-map> mounts) makes the map's canvases, their keys' help and the announcer where index.html keeps
+  // `<!--corn-piece:map/stage-->`. It watches the theme's tokens (the map reads --corn-map-* from the theme, and again when it changes), makes the
+  // renderer (WebGL2, or Canvas 2D when it is missing or the address says ?renderer=canvas2d: the address is read here, not by the renderer), binds
+  // the canvas and its keys (engine/keyboard.js), follows the box's size, and answers a tap (a node's panel, the normal view, the end of a flight)
+  mountMap(document.body, inst, {
+    slots: pieceSlots('map'), measureCovered, keysHelp: KEYS_HELP_WITH_PANEL,
+    renderer: rendererPreference(window.location.search) === 'canvas2d' ? 'canvas2d' : 'auto',
+  });
   loadFreeformPositions(inst);
   ensurePagePieces(); // the node panel, the Layers menu, the search, the proposal's bar, the review column and the decision, mounted where index.html has their places (page-pieces.js)
   keepAddress(inst); // ?proposal= follows the open proposal (page-address.js)
-  // What a tap on the map asks of the page: a node's panel, the normal view, the end of a flight to a match
-  inst.on('select', (node) => selectNode(inst, node, { source: 'tap' }));
-  inst.on('background', () => clearSelection(inst, { source: 'tap' }));
-  inst.on('grab', () => stopFlight());
-  bindCanvasInput(inst);
   initKeyboard(); // the map by keyboard (the panel's, the Layers menu's and the search's keys are their pieces') (engine/keyboard.js)
   initAccountMenu(); // the one menu at the right of the header (account-menu.js)
   initSheets();
-  map.watchSize(); // the map follows its box (a ResizeObserver on the stage), in place of the window's resize event
 
   map.resize();
   syncViewUi();

@@ -10,12 +10,16 @@ import { withParts } from '../explorer/engine/piece.js';
 import { markup as nodePanelMarkup } from '../explorer/pieces/node-panel.js';
 import { markup as layersMarkup } from '../explorer/pieces/layers.js';
 import { markup as searchMarkup } from '../explorer/pieces/search.js';
+import { markup as mapMarkup, KEYS_HELP_WITH_PANEL } from '../explorer/pieces/map.js';
 
 import { markup as proposalMarkup } from '../explorer/pieces/proposal.js';
 import { markup as changesMarkup } from '../explorer/pieces/changes.js';
 import { markup as decisionMarkup } from '../explorer/pieces/decision.js';
 
-const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup };
+const PIECE_MARKUP = {
+  'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, map: () => mapMarkup({ keysHelp: KEYS_HELP_WITH_PANEL }),
+  proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup,
+};
 
 export const CORNFIELD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SAMPLE = path.join(CORNFIELD, 'test', 'fixtures', 'sample');
@@ -31,18 +35,21 @@ export const sampleRegistry = () => readJson(path.join(SAMPLE, 'topology.cloud.j
 export const samplePersonas = () => readJson(path.join(SAMPLE, 'topology.personas.json'));
 /** A house answer as a source gives it (the sample's house file, with its time) */
 export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00.000Z', ...readJson(path.join(SAMPLE, 'cornfield.house.json')) } });
-/** The explorer page as the server serves it, before the import map goes in */
 /**
- * explorer/index.html. The pieces (explorer/pieces/) keep only their places in it, a `<!--corn-piece:NAME/SLOT-->` comment each; a test that mounts
- * them (through the bridges: panels.js, layers.js, search.js) wants the page as it is. A test that reads the markup itself passes `{ pieces: true }`
- * and gets every piece's markup (with its parts) in its place, as the page shows it once page.js has mounted them.
+ * explorer/index.html. The pieces (explorer/pieces/) keep only their places in it, a `<!--corn-piece:NAME/SLOT-->` comment each. A test that mounts
+ * them (the node panel, Layers and search through the bridges: panels.js, layers.js, search.js; the map through page.js) wants the page as it is.
+ * A test that reads the markup itself, or drives a module on markup that page.js would have mounted, names the pieces whose markup it wants in
+ * place (`{ pieces: ['map'] }`: the map's canvases, its keys' help and its announcer), or all of them (`{ pieces: true }`), as the page shows it
+ * once page.js has mounted them, parts included.
+ * @param {{ pieces?: boolean | string[] }} [opts]
  */
 export function explorerPage({ pieces = false } = {}) {
   const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
   if (!pieces) return page;
-  let out = page.replace(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1-->)/g, ''); // the stand-in goes when the piece comes (engine/piece.js place)
+  const wanted = (name) => pieces === true || pieces.includes(name);
+  let out = page.replace(/<!--corn-placeholder:([a-z-]+)\/([a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1\/\2-->)/g, (all, name) => (wanted(name) ? '' : all)); // the stand-in goes when the piece comes (engine/piece.js place)
   // a piece's markup may keep a place for another (the review column holds the decision's foot): fill those too
-  for (let i = 0; i < 3; i++) out = out.replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
+  for (let i = 0; i < 3; i++) out = out.replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (all, name, slot) => (wanted(name) ? withParts(PIECE_MARKUP[name]()[slot]) : all));
   return out;
 }
 

@@ -10,9 +10,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
 import { initReviewTokens, openTokens, closeTokens, resetReviewTokensForTests } from '../../explorer/review-tokens.js';
+import { explorerPage } from '../helpers.js';
 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 

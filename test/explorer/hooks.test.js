@@ -264,7 +264,7 @@ describe('the retro fixture theme, the proof that hooks are enough', () => {
 
 // --- The page and some panels, mounted -------------------------------------------------------------------------------
 
-const html = explorerPage(); // with the pieces' places: page.js mounts them (page-pieces.js), and so does each test below
+const html = explorerPage({ pieces: ['map'] }); // the map's markup in place, the other pieces' places: page.js mounts them (page-pieces.js), and so does each test below
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (sel) => document.querySelector(sel);
 const hook = (name) => $(`[data-corn="${name}"]`);

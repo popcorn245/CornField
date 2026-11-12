@@ -28,10 +28,11 @@ import { groupRuns, overlayOf, timelineWords, changeWords, limitRows, litOfRun, 
 import { syncRunOverlay, setReducedMotionForTests, resetRunsMapForTests } from '../../explorer/runs-map.js';
 // @ts-expect-error plain JS modules, no declarations
 import { toggleLayer } from '../../explorer/layers.js';
+import { explorerPage } from '../helpers.js';
 
 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 const NOW = Date.parse('2026-11-05T12:00:00Z');

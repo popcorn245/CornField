@@ -34,6 +34,31 @@ jobs:
       - name: The package holds only what it should
         run: npm pack --dry-run --json | node -e "const [p] = JSON.parse(require('fs').readFileSync(0, 'utf8')); const bad = p.files.map((f) => f.path).filter((f) => !/^(cli|core|explorer|plugins|server)\/|^(package\.json|README\.md|LICENSE|CHANGELOG\.md)$/.test(f)); if (bad.length) { console.error('Unexpected files in the package:', bad); process.exit(1); } console.log(p.files.length, 'files')"
 
+  # The web components (spec 0011): a package of their own, with its own lockfile; the root package takes no dependency from it and the job above needs none of it
+  components:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: components
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: components/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Types of the package's own source
+        run: npm run typecheck
+      - name: Build (ES modules, tokens.css, type declarations)
+        run: npm run build
+      - name: Tests in happy-dom, the generated tokens and types, the files of dist
+        run: npm test
+      - name: Tests in headless Chrome (drawing, selection, tokens, hostile CSS, axe, the demo page)
+        run: npm run test:browser
+      - name: Size budget (gzipped runtime and corn-map with its engine, at most 5% over)
+        run: npm run check:size
+
   image:
     runs-on: ubuntu-latest
     steps:
