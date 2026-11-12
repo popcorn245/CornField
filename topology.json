@@ -2703,7 +2703,7 @@
       "label": "map.js",
       "type": "core",
       "file": "explorer/pieces/map.js",
-      "summary": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)…",
+      "summary": "The map as a piece (spec 0011 D3): its two canvases, the help for its keys and its announcer, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it where index.ht…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)… (explorer/pieces/map.js)"
@@ -7969,12 +7969,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-fly",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-focus-room",
       "dashed": true,
       "label": "imports"
@@ -8455,12 +8449,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-engine-selection",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-page-pieces",
       "dashed": true,
       "label": "imports"
@@ -8833,12 +8821,6 @@
     },
     {
       "from": "core-explorer-pieces-map",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
       "to": "core-explorer-engine-layout",
       "dashed": true,
       "label": "imports"
@@ -8875,19 +8857,7 @@
     },
     {
       "from": "core-explorer-pieces-map",
-      "to": "core-explorer-keyboard-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
       "to": "core-explorer-renderer",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
-      "to": "core-explorer-selection-model",
       "dashed": true,
       "label": "imports"
     },
@@ -8906,7 +8876,43 @@
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-embedding",
       "dashed": true
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-pieces-adopt-tokens",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T10:54:45.498Z"
+  "updatedAt": "2026-11-12T11:16:09.153Z"
 }

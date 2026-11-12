@@ -31,10 +31,10 @@ import { initSheets, visibleMapRect } from '../../explorer/sheets.js';
 import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MIN } from '../../explorer/camera.js';
 // @ts-expect-error plain JS modules, no declarations
 import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
+import { explorerPage } from '../helpers.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-import { withMapElements } from '../helpers.js';
-const page = withMapElements(fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8'));
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
 

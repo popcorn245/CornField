@@ -23,9 +23,9 @@ import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js'
 import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer } from '../../explorer/panels.js';
+import { explorerPage } from '../helpers.js';
 
-import { withMapElements } from '../helpers.js';
-const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const node = (id, type, file) => ({ id, type, x: 0, y: 0, r: 20, color: '#336699', label: id, degree: 1, ...(file ? { file } : {}) });

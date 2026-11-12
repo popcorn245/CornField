@@ -18,9 +18,9 @@ import { LAYER_DEFS, renderLayerToggles, toggleLayer } from '../../explorer/laye
 import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { updateSearchStatus, NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
+import { explorerPage } from '../helpers.js';
 
-import { withMapElements } from '../helpers.js';
-const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const node = (id, type, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: '#336699', label: id, ...extra });

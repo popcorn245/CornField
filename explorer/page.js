@@ -32,16 +32,14 @@ import { createMap } from './engine/render.js';
 import { rendererPreference } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './engine/layout.js';
 import { measureCovered } from './sheets.js';
-import { stopFlight } from './fly.js';
 import { setProjectLayers } from './layers.js';
 import { closeDrawer } from './panels.js';
-import { selectNode, clearSelection } from './engine/selection.js';
-import { ensurePagePieces } from './page-pieces.js';
+import { ensurePagePieces, pieceSlots } from './page-pieces.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { initReviewColumn } from './review-column.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
-import { mount as mountMap } from './pieces/map.js';
+import { mount as mountMap, KEYS_HELP_WITH_PANEL } from './pieces/map.js';
 import { initProposals } from './proposal.js';
 import { followDeepLink } from './deep-link.js';
 import { initWhatIf } from './whatif.js';
@@ -173,21 +171,16 @@ export function startPage() {
   map = createMap(inst, { measureCovered }); // the camera, the scene and the frame loop of this instance (engine/render.js)
   const mapStyle = mapStyleOf(inst);
   initTheme(); // light or dark, before the first scene is built (theme.js)
-  // The map's canvases, their keys' help and the announcer are made by the map piece (pieces/map.js, also what <corn-map> mounts), into this stage.
-  // It watches the theme's tokens (the map reads --corn-map-* from the theme, and again when it changes), makes the renderer (WebGL2, or Canvas 2D
-  // when it is missing or the address says ?renderer=canvas2d: the address is read here, not by the renderer), binds the canvas and follows the box's size.
-  // The page keeps what a tap on a node means (its panel) and the keys (keyboard.js, which also drives the panels): `handleTaps` and `keyboard` are off.
-  mountMap(document.querySelector('[data-corn="stage"]'), inst, {
-    stage: false, keyboard: false, handleTaps: false, measureCovered,
+  // The map piece (pieces/map.js, also what <corn-map> mounts) makes the map's canvases, their keys' help and the announcer where index.html keeps
+  // `<!--corn-piece:map/stage-->`. It watches the theme's tokens (the map reads --corn-map-* from the theme, and again when it changes), makes the
+  // renderer (WebGL2, or Canvas 2D when it is missing or the address says ?renderer=canvas2d: the address is read here, not by the renderer), binds
+  // the canvas and its keys (engine/keyboard.js), follows the box's size, and answers a tap (a node's panel, the normal view, the end of a flight)
+  mountMap(document.body, inst, {
+    slots: pieceSlots('map'), measureCovered, keysHelp: KEYS_HELP_WITH_PANEL,
     renderer: rendererPreference(window.location.search) === 'canvas2d' ? 'canvas2d' : 'auto',
-    keysHelp: "Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.",
   });
   loadFreeformPositions(inst);
   ensurePagePieces(); // the node panel, the Layers menu and the search, mounted where index.html has their places (page-pieces.js)
-  // What a tap on the map asks of the page: a node's panel, the normal view, the end of a flight to a match
-  inst.on('select', (node) => selectNode(inst, node, { source: 'tap' }));
-  inst.on('background', () => clearSelection(inst, { source: 'tap' }));
-  inst.on('grab', () => stopFlight());
   initKeyboard(); // the map by keyboard (the panel's, the Layers menu's and the search's keys are their pieces') (engine/keyboard.js)
   initAccountMenu(); // the one menu at the right of the header (account-menu.js)
   initSheets();

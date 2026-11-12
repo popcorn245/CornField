@@ -1,29 +1,31 @@
 /**
  * @module explorer/pieces/map
  *
- * The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own
- * page (explorer/page.js mounts it into the page's stage) and for the `<corn-map>` component (components/src/corn-map, which mounts it in
- * its shadow root). There is one code path; the two differ only in the options they pass.
+ * The map as a piece (spec 0011 D3): its two canvases, the help for its keys and its announcer, made, wired and ended in one place, for cornfield's
+ * own page (explorer/page.js mounts it where index.html keeps `<!--corn-piece:map/stage-->`) and for the `<corn-map>` component (components/src,
+ * which mounts it in its shadow root). There is one code path: the keys are engine/keyboard.js's, a tap selects through engine/selection.js, and
+ * the page and a component differ only in who listens to the instance's events (the page's node panel follows `node:show`; a component turns
+ * `selection` into `cornSelect`).
  *
  *   const piece = mount(root, inst, options)    -> { update, destroy, ... }
  *
- *   root      where the piece's elements go: an element or a shadow root
+ *   root      where the piece's elements go when `options.slots` names no place: an element or a shadow root (they go in a stage of their own there)
  *   inst      the instance (instance.js) the map runs on; null makes one over `root`, which `destroy()` then ends too
  *   options   see below; `update(next)` takes the same keys and applies what changed
  *
  * Options, all optional:
  *   topology   {nodes, edges}: the map to draw (the object topology.json holds). The page does not pass it: it fetches and fills the state itself (view.js)
  *   view       'map' | 'dataflow'
- *   node       the id of the selected node, or null/'' for none
+ *   node       the id of the selected node, or null/'' for none. A node the map has not got yet is selected when a topology brings it
  *   theme      'light' | 'dark' | 'auto': the ground the map is drawn for. 'auto' (and nothing) follows the document's own `data-theme`, else prefers-color-scheme
  *   renderer   'auto' | 'canvas2d'
  *   base, fetch, strings   for a piece that makes its own instance
- *   stage      true (default): the elements go in a stage of their own. false: straight into `root` (the page's stage is already there)
- *   keysHelp   the words the canvas is described by (the page's mention its panel); default: the keys the piece has
+ *   slots      { stage: Node }: the place the elements go before (cornfield's page: the marker in its stage). Without it they go in a stage of their own in `root`
+ *   keysHelp   the words the canvas is described by; default KEYS_HELP. cornfield's page, which has the node panel and Freeform, says KEYS_HELP_WITH_PANEL
+ *   tokens     the default `--corn-*` tokens (CSS text) to add, once, to the document or shadow root the map's host is in (adopt-tokens.js)
  *   measureCovered   () => px of the bottom of the map something covers (the page's phone sheets); default none
- *   keyboard   true (default): the map's keys on its canvas. The page keeps keyboard.js, which also drives its panels
- *   handleTaps true (default): a tap on a node selects it, a tap on the background clears it. The page decides that itself (it opens a panel)
- *   onSelect   ({id, kind}) after every change of selection, whoever made it (a tap, a key, `node`, `focusNode`); id null when cleared
+ *   onSelect   ({ id, kind, source, from?, to? }) once per change of the selection, from the instance's `selection` event, whoever made it:
+ *              kind 'node' (id: the node's), 'edge' (id: 'from->to', and from, to), or null with id null (cleared); source as the event says
  *   onReady    () once, after the first frame with a map in it is drawn
  *
  * What it does for a root that is not the document (the traps in test/explorer/piece-map.test.js):
@@ -37,22 +39,41 @@ import { createInstance } from '../instance.js';
 import { createMap } from '../engine/render.js';
 import { mapStyleOf } from '../engine/map-style.js';
 import { computeDegreeCentrality, computeLaneLayout, layoutOrbit } from '../engine/layout.js';
+import { initKeyboard, resetKeyboard } from '../engine/keyboard.js';
+import { selectNode, clearSelection } from '../engine/selection.js';
+import { stopFlight } from '../engine/fly.js';
+import { scopeOf, place } from '../engine/piece.js';
 import { createRenderer } from '../renderer.js';
 import { bindCanvasInput } from '../input.js';
 import { buildDataFlow } from '../flow-build.js';
 import { resolveTheme } from '../theme-model.js';
-import { selectionCamera } from '../selection-model.js';
-import { zoomAbout } from '../camera.js';
-import * as K from '../keyboard-model.js';
+import { escapeHtml } from '../../core/text.js';
+import { adoptDefaultTokens } from './adopt-tokens.js';
 
-const KEYS_HELP = 'Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Escape clears the selection.';
+/** The keys of a map on its own (engine/keyboard.js): what the canvas is described by */
+export const KEYS_HELP = 'Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Escape clears the selection.';
+/** The same keys where the map has the node panel and Freeform beside it (cornfield's page) */
+export const KEYS_HELP_WITH_PANEL = "Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.";
 
-/** An element with a hook and the part of the same name (a host styles it with `corn-map::part(map-canvas)`) */
-function hooked(inst, tag, name, attrs = {}) {
-  const el = inst.doc.createElement(tag);
-  if (name) { el.setAttribute('data-corn', name); el.setAttribute('part', name); }
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-  return el;
+/** The map canvas: one per mount, and one per change of renderer (a canvas that gave a WebGL context can never give a 2d one) */
+const CANVAS = '<canvas id="graph-canvas" data-corn="map-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help"></canvas>';
+
+/**
+ * The markup of the piece (`stage`): the map canvas, the help for its keys, the announcer the keyboard speaks in (engine/keyboard.js), and the
+ * canvas the labels are drawn on (labels.js) over the map; the map canvas still gets the pointer. Hooks get their parts when placed (engine/piece.js).
+ * @param {{ keysHelp?: string }} [opts]
+ */
+export const markup = ({ keysHelp = KEYS_HELP } = {}) => ({
+  stage: `${CANVAS}
+<p id="map-keys-help" class="hx-sr-only">${escapeHtml(keysHelp)}</p>
+<p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>
+<canvas id="label-canvas" data-corn="label-canvas" aria-hidden="true"></canvas>`,
+});
+
+/** The document or shadow root the map's host sits in: where the default tokens go */
+function hostRootOf(root) {
+  const host = root.nodeType === 11 ? /** @type {ShadowRoot} */ (root).host : root;
+  return host && typeof host.getRootNode === 'function' ? host.getRootNode() : null;
 }
 
 /**
@@ -64,39 +85,31 @@ export function mount(root, inst, options = {}) {
   const ownsInstance = !inst;
   if (ownsInstance) inst = createInstance({ root, base: options.base || '', fetch: options.fetch, strings: options.strings });
   const { state } = inst;
-  /** What the piece set up, undone by destroy() (the instance's own list is only run when the instance ends, which a page's instance does not with its piece) */
-  const ends = [];
-  const keep = (off) => { ends.push(off); return off; };
+  if (options.tokens) adoptDefaultTokens(hostRootOf(root), options.tokens);
+  /** What the piece set up, undone by destroy() (the instance's own end runs it too, if the piece is still there) */
+  const scope = scopeOf(inst);
   const rendererOf = (v) => (v === 'canvas2d' ? 'canvas2d' : 'auto');
   const themeOf = (v) => (v === 'light' || v === 'dark' ? v : 'auto');
-  const current = { renderer: rendererOf(options.renderer), theme: themeOf(options.theme), view: 'map', node: null, topology: undefined };
+  const current = { renderer: rendererOf(options.renderer), theme: themeOf(options.theme), topology: undefined };
   let ended = false;
   let ready = false;
 
   // -- elements ---------------------------------------------------------------------------------------------------------------------
-  const stage = options.stage === false ? null : hooked(inst, 'div', 'map-stage');
-  const help = hooked(inst, 'p', null, { id: 'map-keys-help', class: 'hx-sr-only' });
-  help.textContent = options.keysHelp || KEYS_HELP;
-  const announcer = hooked(inst, 'p', null, { id: 'map-announcer', class: 'hx-sr-only', role: 'status', 'aria-live': 'polite' });
-  const labelCanvas = hooked(inst, 'canvas', 'label-canvas', { id: 'label-canvas', 'aria-hidden': 'true' });
-
-  /** A new map canvas: one per mount, and one per change of renderer (a canvas that gave a WebGL context can never give a 2d one) */
-  function makeCanvas() {
-    return hooked(inst, 'canvas', 'map-canvas', { id: 'graph-canvas', tabindex: '0', role: 'application', 'aria-roledescription': 'map', 'aria-label': 'Topology map', 'aria-describedby': 'map-keys-help' });
-  }
-  const firstCanvas = makeCanvas();
-  if (stage) { stage.append(firstCanvas, help, announcer, labelCanvas); root.append(stage); } else root.prepend(firstCanvas, help, announcer, labelCanvas);
-  keep(() => { for (const el of [firstCanvas, state.canvas, help, announcer, labelCanvas, stage]) if (el) el.remove(); });
+  const html = markup({ keysHelp: options.keysHelp }).stage;
+  const slots = options.slots && options.slots.stage ? options.slots : null;
+  const made = place(inst, root, slots ? html : `<div data-corn="map-stage">${html}</div>`, slots, 'stage');
+  const find = (sel) => made.map((el) => (el.matches(sel) ? el : el.querySelector(sel))).find(Boolean);
+  scope.own(() => { for (const el of [...made, state.canvas]) if (el) el.remove(); });
 
   // -- what the engine needs on the state, in this order ------------------------------------------------------------------------------
-  state.canvas = firstCanvas;
-  state.labelCanvas = labelCanvas;
+  state.canvas = find('[data-corn="map-canvas"]');
+  state.labelCanvas = find('[data-corn="label-canvas"]');
   // A 2d context that only measures text (layout.js labelWidth): the map canvas may be WebGL, and a canvas that gave WebGL can never give 2d
   state.ctx = inst.doc.createElement('canvas').getContext('2d');
   const map = createMap(inst, options.measureCovered ? { measureCovered: options.measureCovered } : {});
   const style = mapStyleOf(inst);
-  keep(style.watch());
-  keep(style.onChange(() => map.render()));
+  scope.own(style.watch());
+  scope.own(style.onChange(() => map.render()));
   const prefer = () => (current.renderer === 'canvas2d' ? 'canvas2d' : null);
   const installRenderer = () => map.setRenderer(createRenderer(state.canvas, { prefer: prefer(), mapStyle: style.get }));
 
@@ -119,15 +132,15 @@ export function mount(root, inst, options = {}) {
     map.render();
   }
   state.theme = mode();
-  if (lightQuery && lightQuery.addEventListener) { lightQuery.addEventListener('change', refresh); keep(() => lightQuery.removeEventListener('change', refresh)); }
+  if (lightQuery && lightQuery.addEventListener) { lightQuery.addEventListener('change', refresh); scope.own(() => lightQuery.removeEventListener('change', refresh)); }
   const Mutation = inst.win && inst.win.MutationObserver;
   if (Mutation && inst.doc && inst.doc.documentElement) { // the host page switching its own light and dark
     const watch = new Mutation(refresh);
     watch.observe(inst.doc.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
-    keep(() => watch.disconnect());
+    scope.own(() => watch.disconnect());
   }
 
-  // -- the renderer, the layout, the input ------------------------------------------------------------------------------------------------
+  // -- the renderer, the layout --------------------------------------------------------------------------------------------------------
   installRenderer();
 
   /** Where nodes sit for the current view */
@@ -140,99 +153,31 @@ export function mount(root, inst, options = {}) {
   }
 
   const fit = () => { if (state.nodes.length) map.fitGraphToViewport(map.fitPadding()); };
-
-  // -- selection --------------------------------------------------------------------------------------------------------------------------
-  let said = { id: null, kind: 'node' };
-  /** Tells `onSelect` when the selection is not what it said last. Run after every change of the scene, so a tap, a key, search and a property all reach it. */
-  function noteSelection() {
-    if (ended) return;
-    const node = state.selectedNode;
-    const edge = state.selectedEdge;
-    const next = node ? { id: node.id, kind: 'node' } : edge ? { id: `${edge.from}->${edge.to}`, kind: 'edge' } : { id: null, kind: said.kind };
-    if (next.id === said.id) return;
-    said = next;
-    if (options.onSelect) options.onSelect({ ...next });
-  }
-  keep(inst.onSceneTouch(noteSelection));
-
   const nodeById = (id) => state.nodes.find((n) => n.id === id) || null;
 
-  function select(node, { frame = false } = {}) {
-    if (!node) { clear(); return; }
-    if (!state.selectedNode || state.selectedNode.id !== node.id) state.selectedKind = null;
-    state.selectedNode = node;
-    state.selectedEdge = null;
-    inst.touchScene();
-    map.render();
-    if (frame) frameSelected();
-  }
-  function clear() {
-    if (!state.selectedNode && !state.selectedEdge) return;
-    state.selectedNode = null;
-    state.selectedEdge = null;
-    inst.touchScene();
-    map.render();
-  }
-
-  /** The camera goes to the selected node and what it lights (selection-model.js), at once: a flight is the page's */
-  function frameSelected() {
-    const node = state.selectedNode;
-    if (!node || !state.width) return null;
-    const lit = map.getScene().nodes.filter((n) => n.connected);
-    const target = selectionCamera(node, lit, { x: 0, y: 0, width: state.width, height: state.height }, { padding: map.fitPadding() });
-    Object.assign(state.camera, { x: target.x, y: target.y, zoom: target.zoom });
-    map.render();
-    return target;
-  }
+  // -- selection: one path for the page and a component ---------------------------------------------------------------------------------
+  /** A node the host asked for that the map has not got (yet): selected when a topology brings it */
+  let pendingNode = null;
+  // A tap on a node selects it, a tap on the bare map clears it, a hand on the camera ends a flight (input.js asks; engine/selection.js does)
+  scope.on('select', (node) => selectNode(inst, node, { source: 'tap' }));
+  scope.on('background', () => clearSelection(inst, { source: 'tap' }));
+  scope.on('grab', () => stopFlight(inst));
+  // The instance says each change once, whoever made it (a tap, a key, a search, `node`, an assignment to the state: an edge picked on a proposal)
+  scope.on('selection', ({ node, edge, source }) => {
+    if (ended) return;
+    if (node || edge) pendingNode = null;
+    if (!options.onSelect) return;
+    if (node) options.onSelect({ id: node.id, kind: 'node', source });
+    else if (edge) options.onSelect({ id: `${edge.from}->${edge.to}`, kind: 'edge', from: edge.from, to: edge.to, source });
+    else options.onSelect({ id: null, kind: null, source });
+  });
 
   /** Selects the node with this id and brings it into view; false when the map has no such node */
   function focusNode(id) {
-    const node = nodeById(id);
-    if (!node) return false;
-    select(node, { frame: true });
+    const node = nodeById(String(id));
+    if (!node || ended) return false;
+    selectNode(inst, node, { frame: true, source: 'api' });
     return true;
-  }
-
-  // -- the keyboard ---------------------------------------------------------------------------------------------------------------------
-  let announceTimer = null;
-  function announce(text) {
-    announcer.textContent = '';
-    inst.win.clearTimeout(announceTimer);
-    announceTimer = inst.win.setTimeout(() => { announcer.textContent = text; }, 30); // a fresh text node a moment later is what makes a live region speak again
-  }
-  keep(() => inst.win.clearTimeout(announceTimer));
-
-  const stepOrder = () => K.readingOrder(state.nodes.filter((n) => map.isNodeVisible(n)));
-  function land(node, order) {
-    if (!node) { announce('No nodes are shown.'); return; }
-    select(node, { frame: true });
-    announce(K.describeNode(node, order.length, order.indexOf(node)));
-  }
-
-  function onKey(e) {
-    if (e.target !== state.canvas || e.defaultPrevented) return;
-    const action = K.mapKeyAction(e.key, { shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, selected: !!state.selectedNode });
-    if (!action || action.type === 'open' || action.type === 'move') return; // a panel and freeform are the page's
-    e.preventDefault(); // the host's own handlers see the key too, and tell by `defaultPrevented` that the map took it
-    const { camera, width, height } = state;
-    switch (action.type) {
-      case 'pan': camera.x += action.dx; camera.y += action.dy; map.render(); break;
-      case 'zoom':
-        Object.assign(camera, zoomAbout(camera, action.factor, width / 2, height / 2, map.getMinZoom()));
-        map.render();
-        announce(K.zoomWords(camera.zoom));
-        break;
-      case 'fit': fit(); announce(`The whole map. ${K.zoomWords(camera.zoom)}`); break;
-      case 'step': { const order = stepOrder(); land(K.stepFrom(order, state.selectedNode && state.selectedNode.id, action.by), order); break; }
-      case 'first': case 'last': { const order = stepOrder(); land(action.type === 'first' ? order[0] : order[order.length - 1], order); break; }
-      case 'frame': {
-        const target = frameSelected();
-        if (target) announce(target.framed ? `Framed ${state.selectedNode.label}` : `${state.selectedNode.label} centred`);
-        break;
-      }
-      case 'close': clear(); announce('Selection cleared'); break;
-      default:
-    }
   }
 
   // -- pointer and keys on the canvas ---------------------------------------------------------------------------------------------------
@@ -246,32 +191,29 @@ export function mount(root, inst, options = {}) {
       // input.js hears the release on the root, so a drag let go outside an element root would stick: the canvas holds the pointer until it is let go
       offs.push(inst.listen(canvas, 'pointerdown', (e) => { if (e.pointerType === 'mouse' && canvas.setPointerCapture) { try { canvas.setPointerCapture(e.pointerId); } catch { /* the pointer is gone */ } } }));
     }
-    if (options.keyboard !== false) offs.push(inst.listen(canvas, 'keydown', onKey));
+    resetKeyboard(inst); // the keys are the canvas's (engine/keyboard.js): a new canvas takes them over
+    initKeyboard(inst);
+    offs.push(() => resetKeyboard(inst));
     stopInput = () => offs.forEach((off) => off());
   }
 
-  if (options.handleTaps !== false) {
-    keep(inst.on('select', (node) => select(node)));
-    keep(inst.on('background', () => clear()));
-  }
-
   // -- the first frame ---------------------------------------------------------------------------------------------------------------------
-  keep(map.onPaint(() => {
+  scope.own(map.onPaint(() => {
     if (ready || !state.nodes.length) return;
     ready = true;
     if (options.onReady) options.onReady();
   }));
 
   bind();
-  keep(() => stopInput());
-  keep(map.watchSize());
+  scope.own(() => stopInput());
+  scope.own(map.watchSize());
   map.resize();
 
   // -- changes ---------------------------------------------------------------------------------------------------------------------------------
-  let pendingNode = null;
   function setTopology(topology) {
-    const nodes = topology && Array.isArray(topology.nodes) ? topology.nodes : [];
-    const edges = topology && Array.isArray(topology.edges) ? topology.edges : [];
+    const nodes = topology && Array.isArray(topology.nodes) ? topology.nodes.filter((n) => n && typeof n.id === 'string') : [];
+    const edges = topology && Array.isArray(topology.edges) ? topology.edges.filter((e) => e && typeof e.from === 'string' && typeof e.to === 'string') : [];
+    const keep = state.selectedNode ? state.selectedNode.id : null; // the selection outlives a new topology that has its node
     // The host's object is never changed: the map works on copies (the layout writes positions on them)
     state.baseNodes = nodes;
     state.baseEdges = edges;
@@ -279,15 +221,16 @@ export function mount(root, inst, options = {}) {
     state.edges = edges.map((e) => ({ ...e }));
     state.mapNodes = state.nodes;
     state.mapEdges = state.edges;
-    state.selectedNode = null;
-    state.selectedEdge = null;
     state.flow = buildDataFlow(state.nodes, state.edges);
+    const again = keep ? nodeById(keep) : null;
+    // The same id is the same selection (the instance says nothing); none is a change it says once
+    if (again) { state.selectedEdge = null; state.selectedNode = again; } else if (state.selectedNode || state.selectedEdge) { state.selectedNode = null; state.selectedEdge = null; }
     inst.touchScene();
     if (state.nodes.length) { applyLayout(); fit(); }
-    if (pendingNode) { const node = nodeById(pendingNode); if (node) select(node); }
+    const asked = !again && pendingNode ? nodeById(pendingNode) : null; // the node the host asked for before the map had it
+    if (asked) selectNode(inst, asked, { source: 'api' });
     map.render();
     map.ensureFlowLoop();
-    noteSelection();
   }
 
   function setView(view) {
@@ -303,12 +246,17 @@ export function mount(root, inst, options = {}) {
     const previous = map.getRenderer();
     if (previous.release) previous.release(); else previous.destroy(); // before the swap: a renderer already destroyed does not give its context back
     stopInput();
-    const next = makeCanvas();
+    const holder = inst.doc.createElement('template');
+    holder.innerHTML = CANVAS;
+    const next = /** @type {HTMLCanvasElement} */ (holder.content.firstElementChild);
+    next.setAttribute('part', 'map-canvas');
+    const hadFocus = inst.active() === state.canvas;
     state.canvas.replaceWith(next);
     state.canvas = next;
     bind();
     installRenderer();
     map.resize();
+    if (hadFocus) next.focus();
   }
 
   /**
@@ -326,12 +274,17 @@ export function mount(root, inst, options = {}) {
       if (value !== current.theme) { current.theme = value; refresh(); }
     }
     if ('topology' in next && next.topology !== current.topology) { current.topology = next.topology; setTopology(next.topology); }
-    if ('view' in next) { current.view = next.view === 'dataflow' ? 'dataflow' : 'map'; setView(current.view === 'dataflow' ? 'dataflow' : 'orbit'); }
+    if ('view' in next) setView(next.view === 'dataflow' ? 'dataflow' : 'orbit');
     if ('node' in next) {
       const id = next.node == null || next.node === '' ? null : String(next.node);
-      pendingNode = id;
-      if (id === null) clear();
-      else { const node = nodeById(id); if (node && !(state.selectedNode && state.selectedNode.id === id)) select(node); }
+      if (id === null) {
+        pendingNode = null;
+        if (state.selectedNode || state.selectedEdge) clearSelection(inst, { source: 'api' });
+      } else {
+        const node = nodeById(id);
+        if (!node) pendingNode = id;
+        else if (!state.selectedNode || state.selectedNode.id !== id) selectNode(inst, node, { source: 'api' }); // the same node again changes nothing and says nothing
+      }
     }
   }
 
@@ -339,7 +292,7 @@ export function mount(root, inst, options = {}) {
   function destroy() {
     if (ended) return;
     ended = true;
-    while (ends.length) { try { ends.pop()(); } catch (err) { console.error('A map clean-up failed', err); } }
+    scope.destroy();
     map.destroy();
     if (ownsInstance) inst.destroy();
   }

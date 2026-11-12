@@ -10,8 +10,9 @@ import { withParts } from '../explorer/engine/piece.js';
 import { markup as nodePanelMarkup } from '../explorer/pieces/node-panel.js';
 import { markup as layersMarkup } from '../explorer/pieces/layers.js';
 import { markup as searchMarkup } from '../explorer/pieces/search.js';
+import { markup as mapMarkup, KEYS_HELP_WITH_PANEL } from '../explorer/pieces/map.js';
 
-const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup };
+const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, map: () => mapMarkup({ keysHelp: KEYS_HELP_WITH_PANEL }) };
 
 export const CORNFIELD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SAMPLE = path.join(CORNFIELD, 'test', 'fixtures', 'sample');
@@ -28,27 +29,20 @@ export const samplePersonas = () => readJson(path.join(SAMPLE, 'topology.persona
 /** A house answer as a source gives it (the sample's house file, with its time) */
 export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00.000Z', ...readJson(path.join(SAMPLE, 'cornfield.house.json')) } });
 /**
- * What explorer/pieces/map.js makes in the page's stage, as markup (a test of the piece holds that it makes exactly this): index.html keeps only
- * the place for it (`<!-- map-slot -->`), and a test that builds the page's body from the file puts the map's elements there
- */
-export const MAP_ELEMENTS_HTML = '<canvas id="graph-canvas" data-corn="map-canvas" part="map-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help"></canvas>'
-  + '<p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node\'s panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>'
-  + '<p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>'
-  + '<canvas id="label-canvas" data-corn="label-canvas" part="label-canvas" aria-hidden="true"></canvas>';
-/** index.html with the map's elements where the page's stage keeps their place */
-export const withMapElements = (html) => html.replace(/<!-- map-slot[\s\S]*?-->/, MAP_ELEMENTS_HTML);
-
-/**
- * explorer/index.html. The pieces (explorer/pieces/) keep only their places in it, a `<!--corn-piece:NAME/SLOT-->` comment each; a test that mounts
- * them (through the bridges: panels.js, layers.js, search.js) wants the page as it is. A test that reads the markup itself passes `{ pieces: true }`
- * and gets every piece's markup (with its parts) in its place, as the page shows it once page.js has mounted them.
+ * explorer/index.html. The pieces (explorer/pieces/) keep only their places in it, a `<!--corn-piece:NAME/SLOT-->` comment each. A test that mounts
+ * them (the node panel, Layers and search through the bridges: panels.js, layers.js, search.js; the map through page.js) wants the page as it is.
+ * A test that reads the markup itself, or drives a module on markup that page.js would have mounted, names the pieces whose markup it wants in
+ * place (`{ pieces: ['map'] }`: the map's canvases, its keys' help and its announcer), or all of them (`{ pieces: true }`), as the page shows it
+ * once page.js has mounted them, parts included.
+ * @param {{ pieces?: boolean | string[] }} [opts]
  */
 export function explorerPage({ pieces = false } = {}) {
-  const page = withMapElements(fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8'));
+  const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
   if (!pieces) return page;
+  const wanted = (name) => pieces === true || pieces.includes(name);
   return page
-    .replace(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1-->)/g, '') // the stand-in goes when the piece comes (engine/piece.js place)
-    .replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
+    .replace(/<!--corn-placeholder:([a-z-]+)\/([a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1\/\2-->)/g, (all, name) => (wanted(name) ? '' : all)) // the stand-in goes when the piece comes (engine/piece.js place)
+    .replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (all, name, slot) => (wanted(name) ? withParts(PIECE_MARKUP[name]()[slot]) : all));
 }
 
 /** The stand-in index.html keeps for a piece's markup until the piece is mounted: the same markup, with its parts, without ids (nor what points at them) */

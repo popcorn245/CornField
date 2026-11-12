@@ -8,9 +8,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fakeGl } from './fake-gl.js';
-import { loadSample, MAP_ELEMENTS_HTML, EXPLORER } from '../helpers.js';
+import { loadSample, EXPLORER, PIECE_MARKUP } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
-import { mount } from '../../explorer/pieces/map.js';
+import { withParts } from '../../explorer/engine/piece.js';
+// @ts-expect-error plain JS modules, no declarations
+import { mount, KEYS_HELP_WITH_PANEL } from '../../explorer/pieces/map.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createInstance } from '../../explorer/instance.js';
 
@@ -86,12 +88,18 @@ afterEach(() => {
 });
 
 const SIZE = { width: 800, height: 600 };
-/** A host element with the box a layout would give it, and the piece in it */
-function make(options = {}, { shadow = true, inst = null } = {}) {
+/** A host element with the box a layout would give it, and the piece in it: in a shadow root of its own, or (`page`) before a marker as cornfield's page has */
+function make(options = {}, { shadow = true, inst = null, page = false } = {}) {
   const host = document.createElement('div');
   document.body.append(host);
-  const root = shadow ? host.attachShadow({ mode: 'open' }) : host;
-  const piece = mount(root, inst, { renderer: 'canvas2d', ...options });
+  const root = shadow && !page ? host.attachShadow({ mode: 'open' }) : host;
+  let slots;
+  if (page) {
+    const marker = document.createComment('corn-piece:map/stage');
+    host.append(marker);
+    slots = { stage: marker };
+  }
+  const piece = mount(root, inst, { renderer: 'canvas2d', ...(slots ? { slots } : {}), ...options });
   const stage = piece.inst.state.canvas.parentElement;
   Object.defineProperty(stage, 'clientWidth', { value: SIZE.width, configurable: true });
   Object.defineProperty(stage, 'clientHeight', { value: SIZE.height, configurable: true });
@@ -117,10 +125,10 @@ describe('its elements', () => {
   });
 
   it('gives every element with a data-corn hook a part of the same name (D7), for the stage and for the page', () => {
-    for (const shadow of [true, false]) {
-      const { root } = make({ topology: topology() }, { shadow });
+    for (const page of [false, true]) {
+      const { root } = make({ topology: topology() }, { page });
       const hooked = [...root.querySelectorAll('[data-corn]')];
-      expect(hooked.length).toBeGreaterThanOrEqual(3);
+      expect(hooked.length).toBeGreaterThanOrEqual(page ? 2 : 3);
       for (const el of hooked) expect(el.getAttribute('part'), el.outerHTML).toBe(el.getAttribute('data-corn'));
     }
   });
@@ -138,13 +146,13 @@ describe('its elements', () => {
     }
   });
 
-  it('in the page (no stage of its own) makes exactly the elements index.html used to hold, in that order', () => {
-    const { root } = make({ stage: false, keysHelp: "Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node." }, { shadow: false });
+  it('in the page (before its marker, no stage of its own) makes exactly the markup tests read for the page (helpers PIECE_MARKUP), parts included', () => {
+    const { root } = make({ keysHelp: KEYS_HELP_WITH_PANEL }, { page: true });
     const holder = document.createElement('div');
-    holder.innerHTML = MAP_ELEMENTS_HTML;
-    const names = (el) => [...el.children].map((c) => `${c.tagName}#${c.id}|${c.getAttribute('data-corn')}|${c.getAttribute('class')}|${c.getAttribute('role')}`);
-    expect(names(root)).toEqual(names(holder));
-    expect(root.querySelector('#map-keys-help').textContent).toBe(holder.querySelector('#map-keys-help').textContent);
+    holder.innerHTML = withParts(PIECE_MARKUP.map().stage);
+    const html = (el) => [...el.children].map((c) => c.outerHTML.replace(/ width="\d+" height="\d+"/, "")); // the size is the renderer's
+    expect(html(root)).toEqual(html(holder));
+    expect(root.lastChild.nodeType).toBe(8); // the marker stays after them, as every piece's does
   });
 
   it('leaves the host\'s topology alone: the map works on copies', () => {
@@ -203,27 +211,27 @@ describe('selection: onSelect comes from the real change of selection', () => {
 
     key(canvas, 'n'); // the keyboard selects the first node in reading order
     expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect.mock.calls[0][0]).toMatchObject({ kind: 'node' });
+    expect(onSelect.mock.calls[0][0]).toMatchObject({ kind: 'node', source: 'keyboard' });
     const first = onSelect.mock.calls[0][0].id;
     expect(state.selectedNode.id).toBe(first);
 
     const other = ids.find((id) => id !== first);
     piece.update({ node: other }); // the host sets the node
-    expect(onSelect).toHaveBeenLastCalledWith({ id: other, kind: 'node' });
+    expect(onSelect).toHaveBeenLastCalledWith({ id: other, kind: 'node', source: 'api' });
     piece.update({ node: other }); // the same again: nothing changed
     expect(onSelect).toHaveBeenCalledTimes(2);
 
     expect(piece.focusNode(first)).toBe(true);
-    expect(onSelect).toHaveBeenLastCalledWith({ id: first, kind: 'node' });
+    expect(onSelect).toHaveBeenLastCalledWith({ id: first, kind: 'node', source: 'api' });
     expect(piece.focusNode('no-such-node')).toBe(false);
     expect(onSelect).toHaveBeenCalledTimes(3);
 
     piece.inst.emit('background'); // a tap on the bare map
-    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: 'node' });
+    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: null, source: 'tap' });
     piece.inst.emit('select', state.nodes[2]); // a tap on a node
-    expect(onSelect).toHaveBeenLastCalledWith({ id: state.nodes[2].id, kind: 'node' });
+    expect(onSelect).toHaveBeenLastCalledWith({ id: state.nodes[2].id, kind: 'node', source: 'tap' });
     key(canvas, 'Escape');
-    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: 'node' });
+    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: null, source: 'keyboard' });
     expect(onSelect).toHaveBeenCalledTimes(6);
   });
 
@@ -233,13 +241,76 @@ describe('selection: onSelect comes from the real change of selection', () => {
     expect(onSelect).not.toHaveBeenCalled();
     piece.update({ topology: topology() });
     expect(state.selectedNode.id).toBe(sample.nodes[4].id);
-    expect(onSelect).toHaveBeenCalledWith({ id: sample.nodes[4].id, kind: 'node' });
+    expect(onSelect).toHaveBeenCalledWith({ id: sample.nodes[4].id, kind: 'node', source: 'api' });
   });
 
-  it('does not take a tap for the host when handleTaps is off (cornfield\'s page decides what a tap means)', () => {
-    const { piece, state } = make({ topology: topology(), handleTaps: false });
-    piece.inst.emit('select', state.nodes[1]);
+  it('hears an edge selection (the instance\'s `selection` event, not the scene): an edge picked by a proposal reaches onSelect, once', () => {
+    const onSelect = vi.fn();
+    const { state } = make({ topology: topology(), onSelect });
+    const edge = state.edges[0];
+    state.selectedEdge = edge; // what proposal.js does on cornfield's page: an assignment, which the instance says as source 'state'
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenLastCalledWith({ id: `${edge.from}->${edge.to}`, kind: 'edge', from: edge.from, to: edge.to, source: 'state' });
+    state.selectedEdge = edge;
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    state.selectedEdge = null;
+    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: null, source: 'state' });
+  });
+
+  it('keeps the selection across a new topology that has the node, says nothing for it, and clears it (once) when the node is gone', () => {
+    const onSelect = vi.fn();
+    const { piece, state } = make({ topology: topology(), onSelect });
+    const id = sample.nodes[3].id;
+    piece.update({ node: id });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    piece.update({ topology: topology() });
+    expect(state.selectedNode.id).toBe(id);
+    expect(state.nodes).toContain(state.selectedNode); // the new copy, not the old one
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    piece.update({ topology: { nodes: sample.nodes.filter((n) => n.id !== id).map((n) => ({ ...n })), edges: [] } });
     expect(state.selectedNode).toBe(null);
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith({ id: null, kind: null, source: 'state' });
+  });
+
+  it('draws nothing from what is not a topology, and leaves out what is not a node or an edge', () => {
+    const { piece, state } = make({});
+    for (const bad of [null, 42, 'x', { nodes: 'no' }, { nodes: [null, { id: 3 }, {}], edges: [null, { from: 1 }] }]) {
+      piece.update({ topology: bad });
+      expect(state.nodes).toEqual([]);
+      expect(state.edges).toEqual([]);
+    }
+    piece.update({ topology: { nodes: [{ id: 'a' }, 7, { id: 'b' }], edges: [{ from: 'a', to: 'b' }, 'x'] } });
+    expect(state.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(state.edges).toHaveLength(1);
+  });
+
+  it('has one keyboard: the engine\'s (engine/keyboard.js), the page\'s and a component\'s, and a tap goes the one way too', () => {
+    const src = fs.readFileSync(path.join(EXPLORER, 'pieces', 'map.js'), 'utf8');
+    expect(src).toMatch(/from '\.\.\/engine\/keyboard\.js'/);
+    expect(src).not.toMatch(/mapKeyAction|keyboard-model/); // no keys of its own
+    expect(src).not.toMatch(/handleTaps|options\.keyboard/);
+    const page = fs.readFileSync(path.join(EXPLORER, 'page.js'), 'utf8');
+    expect(page).not.toMatch(/inst\.on\('(?:select|background|grab)'/); // the piece answers a tap, on the page as in a component
+    // The engine's words: F says how many it framed, Escape says what it closed (a panel only where there is one)
+    const { canvas, root, piece } = make({ topology: topology() });
+    const said = [];
+    piece.inst.on('announce', (text) => said.push(text));
+    key(canvas, 'n');
+    key(canvas, 'f');
+    expect(said.at(-1)).toMatch(/connected/);
+    key(canvas, 'Escape');
+    expect(said.at(-1)).toBe('Selection cleared');
+    const withPanel = make({ topology: topology() }, { page: true });
+    const drawer = document.createElement('aside');
+    drawer.id = 'spec-drawer';
+    withPanel.host.append(drawer);
+    const heard = [];
+    withPanel.piece.inst.on('announce', (text) => heard.push(text));
+    key(withPanel.canvas, 'n');
+    key(withPanel.canvas, 'Escape');
+    expect(heard.at(-1)).toBe('Panel closed');
+    expect(root.querySelector('#map-announcer')).toBeTruthy();
   });
 
   it('the keys act on the canvas only: a key anywhere else in the root does nothing, and a handled key is marked as handled', () => {
@@ -271,7 +342,7 @@ describe('what a map in another app needs (the traps)', () => {
     canvas.dispatchEvent(touch);
     expect(canvas.setPointerCapture).toHaveBeenCalledTimes(1); // a touch is captured by the browser already
 
-    const page = make({ stage: false }, { shadow: false, inst: createInstance({ root: document }) });
+    const page = make({}, { page: true, inst: createInstance({ root: document }) });
     page.canvas.setPointerCapture = vi.fn();
     page.canvas.dispatchEvent(down);
     expect(page.canvas.setPointerCapture).not.toHaveBeenCalled(); // the page hears the release anywhere on the document
@@ -385,7 +456,7 @@ describe('its end', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     const mine = createInstance({ root: document });
-    const page = make({ stage: false }, { shadow: false, inst: mine });
+    const page = make({}, { page: true, inst: mine });
     const own = vi.spyOn(mine, 'destroy');
     page.piece.destroy();
     expect(own).not.toHaveBeenCalled();

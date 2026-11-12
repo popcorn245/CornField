@@ -84,7 +84,7 @@ describe('the documented components', () => {
   it('lists every part: exactly the hooks the piece makes (each is a part of the same name)', () => {
     const piece = fs.readFileSync(path.join(EXPLORER, 'pieces', 'map.js'), 'utf8');
     const renderer = fs.readFileSync(path.join(EXPLORER, 'renderer.js'), 'utf8');
-    const made = [...piece.matchAll(/\bhooked\(inst, '[a-z]+', '([a-z0-9-]+)'/g)].map((m) => m[1]);
+    const made = [...piece.matchAll(/\bdata-corn="([a-z0-9-]+)"/g)].map((m) => m[1]); // its markup and its stage: each hook gets its part when placed (engine/piece.js)
     const stand = /setAttribute\('data-corn', '(map-overlay)'\)/.exec(renderer)[1]; // the second renderer's stand-in canvas
     const parts = rows(sub('Parts')).find((r) => ticked(r[0])[0] === 'corn-map');
     expect(ticked(parts[1]).sort()).toEqual([...new Set([...made, stand])].sort());
