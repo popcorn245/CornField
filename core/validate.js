@@ -22,7 +22,7 @@ import { PERSONAS_FILE, validatePersonas } from './personas.js';
 import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
-import { repoPaths, repoReader } from './repo.js';
+import { reachable, repoPaths, repoReader } from './repo.js';
 import { checkThemeContrast } from './contrast.js';
 import { layerTokenWarnings, mapTokenWarnings, nodeColorNotes, nodeColorWarnings, quoted } from './map-tokens.js';
 import { layersMapWarnings } from './layers.js';
@@ -214,11 +214,11 @@ export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
  * @returns {string[]}
  */
 export function validatePersonasFile(root, roles = null) {
-  const file = path.join(root, PERSONAS_FILE);
-  if (!fs.existsSync(file)) return [];
+  const io = repoReader(root); // a file that leads out of the repo is not there, as for the personas deriver
+  if (!io.exists(PERSONAS_FILE)) return [];
   let parsed;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed = JSON.parse(io.read(PERSONAS_FILE));
   } catch (err) {
     return [`${PERSONAS_FILE} is not valid JSON: ${err.message}`];
   }
@@ -232,11 +232,11 @@ export function validatePersonasFile(root, roles = null) {
  * @returns {string[]}
  */
 export function validateCloudNodes(topology, root) {
-  const file = path.join(root, CLOUD_FILE);
+  const io = repoReader(root); // a file that leads out of the repo is not there, as for the cloud deriver
   let parsed = null;
-  if (fs.existsSync(file)) {
+  if (io.exists(CLOUD_FILE)) {
     try {
-      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      parsed = JSON.parse(io.read(CLOUD_FILE));
     } catch (err) {
       return [`${CLOUD_FILE} is not valid JSON: ${err.message}`];
     }
@@ -260,7 +260,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   if (!topology) return { errors: [`${config.topology} is missing: run cornfield sync to make it.`], warnings: [], derived: null, notes: [] };
   const errors = validateTopology(topology);
   try {
-    errors.push(...missingPaths(topology, repoPaths(config.root)));
+    errors.push(...missingPaths(topology, repoPaths(config.root), reachable(repoReader(config.root))));
   } catch (err) {
     errors.push(`Checking the paths the map cites failed: ${err.message}`);
   }
