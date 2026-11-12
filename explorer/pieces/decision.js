@@ -101,11 +101,14 @@ export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
+  /** What the foot says in place of its buttons for a proposal with no name, which nothing can be decided on (the review piece's, with no server); none: the page's */
+  const unnamed = typeof options.unnamed === 'string' && options.unnamed ? options.unnamed : '';
   const get = credentialed(inst);
   const made = place(inst, root, markup().foot, options.slots, 'foot');
   scope.keepParts(...made);
   const foot = made[0];
   const rootEl = foot.querySelector('#review');
+  const actions = foot.querySelector('.hx-proposal-actions');
   let gone = false;
 
   /** What is shown: the review of the proposal that is open, and the lines under the buttons */
@@ -182,8 +185,12 @@ export function mount(root, inst, options = {}) {
 
     // The line is Approve's description (the question while one is asked); not on a PR it is the reason for both buttons
     const line = q('[data-review-line]');
-    line.textContent = ui.key ? d.line : '';
-    line.hidden = !ui.key || !!askText; // the question takes the line's place while one is asked
+    // A proposal open with no name has nothing to decide on. Where the host says so (`unnamed`: the review piece handed an object with no server),
+    // the line says it and there are no buttons to press; cornfield's page (a proposal from the hub) hides the foot's lines as before
+    const readOnly = !ui.key && !!state.proposal && !!unnamed;
+    line.textContent = ui.key ? d.line : readOnly ? unnamed : '';
+    line.hidden = (!ui.key && !readOnly) || !!askText; // the question takes the line's place while one is asked
+    actions.hidden = readOnly;
     const ask = q('[data-review-ask]');
     if (ask.textContent !== askText) ask.textContent = askText;
     ask.hidden = !askText;
@@ -275,7 +282,7 @@ export function mount(root, inst, options = {}) {
   /** The bar was drawn: when it is another proposal than the one shown, start again for it */
   function onBar({ open }) {
     const key = open ? keyOf() : null;
-    rootEl.hidden = !key;
+    rootEl.hidden = !(key || (open && unnamed));
     if (key === ui.key) { paint(); return; }
     if (ui.hold) stopHold(open ? 'other' : 'closed', { quiet: false });
     ui.key = key;

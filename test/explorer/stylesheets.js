@@ -17,6 +17,9 @@ export function linkedPieces() {
   return [...html.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="\/explorer\/css\/([\w.-]+\.css)"/g)].map((m) => m[1]);
 }
 
+/** The files of explorer/css/ that cornfield's page does not link, because a host loads them (the one-tag review's own layout: pieces/review.js `STYLESHEETS`) */
+export const HOST_ONLY = ['review.css'];
+
 /** Every file in explorer/css/, sorted (what is on disk, linked or not) */
 export function pieceFiles() {
   return fs.readdirSync(CSS_DIR).filter((f) => f.endsWith('.css')).sort();

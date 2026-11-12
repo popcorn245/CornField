@@ -37,6 +37,7 @@ function sheetsOf(inst) {
     away: new Set(), // sheets displaced by the other of their group: open on the page, hidden until opened again
     listeners: new Set(),
     dock: null,
+    box: null, // the element whose width says phone, instead of the window's (setPhoneBox)
     lastCovered: 0,
     observers: [],
     wiredDock: null,
@@ -44,7 +45,42 @@ function sheetsOf(inst) {
   }));
 }
 
-export const isPhone = (inst) => !!(inst.win && typeof inst.win.matchMedia === 'function' && inst.win.matchMedia(PHONE_QUERY).matches);
+/** The width of a box below which it is a phone's (the CSS's `@container corn-box (max-width: 767px)`) */
+const PHONE_WIDTH = 768;
+
+/**
+ * Whether the instance is laid out as a phone: the window's width on cornfield's page (PHONE_QUERY), or, where the instance has a box of its own
+ * (`setPhoneBox`: the one-tag review in another app's page), that box's width, which is what the stylesheets' container queries ask
+ */
+export const isPhone = (inst) => {
+  const { box } = sheetsOf(inst);
+  if (box) return box.isConnected && box.clientWidth > 0 && box.clientWidth < PHONE_WIDTH;
+  return !!(inst.win && typeof inst.win.matchMedia === 'function' && inst.win.matchMedia(PHONE_QUERY).matches);
+};
+
+/** Makes `el`'s width, not the window's, say whether the instance is a phone's (the review piece's box in another app's page); null goes back to the window's */
+export function setPhoneBox(inst, el) {
+  sheetsOf(inst).box = el || null;
+}
+
+/** Calls `fn` when the instance becomes a phone's or stops being one (the window's width, or the phone box's). Returns how to stop. */
+export function onPhoneChange(inst, fn) {
+  const { box } = sheetsOf(inst);
+  const RO = inst.win && inst.win.ResizeObserver;
+  if (box && typeof RO === 'function') {
+    let was = isPhone(inst);
+    const ro = new RO(() => { const now = isPhone(inst); if (now !== was) { was = now; fn(); } });
+    ro.observe(box);
+    const off = () => { ro.disconnect(); inst.release(off); };
+    inst.own(off);
+    return off;
+  }
+  if (inst.win && typeof inst.win.matchMedia === 'function') {
+    const mq = inst.win.matchMedia(PHONE_QUERY);
+    if (mq && mq.addEventListener) return inst.listen(mq, 'change', () => fn());
+  }
+  return () => {};
+};
 
 const stageOf = (inst, S) => (S.dock && S.dock.parentElement) || (inst.state.canvas ? inst.state.canvas.parentElement : null);
 
@@ -78,8 +114,8 @@ function apply(inst) {
   }
   const stage = stageOf(inst, S);
   if (stage) stage.dataset.sheetOpen = model.expanded() || '';
-  // The expanded sheet is capped so the map keeps 35% of the screen: what is left under the stub, if there is one
-  if (S.dock && isPhone(inst)) S.dock.style.setProperty('--hx-sheet-cap', `${sheetCap(inst.win.innerHeight || 0, model.stubs())}px`);
+  // The expanded sheet is capped so the map keeps 35% of the screen (of the box, where the instance has one): what is left under the stub, if there is one
+  if (S.dock && isPhone(inst)) S.dock.style.setProperty('--hx-sheet-cap', `${sheetCap((S.box ? S.box.clientHeight : inst.win.innerHeight) || 0, model.stubs())}px`);
   markLast(inst);
   measureCovered(inst);
   S.listeners.forEach((fn) => fn());
@@ -408,10 +444,7 @@ export function initSheets(inst) {
     S.documentWired = true;
     for (const type of ['pointerdown', 'touchstart', 'mousedown']) inst.listen(inst.root, type, (e) => onMapDown(inst, e), { passive: true, capture: true });
     inst.listen(inst.root, 'keydown', (e) => onEscape(inst, e), true);
-    if (inst.win && typeof inst.win.matchMedia === 'function') {
-      const mq = inst.win.matchMedia(PHONE_QUERY);
-      if (mq && mq.addEventListener) inst.listen(mq, 'change', () => { collapseAllSheets(inst); measureCovered(inst); });
-    }
+    onPhoneChange(inst, () => { collapseAllSheets(inst); measureCovered(inst); });
   }
   apply(inst);
 }

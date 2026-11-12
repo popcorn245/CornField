@@ -80,6 +80,9 @@ export const CONVERTED = [
   'outage-model.js',
   'scenario.js',
   'waiting-model.js',
+  // The one-tag review: the composed piece and the engine function that gives an instance its map (spec 0011 D3, D4)
+  'pieces/review.js',
+  'engine/topology.js',
 ];
 
 /** What the not-yet-converted modules import in place of an instance: no converted module may */

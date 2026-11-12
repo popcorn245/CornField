@@ -248,7 +248,11 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
     active: () => {
       if (!root || !doc) return null;
       if (root.nodeType !== 1) return root.activeElement || null; // a Document or a shadow root
-      return doc.activeElement && root.contains(doc.activeElement) ? doc.activeElement : null;
+      // An element: the focus is asked of the tree it sits in, so an element inside a shadow root (the review piece's box in a shell's shadow root)
+      // finds its own focused element, where the document's would be the shadow root's host
+      const tree = typeof root.getRootNode === 'function' ? root.getRootNode() : doc;
+      const focused = tree && tree.activeElement !== undefined ? tree.activeElement : doc.activeElement;
+      return focused && root.contains(focused) ? focused : null;
     },
 
     // -- what the viewer prefers --------------------------------------------------------------------------------------------------
