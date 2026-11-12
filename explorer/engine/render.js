@@ -104,12 +104,32 @@ export function createMap(inst, opts = {}) {
   // -------------------------------------------------------------------------
   function resize() {
     const { canvas } = state;
+    const before = `${state.width}x${state.height}`;
     state.width = canvas.parentElement.clientWidth;
     state.height = canvas.parentElement.clientHeight;
     getRenderer().resize(state.width, state.height, inst.dpr());
     const labels = getLabelLayer();
     if (labels) labels.resize(state.width, state.height, inst.dpr());
+    if (before !== `${state.width}x${state.height}`) fitToNewBox();
     render();
+  }
+
+  /**
+   * The box the map's fit reads is not always final when the map is first fitted: the page's own box is laid out a moment after the topology arrives
+   * (an embedded pane sized after the page began loading), a component's stage is `display: none` or not yet sized. So the engine keeps what the last
+   * fit asked for (`memo.lastFit`: its arguments and the camera it set), and when the box changes while the camera is still exactly there, nobody has
+   * panned, zoomed or flown since, so the fit is made again for the box. Once anyone has moved the camera, a new box keeps their view.
+   * A fit asked for while the map has no box (a parent `display: none`, a box of no size) waits for one (`memo.waiting`): fitted to nothing,
+   * the camera would be lost.
+   */
+  const memo = inst.slot('fit', () => ({ lastFit: null, waiting: null })); // on the instance: a page that made two maps over one state (page.js, then the map piece) has one memory
+
+  function fitToNewBox() {
+    if (!state.width || !state.height) return;
+    if (memo.waiting) { const { padding, only } = memo.waiting; fitGraphToViewport(padding === null ? fitPadding() : padding, only); return; }
+    const { camera } = state;
+    const last = memo.lastFit;
+    if (last && camera.x === last.x && camera.y === last.y && camera.zoom === last.zoom) fitGraphToViewport(last.auto ? fitPadding() : last.padding, last.only);
   }
 
   /**
@@ -179,7 +199,12 @@ export function createMap(inst, opts = {}) {
 
   /** Zoom and pan so every visible node (and its label) is on screen; `only` (a Set of ids) narrows it to those, when any are visible */
   function fitGraphToViewport(padding = 40, only = null) {
-    const { width, camera } = state;
+    const { width, height, camera } = state;
+    if (!width || !height) { // no box yet: the fit is made when there is one (resize())
+      if (state.nodes.length) memo.waiting = { padding: padding === fitPadding() ? null : padding, only };
+      return;
+    }
+    memo.waiting = null;
     const t = fitTarget(padding, only);
     if (!t) return;
     const { minX, maxX, minY, maxY, mapHeight } = t;
@@ -188,6 +213,7 @@ export function createMap(inst, opts = {}) {
     camera.zoom = targetZoom;
     camera.x = width / 2 - ((minX + maxX) / 2) * targetZoom;
     camera.y = mapHeight / 2 - ((minY + maxY) / 2) * targetZoom;
+    memo.lastFit = { padding, auto: padding === fitPadding(), only, x: camera.x, y: camera.y, zoom: camera.zoom };
     render();
   }
 
@@ -279,6 +305,12 @@ export function createMap(inst, opts = {}) {
     for (const type of ACTIVITY) inst.listen(inst.root, type, onInput, { passive: true, capture: true });
   }
   inst.onShown(() => scheduler.shown());
+  // A page that loaded hidden (a background tab, a pane not yet shown) has had no frames, and a ResizeObserver reports nothing while it is hidden:
+  // the box is read again when it is shown (resize() fits the map again if nobody has moved the camera)
+  inst.onShown(() => {
+    const box = state.canvas && state.canvas.parentElement;
+    if (!ended && box && box.clientWidth && box.clientHeight && (box.clientWidth !== state.width || box.clientHeight !== state.height)) resize();
+  });
 
   /** Ends the map: no frame is waiting, the renderer's GPU context and the label layer are released, nothing is called again */
   function destroy() {
