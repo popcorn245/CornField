@@ -17,14 +17,14 @@
  *  - `paintOutage(scene, radius)`: the colours on a built scene: run hits red, deploy amber, renew violet (each
  *    `WHEN_STYLES[when].color`), each walked edge in the colour of the hit it made, the down nodes black with
  *    their label struck through. It only recolours and brightens: what the radius does not reach stays dimmed.
- *  - `outageLayers(radius, nodes)`: the Layers keys its nodes are drawn on, for the player to turn on.
- *  - `outageScenario(node, nodes, edges)`: the cloud panel's Play button: a scenario that takes the node down,
- *    one step on it with its `breaks` line, then one step per hit group (now, the next deploy, the next renewal).
+ *  - outage-scenario.js has what the player does with it: `outageLayers(radius, nodes)` (the Layers keys its nodes are drawn on, for the
+ *    player to turn on) and `outageScenario(node, nodes, edges)` (the cloud panel's Play button: a scenario that takes the node down, one
+ *    step on it with its `breaks` line, then one step per hit group). A map alone paints a radius and does not carry those.
  *
  * The House view (CLOUD-08) reads the same radius: `hits` and `down` by node id, whatever the view draws.
  */
 
-import { WHEN_STYLES, cloudUsedBy, externalLayer, nounOf, whenOf } from './cloud-model.js';
+import { WHEN_STYLES, whenOf } from './cloud-model.js';
 
 /** The `when`s, strongest first; a hit's rank is its index here */
 const WHENS = Object.keys(WHEN_STYLES);
@@ -33,7 +33,8 @@ const RANK = Object.fromEntries(WHENS.map((w, i) => [w, i]));
 const NEVER_HIT = new Set(['persona', 'room', 'floor']);
 /** The order hits are listed in within a group: outside first, then the house, then the code, then the sites */
 const TYPE_ORDER = ['external', 'machine', 'container', 'service', 'page', 'app'];
-const typeRank = (type) => { const i = TYPE_ORDER.indexOf(type); return i < 0 ? TYPE_ORDER.length : i; };
+/** Where a type comes in a list of hits (outage-scenario.js names them in this order too) */
+export const typeRank = (type) => { const i = TYPE_ORDER.indexOf(type); return i < 0 ? TYPE_ORDER.length : i; };
 
 /** How a down node and a hit look on the scene (the hit's colour is its `WHEN_STYLES[when].color`) */
 export const OUTAGE_DOWN = { color: '#050608', halo: 'child' };
@@ -167,75 +168,4 @@ export function paintOutage(scene, radius) {
     e.width = Math.max(e.width, HIT.edgeWidth);
     if (e.packet) e.packet = { ...e.packet, glowColor: color };
   }
-}
-
-/** The Layers keys the down nodes and the hits are drawn on (layers.js), each once: what the player turns on */
-export function outageLayers(radius, nodes) {
-  if (!radius) return [];
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const keys = new Set();
-  for (const id of [...radius.down, ...radius.hits.keys()]) {
-    const n = byId.get(id);
-    if (n) keys.add(n.type === 'external' ? externalLayer(n) : n.type);
-  }
-  return [...keys];
-}
-
-// ---------------------------------------------------------------------------
-//  The generated scenario
-// ---------------------------------------------------------------------------
-/** Up to this many of one kind are named; more are counted */
-const NAME_AT = 3;
-const BROWSER = ' (in the visitor\'s browser)';
-
-/** "a, b and c"; parts that hold an "and" of their own are kept apart with a comma ("the apps a and b, and the container c") */
-function andList(words) {
-  if (words.length < 2) return words.join('');
-  const glue = words.some((w) => w.includes(' and ')) ? ', and ' : ' and ';
-  return `${words.slice(0, -1).join(', ')}${glue}${words[words.length - 1]}`;
-}
-
-/** Hits of one group as words: "the container cloudflared and the machine server-1", "13 containers and 2 apps" */
-function describe(items) {
-  const byType = new Map();
-  for (const it of items) { if (!byType.has(it.type)) byType.set(it.type, []); byType.get(it.type).push(it); }
-  const parts = [...byType].sort(([ta, a], [tb, b]) => b.length - a.length || typeRank(ta) - typeRank(tb) || ta.localeCompare(tb)).map(([type, list]) => {
-    const noun = nounOf(type, list.length);
-    if (list.length > NAME_AT) {
-      const browsers = list.filter((i) => i.browser).length;
-      return `${list.length} ${noun}${browsers === list.length ? BROWSER : browsers ? ` (${browsers} in the visitor's browser)` : ''}`;
-    }
-    return `the ${noun} ${andList(list.map((i) => `${i.label}${i.browser ? BROWSER : ''}`))}`;
-  });
-  return andList(parts);
-}
-
-/**
- * The Play button's scenario for one cloud node (spec 0031 section 8): it takes the node down; the first step is
- * on the node with its `breaks` line; then one step per hit group, strongest first, on a call from one of the
- * node's own users when the group has one (else on its first hit), naming the direct users and then what breaks
- * through them. Validates as a proposal scenario on any map that has the node (its steps are the map's own).
- * @returns {{ id: string, title: string, down: string[], steps: object[] }}
- */
-export function outageScenario(node, nodes, edges) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const name = String(node.label || node.id);
-  const radius = blastRadius([node.id], nodes, edges);
-  const hitAs = (when) => (i) => radius.hits.has(i.id) && radius.hits.get(i.id).when === when; // a user with a stronger path elsewhere is listed there
-  const direct = new Map(cloudUsedBy(node, nodes, edges).map((g) => [g.when, g.types.flatMap((t) => t.items).filter(hitAs(g.when)).map((i) => ({ ...i, browser: radius.hits.get(i.id).browser }))]));
-  const opening = [`${name} is down.`, node.breaks ? String(node.breaks) : '', radius.groups.length ? '' : 'Nothing on the map uses it.'].filter(Boolean).join(' ');
-  const steps = [{ node: node.id, text: opening }];
-  for (const group of radius.groups) {
-    const own = direct.get(group.when) || [];
-    const ownIds = new Set(own.map((i) => i.id));
-    const through = group.ids.filter((id) => !ownIds.has(id)).map((id) => {
-      const n = byId.get(id);
-      return { id, label: String(n.label || id), type: n.type, browser: radius.hits.get(id).browser };
-    });
-    let text;
-    if (own.length) text = `${group.title}: ${describe(own)}.${through.length ? ` Through ${own.length === 1 ? 'it' : 'them'}: ${describe(through)}.` : ''}`;
-    else text = `${group.title}, through what uses it: ${describe(through)}.`;
-    steps.push(own.length ? { edge: { from: own[0].id, to: node.id, kind: 'calls' }, text } : { node: group.ids[0], text });
-  }
-  return { id: `outage-${node.id}`, title: `${name} is down`, down: [node.id], steps };
 }

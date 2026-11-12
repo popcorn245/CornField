@@ -4,7 +4,9 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX, ZOOM_FLOOR, panIntoView } from '../../explorer/camera.js';
+import { zoomAbout, pinchStart, pinchCamera, clampZoom, ZOOM_MIN, ZOOM_MAX, ZOOM_FLOOR } from '../../explorer/camera.js';
+// @ts-expect-error plain JS modules, no declarations
+import { panIntoView } from '../../explorer/camera-frame.js';
 
 
 const toWorld = (c     , sx        , sy        ) => ({ x: (sx - c.x) / c.zoom, y: (sy - c.y) / c.zoom });

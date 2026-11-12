@@ -168,9 +168,9 @@
  */
 
 import { flowStyleOf } from './flow-style.js';
-import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-model.js';
+import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-marks.js';
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
-import { paintVerdict } from './check-model.js';
+import { paintVerdict } from './verdict-paint.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
 import { greying, lettersOf, projectLayerKey, shownByProposal, layersOf } from './layer-model.js';
 import { NODE_THEMES, shapeOf } from '../core/schema.js';

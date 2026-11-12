@@ -11,11 +11,15 @@ import { SAMPLE, loadSample } from '../helpers.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  blastRadius, outageFor, outageScenario, outageLayers, paintOutage, OUTAGE_DOWN,
+  blastRadius, outageFor, paintOutage, OUTAGE_DOWN,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/outage-model.js';
 // @ts-expect-error plain JS modules, no declarations
-import { WHEN_STYLES, cloudPanelHtml } from '../../explorer/cloud-model.js';
+import { WHEN_STYLES } from '../../explorer/cloud-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { cloudPanelHtml } from '../../explorer/cloud-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import { outageLayers, outageScenario } from '../../explorer/outage-scenario.js';
 // @ts-expect-error plain JS modules, no declarations
 import { buildScene } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations

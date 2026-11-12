@@ -5,7 +5,7 @@
  * lights, how many of them are off screen, and the camera that frames them. "Frame them" in the node panel and the `F` key call
  * `frameSelection`; a selection that comes from search, a list, a link or the keyboard calls it too (engine/selection.js), and a click on the map never does.
  */
-import { visibleMapRect } from './engine/sheets.js';
+import { visibleMapRect } from './engine/map-rect.js';
 import { flyTo } from './engine/fly.js';
 import { countOffScreen, selectionCamera } from './selection-model.js';
 

@@ -34,7 +34,8 @@
  */
 
 import { edgePoint } from '../scene.js';
-import { frameNodes, largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from '../camera.js';
+import { frameNodes } from '../camera.js';
+import { largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from '../camera-frame.js';
 import { PROPOSAL_VIEWS, MARK_WORDS, touchedIds, viewWords, jumpWords, notFoundWords, otherCopies } from '../proposal-model.js';
 import { applyProposal, edgeKey, proposalProblems } from '../../core/proposal.js';
 import { beginReview, endReview, redrawLayers, reviewLayersLine } from './layers.js';

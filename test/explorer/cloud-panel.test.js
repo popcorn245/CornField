@@ -10,9 +10,11 @@ import { CAP } from '../../explorer/capped.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  WHEN_STYLES, whenOf, whenTicks, externalLayer, planLabel, cloudUsedBy, cloudPanelHtml,
+  WHEN_STYLES, whenOf, whenTicks, externalLayer,
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/cloud-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { planLabel, cloudUsedBy, cloudPanelHtml } from '../../explorer/cloud-panel.js';
 
 const topology = loadSample();
 const registry = sampleRegistry();

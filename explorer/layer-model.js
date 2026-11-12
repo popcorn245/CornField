@@ -16,7 +16,7 @@
  */
 
 import { STARTING_LAYERS, kindLetters, layerKeyOf, parentIndex, projectLayerOf } from '../core/layers.js';
-import { touchedIds } from './proposal-model.js';
+import { touchedIds } from './proposal-marks.js';
 
 /** Asks the ownership line of the map the state holds, only when a layer matches by `parent` */
 const parentFn = (state) => ((state.projectLayers || []).some((l) => l.match && l.match.parent !== undefined) ? (n) => parentIndex(state.edges || []).get(n.id) : undefined);
