@@ -214,11 +214,11 @@ export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
  * @returns {string[]}
  */
 export function validatePersonasFile(root, roles = null) {
-  const file = path.join(root, PERSONAS_FILE);
-  if (!fs.existsSync(file)) return [];
+  const io = repoReader(root); // a file that leads out of the repo is not there, as for the personas deriver
+  if (!io.exists(PERSONAS_FILE)) return [];
   let parsed;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed = JSON.parse(io.read(PERSONAS_FILE));
   } catch (err) {
     return [`${PERSONAS_FILE} is not valid JSON: ${err.message}`];
   }
@@ -232,11 +232,11 @@ export function validatePersonasFile(root, roles = null) {
  * @returns {string[]}
  */
 export function validateCloudNodes(topology, root) {
-  const file = path.join(root, CLOUD_FILE);
+  const io = repoReader(root); // a file that leads out of the repo is not there, as for the cloud deriver
   let parsed = null;
-  if (fs.existsSync(file)) {
+  if (io.exists(CLOUD_FILE)) {
     try {
-      parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      parsed = JSON.parse(io.read(CLOUD_FILE));
     } catch (err) {
       return [`${CLOUD_FILE} is not valid JSON: ${err.message}`];
     }

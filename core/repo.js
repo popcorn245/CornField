@@ -44,7 +44,8 @@ export function repoReader(root) {
   // symlink points at, a file whose real path is outside is not there (`read` throws, `exists` and `isDir` say no,
   // `list` is empty). A folder's verdict is kept for the reader's life, so a plain file costs one `lstat`, not a
   // `realpath` walk of its whole way; only a symlink is resolved each time. A file `walk` returned was judged by its
-  // real path there, and is read without a second look.
+  // real path there, and is read without a second look. Both are kept for the reader's life: make a reader per run, not
+  // one that outlives changes to the repo's links.
   const folders = new Map();
   const walked = new Set();
   const pending = []; // what `walk` returned since a read last looked: only a reader of those files pays to list them
@@ -53,13 +54,16 @@ export function repoReader(root) {
     if (v === undefined) { v = insideAbs(dir); folders.set(dir, v); }
     return v;
   };
+  // A trailing separator would make `lstat` follow a link it names (`ext/` for `ext`), so a path is looked at without one
+  const bare = (p) => { let q = p; while (q.length > 1 && (q.endsWith('/') || q.endsWith(path.sep))) q = q.slice(0, -1); return q; };
+  const rootAt = bare(path.join(root));
   /** `null` when there is nothing at `rel`; else whether it is a symlink, whether it lies in the repo, and (not a link) what it is */
   const look = (rel) => {
-    const at = abs(rel);
+    const at = bare(abs(rel));
     let st;
     try { st = fs.lstatSync(at); } catch { return null; }
     if (st.isSymbolicLink()) return { link: true, ok: insideAbs(at), st };
-    return { link: false, ok: at === path.join(root) || folderInside(path.dirname(at)), st };
+    return { link: false, ok: at === rootAt || folderInside(path.dirname(at)), st };
   };
   const outside = (rel) => Object.assign(new Error(`${JSON.stringify(String(rel))} is outside the repo.`), { code: 'EOUTSIDE' });
   const read = (rel) => {
@@ -120,7 +124,7 @@ export function repoReader(root) {
       });
     };
     const found = go(start, startReal, linked);
-    pending.push(found);
+    pending.push(found.slice()); // a copy: what a caller adds to the list it gets back is not taken for a walked file
     return found;
   };
   return { root, read, exists, isDir, list, walk, inside };
@@ -149,12 +153,21 @@ export const outsideProblem = (who, p) => `${who}: ${JSON.stringify(p)} is outsi
 /**
  * For `missingPaths`: whether a path `repoPaths` does not list is in the repo all the same, because a symlink on its way
  * stays in the repo (`repoPaths` does not follow links; the walk does, and makes nodes at such paths). The path must be
- * written plainly (relative, no `..`, no folder the walks skip), and `exists` holds it to its real path.
- * @param {{ exists: (rel: string) => boolean }} io
+ * written plainly (relative, no empty, `.` or `..` segment, no folder the walks skip), a symlink must be on its way (so a
+ * repo without one is checked exactly as `repoPaths` says), and `exists` holds it to its real path.
+ * @param {{ root: string, exists: (rel: string) => boolean }} io a repo reader
  * @returns {(p: string) => boolean}
  */
-export const reachable = (io) => (p) => typeof p === 'string' && p !== '' && !path.posix.isAbsolute(p) && path.posix.normalize(p) === p
-  && !p.split('/').some((s) => s === '..' || SKIP_DIRS.has(s)) && io.exists(p);
+export const reachable = (io) => (p) => {
+  if (typeof p !== 'string' || p === '' || p.includes('\0') || path.posix.isAbsolute(p) || path.win32.isAbsolute(p)) return false;
+  const segments = p.split('/');
+  if (segments.some((s) => s === '' || s === '.' || s === '..' || SKIP_DIRS.has(s))) return false;
+  if (!io.exists(p)) return false; // first, so a path that is not there costs one look
+  for (let i = 1; i <= segments.length; i++) {
+    try { if (fs.lstatSync(path.join(io.root, ...segments.slice(0, i))).isSymbolicLink()) return true; } catch { return false; }
+  }
+  return false;
+};
 
 /**
  * Every file and folder path under the root (relative, forward slashes), for checking the paths a map cites.
