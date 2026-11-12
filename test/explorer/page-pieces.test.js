@@ -22,7 +22,7 @@ const html = explorerPage();
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const header = () => document.querySelector('[data-corn="header"]');
 /** The hooks of the header's controls, in document order (not the rows the Layers menu draws once it is mounted) */
-const headerHooks = () => [...header().querySelectorAll('button, input, [data-corn="search"]')].filter((el) => !el.closest('#layer-toggles-container')).map((el) => el.getAttribute('data-corn') || el.getAttribute('data-action'));
+const headerHooks = () => [...header().querySelectorAll('button, input, [data-corn="search"]')].filter((el) => !el.closest('#layer-toggles-container') && el.getAttribute('data-corn') !== 'proposals-button').map((el) => el.getAttribute('data-corn') || el.getAttribute('data-action'));
 const squash = (s) => s.replace(/>\s+</g, '><').replace(/\s+/g, ' ').trim();
 
 describe('the header before the scripts run', () => {
@@ -64,6 +64,8 @@ describe('the header once the pieces are mounted', () => {
     expect(document.getElementById('legend-toggle-btn').getAttribute('data-corn')).toBe('layers-button');
     expect(document.getElementById('node-search').closest('[data-corn="search"]')).toBeTruthy();
     expect(document.body.innerHTML).not.toContain('corn-placeholder');
+    // the proposal piece's Proposals entry is in the account menu (hidden until the menu opens, so it needs no stand-in)
+    expect(header().querySelectorAll('[data-corn="account-menu"] #proposal-btn[data-corn="proposals-button"]')).toHaveLength(1);
   });
 
   it('carries over what was typed in the stand-in, and its focus', () => {

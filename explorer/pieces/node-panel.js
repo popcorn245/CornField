@@ -25,7 +25,7 @@
 
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { flowSummary } from '../engine/flow-ui.js';
-import { kindOfMark, fieldRows, MARK_WORDS } from '../proposal-model.js';
+import { kindOfMark, fieldRows, MARK_WORDS, proposalPanelHtml } from '../proposal-model.js';
 import { nodeMockupsHtml } from '../mockups-model.js';
 import { collapseSheet, initSheets, isPhone, measureCovered, onCoveredChange, registerSheet, unregisterSheet, showSheet, onBackdrop } from '../engine/sheets.js';
 import { panIntoView } from '../camera.js';
@@ -438,6 +438,38 @@ export function mount(root, inst, options = {}) {
   }
 
   /**
+   * Fills the panel for an edge and opens it: what it is, and what the proposal says about it (the engine's `showEdge` selects it and says `node:show-edge`).
+   * As ever, an edge alone gets no sheet on a phone (the panel is opened, not `showSheet`ed), and Escape on the map does not close it.
+   */
+  function showEdge(edge) {
+    if (!edge || gone) return;
+    const row = (label, value) => (value ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
+    const kind = edge.kind || (edge.dashed ? 'usage' : 'ownership');
+    const facts = row('Kind', kind) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
+    const title = own('drawer-title');
+    title.textContent = `${sections.nameOf(edge.from)} → ${sections.nameOf(edge.to)}`;
+    title.classList.remove('hx-mono');
+    own('drawer-badge').textContent = 'Edge';
+    own('drawer-host').textContent = '';
+    own('drawer-diff').hidden = true;
+    const lead = own('drawer-description');
+    lead.textContent = '';
+    lead.hidden = true;
+    metaList.innerHTML = `${facts ? `<div class="hx-facts">${facts}</div>` : ''}
+    <div class="hx-facts">
+      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">From</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(sections.nameOf(edge.from))}</button></div></div>
+      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(sections.nameOf(edge.to))}</button></div></div>
+    </div>${proposalPanelHtml(edge)}`;
+    addParts(metaList);
+    own('drawer-open-btn').hidden = true;
+    own('drawer-file-btn').hidden = true;
+    own('drawer-run-btn').hidden = true;
+    drawer.classList.add('drawer-open');
+    drawer.inert = false; // closed, the panel is inert (MAP-02): open for an edge, its links and its Close are reached as a node's are
+    backdrop.hidden = false;
+  }
+
+  /**
    * On a phone the node's sheet covers the bottom of the map (engine/sheets.js): when the selected node is under it, or
    * gets covered as the sheet expands, pan the map (never zoom it) so the node is in the part still showing (F32)
    */
@@ -498,6 +530,7 @@ export function mount(root, inst, options = {}) {
 
   scope.on('node:show', ({ node, frame }) => show(node, { frame }));
   scope.on('node:close', close);
+  scope.on('node:show-edge', ({ edge }) => showEdge(edge));
   // Enter on the map goes into the open panel: its title takes the focus, so a screen reader starts there and Tab goes on into it
   scope.on('node:focus', () => {
     const title = own('drawer-title');

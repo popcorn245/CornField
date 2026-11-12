@@ -148,6 +148,8 @@ describe('the generated markup', () => {
     state.proposal = { title: 'p' };
     state.proposalSlug = 's';
     state.proposalSource = 'pull/3';
+    document.body.innerHTML = /<body>([\s\S]*)<\/body>/.exec(explorerPage())[1].replace(/<script[\s\S]*?<\/script>/g, ''); // the page with the places of its pieces: the decision is made there, in the words just set
+    resetReviewForTests();
     initReview();
     const root = $('review');
     const bar = $('review-decision');

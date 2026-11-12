@@ -11,7 +11,11 @@ import { markup as nodePanelMarkup } from '../explorer/pieces/node-panel.js';
 import { markup as layersMarkup } from '../explorer/pieces/layers.js';
 import { markup as searchMarkup } from '../explorer/pieces/search.js';
 
-const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup };
+import { markup as proposalMarkup } from '../explorer/pieces/proposal.js';
+import { markup as changesMarkup } from '../explorer/pieces/changes.js';
+import { markup as decisionMarkup } from '../explorer/pieces/decision.js';
+
+const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup };
 
 export const CORNFIELD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SAMPLE = path.join(CORNFIELD, 'test', 'fixtures', 'sample');
@@ -36,9 +40,10 @@ export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00
 export function explorerPage({ pieces = false } = {}) {
   const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
   if (!pieces) return page;
-  return page
-    .replace(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1-->)/g, '') // the stand-in goes when the piece comes (engine/piece.js place)
-    .replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
+  let out = page.replace(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1-->)/g, ''); // the stand-in goes when the piece comes (engine/piece.js place)
+  // a piece's markup may keep a place for another (the review column holds the decision's foot): fill those too
+  for (let i = 0; i < 3; i++) out = out.replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
+  return out;
 }
 
 /** The stand-in index.html keeps for a piece's markup until the piece is mounted: the same markup, with its parts, without ids (nor what points at them) */

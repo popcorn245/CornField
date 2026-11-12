@@ -152,11 +152,8 @@
           <!-- Review tokens (explorer/review-tokens.js): shown only when somebody is signed in to a forge -->
           <button type="button" id="tokens-btn" class="hx-account-item" aria-haspopup="dialog" aria-expanded="false" aria-controls="tokens-dialog" title="Review tokens: let a script or a chat bot approve or send back a proposal as you" hidden data-corn="tokens-button">Review tokens</button>
 
-          <!-- Proposals: what a change would add, change and remove, drawn on the map (proposal.js). Only without the Work panel (no forge, or no sign-in): with it, its Specs tab lists them and forge-panel.js hides this -->
-          <div id="proposal-wrap">
-            <button type="button" id="proposal-btn" class="hx-account-item" data-action="toggle-proposals-menu" aria-haspopup="true" aria-expanded="false" title="Open a proposal: what a change would add, change and remove" data-corn="proposals-button"><span data-corn-string="proposals">Proposals</span><span class="hx-faint" aria-hidden="true">▾</span></button>
-            <div id="proposal-menu" class="hx-menu hx-menu--proposals" hidden data-corn="proposals-menu"></div>
-          </div>
+          <!-- Proposals: what a change would add, change and remove, drawn on the map. It is part of the proposal piece (explorer/pieces/proposal.js): page.js mounts it here. Only without the Work panel (no forge, or no sign-in): with it, its Specs tab lists them and forge-panel.js hides this -->
+          <!--corn-piece:proposal/menu-->
 
           <!-- The config's links (cornfield.config.js `links`), the forge and Docs, then Sign out: filled by explorer/plugins.js -->
           <div id="cf-links" class="hx-links" data-corn="links"></div>
@@ -183,61 +180,11 @@
 
     <!-- Below 768px the proposal bar, the scenario player and the node panel stack here as bottom sheets (sheets.js); from 768px the dock is display: contents -->
     <div id="sheet-dock" class="hx-dock" data-corn="dock">
-    <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Play, Edit, Send back, Approve, ⋯ (proposal.js, review.js, whatif.js, scenario-ui.js) -->
-    <section id="proposal-bar" class="hx-proposal-bar glass" aria-label="Open proposal" hidden data-corn="proposal-bar">
-      <p id="proposal-message" class="hx-proposal-message" data-corn="message" role="status" hidden></p>
-      <div id="proposal-ways" class="hx-proposal-ways" role="group" aria-label="Ways on" data-corn="proposal-ways" hidden></div>
-      <div id="proposal-body">
-        <div class="hx-proposal-head" data-corn="proposal-head" role="group" aria-label="Proposal actions">
-          <h2 id="proposal-title" class="hx-proposal-name" data-corn="proposal-title"></h2>
-          <a id="proposal-source" class="hx-proposal-source" data-corn="proposal-source" hidden></a>
-          <div class="hx-proposal-counts">
-            <div id="proposal-chip" class="hx-proposal-chip" data-corn="proposal-counts"></div>
-            <p id="proposal-peek" class="hx-proposal-peek"></p>
-            <button type="button" id="proposal-mode" class="hx-proposal-mode" data-corn="proposal-mode" data-action="toggle-proposal-mode" data-peek-ok aria-expanded="false" aria-controls="proposal-seg" title="Before, Diff or After"></button>
-          </div>
-          <div id="proposal-seg" class="hx-seg" data-corn="compare" role="group" aria-label="Compare">
-            <button data-corn="compare-option" type="button" class="hx-seg-btn" data-action="proposal-view" data-view="before" aria-pressed="false" data-corn-string="before">Before</button>
-            <button data-corn="compare-option" type="button" class="hx-seg-btn" data-action="proposal-view" data-view="diff" aria-pressed="true" data-corn-string="diff">Diff</button>
-            <button data-corn="compare-option" type="button" class="hx-seg-btn" data-action="proposal-view" data-view="after" aria-pressed="false" data-corn-string="after">After</button>
-          </div>
-          <div class="hx-proposal-tools">
-            <!-- Shown only while there are what-if edits: off, the map is the proposal as written; the edits are kept and still go with a review (whatif.js) -->
-            <!-- The review narrows the map to the change; this puts the whole map back, as Diff always was (layers.js setWholeMap). Off at every opening -->
-            <!-- Its words are "Whole map", which read right pressed or not; its name and tooltip are the full "Show the whole map". On a desk it sits beside the title, so the bar keeps its rows (explorer.css) -->
-            <button data-corn="whole-map" data-corn-kind="secondary" type="button" id="proposal-whole" class="hx-btn" data-action="proposal-whole" aria-pressed="false" aria-label="Show the whole map" title="Show the whole map" data-peek-ok data-corn-string="wholeMap" data-corn-string-aria-label="showWholeMap">Whole map</button>
-            <button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>
-            <button data-corn-kind="secondary" type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
-          </div>
-          <div class="hx-proposal-more">
-            <button type="button" id="proposal-more" class="hx-btn hx-btn--icon" data-action="toggle-proposal-more" aria-haspopup="menu" aria-expanded="false" aria-controls="proposal-more-menu" aria-label="More" data-corn-kind="icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/></svg></button>
-            <div id="proposal-more-menu" class="hx-proposal-more-menu glass" data-corn="proposal-menu" role="menu" aria-label="More" hidden>
-              <button type="button" role="menuitem" class="hx-btn hx-btn--quiet" data-action="close-proposal" title="Close the proposal and go back to the map" data-corn-kind="quiet" data-corn-string="closeProposal">Close</button>
-            </div>
-          </div>
-        </div>
-        <details id="proposal-errors" class="hx-proposal-errors" data-corn="proposal-errors" hidden>
-          <summary data-corn="summary" id="proposal-errors-count"></summary>
-          <ul id="proposal-errors-list"></ul>
-          <p class="hx-faint">The map shows what it can.</p>
-        </details>
-      </div>
-    </section>
+    <!-- The open proposal, a toolbar: title, counts, Before / Diff / After, Whole map, Edit, ⋯. It is a piece (explorer/pieces/proposal.js): page.js mounts it here -->
+    <!--corn-piece:proposal/bar-->
 
-    <!-- The review column (review-column.js, spec 0006): what the proposal changes, and the personas and the scenarios that apply to them. Docked left of the map from 768px, the expanded proposal sheet's body on a phone -->
-    <aside id="review-column" class="hx-review-column glass" aria-label="Review" data-corn="review-column" hidden>
-      <div class="hx-rc-scroll">
-        <p id="proposal-summary" class="hx-proposal-summary" hidden></p>
-        <div id="review-lists" class="hx-rc-lists"></div>
-      </div>
-      <!-- The decision, the column's foot: Send back and Approve (review.js). Spec 0007 puts its line about what Approve does above them here. -->
-      <div id="review-decision" class="hx-rc-foot" data-corn="decision" role="group" aria-label="Decision">
-        <div class="hx-proposal-actions">
-            <button data-corn-kind="secondary" type="button" class="hx-btn" data-review="notes" data-peek-ok title="Send it back to the drafting agent with a note and your edits" data-corn-string="sendBack">Send back</button>
-            <button type="button" class="hx-btn hx-btn--approve" data-review="approved" data-peek-ok title="Sign this proposal off" data-corn-kind="approve" data-corn-string="approve">Approve</button>
-          </div>
-      </div>
-    </aside>
+    <!-- The review column (explorer/pieces/changes.js, spec 0006): what the proposal changes, and the personas and the scenarios that apply to them. Docked left of the map from 768px, the expanded proposal sheet's body on a phone. The decision (explorer/pieces/decision.js, spec 0007) is its foot: the column keeps its place -->
+    <!--corn-piece:changes/column-->
 
     <!-- The Work panel (forge-panel.js): Specs, PRs, Issues, Threads, Runs and Deploys, in the order of the loop. A slide-over from the left on desktop, a bottom sheet on a phone; hidden and inert until the config names a forge. `forge-panel` on the inner box is the old name of the hook, kept for one release (docs/theming.md) -->
     <p id="offline-banner" class="hx-offline" data-corn="notice" hidden></p>

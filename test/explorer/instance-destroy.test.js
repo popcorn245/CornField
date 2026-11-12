@@ -23,6 +23,16 @@ import * as layersPiece from '../../explorer/pieces/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import * as searchPiece from '../../explorer/pieces/search.js';
 // @ts-expect-error plain JS modules, no declarations
+import * as proposalPiece from '../../explorer/pieces/proposal.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as changesPiece from '../../explorer/pieces/changes.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as decisionPiece from '../../explorer/pieces/decision.js';
+// @ts-expect-error plain JS modules, no declarations
+import { showProposal, openProposal } from '../../explorer/engine/proposal.js';
+// @ts-expect-error plain JS modules, no declarations
+import { HOLD_MS } from '../../explorer/decision-model.js';
+// @ts-expect-error plain JS modules, no declarations
 import { initKeyboard } from '../../explorer/engine/keyboard.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode } from '../../explorer/engine/selection.js';
@@ -304,6 +314,161 @@ describe('the pieces: node panel, Layers menu, search', () => {
     expect(snapshot().timers).toBeGreaterThan(quiet);
     pieces.end();
     inst.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+//  Step 5: the proposal's bar, the change list with the player, the decision
+// ---------------------------------------------------------------------------
+
+const PROPOSAL = {
+  version: 1, spec: '0001', title: 'Add a page', summary: 'Adds /new.',
+  nodes: { add: [{ id: 'page-new', label: '/new', type: 'page', parent: 'a' }] },
+  edges: { add: [{ from: 'page-new', to: 'b', kind: 'calls', label: 'asks' }] },
+  scenarios: [{ id: 's1', title: 'Opening the page', stepMs: 1000, steps: [{ node: 'page-new', text: 'It opens.' }, { node: 'b', text: 'Then it asks.' }] }],
+};
+const FACTS = { pull: { number: 21, draft: false, head: 'a'.repeat(40) }, checks: { total: 1, passed: 1, running: 0, failed: [] }, lands: false, landing: null, run: null };
+const jsonRes = (status, data) => ({ ok: status < 400, status, redirected: false, headers: new Headers(), json: async () => data });
+
+/** A fetch for the review's routes; `hold` is a list the test pushes to, to answer a request later */
+function reviewFetch({ hold = null } = {}) {
+  const calls = [];
+  vi.stubGlobal('fetch', vi.fn((url, init = {}) => {
+    const method = init.method || 'GET';
+    calls.push({ method, url: String(url) });
+    const answer = () => {
+      if (String(url).includes('/decision')) return jsonRes(200, FACTS);
+      if (method === 'PUT') return jsonRes(200, { verdict: 'approved', at: new Date().toISOString() });
+      if (String(url).includes('/review')) return jsonRes(404, { error: 'No review yet' });
+      if (String(url).includes('/api/forge/pulls/')) return jsonRes(200, { pull: { number: 21, state: 'open', head: { sha: 'a'.repeat(40) } }, checks: [] });
+      return jsonRes(404, { error: 'no' });
+    };
+    if (hold && !String(url).includes('/api/forge/')) return new Promise((resolve) => hold.push(() => resolve(answer())));
+    return Promise.resolve(answer());
+  }));
+  return calls;
+}
+
+/** The three pieces of the review on an instance, with a proposal open on it; `end()` destroys them */
+function mountReview(root, inst) {
+  Object.assign(inst.state, { baseNodes: inst.state.nodes.map((n) => ({ ...n })), baseEdges: inst.state.edges.map((e) => ({ ...e })) });
+  const pieces = [proposalPiece.mount(root, inst), changesPiece.mount(root, inst), decisionPiece.mount(root, inst)];
+  showProposal(inst, structuredClone(PROPOSAL), { slug: '0001-add-a-page', source: 'pull/21', sha256: 'b'.repeat(64) });
+  return Object.assign(pieces, { end: () => pieces.slice().reverse().forEach((p) => p.destroy()) });
+}
+
+describe('the review pieces: proposal bar, change list with the player, decision', () => {
+  beforeEach(() => { reviewFetch(); });
+
+  it('have things to take back: listeners, observers, timers, markup', async () => {
+    const { inst, root } = make();
+    const before = snapshot();
+    const pieces = mountReview(root, inst);
+    await vi.advanceTimersByTimeAsync(0);
+    const after = snapshot();
+    expect(after.listeners).toBeGreaterThan(before.listeners + 8);
+    expect(after.timers).toBeGreaterThan(before.timers);
+    expect(root.querySelector('#proposal-bar') && root.querySelector('#review-column') && root.querySelector('#review-decision')).toBeTruthy();
+    pieces.end();
+    for (const id of ['proposal-bar', 'proposal-wrap', 'review-column', 'review-decision']) expect(root.querySelector(`#${id}`), id).toBeNull();
+    inst.destroy();
+  });
+
+  it('mounted, played, held and destroyed 50 times on one instance, add nothing', async () => {
+    const { inst, root } = make();
+    const first = mountReview(root, inst);
+    first.end();
+    await vi.advanceTimersByTimeAsync(0);
+    const once = snapshot();
+    for (let i = 0; i < 50; i++) {
+      const pieces = mountReview(root, inst);
+      await vi.advanceTimersByTimeAsync(0); // the facts are read
+      pieces[1].playScenario(inst.state.proposal.scenarios[0], { autoplay: true }); // a scenario plays: a bar, a frame client, a sheet
+      root.querySelector('[data-review="approved"]').click(); // a hold counts down
+      pieces.end();
+    }
+    expect(snapshot()).toEqual(once);
+    expect(root.querySelectorAll('[data-corn="proposal-bar"], [data-corn="review-column"], [data-corn="decision"], [data-corn="scenario-player"], [data-corn="proposals-button"]')).toHaveLength(0);
+    inst.destroy();
+  });
+
+  it('are what does it: ten sets mounted and not destroyed leave listeners behind', () => {
+    const { inst, root } = make();
+    const base = snapshot().listeners;
+    for (let i = 0; i < 10; i++) mountReview(root, inst);
+    expect(snapshot().listeners).toBeGreaterThan(base + 10 * 8);
+    inst.destroy();
+  });
+
+  it('a destroy while a scenario plays takes the bar, the frame client and the sheet with it, and the instance carries on', async () => {
+    const { inst, root, map } = make();
+    const pieces = mountReview(root, inst);
+    const snap = pieces[1].playScenario(inst.state.proposal.scenarios[0], { autoplay: true });
+    expect(snap && root.querySelector('.hx-player')).toBeTruthy();
+    expect(inst.state.scenario).not.toBeNull();
+    const heard = vi.fn();
+    inst.on('scenario:player', heard);
+    pieces.end();
+    expect(root.querySelector('.hx-player')).toBeNull();
+    expect(inst.state.scenario).toBeNull();
+    heard.mockClear();
+    vi.advanceTimersByTime(3000); // the frames that would have played it
+    map.renderNow();
+    expect(heard).not.toHaveBeenCalled();
+    expect(inst.state.scenario).toBeNull();
+    inst.destroy();
+  });
+
+  it('a destroy while a hold counts down sends nothing and leaves no timer', async () => {
+    const calls = reviewFetch();
+    const { inst, root } = make();
+    const pieces = mountReview(root, inst);
+    await vi.advanceTimersByTimeAsync(0);
+    root.querySelector('[data-review="approved"]').click();
+    expect(root.querySelector('[data-review-hold]').hidden).toBe(false);
+    const timers = vi.getTimerCount();
+    pieces.end();
+    expect(vi.getTimerCount()).toBeLessThan(timers);
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 5000);
+    expect(calls.filter((c) => c.method === 'PUT')).toEqual([]);
+    inst.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a destroy while a fetch is in flight paints nothing and says nothing when the answer comes', async () => {
+    const hold = [];
+    reviewFetch({ hold });
+    const { inst, root } = make();
+    const said = vi.fn();
+    inst.on('decision', said);
+    inst.on('auth', said);
+    const pieces = mountReview(root, inst); // the decision and the review are asked, and not answered
+    expect(hold.length).toBeGreaterThan(0);
+    const foot = root.querySelector('#review-decision');
+    pieces.end();
+    hold.splice(0).forEach((answer) => answer());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(said).not.toHaveBeenCalled();
+    expect(foot.isConnected).toBe(false);
+    expect(root.querySelector('#review-decision')).toBeNull();
+    inst.destroy();
+  });
+
+  it('a destroy while the proposal is being fetched leaves the bar gone and the map as it was', async () => {
+    const hold = [];
+    reviewFetch({ hold });
+    const { inst, root } = make();
+    Object.assign(inst.state, { baseNodes: inst.state.nodes.map((n) => ({ ...n })), baseEdges: inst.state.edges });
+    const bar = proposalPiece.mount(root, inst);
+    const opening = openProposal(inst, '0001-add-a-page', 'pull/21');
+    bar.destroy();
+    inst.destroy();
+    hold.splice(0).forEach((answer) => answer());
+    await vi.advanceTimersByTimeAsync(0);
+    await opening.catch(() => {});
+    expect(root.querySelector('#proposal-bar')).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
   });
 });

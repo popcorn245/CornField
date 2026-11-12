@@ -382,8 +382,9 @@ describe('the time', () => {
     const s = fakeServer({ review: { version: 1, verdict: 'approved', at: new Date(T0 - 60_000).toISOString() } });
     open(robot(), '0013-meals', 'pull/24');
     await settle();
-    expect(s.calls[0].method).toBe('GET');
-    expect(s.calls[0].url).toBe('/proposals/0013-meals/review?source=pull%2F24');
+    const read = s.calls.find((c) => c.url.startsWith('/proposals/')); // (the bar's chip reads the PR too: /api/forge/pulls/24)
+    expect(read.method).toBe('GET');
+    expect(read.url).toBe('/proposals/0013-meals/review?source=pull%2F24');
     expect(status()).toBe('Approved 1 minute ago');
   });
 

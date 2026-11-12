@@ -15,6 +15,7 @@
  *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
+ *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onHide(fn): the few window facts the review needs
  *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
@@ -209,11 +210,28 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
     /** The device pixel ratio now */
     dpr: () => (win && win.devicePixelRatio) || 1,
     /** Whether the tab is hidden */
-    hidden: () => !!(doc && doc.hidden),
+    hidden: () => !!(doc && (doc.hidden || doc.visibilityState === 'hidden')),
     /** Calls `fn` when the tab is shown again; the one document-level fact an instance needs. Removed by destroy(). */
     onShown(fn) {
       if (!doc) return () => {};
-      return inst.listen(doc, 'visibilitychange', () => { if (!doc.hidden) fn(); });
+      return inst.listen(doc, 'visibilitychange', () => { if (!inst.hidden()) fn(); });
+    },
+    /** Whether the browser says it has no network (`navigator.onLine === false`) */
+    offline: () => !!(win && win.navigator && win.navigator.onLine === false),
+    /** Calls `fn(offline)` when the browser goes offline (true) or comes back (false). Removed by destroy(). */
+    onNetwork(fn) {
+      if (!win) return () => {};
+      const offs = [inst.listen(win, 'offline', () => fn(true)), inst.listen(win, 'online', () => fn(false))];
+      return () => offs.forEach((off) => off());
+    },
+    /** Calls `fn()` when the window gets the focus again. Removed by destroy(). */
+    onWindowFocus: (fn) => (win ? inst.listen(win, 'focus', () => fn()) : () => {}),
+    /** Calls `fn()` when the page is going away (a tab closed, a reload). Removed by destroy(). */
+    onPageHide: (fn) => (win ? inst.listen(win, 'pagehide', () => fn()) : () => {}),
+    /** Calls `fn()` when the tab is hidden. Removed by destroy(). */
+    onHide(fn) {
+      if (!doc) return () => {};
+      return inst.listen(doc, 'visibilitychange', () => { if (inst.hidden()) fn(); });
     },
     /** A small key-value store (the browser's localStorage, which may be blocked): what a viewer's own choices are kept in */
     store: {
@@ -248,6 +266,8 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
       if (!slots.has(key)) slots.set(key, make(inst));
       return slots.get(key);
     },
+    /** Whether `destroy()` has run: an answer that arrives after it (a fetch in flight) is not wanted */
+    get ended() { return destroyed; },
     /** Removes every listener, observer and timer the instance's modules set up and releases the renderer's GPU context. Safe to call twice. */
     destroy() {
       if (destroyed) return;
