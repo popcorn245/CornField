@@ -18,10 +18,11 @@ import { escapeHtml as esc } from '../../core/text.js';
 import { deriveTopology } from '../../core/derive.js';
 import { readTopology } from '../../core/validate.js';
 import { renderMarkdown, safeUrl } from './markdown.js';
-import docsDeriver, { resolveLink } from './index.js';
+import docsDeriver, { resolveLink, SITE_OUTPUTS } from './index.js';
+import { repoReader } from '../../core/repo.js';
 
 /** The file a built site holds, so a rebuild knows the folder is its own */
-export const SITE_MARKER = '.cornfield-site';
+export const SITE_MARKER = SITE_OUTPUTS[2];
 const IMAGE = /\.(png|jpe?g|gif|svg|webp|avif)$/i;
 
 /** The forge URL a repo file is shown at, from the config's forge, or null */
@@ -102,6 +103,7 @@ ${body}
 `;
 
   for (const page of pages) {
+    if (SITE_OUTPUTS.includes(page.output) || pages.some((q) => q !== page && q.output === page.output)) throw new Error(`${page.file} would be written to ${page.output}, which another page or the site itself writes.`);
     const { html } = renderMarkdown(read(page.file), {
       link: (href, { image }) => {
         const t = resolveLink(page.file, href);
@@ -218,21 +220,32 @@ export async function buildSite({ config, derivers, out, sourceUrl = sourceUrlOf
   const derived = await deriveTopology({ root, config, derivers: list, map: readTopology(config) });
   const pages = derived.info.docs?.pages || [];
   if (!pages.length) throw new Error('There are no docs to build: the docs deriver found no Markdown (see its "paths" option).');
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
-  const exists = (rel) => fs.existsSync(path.join(root, rel));
-  const isDir = (rel) => { try { return fs.statSync(path.join(root, rel)).isDirectory(); } catch { return false; } };
+  // What the site reads is the repo's: a path that leads out of it, by `..` or a symlink, is as if it were not there
+  const io = repoReader(root);
+  const read = (rel) => {
+    if (!io.inside(rel)) throw new Error(`${rel} is outside the repo.`);
+    return fs.readFileSync(path.join(root, rel), 'utf8');
+  };
+  const exists = (rel) => io.inside(rel) && io.exists(rel);
+  const isDir = (rel) => io.inside(rel) && io.isDir(rel);
   const files = siteFiles({ title: config.title || 'Docs', pages, nodes: derived.nodes, edges: derived.edges, read, exists, isDir, sourceUrl });
   // Only a folder this builds (it leaves a marker) or an empty one is emptied: never a folder of the repo's own files
   if (fs.existsSync(out) && fs.readdirSync(out).length && !fs.existsSync(path.join(out, SITE_MARKER))) throw new Error(`${out} is not empty and is not a site cornfield built: pick another folder, or empty it first.`);
   fs.rmSync(out, { recursive: true, force: true });
   files[SITE_MARKER] = 'Built by cornfield docs. This folder is emptied on every build.\n';
+  const problems = [...derived.problems];
+  const written = [];
   for (const [rel, content] of Object.entries(files)) {
     const dest = path.join(out, rel);
+    // What is written lies in `out`, whatever a doc is called
+    if (path.relative(out, dest).split(path.sep)[0] === '..' || path.isAbsolute(path.relative(out, dest))) { problems.push(`docs: ${rel} would be written outside ${path.basename(out)}; it is not.`); continue; }
+    if (typeof content !== 'string' && !io.inside(content.copy)) { problems.push(`docs: ${content.copy} leads outside the repo; it is not copied.`); continue; }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     if (typeof content === 'string') fs.writeFileSync(dest, content, 'utf8');
     else fs.copyFileSync(path.join(root, content.copy), dest);
+    written.push(rel);
   }
-  return { pages: pages.length, files: Object.keys(files).sort(), warnings: derived.warnings, problems: derived.problems };
+  return { pages: pages.length, files: written.sort(), warnings: derived.warnings, problems };
 }
 
 const SITE_CSS = `:root {

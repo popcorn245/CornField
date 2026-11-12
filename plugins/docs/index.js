@@ -24,17 +24,25 @@ export const DEFAULT_PATHS = ['README.md', 'docs'];
 const isMarkdown = (f) => /\.md$/i.test(f);
 const isReadme = (f) => /^readme\.md$/i.test(path.posix.basename(f));
 
+/** The files the site writes itself: a doc's page may not land on one (see `docOutputs`) */
+export const SITE_OUTPUTS = ['map.html', 'site.css', '.cornfield-site'];
+
 /**
- * The Markdown files the paths name, sorted, each once.
- * @param {{ exists: Function, isDir: Function, walk: Function }} io
+ * The Markdown files the paths name, sorted, each once. A path that leaves the repo (`..`, an absolute path, a
+ * symlink to somewhere else), and a file or folder under one that does, is left out and said by `refuse`.
+ * @param {{ exists: Function, isDir: Function, walk: Function, inside?: Function }} io
  * @param {string[]} paths
+ * @param {(message: string, severity: 'problem' | 'warning') => void} [refuse]
  */
-export function docFiles(io, paths) {
+export function docFiles(io, paths, refuse = () => {}) {
   const out = new Set();
+  const inside = io.inside || (() => true);
   for (const p of paths) {
-    const rel = p.replace(/^\.\/+/, '').replace(/\/+$/, '');
-    if (io.isDir(rel)) io.walk(rel, isMarkdown).forEach((f) => out.add(f));
-    else if (isMarkdown(rel) && io.exists(rel)) out.add(rel);
+    const rel = path.posix.normalize(p.replace(/^\.\/+/, '').replace(/\/+$/, '') || '.');
+    if (path.isAbsolute(p) || path.win32.isAbsolute(p) || rel === '..' || rel.startsWith('../') || !inside(rel)) { refuse(`docs: "${p}" is outside the repo; only files and folders of the repo are read.`, 'problem'); continue; }
+    if (io.isDir(rel)) {
+      io.walk(rel, isMarkdown, (f, why) => refuse(why === 'outside' ? `docs: ${f} is a link to somewhere outside the repo; it is not followed.` : `docs: ${f} leads to a folder already read; it is not read again.`, 'warning')).forEach((f) => out.add(f));
+    } else if (isMarkdown(rel) && io.exists(rel)) out.add(rel);
   }
   return [...out].sort();
 }
@@ -52,6 +60,31 @@ export function docRoute(file) {
 export function docOutput(file) {
   const route = docRoute(file);
   return route.endsWith('/') ? `${route.slice(1)}index.html` : `${route.slice(1)}.html`;
+}
+
+/**
+ * Where each doc lands, by file. A doc whose page would land on a file the site writes itself (`map.md` → `map.html`),
+ * or on another doc's page (`index.md` beside a README), goes to the next free `-doc` name (`map-doc.html`), so no
+ * page is written over; `renamed` lists `[file, output, other]` for each. A README keeps the folder's `index.html`,
+ * and the first of two docs keeps its name. A doc with no clash keeps `docOutput(file)`.
+ * @param {string[]} files
+ */
+export function docOutputs(files) {
+  const taken = new Map(SITE_OUTPUTS.map((o) => [o, null]));
+  const outputs = new Map();
+  const renamed = [];
+  for (const file of [...files].sort((a, b) => Number(isReadme(b)) - Number(isReadme(a)))) {
+    let out = docOutput(file);
+    if (taken.has(out)) {
+      const other = taken.get(out);
+      const stem = out.replace(/\.html$/, '');
+      for (let n = 1; taken.has(out); n++) out = `${stem}-doc${n > 1 ? `-${n}` : ''}.html`;
+      renamed.push([file, out, other]);
+    }
+    taken.set(out, file);
+    outputs.set(file, out);
+  }
+  return { outputs, renamed };
 }
 
 /** The page node id of a doc: `page-doc-` and its path, in kebab case */
@@ -84,13 +117,16 @@ export default {
   derive(ctx) {
     const { paths = DEFAULT_PATHS, app: appId = 'app-docs', label = 'docs', parent = 'root' } = ctx.options || {};
     if (!Array.isArray(paths) || !paths.every((p) => typeof p === 'string' && p)) throw new Error('options.paths is a list of files and folders, like ["README.md", "docs"].');
-    const files = docFiles(ctx, paths);
-    const empty = { nodes: [], edges: [], info: { pages: [] } };
-    if (!files.length) return { ...empty, warnings: ctx.options?.paths ? [`docs: no Markdown in ${paths.join(', ')}.`] : [] };
-
     const warnings = [];
     const problems = [];
-    const nodes = [{ id: appId, type: 'app', label, file: paths.map((p) => p.replace(/^\.\/+/, '').replace(/\/+$/, '')).find((p) => ctx.exists(p)) }];
+    const refuse = (message, severity) => (severity === 'problem' ? problems : warnings).push(message);
+    const files = docFiles(ctx, paths, refuse);
+    const empty = { nodes: [], edges: [], info: { pages: [] } };
+    if (!files.length) return { ...empty, warnings: [...warnings, ...(ctx.options?.paths ? [`docs: no Markdown in ${paths.join(', ')}.`] : [])], problems };
+
+    const { outputs, renamed } = docOutputs(files);
+    for (const [file, output, other] of renamed) warnings.push(`docs: ${file} would be page ${docOutput(file)}, ${other ? `which ${other} has` : 'which the site writes itself'}; it is written to ${output}.`);
+    const nodes = [{ id: appId, type: 'app', label, file: paths.map((p) => p.replace(/^\.\/+/, '').replace(/\/+$/, '')).find((p) => ctx.exists(p) && ctx.inside(p)) }];
     const edges = [];
     if (ctx.nodes.some((n) => n.id === parent)) edges.push({ from: parent, to: appId });
 
@@ -102,7 +138,7 @@ export default {
       if (clash) { problems.push(`docs: ${file} and ${clash.file} would both be page "${id}"; rename one.`); continue; }
       const text = ctx.read(file);
       const { title, headings } = renderMarkdown(text);
-      const page = { id, file, route: docRoute(file), output: docOutput(file), title: title || path.posix.basename(file, '.md'), anchors: headings.map((h) => h.id), text };
+      const page = { id, file, route: docRoute(file), output: outputs.get(file), title: title || path.posix.basename(file, '.md'), anchors: headings.map((h) => h.id), text };
       pages.push(page);
       byFile.set(file, page);
       nodes.push({ id, type: 'page', label: page.route, file, summary: page.title });
@@ -126,6 +162,7 @@ export default {
         if (t.external) continue;
         if (t.outside) { warnings.push(`docs: ${page.file} links to "${href}", outside the repo.`); continue; }
         const target = t.path === '' ? page.file : t.path;
+        if (!ctx.inside(target)) { warnings.push(`docs: ${page.file} links to "${href}", which leads outside the repo.`); continue; }
         if (!ctx.exists(target)) { problems.push(`docs: ${page.file} links to "${href}", but ${target} is not in the repo.`); continue; }
         const readme = ctx.isDir(target) ? files.find((f) => path.posix.dirname(f) === target && isReadme(f)) : null;
         const doc = byFile.get(readme || target);
