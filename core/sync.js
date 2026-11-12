@@ -75,11 +75,12 @@ const CITED_PATH = /(?:^|[\s(`'"[])((?:[\w@.-]+\/)+[\w@-]+\.(?:json|js|ts|mjs|md
  * (`lib/outbox.ts`), so it counts when it is a path suffix of anything in the repo.
  * @param {{ nodes: any[], edges: any[] }} topology
  * @param {Set<string>} paths every path in the repo (core/repo.js `repoPaths`)
+ * @param {(p: string) => boolean} [reach] whether a path `paths` does not list is still in the repo, by a symlink that stays in it (core/repo.js `reachable`)
  * @returns {string[]}
  */
-export function missingPaths(topology, paths) {
+export function missingPaths(topology, paths, reach = () => false) {
   const all = [...paths];
-  const exists = (p) => paths.has(p) || all.some((q) => q.endsWith(`/${p}`));
+  const exists = (p) => paths.has(p) || all.some((q) => q.endsWith(`/${p}`)) || reach(p);
   const found = [];
   const check = (where, text) => {
     for (const m of String(text || '').matchAll(CITED_PATH)) {
@@ -89,7 +90,7 @@ export function missingPaths(topology, paths) {
   };
   for (const n of topology.nodes) {
     for (const f of String(n.file || '').split(/,\s*/).filter(Boolean)) {
-      if (!paths.has(f)) found.push(`Node "${n.id}" has file "${f}", which is not in the repo`);
+      if (!paths.has(f) && !reach(f)) found.push(`Node "${n.id}" has file "${f}", which is not in the repo`);
     }
     check(`Node "${n.id}" description`, n.desc);
     check(`Node "${n.id}" summary`, n.summary);

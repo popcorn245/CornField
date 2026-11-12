@@ -6103,12 +6103,6 @@
     },
     {
       "from": "core-server-spec-poll",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-spec-poll",
       "to": "core-server-threads",
       "dashed": true,
       "label": "imports"
@@ -10379,6 +10373,71 @@
       "label": "imports"
     },
     {
+      "from": "pkg-compose",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-world",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-openapi-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-world-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-cloud",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
+    },
+    {
       "from": "core-server-agent-runs",
       "to": "core-server-files",
       "dashed": true,
@@ -10389,7 +10448,18 @@
       "to": "core-server-files",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-server-spec-poll",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T23:07:23.315Z"
+  "updatedAt": "2026-11-12T23:32:04.793Z"
 }
