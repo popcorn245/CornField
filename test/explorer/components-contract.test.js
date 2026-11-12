@@ -134,7 +134,11 @@ describe('the root package takes nothing from the components (D1)', () => {
     const dockerfile = fs.readFileSync(path.join(CORNFIELD, 'Dockerfile'), 'utf8');
     const lines = dockerfile.split('\n').filter((l) => !l.trim().startsWith('#'));
     const froms = lines.map((l, i) => [l, i]).filter(([l]) => /^FROM /.test(l));
-    expect(froms.map(([l]) => l)).toEqual(['FROM node:22-alpine AS components', 'FROM node:22-alpine']);
+    expect(froms.map(([l]) => l)).toEqual(['FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS components', 'FROM node:22-alpine']);
+    // StencilRS publishes glibc binaries only (linux-x64-gnu, linux-arm64-gnu): on a musl base the build dies loading it (ERR_DLOPEN_FAILED, PR #245's
+    // first image job). The builder runs on glibc, on the build machine's own platform (never emulated); the final image stays Alpine
+    expect(froms[0][0]).not.toMatch(/alpine|musl|busybox|distroless|:\s*$/i);
+    expect(froms[0][0]).toMatch(/^FROM --platform=\$BUILDPLATFORM node:22-(?:bookworm|trixie|bullseye)(?:-slim)? AS components$/);
     const builder = lines.slice(froms[0][1], froms[1][1]).join('\n');
     const final = lines.slice(froms[1][1]).join('\n');
     // the builder installs components/'s own dev dependencies from its own lockfile and builds

@@ -14,7 +14,10 @@
 # See compose.example.yml and docs/deploy.md.
 
 # --- the builder: the components, built with the version in package.json (the release sets it from the tag first) ---
-FROM node:22-alpine AS components
+# On glibc (Debian), not Alpine: StencilRS's native binary is published for linux-x64-gnu and linux-arm64-gnu only, and does not load on musl.
+# On the build machine's own platform ($BUILDPLATFORM), never emulated: what it makes is plain JS, CSS and JSON, the same for every target platform,
+# so a multi-platform build needs a StencilRS binary for the builder's platform only. The final image below stays Alpine.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS components
 WORKDIR /src
 # What the build reads besides components/: the version (package.json) and the engine the components wrap (explorer/, core/)
 COPY package.json ./
