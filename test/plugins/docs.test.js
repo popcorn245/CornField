@@ -625,34 +625,43 @@ describe('block Markdown', () => {
     for (const [md, expected] of cases) expect(html(md), JSON.stringify(md)).toBe(expected);
   });
 
-  // A header of 100 cells and rows of one pipe: the table takes a row while its cells (100 for each line) are no more than
-  // the characters of its own lines plus 256. The header and the separator are 200 characters each with their line break,
-  // each row adds 2, so 100 * (rows + 1) <= 400 + 2 * rows + 256 holds for five rows and fails for the sixth
-  const wide = (rows, row = '|') => ['a|'.repeat(99) + 'a', '-|'.repeat(99) + '-', ...Array(rows).fill(row)].join('\n');
   const count = (s, re) => (s.match(re) || []).length;
+  const bodyRows = (s) => s.match(/(?<!<thead>)<tr>.*?<\/tr>/g) || [];
 
-  it('pads a table to its header up to as many cells as the characters of its lines plus 256, and reads the rest as text', () => {
-    const five = html(wide(5));
-    expect(count(five, /<tr>/g)).toBe(6);
-    expect(five).not.toContain('<p>');
-    const six = html(wide(6));
-    expect(count(six, /<tr>/g)).toBe(6);
-    expect(six.endsWith('</tbody>\n</table></div>\n<p>|</p>')).toBe(true);
-    const seven = html(wide(7));
-    expect(count(seven, /<tr>/g)).toBe(6);
-    expect(seven.endsWith('</table></div>\n<p>|\n|</p>')).toBe(true);
-    // The rows that are text go through the inline reader and the escaping as any text does
-    expect(html(wide(6) + '\n| <b>x</b> |')).toContain('<p>|\n| &lt;b&gt;x&lt;/b&gt; |</p>');
-    // Rows with as many characters as the header have cells to fill, any number of them
-    expect(count(html(wide(500, '|x'.repeat(100))), /<tr>/g)).toBe(501);
+  it('pads every short row of a wide, sparse table to the header, as it always has', () => {
+    // 30 columns and 200 rows that fill only their first cell: 5,800 empty cells, well within the allowance
+    const md = ['|' + Array.from({ length: 30 }, (_, k) => ` c${k} |`).join(''), '|' + '---|'.repeat(30), ...Array(200).fill('| x |')].join('\n');
+    const rows = bodyRows(html(md));
+    expect(rows.length).toBe(200);
+    expect(rows.every((tr) => tr === `<tr><td>x</td>${'<td></td>'.repeat(29)}</tr>`)).toBe(true);
   });
 
-  it('keeps output in proportion to the input for a wide header and many short rows', () => {
-    for (const size of [40000, 400000]) {
+  // A header of 1000 cells over rows of one cell: each row needs 999 empty cells, so the document's 65,536 pad 65 rows
+  // (64,935 cells) and leave 601
+  const wide = (...rows) => ['a|'.repeat(999) + 'a', '-', ...Array(65).fill('|'), ...rows].join('\n');
+
+  it('adds at most 65,536 empty cells to short rows in a document; a row that would pass that keeps its own cells', () => {
+    const rows = bodyRows(html(wide('| <b>x</b> |', '|x'.repeat(500) + '|', '|')));
+    expect(rows.length).toBe(68);
+    expect(rows.slice(0, 65).every((tr) => count(tr, /<td>/g) === 1000)).toBe(true);
+    // 999 more would pass the 601 left: the row keeps its one cell, its text escaped as any cell's is
+    expect(rows[65]).toBe('<tr><td>&lt;b&gt;x&lt;/b&gt;</td></tr>');
+    // 500 more fit in the 601 left, and then 999 do not fit in the 101 left
+    expect(count(rows[66], /<td>/g)).toBe(1000);
+    expect(rows[67]).toBe('<tr><td></td></tr>');
+    // Every row is still a row of the table, and the next document starts with the whole allowance
+    expect(html(wide('|'))).not.toContain('<p>');
+    expect(count(html(wide('|')), /<td>/g)).toBe(65 * 1000 + 1);
+    expect(count(html(['a|'.repeat(999) + 'a', '-', '|'].join('\n')), /<td>/g)).toBe(1000);
+  });
+
+  it('keeps output within 15 times the input and the allowance for a wide header and many short rows', () => {
+    // An empty cell is at most 36 characters of output (`<td style="text-align:center"></td>`)
+    for (const size of [4000, 40000, 400000]) {
       const plain = '|a'.repeat(size / 2) + '\n|-|\n' + '|\n'.repeat(size / 2);
-      expect(html(plain).length, `${size} bytes`).toBeLessThan(plain.length * 15);
+      expect(html(plain).length, `${size} bytes`).toBeLessThan(plain.length * 15 + 65536 * 36);
       const aligned = '|a'.repeat(size / 4) + '\n' + '|:-:'.repeat(size / 4) + '\n' + '|\n'.repeat(size / 2);
-      expect(html(aligned).length, `${size} bytes aligned`).toBeLessThan(aligned.length * 60);
+      expect(html(aligned).length, `${size} bytes aligned`).toBeLessThan(aligned.length * 15 + 65536 * 36);
     }
   });
 });
@@ -693,7 +702,7 @@ describe('block Markdown in linear time', () => {
     const t = performance.now();
     const out = renderMarkdown(md).html;
     expect(performance.now() - t).toBeLessThan(LIMIT);
-    expect(out.length).toBeLessThan(md.length * 15);
+    expect(out.length).toBeLessThan(md.length * 15 + 65536 * 36);
   });
 
   it('takes four times as long for four times the text, not sixteen', () => {

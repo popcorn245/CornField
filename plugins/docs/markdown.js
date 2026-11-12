@@ -611,6 +611,7 @@ const SEP_CELL = /:?-+:?\s*/y;
 function isTableSep(line) {
   let i = 0;
   while (i < 3 && line[i] === ' ') i++;
+  // Up to three spaces and a pipe; with no pipe the spaces are read as the cell's own leading spaces
   if (line[i] !== '|') i = 0; else i++;
   for (;;) {
     SPACES.lastIndex = i;
@@ -627,8 +628,8 @@ function isTableSep(line) {
   }
 }
 
-/** How many cells beyond one for each character of its lines a table may write (see renderBlocks) */
-const TABLE_SLACK = 256;
+/** How many empty cells a document's tables may add to rows shorter than their header (see renderBlocks) */
+const MAX_PADDING = 65536;
 
 const isBlank = (l) => /^\s*$/.test(l);
 const indentOf = (l) => /^ */.exec(l.replace(/\t/g, '    '))[0].length;
@@ -662,7 +663,7 @@ const startsBlock = (line) => {
 /**
  * Lines of Markdown as HTML.
  * @param {string[]} lines
- * @param {{ link: Function, headings: object[], slugs: Map<string, number> }} ctx
+ * @param {{ link: Function, headings: object[], slugs: Map<string, number>, padding: number }} ctx (padding: the empty cells a table may still add)
  * @param {boolean} [tight] paragraphs without <p> (a tight list item)
  * @param {number} [depth] how many lists and quotes these lines sit in (from MAX_NEST on, a list or quote is text)
  */
@@ -721,17 +722,18 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
       const head = cells(line);
       const align = cells(lines[i + 1]).map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : null));
       const cell = (tag, text, k) => `<${tag}${align[k] ? ` style="text-align:${align[k]}"` : ''}>${renderInline(text, ctx)}</${tag}>`;
-      // A row is padded to the header's width, so a wide header and many short rows would make output in the square of the input:
-      // the table takes a row only while its cells (the header's width for each line) are no more than the characters of its own
-      // lines plus TABLE_SLACK. Past that the table ends and the rest is read as the blocks it would otherwise be
-      let size = line.length + lines[i + 1].length + 2;
       i += 2;
       const rows = [];
       while (i < lines.length && !isBlank(lines[i]) && lines[i].includes('|')) {
-        size += lines[i].length + 1;
-        if (head.length * (rows.length + 2) > size + TABLE_SLACK) break;
         const row = cells(lines[i++]);
-        rows.push(`<tr>${head.map((_, k) => cell('td', row[k] ?? '', k)).join('')}</tr>`);
+        // A short row is padded with empty cells to the header's width. A wide header over many short rows would so make output
+        // in the square of the input, so a document adds at most MAX_PADDING such cells: a row that would pass that keeps its own
+        let width = head.length;
+        if (row.length < width) {
+          if (width - row.length <= ctx.padding) ctx.padding -= width - row.length;
+          else width = row.length;
+        }
+        rows.push(`<tr>${head.slice(0, width).map((_, k) => cell('td', row[k] ?? '', k)).join('')}</tr>`);
       }
       out.push(`<div class="table"><table>\n<thead><tr>${head.map((h, k) => cell('th', h, k)).join('')}</tr></thead>\n<tbody>\n${rows.join('\n')}\n</tbody>\n</table></div>`);
       continue;
@@ -796,7 +798,7 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
  * @returns {{ html: string, title: string | null, headings: { level: number, text: string, id: string }[] }}
  */
 export function renderMarkdown(text, { link = (href) => href } = {}) {
-  const ctx = { link, headings: [], slugs: new Map() };
+  const ctx = { link, headings: [], slugs: new Map(), padding: MAX_PADDING };
   const html = renderBlocks(String(text).replace(/\r\n?/g, '\n').split('\n'), ctx);
   const h1 = ctx.headings.find((h) => h.level === 1);
   return { html, title: h1 ? h1.text : null, headings: ctx.headings };
