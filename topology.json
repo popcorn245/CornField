@@ -10171,7 +10171,17 @@
       "from": "page-doc-docs-embedding",
       "to": "page-doc-docs-config",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T16:40:11.779Z"
+  "updatedAt": "2026-11-12T17:00:41.674Z"
 }
