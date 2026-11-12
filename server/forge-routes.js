@@ -48,8 +48,6 @@
  * for up to a day, instead of nothing.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ForgeError, canRerun, hasAdapter, isMaintainer, isTagName, rateLimitWords } from './forge.js';
 import { actionOf, countAttempt, serveAction, serveIdea } from './forge-actions.js';
@@ -61,7 +59,7 @@ import { listPullProposals } from './proposal-pulls.js';
 import { deploysOf } from './deploys.js';
 import { readBody, sameOrigin } from './proposals.js';
 import { releaseNotes } from './release-notes.js';
-import { readTopology } from '../core/validate.js';
+import { inside, readMap, readPlain } from './files.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -109,10 +107,14 @@ function sinceOf(value) {
 /** The map the notes are grouped by and the package's version, read from the checkout each time (they change with a sync) */
 function notesInput(config, since) {
   let topology = null;
-  try { topology = readTopology(config); } catch { topology = null; }
+  try { topology = readMap(config); } catch { topology = null; }
   if (!topology) throw new ForgeError(`${config.topology} is not there yet: run cornfield sync, so the notes can follow the map.`, { code: 'not-found' });
   let version = null;
-  try { version = JSON.parse(fs.readFileSync(path.join(config.root, 'package.json'), 'utf8')).version ?? null; } catch { version = null; }
+  try {
+    const real = inside(config.root, 'package.json');
+    const pkg = real && readPlain(real);
+    version = pkg ? JSON.parse(pkg.body.toString('utf8')).version ?? null : null;
+  } catch { version = null; }
   return { topology, since, version, breakingLabel: config.releaseNotes?.breakingLabel };
 }
 
@@ -152,7 +154,7 @@ function routeOf(reqPath, url, config, where, hooks = null) {
           // Whatever a look reads is news to the hooks once (thread.opened, thread.message, thread.linked), as the spec PRs are
           if (hooks) {
             let nodes = [];
-            try { nodes = readTopology(config)?.nodes || []; } catch { nodes = []; }
+            try { nodes = readMap(config)?.nodes || []; } catch { nodes = []; }
             hooks.threadsSeen(forge.repo, snapshotOf(found.gathered, nodes)).catch(() => {});
           }
           return { items: found.items, label, problem: found.problem };

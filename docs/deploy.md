@@ -54,6 +54,7 @@ The health check asks `GET /healthz`, which answers `{ "ok": true }` without a s
 
 **Exposed:** the sign-in routes under `/auth/` and `/healthz` (`{ "ok": true }`, nothing else), to anyone who can reach the proxy. **Not exposed:** everything else (the page, `topology.json`, proposals, the API, the explorer's own files) answers 401 without a session and 403 to anyone who is not a maintainer of the configured repo ([ADR 0004](adr/0004-admins-only-loopback-until-sign-in.md)). There is no switch to open it.
 
+- **Only the repo is served.** A file is sent only from the repo (or cornfield's own folders), judged by where it really is once symlinks are followed: a symlink in the repo that leads outside it is a plain 404, the same as a file that is not there, and nothing outside the repository is served or read.
 - **Secrets** live in `.env` or your orchestrator's secret store, never in the image, the compose file or git. The OAuth client secret and the session secret are the two to protect; keep `.env` mode `0600`.
 - **A maintainer's forge token** is kept encrypted in `cornfield.db`, with a key from the session secret. Whoever has both the file and the secret can use those tokens, so keep backups apart from `.env`.
 - **Rotate the session secret** when it may have leaked, or on a schedule: put a new `openssl rand -base64 48` in `.env` and run `docker compose up -d`. Every session becomes unreadable, so everyone is signed out and signs in again. Rotate the OAuth client secret on the forge the same way and update `.env`.

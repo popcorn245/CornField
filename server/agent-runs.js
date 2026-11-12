@@ -128,13 +128,12 @@
 
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import path from 'node:path';
 import { ForgeError, isMaintainer } from './forge.js';
 import { createRequest, findRunId, fencedBlocks, formatRunComment, isRunId, newRunId, runAuthors, runBlocksOf, runIdFromBranch, validateAnswer, validateReport, validateRequest, CONTRACT_VERSION, EDIT_GRACE_MS, MAX_BLOCKS, MAX_BLOCK_CHARS, MAX_NOTE_CHARS, MAX_TEXT_CHARS, RUN_TAG } from '../core/agent-contract.js';
 import { handWrittenMode, ideaLabel, limitDefaults, quietAfterMs, runnerQuietAfterMs } from '../core/config.js';
 import { runnerPresence } from './runner-presence.js';
 import { nodesForFile, parseMentions, resolveMentions } from '../core/mentions.js';
-import { readTopology } from '../core/validate.js';
+import { inside, readMap } from './files.js';
 import { findPullProposal, listPullProposals, pullProposals, readPullProposal } from './proposal-pulls.js';
 import { Refused, countAttempt, throttle } from './throttle.js';
 import { byFromText, byToText, runnerBy } from './review-tokens.js';
@@ -380,10 +379,10 @@ export function createRuns({ config, where, auth, hooks = null, now = Date.now, 
   let mapCache = { stamp: '', nodes: /** @type {{ id: string, file?: string }[]} */ ([]), ids: /** @type {Set<string>} */ (new Set()) };
   function theMap() {
     let stamp = '';
-    try { stamp = String(fs.statSync(path.join(config.root, config.topology)).mtimeMs); } catch { stamp = ''; }
+    try { const real = inside(config.root, config.topology); stamp = real ? String(fs.statSync(real).mtimeMs) : ''; } catch { stamp = ''; }
     if (stamp === mapCache.stamp) return mapCache;
     let nodes = [];
-    try { nodes = readTopology(config)?.nodes ?? []; } catch { nodes = []; }
+    try { nodes = readMap(config)?.nodes ?? []; } catch { nodes = []; }
     nodes = Array.isArray(nodes) ? nodes.filter((n) => n && typeof n.id === 'string') : [];
     mapCache = { stamp, nodes, ids: new Set(nodes.map((n) => n.id)) };
     return mapCache;

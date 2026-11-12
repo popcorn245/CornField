@@ -41,8 +41,7 @@
  */
 
 import fsp from 'node:fs/promises';
-import path from 'node:path';
-import { findProposalFile, listProposalFiles } from './files.js';
+import { findProposalFile, inside, listProposalFiles } from './files.js';
 import { summarize, proposalProblems } from '../core/proposal.js';
 import { ForgeError } from './forge.js';
 import { REVIEW_LIMIT, latestReview, migrateStage1Reviews, proposalHash } from './reviews.js';
@@ -65,7 +64,9 @@ function send(res, status, body, extra = {}) {
 
 /** The map the proposals are checked against: the checkout's topology.json, or null when it cannot be read */
 async function readTopology(where) {
-  const file = path.join(where.root, where.topology || 'topology.json');
+  // The real path, inside the repo: a map that is a link out of it is no map (server/files.js `inside`)
+  const file = inside(where.root, where.topology || 'topology.json');
+  if (!file) return null;
   try {
     const st = await fsp.stat(file);
     const stamp = `${st.mtimeMs}:${st.size}`;

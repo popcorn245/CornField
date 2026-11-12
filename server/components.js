@@ -85,8 +85,9 @@ export function createComponents({ dir }) {
     if (!stats.isFile() || stats.size > MAX_BYTES) return null;
     // lstat looks at the last segment only: a folder on the way (`chunks`) that is a link out of the build is refused too. The build folder
     // itself may be a link; what is served is what lies, really, inside it
+    let real;
     try {
-      const real = fs.realpathSync(file);
+      real = fs.realpathSync(file);
       const realRoot = fs.realpathSync(root);
       if (real !== path.join(realRoot, ...name.split('/'))) return null;
     } catch { return null; }
@@ -94,7 +95,7 @@ export function createComponents({ dir }) {
     const known = bodies.get(name);
     if (known?.stamp === stamp) return known;
     try {
-      const body = fs.readFileSync(file);
+      const body = fs.readFileSync(real); // the path that was checked, not the one written
       const entry = { stamp, body, etag: createHash('sha256').update(body).digest('base64url').slice(0, 27) };
       bodies.set(name, entry);
       return entry;

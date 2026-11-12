@@ -5472,12 +5472,6 @@
     },
     {
       "from": "core-server-forge-routes",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-forge-routes",
       "to": "core-server-proposals",
       "dashed": true,
       "label": "imports"
@@ -6498,12 +6492,6 @@
     {
       "from": "core-server-agent-runs",
       "to": "core-core-mentions",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-agent-runs",
-      "to": "core-core-validate",
       "dashed": true,
       "label": "imports"
     },
@@ -10389,7 +10377,19 @@
       "to": "core-core-repo",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-server-agent-runs",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T21:50:40.869Z"
+  "updatedAt": "2026-11-12T23:07:23.315Z"
 }

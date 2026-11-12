@@ -62,7 +62,7 @@ import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, c
 import { clientStrings } from '../core/strings.js';
 import { clientLayers } from '../core/layers.js';
 import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, cssUrls, fontOrigins, themeAssetFile, themeAssetPath, themeUrlTarget } from '../core/theme.js';
-import { decodePath, inside, notFound, sendFile } from './files.js';
+import { decodePath, inside, named, notFound, readPlain, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
 import { hasAdapter } from './forge.js';
@@ -91,7 +91,9 @@ export const BROWSER_CORE = ['schema.js', 'proposal.js', 'personas.js', 'cloud.j
 /** The explorer files the sign-in pages load: cornfield's tokens, their own stylesheet and the script that applies Light or Dark. Served without a session. */
 const SIGN_IN_FILES = new Set(['/explorer/tokens.css', '/explorer/sign-in.css', '/explorer/theme-boot.js']);
 /** cornfield's own browser sources, by request path */
-const BROWSER_PLUGINS = new Map(Object.values(BUILTIN_SOURCES).map((p) => [p, path.join(CORNFIELD_DIR, p)]));
+const BROWSER_PLUGINS = new Set(Object.values(BUILTIN_SOURCES));
+const CORE_DIR = path.join(CORNFIELD_DIR, 'core');
+const PLUGINS_DIR = path.join(CORNFIELD_DIR, 'plugins');
 const PKG = JSON.parse(fs.readFileSync(path.join(CORNFIELD_DIR, 'package.json'), 'utf8'));
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' };
@@ -138,8 +140,9 @@ function themeAssetsNamed(config, themeFile) {
   for (const [servedAt, rel] of themeFile) {
     try {
       const file = inside(config.root, rel);
-      if (!file || fs.statSync(file).size > MAX_THEME_BYTES) continue;
-      for (const ref of cssUrls(fs.readFileSync(file, 'utf8'))) {
+      const got = file && readPlain(file, MAX_THEME_BYTES);
+      if (!got) continue;
+      for (const ref of cssUrls(got.body.toString('utf8'))) {
         const target = themeUrlTarget(ref, servedAt);
         if (target.asset) out.add(target.asset);
       }
@@ -150,17 +153,14 @@ function themeAssetsNamed(config, themeFile) {
 
 /**
  * Serves one theme file: text/css and nosniff, only a file the config names, only a plain file whose real path is still inside the repo
- * (a link out is refused), only up to MAX_THEME_BYTES, and only if it passes the same CSS checks as `cornfield validate`.
+ * (server/files.js `inside`: a link out is refused), only up to MAX_THEME_BYTES, and only if it passes the same CSS checks as `cornfield validate`.
  */
 function sendTheme(req, res, config, rel, reqPath) {
   try {
-    const file = inside(config.root, rel);
-    const real = file && fs.realpathSync(file);
-    const base = fs.realpathSync(config.root);
-    if (!real || !real.startsWith(base + path.sep)) return notFound(res, reqPath);
-    const stats = fs.statSync(real);
-    if (!stats.isFile() || stats.size > MAX_THEME_BYTES) return notFound(res, reqPath);
-    const text = fs.readFileSync(real, 'utf8');
+    const real = inside(config.root, rel);
+    const got = real && readPlain(real, MAX_THEME_BYTES);
+    if (!got) return notFound(res, reqPath);
+    const text = got.body.toString('utf8');
     if (cssProblems(text, { fonts: config.theme.fonts }).length) return notFound(res, reqPath);
     res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     return res.end(req.method === 'HEAD' ? undefined : text);
@@ -364,18 +364,21 @@ export function createCornfieldServer(config, opts = {}) {
   let serverClosed = false;
   const proxies = Object.entries(config.proxy || {});
   const houseSource = config.sources.house && (config.sources.house === 'house' || config.sources.house.use === 'house') ? config.sources.house : null;
-  const houseFile = houseSource && houseSource.options && houseSource.options.file ? inside(root, houseSource.options.file) : null;
+  // Where the file is is looked at when it is asked for (a link may change, and the file may not be there yet), never kept from now
+  const houseRel = houseSource && houseSource.options && houseSource.options.file ? houseSource.options.file : null;
   const haSource = config.sources.house && (config.sources.house === 'home-assistant' || config.sources.house.use === 'home-assistant') ? config.sources.house : null;
   const haOptions = (haSource && typeof haSource === 'object' && haSource.options) || {};
-  const haFile = haOptions.file ? inside(root, haOptions.file) : null;
+  const haRel = haOptions.file || null;
   let haCache = null; // { until, promise }
   /** Home Assistant's house answer, over the house file's plan and other parts when there is one; reused for HA_CACHE_MS */
   const haHouse = () => {
     const now = Date.now();
     if (haCache && haCache.until > now) return haCache.promise;
     let file = null;
-    if (haFile && fs.existsSync(haFile)) {
-      try { file = JSON.parse(fs.readFileSync(haFile, 'utf8')); } catch { file = null; }
+    const haFile = haRel && inside(root, haRel);
+    const got = haFile && readPlain(haFile);
+    if (got) {
+      try { file = JSON.parse(got.body.toString('utf8')); } catch { file = null; }
     }
     const promise = homeAssistantHouse({ url: haOptions.url || env[HA_ENV.url], token: env[HA_ENV.token], file, ...homeAssistant });
     haCache = { until: now + HA_CACHE_MS, promise };
@@ -478,7 +481,7 @@ export function createCornfieldServer(config, opts = {}) {
       // Only an asset a theme file names in a url(): anything else beside the theme answers 401, as it would without a theme
       if (reqPath.startsWith(THEME_ASSET_PREFIX) && themeAssetsNamed(config, themeFile).has(reqPath.slice(THEME_ASSET_PREFIX.length))) return sendThemeAsset(req, res, config, reqPath);
       if (brandFile.has(reqPath)) return sendBrand(req, res, config, brandFile.get(reqPath), reqPath);
-      if (SIGN_IN_FILES.has(reqPath)) return sendFile(req, res, path.join(EXPLORER_DIR, path.basename(reqPath)), reqPath);
+      if (SIGN_IN_FILES.has(reqPath)) return sendFile(req, res, inside(EXPLORER_DIR, path.basename(reqPath)), reqPath);
     }
     const gate = await auth.gate(req, res, reqPath, url);
     if (gate.done) return;
@@ -511,25 +514,29 @@ export function createCornfieldServer(config, opts = {}) {
     if (reqPath === '/cornfield/config.json') return sendJson(res, 200, clientConfig(config, signedIn));
     if (reqPath === '/topology.json') {
       const file = inside(root, config.topology);
-      if (!file || !fs.existsSync(file)) return sendJson(res, 404, { error: `${config.topology} is not there yet: run cornfield sync` });
+      if (!file) return sendJson(res, 404, { error: `${config.topology} is not there yet: run cornfield sync` });
       return sendFile(req, res, file, reqPath);
     }
     if (reqPath === '/topology.cloud.json') {
       const file = inside(root, CLOUD_FILE);
-      if (!file || !fs.existsSync(file)) return notFound(res, reqPath);
+      const got = file && readPlain(file);
+      if (!got) return notFound(res, reqPath);
       try {
+        const body = publicRegistry(got.body.toString('utf8'));
         res.writeHead(200, JSON_HEADERS);
-        return res.end(req.method === 'HEAD' ? undefined : publicRegistry(fs.readFileSync(file, 'utf8')));
+        return res.end(req.method === 'HEAD' ? undefined : body);
       } catch {
         return sendJson(res, 422, { error: `${CLOUD_FILE} is not valid JSON` });
       }
     }
     if (reqPath === '/cornfield/house.json' && haSource) return sendJson(res, 200, { ok: true, data: await haHouse() });
     if (reqPath === '/cornfield/house.json') {
-      if (!houseFile || !fs.existsSync(houseFile)) return sendJson(res, 404, { ok: false, error: 'No house file is configured (sources.house.options.file)' });
+      const houseFile = houseRel && inside(root, houseRel);
+      const got = houseFile && readPlain(houseFile);
+      if (!got) return sendJson(res, 404, { ok: false, error: 'No house file is configured (sources.house.options.file)' });
       try {
-        const data = JSON.parse(fs.readFileSync(houseFile, 'utf8'));
-        const at = data.at || fs.statSync(houseFile).mtime.toISOString();
+        const data = JSON.parse(got.body.toString('utf8'));
+        const at = data.at || got.stats.mtime.toISOString();
         return sendJson(res, 200, { ok: true, data: { ...data, at } });
       } catch (err) {
         return sendJson(res, 422, { ok: false, error: `The house file is not valid JSON: ${err.message}` });
@@ -553,21 +560,22 @@ export function createCornfieldServer(config, opts = {}) {
       return res.end(req.method === 'HEAD' ? undefined : fixtureCache.get(key));
     }
     if (reqPath.startsWith('/explorer/')) {
-      const file = inside(EXPLORER_DIR, reqPath.slice('/explorer'.length));
-      if (!file || !/\.(?:js|css)$/.test(file)) return notFound(res, reqPath);
-      return sendFile(req, res, file, reqPath);
+      // The name asked for is what must be .js or .css; the file is judged against cornfield's own explorer folder, where that really is
+      if (!/\.(?:js|css)$/.test(reqPath)) return notFound(res, reqPath);
+      return sendFile(req, res, inside(EXPLORER_DIR, reqPath.slice('/explorer'.length)), reqPath);
     }
     if (reqPath.startsWith('/core/')) {
       const name = reqPath.slice('/core/'.length);
-      return BROWSER_CORE.includes(name) ? sendFile(req, res, path.join(CORNFIELD_DIR, 'core', name), reqPath) : notFound(res, reqPath);
+      return BROWSER_CORE.includes(name) ? sendFile(req, res, inside(CORE_DIR, name), reqPath) : notFound(res, reqPath);
     }
-    if (BROWSER_PLUGINS.has(reqPath)) return sendFile(req, res, BROWSER_PLUGINS.get(reqPath), reqPath);
+    if (BROWSER_PLUGINS.has(reqPath)) return sendFile(req, res, inside(PLUGINS_DIR, reqPath.slice('/plugins/'.length)), reqPath);
     if (reqPath.startsWith('/repo/')) {
       const rel = reqPath.slice('/repo/'.length);
-      const file = inside(root, rel);
-      const relNorm = file ? path.relative(root, file).split(path.sep).join('/') : null;
+      // The allowlist judges the name as written (a link inside the repo keeps the name it has); what is sent is the real file, if it is still in the repo
+      const written = named(root, rel);
+      const relNorm = written ? path.relative(root, written).split(path.sep).join('/') : null;
       const allowed = relNorm && relNorm.endsWith('.js') && (repoModules.files.includes(relNorm) || repoModules.dirs.some((d) => relNorm.startsWith(`${d}/`)));
-      return allowed ? sendFile(req, res, file, reqPath) : notFound(res, reqPath);
+      return allowed ? sendFile(req, res, inside(root, rel), reqPath) : notFound(res, reqPath);
     }
     return notFound(res, reqPath);
   }
