@@ -106,27 +106,38 @@ export class SourceError extends Error {
 }
 
 /**
- * The fetch options of a read: a server of another origin is read with the maintainer's session (`credentials: 'include'`), the page's own is
- * read as `fetch` reads it. `init` is what the call adds; nothing is added where there is nothing to add (the page's request is unchanged).
+ * Whether `path`, made absolute as `inst.fetch` makes it, is on the origin of the instance's base: only a request there carries the maintainer's
+ * session. The same rule as engine/connection.js `credentialed` (an absolute URL or a `//host` path on another origin goes without credentials).
  */
-function optionsOf(inst, init, signal) {
-  const out = { ...init };
-  if (inst.base) out.credentials = 'include';
+export function underBase(inst, path) {
+  if (!inst.base) return false;
+  try { return new URL(inst.url(String(path)), inst.base).origin === new URL(inst.base).origin; } catch { return false; }
+}
+
+/**
+ * The fetch options of a read: a request to the base's own origin is made with the maintainer's session (`credentials: 'include'`), the page's own
+ * is read as `fetch` reads it. `init` is what the call adds; nothing is added where there is nothing to add (the page's request is unchanged).
+ */
+function optionsOf(inst, path, init, signal) {
+  const out = underBase(inst, path) ? { credentials: 'include', ...init } : { ...init };
   if (signal) out.signal = signal;
   return Object.keys(out).length ? out : undefined;
 }
 
-/** Fetches `url` through the instance and returns the response, or throws a SourceError for a network failure, 401/403 and any other non-OK status */
-async function read(inst, url, init, signal) {
+/**
+ * Fetches `url` through the instance and returns the response, or throws a SourceError for a network failure, 401/403 and any other non-OK status.
+ * `label` is the address a message names (the page's has always said `GET /topology.json answered 500`, without the cache-buster).
+ */
+async function read(inst, url, init, signal, label = url) {
   let res;
   try {
-    const options = optionsOf(inst, init, signal);
+    const options = optionsOf(inst, url, init, signal);
     res = options ? await inst.fetch(url, options) : await inst.fetch(url);
   } catch (err) {
     throw new SourceError('network', err && err.message ? err.message : String(err), { cause: err });
   }
-  if (res.status === 401 || res.status === 403) throw new SourceError('auth', `GET ${url} answered ${res.status} ${res.statusText}`.trim(), { status: res.status });
-  if (!res.ok) throw new SourceError('server', `GET ${url} answered ${res.status} ${res.statusText}`.trim(), { status: res.status });
+  if (res.status === 401 || res.status === 403) throw new SourceError('auth', `GET ${label} answered ${res.status} ${res.statusText}`.trim(), { status: res.status });
+  if (!res.ok) throw new SourceError('server', `GET ${label} answered ${res.status} ${res.statusText}`.trim(), { status: res.status });
   return res;
 }
 
@@ -152,7 +163,7 @@ export async function fetchConfig(inst, { signal } = {}) {
  * @param {{ signal?: AbortSignal }} [opts]
  */
 export async function fetchTopology(inst, path = TOPOLOGY_PATH, { signal } = {}) {
-  const res = await read(inst, path + (path.includes('?') ? '&v=' : '?v=') + Date.now(), undefined, signal);
+  const res = await read(inst, path + (path.includes('?') ? '&v=' : '?v=') + Date.now(), undefined, signal, path);
   let data;
   try { data = await res.json(); } catch (err) { throw new SourceError('server', `${path} is not JSON`, { status: res.status, cause: err }); }
   if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) throw new SourceError('server', `${path} has no nodes`, { status: res.status });

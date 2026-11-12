@@ -105,7 +105,9 @@ describe('cornfield\'s own page (no base) asks what it always asked', () => {
   });
   it('says what it always said when the topology cannot be had', async () => {
     const inst = createInstance({ fetch: server({ [TOPOLOGY_PATH]: json({}, 500), '/empty.json': json({ nodes: [] }) }).fetch });
-    await expect(fetchTopology(inst)).rejects.toThrow('GET /topology.json?v=');
+    // the words main's page said (view.js before engine/source.js): the address without the cache-buster
+    await expect(fetchTopology(inst)).rejects.toThrow(/^GET \/topology\.json answered 500 Error$/);
+    await expect(fetchTopology(inst, '/topology.json?fixture=5k')).rejects.toThrow(/^GET \/topology\.json\?fixture=5k answered 500 Error$/);
     await expect(fetchTopology(inst)).rejects.toMatchObject({ kind: 'server', status: 500 });
     await expect(fetchTopology(inst, '/empty.json')).rejects.toThrow('/empty.json has no nodes');
   });
@@ -120,6 +122,20 @@ describe('a server of another origin (a base) is asked with the session', () => 
     expect(s.calls[0]).toEqual([`${BASE}${CONFIG_PATH}`, { cache: 'no-store', credentials: 'include' }]);
     expect(s.calls[1][0]).toMatch(/^https:\/\/map\.example\.com\/topology\.json\?v=\d+$/);
     expect(s.calls[1][1]).toEqual({ credentials: 'include' });
+  });
+  it('sends the session only to the base\'s own origin: never to an absolute URL or a //host path elsewhere, whatever is asked', async () => {
+    const s = server({ [TOPOLOGY_PATH]: json(TOPOLOGY), '/cornfield/topology.json': json(TOPOLOGY), '/other/topology.json': json(TOPOLOGY) });
+    const inst = createInstance({ base: 'https://example.com/cornfield', fetch: s.fetch });
+    await fetchTopology(inst, 'https://elsewhere.test/topology.json').catch(() => {});
+    await fetchTopology(inst, '//elsewhere.test/topology.json').catch(() => {});
+    await fetchTopology(inst, 'https://example.com/other/topology.json').catch(() => {});
+    await fetchTopology(inst, TOPOLOGY_PATH);
+    expect(s.calls.map(([u, init]) => [u.replace(/[?&]v=\d+/, ''), init && init.credentials])).toEqual([
+      ['https://elsewhere.test/topology.json', undefined],
+      ['//elsewhere.test/topology.json', undefined],
+      ['https://example.com/other/topology.json', 'include'],
+      ['https://example.com/cornfield/topology.json', 'include'],
+    ]);
   });
   it('tells a refusal to sign in from a missing answer', async () => {
     const inst = createInstance({ base: BASE, fetch: server({ [CONFIG_PATH]: json({ ok: false }, 401), '/topology.json': json({}, 403), '/x': 'refuse' }).fetch });
