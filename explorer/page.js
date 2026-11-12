@@ -59,7 +59,6 @@ import { initTheme, setThemeChoice } from './theme.js';
 import { initAccountMenu } from './account-menu.js';
 import { watchHeaderFit } from './header-fit.js';
 import { watchHint } from './hint.js';
-import { watchFocusRoom } from './focus-room.js';
 import { mapStyleOf } from './engine/map-style.js';
 
 /** The instance and its map: made by `startPage`, the one of this document */
@@ -190,7 +189,7 @@ export function startPage() {
   map.resize();
   syncViewUi();
   // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-  const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); mapStyle.applyTheme(config.theme); setProjectLayers(config.layers); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+  const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); mapStyle.applyTheme(config.theme); setProjectLayers(config.layers); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
   loadTopology().then(async (ok) => {
     if (!ok) return;
     // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional

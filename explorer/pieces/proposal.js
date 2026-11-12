@@ -412,6 +412,13 @@ export function mount(root, inst, options = {}) {
     const wrap = own('proposal-wrap');
     if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
   });
+  // Answer, on the bar's line (a run waits on this proposal): the Work panel opens on that run with its reply field focused (work:answer)
+  scope.listen(bar, 'click', (e) => {
+    const go = e.target.closest && e.target.closest('[data-waiting-answer]');
+    if (go) { e.preventDefault(); e.stopPropagation(); inst.emit('work:answer', { run: go.dataset.waitingAnswer }); }
+  }, true);
+  // With the Work panel on, its Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without it (no forge, or no sign-in)
+  scope.on('work:available', ({ on }) => { const wrap = own('proposal-wrap'); if (wrap) wrap.hidden = !!on; });
   scope.listen(inst.root, 'keydown', (e) => {
     if (e.key === 'Escape' && menuOpen()) closeMenu();
     onMoreKey(e);

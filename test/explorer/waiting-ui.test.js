@@ -31,7 +31,10 @@ import { approvalWarning, emptyWords } from '../../explorer/forge-panel-model.js
 // @ts-expect-error plain JS modules, no declarations
 import { OFFLINE_WORDS, ONLINE_WORDS, resetConnectionForTests } from '../../explorer/connection.js';
 // @ts-expect-error plain JS modules, no declarations
-import { resetFeedbackForTests } from '../../explorer/feedback.js';
+import { resetFeedback } from '../../explorer/engine/feedback.js';
+// @ts-expect-error plain JS modules, no declarations
+import { pageInstance as feedbackPage } from '../../explorer/state.js';
+const resetFeedbackForTests = () => resetFeedback(feedbackPage());
 import { explorerPage } from '../helpers.js';
 
 import { explorerCss } from './stylesheets.js';
@@ -320,7 +323,9 @@ describe('D6: the Runs groups', () => {
 describe('the proposal bar\'s line', () => {
   const waitingRun = RUN(1, 'waiting', { refs: { proposal: '0042-x' }, report: { state: 'waiting', at: ago(1), by: 'r', note: 'Plan ready <b>approve</b> to build', url: null, tokens: null, cost: null }, timeline: [{ kind: 'report', at: ago(1) }] });
   const showBar = async () => {
-    const { hooks } = await import('../../explorer/proposal.js');
+    const { pageInstance } = await import('../../explorer/state.js');
+    // what the bar and the decision say to the instance (the old `hooks.bar` and `hooks.reviewed` chain is these events)
+    const hooks = { bar: (open) => pageInstance().emit('proposal:bar', { open }), reviewed: () => pageInstance().emit('decision', { outcome: 'approved', open: true }) };
     Object.assign(state, { proposal: {}, proposalSlug: '0042-x', proposalSource: 'pull/42' });
     hooks.bar(true);
     return hooks;
@@ -349,7 +354,8 @@ describe('the proposal bar\'s line', () => {
     fakeServer({ runs: [waitingRun], proposals: [] });
     mount();
     await settle();
-    const { hooks } = await import('../../explorer/proposal.js');
+    const { pageInstance } = await import('../../explorer/state.js');
+    const hooks = { bar: (open) => pageInstance().emit('proposal:bar', { open }) };
     Object.assign(state, { proposal: {}, proposalSlug: '0099-other', proposalSource: 'pull/99' });
     hooks.bar(true);
     expect(q('[data-corn="waiting-line"]').hidden).toBe(true);
@@ -388,8 +394,8 @@ describe('what idle costs', () => {
     mount();
     await settle();
     const before = server.urls().filter((u) => u === '/proposals').length;
-    const { hooks } = await import('../../explorer/proposal.js');
-    hooks.reviewed();
+    const { pageInstance } = await import('../../explorer/state.js');
+    pageInstance().emit('decision', { outcome: 'approved', open: true }); // the server took the review (pieces/decision.js)
     await settle();
     expect(server.urls().filter((u) => u === '/proposals').length).toBe(before + 1);
   });

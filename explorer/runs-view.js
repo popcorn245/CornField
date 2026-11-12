@@ -92,15 +92,16 @@ function resultHtml(ctx, run) {
 
 /** A waiting run: what was asked (the note and link are shown above) and the three answers, plain buttons and a reply field */
 function answerHtml(ctx, run) {
+  const say = ctx.t || t; // the words of the instance that draws it (the Work piece hands its own), else the page's
   const id = ctx.esc(run.runId);
   const name = ctx.esc(runName(run, ctx.now));
   const off = ctx.busy ? ' disabled' : '';
   const reply = ctx.replies && ctx.replies.get(run.runId) || '';
   return `${run.answer ? answeredHtml(ctx, run) : ''}<div class="hx-run-actions" data-corn="run-actions" role="group" aria-label="Answer: ${name}">
-      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(t('continueRun'))}: ${name}"${off}>${ctx.esc(t('continueRun'))}</button>
-      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="${ctx.esc(t('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(t('stop'))}</button></div>
+      <button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="continue" data-run-id="${id}" aria-label="${ctx.esc(say('continueRun'))}: ${name}"${off}>${ctx.esc(say('continueRun'))}</button>
+      <button type="button" class="hx-btn hx-forge-act" data-run-answer="stop" data-run-id="${id}" aria-label="${ctx.esc(say('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button></div>
     <label class="hx-forge-field" data-corn="field">Reply to ${ctx.esc(`${run.kind} on ${aboutWords(run.refs)}`)}<input data-corn="control" type="text" class="hx-forge-input" data-run-reply="${id}" value="${ctx.esc(reply)}" maxlength="4000" autocomplete="off" /></label>
-    <div class="hx-run-actions" data-corn="run-actions"><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(t('reply'))}: ${name}"${off}>${ctx.esc(t('reply'))}</button></div>`;
+    <div class="hx-run-actions" data-corn="run-actions"><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-run-answer="reply" data-run-id="${id}" aria-label="${ctx.esc(say('reply'))}: ${name}"${off}>${ctx.esc(say('reply'))}</button></div>`;
 }
 
 /**
@@ -141,6 +142,7 @@ export function loadingLinesHtml(n = 1) {
 
 /** One run */
 export function runHtml(ctx, run, all) {
+  const say = ctx.t || t;
   const lit = ctx.selected === run.runId;
   const open = ctx.timelines.has(run.runId);
   const why = statusWhy(run);
@@ -148,8 +150,8 @@ export function runHtml(ctx, run, all) {
   const note = run.report && run.report.note ? `<p class="hx-forge-meta">Runner: ${ctx.esc(run.report.note)}</p>` : '';
   const answering = canAnswer(run);
   const off = ctx.busy ? ' disabled' : '';
-  const retry = canRetry(run) ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('startAgain'))}: ${name}"${off}>${ctx.esc(t('startAgain'))}</button>` : '';
-  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(t('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(t('stop'))}</button>` : '';
+  const retry = canRetry(run) ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-retry="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('startAgain'))}: ${name}"${off}>${ctx.esc(say('startAgain'))}</button>` : '';
+  const stop = canStop(run) && !answering ? `<button type="button" class="hx-btn hx-forge-act" data-forge-stop="${ctx.esc(run.runId)}" aria-label="${ctx.esc(say('stop'))}: ${name}"${off} data-corn-kind="danger">${ctx.esc(say('stop'))}</button>` : '';
   const names = nodeLabels(run.nodes, ctx.nodes);
   const collision = collisionWords(run, all, ctx.nodes);
   const limits = limitRows(run);
@@ -182,7 +184,7 @@ export function runHtml(ctx, run, all) {
  * @param {object[]} runs
  */
 export function runsHtml(ctx, runs) {
-  return runGroups(runs).map((group) => runGroupHeadingHtml(group) + group.items.map((g) => {
+  return runGroups(runs).map((group) => runGroupHeadingHtml(group, ctx.t) + group.items.map((g) => {
     if (g.kind === 'run') return runHtml(ctx, g.run, runs);
     const id = `cmp-${g.runs[0].runId}`;
     return `<li class="hx-run-group" data-key="${ctx.esc(id)}"><section class="hx-run-compare" aria-labelledby="${ctx.esc(id)}">

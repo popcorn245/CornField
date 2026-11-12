@@ -25,7 +25,11 @@ import { closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { groupRuns, overlayOf, timelineWords, changeWords, limitRows, litOfRun, collisionWords } from '../../explorer/runs-model.js';
 // @ts-expect-error plain JS modules, no declarations
-import { syncRunOverlay, setReducedMotionForTests, resetRunsMapForTests } from '../../explorer/runs-map.js';
+// @ts-expect-error plain JS modules, no declarations
+import { pagePiece } from '../../explorer/page-pieces.js';
+// The marks are the Work piece's own (pieces/work.js): motion is set on it, and it forgets the marks when it is reset (resetForgePanelForTests)
+const setReducedMotionForTests = (on) => { const p = pagePiece('work'); if (p) p.setReducedMotion(on); };
+const resetRunsMapForTests = () => setReducedMotionForTests(null);
 // @ts-expect-error plain JS modules, no declarations
 import { toggleLayer } from '../../explorer/layers.js';
 import { explorerPage } from '../helpers.js';
