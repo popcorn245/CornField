@@ -83,7 +83,12 @@ describe('the web components route', () => {
     // A link out of the folder, named by the manifest all the same
     fs.symlinkSync(path.join(os.tmpdir(), 'cornfield-components-secret.js'), path.join(dist, 'linked.js'));
     fs.writeFileSync(path.join(os.tmpdir(), 'cornfield-components-secret.js'), 'export const secret = 1;\n');
-    const listed = [...Object.keys(FILES), 'linked.js', 'notes.txt', '.hidden.js', '../outside.js', 'a/../../b.js', '/abs.js', 'types', 'bad name.js', 'x.html'];
+    // A folder that is a link out of the build: lstat of the file alone does not see it
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-components-outside-'));
+    dirs.push(outside);
+    fs.writeFileSync(path.join(outside, 'leak.js'), 'export const secret = 2;\n');
+    fs.symlinkSync(outside, path.join(dist, 'linkdir'));
+    const listed = [...Object.keys(FILES), 'linked.js', 'linkdir/leak.js', 'notes.txt', '.hidden.js', '../outside.js', 'a/../../b.js', '/abs.js', 'types', 'bad name.js', 'x.html'];
     fs.writeFileSync(path.join(dist, 'manifest.json'), JSON.stringify({ name: 'x', cornfield: '9.9.9', files: listed.map((p) => ({ path: p, bytes: 1, sha256: 'x' })) }));
   });
   afterAll(async () => {
@@ -187,7 +192,7 @@ describe('the web components route', () => {
 
     it('serves nothing but what the manifest lists, as one of the five kinds, and nothing that leaves the folder', async () => {
       const refused = [
-        'manifest.json', 'stray.js', 'notes.txt', '.hidden.js', 'linked.js', 'x.html', 'types', 'types/', 'chunks/', 'chunks', '', 'nope.js', 'bad%20name.js', 'index.js/', 'INDEX.JS', 'index.js%00', 'chunks/runtime-AbCd1234.js.gz',
+        'manifest.json', 'stray.js', 'notes.txt', '.hidden.js', 'linked.js', 'linkdir/leak.js', 'x.html', 'types', 'types/', 'chunks/', 'chunks', '', 'nope.js', 'bad%20name.js', 'index.js/', 'INDEX.JS', 'index.js%00', 'chunks/runtime-AbCd1234.js.gz',
         '../manifest.json', '../../package.json', '..%2f..%2fpackage.json', '%2e%2e/%2e%2e/package.json', '..%5cpackage.json', '%2fetc%2fpasswd', '/etc/passwd', '.%2e/x.js',
       ];
       for (const name of refused) {

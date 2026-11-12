@@ -59,7 +59,7 @@ export function createComponents({ dir }) {
     const file = path.join(root, 'manifest.json');
     let stats;
     try { stats = fs.lstatSync(file); } catch { return (listed = null); }
-    if (!stats.isFile()) return (listed = null);
+    if (!stats.isFile() || stats.size > MAX_BYTES) return (listed = null);
     const stamp = `${stats.size}:${stats.mtimeMs}`;
     if (listed?.stamp === stamp) return listed.names;
     try {
@@ -83,6 +83,13 @@ export function createComponents({ dir }) {
     let stats;
     try { stats = fs.lstatSync(file); } catch { return null; }
     if (!stats.isFile() || stats.size > MAX_BYTES) return null;
+    // lstat looks at the last segment only: a folder on the way (`chunks`) that is a link out of the build is refused too. The build folder
+    // itself may be a link; what is served is what lies, really, inside it
+    try {
+      const real = fs.realpathSync(file);
+      const realRoot = fs.realpathSync(root);
+      if (real !== path.join(realRoot, ...name.split('/'))) return null;
+    } catch { return null; }
     const stamp = `${stats.size}:${stats.mtimeMs}`;
     const known = bodies.get(name);
     if (known?.stamp === stamp) return known;
