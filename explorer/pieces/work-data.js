@@ -32,6 +32,7 @@ export function install(ctx) {
 
   /** One GET (or the one POST, with its JSON); `{ ok, status, body }`, with a status of null when the server did not answer */
   async function request(url, refresh, post) {
+    if (ctx.dead) return never(); // nothing is asked once the piece has ended
     try {
       // Refresh sends `Cache-Control: no-cache`, which the server takes as "ask the forge again"
       const init = post ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(post) } : refresh ? { cache: 'reload' } : {};
@@ -49,6 +50,7 @@ export function install(ctx) {
 
   /** One POST of JSON; `{ ok, status, body }`, with a status of null when the server did not answer */
   async function post(url, payload) {
+    if (ctx.dead) return never();
     try {
       const res = await ask(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (ctx.dead) return never();

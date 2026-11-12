@@ -179,7 +179,7 @@ export function mount(root, inst, options = {}) {
     // The map or the proposal changed the nodes: the lights follow them. The header's Proposals menu reads the same list: the Specs tab and its count follow
     scope.on('scene', fn.onNodesChange);
     scope.own(P.onProposalListing(inst, () => { fn.paintWaiting(); if (ui.open) fn.paint(); }));
-    inst.onNetwork((offline) => { if (!offline) fn.readOnline(); });
+    scope.own(inst.onNetwork((offline) => { if (!offline) fn.readOnline(); })); // ends with the piece, not only with the instance
     scope.own(inst.onPageHide(() => fn.onPageHide()));
     scope.own(inst.onPageShow(() => fn.onPageShow()));
     // Any `data-action="toggle-forge"` opens and closes the panel
@@ -226,7 +226,7 @@ export function mount(root, inst, options = {}) {
     if (ui.agent) fn.closeAgent({ restoreFocus: false });
     // What this panel lit and said goes with it
     if (inst.state.forgeLit) inst.state.forgeLit = null;
-    runsMap.clear();
+    runsMap.destroy();
     inst.emit('proposal:waiting-reset');
     inst.emit('work:waiting', { total: 0 });
     try { unregisterSheet(inst, 'forge', false); } catch { /* it was never registered */ }

@@ -39,7 +39,8 @@ export function createRunsMap(inst) {
   let placedScene = null;
   let placedLayer = null;
   let reduce = null;
-  let wired = false;
+  /** The map's paint hook while the marks follow it */
+  let offPaint = null;
 
   /** Whether motion is reduced: the viewer's setting, or a test's */
   const reducedMotion = () => (reduce === null ? inst.reducedMotion : reduce);
@@ -107,11 +108,16 @@ export function createRunsMap(inst) {
     for (const [key, el] of marks) if (!seen.has(key)) { el.remove(); marks.delete(key); }
   }
 
+  function clear() {
+    state.runsMap = null;
+    clearMarks();
+    paintLegend();
+  }
+
   /** Follows the map's paints: once, while the instance has a map (a bare root has none, and no marks) */
   function wire() {
-    if (wired || !inst.map) return;
-    wired = true;
-    inst.own(inst.map.onPaint((scene, camera) => sync(scene, camera)));
+    if (offPaint || !inst.map) return;
+    offPaint = inst.own(inst.map.onPaint((scene, camera) => sync(scene, camera)));
   }
 
   return {
@@ -123,10 +129,11 @@ export function createRunsMap(inst) {
       if (inst.map) inst.map.render();
     },
     /** Takes the marks off (the panel ends, or there is no forge) */
-    clear() {
-      state.runsMap = null;
-      clearMarks();
-      paintLegend();
+    clear,
+    /** Takes the marks off and stops following the map's paints: the piece that made this ends before the instance (a second one may follow) */
+    destroy() {
+      if (offPaint) { offPaint(); inst.release(offPaint); offPaint = null; }
+      clear();
     },
     sync,
     /** For tests: force reduced motion on or off (null: follow the viewer's setting) */
