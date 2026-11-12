@@ -8199,7 +8199,12 @@
       "from": "page-doc-docs-sign-in",
       "to": "page-doc-docs-embedding",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-sign-in",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T06:40:38.140Z"
+  "updatedAt": "2026-11-12T07:34:50.794Z"
 }
