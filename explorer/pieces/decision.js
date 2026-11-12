@@ -50,7 +50,7 @@
 import { expandSheet, isPhone } from '../engine/sheets.js';
 import { reviewParts, sendBackProblem, reviewBody, editsHint, isReviewable } from '../review-model.js';
 import {
-  HOLD_MS, decide, askReasons, askWords, newReasons, sendBackLine, sendBackDecision, refusalWords, holdWords, holdStartWords, holdCancelledWords, editsSentWords,
+  HOLD_MS, decide, askReasons, askWords, newReasons, sendBackLine, sendBackDecision, refusalWords, holdWords, holdStartWords, holdCancelledWords, editsSentWords, NOTHING_TO_DECIDE,
 } from '../decision-model.js';
 import { pullNumberOf } from '../proposal-model.js';
 import { announce } from '../engine/keyboard.js';
@@ -106,6 +106,7 @@ export function mount(root, inst, options = {}) {
   scope.keepParts(...made);
   const foot = made[0];
   const rootEl = foot.querySelector('#review');
+  const actions = foot.querySelector('.hx-proposal-actions');
   let gone = false;
 
   /** What is shown: the review of the proposal that is open, and the lines under the buttons */
@@ -182,8 +183,11 @@ export function mount(root, inst, options = {}) {
 
     // The line is Approve's description (the question while one is asked); not on a PR it is the reason for both buttons
     const line = q('[data-review-line]');
-    line.textContent = ui.key ? d.line : '';
-    line.hidden = !ui.key || !!askText; // the question takes the line's place while one is asked
+    // A proposal open with no name has nothing to decide on (handed in as an object, with no server): the line says so, and there are no buttons to press
+    const readOnly = !ui.key && !!state.proposal;
+    line.textContent = ui.key ? d.line : readOnly ? NOTHING_TO_DECIDE : '';
+    line.hidden = (!ui.key && !readOnly) || !!askText; // the question takes the line's place while one is asked
+    actions.hidden = readOnly;
     const ask = q('[data-review-ask]');
     if (ask.textContent !== askText) ask.textContent = askText;
     ask.hidden = !askText;
@@ -275,7 +279,7 @@ export function mount(root, inst, options = {}) {
   /** The bar was drawn: when it is another proposal than the one shown, start again for it */
   function onBar({ open }) {
     const key = open ? keyOf() : null;
-    rootEl.hidden = !key;
+    rootEl.hidden = !open;
     if (key === ui.key) { paint(); return; }
     if (ui.hold) stopHold(open ? 'other' : 'closed', { quiet: false });
     ui.key = key;

@@ -132,6 +132,12 @@ export function askWords(reasons, verb = 'Approve') {
 export const newReasons = (reasons, answered) => reasons.filter((r) => !answered.includes(r.key));
 
 /**
+ * What the foot says, in place of Approve and Send back, for a proposal that names nothing to decide on: one a host handed in as an object with no
+ * cornfield server to send a review to (pieces/review.js with no `base`). Cornfield's own page always names its proposal, so it never says this.
+ */
+export const NOTHING_TO_DECIDE = 'Shown to read only: there is no cornfield server here to send an approval or a send back to.';
+
+/**
  * The line above Approve and what a press of it does, from the facts and the page's own state.
  * @param {object} input
  * @param {string|null} input.source the proposal's source: `pull/<n>`, `checkout` or a worktree
