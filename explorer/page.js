@@ -25,7 +25,8 @@
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
  *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
- *   forge-panel.js  the issues and PRs panel, when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half
+ *   pieces/work.js  the Work panel (a piece, with a part per tab in pieces/work-*.js), when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half;
+ *                   forge-panel.js is the page's way in to it (initForgePanel, the deep links)
  *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
 

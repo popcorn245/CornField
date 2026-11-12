@@ -14,12 +14,16 @@
  *   update({ config, clock })   the config arrived (or changed): the panel starts, or does not. `isOn()` says which.
  *   destroy()                   every listener, timer and poll ends, the elements go, an answer still on its way is not heard
  *
- * What it asks of the server (all through `credentialed(inst)`, served paths only: docs/embedding.md lists which a sibling origin may reach, today none of them):
- *   GET  /api/forge/{pulls,issues,deploys,threads}?state=…   GET /api/forge/pulls/<n>   GET /api/forge/pulls/<n>/landing   POST /api/forge/pulls/<n>/landing/cancel
- *   GET  /api/forge/work   GET /api/forge/threads/<n>   GET /api/forge/issues/<n>   POST /api/forge/threads {title, body}
- *   POST /api/forge/pulls/<n>/{merge,rerun}   GET /api/forge/issues/<n>/spec/plan  POST /api/forge/issues/<n>/spec   GET|POST … /build   (forge-panel-model.js)
- *   GET  /api/forge/release-notes[?since=]   POST /api/forge/release-drafts {tag, since?}
- *   GET  /api/agent-runs[?refresh=1]   POST /api/agent-runs   GET /api/agent-runs/<id>/brief   POST /api/agent-runs/<id>/{stop,answer}
+ * What it asks of the server (all through `credentialed(inst)`, served paths only; docs/embedding.md lists which a sibling origin may reach: today none of these):
+ *   GET  /api/forge/{pulls,issues,threads}?state=<open|closed|all>&limit=100   GET /api/forge/deploys?limit=100   GET /api/forge/work
+ *   GET  /api/forge/pulls/<n>   GET /api/forge/pulls/<n>/landing (approveLands)   POST /api/forge/pulls/<n>/landing/cancel {}
+ *   POST /api/forge/pulls/<n>/merge {sha, ...}   POST /api/forge/pulls/<n>/rerun {sha, check}   GET /api/forge/pulls/<n>/build?slug=<slug>   POST /api/forge/pulls/<n>/build {digest, ...}
+ *   GET  /api/forge/issues/<n>   GET /api/forge/issues/<n>/spec   POST /api/forge/issues/<n>/spec {digest, ...}
+ *   GET  /api/forge/threads/<n>   POST /api/forge/threads {title, body}
+ *   GET  /api/forge/release-notes[?since=<tag>]   POST /api/forge/release-drafts {tag, since?}
+ *   GET  /api/agent-runs[?follow=1]   POST /api/agent-runs {kind, refs, brief, profile?, limits?, force?, retryOf?}   GET /api/agent-runs/<id>/brief
+ *   POST /api/agent-runs/<id>/stop {}   POST /api/agent-runs/<id>/answer {action: 'continue'|'stop'|'reply', text?}
+ *   (and GET /proposals, which the engine reads for the Specs tab: engine/proposal.js)
  *
  * Events and asks (instance.js lists them): hears `work:open-specs` (ask, answers true), `forge:can-start` (ask) and `forge:start`, `thread:open`,
  * `thread:start`, `threads:ensure`, `threads:index` (ask), `proposal:bar`, `proposal`, `decision`, `work:answer`, `scene`; says `work:waiting {total}`,
@@ -189,8 +193,7 @@ export function mount(root, inst, options = {}) {
     scope.listen(ctx.root, 'focusin', (e) => { revealInStrip(e.target); });
     const tabs = panel.querySelector('.hx-forge-tabs');
     if (tabs) scope.listen(tabs, 'scroll', fn.paintTabsMore, { passive: true });
-    const RO = inst.win && inst.win.ResizeObserver;
-    if (RO) { const ro = new RO(() => fn.paintTabsMore()); ro.observe(panel); scope.own(() => ro.disconnect()); }
+    scope.own(inst.onResize(() => fn.paintTabsMore()));
     scope.listen(panel, 'click', fn.onClick);
     scope.listen(panel, 'change', fn.onChange);
     scope.listen(panel, 'input', fn.onInput);

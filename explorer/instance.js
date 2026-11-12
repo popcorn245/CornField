@@ -15,7 +15,7 @@
  *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
- *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onHide(fn): the few window facts the review needs
+ *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs
  *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
@@ -252,6 +252,8 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
     onWindowFocus: (fn) => (win ? inst.listen(win, 'focus', () => fn()) : () => {}),
     /** Calls `fn()` when the page is going away (a tab closed, a reload). Removed by destroy(). */
     onPageHide: (fn) => (win ? inst.listen(win, 'pagehide', () => fn()) : () => {}),
+    /** Calls `fn()` when the window is resized. Removed by destroy(). */
+    onResize: (fn) => (win ? inst.listen(win, 'resize', () => fn()) : () => {}),
     /** Calls `fn()` when the page is shown again, or comes back from the back-forward cache. Removed by destroy(). */
     onPageShow: (fn) => (win ? inst.listen(win, 'pageshow', () => fn()) : () => {}),
     /** Calls `fn()` when the tab is hidden. Removed by destroy(). */

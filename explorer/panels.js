@@ -33,7 +33,6 @@ export function closeDrawer() {
 
 /** "Added by Checkout": the pill for a node the open proposal touches; '' for one it leaves alone */
 export const diffPillWords = (node) => pill(node, pageInstance().state.proposal);
-export const repaintThreads = () => { const p = pagePiece('node-panel'); if (p) p.repaintThreads(); };
 export const keepSelectedInView = () => { const p = pagePiece('node-panel'); if (p) p.keepSelectedInView(); };
 export const startRun = () => { const p = pagePiece('node-panel'); if (p) p.startRun(); };
 /** Copies the selected node as JSON (the Copy Spec button); `button` is kept for the old signature */

@@ -83,7 +83,6 @@ export function install(ctx) {
   }
 
   /** The page is being put away (closed, or into the back-forward cache): no look until it is shown again */
-
   function onPageHide() { m.pageAway = true; syncRunsPoll(); }
 
   function onPageShow() { m.pageAway = false; syncRunsPoll(); }
@@ -290,8 +289,6 @@ export function install(ctx) {
     if (ui.runTimelines.has(id)) ui.runTimelines.delete(id); else ui.runTimelines.add(id);
     fn.paint();
   }
-
-  /** The runs whose card is drawn anew at the next paint, whatever holds the focus in it (the page itself changed what it says) */
 
   /** Gives the focus to the first of `selectors` that is there and not disabled, inside the card of a run (else the card itself) */
   function focusInRun(runId, selectors) {

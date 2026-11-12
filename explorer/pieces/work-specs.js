@@ -49,8 +49,6 @@ export function install(ctx) {
     return `${plural(shown, 'spec')} shown${decide ? `, ${decide} ${t('toDecide').toLowerCase()}` : ''}`;
   }
 
-  /** How often the specs are read again for the number while the page is open (spec 0010 D2: at most every 5 minutes; the server keeps what it read by PR head) */
-
   /** Reads the proposals now, quietly (the number and the list follow); one read at a time */
   async function readSpecsQuiet() {
     if (m.specsReading) return;
