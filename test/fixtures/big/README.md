@@ -25,6 +25,11 @@ node test/fixtures/big/serve.js --forge --port 3403                 # add --them
 # (e) a sibling origin listed (`embed.origins`, docs/embedding.md); `--public` is the name the browser opens it at (a `*.localhost` name), `--forge-port` the fake forge's port
 node test/fixtures/big/serve.js --forge --port 3711 --forge-port 3721 --public http://map.corn.localhost:3711 --embed http://tasks.corn.localhost:3713
 node test/fixtures/big/embed-proof.mjs     # the browser proof: two rigs and three blank host pages (ports 3711-3715, 3721-3722), Chromium, what it sent and what came back
+node test/fixtures/big/scope-proof.mjs     # `<corn-map src>` and `<corn-scope>` on a listed sibling origin (ports 3780-3789); needs the built package
+# (f) the one-tag review on a listed sibling origin: Approve, Send back, signing in, an unlisted host, the CSP, axe, the keyboard (ports 3920-3929, forge 4020); needs the built package
+node test/fixtures/big/review-proof.mjs [--shots <dir>] [--only open,decide,signedout,unlisted,keys,axe]
+# (g) the requests of a decision in `<corn-review>` against cornfield's own page's for the same steps, byte for byte (ports 3930-3939, forge 4030, 4032)
+node test/fixtures/big/review-requests.mjs [--only approve,sendback,stale,refusals,signedout]
 ```
 
 Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.

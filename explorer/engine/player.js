@@ -21,7 +21,8 @@
 
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { createPlayer, cameraFor, parseSpeed, SPEED_CHOICES, SPEED_KEY } from '../scenario.js';
-import { blastRadius, outageLayers, outageScenario } from '../outage-model.js';
+import { blastRadius } from '../outage-model.js';
+import { outageLayers, outageScenario } from '../outage-scenario.js';
 import { setLayer, clearStepLayers, LAYER_DEFS } from './layers.js';
 import { externalLayer } from '../cloud-model.js';
 import { layerOn, layersOf, projectLayerKey, shownByProposal } from '../layer-model.js';

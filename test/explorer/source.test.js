@@ -134,9 +134,23 @@ describe('a server of another origin (a base) is asked with the session', () => 
     const inst = createInstance({ base: BASE, fetch: s.fetch });
     await fetchConfig(inst);
     await fetchTopology(inst);
-    expect(s.calls[0]).toEqual([`${BASE}${CONFIG_PATH}`, { cache: 'no-store', credentials: 'include' }]);
+    expect(s.calls[0]).toEqual([`${BASE}${CONFIG_PATH}`, { cache: 'no-store', credentials: 'include', redirect: 'error' }]);
     expect(s.calls[1][0]).toMatch(/^https:\/\/map\.example\.com\/topology\.json\?v=\d+$/);
-    expect(s.calls[1][1]).toEqual({ credentials: 'include' });
+    expect(s.calls[1][1]).toEqual({ credentials: 'include', redirect: 'error' });
+  });
+  it('never follows a redirect with the session: an answer that sends it elsewhere is no answer (and a request of the page\'s own is as it was)', async () => {
+    const { sessionInit, credentialed } = await import('../../explorer/engine/connection.js');
+    const inst = createInstance({ base: BASE, fetch: () => Promise.reject(new TypeError('Failed to fetch')) });
+    expect(sessionInit(inst, '/proposals/0042-x/review', { method: 'PUT', body: '{}' })).toEqual({ credentials: 'include', redirect: 'error', method: 'PUT', body: '{}' });
+    expect(sessionInit(inst, 'https://elsewhere.test/x', { method: 'GET' })).toEqual({ method: 'GET' });
+    const page = createInstance({ fetch: () => Promise.resolve({ ok: true }) });
+    expect(sessionInit(page, '/proposals', { cache: 'no-store' })).toEqual({ cache: 'no-store' });
+    expect(sessionInit(page, '/proposals', undefined)).toBeUndefined();
+    // a browser's fetch with redirect: 'error' rejects on a 3xx: the read is said as one that got no answer
+    const seen = [];
+    const strict = createInstance({ base: BASE, fetch: (u, init) => { seen.push(init.redirect); return init.redirect === 'error' ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: true, redirected: true }); } });
+    await expect(credentialed(strict)('/proposals/0042-x.json')).rejects.toThrow(TypeError);
+    expect(seen).toEqual(['error']);
   });
   it('sends the session only to the base\'s own origin: never to an absolute URL or a //host path elsewhere, whatever is asked', async () => {
     const s = server({ [TOPOLOGY_PATH]: json(TOPOLOGY), '/cornfield/topology.json': json(TOPOLOGY), '/other/topology.json': json(TOPOLOGY) });

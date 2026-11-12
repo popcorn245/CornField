@@ -19,7 +19,9 @@ export default defineConfig({
     lib: { entry: entries, formats: ['es'], fileName: (_format, name) => `${name}.js` },
     rolldownOptions: {
       output: {
-        chunkFileNames: 'chunks/[name]-[hash].js',
+        // A chunk is named after its first module, so the engine every component shares would be `_corn-default-tokens-…` (the tokens are its first
+        // module): it is named for what it is
+        chunkFileNames: (chunk) => (chunk.moduleIds.some((id) => id.includes('corn-default-tokens')) ? 'chunks/engine-[hash].js' : 'chunks/[name]-[hash].js'),
         // The runtime is one chunk of its own, whatever components are built: every entry shares it (the budget in size-budget.json holds its size)
         codeSplitting: { groups: [{ name: 'runtime', test: /node_modules[\\/]@stencil[\\/]core/ }] },
       },

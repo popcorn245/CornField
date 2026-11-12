@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>corn-map demo</title>
+  <title>cornfield components demo</title>
   <!-- A page with its own look, unrelated to cornfield's: its own fonts, colours and rules, some of them blunt (a bare canvas and button rule, box-sizing). -->
   <style>
     :root { --brand: #7a3e00; --paper: #fbf3e4; --ink: #2b1d0e; }
@@ -14,6 +14,8 @@
     header p { margin: 0; font-size: 14px; opacity: .85; }
     main { padding: 16px; }
     .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .review-card { margin-top: 16px; }
+    corn-review { height: 640px; border: 1px solid var(--ink); }
     .card { border: 2px solid var(--brand); border-radius: 6px; background: #fff; padding: 8px; }
     .card h2 { margin: 0 0 8px; font-size: 16px; }
     corn-map { height: 520px; border: 1px solid var(--ink); }
@@ -23,17 +25,18 @@
     output { font: 13px/1.4 ui-monospace, monospace; }
     /* The host tunes one token for the dark map only: an ordinary rule on one element beats cornfield's default */
     #dark { --corn-ground: #101a2e; }
-    @media (max-width: 760px) { .maps { grid-template-columns: 1fr; } corn-map { height: 360px; } }
+    @media (max-width: 760px) { .maps { grid-template-columns: 1fr; } corn-map { height: 360px; } corn-review { height: 560px; } }
   </style>
   <script type="module" src="./main.ts"></script>
 </head>
 <body>
-  <header><h1>Tasks (a host page)</h1><p>Two corn-map elements from the synthetic fixture, one forced light, one forced dark, on a page with its own styles.</p></header>
+  <header><h1>Tasks (a host page)</h1><p>Two corn-map elements and a corn-review from the synthetic fixture, on a page with its own styles.</p></header>
   <main>
     <div class="maps">
       <section class="card"><h2>Light, forced</h2><corn-map id="light" theme="light"></corn-map></section>
       <section class="card"><h2>Dark, forced</h2><corn-map id="dark" theme="dark"></corn-map></section>
     </div>
+    <section class="card review-card"><h2>A review: a proposal on the map, handed to the page as objects (no server)</h2><corn-review id="review" theme="light"></corn-review></section>
     <div class="bar"><button id="fit" type="button">Fit both</button><button id="flow" type="button">Data flow</button><output id="log" aria-live="polite"></output></div>
   </main>
 </body>

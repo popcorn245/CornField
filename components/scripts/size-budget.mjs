@@ -1,5 +1,5 @@
-// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, of corn-map with its engine, of corn-map with what a `src` brings, and of
-// corn-scope with what it loads (what each entry pulls in besides the runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
+// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, of corn-map with its engine, of corn-map with what a `src` brings, of corn-review
+// alone and with what a `src` brings, and of corn-scope with what it loads (what each entry pulls in besides the runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
 //   node scripts/size-budget.mjs [--record]
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,7 +31,14 @@ export function measure() {
   const own = (entry, dynamic = false) => [...reach(entry, dynamic)].filter((f) => !f.startsWith('chunks/runtime-')).reduce((sum, f) => sum + gz(f), 0);
   // Each is what the entry loads besides the runtime; they share the engine's chunk, so they do not add up. `corn-map` is a map handed its data;
   // `corn-map-src` the same with the chunk a `src` (or a scope) brings: the loading, the states, the server's theme
-  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own('corn-map.js'), 'corn-map-src': own('corn-map.js', true), 'corn-scope': own('corn-scope.js') };
+  // `corn-review` is a review handed its data and `corn-review-src` the same with the chunk a `src` brings (the load, the card, the server's theme); the review
+  // shares the engine's chunks with the map, so a map alone loads what the review uses of the modules they share (the growth of `corn-map` when it arrived)
+  return {
+    runtime: gz(`chunks/${runtime}`),
+    'corn-map': own('corn-map.js'), 'corn-map-src': own('corn-map.js', true),
+    'corn-review': own('corn-review.js'), 'corn-review-src': own('corn-review.js', true),
+    'corn-scope': own('corn-scope.js'),
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -7,7 +7,7 @@
  * map piece inside its stage (pieces/map.js); a shell holds none of it. Words are `strings` keys (core/strings.js), each element has a `data-corn`
  * hook and so a `part`, and nothing here is built from data except through `escapeHtml`, `textContent` and a link checked to be http(s).
  *
- *   const status = mount(container, inst, { onRetry })   -> { destroy, refuse }
+ *   const status = mount(container, inst, { onRetry })   -> { destroy, refuse, show, clear }
  *
  * It follows the instance's `source` event (engine/source.js) and reads where the load is now from `sourceOf(inst)`, so a piece that joins late
  * shows the right thing. A polite live region, apart from the card, says each state once (a second `server` error says itself again: it is a
@@ -131,6 +131,10 @@ export function mount(container, inst, { onRetry = () => {}, focusMap = () => {}
   return {
     /** Says that this piece cannot have the scope it is in (a second map): the card says why, and the piece draws nothing */
     refuse(why = 'second-map') { render({ state: why }); },
+    /** Shows a state the load did not say (a decision the server refused for want of a sign-in: `{ state: 'sign-in', status, signIn }`), in the same card */
+    show(detail) { render(detail); },
+    /** Takes what `show` put up away: the card shows where the load is now (nothing, once it is ready) */
+    clear() { const now = source ? source.state() : null; render(now && now.state !== 'ready' ? now : { state: 'ready' }); },
     destroy() {
       if (ended) return;
       ended = true;

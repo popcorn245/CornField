@@ -10,7 +10,9 @@ import {
   // @ts-expect-error plain JS modules, no declarations
 } from '../../explorer/scenario.js';
 // @ts-expect-error plain JS modules, no declarations
-import { ZOOM_MIN, READ_ZOOM, allInside } from '../../explorer/camera.js';
+import { ZOOM_MIN } from '../../explorer/camera.js';
+// @ts-expect-error plain JS modules, no declarations
+import { READ_ZOOM, allInside } from '../../explorer/camera-frame.js';
 
 const scenario = (extra         = {}) => ({
   id: 'save-a-meal',

@@ -67,7 +67,7 @@ const RECORD = () => {
     let url = ''; try { url = typeof input === 'string' ? input : String(input.url || input); } catch { url = ''; }
     const p = new URL(url, location.href);
     if (!(/\.(png|svg|woff2?|css|js|map)$/.test(p.pathname) || p.pathname.startsWith('/explorer/') || p.pathname.startsWith('/core/') || p.pathname.startsWith('/cornfield/') || p.pathname.startsWith('/data/') || p.pathname === '/topology.json')) {
-      window.__log.push({ method: (init && init.method) || 'GET', path: p.pathname + p.search.replace(/[?&]v=\d+/, ''), cred: init && 'credentials' in init ? init.credentials : '-', cache: (init && init.cache) || '-', headers: init && init.headers ? JSON.stringify(init.headers) : '', body: init && init.body !== undefined ? String(init.body) : '-', keys: init ? Object.keys(init).filter((k) => k !== 'credentials').join(',') : '-' });
+      window.__log.push({ method: (init && init.method) || 'GET', path: p.pathname + p.search.replace(/[?&]v=\d+/, ''), cred: init && 'credentials' in init ? init.credentials : '-', redirect: (init && init.redirect) || '-', cache: (init && init.cache) || '-', headers: init && init.headers ? JSON.stringify(init.headers) : '', body: init && init.body !== undefined ? String(init.body) : '-', keys: init ? Object.keys(init).filter((k) => k !== 'credentials' && k !== 'redirect').join(',') : '-' });
     }
     return of.apply(this, arguments);
   };
@@ -93,7 +93,7 @@ async function sendBack(page, wait) {
   return out;
 }
 /** What differs only because a base on another origin makes a request credentialed and absolute: removed before comparing */
-const same = (a, b) => JSON.stringify(a.map((s) => ({ name: s.name, log: s.log.map(({ cred, ...r }) => r) }))) === JSON.stringify(b.map((s) => ({ name: s.name, log: s.log.map(({ cred, ...r }) => r) })));
+const same = (a, b) => JSON.stringify(a.map((s) => ({ name: s.name, log: s.log.map(({ cred, redirect, ...r }) => r) }))) === JSON.stringify(b.map((s) => ({ name: s.name, log: s.log.map(({ cred, redirect, ...r }) => r) })));
 
 /**
  * What only a shadow root can show (the harness's `&shadow=1`): the host's own rules stop at it, the lookups and the focus are the box's, two reviews put
@@ -270,7 +270,7 @@ async function main() {
   const count = (r) => [...r.approve, ...r.send].reduce((n, s) => n + s.log.length, 0);
   check('Approve with the hold, Undo and the landing: the same requests as the page', same(onPage.approve, onPiece.approve) && count({ approve: onPage.approve, send: [] }) > 0, `${count({ approve: onPage.approve, send: [] })} requests`);
   check('Send back with a note: the same request as the page', same(onPage.send, onPiece.send) && count({ approve: [], send: onPage.send }) > 0, `${count({ approve: [], send: onPage.send })} requests`);
-  check('the only difference is the credentials flag on a base of another origin', [...onPiece.approve, ...onPiece.send].every((s) => s.log.every((r) => r.cred === 'include')) && [...onPage.approve, ...onPage.send].every((s) => s.log.every((r) => r.cred === '-')));
+  check('the only difference is the session on a base of another origin: credentials include, and no redirect followed with it', [...onPiece.approve, ...onPiece.send].every((s) => s.log.every((r) => r.cred === 'include' && r.redirect === 'error')) && [...onPage.approve, ...onPage.send].every((s) => s.log.every((r) => r.cred === '-' && r.redirect === '-')));
 
   await browser.close();
   harness.close();

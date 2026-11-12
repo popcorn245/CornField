@@ -41,14 +41,26 @@ function declarationOf(source, name) {
   throw new Error(`the type ${name} is never closed`);
 }
 
-/** The types a component declares in its own file and names in a property, event or method: a consumer needs their declarations too */
+/**
+ * The types a component declares in its own file and names in a property, event or method: a consumer needs their declarations too. A type that one of
+ * those declarations names in turn (`CornDecisionDetail` has a `CornReviewRecord`) comes with it.
+ */
 function localTypes(c, source) {
   const names = new Set();
   for (const m of [...c.properties, ...c.events, ...c.methods]) {
     const refs = (m.complexType && m.complexType.references) || {};
     for (const [name, ref] of Object.entries(refs)) if (ref && ref.location === 'local') names.add(name);
   }
-  return [...names].sort().map((name) => declarationOf(source, name));
+  const declared = [...source.matchAll(/^export (?:interface|type) (\w+)\b/gm)].map((m) => m[1]);
+  const texts = new Map();
+  const add = (name) => {
+    if (texts.has(name)) return;
+    const text = declarationOf(source, name);
+    texts.set(name, text);
+    for (const other of declared) if (other !== name && new RegExp(`\\b${other}\\b`).test(text)) add(other);
+  };
+  for (const name of [...names].sort()) add(name);
+  return [...texts.keys()].sort().map((name) => texts.get(name));
 }
 
 /** A property's type as written in the source (the `original` text: resolved types print object literals as ''), with `undefined` when it is optional */

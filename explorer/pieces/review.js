@@ -27,7 +27,23 @@
  *   base, fetch, tokens, renderer, onSelect, onReady   as pieces/map.js; `renderer` is read at mount only (a canvas that is replaced loses the edge picking)
  *   label      the box's accessible name (a region; 'Proposal review' by default), read at mount
  *
- * What a host hears is on the instance already (instance.js): `selection`, `proposal`, `decision`, `auth`, `scenario:player`. This piece adds nothing.
+ * From a server (spec 0011 D1, D6): with `src` (the base address of a cornfield server) and no instance handed in, the piece makes its own over that base and
+ * LOADS what it was not handed: `/cornfield/config.json` and `/topology.json` through engine/source.js, with the maintainer's session (the base's own origin
+ * only: engine/connection.js), the words, layers and the map's theme from the config, then the proposal by name. Where the load is shows in the box as the
+ * status card a map with a `src` has (pieces/status.js): loading, signed out, not a maintainer, not listed, offline, a server error, a bad address, and the
+ * version notice. A decision the server refuses for want of a sign-in shows the same card with the same link. The load and the card are a chunk of their own
+ * (pieces/review-source.js), imported the first time a review has a `src`; what is handed in (`topology`, `config`, `strings`) goes to the same load, and a host that
+ * handed a topology and a config in is asked for nothing. A proposal that cannot be opened is said in the bar, with no way on that goes nowhere here (no Specs list).
+ *   src, useTheme, version, pageUrl   the server's address; whether the box wears its theme (its rules in this shadow root, its `--corn-*` tokens on the host element);
+ *              the package's version, compared with the server's; the page's address, for the sign-in's way back. Read at mount: a new server is a new piece
+ *   onNavigate ({ proposal, source, view, change })  the open proposal or its view changed: what cornfield's page puts in its address bar (`proposal` is the name,
+ *              `source` only when it was asked for by name with one, `view` is null once closed), for the host to answer or not; `change`: 'opened' | 'view' | 'closed'
+ *   onDecision ({ outcome, proposal, source, open, review })  the server took a review (the instance's `decision`, said once, after the answer)
+ *   onAuth ({ status, signIn, during })  a sign-in is needed: `during` is 'load', 'proposal', 'facts', 'review', 'send' or 'landing'; `signIn` is the server's sign-in
+ *   onError ({ kind, message })  `not-listed`, `offline`, `server`, `address`, `version`, `theme` (engine/source.js `errorOf`) or `proposal` (it did not open)
+ * onReady (above) is said once, with the first frame of the map that shows the proposal asked for open, or the bar saying why it is not.
+ *
+ * What a host hears is on the instance too (instance.js): `selection`, `proposal`, `decision`, `auth`, `scenario:player`; the callbacks above are those, made plain.
  *
  * Where it lives. The box declares itself the query container its stylesheets ask (`container: corn-box corn-page / size`, css/review.css) and is the
  * containing block of its own `position: fixed` descendants (`contain: layout`), so it needs a host that gives it a height (it fills 100% of it and is never
@@ -52,12 +68,13 @@ import { mount as mountProposal } from './proposal.js';
 import { mount as mountChanges } from './changes.js';
 import { mount as mountDecision } from './decision.js';
 import { setTopology, layoutMap, setMap } from '../engine/topology.js';
-import { closeProposal, rebuildProposalMap } from '../engine/proposal.js';
+import { closeProposal, rebuildProposalMap, setMessage } from '../engine/proposal.js';
 import { measureCovered, setPhoneBox } from '../engine/sheets.js';
 import { setProjectLayers } from '../engine/layers.js';
 import { applyStrings, setStrings } from '../engine/strings.js';
 import { withParts } from '../engine/piece.js';
-import { PROPOSAL_VIEWS } from '../proposal-model.js';
+import { PROPOSAL_VIEWS, isProposalName, notANameWords } from '../proposal-model.js';
+import { parseSource, signInUrl } from '../engine/source-address.js';
 import { NOTHING_TO_DECIDE } from '../decision-model.js';
 
 /**
@@ -113,12 +130,38 @@ export function mount(root, inst, options = {}) {
   root.append(box);
 
   const ownsInstance = !inst;
-  if (ownsInstance) inst = createInstance({ root: box, base: options.base || '', fetch: options.fetch, strings: options.strings });
+  // A `src` (only for a piece that makes its own instance: a scope's is the scope's) is the server: its base is the instance's, a bad one is none and says so
+  const srcGiven = ownsInstance && typeof options.src === 'string' ? options.src !== '' : ownsInstance && options.src !== undefined && options.src !== null;
+  const parsed = srcGiven ? parseSource(options.src) : null;
+  /** A `src` that is not an address is no server: nothing is asked of the page's own origin in its place (a path with no base is the host's own) */
+  const blocked = !!parsed && !parsed.ok;
+  const nowhere = () => Promise.reject(new TypeError('The review has no server: its src is not an address.'));
+  if (ownsInstance) inst = createInstance({ root: box, base: parsed ? (parsed.ok ? parsed.base : '') : options.base || '', fetch: blocked ? nowhere : options.fetch, strings: options.strings });
   else if (options.strings !== undefined) setStrings(inst, options.strings);
   const { state } = inst;
   setPhoneBox(inst, box); // a phone is a narrow box, whatever the window is (engine/sheets.js)
   applyStrings(inst, box);
   let ended = false;
+  /** `onReady`: the map is drawn and the proposal asked for is open (or has said why it is not): once */
+  let mapDrawn = false;
+  let settled = true;
+  let readyFired = false;
+  let readyWaiting = false;
+  /** Said with the frame that shows it: the map's next paint after the proposal opened (or said why not), so what the bar says is what the map shows */
+  const sayReady = () => {
+    if (readyFired || readyWaiting || ended || !mapDrawn || !settled) return;
+    const map = inst.map;
+    if (!map || typeof map.onPaint !== 'function') { readyFired = true; if (options.onReady) options.onReady(); return; }
+    readyWaiting = true;
+    const off = map.onPaint(() => {
+      off();
+      readyWaiting = false;
+      if (readyFired || ended || !settled) return; // another proposal was asked for since: it says ready when it is there
+      readyFired = true;
+      if (options.onReady) options.onReady();
+    });
+    map.render();
+  };
 
   // -- the pieces, in the order the page mounts them: the map first, the node panel, the bar, the column, the decision in the column's foot -----
   const at = markersIn(doc, box);
@@ -130,7 +173,7 @@ export function mount(root, inst, options = {}) {
     theme: options.theme,
     tokens: options.tokens,
     onSelect: options.onSelect,
-    onReady: options.onReady,
+    onReady: () => { mapDrawn = true; sayReady(); },
   });
   const nodePanel = mountNodePanel(box, inst, { slots: { drawer: at['node-panel/drawer'], backdrop: at['node-panel/backdrop'] } });
   const proposalPiece = mountProposal(box, inst, { slots: { bar: at['proposal/bar'], menu: at['proposal/menu'] }, edit: false });
@@ -143,7 +186,7 @@ export function mount(root, inst, options = {}) {
 
   // -- what the host asked for ---------------------------------------------------------------------------------------------------------------
   /** What has been handed in, so an `update` that repeats a value changes nothing */
-  const serverless = !options.base && !options.fetch;
+  const serverless = !options.base && !options.fetch && !(parsed && parsed.ok);
   const current = { topology: undefined, proposal: null, source: null, slug: null, sha256: null, proposalView: null, shown: null, hasTopology: false, held: false };
 
   const redraw = () => { proposalPiece.update(); changesPiece.update(); decisionPiece.update(); nodePanel.update(); };
@@ -155,23 +198,49 @@ export function mount(root, inst, options = {}) {
     if (wanted === null || wanted === undefined || wanted === '') {
       current.held = false;
       current.shown = null;
+      settled = true;
       if (state.proposal) closeProposal(inst);
+      sayReady();
       return undefined;
     }
-    if (!current.hasTopology) { current.held = true; return undefined; } // a proposal is laid over a map: it opens when there is one
+    if (!current.hasTopology) { current.held = true; settled = false; return undefined; } // a proposal is laid over a map: it opens when there is one
     current.held = false;
     const view = current.proposalView;
+    if (typeof wanted === 'string' && blocked) { settled = true; sayReady(); return undefined; } // there is no server to ask
+    if (typeof wanted === 'string' && serverless) {
+      // No server at all (no `src`, `base` or `fetch`): a name is never asked of the page's own origin in its place. Said in the bar, as a name not found is.
+      const message = isProposalName(wanted) ? `${wanted} cannot be opened here: there is no cornfield server to read it from (the review has no src).` : notANameWords(wanted);
+      current.shown = null;
+      setMessage(inst, message, true, []);
+      inst.emit('proposal:failed', { slug: wanted, source: current.source, status: 0, notFound: false, message });
+      settled = true;
+      sayReady();
+      return undefined;
+    }
     if (typeof wanted === 'string') {
+      // The proposal that is open already, asked for again by its name (a host that heard `cornNavigate` and set what it said): nothing opens again, and the copy
+      // the server found is the same one whether or not the name carries it
+      if (state.proposal && state.proposalSlug === wanted && (!current.source || current.source === state.proposalSource)) {
+        current.shown = `${wanted}\u0000${current.source || ''}`;
+        if (PROPOSAL_VIEWS.includes(view) && state.proposalView !== view) proposalPiece.update({ view });
+        settled = true;
+        return undefined;
+      }
       const key = `${wanted}\u0000${current.source || ''}`;
       if (current.shown === key && state.proposal) return undefined; // already open (the piece answers true too)
       current.shown = key;
-      return proposalPiece.update({ proposal: wanted, source: current.source, view });
+      settled = false;
+      const opening = proposalPiece.update({ proposal: wanted, source: current.source, view });
+      Promise.resolve(opening).then(() => { if (current.shown === key) { settled = true; sayReady(); } }); // opened, or said why not
+      return opening;
     }
     if (current.shown === wanted && state.proposal) return undefined;
     current.shown = wanted;
     // With no server to ask (no `base`, no `fetch`) the object is all there is: its name and source would only send the pieces to the host's own origin for a PR's checks and reviews
     const named = serverless ? {} : { source: current.source, slug: current.slug, sha256: current.sha256 };
     proposalPiece.update({ proposal: wanted, ...named, view });
+    settled = true;
+    sayReady();
     return undefined;
   }
 
@@ -220,6 +289,58 @@ export function mount(root, inst, options = {}) {
     if (config.theme) mapPiece.applyTheme(config.theme);
   }
 
+  /** A topology the host handed in, or the server's: laid out once per object */
+  function takeTopology(topology) {
+    if (topology === current.topology) return;
+    current.topology = topology;
+    applyTopology(topology);
+  }
+
+  // -- the server: with a `src` the review loads what it was not handed (pieces/review-source.js, a chunk of its own) ----------------------------------
+  /** What the host handed in before that chunk came: given to the load as soon as it is there */
+  const queued = {};
+  let link = null;
+  const hand = (what) => { if (link) link.provide(what); else if (srcGiven) Object.assign(queued, what); };
+  current.useTheme = !!options.useTheme;
+  current.theme = options.theme;
+  if (srcGiven && options.strings !== undefined) hand({ strings: options.strings }); // the host's words win over the server's
+  /** What a decision or a read the server refused tells a host, with the server's sign-in; the card is the load's own */
+  const signInOf = () => (inst.base ? signInUrl(inst.base, typeof options.pageUrl === 'function' ? options.pageUrl() : '') : '');
+  const offs = [];
+  /** The facts are read again every half minute: a sign-in that is still needed is said once, not every time (a press, or a decision taken, is said each time) */
+  let factsRefused = '';
+  offs.push(inst.on('auth', ({ status, during }) => {
+    const signIn = signInOf();
+    if (link) link.showSignIn({ status, signIn });
+    if (during === 'facts') { if (factsRefused === `${status}`) return; factsRefused = `${status}`; } else factsRefused = '';
+    if (options.onAuth) options.onAuth({ status, signIn, during });
+  }));
+  offs.push(inst.on('decision', () => { factsRefused = ''; if (link) link.clearSignIn(); }));
+  if (options.onDecision) offs.push(inst.on('decision', ({ outcome, review, slug, source, open }) => options.onDecision({ outcome, proposal: slug, source, open, review })));
+  if (options.onNavigate) {
+    offs.push(inst.on('proposal', ({ change, slug, source, pinSource, view }) => options.onNavigate({ proposal: slug, source: pinSource ? source : null, view: change === 'closed' ? null : view, change })));
+  }
+  if (options.onError) offs.push(inst.on('proposal:failed', ({ message }) => options.onError({ kind: 'proposal', message })));
+  // There is no list of specs to open in another app's page: a bad link's ways leave that button out (engine/proposal.js)
+  offs.push(inst.on('proposal:specs-list', () => false));
+
+  if (srcGiven) {
+    import('./review-source.js').then(({ attachSource }) => {
+      if (ended) return;
+      link = attachSource(inst, {
+        root, stage: box.querySelector('[data-corn="stage"]'), parsed, tokens: options.tokens, version: options.version, pageUrl: options.pageUrl,
+        useTheme: current.useTheme, theme: current.theme,
+        topology: queued.topology, config: queued.config, strings: queued.strings,
+        onTopology: (topology) => takeTopology(topology),
+        onConfig: () => { applyStrings(inst, box); redraw(); }, // the config's words and layers are on the instance: the pieces say them
+        onAuth: (detail) => { if (options.onAuth) options.onAuth(detail); },
+        onError: (detail) => { if (options.onError) options.onError(detail); },
+        onMode: () => mapPiece.refresh(),
+        focusMap: () => { if (state.canvas) state.canvas.focus(); },
+      });
+    }, (err) => { if (!ended && options.onError) options.onError({ kind: 'offline', message: `the review's loader did not load: ${err && err.message ? err.message : err}` }); });
+  }
+
   /**
    * Applies what changed in `next` (the options above). Only the keys present are looked at.
    * @returns {Promise<boolean>|undefined} when a proposal is fetched: whether it opened
@@ -227,11 +348,15 @@ export function mount(root, inst, options = {}) {
   function update(next = {}) {
     if (ended) return undefined;
     let again = false;
-    if ('strings' in next) { setStrings(inst, next.strings); applyStrings(inst, box); again = true; }
-    if ('config' in next) applyConfig(next.config);
-    if ('theme' in next) mapPiece.update({ theme: next.theme });
+    if ('strings' in next) { setStrings(inst, next.strings); applyStrings(inst, box); again = true; hand({ strings: next.strings }); }
+    if ('useTheme' in next) { current.useTheme = !!next.useTheme; if (link) link.setUseTheme(current.useTheme); }
+    if ('config' in next) { if (srcGiven) hand({ config: next.config || null }); else applyConfig(next.config); }
+    if ('theme' in next) { mapPiece.update({ theme: next.theme }); current.theme = next.theme; if (link) link.setTheme(next.theme); }
     if ('checker' in next) changesPiece.update({ checker: next.checker });
-    if ('topology' in next && next.topology !== current.topology) { current.topology = next.topology; applyTopology(next.topology); }
+    if ('topology' in next) {
+      if (srcGiven) hand({ topology: next.topology || null }); // the load takes it, and says it is ready: takeTopology
+      else takeTopology(next.topology);
+    }
     let result;
     const asked = ['proposal', 'source', 'slug', 'sha256'].some((k) => k in next);
     if (asked) {
@@ -253,6 +378,9 @@ export function mount(root, inst, options = {}) {
     if (ended) return;
     ended = true;
     stopAsking();
+    offs.forEach((off) => off());
+    if (link) link.destroy();
+    link = null;
     for (const piece of [decisionPiece, changesPiece, proposalPiece, nodePanel, mapPiece]) piece.destroy();
     setPhoneBox(inst, null);
     box.remove();
@@ -262,6 +390,7 @@ export function mount(root, inst, options = {}) {
   // What was handed in at mount is applied as an update, in the order update() keeps (strings, theme and the checker were taken above)
   const first = {};
   for (const key of ['config', 'topology', 'proposal', 'source', 'slug', 'sha256', 'view', 'node']) if (options[key] !== undefined) first[key] = options[key];
+  if (srcGiven) { for (const key of ['topology', 'config']) if (key in first) { hand({ [key]: first[key] || null }); delete first[key]; } } // the load takes them
   update(first);
 
   return {
@@ -276,5 +405,9 @@ export function mount(root, inst, options = {}) {
     destroy,
     /** The whole map in view */
     fit: () => mapPiece.fit(),
+    /** Selects a node by id and brings it into view; false when there is none */
+    focusNode: (id) => mapPiece.focusNode(id),
+    /** Reads the tokens again and draws: for a change the style cannot see (the host's `<html>`, a stylesheet in its head) */
+    refresh: () => mapPiece.refresh(),
   };
 }

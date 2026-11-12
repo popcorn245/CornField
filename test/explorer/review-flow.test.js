@@ -28,7 +28,9 @@ import { HOLD_MS } from '../../explorer/decision-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, visibleMapRect } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
-import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MIN } from '../../explorer/camera.js';
+import { freeRect, frameNodes } from '../../explorer/camera.js';
+// @ts-expect-error plain JS modules, no declarations
+import { largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MIN } from '../../explorer/camera-frame.js';
 // @ts-expect-error plain JS modules, no declarations
 import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
 import { explorerPage } from '../helpers.js';

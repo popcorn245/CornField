@@ -24,9 +24,12 @@ export function credentialed(inst) {
  * The one rule for the maintainer's session (credentialed() here, and engine/source.js's reads of the config and the map): the fetch options for
  * `path`, with `credentials: 'include'` added when the instance has a base and `path` is on the base's own origin, else `init` as it was
  * (`undefined` stays `undefined`, so a request of the page's own is unchanged). What the caller set itself wins.
+ *
+ * A request with the session never follows a redirect (`redirect: 'error'`): the browser would take it, with the cookies of wherever it is sent,
+ * to whatever origin the answer names, and cornfield answers none of these routes with one. It fails instead, as a request with no answer does.
  */
 export function sessionInit(inst, path, init) {
-  return inst.base && underBase(inst, path) ? { credentials: 'include', ...init } : init;
+  return inst.base && underBase(inst, path) ? { credentials: 'include', redirect: 'error', ...init } : init;
 }
 
 /** Whether `path`, made absolute against the instance's base (as `inst.fetch` makes it), is on the base's origin: only those carry the maintainer's session */

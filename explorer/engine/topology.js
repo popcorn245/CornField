@@ -18,7 +18,7 @@
  */
 
 import { buildDataFlow } from '../flow-build.js';
-import { orderAddedLast, pinLanes, placeAddedNodes } from '../proposal-model.js';
+import { orderAddedLast, pinLanes, placeAddedNodes } from '../proposal-marks.js';
 import { computeDegreeCentrality, computeLaneLayout, layoutOrbit } from './layout.js';
 
 /** The nodes and edges of a topology that have what the engine needs (an id, and two ends), as arrays; anything else is dropped */

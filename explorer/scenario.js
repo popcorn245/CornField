@@ -52,7 +52,8 @@
  */
 
 import { edgeKey } from '../core/proposal.js';
-import { frameNodes, allInside, READ_ZOOM, ZOOM_MIN } from './camera.js';
+import { frameNodes, ZOOM_MIN } from './camera.js';
+import { allInside, READ_ZOOM } from './camera-frame.js';
 
 export const DEFAULT_STEP_MS = 5000;
 /** Where the viewer's speed is kept (localStorage); scenario-ui.js reads and writes it */

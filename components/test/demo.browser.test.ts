@@ -35,6 +35,19 @@ describe('the demo page', () => {
     expect(errors).toEqual([]);
   });
 
+  it('shows a review under the maps: a proposal of the fixture on its map, handed in as objects, read only', async () => {
+    const { doc, win, errors } = await openDemo();
+    const review = doc.querySelector('#review')!;
+    for (let i = 0; i < 100 && !review.hasAttribute('data-ready'); i++) await sleep(100);
+    expect(review.hasAttribute('data-ready')).toBe(true);
+    for (let i = 0; i < 50 && !(review.shadowRoot!.querySelector('#proposal-title')?.textContent || '').length; i++) await sleep(100);
+    expect(review.shadowRoot!.querySelector('#proposal-title')!.textContent!.length).toBeGreaterThan(3);
+    expect(review.shadowRoot!.querySelector('#review-line')!.textContent).toMatch(/read only/);
+    expect(win.getComputedStyle(review.shadowRoot!.querySelector('button')!).fontStyle).not.toBe('italic'); // the page's `button` rule is the page's
+    expect(review.getBoundingClientRect().height).toBeGreaterThanOrEqual(600);
+    expect(errors).toEqual([]);
+  });
+
   it('keeps the two maps on one screen at a phone\'s width, stacked, without a sideways scroll', async () => {
     const { doc, win } = await openDemo(390, 844);
     const [a, b] = [doc.querySelector('#light')!.getBoundingClientRect(), doc.querySelector('#dark')!.getBoundingClientRect()];

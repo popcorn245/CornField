@@ -3,7 +3,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
-import { activeSubgraph, linesByKind, farEnds, countOffScreen, selectionCamera, connectedLine, kindPanelWord, FRAME_MIN_ZOOM } from '../../explorer/selection-model.js';
+import { activeSubgraph, countOffScreen, selectionCamera, FRAME_MIN_ZOOM } from '../../explorer/selection-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { linesByKind, farEnds, connectedLine, kindPanelWord } from '../../explorer/selection-words.js';
 // @ts-expect-error plain JS modules, no declarations
 import { buildScene, getActiveSubgraph } from '../../explorer/scene.js';
 import { makeBig } from '../fixtures/big/make.js';

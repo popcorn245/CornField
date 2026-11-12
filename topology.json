@@ -2997,6 +2997,106 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, … (explorer/pieces/work.js)"
+    },
+    {
+      "id": "core-explorer-engine-source-address",
+      "label": "source-address.js",
+      "type": "core",
+      "file": "explorer/engine/source-address.js",
+      "summary": "The addresses of a cornfield server (spec 0011 D6), apart from the load that uses them (engine/source.js re-exports all of this): checking a `src`, the server's sign-in and the origin of a page.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The addresses of a cornfield server (spec 0011 D6), apart from the load that uses them (engine/source.js re-exports all of this): checking a `src`, the server's sign-in and the origin of a page. (explorer/engine/source-address.js)"
+    },
+    {
+      "id": "core-explorer-pieces-review-source",
+      "label": "review-source.js",
+      "type": "core",
+      "file": "explorer/pieces/review-source.js",
+      "summary": "What a review with a `src` brings (spec 0011 D1, D5, D6, D7, D9): the load from a cornfield server and the states it shows, and the server's theme.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a review with a `src` brings (spec 0011 D1, D5, D6, D7, D9): the load from a cornfield server and the states it shows, and the server's theme. (explorer/pieces/review-source.js)"
+    },
+    {
+      "id": "core-explorer-camera-frame",
+      "label": "camera-frame.js",
+      "type": "core",
+      "file": "explorer/camera-frame.js",
+      "summary": "Where a review's camera goes, as pure functions on `{ x, y, zoom }` (camera.js's): the zoom a step or a picked change is read at (`READ_ZOOM`), the lowest a change is framed at (`FRAME_ZOOM_MIN`) a…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where a review's camera goes, as pure functions on `{ x, y, zoom }` (camera.js's): the zoom a step or a picked change is read at (`READ_ZOOM`), the lowest a change is framed at (`FRAME_ZOOM_MIN`) a… (explorer/camera-frame.js)"
+    },
+    {
+      "id": "core-explorer-cloud-panel",
+      "label": "cloud-panel.js",
+      "type": "core",
+      "file": "explorer/cloud-panel.js",
+      "summary": "What the node panel says of a cloud node or the public web (spec 0031 sections 1 and 6, CLOUD-06): `planLabel`, `cloudUsedBy` (who uses it, by when its outage bites), `nounOf` (the outage scenario'…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the node panel says of a cloud node or the public web (spec 0031 sections 1 and 6, CLOUD-06): `planLabel`, `cloudUsedBy` (who uses it, by when its outage bites), `nounOf` (the outage scenario'… (explorer/cloud-panel.js)"
+    },
+    {
+      "id": "core-explorer-engine-map-rect",
+      "label": "map-rect.js",
+      "type": "core",
+      "file": "explorer/engine/map-rect.js",
+      "summary": "The part of the map that nothing covers, and whether the instance is laid out as a phone (spec 0012, TOPO-18; spec 0011 D2): what a map frames a node into (selection-view.js) and what the sheets me…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The part of the map that nothing covers, and whether the instance is laid out as a phone (spec 0012, TOPO-18; spec 0011 D2): what a map frames a node into (selection-view.js) and what the sheets me… (explorer/engine/map-rect.js)"
+    },
+    {
+      "id": "core-explorer-outage-scenario",
+      "label": "outage-scenario.js",
+      "type": "core",
+      "file": "explorer/outage-scenario.js",
+      "summary": "What the scenario player does with an outage (spec 0031 section 8, CLOUD-07): the Layers keys an outage is drawn on (`outageLayers`) and the Play button's scenario for one cloud node (`outageScenar…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the scenario player does with an outage (spec 0031 section 8, CLOUD-07): the Layers keys an outage is drawn on (`outageLayers`) and the Play button's scenario for one cloud node (`outageScenar… (explorer/outage-scenario.js)"
+    },
+    {
+      "id": "core-explorer-proposal-marks",
+      "label": "proposal-marks.js",
+      "type": "core",
+      "file": "explorer/proposal-marks.js",
+      "summary": "What a proposal's marks do to the map (spec 0012 B2, TOPO-09), the part a map draws with: which nodes and edges each view shows (`showsNode`, `showsEdge`), the mark a scene carries (`markIn`), a ch…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a proposal's marks do to the map (spec 0012 B2, TOPO-09), the part a map draws with: which nodes and edges each view shows (`showsNode`, `showsEdge`), the mark a scene carries (`markIn`), a ch… (explorer/proposal-marks.js)"
+    },
+    {
+      "id": "core-explorer-selection-words",
+      "label": "selection-words.js",
+      "type": "core",
+      "file": "explorer/selection-words.js",
+      "summary": "What the node panel says of a selection (spec 0008 D6): the kinds of its lit lines in the panel's order (`LINE_KINDS`, `linesByKind`), a kind's panel word (`kindPanelWord`, from selection-model.js'…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the node panel says of a selection (spec 0008 D6): the kinds of its lit lines in the panel's order (`LINE_KINDS`, `linesByKind`), a kind's panel word (`kindPanelWord`, from selection-model.js'… (explorer/selection-words.js)"
+    },
+    {
+      "id": "core-explorer-verdict-paint",
+      "label": "verdict-paint.js",
+      "type": "core",
+      "file": "explorer/verdict-paint.js",
+      "summary": "A checked step's verdict on the map (spec 0005): the colours (`VERDICT_COLOR`) and `paintVerdict(scene, scn)`, which scene.js calls on a built scene.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "A checked step's verdict on the map (spec 0005): the colours (`VERDICT_COLOR`) and `paintVerdict(scene, scn)`, which scene.js calls on a built scene. (explorer/verdict-paint.js)"
+    },
+    {
+      "id": "core-explorer-engine-server-load",
+      "label": "server-load.js",
+      "type": "core",
+      "file": "explorer/engine/server-load.js",
+      "summary": "The load from a cornfield server and its theme, on one instance (spec 0011 D6, D7): what a scope (pieces/scope.js) and a review with a `src` (pieces/review-source.js) both start, written once.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The load from a cornfield server and its theme, on one instance (spec 0011 D6, D7): what a scope (pieces/scope.js) and a review with a `src` (pieces/review-source.js) both start, written once. (explorer/engine/server-load.js)"
     }
   ],
   "edges": [
@@ -3511,12 +3611,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-cloud-model",
-      "to": "core-core-text",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-flows",
       "to": "core-explorer-state",
       "dashed": true,
@@ -3770,12 +3864,6 @@
     },
     {
       "from": "core-explorer-scene",
-      "to": "core-explorer-check-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-scene",
       "to": "core-explorer-cloud-model",
       "dashed": true,
       "label": "imports"
@@ -3789,12 +3877,6 @@
     {
       "from": "core-explorer-scene",
       "to": "core-explorer-outage-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-scene",
-      "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
     },
@@ -6710,12 +6792,6 @@
       "to": "core-explorer-file-url"
     },
     {
-      "from": "core-explorer-cloud-model",
-      "to": "core-explorer-capped",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "app-docs",
       "to": "page-doc-docs-reviews-0-34-design-review"
     },
@@ -7196,12 +7272,6 @@
     {
       "from": "core-explorer-layer-model",
       "to": "core-core-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layer-model",
-      "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
     },
@@ -8095,12 +8165,6 @@
     },
     {
       "from": "core-explorer-engine-sheets",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-engine-sheets",
       "to": "core-explorer-sheet-model",
       "dashed": true,
       "label": "imports"
@@ -8299,19 +8363,7 @@
     },
     {
       "from": "core-explorer-pieces-node-panel",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-node-panel",
       "to": "core-explorer-capped",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-node-panel",
-      "to": "core-explorer-cloud-model",
       "dashed": true,
       "label": "imports"
     },
@@ -8496,12 +8548,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-selection-view",
-      "to": "core-explorer-engine-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-sheets",
       "to": "core-explorer-engine-sheets",
       "dashed": true,
@@ -8596,11 +8642,6 @@
       "to": "core-explorer-theme-model",
       "dashed": true,
       "label": "imports"
-    },
-    {
-      "from": "page-doc-docs-embedding",
-      "to": "page-doc-docs-theming",
-      "dashed": true
     },
     {
       "from": "page-doc-docs-theming",
@@ -9280,12 +9321,6 @@
     },
     {
       "from": "core-explorer-pieces-scope",
-      "to": "core-explorer-engine-theme-sheet",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-scope",
       "to": "core-explorer-instance",
       "dashed": true,
       "label": "imports"
@@ -9305,12 +9340,6 @@
     {
       "from": "core-explorer-pieces-scope",
       "to": "core-explorer-pieces-status",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-scope",
-      "to": "core-explorer-theme-model",
       "dashed": true,
       "label": "imports"
     },
@@ -9345,11 +9374,6 @@
       "label": "imports"
     },
     {
-      "from": "page-doc-docs-embedding",
-      "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
-      "dashed": true
-    },
-    {
       "from": "core-explorer-engine-source",
       "to": "core-explorer-engine-connection",
       "dashed": true,
@@ -9372,12 +9396,6 @@
     {
       "from": "core-explorer-engine-topology",
       "to": "core-explorer-flow-build",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-engine-topology",
-      "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
     },
@@ -10118,7 +10136,254 @@
       "to": "core-core-text",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-source-address"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-review-source"
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-pieces-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-review-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-config",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-theming",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
+      "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-camera-frame"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-cloud-panel"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-map-rect"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-outage-scenario"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-proposal-marks"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-selection-words"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-verdict-paint"
+    },
+    {
+      "from": "core-explorer-camera-frame",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-check-model",
+      "to": "core-explorer-verdict-paint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-cloud-panel",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-cloud-panel",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-cloud-panel",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-rect",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-map-rect",
+      "to": "core-explorer-sheet-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-player",
+      "to": "core-explorer-outage-scenario",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-proposal",
+      "to": "core-explorer-camera-frame",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-sheets",
+      "to": "core-explorer-engine-map-rect",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-topology",
+      "to": "core-explorer-proposal-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layer-model",
+      "to": "core-explorer-proposal-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-outage-scenario",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-outage-scenario",
+      "to": "core-explorer-cloud-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-outage-scenario",
+      "to": "core-explorer-outage-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-camera-frame",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-cloud-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-selection-words",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-proposal-model",
+      "to": "core-explorer-proposal-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scenario",
+      "to": "core-explorer-camera-frame",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-proposal-marks",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-scene",
+      "to": "core-explorer-verdict-paint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-engine-map-rect",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-words",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-server-load"
+    },
+    {
+      "from": "core-explorer-engine-server-load",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-server-load",
+      "to": "core-explorer-engine-theme-sheet",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-engine-server-load",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-server-load",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T16:25:54.320Z"
+  "updatedAt": "2026-11-12T17:43:44.141Z"
 }

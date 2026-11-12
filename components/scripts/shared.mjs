@@ -45,20 +45,31 @@ export function cornTokens() {
 /** Dev server and tests read the engine from ../explorer and ../core */
 export const server = { fs: { allow: [REPO] } };
 
-/** A Vite plugin: `/demo/topology.json` is the synthetic fixture's map (test/fixtures/big, generated in memory: nothing generated is committed) */
+/** A Vite plugin: `/demo/topology.json` is the synthetic fixture's map and `/demo/proposal.json` one of its rich proposals (test/fixtures/big, generated in memory: nothing generated is committed) */
 export function demoTopology() {
   let body = null;
+  let proposal = null;
   return {
     name: 'corn-demo-topology',
     async configureServer(devServer) {
+      const made = async () => {
+        if (body) return;
+        const { buildTopology } = await import(pathToFileURL(join(REPO, 'test', 'fixtures', 'big', 'make.js')).href);
+        const { makeProposals } = await import(pathToFileURL(join(REPO, 'test', 'fixtures', 'big', 'proposals.js')).href);
+        const topology = buildTopology();
+        body = JSON.stringify({ nodes: topology.nodes, edges: topology.edges });
+        const files = makeProposals(topology);
+        proposal = files[Object.keys(files).sort().find((f) => f.startsWith('0100-'))];
+      };
       devServer.middlewares.use('/demo/topology.json', async (_req, res) => {
-        if (!body) {
-          const { buildTopology } = await import(pathToFileURL(join(REPO, 'test', 'fixtures', 'big', 'make.js')).href);
-          const topology = buildTopology();
-          body = JSON.stringify({ nodes: topology.nodes, edges: topology.edges });
-        }
+        await made();
         res.setHeader('content-type', 'application/json');
         res.end(body);
+      });
+      devServer.middlewares.use('/demo/proposal.json', async (_req, res) => {
+        await made();
+        res.setHeader('content-type', 'application/json');
+        res.end(proposal);
       });
     },
   };

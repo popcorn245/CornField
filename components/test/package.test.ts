@@ -112,6 +112,17 @@ describe('the type declarations (D11)', () => {
     expect(map.methods.map((m: { name: string }) => m.name).sort()).toEqual(['fit', 'focusNode', 'refresh']);
   });
 
+  it('lists exactly what corn-review declares: its properties, its events and its methods, and the types of their details', () => {
+    const [review] = analyzeComponents().filter((c: { tagName: string }) => c.tagName === 'corn-review');
+    const names = (list: Array<{ name: string }>) => list.map((x) => x.name).sort();
+    expect(names(review.properties)).toEqual(['checker', 'config', 'node', 'proposal', 'source', 'src', 'strings', 'theme', 'topology', 'useTheme', 'view']);
+    expect(names(review.events)).toEqual(['cornAuth', 'cornDecision', 'cornError', 'cornNavigate', 'cornReady', 'cornSelect']);
+    expect(names(review.methods)).toEqual(['fit', 'focusNode', 'refresh']);
+    const text = typesFor([review])['components.d.ts'];
+    // the types the details name come with them, one level down too (a decision's review record)
+    for (const type of ['CornSelectDetail', 'CornNavigateDetail', 'CornDecisionDetail', 'CornReviewRecord', 'CornReviewAuthDetail', 'CornReviewErrorDetail']) expect(text, type).toContain(`export interface ${type}`);
+  });
+
   it('a consumer\'s .ts compiles against them: the element, its properties, a typed event detail, the methods and the tag name map', () => {
     expect(compile(`
       const el = document.querySelector('corn-map')!;            // HTMLElementTagNameMap['corn-map']
@@ -144,12 +155,52 @@ describe('the type declarations (D11)', () => {
     `).join('\n')).toMatch(/sideways/);
   }, 30_000);
 
+  it('a consumer\'s .ts compiles against corn-review: its properties, a typed detail for each event, the methods and the JSX element', () => {
+    expect(compile(`
+      import type { LocalJSX, CornDecisionDetail, CornNavigateDetail } from './types/components';
+      const el: HTMLCornReviewElement = document.createElement('corn-review');
+      el.src = 'https://map.example.com';
+      el.proposal = '0042-retire-the-old-export';
+      el.proposal = { title: 'An object' };
+      el.source = 'pull/31';
+      el.view = 'after';
+      el.node = 'a';
+      el.theme = 'auto';
+      el.useTheme = true;
+      el.topology = { nodes: [{ id: 'a' }], edges: [] };
+      el.config = { version: '1.2.3' };
+      el.strings = { approve: 'Ship it' };
+      el.checker = { check: async (items, options) => { void items; void options?.signal; return []; } };
+      el.addEventListener('cornDecision', (e) => { const d: CornDecisionDetail = e.detail; const outcome: 'approved' | 'notes' = d.outcome; const open: boolean = d.open; const by: string | undefined = d.review.by; void outcome; void open; void by; });
+      el.addEventListener('cornNavigate', (e) => { const d: CornNavigateDetail = e.detail; const view: 'before' | 'diff' | 'after' | null = d.view; const change: 'opened' | 'view' | 'closed' = d.change; const name: string | null = d.proposal; void view; void change; void name; });
+      el.addEventListener('cornAuth', (e) => { const during: 'load' | 'proposal' | 'facts' | 'review' | 'send' | 'landing' = e.detail.during; const signIn: string = e.detail.signIn; void during; void signIn; });
+      el.addEventListener('cornError', (e) => { if (e.detail.kind === 'proposal') void e.detail.message; });
+      el.addEventListener('cornSelect', (e) => { const id: string | null = e.detail.id; void id; });
+      el.addEventListener('cornReady', (e) => { const none: void = e.detail; void none; });
+      void (async () => { await el.fit(); await el.focusNode('a'); await el.refresh(); })();
+      const tagged: HTMLCornReviewElement = document.querySelector('corn-review')!;
+      const props: LocalJSX.IntrinsicElements['corn-review'] = { src: 'https://map.example.com', proposal: 'x', view: 'diff', onCornDecision: (e) => { const d: CornDecisionDetail = e.detail; void d; } };
+      void tagged; void props;
+    `)).toEqual([]);
+    const wrong = compile(`
+      const el = document.querySelector('corn-review')!;
+      el.view = 'sideways';
+      el.theme = 'blue';
+      el.addEventListener('cornDecision', (e) => { const outcome: 'rejected' = e.detail.outcome; void outcome; });
+      el.addEventListener('cornDecision', (e) => { const proposal: string = e.detail.proposal; void proposal; });
+      el.addEventListener('cornError', (e) => { if (e.detail.kind === 'gone') void 0; });
+      el.focusNode(7);
+      el.src = 7;
+    `).join('\n');
+    for (const word of ['sideways', 'blue', 'rejected', 'null', 'gone', 'number']) expect(wrong, word).toContain(word);
+  }, 30_000);
+
   it('has an entry in the exports map for every component, with its declarations', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
     for (const tag of componentTags()) expect(pkg.exports[`./${tag}`], tag).toEqual({ types: `./dist/types/${tag}.d.ts`, default: `./dist/${tag}.js` });
   });
 
-  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-scope, tokens.css and version.json', () => {
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-review, ./corn-scope, tokens.css and version.json', () => {
     if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
     const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
     fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
@@ -161,6 +212,16 @@ describe('the type declarations (D11)', () => {
       import { CornScope } from '@popcorn245/cornfield-components/corn-scope';
       import type { CornAuthDetail, CornErrorDetail } from '@popcorn245/cornfield-components';
       import '@popcorn245/cornfield-components/corn-map';
+      import '@popcorn245/cornfield-components/corn-review';
+      import type { CornDecisionDetail, CornNavigateDetail, CornReviewAuthDetail } from '@popcorn245/cornfield-components';
+      import { CornReview } from '@popcorn245/cornfield-components/corn-review';
+      const review: HTMLCornReviewElement = document.createElement('corn-review');
+      review.src = 'https://map.example.com';
+      review.proposal = '0042-retire-the-old-export';
+      review.addEventListener('cornDecision', (e) => { const d: CornDecisionDetail = e.detail; void d; });
+      review.addEventListener('cornNavigate', (e) => { const d: CornNavigateDetail = e.detail; void d; });
+      review.addEventListener('cornAuth', (e) => { const d: CornReviewAuthDetail = e.detail; void d; });
+      void CornReview;
       const v: string = version;
       const el = document.querySelector('corn-map')!;
       el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
@@ -234,6 +295,10 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect([...reach('index.js')].some((f) => f.includes(runtime[0]))).toBe(true);
     expect([...reach('corn-map.js')].some((f) => f.includes(runtime[0]))).toBe(true);
     expect(read(`chunks/${runtime[0]}`)).not.toContain('explorer/pieces');
+    // each chunk is named plainly, for what it is (the engine every component shares is `engine-<hash>.js`, not its first module's name)
+    const chunks = fs.readdirSync(path.join(dist, 'chunks'));
+    for (const f of chunks) expect(f, f).toMatch(/^[a-z][a-z0-9-]*-[\w-]{8}\.js$/);
+    expect(chunks.filter((f) => f.startsWith('engine-'))).toHaveLength(1);
   });
 
   it('a map that is handed its data loads none of the scope: the loading, the states and the server\'s theme are a chunk of their own, imported only for a src', () => {
@@ -251,6 +316,45 @@ describe('what a build leaves in dist/ (D11)', () => {
     for (const [module, probe] of Object.entries(probes)) expect(all.includes(probe), module).toBe(true);
     // corn-scope has it at once: no second round trip for a scope
     expect([...reach('corn-scope.js', false)].some((f) => read(f).includes('// ../explorer/pieces/scope.js'))).toBe(true);
+  });
+
+  it('a review that is handed its data loads none of the load: the config and the map read, the states and the server\'s theme are a chunk of their own, imported only for a src', () => {
+    const reach = (entry: string, dynamic: boolean, seen = new Set<string>()): Set<string> => {
+      const text = read(entry);
+      const pattern = dynamic ? /(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g : /(?:from|import)\s*["'](\.[^"']+)["']/g;
+      for (const m of text.matchAll(pattern)) { const target = path.posix.normalize(path.posix.join(path.posix.dirname(entry), m[1])); if (!seen.has(target)) { seen.add(target); reach(target, dynamic, seen); } }
+      return seen;
+    };
+    const probes = { 'engine/source.js': '/cornfield/config.json', 'engine/theme-sheet.js': 'constructable stylesheets are not available', 'pieces/status.js': 'source-announcer' };
+    const statics = [...reach('corn-review.js', false)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(statics.includes(probe), module).toBe(false);
+    expect(statics).toContain('The review has no server'); // what a src needs at once: the address, and nothing asked of the host's own origin in its place
+    const all = [...reach('corn-review.js', true)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(all.includes(probe), module).toBe(true);
+    // the review shares the engine with the map: it makes no copy of it (the chunks are the map's and the scope's)
+    const shared = [...reach('corn-review.js', false)].filter((f) => reach('corn-map.js', false).has(f));
+    expect(shared.some((f) => f.startsWith('chunks/') && !f.includes('runtime'))).toBe(true);
+  });
+
+  it('a map alone loads none of the review, the two load one engine once, and no chunk imports back the chunk that imported it', () => {
+    const edges = (f: string, dynamic: boolean) => [...read(f).matchAll(dynamic ? /(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g : /(?:from|import)\s*["'](\.[^"']+)["']/g)].map((m) => path.posix.normalize(path.posix.join(path.posix.dirname(f), m[1])));
+    const reach = (entry: string, dynamic: boolean, seen = new Set<string>([entry])): Set<string> => { for (const t of edges(entry, dynamic)) if (!seen.has(t)) { seen.add(t); reach(t, dynamic, seen); } return seen; };
+    // a string only each review-side module holds: a map that shares a module with the review would carry the review's use of it (the size budget)
+    const probes = {
+      'engine/sheets.js': 'hx-sheet-handle', 'proposal-model.js': 'There is no proposal called', 'check-model.js': 'Expected allowed, but refused',
+      'cloud-panel.js': 'Breaks on renewal', 'outage-scenario.js': 'in the visitor\'s browser', 'selection-words.js': 'off screen', 'pieces/decision.js': 'data-review-undo',
+    };
+    const map = [...reach('corn-map.js', false)];
+    const mapText = map.map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(mapText.includes(probe), module).toBe(false);
+    const review = reach('corn-review.js', false);
+    const reviewText = [...review].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(reviewText.includes(probe), module).toBe(true);
+    // one engine: every chunk a map loads but its own shell is one the review loads, so a page with both fetches each once
+    for (const f of map.filter((x) => x.startsWith('chunks/') && !x.startsWith('chunks/corn-map-'))) expect(review.has(f), f).toBe(true);
+    // no cycle: walking the chunks (dynamic imports too) never comes back to where it started
+    const files = ['index.js', ...componentTags().map((t) => `${t}.js`), ...fs.readdirSync(path.join(dist, 'chunks')).filter((f) => f.endsWith('.js')).map((f) => `chunks/${f}`)];
+    for (const f of files) for (const t of edges(f, true)) expect(reach(t, true).has(f), `${t} leads back to ${f}`).toBe(false);
   });
 
   it('is ES modules that register the tag when loaded, and no more than that: no top-level fetch, no document write', () => {
@@ -276,13 +380,13 @@ describe('what a build leaves in dist/ (D11)', () => {
   });
 
   it('ships the declarations next to the modules', () => {
-    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
+    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-review.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
-  it('is inside the size budget: the runtime chunk, corn-map with its engine, corn-map with what a src brings and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
+  it('is inside the size budget: the runtime chunk, corn-map and corn-review with their engine, each with what a src brings, and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-map-src', 'corn-scope', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-map-src', 'corn-review', 'corn-review-src', 'corn-scope', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

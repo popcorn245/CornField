@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import sample from '../../test/fixtures/sample/topology.json';
+import checkout from '../../test/fixtures/sample/docs/specs/proposals/0002-checkout.json';
 import '../src/index';
 import { version } from '../src/index';
 
@@ -68,6 +69,21 @@ describe('the shell holds no behaviour (D1)', () => {
       // every public method only hands the call to the piece, under its own name
       for (const m of body.matchAll(/@Method\(\)\s*async\s+(\w+)\([^)]*\)[^{]*\{([^}]*)\}/g)) expect(m[2].trim(), `${name}.${m[1]}`).toMatch(new RegExp(`^if \\(this\\.piece\\) this\\.piece\\.${m[1]}\\([^;]*\\);$`));
     }
+  });
+
+  /** The page's own things a shell would reach for to do something by itself: none is in a shell (the one read of the page's address, for the sign-in's way back, is handed to the piece as it is) */
+  const PAGE_REACH = /\b(fetch|document|window|globalThis|self|history|location|navigator|localStorage|sessionStorage|indexedDB|setTimeout|setInterval|requestAnimationFrame|queueMicrotask|XMLHttpRequest|WebSocket|EventSource|eval|Function|innerHTML|outerHTML|insertAdjacentHTML|addEventListener|dispatchEvent|querySelector|querySelectorAll|getElementById|attachShadow|import)\b/g;
+  const reachesPage = (code: string) => code
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/[^'"`\n]*$/gm, '')
+    .replace(/^import .*$/gm, '')
+    .replace("pageUrl: () => (typeof location === 'undefined' ? '' : location.href)", 'pageUrl')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"/g, "''")
+    .match(PAGE_REACH) || [];
+
+  it('reaches nothing of the page by itself: no fetch, document, window, timer, storage, listener or markup of its own (the piece does all of it)', () => {
+    for (const { name, file } of sources) expect(reachesPage(fs.readFileSync(file, 'utf8')), name).toEqual([]);
+    // and the check is not blind: each way a shell could do something by itself is caught
+    for (const bad of ["onDecision: (d) => { fetch('/x'); }", 'onReady: () => setTimeout(() => this.cornReady.emit(), 0)', 'this.el.shadowRoot.innerHTML = this.src;', "window.addEventListener('message', () => {})", 'location.assign(detail.signIn)', "document.title = 'x'", "import('./x.js')"]) expect(reachesPage(bad), bad).not.toEqual([]);
   });
 
   it('the check is not blind: it refuses the engine\'s other modules, the bridges, a package and a helper of the package\'s own', () => {
@@ -258,5 +274,201 @@ describe('<corn-map>', () => {
     expect(sheets + styles).toBe(1);
     const { adoptDefaultTokens } = await import('../../explorer/pieces/adopt-tokens.js');
     expect(adoptDefaultTokens(document, ':where(:root){--corn-x:1}')).toBe(false); // a second copy finds the first's sheet
+  });
+});
+
+type Review = HTMLElement & {
+  src?: string; proposal?: unknown; source?: string | null; view?: string | null; node?: string | null; theme?: string; useTheme: boolean; topology?: unknown; config?: unknown; strings?: unknown; checker?: unknown;
+  shadowRoot: ShadowRoot; componentOnReady(): Promise<Review>; fit(): Promise<void>; focusNode(id: string): Promise<void>; refresh(): Promise<void>;
+};
+
+describe('<corn-review>', () => {
+  const made = async (html = '<corn-review></corn-review>') => { document.body.innerHTML = html; const el = document.body.firstElementChild as Review; await el.componentOnReady(); return el; };
+  const q = (el: Review, sel: string) => el.shadowRoot.querySelector(sel) as HTMLElement | null;
+
+  it('registers, has a shadow root, and mounts the review piece in it: one named region, every hook a part', async () => {
+    const el = await made();
+    expect(customElements.get('corn-review')).toBeTruthy();
+    const box = q(el, '[data-corn="review"]')!;
+    expect(box.getAttribute('role')).toBe('region');
+    expect(box.getAttribute('aria-label')).toBe('Proposal review');
+    expect(el.shadowRoot.querySelectorAll('[data-corn="review"]')).toHaveLength(1);
+    for (const hooked of el.shadowRoot.querySelectorAll('[data-corn]')) expect(hooked.getAttribute('part'), hooked.outerHTML.slice(0, 60)).toBe(hooked.getAttribute('data-corn'));
+    expect(el.shadowRoot.querySelectorAll('canvas').length).toBe(2);
+  });
+
+  it('takes src, source, theme (reflected), view and node (reflected, mutable) and use-theme as attributes, and topology, config, strings, checker and a proposal object as properties', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const el = await made('<corn-review src="https://map.example.com" proposal="0042-retire" source="pull/31" theme="dark" use-theme view="after" node="a"></corn-review>');
+    expect(el.src).toBe('https://map.example.com');
+    expect(el.proposal).toBe('0042-retire');
+    expect(el.source).toBe('pull/31');
+    expect(el.theme).toBe('dark');
+    expect(el.useTheme).toBe(true);
+    expect(el.view).toBe('after');
+    el.theme = 'light';
+    el.view = 'before';
+    await frames(2);
+    expect(el.getAttribute('theme')).toBe('light');
+    expect(el.getAttribute('view')).toBe('before');
+    el.proposal = { title: 'An object' };
+    el.topology = topology();
+    el.config = { version: '0.0.0' };
+    el.strings = { approve: 'Ship it' };
+    el.checker = { check: () => [] };
+    await frames(2);
+    vi.restoreAllMocks();
+  });
+
+  it('a bad src is refused and said (cornError address), and nothing is fetched', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const seen: unknown[] = [];
+    document.addEventListener('cornError', (e) => seen.push((e as CustomEvent).detail), { once: true });
+    const el = await made('<corn-review src="ftp://map.example.com" proposal="0042-retire"></corn-review>');
+    await frames(4);
+    expect(seen).toEqual([{ kind: 'address', message: 'is not http or https' }]);
+    expect(q(el, '[data-corn="source-status"]:not([hidden])')?.textContent).toMatch(/address/i);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+
+  it('a proposal object with a topology: cornReady once, cornNavigate says it opened, and no request is made', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const el = await made();
+    const ready = vi.fn();
+    const navigated: unknown[] = [];
+    el.addEventListener('cornReady', ready);
+    el.addEventListener('cornNavigate', (e) => navigated.push((e as CustomEvent).detail));
+    el.topology = topology();
+    el.proposal = structuredClone(checkout);
+    await frames(4);
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(navigated).toEqual([{ proposal: null, source: null, view: 'diff', change: 'opened' }]); // an object with no name has none to say
+    expect(q(el, '#proposal-title')?.textContent).toBe(checkout.title);
+    expect(fetched).not.toHaveBeenCalled();
+    el.proposal = structuredClone(checkout); // another object: a new proposal
+    await frames(2);
+    expect(ready).toHaveBeenCalledTimes(1);
+    fetched.mockRestore();
+  });
+
+  it('view follows the reviewer\'s own choice and a set value alike, said once as cornNavigate, never echoed; node follows the selection both ways', async () => {
+    const el = await made();
+    el.topology = topology();
+    el.proposal = structuredClone(checkout);
+    await frames(3);
+    const navigated: Array<{ view: string | null; change: string }> = [];
+    const selected: unknown[] = [];
+    el.addEventListener('cornNavigate', (e) => navigated.push((e as CustomEvent).detail));
+    el.addEventListener('cornSelect', (e) => selected.push((e as CustomEvent).detail));
+    q(el, '[data-view="after"]')!.click();
+    await frames(3);
+    expect(el.view).toBe('after');
+    expect(el.getAttribute('view')).toBe('after');
+    expect(navigated).toEqual([expect.objectContaining({ view: 'after', change: 'view' })]);
+    el.view = 'before';
+    await frames(3);
+    expect(navigated).toHaveLength(2); // once for the set value; the property following it did not say it again
+    const [a, b] = [sample.nodes[2].id, sample.nodes[4].id];
+    el.node = a;
+    await frames(2);
+    expect(selected).toEqual([{ id: a, kind: 'node', source: 'api' }]);
+    el.node = a;
+    await frames(2);
+    expect(selected).toHaveLength(1);
+    await el.focusNode(b);
+    await frames(2);
+    expect(el.node).toBe(b);
+    expect(el.getAttribute('node')).toBe(b);
+    expect(selected.at(-1)).toEqual({ id: b, kind: 'node', source: 'api' });
+  });
+
+  it('proposal follows the reviewer as view does: Close in the bar sets it to null, once; the host setting it again opens it, said once, never echoed', async () => {
+    const json = (body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json', ...headers } });
+    const fetched = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const u = new URL(String(input));
+      if (u.pathname === '/cornfield/config.json') return json({ name: 'cornfield', version: '0.0.0', strings: {}, layers: { add: [], off: [], order: [] }, theme: null });
+      if (u.pathname === '/topology.json') return json(topology());
+      if (u.pathname === '/proposals/0002-checkout.json') return json(checkout, { 'X-Proposal-Source': 'checkout' });
+      return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+    });
+    const el = await made('<corn-review src="https://map.example.com" proposal="0002-checkout"></corn-review>');
+    const navigated: Array<{ proposal: string | null; change: string }> = [];
+    el.addEventListener('cornNavigate', (e) => navigated.push((e as CustomEvent).detail));
+    for (let i = 0; i < 60 && !q(el, '#proposal-title')?.textContent; i++) await frames(1);
+    expect(q(el, '#proposal-title')?.textContent).toBe(checkout.title);
+    expect(navigated).toEqual([{ proposal: '0002-checkout', source: null, view: 'diff', change: 'opened' }]);
+    el.proposal = '0002-checkout'; // the value it has: nothing happens
+    await frames(3);
+    expect(navigated).toHaveLength(1);
+    q(el, '[data-action="close-proposal"]')!.click();
+    await frames(3);
+    expect(el.proposal).toBeNull();
+    expect(navigated.slice(1)).toEqual([{ proposal: null, source: null, view: null, change: 'closed' }]);
+    const asked = fetched.mock.calls.length;
+    el.proposal = '0002-checkout'; // the host opens it again
+    for (let i = 0; i < 60 && navigated.length < 3; i++) await frames(1);
+    await frames(3);
+    expect(navigated.slice(2)).toEqual([{ proposal: '0002-checkout', source: null, view: 'diff', change: 'opened' }]);
+    expect(el.proposal).toBe('0002-checkout');
+    expect(fetched.mock.calls.slice(asked).map(([u]) => new URL(String(u)).pathname)).toEqual(['/proposals/0002-checkout.json']);
+    fetched.mockRestore();
+  });
+
+  it('its events bubble and cross the shadow root, and have fit(), focusNode() and refresh(), each answering with a promise', async () => {
+    const el = await made();
+    el.topology = topology();
+    await frames(3);
+    const heard = vi.fn();
+    document.body.addEventListener('cornSelect', heard);
+    el.node = sample.nodes[2].id;
+    await frames(2);
+    expect(heard).toHaveBeenCalledTimes(1);
+    document.body.removeEventListener('cornSelect', heard);
+    for (const result of [el.fit(), el.focusNode('nothing'), el.refresh()]) expect(result).toBeInstanceOf(Promise);
+    await expect(Promise.all([el.fit(), el.focusNode('nothing'), el.refresh()])).resolves.toEqual([undefined, undefined, undefined]);
+  });
+
+  it('ends the piece when it leaves the page and makes a new one when it comes back; a new src is a new piece', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const el = await made('<corn-review src="https://map.example.com"></corn-review>');
+    await frames(2);
+    const first = q(el, '[data-corn="review"]');
+    el.remove();
+    expect(el.shadowRoot.childElementCount).toBe(0);
+    document.body.append(el);
+    await frames(3);
+    expect(el.shadowRoot.querySelectorAll('[data-corn="review"]')).toHaveLength(1);
+    expect(q(el, '[data-corn="review"]')).not.toBe(first);
+    const second = q(el, '[data-corn="review"]');
+    el.src = 'https://other.example.com';
+    await frames(3);
+    expect(q(el, '[data-corn="review"]')).not.toBe(second);
+    expect(el.shadowRoot.querySelectorAll('[data-corn="review"]')).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+
+  it('inside a corn-scope it works alone: it never asks the scope for its instance, and takes its src from its own attribute', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const requests: string[] = [];
+    document.body.innerHTML = '<corn-scope id="s" src="https://scope.example.com"><corn-review src="https://review.example.com"></corn-review></corn-scope>';
+    document.getElementById('s')!.addEventListener('corn-scope-request', () => requests.push('asked'), { capture: true });
+    const el = document.querySelector('corn-review') as Review;
+    await el.componentOnReady();
+    el.remove();
+    document.getElementById('s')!.append(el);
+    await el.componentOnReady();
+    await frames(3);
+    expect(requests).toEqual([]);
+    const urls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.startsWith('https://review.example.com/'))).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it('adds the default tokens to the document once, however many elements there are', async () => {
+    await make('<corn-review></corn-review><corn-review></corn-review><corn-map renderer="canvas2d"></corn-map>');
+    const sheets = document.adoptedStyleSheets?.length ?? 0;
+    const styles = document.head.querySelectorAll('style[data-corn-default-tokens]').length;
+    expect(sheets + styles).toBe(1);
   });
 });

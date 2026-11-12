@@ -42,12 +42,13 @@
  *   proposal:draw   { open }  the bar and the review column draw again; proposal:bar { open }: they have, so what sits on the bar draws again
  *   proposal:mark   { applied, effective, proposal }  before the map is laid out (the what-if editor marks its edits)
  *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal; proposal:listing: the list the server gave was read
+ *   proposal:failed { slug, source, status, notFound, message }  a proposal asked for by name did not open (once, with the words the bar says)
  *   proposal:pull-head sha  the open proposal's PR was read; proposal:waiting { run, key }: a run waits on it (the bar's waiting line); proposal:waiting-reset
  *   scenario:player { id, index, total, done, playing, checks } | null  the scenario player moved, or closed (engine/player.js)
  *   changes:paint   (none)  the review column's lists were drawn again; changes:peek text: its count line, for a phone's peek
  *   decision        { outcome: 'approved' | 'notes', review, slug, source, open }  the server took the review, after it answered (pieces/decision.js);
  *                   `open`: false when another proposal was opened, or this one closed, while it was sent
- *   auth            { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
+ *   auth            { status: 401 | 403, during: 'proposal' | 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
  *   source          { state, … }  where a scope's or a map's load from a cornfield server is (engine/source.js lists the states: loading, ready, sign-in,
  *                   not-allowed, offline, server, address, version); pieces/status.js shows it and pieces/scope.js turns it into `cornAuth` and `cornError`
  *   theme           { state: 'loading' | 'ready' | 'failed' | 'none' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`; 'none': taken back out): the map reads its tokens again
@@ -79,6 +80,7 @@
  *   forge:can-start (none)  can a run be started from here? -> boolean; forge:start (emit) { slug, returnTo }: open the Start dialog
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
+ *   proposal:specs-list (none) -> false  there is no list of specs to open here (the review in another app): a bad link's ways leave the button out
  *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
  *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)

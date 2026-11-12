@@ -81,11 +81,12 @@ Today the explorer is one program per document. It becomes something a page can 
 | `corn-proposal` | The proposal's bar: title, Before, Diff, After, Whole map | yes | 5 |
 | `corn-changes` | The change list, personas and scenarios, and the player | yes | 5 |
 | `corn-decision` | Approve and Send back, and what each will do | yes | 5 |
-| `corn-review` | **The one-tag review:** the six above, laid out | no | 5 |
+| `corn-review` | **The one-tag review:** the six above, laid out | ~~no~~ yes (amended below) | 5 |
 | `corn-work` | The Work panel; its tabs follow as pieces of their own | yes | 6 |
 | `corn-explorer` | Everything cornfield's page shows | no | 7 |
 
 - The what-if editor, the House view, the review tokens dialog and the account menu come with step 7 or later. The sign-in pages stay the server's.
+- **`corn-review` has a shadow root after all, kept on purpose** (the PM, 2026-11-12, after the review piece's review, PR #248). Built without one, the review showed that a host's own rules reach in: a `button` reset, a border on every `canvas`, an indent on every paragraph restyled cornfield's controls, which is what D7 gives leaf pieces a shadow root against. So the tag mounts the whole review (`explorer/pieces/review.js`: the map, the bar, the change list and player, the node panel and the decision, on one instance) in **one** shadow root of its own, with every hook a part. It is not a layout of the leaf tags yet, and does not share a `corn-scope`'s instance (D5): `corn-proposal`, `corn-changes` and `corn-decision` as tags of their own are still to come.
 - **Order:** the map, then the review, then the rest. The Work panel is last of the large pieces because it is the hardest to split, not because it matters least.
 
 ### D5. Pieces find each other through the nearest `corn-scope`
@@ -108,6 +109,7 @@ Today the explorer is one program per document. It becomes something a page can 
 - **Every `data-corn` hook is also a `part` of the same name.** A host styles one element with `corn-node-panel::part(panel-title)`. The test that today requires a hook on every control requires the matching part too.
 - **A whole theme still works.** With the `theme` attribute set to use the server's theme, the scope fetches the project's theme stylesheet once and gives it to every leaf's shadow root, where its `[data-corn="…"]` rules apply as written. Its `--corn-*` token values are copied to the scope. Nothing else from it reaches the host's document.
 - **One limit, documented:** inside a shadow root a rule cannot ask what `<html>` says, so a theme that restyles a hook by light or dark must do it through tokens. The `retro` fixture theme already does.
+- **Amended for `corn-review`, kept on purpose** (the PM, 2026-11-12, after the review piece's review, PR #248): it has one shadow root, round the whole review, for the reason above: a host's global rules reached into the review without one (D4). `corn-scope` still has none.
 - **Rejected:** no shadow roots, with Stencil's scoped styles (page-level hook rules would keep working, but every global rule of the host's, a `button` reset for one, lands on cornfield's controls); shadow roots with parts only (a theme written against hooks would have to be rewritten, and `::part()` cannot select a child of a part).
 
 ### D8. One stylesheet per piece, sized by its own box
@@ -240,12 +242,14 @@ How the code is shared:
 
 Each step is its own release, and cornfield's page looks and behaves the same after each.
 
-1. **The instance** (D2): `createInstance`, the map's modules moved onto it (render, scene, labels, layout, map-style, camera, input, frame), the page shell, the tripwire tests, the two-instances test.
-2. **`components/` and `corn-map`** (D1, D3, D6, D11, D12): the package, its build and tests in CI, the first piece and its shell, properties in and events out, the size budget.
-3. **The server and `corn-scope`** (D5, D9): `embed.origins`, CORS, the write check, sign-in and return, theme images; the scope with `src`; a rig with two sibling names that proves the cookie travels.
-4. **The pieces around the map** (D3, D7, D8): node panel, layers, search; the stylesheet split, container queries, parts, the theme handed in.
-5. **The review** (D4, D6): proposal bar, changes, player, decision, and `corn-review`. **The host app can review and decide here.**
-6. **The Work panel** (D8): `forge-panel.js` split into pieces, `corn-work`, the dialogs, and what a listed origin may do beyond the decision.
+Where it stands (the PM, 2026-11-12): steps 1 to 5 are built, and the JavaScript half of step 6 (the Work panel split into pieces on the instance, PR #249). What is left of steps 3 and 6, the routes a listed origin may read and write beyond the review's (the Work panel's, `corn-work`), waits on a second embed key, which is the maintainer's decision.
+
+1. **The instance** (D2) *(built)*: `createInstance`, the map's modules moved onto it (render, scene, labels, layout, map-style, camera, input, frame), the page shell, the tripwire tests, the two-instances test.
+2. **`components/` and `corn-map`** *(built)* (D1, D3, D6, D11, D12): the package, its build and tests in CI, the first piece and its shell, properties in and events out, the size budget.
+3. **The server and `corn-scope`** (D5, D9) *(built; the routes beyond the review's wait on the second embed key)*: `embed.origins`, CORS, the write check, sign-in and return, theme images; the scope with `src`; a rig with two sibling names that proves the cookie travels.
+4. **The pieces around the map** (D3, D7, D8) *(built)*: node panel, layers, search; the stylesheet split, container queries, parts, the theme handed in.
+5. **The review** (D4, D6) *(built: `corn-review`, in one shadow root, D4)*: proposal bar, changes, player, decision, and `corn-review`. **The host app can review and decide here.**
+6. **The Work panel** (D8) *(the JavaScript half built: the pieces on the instance; `corn-work` and the routes wait on the second embed key)*: `forge-panel.js` split into pieces, `corn-work`, the dialogs, and what a listed origin may do beyond the decision.
 7. **The rest:** `corn-explorer`, the what-if editor, the account pieces, and question 11.
 
 ## What is not in this spec
