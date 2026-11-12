@@ -31,8 +31,8 @@
 
 import { createInstance } from '../instance.js';
 import { adoptDefaultTokens } from './adopt-tokens.js';
-import { createSource, parseSource, errorOf } from '../engine/source.js';
-import { createServerTheme, modeOf, watchMode } from '../engine/theme-sheet.js';
+import { parseSource } from '../engine/source.js';
+import { connectServer } from '../engine/server-load.js';
 import { keepLayersIn } from '../engine/layers.js';
 import { mount as mountStatus } from './status.js';
 import { CHANGED, REQUEST, infoOf } from './scope-link.js';
@@ -64,6 +64,8 @@ export function mountScope(host, options = {}) {
   let inst = null;
   let source = null;
   let serverTheme = null;
+  /** The load and the theme of the instance (engine/server-load.js) */
+  let serverLink = null;
   let readyFired = false;
   let ended = false;
 
@@ -90,10 +92,9 @@ export function mountScope(host, options = {}) {
   }
 
   // -- the mode (light or dark) the server's tokens are for ------------------------------------------------------------------------------
-  const modeNow = () => modeOf(inst, props.theme);
+  /** The scope's `theme` changed: the tokens follow (the page's own light and dark, and the system's, the link follows by itself) */
   function followMode() {
-    if (serverTheme) serverTheme.setMode(modeNow());
-    if (inst) inst.emit('scope:theme');
+    if (serverLink) serverLink.follow();
   }
 
   // -- one instance per server ---------------------------------------------------------------------------------------------------------------
@@ -104,21 +105,25 @@ export function mountScope(host, options = {}) {
     const info = infoOf(inst);
     info.host = host;
     info.theme = THEMES.includes(props.theme) ? props.theme : 'auto';
-    const st = createServerTheme(inst, { defaults: options.tokens || '' });
+    const mine = inst;
+    // The load and the server's theme, as a review with a src starts them (engine/server-load.js): the theme's tokens onto the scope's element
+    const link = connectServer(inst, {
+      host, tokens: options.tokens, version: options.version, pageUrl,
+      theme: () => (THEMES.includes(props.theme) ? props.theme : 'auto'), useTheme: () => props.useTheme,
+      onReady: () => { if (!readyFired && inst === mine) { readyFired = true; if (options.onReady) options.onReady(); } },
+      onAuth: (detail) => { if (options.onAuth) options.onAuth(detail); },
+      onError: (error) => { if (options.onError) options.onError(error); },
+      onMode: () => mine.emit('scope:theme'),
+    });
+    serverLink = link;
+    const st = link.theme;
     serverTheme = st;
     info.serverTheme = st;
-    st.tokensOn(host);
-    inst.own(() => st.destroy());
-    source = createSource(inst, {
-      version: options.version || '',
-      pageUrl,
-      onConfig: (config) => { if (props.useTheme) st.load(config); },
-    });
+    inst.own(() => link.destroy());
+    source = link.source;
     info.source = source;
     info.mountStatus = mountStatus;
     readyFired = false;
-    inst.on('source', onSource);
-    inst.on('theme', onTheme);
     // A second map waits: when the one that has the instance's root gives it back, the first that waits and is still in the page asks again
     // (after the leaving map has finished ending, so the two never hold the instance's state at once)
     const waiting = [];
@@ -126,7 +131,6 @@ export function mountScope(host, options = {}) {
       if (d.host && !waiting.includes(d.host)) waiting.push(d.host);
       if (options.onError) options.onError({ kind: d.reason, message: d.message });
     });
-    const mine = inst;
     inst.on('attach:released', () => {
       Promise.resolve().then(() => {
         if (ended || inst !== mine) return;
@@ -136,31 +140,9 @@ export function mountScope(host, options = {}) {
         }
       });
     });
-    // The host's own light and dark and the system's: the tokens follow
-    watchMode(inst, followMode);
-    serverTheme.setMode(modeNow());
     if (parsed && !parsed.ok) source.say({ state: 'address', problem: parsed.problem });
     source.provide({ topology: props.topology || undefined, config: props.config || undefined, strings: props.strings || undefined });
     if (parsed && parsed.ok) source.load();
-  }
-
-  function onSource(detail) {
-    if (ended) return;
-    switch (detail.state) {
-      case 'ready':
-        if (!readyFired) { readyFired = true; if (options.onReady) options.onReady(); }
-        break;
-      case 'sign-in':
-        if (options.onAuth) options.onAuth({ status: detail.status, signIn: detail.signIn });
-        break;
-      default: {
-        const error = errorOf(detail);
-        if (error && options.onError) options.onError(error);
-      }
-    }
-  }
-  function onTheme(detail) {
-    if (!ended && detail.state === 'failed' && options.onError) options.onError({ kind: 'theme', message: detail.reason });
   }
 
   function release() {
@@ -169,6 +151,7 @@ export function mountScope(host, options = {}) {
     inst = null;
     source = null;
     serverTheme = null;
+    serverLink = null;
   }
 
   const api = {
@@ -184,12 +167,12 @@ export function mountScope(host, options = {}) {
       }
       if ('useTheme' in next && !!next.useTheme !== props.useTheme) {
         props.useTheme = !!next.useTheme;
-        if (props.useTheme) { if (source.config) serverTheme.load(source.config); } else serverTheme.unload();
+        serverLink.setUseTheme(props.useTheme);
       }
       if (rebuild) {
         // The new instance is made first, the pieces are told to take it, and the old one ends once they have gone
         const previous = inst;
-        serverTheme.destroy(); // its tokens leave this element before the new server's are put on it
+        serverLink.destroy(); // its theme's tokens leave this element before the new server's are put on it, and its load says nothing more
         build();
         tellPieces();
         previous.destroy();

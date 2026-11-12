@@ -2,7 +2,8 @@
  * @module explorer/pieces/review-source
  *
  * What a review with a `src` brings (spec 0011 D1, D5, D6, D7, D9): the load from a cornfield server and the states it shows, and the server's theme.
- * It is the review's own side of what pieces/scope.js does for a scope, on the review's own instance and with the same engine: engine/source.js
+ * It is the review's own side of what pieces/scope.js does for a scope, on the review's own instance, started by the same function (engine/server-load.js
+ * `connectServer`) and with the same engine: engine/source.js
  * reads `/cornfield/config.json` and `/topology.json` (`credentials: 'include'`, only to the base's origin), pieces/status.js shows where the load is in
  * the review's stage (the same card, words, hooks and parts a map with a `src` has), and engine/theme-sheet.js gives the server's theme to the review's
  * shadow root when asked. Nothing here is a second copy of loading.
@@ -18,8 +19,7 @@
  * `onError({ kind, message })`, `onMode()` (the tokens changed: the map reads them again) and `focusMap()`.
  */
 
-import { createSource, errorOf } from '../engine/source.js';
-import { createServerTheme, modeOf, watchMode } from '../engine/theme-sheet.js';
+import { connectServer } from '../engine/server-load.js';
 import { mount as mountStatus } from './status.js';
 
 /**
@@ -34,40 +34,22 @@ export function attachSource(inst, options) {
   let signInShown = false;
   let ended = false;
 
-  // -- the server's theme: its rules go into the review's shadow root, its tokens onto the review's element ----------------------------
-  const theme = createServerTheme(inst, { defaults: options.tokens || '' });
-  theme.tokensOn(host);
-  theme.setMode(modeOf(inst, choice));
-  const offs = [];
-  // Never the document: a theme's rules reach only the shadow root they are adopted into
-  if (root.nodeType === 11) offs.push(theme.adopt(root));
-  const follow = () => { if (ended) return; theme.setMode(modeOf(inst, choice)); options.onMode(); };
-  watchMode(inst, follow);
-
-  // -- the load ------------------------------------------------------------------------------------------------------------------------------
-  const source = createSource(inst, {
-    version: options.version || '',
-    pageUrl: options.pageUrl,
-    onConfig: (config) => {
-      options.onConfig(config);
-      if (useTheme) theme.load(config);
-    },
+  // -- the load and the server's theme, as a scope starts them (engine/server-load.js): the theme's tokens onto the review's element -----------
+  const link = connectServer(inst, {
+    host, tokens: options.tokens, version: options.version, pageUrl: options.pageUrl,
+    theme: () => choice, useTheme: () => useTheme,
+    onConfig: (config) => options.onConfig(config),
+    onReady: () => { signInShown = false; if (link.source.topology) options.onTopology(link.source.topology); },
+    onAuth: ({ status, signIn }) => options.onAuth({ status, signIn, during: 'load' }),
+    onError: (error) => options.onError(error),
+    onMode: () => options.onMode(),
+    onSheet: () => options.onMode(), // the sheet is in, or out: the map reads its tokens again
   });
+  const { source } = link;
+  const offs = [];
+  // Its rules reach only this shadow root: never the document
+  if (root.nodeType === 11) offs.push(link.theme.adopt(root));
   const status = mountStatus(stage, inst, { onRetry: () => source.load(), focusMap: options.focusMap });
-
-  function onSource(detail) {
-    if (ended) return;
-    if (detail.state === 'ready') { signInShown = false; if (source.topology) options.onTopology(source.topology); return; }
-    if (detail.state === 'sign-in') { options.onAuth({ status: detail.status, signIn: detail.signIn, during: 'load' }); return; }
-    const error = errorOf(detail);
-    if (error) options.onError(error);
-  }
-  offs.push(inst.on('source', onSource));
-  offs.push(inst.on('theme', (detail) => {
-    if (ended) return;
-    options.onMode(); // the sheet is in, or out: the map reads its tokens again
-    if (detail.state === 'failed') options.onError({ kind: 'theme', message: detail.reason });
-  }));
 
   source.provide({ topology: options.topology || undefined, config: options.config || undefined, strings: options.strings || undefined });
   // After what the host handed in, so the card stays: a review with no server to ask cannot open a proposal or decide, whatever map it draws
@@ -83,10 +65,10 @@ export function attachSource(inst, options) {
       next = !!next;
       if (next === useTheme) return;
       useTheme = next;
-      if (useTheme) { if (source.config) theme.load(source.config); } else theme.unload();
+      link.setUseTheme(useTheme);
     },
     /** The review's `theme` choice changed: the tokens follow */
-    setTheme(next) { choice = next; follow(); },
+    setTheme(next) { choice = next; link.follow(); },
     /** A decision the server refused for want of a sign-in: the same card the load shows, with the server's sign-in */
     showSignIn(detail) { signInShown = true; status.show({ state: 'sign-in', status: detail.status, signIn: detail.signIn }); },
     /** The card a refused decision put up goes (a decision was taken, or another proposal opened): the load's own state, if it has one, stays */
@@ -96,7 +78,7 @@ export function attachSource(inst, options) {
       ended = true;
       offs.forEach((off) => off());
       status.destroy();
-      theme.destroy();
+      link.destroy();
     },
   };
 }

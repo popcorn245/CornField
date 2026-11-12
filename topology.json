@@ -3087,6 +3087,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "A checked step's verdict on the map (spec 0005): the colours (`VERDICT_COLOR`) and `paintVerdict(scene, scn)`, which scene.js calls on a built scene. (explorer/verdict-paint.js)"
+    },
+    {
+      "id": "core-explorer-engine-server-load",
+      "label": "server-load.js",
+      "type": "core",
+      "file": "explorer/engine/server-load.js",
+      "summary": "The load from a cornfield server and its theme, on one instance (spec 0011 D6, D7): what a scope (pieces/scope.js) and a review with a `src` (pieces/review-source.js) both start, written once.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The load from a cornfield server and its theme, on one instance (spec 0011 D6, D7): what a scope (pieces/scope.js) and a review with a `src` (pieces/review-source.js) both start, written once. (explorer/engine/server-load.js)"
     }
   ],
   "edges": [
@@ -9311,12 +9321,6 @@
     },
     {
       "from": "core-explorer-pieces-scope",
-      "to": "core-explorer-engine-theme-sheet",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-scope",
       "to": "core-explorer-instance",
       "dashed": true,
       "label": "imports"
@@ -10149,18 +10153,6 @@
     },
     {
       "from": "core-explorer-pieces-review-source",
-      "to": "core-explorer-engine-source",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-review-source",
-      "to": "core-explorer-engine-theme-sheet",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-review-source",
       "to": "core-explorer-pieces-status",
       "dashed": true,
       "label": "imports"
@@ -10363,7 +10355,35 @@
       "to": "core-explorer-selection-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-server-load"
+    },
+    {
+      "from": "core-explorer-engine-server-load",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-server-load",
+      "to": "core-explorer-engine-theme-sheet",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-engine-server-load",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-server-load",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T17:20:46.429Z"
+  "updatedAt": "2026-11-12T17:43:44.141Z"
 }
