@@ -1,68 +1,25 @@
 /**
  * @module explorer/strings
  *
- * The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which
- * `/cornfield/config.json` carries). Every overridable label is read through `t(key)`; the static markup in index.html marks what
- * to replace with `data-corn-string` attributes, which `applyStrings` fills once the config is in.
- *
- *   data-corn-string="key"                the element's text
- *   data-corn-string-aria-label="key"     its aria-label
- *   data-corn-string-placeholder="key"    its placeholder
- *
- * The rule for accessible names: a control's name is its visible label. When a key is overridden the visible text and the
- * aria-label carry the same words, and where a name adds a fixed target ("Stop run 7") only the label part is replaced
- * ("Halt run 7"). So a screen reader says what is on the screen.
- *
- * Values are only ever set through textContent and attributes, never as HTML, and a value that fails core/strings.js
- * `stringProblem` (not text, a line break, too long) is ignored here as well, whatever the server sent.
+ * A bridge (spec 0011 D2, step 4): the words now live on the instance (`inst.strings`, read with `t(inst, key)` from engine/strings.js).
+ * This file keeps the old names for the modules that are not yet on an instance, bound to the page's voice: `pageStrings`, the object the page
+ * instance's `strings` is (state.js hands it over), so the two are one. It imports nothing of the page's state, because pure models read the words
+ * through it (waiting-model.js) and the converted modules import those. It goes when the last caller (forge-panel.js, proposal.js, review.js,
+ * review-column.js, whatif.js, scenario-ui.js, runs-view.js, waiting-*.js, plugins.js) is converted.
  */
+import * as S from './engine/strings.js';
 
-import { STRINGS, isStringKey, stringProblem } from '../core/strings.js';
+/** The overrides in force on cornfield's page: key -> text */
+export const pageStrings = {};
+const voice = { strings: pageStrings, root: null };
 
-/** The overrides in force: key -> text */
-let overrides = {};
-
-/**
- * Takes the overrides the config carries (`config.strings`). Anything that is not a known key with good text is left out.
- * @param {unknown} strings
- */
-export function setStrings(strings) {
-  overrides = {};
-  if (!strings || typeof strings !== 'object' || Array.isArray(strings)) return;
-  for (const [key, value] of Object.entries(strings)) if (isStringKey(key) && !stringProblem(value)) overrides[key] = value;
-}
-
+/** Takes the overrides the config carries (`config.strings`) */
+export const setStrings = (strings) => S.setStrings(voice, strings);
 /** Whether the config overrides this key */
-export const isOverridden = (key) => Object.hasOwn(overrides, key);
-
-/** The words for a key: the override, else the default. A key that is not in the table gives the key itself (a test keeps the code to the table). */
-export function t(key) {
-  if (Object.hasOwn(overrides, key)) return overrides[key];
-  return isStringKey(key) ? STRINGS[key] : String(key);
-}
-
-const TARGETS = [
-  ['data-corn-string', (el, text) => { el.textContent = text; }],
-  ['data-corn-string-aria-label', (el, text) => el.setAttribute('aria-label', text)],
-  ['data-corn-string-placeholder', (el, text) => el.setAttribute('placeholder', text)],
-];
-
-/**
- * Puts the overrides in the static markup. Only an overridden key touches its element, so what index.html says is what shows
- * without one.
- * @param {ParentNode} root
- */
-export function applyStrings(root) {
-  if (!root || typeof root.querySelectorAll !== 'function') return;
-  for (const [attr, set] of TARGETS) {
-    for (const el of root.querySelectorAll(`[${attr}]`)) {
-      const key = el.getAttribute(attr);
-      if (isOverridden(key)) set(el, overrides[key]);
-    }
-  }
-}
-
+export const isOverridden = (key) => S.isOverridden(voice, key);
+/** The words for a key: the override, else the default */
+export const t = (key) => S.t(voice, key);
+/** Puts the overrides in the static markup under `root` */
+export const applyStrings = (root) => S.applyStrings(voice, root);
 /** For tests: forget the overrides */
-export function resetStringsForTests() {
-  overrides = {};
-}
+export const resetStringsForTests = () => S.setStrings(voice, {});

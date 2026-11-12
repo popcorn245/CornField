@@ -20,6 +20,18 @@ import { looksWith, mapStyleOf, styledScene } from '../../explorer/engine/map-st
 import { looksFor } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
 import { state as pageState } from '../../explorer/state.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as nodePanel from '../../explorer/pieces/node-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as layersPiece from '../../explorer/pieces/layers.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as searchPiece from '../../explorer/pieces/search.js';
+// @ts-expect-error plain JS modules, no declarations
+import { selectNode, clearSelection } from '../../explorer/engine/selection.js';
+// @ts-expect-error plain JS modules, no declarations
+import { applyStrings } from '../../explorer/engine/strings.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initKeyboard } from '../../explorer/engine/keyboard.js';
 
 const sample = loadSample();
 /** Two different maps: all of the sample, and the sample without its pages (and the edges that touch them) */
@@ -268,8 +280,8 @@ describe('two instances in one document', () => {
   it('hands out what the map and the page use, and nothing more (spec 0011: the simplest thing; a later step adds what it needs)', () => {
     const inst = createInstance({ root: document.body });
     expect(Object.keys(inst).sort()).toEqual([
-      'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'fetch', 'hidden', 'listen', 'on', 'onSceneTouch', 'onShown', 'own', 'reducedMotion',
-      'root', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
+      'active', 'ask', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'fetch', 'hidden', 'listen', 'on', 'onSceneTouch', 'onShown', 'own', 'reducedMotion',
+      'release', 'root', 'setSelection', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
     ]);
     inst.destroy();
   });
@@ -280,5 +292,227 @@ describe('two instances in one document', () => {
     await inst.fetch('/cornfield/config.json', { credentials: 'include' });
     await inst.fetch('https://other.test/x');
     expect(calls).toEqual([['https://map.example.test/cornfield/config.json', { credentials: 'include' }], ['https://other.test/x', undefined]]);
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+//  Spec 0011 D3 (step 4): each with its own node panel, Layers menu and search
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('two instances, each with its own node panel, Layers menu and search', () => {
+  let a;
+  let b;
+  const piecesOn = (one, strings) => {
+    if (strings) Object.assign(one.inst.strings, strings);
+    one.keyboard = initKeyboard(one.inst);
+    one.panel = nodePanel.mount(one.root, one.inst);
+    one.layers = layersPiece.mount(one.root, one.inst, { storageKey: null });
+    one.search = searchPiece.mount(one.root, one.inst);
+    applyStrings(one.inst, one.root);
+    one.canvas.setAttribute('tabindex', '0');
+    return one;
+  };
+  const q = (one, sel) => one.root.querySelector(sel);
+  const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  const key = (el, k, init = {}) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...init }));
+  const type = (input, value) => { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); };
+
+  beforeEach(() => {
+    a = piecesOn(A, { layers: 'Strata' });
+    b = piecesOn(B);
+  });
+  afterEach(() => {
+    a.panel.destroy(); a.layers.destroy(); a.search.destroy();
+    b.panel.destroy(); b.layers.destroy(); b.search.destroy();
+  });
+
+  it('each makes its own markup in its own root, with the same ids twice in the document', () => {
+    expect(document.querySelectorAll('#spec-drawer')).toHaveLength(2);
+    expect(document.querySelectorAll('#legend-dropdown')).toHaveLength(2);
+    expect(document.querySelectorAll('#node-search')).toHaveLength(2);
+    expect(a.inst.el('spec-drawer')).toBe(q(a, '#spec-drawer'));
+    expect(b.inst.el('spec-drawer')).toBe(q(b, '#spec-drawer'));
+    expect(a.inst.el('spec-drawer')).not.toBe(b.inst.el('spec-drawer'));
+    // every hook has its part
+    for (const root of [a.root, b.root]) for (const el of root.querySelectorAll('[data-corn]')) expect(el.getAttribute('part'), el.outerHTML.slice(0, 80)).toBe(el.getAttribute('data-corn'));
+  });
+
+  it('selecting in one opens that one\'s panel and changes nothing in the other', () => {
+    const heardA = vi.fn();
+    const heardB = vi.fn();
+    a.inst.on('selection', heardA);
+    b.inst.on('selection', heardB);
+    const sceneB = B.map.getScene();
+    const node = a.state.nodes.find((n) => n.type === 'app');
+    selectNode(a.inst, node, { source: 'search' });
+    expect(q(a, '#spec-drawer').classList.contains('drawer-open')).toBe(true);
+    expect(q(a, '#drawer-title').textContent).toBe(node.label);
+    expect(q(a, '#drawer-backdrop').hidden).toBe(false);
+    expect(heardA).toHaveBeenCalledTimes(1);
+    expect(heardA.mock.calls[0][0]).toMatchObject({ source: 'search', edge: null });
+    expect(heardA.mock.calls[0][0].node.id).toBe(node.id);
+    expect(heardB).not.toHaveBeenCalled();
+    expect(q(b, '#spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect(q(b, '#spec-drawer').inert).toBe(true);
+    expect(q(b, '#drawer-title').textContent).not.toBe(node.label);
+    expect(B.state.selectedNode).toBeNull();
+    expect(B.map.getScene()).toBe(sceneB);
+    // the Close button of one closes that one only
+    const other = b.state.nodes.find((n) => n.type === 'app');
+    selectNode(b.inst, other, { source: 'tap' });
+    click(q(a, '[data-action="close-drawer"]'));
+    expect(a.state.selectedNode).toBeNull();
+    expect(q(a, '#spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect(b.state.selectedNode.id).toBe(other.id);
+    expect(q(b, '#spec-drawer').classList.contains('drawer-open')).toBe(true);
+  });
+
+  it('the selection event names every way a selection changes, and says nothing when it did not', () => {
+    const seen = [];
+    a.inst.on('selection', (d) => seen.push([d.source, d.node ? d.node.id : null, d.edge ? d.edge.kind : null]));
+    const [n1, n2] = a.state.nodes.filter((n) => n.type === 'app' || n.type === 'service');
+    selectNode(a.inst, n1, { source: 'tap' });
+    selectNode(a.inst, n1, { source: 'tap' }); // the same node again: not a change
+    selectNode(a.inst, n2, { source: 'keyboard' });
+    a.state.selectedEdge = { from: n1.id, to: n2.id, kind: 'calls' }; // an edge picked on the map
+    a.state.selectedNode = n1; // a program assigning it
+    clearSelection(a.inst, { source: 'api' });
+    clearSelection(a.inst, { source: 'api' }); // nothing was selected: not a change
+    expect(seen).toEqual([['tap', n1.id, null], ['keyboard', n2.id, null], ['state', n2.id, 'calls'], ['state', n1.id, 'calls'], ['api', null, null]]);
+  });
+
+  it('the selection event is said once per change, in order, never inside itself, with what was last heard as `previous`', () => {
+    const [n1, n2, n3] = a.state.nodes.filter((n) => n.type === 'app' || n.type === 'service');
+    const id = (x) => (x ? x.id : null);
+    // a listener that selects while the event is being said: every listener hears the first change before anyone hears the second
+    const first = [];
+    const second = [];
+    const offA = a.inst.on('selection', (d) => { first.push([id(d.previous.node), id(d.node)]); if (id(d.node) === n1.id) a.state.selectedNode = n2; });
+    const offB = a.inst.on('selection', (d) => second.push([id(d.previous.node), id(d.node)]));
+    selectNode(a.inst, n1, { source: 'tap' });
+    expect(second).toEqual([[null, n1.id], [n1.id, n2.id]]);
+    expect(first).toEqual([[null, n1.id], [n1.id, n2.id]]);
+    offA();
+    // a quiet change that a later one overtook says nothing of its own, and is said only once however often it is told to
+    second.length = 0;
+    const held = a.inst.setSelection(n3, null, { source: 'api', quiet: true });
+    a.state.selectedNode = n1;
+    held.announce();
+    held.announce();
+    expect(second).toEqual([[n2.id, n1.id]]);
+    const twice = a.inst.setSelection(n2, null, { source: 'api', quiet: true });
+    twice.announce();
+    twice.announce();
+    expect(second).toEqual([[n2.id, n1.id], [n1.id, n2.id]]);
+    offB();
+  });
+
+  it('toggling a layer in one redraws that menu and leaves the other\'s rows, counts and scene alone', () => {
+    const rowsB = q(b, '#layer-toggles-container').innerHTML;
+    const chipB = q(b, '#layers-count').textContent;
+    const sceneB = B.map.getScene();
+    const appRow = q(a, '[data-action="toggle-layer"][data-layer="app"]');
+    expect(appRow.getAttribute('aria-pressed')).toBe('true');
+    click(appRow);
+    expect(a.state.activeLayers.app).toBe(false);
+    expect(q(a, '[data-action="toggle-layer"][data-layer="app"]').getAttribute('aria-pressed')).toBe('false');
+    expect(A.map.getScene().nodes.filter((n) => n.type === 'app')).toHaveLength(0);
+    expect(b.state.activeLayers.app).toBe(true);
+    expect(q(b, '#layer-toggles-container').innerHTML).toBe(rowsB);
+    expect(q(b, '#layers-count').textContent).toBe(chipB);
+    expect(B.map.getScene()).toBe(sceneB);
+    // the chip opens one menu
+    click(q(a, '#legend-toggle-btn'));
+    expect(q(a, '#legend-dropdown').hidden).toBe(false);
+    expect(q(b, '#legend-dropdown').hidden).toBe(true);
+    // a click in B's root is outside A's menu: it stays open (it is B's click), a click in A's root outside the menu closes it
+    click(a.canvas);
+    expect(q(a, '#legend-dropdown').hidden).toBe(true);
+  });
+
+  it('searching in one finds in that one only', () => {
+    const input = q(a, '#node-search');
+    type(input, 'a');
+    expect(a.state.searchQuery).toBe('a');
+    expect(b.state.searchQuery).toBe('');
+    expect(q(a, '#search-count').textContent).not.toBe('');
+    expect(q(b, '#search-count').textContent).toBe('');
+    expect(q(b, '#search-steps').hidden).toBe(true);
+    input.focus();
+    key(input, 'Enter');
+    expect(a.state.searchCurrent).toBeTruthy();
+    expect(a.state.selectedNode.id).toBe(a.state.searchCurrent); // a search selects what it chose, in its own instance
+    expect(b.state.selectedNode).toBeNull();
+    expect(b.state.searchCurrent).toBeNull();
+    // Escape in the field clears A's search
+    key(input, 'Escape');
+    key(input, 'Escape');
+    expect(a.state.searchQuery).toBe('');
+  });
+
+  it('a shortcut acts where the focus is: / goes to that instance\'s search, N steps that map, Escape closes that panel', () => {
+    a.canvas.focus();
+    key(a.canvas, '/', { bubbles: true });
+    expect(a.inst.active()).toBe(q(a, '#node-search'));
+    expect(b.inst.active()).not.toBe(q(b, '#node-search'));
+    // N on A's map selects in A only
+    a.canvas.focus();
+    key(a.canvas, 'n');
+    expect(a.state.selectedNode).not.toBeNull();
+    expect(b.state.selectedNode).toBeNull();
+    // Escape inside A's panel closes A's panel
+    const other = b.state.nodes.find((n) => n.type === 'app');
+    selectNode(b.inst, other);
+    key(q(a, '#drawer-title'), 'Escape');
+    expect(a.state.selectedNode).toBeNull();
+    expect(b.state.selectedNode.id).toBe(other.id);
+    // a key pressed in B's root is B's: `/` on B's canvas takes B's search, and A's keeps what it has
+    key(b.canvas, '/');
+    expect(b.inst.active()).toBe(q(b, '#node-search'));
+    expect(a.inst.active()).toBeNull();
+  });
+
+  it('speak in their own words: a key one overrides is read by that one only', () => {
+    expect(q(a, '#legend-toggle-btn').firstElementChild.textContent).toBe('Strata');
+    expect(q(b, '#legend-toggle-btn').firstElementChild.textContent).toBe('Layers');
+    selectNode(a.inst, a.state.nodes.find((n) => n.type === 'app'));
+    selectNode(b.inst, b.state.nodes.find((n) => n.type === 'app'));
+    expect(q(a, '#drawer-file-btn').textContent).toBe('Open file ↗');
+    a.inst.strings.openFile = 'See the source';
+    a.panel.update();
+    expect(q(a, '#drawer-file-btn').textContent).toBe('See the source ↗');
+    expect(q(b, '#drawer-file-btn').textContent).toBe('Open file ↗');
+  });
+
+  it('make their markup in the instance\'s words from the start: a host need not apply them after mounting', () => {
+    const box = document.createElement('div');
+    a.root.append(box);
+    a.inst.strings.searchPlaceholder = 'Find a part';
+    a.inst.strings.copySpec = 'Copy as JSON';
+    const layers = layersPiece.mount(box, a.inst, { storageKey: null });
+    const search = searchPiece.mount(box, a.inst);
+    const panel = nodePanel.mount(box, a.inst);
+    expect(box.querySelector('[data-corn="layers-button"]').firstElementChild.textContent).toBe('Strata');
+    expect(box.querySelector('[data-corn="search-input"]').getAttribute('placeholder')).toBe('Find a part');
+    expect(box.querySelector('[data-action="copy-spec"]').textContent).toBe('Copy as JSON');
+    panel.destroy(); search.destroy(); layers.destroy();
+    delete a.inst.strings.searchPlaceholder;
+    delete a.inst.strings.copySpec;
+    box.remove();
+  });
+
+  it('ending one piece takes its markup and its listeners and leaves the other instance as it was', () => {
+    const snapshot = b.root.innerHTML;
+    a.panel.destroy();
+    a.layers.destroy();
+    a.search.destroy();
+    expect(a.root.querySelector('#spec-drawer')).toBeNull();
+    expect(a.root.querySelector('#legend-dropdown')).toBeNull();
+    expect(a.root.querySelector('#node-search')).toBeNull();
+    expect(b.root.innerHTML).toBe(snapshot);
+    selectNode(a.inst, a.state.nodes.find((n) => n.type === 'app')); // no panel to open, and nothing breaks
+    expect(a.state.selectedNode).not.toBeNull();
+    a.panel = nodePanel.mount(a.root, a.inst); a.layers = layersPiece.mount(a.root, a.inst, { storageKey: null }); a.search = searchPiece.mount(a.root, a.inst); // for afterEach
   });
 });

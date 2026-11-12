@@ -12,7 +12,7 @@
  *   instance.js the instance (state, root, base)   engine/layout.js   where nodes sit (orbit, lanes, freeform)
  *   engine/render.js the camera and the loop        flows.js    flow styling, legend, the data-flow preset
  *   scene.js    what is drawn (contract)    renderer.js  how it is drawn: renderer-webgl.js or renderer-canvas2d.js
- *   layers.js   the Layers menu             panels.js   the node panel
+ *   pieces/     the node panel, the Layers menu and the search: pieces mounted where index.html has their places (page-pieces.js)
  *   view.js     loading and view switching  input.js    mouse and touch
  *   proposal.js the proposal overlay (picker, Before / Diff / After); proposal-model.js its pure half
  *   whatif.js   what-if edits on an open proposal (add, remove, draw, steps, undo); whatif-model.js its pure half
@@ -21,22 +21,22 @@
  *   scenario.js the player's pure core      scenario-ui.js  its bar, keys and camera
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
- *   search.js   search: the count, the list by type and the stepping; search-model.js its pure half (what it reads and the rank)
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
  *   review-tokens.js  review tokens for the review API, when somebody is signed in: make one (shown once), list, revoke; review-tokens-model.js its pure half
  *   forge-panel.js  the issues and PRs panel, when the config names a forge: a PR lights the nodes it changes; forge-panel-model.js its pure half
  *   theme.js    light or dark: the system setting and the header toggle; theme-model.js the colours (theme-boot.js before the first paint)
  */
 
-import { state, nodeById, startPageInstance } from './state.js';
-import { initSearch, setQuery, stepMatch } from './search.js';
+import { state, startPageInstance } from './state.js';
 import { createMap } from './engine/render.js';
 import { createRenderer, rendererPreference } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './engine/layout.js';
 import { measureCovered } from './sheets.js';
 import { stopFlight } from './fly.js';
-import { clickWithLegendMenu, setProjectLayers, toggleAllLayers, toggleLayer, toggleLayerKinds, toggleLegendMenu } from './layers.js';
-import { closeDrawer, copySpec, selectNode, startRun } from './panels.js';
+import { setProjectLayers } from './layers.js';
+import { closeDrawer } from './panels.js';
+import { selectNode, clearSelection } from './engine/selection.js';
+import { ensurePagePieces } from './page-pieces.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { initReviewColumn } from './review-column.js';
@@ -52,7 +52,7 @@ import { initLive } from './live.js';
 import { initHouse } from './house.js';
 import { houseOffered } from './house-model.js';
 import { initChecks } from './check.js';
-import { frameThem, initKeyboard } from './keyboard.js';
+import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
 import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
@@ -99,30 +99,11 @@ function resetFreeformPositions() {
 }
 
 // ---------------------------------------------------------------------------
-//  Search
-// ---------------------------------------------------------------------------
-function toggleMobileSearch(open) {
-  const bar = $('mobile-search-bar');
-  const input = $('mobile-node-search');
-  const willOpen = open !== undefined ? open : bar.hidden;
-  bar.hidden = !willOpen;
-  if (willOpen) {
-    input.value = state.searchQuery;
-    setTimeout(() => input.focus(), 60);
-  }
-}
-
-// ---------------------------------------------------------------------------
 //  One click handler for everything with a data-action
 // ---------------------------------------------------------------------------
 const ACTIONS = {
   'reset-view': () => fitGraphToViewport(fitPadding()),
   'fit': () => fitGraphToViewport(fitPadding()),
-  'toggle-layers-menu': () => toggleLegendMenu(),
-  'layers-all': () => toggleAllLayers(true, { viewer: true }),
-  'layers-none': () => toggleAllLayers(false, { viewer: true }),
-  'toggle-layer': (el) => toggleLayer(el.dataset.layer, { viewer: true }),
-  'toggle-layer-kinds': (el) => toggleLayerKinds(el.dataset.layer),
   'toggle-freeform': () => toggleFreeformMode(),
   'reset-positions': () => resetFreeformPositions(),
   'preset-map': () => {
@@ -133,29 +114,20 @@ const ACTIONS = {
     closeDrawer();
     setView(state.view === 'dataflow' ? 'orbit' : 'dataflow');
   },
-  'toggle-mobile-search': () => toggleMobileSearch(),
-  'close-mobile-search': () => toggleMobileSearch(false),
-  'clear-search': () => { setQuery(''); const field = $('node-search'); const bar = $('mobile-search-bar'); (bar && !bar.hidden ? $('mobile-node-search') : field).focus(); },
-  'search-prev': () => stepMatch(-1),
-  'search-next': () => stepMatch(1),
-  'close-drawer': () => closeDrawer(),
-  'copy-spec': (el) => copySpec(el),
-  'start-run': () => startRun(),
-  'select-node': (el) => selectNode(nodeById(el.dataset.id), { frame: true }), // a link or a list row: the camera follows (spec 0008 D6)
-  'frame-selection': () => frameThem(),
   'play-outage': (el) => playOutage(el.dataset.id), // the cloud panel's Play button (spec 0031 section 8)
   'retry': () => loadTopology(),
   'set-theme': (el) => setThemeChoice(el.dataset.choice),
 };
 
-// Any click outside the Layers menu closes it; a click on one of its rows does not (layers.js clickWithLegendMenu reads which before the action)
-document.addEventListener('click', (e) => clickWithLegendMenu(e.target, () => {
+// The click on a control the page owns (the header's View switch, Fit, Retry, the theme and the Freeform layout). The pieces' controls are their own:
+// the node panel's, the Layers menu's and the search's (explorer/pieces/), which also close the Layers menu on a click outside it
+document.addEventListener('click', (e) => {
   const target = e.target.closest('[data-action]');
   if (target) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   }
-}));
+});
 
 // ---------------------------------------------------------------------------
 //  /?bench=1: the scripted pan-and-zoom of bench.js on the map as loaded
@@ -211,18 +183,18 @@ export function startPage() {
   // WebGL2, or Canvas 2D when it is missing or the address says ?renderer=canvas2d (the address is read here, not by the renderer)
   map.setRenderer(createRenderer(state.canvas, { prefer: rendererPreference(window.location.search), mapStyle: mapStyle.get }));
   loadFreeformPositions(inst);
+  ensurePagePieces(); // the node panel, the Layers menu and the search, mounted where index.html has their places (page-pieces.js)
   // What a tap on the map asks of the page: a node's panel, the normal view, the end of a flight to a match
-  inst.on('select', (node) => selectNode(node));
-  inst.on('background', () => closeDrawer());
+  inst.on('select', (node) => selectNode(inst, node, { source: 'tap' }));
+  inst.on('background', () => clearSelection(inst, { source: 'tap' }));
   inst.on('grab', () => stopFlight());
   bindCanvasInput(inst);
-  initKeyboard(); // the map, the panel, the search and the Layers menu by keyboard (keyboard.js)
+  initKeyboard(); // the map by keyboard (the panel's, the Layers menu's and the search's keys are their pieces') (engine/keyboard.js)
   initAccountMenu(); // the one menu at the right of the header (account-menu.js)
   initSheets();
   initScenarioUi();
   initReviewColumn(); // the review column: the changes, and the personas with their scenarios (review-column.js)
   map.watchSize(); // the map follows its box (a ResizeObserver on the stage), in place of the window's resize event
-  initSearch(); // the count, the list and the stepping of both search fields (search.js)
 
   map.resize();
   syncViewUi();

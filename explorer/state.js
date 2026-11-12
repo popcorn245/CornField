@@ -18,6 +18,7 @@
 import { escapeHtml } from '../core/text.js';
 import { createInstance } from './instance.js';
 import { createState } from './instance-state.js';
+import { pageStrings } from './strings.js';
 
 /** The page's state: one object, made at import time so a module that reads it while it loads finds it filled */
 export const state = createState();
@@ -30,7 +31,10 @@ let page = null;
  * global document, if there is one, holding the same `state`.
  */
 export function pageInstance() {
-  if (!page) page = createInstance({ state, root: typeof document !== 'undefined' ? document : null });
+  if (!page) {
+    page = createInstance({ state, root: typeof document !== 'undefined' ? document : null });
+    page.strings = pageStrings; // the page's words are the bridge's (strings.js), one object for the modules on an instance and the ones not yet
+  }
   return page;
 }
 

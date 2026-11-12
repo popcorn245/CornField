@@ -11,7 +11,7 @@
  *   mockupUrl         where the server serves one (by its position in the proposal, never by path)
  */
 
-import { state, escHtml } from './state.js';
+import { escapeHtml as escHtml } from '../core/text.js';
 import { mockupsOf } from '../core/proposal.js';
 import { cornStateAttr } from './corn-state.js';
 
@@ -67,10 +67,10 @@ export function mockupsSectionHtml(items) {
 }
 
 /**
- * The section for a node of the proposal that is open now, from `state.proposal` and the review states the server
+ * The section for a node of the proposal that is open now, from `state.proposal` (the instance's state, passed in) and the review states the server
  * last gave (`state.mockupStates`, by index). Empty when no proposal is open or the node has no mockups.
  * @param {string} nodeId
  */
-export function nodeMockupsHtml(nodeId) {
+export function nodeMockupsHtml(state, nodeId) {
   return mockupsSectionHtml(mockupsFor(state.proposal, state.proposalSlug, state.proposalSource, nodeId, state.mockupStates || {}));
 }
