@@ -62,7 +62,7 @@ function send(res, status, body, headers = {}) {
 
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** @typedef {{ config: any, where: any, auth: any, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, now?: () => number, publicHost?: string | null }} ApiContext */
+/** @typedef {{ config: any, where: any, auth: any, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ApiContext */
 
 /**
  * `POST /api/reviews`. The caller has found the path to be this one; this runs before the sign-in guard.
@@ -209,6 +209,12 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
   }
 
   // A change: from cornfield's own page only, as JSON, counted and written down, and the forge asked who this is now
+  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    req.resume();
+    send(res, 403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+    return true;
+  }
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
     req.resume();
@@ -226,10 +232,6 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
     } catch (err) {
       console.error(`[cornfield] the audit row of a review token could not be written: ${err instanceof Error ? err.message : err}`);
       throw new Refused(503, 'cornfield cannot write its audit log, so it will not change review tokens.', 'unavailable');
-    }
-    if (!sameOrigin(req, ctx.publicHost ?? null)) {
-      req.resume();
-      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     }
     const body = revoke ? {} : await jsonBody(req);
     const forge = auth.forgeFor(session);

@@ -70,7 +70,7 @@ function parseBody(body, what) {
   }
 }
 
-/** @typedef {{ config: any, auth: any, runs: import('./agent-runs.js').Runs | null, now?: () => number, publicHost?: string | null }} AgentContext */
+/** @typedef {{ config: any, auth: any, runs: import('./agent-runs.js').Runs | null, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} AgentContext */
 
 /**
  * `POST /api/agent-requests`. The caller has found the path to be this one; this runs before the sign-in guard.
@@ -208,9 +208,11 @@ export async function serveRunRoutes(req, res, reqPath, ctx) {
   const ask = { forge: () => auth.forgeFor(session), who: { login: session.login, userId: session.userId }, limits: { auth, now: ctx.now } };
   let problem;
   let body = {};
-  if (!sameOrigin(req, ctx.publicHost ?? null)) {
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    // Refused before the engine counts anything or writes a row: a same-site page's POST rides on the maintainer's cookie
     req.resume();
-    problem = { status: 403, message: 'Do this from cornfield\'s own page.' };
+    send(res, 403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+    return true;
   } else if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] || ''))) {
     req.resume();
     problem = { status: 415, message: 'Send the request as JSON (Content-Type: application/json).' };

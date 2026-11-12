@@ -362,7 +362,7 @@ export function landingOf(reqPath) {
  * cornfield's own page by a maintainer the forge confirms now, counted like any action.
  * @param {import('node:http').IncomingMessage} req
  * @param {{ n: number, cancel: boolean }} what
- * @param {{ config: any, session: { login: string, userId: string } | null, auth: any, lander?: Lander | null, now?: () => number, publicHost?: string | null, embedOrigins?: readonly string[] }} ctx
+ * @param {{ config: any, session: { login: string, userId: string } | null, auth: any, lander?: Lander | null, now?: () => number, publicHost?: string | null, publicOrigin?: string | null, embedOrigins?: readonly string[] }} ctx
  * @returns {Promise<{ status: number, body: object, headers?: Record<string, string> }>}
  */
 export async function serveLanding(req, what, ctx) {
@@ -375,9 +375,10 @@ export async function serveLanding(req, what, ctx) {
   }
   if (req.method !== 'POST') return { status: 405, body: { ok: false, error: 'Cancelling is done with POST.', code: 'invalid' }, headers: { Allow: 'POST' } };
   try {
+    // The origin first: a same-site page's POST carries the maintainer's cookie, and a refused one must not use up their budget
+    if (!sameOrigin(req, ctx.publicHost ?? null, ctx.embedOrigins ?? [], ctx.publicOrigin ?? null)) throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     const flood = countAttempt(ctx, session.userId, now());
     if (flood) throw flood;
-    if (!sameOrigin(req, ctx.publicHost ?? null, ctx.embedOrigins ?? [])) throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     if (!lander) throw new Refused(404, 'Landing on approval is not turned on (proposals.approveLands).', 'not-found');
     const forge = auth.forgeFor(session);
     const me = await forge.me();

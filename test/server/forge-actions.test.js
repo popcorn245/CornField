@@ -352,7 +352,7 @@ describe('the forge actions', () => {
   });
 
   describe('where from, and how often', () => {
-    it('refuses a request from another origin, whatever header says so, and writes each down', async () => {
+    it('refuses a request from another origin, whatever header says so, before anything is counted or written down', async () => {
       const before = rows().length;
       const tries = [
         { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
@@ -366,8 +366,7 @@ describe('the forge actions', () => {
         clock += 10_000;
       }
       expect(wrote()).toEqual([]);
-      expect(rows()).toHaveLength(before + 4);
-      expect(last()).toMatchObject({ action: 'merge', status: 403 });
+      expect(rows()).toHaveLength(before);
     });
 
     it('refuses a wrong Host before any route (DNS rebinding)', async () => {
@@ -426,14 +425,16 @@ describe('the forge actions', () => {
       expect(statuses.slice(20)).toEqual([429, 429]);
     });
 
-    it('writes nothing down past sixty attempts a minute: a same-site page cannot grow the audit table', async () => {
+    it('a same-site page cannot use up the maintainer\'s budget or grow the audit table: refused writes are not counted (#237)', async () => {
       const before = rows().length;
-      const statuses = [];
-      for (let i = 0; i < 62; i++) statuses.push((await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } })).status);
-      expect(statuses.slice(0, 60).every((s) => s === 403)).toBe(true);
-      expect(statuses.slice(60)).toEqual([429, 429]);
-      expect(rows()).toHaveLength(before + 60);
+      for (let i = 0; i < 62; i++) {
+        const res = await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } });
+        expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
+      }
+      expect(rows()).toHaveLength(before);
       expect(wrote()).toEqual([]);
+      // the maintainer's own write is not rate limited: it reaches the forge's checks (409 as in the ceiling test above), not a 429
+      expect((await act(12, 'merge', { sha: ABC })).status).not.toBe(429);
     });
 
     it('answers a body that is too large at once, and does not read the rest', async () => {

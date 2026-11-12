@@ -656,6 +656,19 @@ describe('landing on approval', () => {
       expect((await page('POST', '/api/forge/pulls/40/landing/cancel')).status).toBe(404);
     });
 
+    it('a same-site page cannot use up the maintainer\'s write budget: refused cross-origin cancels are not counted (#237)', async () => {
+      world.checks = [check('test', 'in_progress', null)];
+      await boot();
+      await approveByButton();
+      await until('waiting', () => timer.waiting().length === 1);
+      for (let i = 0; i < 62; i++) {
+        const res = await page('POST', '/api/forge/pulls/40/landing/cancel', undefined, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } });
+        expect(res.status).toBe(403);
+      }
+      // the maintainer's own cancel still goes through
+      expect((await page('POST', '/api/forge/pulls/40/landing/cancel')).status).toBe(200);
+    });
+
     it('takes a cancel from cornfield\'s own page only, and from a signed-in session only', async () => {
       world.checks = [check('test', 'in_progress', null)];
       await boot();

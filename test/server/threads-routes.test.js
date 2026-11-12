@@ -330,7 +330,7 @@ describe('the threads routes', () => {
     it('counts every attempt against the ceiling before anything is written down', async () => {
       const before = rows().length;
       let last;
-      for (let i = 0; i < ATTEMPTS_PER_MINUTE + 5; i++) last = await post({ title: '' }, { headers: { origin: 'https://evil.example.org' } });
+      for (let i = 0; i < ATTEMPTS_PER_MINUTE + 5; i++) last = await post({ title: '' });
       expect(last.status).toBe(429);
       // the refused ones past the ceiling left no row
       expect(rows().length - before).toBeLessThanOrEqual(ATTEMPTS_PER_MINUTE);

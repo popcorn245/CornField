@@ -715,7 +715,7 @@ describe('the pipeline steps', () => {
       expect(last()).toMatchObject({ action: 'build', status: 403 });
     });
 
-    it('refuses a request from another origin, and writes each down', async () => {
+    it('refuses a request from another origin, before anything is counted or written down', async () => {
       const before = rows().length;
       for (const headers of [{ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }, { origin: undefined, 'sec-fetch-site': undefined }]) {
         const res = await post(SPEC, { digest: 'a'.repeat(32) }, { headers });
@@ -723,7 +723,7 @@ describe('the pipeline steps', () => {
         clock += 10_000;
       }
       expect(wrote()).toEqual([]);
-      expect(rows()).toHaveLength(before + 2);
+      expect(rows()).toHaveLength(before);
     });
 
     it('wants JSON, and takes POST (a plan is a GET at the same address; anything else is a 405)', async () => {

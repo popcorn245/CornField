@@ -160,7 +160,7 @@ export function actionOf(reqPath) {
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {{ n: number, action: 'merge' | 'rerun' | 'spec' | 'build' }} what
- * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveAction(req, res, what, ctx, send) {
@@ -175,6 +175,11 @@ export async function serveAction(req, res, what, ctx, send) {
     return send(403, { ok: false, error: `${DOING[action]} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
   }
   // Past the ceiling nothing is written down: a flood of refused attempts cannot grow the audit table
+  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up their budget
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    req.resume();
+    return send(403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+  }
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
     req.resume();
@@ -198,10 +203,6 @@ export async function serveAction(req, res, what, ctx, send) {
       throw new Refused(503, 'cornfield cannot write its audit log, so it will not act on the forge.', 'unavailable');
     }
 
-    if (!sameOrigin(req, ctx.publicHost ?? null)) {
-      req.resume();
-      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
-    }
     let body;
     try {
       body = await readJson(req);
@@ -304,7 +305,7 @@ export async function serveAction(req, res, what, ctx, send) {
  * caller has found the path and the method to be this; every refusal is in words and written down, as in `serveAction`.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {{ config: any, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, begin: Function, finish: Function }, now?: () => number, publicHost?: string | null }} ctx
+ * @param {{ config: any, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, begin: Function, finish: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveIdea(req, res, ctx, send) {
@@ -320,6 +321,11 @@ export async function serveIdea(req, res, ctx, send) {
   if (!session || !auth.store) {
     req.resume();
     return send(403, { ok: false, error: `${DOING.idea} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
+  }
+  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up their budget
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    req.resume();
+    return send(403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
   }
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
@@ -340,10 +346,6 @@ export async function serveIdea(req, res, ctx, send) {
     } catch (err) {
       console.error(`[cornfield] the audit row of idea ${target} could not be written: ${err instanceof Error ? err.message : err}`);
       throw new Refused(503, 'cornfield cannot write its audit log, so it will not act on the forge.', 'unavailable');
-    }
-    if (!sameOrigin(req, ctx.publicHost ?? null)) {
-      req.resume();
-      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     }
     let asked;
     try {
