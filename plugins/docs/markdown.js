@@ -18,8 +18,17 @@ const ALLOWED_TAGS = {
   details: ['open'], summary: [], sub: [], sup: [], kbd: [], b: [], i: [], em: [], strong: [], code: [], a: ['href', 'title'],
 };
 const VOID_TAGS = new Set(['img', 'br', 'hr']);
-/** An href or src the page may keep: http(s), mailto, or a relative or anchor link */
-const safeUrl = (u) => (typeof u === 'string' && (/^(https?:|mailto:)/i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u.trim())) ? u : null);
+const WEB_URL = /^(https?:|mailto:)/i;
+const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/**
+ * An href or src the page may keep: http(s), mailto, or a relative or anchor link. Checked also as a browser reads
+ * it, which drops every tab and newline and any control or space at the start, so `java\tscript:` is `javascript:`.
+ */
+const safeUrl = (u) => {
+  if (typeof u !== 'string') return null;
+  const read = u.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+/, '');
+  return (WEB_URL.test(u) || !SCHEME.test(u.trim())) && (WEB_URL.test(read) || !SCHEME.test(read)) ? u : null;
+};
 
 /**
  * The anchor GitHub gives a heading: lower case, punctuation dropped, spaces to hyphens.

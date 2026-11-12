@@ -367,6 +367,18 @@ describe('inline Markdown', () => {
     expect(renderMarkdown('[a](x.md) ![b](y.png)', { link: (h, { image }) => (image ? null : `/site/${h}`) }).html).toBe('<p><a href="/site/x.md">a</a> b</p>');
   });
 
+  it('reads a link target as a browser does: a tab, a newline or a control character does not hide its scheme', () => {
+    for (const href of ['java\tscript:alert(1)', 'java\nscript:alert(1)', 'java\rscript:alert(1)', '\u0001javascript:alert(1)', '\u0000javascript:alert(1)', ' \tjavascript:alert(1)', 'data\t:text/html,x', 'vb\tscript:x']) {
+      const one = href.replace(/[\n\r]/g, '');
+      const md = `[x](${one}) ![y](${one})`;
+      expect(html(md), JSON.stringify(href)).not.toMatch(/href=|src=/);
+      const block = renderMarkdown(`<p><a href="${href}">x</a><img src="${href}"></p>`).html;
+      expect(block, JSON.stringify(href)).toBe('<p><a>x</a><img loading="lazy"></p>');
+    }
+    // A tab or a newline elsewhere is no scheme: a relative link and a web link are kept as written
+    expect(renderMarkdown('<p><a href="a\tb.md">x</a><a href="https://a.com/\tb">y</a></p>').html).toBe('<p><a href="a\tb.md">x</a><a href="https://a.com/\tb">y</a></p>');
+  });
+
   it('keeps links, emphasis, lists and quotes nested 16 deep, and writes a deeper one as text', () => {
     const links = (n, inner) => '['.repeat(n) + inner + '](u)'.repeat(n);
     const count = (s, re) => (s.match(re) || []).length;
