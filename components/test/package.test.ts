@@ -144,7 +144,12 @@ describe('the type declarations (D11)', () => {
     `).join('\n')).toMatch(/sideways/);
   }, 30_000);
 
-  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, tokens.css and version.json', () => {
+  it('has an entry in the exports map for every component, with its declarations', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
+    for (const tag of componentTags()) expect(pkg.exports[`./${tag}`], tag).toEqual({ types: `./dist/types/${tag}.d.ts`, default: `./dist/${tag}.js` });
+  });
+
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-scope, tokens.css and version.json', () => {
     if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
     const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
     fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
@@ -153,11 +158,26 @@ describe('the type declarations (D11)', () => {
     fs.writeFileSync(file, `
       import { version, CornMap } from '@popcorn245/cornfield-components';
       import type { CornSelectDetail } from '@popcorn245/cornfield-components';
+      import { CornScope } from '@popcorn245/cornfield-components/corn-scope';
+      import type { CornAuthDetail, CornErrorDetail } from '@popcorn245/cornfield-components';
       import '@popcorn245/cornfield-components/corn-map';
       const v: string = version;
       const el = document.querySelector('corn-map')!;
       el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
-      void v; void CornMap;
+      el.src = 'https://map.example.com';
+      el.useTheme = true;
+      el.addEventListener('cornAuth', (e) => { const signIn: string = e.detail.signIn; const status: number = e.detail.status; void signIn; void status; });
+      const scope: HTMLCornScopeElement = document.createElement('corn-scope');
+      scope.src = 'https://map.example.com';
+      scope.theme = 'auto';
+      scope.useTheme = true;
+      scope.topology = { nodes: [{ id: 'a' }], edges: [] };
+      scope.config = { version: '1.2.3' };
+      scope.strings = { retry: 'Again' };
+      scope.addEventListener('cornAuth', (e) => { const d: CornAuthDetail = e.detail; void d; });
+      scope.addEventListener('cornError', (e) => { const d: CornErrorDetail = e.detail; if (d.kind === 'not-listed') void d.message; });
+      scope.addEventListener('cornReady', (e) => { const none: void = e.detail; void none; });
+      void v; void CornMap; void CornScope;
     `);
     fs.writeFileSync(path.join(app, 'package.json'), '{ "type": "module" }\n');
     // A bundler's resolution, and Node's own (node16, nodenext: relative imports in the declarations need their extension), with the declarations checked too
@@ -182,13 +202,18 @@ describe('the type declarations (D11)', () => {
       el.addEventListener('cornSelect', (e) => { const kind: 'node' | 'edge' = e.detail.kind; void kind; });
       el.zoomTo(3);
       el.focusNode(7);
+      const scope = document.querySelector('corn-scope')!;
+      scope.theme = 'blue';
+      scope.addEventListener('cornError', (e) => { if (e.detail.kind === 'gone') void 0; });
+      scope.src = 7;
     `);
-    expect(wrong.length).toBeGreaterThanOrEqual(5);
+    expect(wrong.length).toBeGreaterThanOrEqual(8);
     const text = wrong.join('\n');
     expect(text).toMatch(/sideways/);
     expect(text).toMatch(/blue/);
     expect(text).toMatch(/zoomTo/);
     expect(text).toMatch(/number/);
+    expect(text).toMatch(/and '"gone"' have no overlap/);
   });
 });
 
