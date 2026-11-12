@@ -6,7 +6,8 @@
  * `use-theme`, the server's) are set, which every piece inside inherits.
  *
  *   const scope = mountScope(host, options)    -> { update, destroy, instance, source }   (the `<corn-scope>` component calls it)
- *   const join = joinScope(el, onChange)       -> { inst, scope, leave }                  (a piece's shell calls it for the scope around it, if any)
+ *   const join = joinScope(el, onChange)       -> { inst, scope, leave }                  (a piece's shell calls it for the scope around it, if any;
+ *                                                                                          it lives in pieces/scope-link.js, so a map alone does not load this module)
  *
  * HOW A PIECE FINDS ITS SCOPE. A piece dispatches `corn-scope-request`, a composed, bubbling event, from its own element when it connects. The
  * nearest scope above it hears it (it crosses every shadow root between them, which `closest()` cannot), answers by handing over a handle (the
@@ -34,19 +35,13 @@ import { createSource, parseSource } from '../engine/source.js';
 import { createServerTheme } from '../engine/theme-sheet.js';
 import { keepLayersIn } from '../engine/layers.js';
 import { resolveTheme } from '../theme-model.js';
+import { mount as mountStatus } from './status.js';
+import { CHANGED, REQUEST, infoOf } from './scope-link.js';
 
-export const REQUEST = 'corn-scope-request';
-export const CHANGED = 'corn-scope-changed';
+export { REQUEST, CHANGED, joinScope, scopeInfo } from './scope-link.js';
 /** The theme choices of a scope (and of a map) */
 const THEMES = ['light', 'dark', 'auto'];
 
-/** What a piece may ask a scope for, per instance: set when a scope makes the instance */
-const infoOf = (inst) => inst.slot('scope', () => ({ theme: 'auto', serverTheme: null, host: null }));
-/** The scope's side of an instance, or null for a private one: its `theme`, its server theme (to adopt into a root) and its element */
-export const scopeInfo = (inst) => {
-  const info = infoOf(inst);
-  return info.host ? info : null;
-};
 
 /**
  * @param {Element} host the `<corn-scope>` element
@@ -128,6 +123,8 @@ export function mountScope(host, options = {}) {
       pageUrl,
       onConfig: (config) => { if (props.useTheme) st.load(config); },
     });
+    info.source = source;
+    info.mountStatus = mountStatus;
     readyFired = false;
     inst.on('source', onSource);
     inst.on('theme', onTheme);
@@ -247,29 +244,4 @@ function piecesBelow(root) {
   };
   walk(root);
   return out;
-}
-
-/**
- * A piece's side: asks for the scope around `el`. `onChange` runs when the answer may be different (a new instance, a scope gone or come): the
- * shell leaves, ends its piece and joins again. `inst` is null when no scope answered (the piece makes a private instance); `leave` is idempotent.
- * @param {Element} el
- * @param {() => void} onChange
- * @returns {{ inst: ReturnType<typeof createInstance> | null, scope: object | null, leave: () => void }}
- */
-export function joinScope(el, onChange) {
-  let handle = null;
-  el.dispatchEvent(new CustomEvent(REQUEST, { bubbles: true, composed: true, detail: { el, claim: (h) => { handle = h; } } }));
-  const changed = () => onChange();
-  el.addEventListener(CHANGED, changed);
-  let left = false;
-  return {
-    inst: handle ? handle.inst : null,
-    scope: handle ? handle.scope : null,
-    leave() {
-      if (left) return;
-      left = true;
-      el.removeEventListener(CHANGED, changed);
-      if (handle) handle.release();
-    },
-  };
 }

@@ -48,7 +48,7 @@ beforeAll(async () => {
   blank = pixelsOf(canvasOf(el)).hash;
   el.remove();
 });
-const lit = (el: Element) => { const p = pixelsOf(canvasOf(el as HTMLElement)); return p.lit > 0 && p.hash !== blank ? 1000 : 0; };
+const lit = (el: Element) => { if (!canvasOf(el as HTMLElement)) return 0; const p = pixelsOf(canvasOf(el as HTMLElement)); return p.lit > 0 && p.hash !== blank ? 1000 : 0; };
 
 describe('a corn-map with a src (a private scope)', () => {
   it('reads the server\'s map and draws it, quietly while it loads, and says cornReady', async () => {
@@ -569,6 +569,8 @@ describe('the server\'s theme (use-theme)', () => {
 
 describe('the scope protocol in a real page', () => {
   const nodesOf = async (el: Piece) => { const ids: string[] = []; for (const id of ['alpha', 'one']) { await el.focusNode(id); if (el.node === id) ids.push(id); } return ids; };
+  /** Waits until the map holds `id` (its data has come), and gives what it holds */
+  const loaded = async (el: Piece, id: string) => { const end = Date.now() + 8000; while (Date.now() < end) { const ids = await nodesOf(el); if (ids.includes(id)) return ids; await sleep(60); } return nodesOf(el); };
 
   it('a piece inside another component\'s closed shadow root finds the scope around that component; a scope put around it later cannot find it (as the docs say)', async () => {
     if (!customElements.get('x-closed-host')) {
@@ -585,8 +587,7 @@ describe('the scope protocol in a real page', () => {
     const host = await page(`<corn-scope src="${at('other')}"><x-closed-host></x-closed-host></corn-scope>`);
     const inner = (host.querySelector('x-closed-host') as any).inner as Piece;
     await inner.componentOnReady();
-    await until(() => !!canvasOf(inner) && lit(inner) > 0);
-    expect(await nodesOf(inner)).toEqual(['one']); // the scope's server's map
+    expect(await loaded(inner, 'one')).toEqual(['one']); // the scope's server's map
     // a scope added around it afterwards: the walk does not enter a closed root, so the piece stays where it was
     const late = document.createElement('main');
     late.innerHTML = '<x-closed-host></x-closed-host>';
@@ -599,14 +600,12 @@ describe('the scope protocol in a real page', () => {
     late.append(wrap);
     await (wrap as any).componentOnReady();
     await sleep(500);
-    expect(lit(alone)).toBe(0);
+    expect(await nodesOf(alone)).toEqual([]); // still its own empty map: no server's node in it
   });
 
   it('nested scopes: the nearest answers; the outer one\'s server is not asked for that piece', async () => {
     const host = await page(`<corn-scope src="${at('ok')}"><corn-scope src="${at('other')}"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope></corn-scope>`);
-    const el = map(host);
-    await until(() => lit(el) > 0);
-    expect(await nodesOf(el)).toEqual(['one']);
+    expect(await loaded(map(host), 'one')).toEqual(['one']);
   });
 
   it('a scope moved in the page ends its instance and makes a new one; its map takes it and draws again, and says cornReady once more', async () => {
@@ -619,7 +618,7 @@ describe('the scope protocol in a real page', () => {
     host.querySelector('#to')!.append(host.querySelector('corn-scope')!);
     await until(() => canvasOf(el) !== first && lit(el) > 0);
     await until(() => events.filter((e) => e.type === 'cornReady' && e.target === 'corn-scope').length === ready + 1);
-    expect(await nodesOf(el)).toEqual(['alpha']);
+    expect(await loaded(el, 'alpha')).toEqual(['alpha']);
   });
 
   it('src changing mid-load: the old server\'s reads are aborted, its answer is never used, and nothing is said for it', async () => {
@@ -632,7 +631,7 @@ describe('the scope protocol in a real page', () => {
       await sleep(100);
       (host.querySelector('corn-scope') as Piece).src = at('other');
       const el = map(host);
-      await until(() => lit(el) > 0);
+      expect(await loaded(el, 'one')).toEqual(['one']);
       await sleep(900); // the slow server has answered by now
       const slow = signals.filter((s) => s.url.includes('/fake/slow/'));
       expect(slow.length).toBeGreaterThan(0);

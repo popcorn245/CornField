@@ -1,5 +1,5 @@
-// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, of corn-map with its engine and of corn-scope with what it loads (what each
-// entry pulls in besides the runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
+// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, of corn-map with its engine, of corn-map with what a `src` brings, and of
+// corn-scope with what it loads (what each entry pulls in besides the runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
 //   node scripts/size-budget.mjs [--record]
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,12 +11,16 @@ const dist = join(PACKAGE, 'dist');
 const budgetFile = join(PACKAGE, 'size-budget.json');
 const gz = (file) => gzipSync(readFileSync(join(dist, file)), { level: 9 }).length;
 
-/** The files an entry loads, found through the static imports of each: `chunks/runtime-…` is the runtime, the rest is the entry's own */
-function reach(entry, seen = new Set()) {
+/**
+ * The files an entry loads, found through the static imports of each (and, with `dynamic`, its `import("./…")`s too: what a `<corn-map src>` fetches
+ * once it has a src): `chunks/runtime-…` is the runtime, the rest is the entry's own
+ */
+function reach(entry, dynamic = false, seen = new Set()) {
   if (seen.has(entry)) return seen;
   seen.add(entry);
   const text = readFileSync(join(dist, entry), 'utf8');
-  for (const m of text.matchAll(/(?:from|import)\s*["']\.\/?((?:chunks\/)?[\w.-]+\.js)["']/g)) reach(m[1].startsWith('chunks/') || m[1].includes('/') ? m[1] : (entry.startsWith('chunks/') ? `chunks/${m[1]}` : m[1]), seen);
+  const pattern = dynamic ? /(?:from|import)\s*\(?\s*["']\.\/?((?:chunks\/)?[\w.-]+\.js)["']/g : /(?:from|import)\s*["']\.\/?((?:chunks\/)?[\w.-]+\.js)["']/g;
+  for (const m of text.matchAll(pattern)) reach(m[1].startsWith('chunks/') || m[1].includes('/') ? m[1] : (entry.startsWith('chunks/') ? `chunks/${m[1]}` : m[1]), dynamic, seen);
   return seen;
 }
 
@@ -24,9 +28,10 @@ function reach(entry, seen = new Set()) {
 export function measure() {
   const runtime = readdirSync(join(dist, 'chunks')).find((f) => f.startsWith('runtime-'));
   if (!runtime) throw new Error('no runtime chunk in dist/chunks');
-  const own = (entry) => [...reach(entry)].filter((f) => !f.startsWith('chunks/runtime-')).reduce((sum, f) => sum + gz(f), 0);
-  // Each is what the entry loads besides the runtime; the two share the engine's chunk, so they do not add up
-  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own('corn-map.js'), 'corn-scope': own('corn-scope.js') };
+  const own = (entry, dynamic = false) => [...reach(entry, dynamic)].filter((f) => !f.startsWith('chunks/runtime-')).reduce((sum, f) => sum + gz(f), 0);
+  // Each is what the entry loads besides the runtime; they share the engine's chunk, so they do not add up. `corn-map` is a map handed its data;
+  // `corn-map-src` the same with the chunk a `src` (or a scope) brings: the loading, the states, the server's theme
+  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own('corn-map.js'), 'corn-map-src': own('corn-map.js', true), 'corn-scope': own('corn-scope.js') };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

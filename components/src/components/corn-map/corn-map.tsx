@@ -1,6 +1,6 @@
 import { Component, Element, Event, EventEmitter, Method, Prop, Watch } from '@stencil/core';
 import { mount } from '../../../../explorer/pieces/map.js';
-import { joinScope } from '../../../../explorer/pieces/scope.js';
+import { joinScope } from '../../../../explorer/pieces/scope-link.js';
 import defaultTokens from '../../generated/default-tokens.css?inline';
 
 /** What `cornSelect` says: the node or the edge now selected, or none; and who chose it */

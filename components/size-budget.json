@@ -2,8 +2,9 @@
   "unit": "bytes, gzip level 9",
   "tolerance": 0.05,
   "budget": {
-    "runtime": 28021,
-    "corn-map": 77104,
-    "corn-scope": 46506
+    "runtime": 28058,
+    "corn-map": 70600,
+    "corn-map-src": 79537,
+    "corn-scope": 50674
   }
 }

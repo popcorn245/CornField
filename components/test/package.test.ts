@@ -236,6 +236,23 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect(read(`chunks/${runtime[0]}`)).not.toContain('explorer/pieces');
   });
 
+  it('a map that is handed its data loads none of the scope: the loading, the states and the server\'s theme are a chunk of their own, imported only for a src', () => {
+    const reach = (entry: string, dynamic: boolean, seen = new Set<string>()): Set<string> => {
+      const text = read(entry);
+      const pattern = dynamic ? /(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g : /(?:from|import)\s*["'](\.[^"']+)["']/g;
+      for (const m of text.matchAll(pattern)) { const target = path.posix.normalize(path.posix.join(path.posix.dirname(entry), m[1])); if (!seen.has(target)) { seen.add(target); reach(target, dynamic, seen); } }
+      return seen;
+    };
+    // a string only each module holds (the build is not minified, but a module's path comment is not always kept)
+    const probes = { 'pieces/scope.js': '// ../explorer/pieces/scope.js', 'engine/source.js': '/cornfield/config.json', 'engine/theme-sheet.js': 'constructable stylesheets are not available', 'pieces/status.js': 'source-announcer' };
+    const statics = [...reach('corn-map.js', false)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(statics.includes(probe), module).toBe(false);
+    const all = [...reach('corn-map.js', true)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(all.includes(probe), module).toBe(true);
+    // corn-scope has it at once: no second round trip for a scope
+    expect([...reach('corn-scope.js', false)].some((f) => read(f).includes('// ../explorer/pieces/scope.js'))).toBe(true);
+  });
+
   it('is ES modules that register the tag when loaded, and no more than that: no top-level fetch, no document write', () => {
     for (const f of ['index.js', 'corn-map.js']) expect(read(f)).not.toMatch(/\brequire\(|module\.exports/);
     const all = fs.readdirSync(path.join(dist, 'chunks')).map((f) => read(`chunks/${f}`)).join('\n');
@@ -262,10 +279,10 @@ describe('what a build leaves in dist/ (D11)', () => {
     for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
-  it('is inside the size budget: the runtime chunk, corn-map with its engine and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
+  it('is inside the size budget: the runtime chunk, corn-map with its engine, corn-map with what a src brings and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-scope', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-map-src', 'corn-scope', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

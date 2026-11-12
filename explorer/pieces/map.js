@@ -24,7 +24,8 @@
  *   base, fetch, strings   for a piece that makes its own instance
  *   src        the base address of a cornfield server, for a piece with no scope around it: it makes a private scope of its own (pieces/scope.js) that reads
  *              the config and the topology from there, with the maintainer's session, and shows the states of that load (pieces/status.js). Not applied
- *              by `update`: a new server is a new instance, so the shell mounts the piece again
+ *              by `update`: a new server is a new instance, so the shell mounts the piece again. pieces/scope.js and what it loads are imported then,
+ *              a chunk of the package's own, so a map that is handed its topology never loads them (the piece answers at once; see mountWithSource)
  *   useTheme, version, pageUrl, onAuth, onError   for that private scope (see mountScope)
  *   slots      { stage: Node }: the place the elements go before (cornfield's page: the marker in its stage). Without it they go in a stage of their own in `root`
  *   keysHelp   the words the canvas is described by; default KEYS_HELP. cornfield's page, which has the node panel and Freeform, says KEYS_HELP_WITH_PANEL
@@ -55,9 +56,7 @@ import { buildDataFlow } from '../flow-build.js';
 import { resolveTheme } from '../theme-model.js';
 import { escapeHtml } from '../../core/text.js';
 import { adoptDefaultTokens } from './adopt-tokens.js';
-import { mountScope, scopeInfo } from './scope.js';
-import { mount as mountStatus } from './status.js';
-import { sourceOf } from '../engine/source.js';
+import { scopeInfo } from './scope-link.js';
 
 /** The keys of a map on its own (engine/keyboard.js): what the canvas is described by */
 export const KEYS_HELP = 'Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Escape clears the selection.';
@@ -83,9 +82,9 @@ export const markup = ({ keysHelp = KEYS_HELP } = {}) => ({
  * The piece of a second map in a scope: the engine holds one map per instance (its state has one canvas, one camera, one selection), so this one draws
  * nothing. It says why, in its own stage (pieces/status.js), and tells the scope, which says it as `cornError` `{ kind: 'second-map' }`.
  */
-function refused(root, inst) {
+function refused(root, inst, info) {
   const made = place(inst, root, '<div data-corn="map-stage"></div>', null, 'stage');
-  const status = mountStatus(made[0], inst, { follow: false });
+  const status = info.mountStatus(made[0], inst, { follow: false });
   status.refuse('second-map');
   inst.emit('piece:refused', { piece: 'map', reason: 'second-map', message: 'A scope holds one map.', host: root.nodeType === 11 ? /** @type {ShadowRoot} */ (root).host : root });
   const none = () => {};
@@ -113,16 +112,50 @@ function hostRootOf(root) {
  * @param {object} [options]
  */
 export function mount(root, inst, options = {}) {
-  // A map with a `src` and no scope around it makes a private scope on its own element: the same loading, the same states, one tag
+  if (!inst && options.src !== undefined && options.src !== null && options.src !== '') return mountWithSource(root, options);
+  return mountOn(root, inst, options, null);
+}
+
+/**
+ * A map with a `src` and no scope around it makes a private scope on its own element: the same loading, the same states, one tag. The scope's code
+ * (pieces/scope.js and what it loads: the reads, the states, the server's theme) is a chunk of the package's own, imported the first time a map has
+ * a `src` (a map that is handed its topology never loads it). The piece answers at once: what it is told before the chunk is there is applied when it
+ * is, `fit`, `refresh` and `focusNode` do nothing until then (there is no map to act on yet), and `destroy` before then makes nothing.
+ */
+function mountWithSource(root, options) {
   const host = root.nodeType === 11 ? /** @type {ShadowRoot} */ (root).host : root;
-  let privateScope = null;
-  if (!inst && options.src !== undefined && options.src !== null && options.src !== '') {
-    privateScope = mountScope(host, {
+  const pending = {};
+  let real = null;
+  let ended = false;
+  import('./scope.js').then(({ mountScope }) => {
+    if (ended) return;
+    const privateScope = mountScope(host, {
       src: options.src, theme: options.theme, useTheme: options.useTheme, tokens: options.tokens, version: options.version, pageUrl: options.pageUrl,
       onAuth: options.onAuth, onError: options.onError,
     });
-    inst = privateScope.instance;
-  }
+    real = mountOn(root, privateScope.instance, { ...options, ...pending }, privateScope);
+  }, (err) => {
+    if (!ended && options.onError) options.onError({ kind: 'offline', message: `the map's loader did not load: ${err && err.message ? err.message : err}` });
+  });
+  return {
+    get inst() { return real ? real.inst : null; },
+    get map() { return real ? real.map : null; },
+    update(next = {}) { if (real) real.update(next); else Object.assign(pending, next); },
+    fit() { if (real) real.fit(); },
+    focusNode(id) { return real ? real.focusNode(id) : false; },
+    refresh() { if (real) real.refresh(); },
+    applyTheme(theme) { return real ? real.applyTheme(theme) : null; },
+    destroy() {
+      if (ended) return;
+      ended = true;
+      if (real) real.destroy();
+      real = null;
+    },
+  };
+}
+
+/** The map on an instance: a scope's, its own private scope's (`privateScope`, which it ends when it ends), or one it makes */
+function mountOn(root, inst, options, privateScope) {
   const ownsInstance = !inst;
   if (ownsInstance) inst = createInstance({ root, base: options.base || '', fetch: options.fetch, strings: options.strings });
   // An instance that belongs to a scope holds one map: the map attaches its shadow root to it, and a second map is told why it has no map
@@ -131,11 +164,11 @@ export function mount(root, inst, options = {}) {
   if (info) {
     try { releaseRoot = inst.attach(root); } catch {
       if (privateScope) privateScope.destroy();
-      return refused(root, inst);
+      return refused(root, inst, info);
     }
   }
   const { state } = inst;
-  const source = sourceOf(inst);
+  const source = info ? info.source : null;
   if (options.tokens) {
     // The defaults go on the document, whose :root every element inherits from (through every shadow root); where the map's host sits in a
     // shadow root of the page's own, that root gets the sheet too, for the rules on the element's `theme` attribute, which match only there
@@ -164,7 +197,7 @@ export function mount(root, inst, options = {}) {
   // What the person sees while the data loads and when it cannot be had (pieces/status.js): only a map that has a source
   const stage = made.find((el) => el.matches('[data-corn="map-stage"]')) || null;
   if (source && stage) {
-    const status = mountStatus(stage, inst, { onRetry: () => source.load(), focusMap: () => { if (state.canvas) state.canvas.focus(); } });
+    const status = info.mountStatus(stage, inst, { onRetry: () => source.load(), focusMap: () => { if (state.canvas) state.canvas.focus(); } });
     scope.own(status.destroy);
   }
 
