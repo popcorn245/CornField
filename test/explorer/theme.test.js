@@ -36,6 +36,7 @@ import { VERDICT_COLOR } from '../../explorer/check-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { WHEN_STYLES } from '../../explorer/cloud-model.js';
 
+import { explorerCss } from './stylesheets.js';
 /** Contrast of a colour drawn at its alpha over the light ground (what the eye gets) */
 function onLight(css) {
   const [r, g, b, a] = parseColor(css);
@@ -308,7 +309,7 @@ describe('tokens.css: the light tokens', () => {
     return v;
   };
   const themes = { dark, light: new Map([...dark, ...light]) };
-  const sheets = ['explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')).join('\n');
+  const sheets = explorerCss(['explorer.css', 'house.css'], { stripComments: true });
   /** The declarations of the rule whose selector list holds `selector` (the last such rule wins, as in the cascade) */
   const ruleFor = (selector) => {
     const out = {};

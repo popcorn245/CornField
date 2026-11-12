@@ -1,0 +1,188 @@
+/*
+ * node-panel.css: the node panel
+ * What is selected (panels.js, #138): type, name, one line, facts, mockups, threads, the diff, the actions; the slide-over from the right
+ * from 768px, a bottom sheet below. Read by corn-node-panel (D4).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+.hx-var { color: var(--corn-hue-pink); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); padding: 0 var(--corn-space-1); border-radius: var(--corn-radius-xs); }
+.hx-drawer-title { font-family: var(--corn-font-display); }
+/* fixed (spec 0011 D8): on a phone, with a sheet open, the tap that closes it covers the whole window, the header too (it never draws: see sheets.css). In the stage it would leave the header live under an open sheet */
+.hx-backdrop { position: fixed; inset: 0; z-index: 40; background: var(--corn-scrim); backdrop-filter: blur(calc(var(--corn-blur) / 4)); }
+@container corn-box (min-width: 768px) {
+  .hx-backdrop { display: none; }
+}
+.hx-drawer { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); box-shadow: var(--corn-shadow-lg); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
+.hx-drawer * { touch-action: pan-y; }
+.hx-drawer.drawer-open { pointer-events: auto; }
+/* The closed panel waits just off the right edge: its shadow would show there */
+.hx-drawer:not(.drawer-open) { box-shadow: none; }
+@container corn-box (max-width: 767px) {
+  /* A sheet in #sheet-dock (sheets.js, "phone bottom sheets" at the end of this file) */
+  .hx-drawer { position: relative; width: 100%; border-radius: var(--corn-radius-lg) var(--corn-radius-lg) 0 0; border-left: 0; transform: none; z-index: auto; }
+  .hx-drawer:not(.drawer-open) { display: none; }
+}
+@container corn-box (min-width: 768px) {
+  .hx-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 480px; transform: translateX(100%); }
+  .hx-drawer.drawer-open { transform: translateX(0); }
+}
+.hx-drawer-handle { display: flex; justify-content: center; padding: var(--corn-space-3) 0 var(--corn-space-1); }
+.hx-drawer-handle span { width: 48px; height: 6px; border-radius: var(--corn-radius-pill); background: var(--corn-surface-3); }
+.hx-drawer-body { flex: 1; display: flex; flex-direction: column; gap: var(--corn-space-5); padding: var(--corn-panel-pad); overflow-y: auto; user-select: text; }
+.hx-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--corn-space-3); }
+.hx-drawer-title { font-size: var(--corn-text-lg); font-weight: 700; color: var(--corn-text); overflow-wrap: anywhere; }
+.hx-lead { font-size: var(--corn-text-base); line-height: 1.5; color: var(--corn-text-2); }
+.hx-block { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-meta { display: flex; flex-direction: column; gap: var(--corn-space-5); font-size: var(--corn-text-md); color: var(--corn-text-2); overflow-wrap: anywhere; }
+.hx-meta > :empty { display: none; } /* no live data, no threads: no gap where they would be */
+.hx-sec { margin-top: var(--corn-space-2); padding-top: var(--corn-space-2); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-line { display: flex; align-items: flex-start; gap: var(--corn-space-2); padding: calc(var(--corn-space-1) / 2) 0; }
+.hx-linkbtn { margin-left: var(--corn-space-1); padding: 0; border: 0; background: none; color: var(--corn-hue-fuchsia); text-decoration: underline; font-size: inherit; }
+.hx-sim { display: flex; flex-direction: column; gap: var(--corn-space-2); padding-top: var(--corn-space-1); font-family: var(--corn-font); }
+.hx-field-label { font-size: var(--corn-text-2xs); color: var(--corn-text-3); }
+.hx-field { width: 100%; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text-2); font-family: var(--corn-mono); font-size: var(--corn-text-xs); }
+.hx-sim-result { font-size: var(--corn-text-xs); }
+.hx-error-text { padding-top: var(--corn-space-3); color: var(--corn-bad); }
+.hx-ms { width: 56px; flex: none; text-align: right; color: var(--corn-hue-fuchsia); }
+.hx-file { padding: calc(var(--corn-space-1) / 2) 0; }
+.hx-sandbox { display: flex; flex-direction: column; gap: var(--corn-space-4); padding: var(--corn-space-5); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); }
+.hx-sandbox-title { display: flex; align-items: center; justify-content: space-between; font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-3); }
+.hx-sandbox-name { display: flex; align-items: center; gap: var(--corn-space-2); }
+.hx-sandbox-stage { min-height: 90px; display: flex; align-items: center; justify-content: center; padding: var(--corn-space-5); border-radius: var(--corn-radius-sm); border: var(--corn-border) dashed var(--corn-surface-2); background: var(--corn-ground); overflow-x: auto; }
+.hx-sandbox-controls { display: flex; flex-direction: column; gap: var(--corn-space-2); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); font-size: var(--corn-text-xs); }
+.hx-ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); color: var(--corn-text-2); }
+.hx-check { display: inline-flex; align-items: center; gap: var(--corn-space-1); margin-right: var(--corn-space-3); cursor: pointer; }
+.hx-chip { padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border: 0; border-radius: var(--corn-radius-xs); font-size: var(--corn-text-xs); font-weight: 500; color: var(--corn-text-on-accent); }
+.hx-chip--ghost { background: var(--corn-surface-2); color: var(--corn-text-2); }
+.hx-chip--outline { background: var(--corn-surface-2); color: var(--corn-accent-text); }
+.hx-chip--primary { background: var(--corn-accent); }
+.hx-chip--danger { background: var(--corn-bad); }
+.hx-chip--success { background: var(--corn-ok); }
+.hx-chip--warning { background: var(--corn-warn); }
+.hx-chip--danger, .hx-chip--success, .hx-chip--warning { color: var(--corn-ground); }
+.hx-drawer-foot { display: flex; align-items: stretch; gap: var(--corn-space-3); flex: none; padding: var(--corn-space-4) var(--corn-space-5) calc(var(--corn-space-4) + env(safe-area-inset-bottom, 0px)); border-top: var(--corn-border) solid var(--corn-line-soft); }
+.hx-open { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: var(--corn-space-2); min-height: var(--hx-control-h); padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); background: var(--corn-accent); color: var(--corn-text-on-accent); font-size: var(--corn-text-sm); font-weight: 600; text-align: center; text-decoration: none; transition: background 0.15s; }
+.hx-open:hover { background: var(--corn-accent-hover); }
+/* The panel's proposal block: why, and what changes */
+.hx-proposal-sec { padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left-width: var(--corn-border-strong); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); margin: 0 0 var(--corn-space-2); font-family: var(--corn-font); }
+.hx-proposal-sec--added { border-left-color: var(--corn-added); }
+.hx-proposal-sec--changed { border-left-color: var(--corn-changed); }
+.hx-proposal-sec--removed { border-left-color: var(--corn-removed); }
+.hx-proposal-sec--edit { border-left-color: var(--corn-edit); }
+.hx-why { margin: var(--corn-space-1) 0 var(--corn-space-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); line-height: 1.5; }
+.hx-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--corn-space-1) / 2) var(--corn-space-3); padding: var(--corn-space-1) 0; border-top: var(--corn-border) solid var(--corn-line-soft); font-family: var(--corn-mono); font-size: var(--corn-text-xs); }
+.hx-change-field { flex: none; min-width: 64px; color: var(--corn-text-3); }
+.hx-change-before { color: var(--corn-bad); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--corn-bad) 50%, transparent); overflow-wrap: anywhere; }
+.hx-change-arrow { color: var(--corn-text-3); }
+.hx-change-after { color: var(--corn-ok); overflow-wrap: anywhere; }
+.hx-change em { color: var(--corn-text-3); text-decoration: none; }
+/* A proposal's mockups (mockups.js): the buttons in a node's panel and the window one opens in. A mockup is untrusted content, shown in an <img> or a sandboxed <iframe>. */
+.hx-mockup-list { list-style: none; margin: var(--corn-space-1) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-mockup-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); }
+.hx-mockup-open { max-width: 100%; white-space: normal; text-align: left; }
+.hx-mockup-state { margin: 0; font-size: var(--corn-text-xs); color: var(--corn-text-2); }
+.hx-mockup-state--approved { color: var(--corn-added-text); }
+.hx-mockup-state--changed { color: var(--corn-warn); font-weight: 600; }
+.hx-mockup-state--missing { color: var(--corn-bad); }
+@container corn-box (max-width: 767px) {
+  .hx-backdrop { display: none; }
+  /* The node panel: its title and type until expanded */
+  .hx-drawer { max-height: 60cqh; }
+}
+/* ---- cloud nodes (spec 0031, CLOUD-06): the panel's badges, plan and Used by; the `when` line styles -- */
+.hx-cloud-browser { color: var(--corn-text-3); font-size: var(--corn-text-sm); }
+.hx-drawer-title:focus { outline: none; }
+.hx-drawer-title:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-drawer-id { flex: 1; min-width: 0; }
+.hx-kicker { display: flex; flex-wrap: wrap; align-items: center; margin: 0 0 var(--corn-space-2); font-size: var(--corn-text-sm); color: var(--corn-text-3); }
+/* The badge carries a project's own kind ("Service · timer", spec 0009): a long one wraps inside the panel, never past it */
+.hx-kicker [data-corn="badge"] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+#drawer-host { white-space: pre; } /* the kicker is a flex row, which drops a leading space: keep " · host" */
+.hx-diffpill { margin-left: var(--corn-space-3); padding: 0 var(--corn-space-3); border-radius: var(--corn-radius-pill); border: var(--corn-border) dashed var(--corn-added); color: var(--corn-added-text); font-size: var(--corn-text-xs); }
+.hx-drawer-id .hx-drawer-title.hx-mono { font-family: var(--corn-mono); }
+.hx-facts { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-fact { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--corn-space-4); }
+.hx-fact-k { color: var(--corn-text-3); }
+.hx-fact-v { min-width: 0; color: var(--corn-text); }
+.hx-fact-v .hx-line { padding: 0; }
+.hx-fact-v .hx-name { color: var(--corn-text); }
+.hx-fact-v .hx-code { color: var(--corn-text-2); font-size: var(--corn-text-sm); }
+.hx-fact-v .hx-chips { padding-top: 0; }
+.hx-sec-block { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-sec-title { margin: 0; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-3); }
+.hx-drawer .hx-mockups { margin: 0; padding: 0; border: 0; }
+.hx-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-row { display: flex; align-items: center; gap: var(--corn-space-4); width: 100%; min-height: 36px; padding: var(--corn-space-3) var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); font: inherit; text-align: left; }
+.hx-row:hover { background: var(--corn-accent-soft); }
+.hx-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-row-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hx-row-meta { flex: none; font-size: var(--corn-text-sm); color: var(--corn-text-3); font-variant-numeric: tabular-nums; }
+.hx-drawer .hx-mockup-list { margin: var(--corn-space-3) 0 0; }
+.hx-drawer .hx-mockup-item { flex-wrap: nowrap; gap: var(--corn-space-4); padding: var(--corn-space-1) var(--corn-space-1) var(--corn-space-1) 0; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); }
+.hx-drawer .hx-mockup-open { flex: 1; min-width: 0; min-height: 36px; border: 0; background: none; color: var(--corn-text); font-weight: 400; }
+.hx-drawer .hx-mockup-state { flex: none; padding-right: var(--corn-space-3); color: var(--corn-text-3); }
+.hx-drawer .hx-mockup-state--approved { color: var(--corn-added-text); }
+.hx-drawer .hx-mockup-state--changed { color: var(--corn-warn); }
+.hx-drawer .hx-mockup-state--missing { color: var(--corn-bad); }
+.hx-textact { align-self: flex-start; background: none; border: 0; padding-left: 0; }
+.hx-diff { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: var(--corn-space-1) var(--corn-space-4); padding: var(--corn-space-1) 0 var(--corn-space-1) var(--corn-space-4); border-left: var(--corn-border-strong) solid var(--corn-changed); font-family: var(--corn-mono); font-size: var(--corn-text-sm); color: var(--corn-text-2); }
+.hx-diff--added { border-left-color: var(--corn-added); }
+.hx-diff--removed { border-left-color: var(--corn-removed); }
+.hx-diff--edit { border-left-color: var(--corn-edit); }
+.hx-diff-k { color: var(--corn-text-3); }
+.hx-diff-v { min-width: 0; overflow-wrap: anywhere; }
+.hx-drawer .hx-why { margin: 0; }
+.hx-drawer-foot .hx-open[hidden], .hx-drawer-foot .hx-foot-btn[hidden] { display: none; }
+.hx-foot-btn { min-height: var(--hx-control-h); padding: 0 var(--corn-space-4); justify-content: center; }
+@container corn-box (max-width: 767px) {
+  /* a phone: the sheet's actions are full width at the foot, each a 44px target */
+  .hx-drawer-foot { flex-direction: column; }
+  .hx-drawer-foot .hx-open, .hx-foot-btn { min-height: 44px; }
+  .hx-drawer .hx-row, .hx-drawer .hx-mockup-open, .hx-textact, .hx-drawer .hx-whatif-drawer .hx-btn, .hx-cloud-play { min-height: 44px; }
+  .hx-drawer .hx-close { width: 44px; height: 44px; }
+}
+.hx-cloud-play { align-self: flex-start; } /* the cloud panel's "Play: X is down", a quiet button under the facts (spec 0031 section 8) */
+.hx-drawer-foot .hx-btn--quiet { border-color: transparent; background: none; text-decoration: none; }
+.hx-more { display: contents; }
+.hx-more[hidden] { display: none; }
+.hx-more-btn { display: block; margin-top: var(--corn-space-1); min-height: 0; padding: 0; font-size: var(--corn-text-sm); }
+@container corn-box (max-width: 767px) {
+  .hx-more-btn { min-height: 44px; }
+}
+.hx-drawer-body { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+.hx-ms, .hx-row-meta { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  /* No panel, sheet or menu slides, and nothing fades or grows, for a viewer who asked for less motion */
+  .hx-drawer { transition: none; animation: none; }
+}
+/* The node panel's facts break at word boundaries only (F60): "hook" is never "hoo / k". A long path or name still wraps, at its slashes and dashes, and only as a last resort anywhere. */
+.hx-fact-v { overflow-wrap: break-word; word-break: normal; }
+.hx-drawer-foot .hx-forge-result { flex-basis: 100%; }
+/* ---------------------------------------------------------------------------
+   The node panel's lines (spec 0008 D5 and D6): the lit lines by kind, the switch, and Frame them
+   --------------------------------------------------------------------------- */
+.hx-lines { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-lines .hx-chips { padding-top: 0; }
+.hx-lines-kind { display: inline-flex; align-items: baseline; gap: var(--corn-space-1); min-height: 28px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: none; color: var(--corn-text-2); font: inherit; font-size: var(--corn-text-xs); font-weight: 600; cursor: pointer; }
+.hx-lines-kind:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-lines-kind[aria-pressed="true"] { border-color: var(--corn-accent); background: var(--corn-accent-soft); color: var(--corn-accent-text); }
+.hx-lines-kind:focus-visible, .hx-lines-switch input:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-lines-count { font-variant-numeric: tabular-nums; color: var(--corn-text-3); }
+.hx-lines-list { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--corn-space-1) / 2); }
+.hx-lines-list .hx-linkbtn { margin-left: 0; text-align: left; overflow-wrap: anywhere; }
+.hx-lines-switch { display: flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; font-size: var(--corn-text-sm); color: var(--corn-text-2); cursor: pointer; }
+.hx-lines-reach { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-3); font-size: var(--corn-text-sm); color: var(--corn-text-2); font-variant-numeric: tabular-nums; }
+@container corn-box (max-width: 767px) {
+  .hx-lines-kind, .hx-lines-switch, .hx-lines-list .hx-linkbtn, .hx-lines-reach .hx-btn { min-height: 44px; }
+  .hx-lines-kind { align-items: center; } /* in a 44px chip the words sit in the middle, not at the top */
+  .hx-lines-switch input { width: 24px; height: 24px; }
+}
+@media (pointer: coarse) {
+  .hx-lines-kind, .hx-lines-switch, .hx-lines-list .hx-linkbtn, .hx-lines-reach .hx-btn { min-height: 44px; }
+  .hx-lines-kind { align-items: center; } /* in a 44px chip the words sit in the middle, not at the top */
+  .hx-lines-switch input { width: 24px; height: 24px; }
+}
+/* The title of a panel: the Work panel, the node panel, the proposal bar, a detail in the Work panel and a dialog are one style. A node's name is long and
+   often a path, so it wraps (overflow-wrap) in this size rather than being set larger than the panel's own words. */
+.hx-drawer-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }
+.hx-drawer-head { min-height: var(--corn-panel-head-height); }

@@ -20,6 +20,7 @@ import { selectNode, closeDrawer } from '../../explorer/panels.js';
 import { updateSearchStatus, NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
 import { explorerPage } from '../helpers.js';
 
+import { explorerCss } from './stylesheets.js';
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
@@ -124,7 +125,7 @@ describe('the service panel (F60)', () => {
 
   it('breaks the value at word boundaries only (the stylesheet says so)', () => {
     mount();
-    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toMatch(/\.hx-fact-v\s*\{[^}]*overflow-wrap:\s*break-word/);
     expect(css).toMatch(/\.hx-fact-v\s*\{[^}]*word-break:\s*normal/);
   });

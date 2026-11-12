@@ -7,7 +7,7 @@
  *   - the choice is `system` (the default: `prefers-color-scheme`, followed live), `light` or `dark`;
  *     the System / Dark / Light segment in the account menu sets it and keeps the choice in localStorage
  *     (THEME_STORAGE_KEY). `?theme=light|dark|system` in the address wins, for that visit, and is not kept;
- *   - the theme in force is `<html data-theme="light|dark">`: explorer.css swaps its tokens on it,
+ *   - the theme in force is `<html data-theme="light|dark">`: tokens.css swaps its tokens on it,
  *     theme-boot.js sets it before the first paint (so a light page never flashes dark), and this module
  *     keeps it right afterwards;
  *   - the map: `state.theme`, then `touchScene()`, so the next scene is built for the new ground (scene.js), and the map's

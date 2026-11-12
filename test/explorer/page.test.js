@@ -29,7 +29,8 @@ describe('the page', () => {
     expect(html.indexOf('/explorer/theme-boot.js')).toBeGreaterThan(html.lastIndexOf('<link rel="stylesheet"', html.indexOf('</head>')));
     expect(html.indexOf('/explorer/theme-boot.js')).toBeGreaterThan(html.indexOf('<!--@theme-->'));
     expect(html.indexOf('/explorer/theme-boot.js')).toBeLessThan(html.indexOf('</head>'));
-    expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/explorer\.css" \/>/);
+    expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/css\/base\.css" \/>/); // explorer.css is one file per piece now (test/explorer/stylesheet-split.test.js)
+    expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/css\/page\.css" \/>/);
     expect(html).toMatch(/<link rel="stylesheet" href="\/explorer\/house\.css" \/>/);
     expect(html).toContain('<!--@importmap-->');
   });

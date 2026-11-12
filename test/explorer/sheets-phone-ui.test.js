@@ -31,6 +31,7 @@ import { mergeSpecs, specWhere } from '../../explorer/proposal-model.js';
 import { approvalWarning, emptyWords } from '../../explorer/forge-panel-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { OFFLINE_WORDS, ONLINE_WORDS, resetConnectionForTests } from '../../explorer/connection.js';
+import { explorerCss } from './stylesheets.js';
 import { explorerPage } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 
@@ -38,7 +39,7 @@ import { explorerPage } from '../helpers.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 const NOW = Date.parse('2026-11-05T12:00:00Z');
 const MAP = { nodes: [{ id: 'root', type: 'root', x: 0, y: 0, r: 20, color: '#336699', label: 'root', degree: 0 }], edges: [] };
 const $ = (id) => document.getElementById(id);
@@ -176,7 +177,7 @@ describe('one expanded at a time: the other folds to a stub, and a tap on the st
     await flush();
     click($('forge-panel').querySelector('.hx-sheet-handle'));
     expect($('sheet-dock').style.getPropertyValue('--hx-sheet-cap')).toBe('504px'); // 844 - 296 - 44
-    expect(css).toMatch(/\.hx-forge\[data-sheet-state="expanded"\] \{ max-height: min\(var\(--hx-sheet-cap, 60dvh\), 60dvh\); \}/);
+    expect(css).toMatch(/\.hx-forge\[data-sheet-state="expanded"\] \{ max-height: min\(var\(--hx-sheet-cap, 60cqh\), 60cqh\); \}/);
     click($('forge-panel').querySelector('.hx-sheet-handle'));
     expect($('sheet-dock').style.getPropertyValue('--hx-sheet-cap')).toBe('548px'); // nothing folded: 844 - 296
   });

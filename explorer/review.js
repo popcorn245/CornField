@@ -135,7 +135,7 @@ function mount() {
         undo.hidden = true;
         undo.textContent = t('undo');
         // Before Approve, not after it: Approve keeps its place under the pointer, so the second click of a double click lands on the held
-        // button (which ignores it), never on Undo; on a phone Undo takes a row of its own under the two (explorer.css)
+        // button (which ignores it), never on Undo; on a phone Undo takes a row of its own under the two (css/decision.css)
         const approve = actions.querySelector('[data-review="approved"]');
         if (approve) approve.before(undo); else actions.append(undo);
       }

@@ -26,6 +26,7 @@ import { externalLayer } from '../../explorer/cloud-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { layerOf } from '../../explorer/live-model.js';
 
+import { explorerCss } from './stylesheets.js';
 const body = /<body>([\s\S]*)<\/body>/.exec(explorerPage())[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 const rows = () => [...document.querySelectorAll('#layer-toggles-container [data-action="toggle-layer"]')];
@@ -225,7 +226,7 @@ describe('the menu with project layers', () => {
     expect(menu.hidden).toBe(true);
   });
   it('on a phone, an open menu is over the sheets (the dock), so a proposal\'s sheet never hides its last rows', () => {
-    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     const phone = css.slice(css.indexOf('Project layers and finer kinds (spec 0009)'));
     const dock = Number(/\.hx-dock \{[^}]*z-index: (\d+)/.exec(css)[1]);
     const over = /\.hx-header:has\(\.hx-layers \.hx-menu:not\(\[hidden\]\)\) \{ z-index: (\d+); \}/.exec(phone);

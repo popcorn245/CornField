@@ -34,10 +34,11 @@ import { OFFLINE_WORDS, ONLINE_WORDS, resetConnectionForTests } from '../../expl
 import { resetFeedbackForTests } from '../../explorer/feedback.js';
 import { explorerPage } from '../helpers.js';
 
+import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 const NOW = Date.parse('2026-11-05T12:00:00Z');
 const MAP = { nodes: [{ id: 'root', type: 'root', x: 0, y: 0, r: 20, color: '#336699', label: 'root', degree: 0 }], edges: [] };
 const $ = (id) => document.getElementById(id);
@@ -129,7 +130,7 @@ describe('D1, D2: one number, the same everywhere', () => {
     expect(document.title).toBe('(4) cornfield'); // the page's own title, never a word of ours
     // a tab keeps its width when its count becomes a badge: the fill's padding is added to the count's 2ch (content-box) and the margin takes it back
     // (with the page's border-box the padding came out of the 2ch and the tab shrank by 7px; measured in a browser, under 1px now)
-    const css = fs.readFileSync(path.join(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toMatch(/\.hx-forge-count\.hx-forge-count--waiting \{ box-sizing: content-box; padding: 0 var\(--corn-space-1\); margin: 0 calc\(var\(--corn-space-1\) \* -2\) 0 0;/);
   });
 

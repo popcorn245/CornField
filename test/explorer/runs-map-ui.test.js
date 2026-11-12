@@ -31,10 +31,11 @@ import { toggleLayer } from '../../explorer/layers.js';
 import { explorerPage } from '../helpers.js';
 
 
+import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 const NOW = Date.parse('2026-11-05T12:00:00Z');
 const MAP = { nodes: [
   { id: 'orders', type: 'page', x: 100, y: 100, r: 14, color: '#38bdf8', label: 'orders', degree: 0 },
@@ -193,7 +194,7 @@ describe('the marks on the map', () => {
     expect($('runs-legend').hidden).toBe(false);
     // the ring pulses by CSS, which reduced motion turns into a still ring
     expect(css).toMatch(/\.hx-run-mark--flight \.hx-run-ring \{ animation: hx-run-pulse/);
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.hx-run-ring \{ animation: none !important/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.hx-run-ring \{ animation: none !important/);
   });
 
   it('are still, not moving, when motion is reduced', async () => {
@@ -289,7 +290,7 @@ describe('the Runs view', () => {
     expect(qa('#forge-runs-list li.hx-run')).toHaveLength(3);
     // two columns on a wide panel, stacked on a narrow one
     expect(css).toMatch(/\.hx-run-columns \{[^}]*grid-template-columns: 1fr;/);
-    expect(css).toMatch(/@media \(min-width: 1100px\)[\s\S]*\.hx-run-columns \{ grid-template-columns: repeat\(2/);
+    expect(css).toMatch(/@container corn-box \(min-width: 1100px\)[\s\S]*\.hx-run-columns \{ grid-template-columns: repeat\(2/);
   });
 
   it('opens a timeline as an ordered list with times, escaped, and keeps it open when the list is drawn again', async () => {
@@ -422,7 +423,7 @@ describe('the proposal bar beside the issues and PRs panel (explorer.css)', () =
   beforeEach(() => { document.body.innerHTML = body; });
   // happy-dom has no layout: the rule is held here, and measured in Chromium at 1100, 1440 and 1920 px wide for the review of #90
   it('makes room by the panel\'s own width, which the compare widens, never a fixed offset', () => {
-    const cssText = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+    const cssText = explorerCss();
     expect(cssText).not.toMatch(/proposal-bar \{ left: \d+px/);
     expect(cssText).toContain('.hx-stage:has(.forge-open) .hx-proposal-bar { left: calc(var(--hx-forge-w) + 12px);');
     expect(cssText).toContain('width: var(--hx-forge-w);');
