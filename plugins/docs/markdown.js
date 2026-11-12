@@ -26,10 +26,16 @@ const safeUrl = (u) => (typeof u === 'string' && (/^(https?:|mailto:)/i.test(u) 
  * @param {string} text the heading's plain text
  */
 export function slugify(text) {
-  return text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+  // Letters keep their marks (the vowel signs of Devanagari, a decomposed \u00e9); only a plain space becomes a hyphen,
+  // so a no-break space or a tab is dropped, as GitHub drops it
+  return text.toLowerCase().replace(/[^\p{L}\p{M}\p{N}_ -]/gu, '').replace(/ /g, '-');
 }
 
-const NAMED_ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", nbsp: '\u00a0', copy: '\u00a9', reg: '\u00ae', hellip: '\u2026', mdash: '\u2014', ndash: '\u2013' };
+const NAMED_ENTITIES = {
+  lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", nbsp: '\u00a0', copy: '\u00a9', reg: '\u00ae', trade: '\u2122', hellip: '\u2026',
+  mdash: '\u2014', ndash: '\u2013', middot: '\u00b7', bull: '\u2022', times: '\u00d7', deg: '\u00b0', laquo: '\u00ab', raquo: '\u00bb',
+  lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d', larr: '\u2190', rarr: '\u2192', uarr: '\u2191', darr: '\u2193', harr: '\u2194',
+};
 
 /** A character reference's text (`&lt;`, `&#60;`, `&#x3c;`); one this does not know stays as written */
 const decodeEntities = (s) => s.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g, (all, dec, hex, name) => {
@@ -38,26 +44,117 @@ const decodeEntities = (s) => s.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|
   return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : all;
 });
 
+const WORD = /[\p{L}\p{N}]/u;
+const isWordAt = (s, i) => i >= 0 && i < s.length && WORD.test(String.fromCodePoint(s.codePointAt(i)));
+const isWordBefore = (s, i) => isWordAt(s, i >= 2 && /[\udc00-\udfff]/.test(s[i - 1]) && /[\ud800-\udbff]/.test(s[i - 2]) ? i - 2 : i - 1);
+const PUNCT = /[!-/:-@[-`{-~]/;
+
 /**
- * A heading's or link text's plain words, the way GitHub reads a heading before it makes the anchor: a code span
- * keeps its literal text (so `<tag>` in backticks stays, brackets and all), a real inline HTML tag outside code
- * gives only its inner text, emphasis and links give their text, and a character reference is its character.
+ * Backslash escapes and code spans, in one pass from the left as CommonMark reads them: an escaped mark and a code
+ * span's text are handed to `keep` (a backslash inside code is literal), an unmatched run of backticks is text.
+ * Linear: a run is closed by the next run of the same length, found from the runs listed once.
  */
-export function plainText(src) {
-  // What must reach the end as written (code spans, escaped marks) is set aside first, so no later step reads it
+function codeAndEscapes(s, keep) {
+  const runs = new Map();
+  for (const m of s.matchAll(/`+/g)) {
+    if (!runs.has(m[0].length)) runs.set(m[0].length, { at: [], next: 0 });
+    runs.get(m[0].length).at.push(m.index);
+  }
+  let out = '';
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === '\\' && PUNCT.test(s[i + 1] || '')) { out += keep(s[i + 1]); i += 2; continue; }
+    if (c !== '`') { out += c; i++; continue; }
+    let n = 1;
+    while (s[i + n] === '`') n++;
+    const same = runs.get(n);
+    // A run that starts after an escaped backtick is not in the list (it is shorter than the run it is part of)
+    while (same && same.next < same.at.length && same.at[same.next] < i + n) same.next++;
+    const close = same && same.next < same.at.length ? same.at[same.next] : -1;
+    if (close < 0) { out += s.slice(i, i + n); i += n; continue; }
+    const code = s.slice(i + n, close).replace(/\n/g, ' ');
+    out += keep(/^ .*[^ ].* $/s.test(code) ? code.slice(1, -1) : code);
+    i = close + n;
+  }
+  return out;
+}
+
+/** Each `<!-- … -->` taken out (linear: once one has no end, no later one has) */
+function dropComments(s) {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const open = s.indexOf('<!--', i);
+    const close = open < 0 ? -1 : s.indexOf('-->', open + 4);
+    if (close < 0) return out + s.slice(i);
+    out += s.slice(i, open);
+    i = close + 3;
+  }
+}
+
+/**
+ * `_em_` and `__strong__` as their text: a mark opens only where no letter or digit is before it and closes only
+ * where none is after it, so `snake_case_name` keeps its underscores. Linear: the next closing mark from each
+ * place is worked out once, from the right.
+ */
+function dropUnderscores(s) {
+  const n = s.length;
+  const close1 = new Int32Array(n + 3).fill(-1);
+  const close2 = new Int32Array(n + 3).fill(-1);
+  const newline = new Int32Array(n + 3).fill(-1);
+  for (let p = n - 1; p >= 0; p--) {
+    close1[p] = s[p] === '_' && !isWordAt(s, p + 1) ? p : close1[p + 1];
+    close2[p] = s[p] === '_' && s[p + 1] === '_' && !isWordAt(s, p + 2) ? p : close2[p + 1];
+    newline[p] = s[p] === '\n' ? p : newline[p + 1];
+  }
+  let out = '';
+  let i = 0;
+  outer: while (i < n) {
+    if (s[i] === '_' && !isWordBefore(s, i)) {
+      for (const mark of s[i + 1] === '_' ? [2, 1] : [1]) {
+        const start = i + mark;
+        if (start >= n || /\s/u.test(s[start])) continue;
+        const end = (mark === 2 ? close2 : close1)[start + 1];
+        if (end < 0 || (newline[start] >= 0 && newline[start] < end)) continue;
+        out += s.slice(start, end);
+        i = end + mark;
+        continue outer;
+      }
+    }
+    out += s[i];
+    i++;
+  }
+  return out;
+}
+
+/**
+ * The text a heading or link text renders to, the way GitHub reads it before it makes a heading's anchor, untrimmed:
+ * a code span keeps its literal text (so `<tag>` in backticks stays, brackets and all), a real inline HTML tag
+ * outside code gives only its inner text, emphasis and links give their text, an autolink its address, and a
+ * character reference is its character. An image gives its alt text, or nothing with `images: false` (GitHub's
+ * anchor reads the heading's text, and an image has none).
+ */
+function inlineText(src, { images = true } = {}) {
+  // What must reach the end as written (code spans, escaped marks, autolinks) is set aside first, so no later step
+  // reads it. A NUL in the source is U+FFFD (as CommonMark has it), so the source cannot forge a set-aside mark.
   const kept = [];
   const keep = (t) => `\u0000${kept.push(t) - 1}\u0000`;
-  const word = '[\\p{L}\\p{N}]';
-  return decodeEntities(String(src)
-    .replace(/\\([!-/:-@[-`{-~])/g, (_, c) => keep(c))
-    .replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (_, __, code) => keep(code.replace(/\n/g, ' ').replace(/^ (.*[^ ].*) $/, '$1')))
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<\/?[a-zA-Z][^<>]*>|<!--[\s\S]*?-->/g, '')
-    .replace(/(\*\*|\*)(?=\S)(.+?)\1/g, '$2')
-    .replace(new RegExp(`(?<!${word})(__|_)(?=\\S)(.+?)\\1(?!${word})`, 'gu'), '$2'))
-    .replace(/\u0000(\d+)\u0000/g, (_, n) => kept[n])
-    .trim();
+  let s = codeAndEscapes(String(src).replace(/\u0000/g, '�'), keep);
+  s = s.replace(/<((?:https?:\/\/|mailto:)[^\s<>]+)>/gi, (_, url) => keep(url.replace(/^mailto:/i, '')));
+  // A link or image: `[text](dest "title")`; the spaces are matched so that no two runs of them can trade places
+  s = s.replace(/(!?)\[([^[\]]*)\]\(\s*(?:(?:<[^<>\n]*>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*|(?:"[^"]*"|'[^']*')\s*)?\)/g, (_, bang, text) => (bang && !images ? '' : text));
+  s = dropComments(s).replace(/<\/?[a-zA-Z][^<>]*>/g, '').replace(/(\*\*|\*)(?=\S)(.+?)\1/g, '$2');
+  return decodeEntities(dropUnderscores(s)).replace(/\u0000(\d+)\u0000/g, (_, k) => kept[k]);
 }
+
+/** A heading's or link text's plain words (see inlineText), trimmed */
+export function plainText(src) {
+  return inlineText(src).trim();
+}
+
+/** A heading's anchor before it is numbered: from its text as GitHub reads it, images giving nothing, untrimmed */
+const headingSlug = (src) => slugify(inlineText(src, { images: false }));
 
 // ---------------------------------------------------------------------------
 //  Inline
@@ -305,7 +402,7 @@ function renderBlocks(lines, ctx, tight = false) {
     if (heading) {
       const level = heading[1].length;
       const text = heading[2] || '';
-      const base = slugify(plainText(text));
+      const base = headingSlug(text);
       const n = ctx.slugs.get(base) || 0;
       ctx.slugs.set(base, n + 1);
       const id = n ? `${base}-${n}` : base;

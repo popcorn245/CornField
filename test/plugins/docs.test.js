@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { renderMarkdown, markdownLinks, slugify } from '../../plugins/docs/markdown.js';
+import { renderMarkdown, markdownLinks, slugify, plainText } from '../../plugins/docs/markdown.js';
 import docs, { docRoute, docOutput, docPageId, resolveLink } from '../../plugins/docs/index.js';
 import { buildSite, sourceUrlOf, SITE_MARKER } from '../../plugins/docs/site.js';
 import { deriveTopology } from '../../core/derive.js';
@@ -81,6 +81,33 @@ describe('a heading anchor, as GitHub makes it from the rendered text', () => {
 
   it('keeps the heading text a reader sees (the tag in code stays)', () => {
     expect(renderMarkdown('## `<corn-review>`: the review').headings[0].text).toBe('<corn-review>: the review');
+  });
+
+  it('reads a backslash inside code as written, and an escaped backtick outside code as text', () => {
+    const h = renderMarkdown('## The `a\\*b` and `\\\\` marks\n\n## Not \\`code` here').headings;
+    expect(h.map((x) => x.text)).toEqual(['The a\\*b and \\\\ marks', 'Not `code` here']);
+    expect(h.map((x) => x.id)).toEqual(['the-ab-and--marks', 'not-code-here']);
+  });
+
+  it('cannot be made to swap in text it set aside, whatever characters the heading holds', () => {
+    const h = renderMarkdown('## `<x>` and \u00000\u0000 and \u00007\u0000').headings[0];
+    expect(h.text).toBe('<x> and �0� and �7�');
+    expect(h.id).toBe('x-and-0-and-7');
+  });
+
+  it('gives an image no text in the anchor, keeps marks on letters, and drops a no-break space or a tab', () => {
+    expect(ids('![logo](logo.png) CornField', 'Build ![CI](ci.svg)', 'हिन्दी शीर्षक', 'A&nbsp;B', 'Tab\there')).toEqual(['-cornfield', 'build-', 'हिन्दी-शीर्षक', 'ab', 'tabhere']);
+    expect(renderMarkdown('# ![logo](logo.png) CornField').title).toBe('logo CornField');
+  });
+
+  it('reads an autolink as its address, a link with a title as its text, and the common arrows as characters', () => {
+    expect(ids('See <https://example.com/a_b_c>', '[Link](x.md "a (note)") here', 'Before &rarr; after')).toEqual(['see-httpsexamplecoma_b_c', 'link-here', 'before--after']);
+  });
+
+  it('reads a huge or hostile heading in linear time', () => {
+    const t = performance.now();
+    for (const s of ['`'.repeat(300000) + 'a', ' _a'.repeat(100000), ' __a'.repeat(100000), '[a]('.repeat(100000), '[a](' + ' '.repeat(300000), '<!--'.repeat(100000), '['.repeat(300000)]) plainText(s);
+    expect(performance.now() - t).toBeLessThan(5000);
   });
 });
 
