@@ -60,6 +60,35 @@ describe('the site: links made from file names', () => {
     for (const html of Object.values(files)) for (const h of hrefs(String(html))) expect(h.startsWith('//')).toBe(false);
   });
 
+  it('reads a folder named with a colon as a path, and writes the map page\'s drawing and table links the same way', () => {
+    const files = build(['README.md', 'c:x/inner.md', 'c:x/javascript:y.md', 'p%.md', 'sub/deep/q.md']);
+    expect(hrefs(files['index.html'])).toEqual(expect.arrayContaining(['./c:x/inner.html', './c:x/javascript:y.html']));
+    expect(files['c:x/inner.html']).toContain('<a href="./javascript:y.html">');
+    expect(files['sub/deep/q.html']).toContain('<a href="../../c:x/inner.html">');
+    const drawing = [...files['map.html'].matchAll(/<a href="([^"]*)"><title>/g)].map((m) => m[1]);
+    const table = [...files['map.html'].matchAll(/<tr><td><a href="([^"]*)">/g)].map((m) => m[1]);
+    const want = ['index.html', './c:x/inner.html', './c:x/javascript:y.html', 'p%25.html', 'sub/deep/q.html'];
+    expect([...drawing].sort()).toEqual([...want].sort());
+    expect([...table].sort()).toEqual([...want].sort());
+  });
+
+  it('writes names with %2e%2e, %00, a quote, <, >, & and letters past ASCII so each names its own file', () => {
+    const links = hrefs(build(['README.md', '%2e%2e.md', '%00.md', 'q"t.md', 'l<g>.md', 'a&b.md', 'naïve-日本.md'])['index.html']);
+    expect(links).toEqual(expect.arrayContaining(['%252e%252e.html', '%2500.html', 'q&quot;t.html', 'l&lt;g&gt;.html', 'a&amp;b.html', 'naïve-日本.html']));
+  });
+
+  it('keeps the hash of a link in a doc after the path, and an image named with a colon or % is a path', () => {
+    const text = {
+      'README.md': '# Home\n\n[a](docs/javascript:x.md#javascript:alert(1)) ![i](./a:b%25.png)\n',
+      'docs/javascript:x.md': '# X\n\n[b](./javascript:x.md#sec) [c](#sec)\n',
+    };
+    const files = build(['README.md', 'docs/javascript:x.md'], { read: (f) => text[f] });
+    expect(files['index.html']).toContain('<a href="docs/javascript:x.html#javascript:alert(1)">a</a>');
+    expect(files['index.html']).toContain('<img src="./a:b%25.png" alt="i"');
+    expect(files['a:b%.png']).toEqual({ copy: 'a:b%.png' });
+    expect(files['docs/javascript:x.html']).toContain('<a href="./javascript:x.html#sec">b</a> <a href="#sec">c</a>');
+  });
+
   it("leaves an ordinary site's links as they were", () => {
     const files = build(['README.md', 'docs/guide.md', 'docs/adr/0001-first.md', 'docs/adr/README.md'], { sourceUrl: 'https://github.com/acme/acme/blob/HEAD' });
     expect(hrefs(files['docs/adr/0001-first.html'])).toEqual(['../../site.css', '../../index.html', '../../map.html', 'https://github.com/acme/acme', '../../index.html', '../guide.html', 'index.html', '0001-first.html', '#x', 'https://github.com/acme/acme/blob/HEAD/docs/adr/0001-first.md', '../../index.html', '../guide.html', 'index.html', '../../index.html', '../guide.html', 'index.html', '../../map.html']);
@@ -70,6 +99,7 @@ describe('the site: links made from config', () => {
   const hostile = [
     'javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'java\nscript:alert(1)', ' javascript:alert(1)',
     '\u0001javascript:alert(1)', 'data:text/html,x', 'vbscript:x', '//evil.example', '/relative', 'ftp://x.example',
+    'https:evil.example/a/blob/HEAD', 'https:/evil.example/a/blob/HEAD', 'https:\\\\evil.example/a/blob/HEAD', 'mailto:a@b.example',
   ];
   it.each(hostile)('writes no link for the source URL %j', (sourceUrl) => {
     const files = build(['README.md', 'docs/guide.md'], { sourceUrl });
