@@ -160,14 +160,18 @@ const headingSlug = (src) => slugify(inlineText(src, { images: false }));
 //  Inline
 // ---------------------------------------------------------------------------
 
-/** The deepest a link or emphasis may sit inside another (as inner text is read again, deeper marks stay as written) */
+/**
+ * The deepest a link or emphasis may sit inside another, and a list or quote inside another: each level reads its
+ * text again, so deeper marks stay as written (and no crafted line can run the reader out of stack)
+ */
 const MAX_NEST = 16;
 
 /**
  * What a line's links and code spans need, each worked out once, from the right, so that no failed match makes a
  * later one look ahead to the end of the line again:
- * - `up[x]`: where the bracket that a `[` at x opens is closed (or -1), reading as a link's text is read: an escaped
- *   character and a code span (a run of backticks up to the next run at least as long) are stepped over whole;
+ * - `up[x]`: the first `]` after x that is not matched by a `[` after x (or -1), reading as a link's text is read: an
+ *   escaped character and a code span (a run of backticks up to the next run at least as long) are stepped over whole.
+ *   For a `[` at x, that is the `]` which closes it;
  * - `kRun[x]`: for a run of backticks that starts (or, after an escape, continues) at x, the next run after it at
  *   least as long, which a code span may close on (or -1).
  * The next run at least that long is found among the runs after the one being passed, kept as a stack in which each
@@ -216,6 +220,8 @@ function scanIndex(src) {
         if (len <= longest) kRun[x] = k;
       }
     }
+    // From `next`: a `]` is the answer; a `[` opens a pair of its own, closed at up[next], and the scan goes on after
+    // that `]` (which up[] at the `]` gives); anything else, the scan goes on from it
     const cn = next < n ? src.charCodeAt(next) : 0;
     if (next >= n) up[x] = -1;
     else if (cn === 93) up[x] = next;
@@ -584,8 +590,9 @@ const startsBlock = (line) => fenceOf(line) || HEADING.test(line) || RULE.test(l
  * @param {string[]} lines
  * @param {{ link: Function, headings: object[], slugs: Map<string, number> }} ctx
  * @param {boolean} [tight] paragraphs without <p> (a tight list item)
+ * @param {number} [depth] how many lists and quotes these lines sit in (from MAX_NEST on, a list or quote is text)
  */
-function renderBlocks(lines, ctx, tight = false) {
+function renderBlocks(lines, ctx, tight = false, depth = 0) {
   const out = [];
   let i = 0;
   while (i < lines.length) {
@@ -623,10 +630,10 @@ function renderBlocks(lines, ctx, tight = false) {
 
     if (RULE.test(line)) { out.push('<hr>'); i++; continue; }
 
-    if (QUOTE.test(line)) {
+    if (QUOTE.test(line) && depth < MAX_NEST) {
       const body = [];
       while (i < lines.length && !isBlank(lines[i]) && (QUOTE.test(lines[i]) || !startsBlock(lines[i]))) body.push(lines[i++].replace(QUOTE, ''));
-      out.push(`<blockquote>\n${renderBlocks(body, ctx)}\n</blockquote>`);
+      out.push(`<blockquote>\n${renderBlocks(body, ctx, false, depth + 1)}\n</blockquote>`);
       continue;
     }
 
@@ -651,7 +658,7 @@ function renderBlocks(lines, ctx, tight = false) {
       continue;
     }
 
-    const item = LIST_ITEM.exec(line);
+    const item = depth < MAX_NEST && LIST_ITEM.exec(line);
     if (item) {
       const ordered = /\d/.test(item[2]);
       const kind = ordered ? item[2].slice(-1) : item[2];
@@ -684,7 +691,7 @@ function renderBlocks(lines, ctx, tight = false) {
         items.push(body);
       }
       const tag = ordered ? 'ol' : 'ul';
-      const lis = items.map((b) => `<li>${renderBlocks(b, ctx, !loose)}</li>`).join('\n');
+      const lis = items.map((b) => `<li>${renderBlocks(b, ctx, !loose, depth + 1)}</li>`).join('\n');
       out.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>\n${lis}\n</${tag}>`);
       continue;
     }

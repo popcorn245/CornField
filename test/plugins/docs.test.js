@@ -366,6 +366,30 @@ describe('inline Markdown', () => {
     // and the site's own link function still decides each target (null: the text without a link)
     expect(renderMarkdown('[a](x.md) ![b](y.png)', { link: (h, { image }) => (image ? null : `/site/${h}`) }).html).toBe('<p><a href="/site/x.md">a</a> b</p>');
   });
+
+  it('keeps links, emphasis, lists and quotes nested 16 deep, and writes a deeper one as text', () => {
+    const links = (n, inner) => '['.repeat(n) + inner + '](u)'.repeat(n);
+    const count = (s, re) => (s.match(re) || []).length;
+    expect(count(html(links(16, 'a')), /<a href="u">/g)).toBe(16);
+    // The seventeenth stays as written, its marks and any tag in it escaped
+    const deep = html(links(17, '<b>x</b>'));
+    expect(count(deep, /<a href="u">/g)).toBe(16);
+    expect(deep).toContain('<a href="u">[&lt;b&gt;x&lt;/b&gt;](u)</a>');
+    // Emphasis counts as a level too: inside fifteen links it is read, inside sixteen it is text
+    expect(html(links(15, '*a* __b__'))).toContain('<a href="u"><em>a</em> <strong>b</strong></a>');
+    expect(html(links(16, '*a* __<i>b</i>__'))).toContain('<a href="u">*a* __&lt;i&gt;b&lt;/i&gt;__</a>');
+    expect(count(html('- '.repeat(16) + 'a'), /<ul>/g)).toBe(16);
+    expect(html('- '.repeat(17) + '<b>a')).toMatch(/<li>- &lt;b&gt;a<\/li>/);
+    expect(count(html('>'.repeat(16) + ' a'), /<blockquote>/g)).toBe(16);
+    expect(html('>'.repeat(17) + ' <b>a')).toMatch(/<blockquote>\n<p>&gt; &lt;b&gt;a<\/p>\n<\/blockquote>/);
+  });
+
+  it('reads a line of a hundred thousand nested marks, lists or quotes without running out of stack', () => {
+    for (const line of ['- '.repeat(100000) + 'a', '>'.repeat(200000) + 'a', '> 1. '.repeat(50000) + 'a', '['.repeat(50000) + 'a' + '](u)'.repeat(50000), '*'.repeat(200000) + 'a' + '*'.repeat(200000)]) {
+      expect(() => renderMarkdown(line)).not.toThrow();
+      expect(() => markdownLinks(line)).not.toThrow();
+    }
+  });
 });
 
 /** The best of a few runs of `fn`, in ms */

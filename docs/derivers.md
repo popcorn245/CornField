@@ -71,7 +71,7 @@ export default {
 
 ## The docs site
 
-`cornfield docs [--out _site]` runs the derivers (the docs deriver with its defaults when the config does not name it) and writes a small static site: a page per document at its route (`docs/config.md` → `docs/config.html`, a README → its folder's `index.html`), a sidebar of every page, the links around each page (what it links to, what links to it, the code it describes), and `map.html`, the map of the docs' links. Links between docs go to the other page, images are copied beside it, and a link to any other file goes to the file on the forge (`forge` in the config). Every link is relative, so the folder serves from anywhere. cornfield's own docs are built this way and published to GitHub Pages by `.github/workflows/pages.yml`.
+`cornfield docs [--out _site]` runs the derivers (the docs deriver with its defaults when the config does not name it) and writes a small static site: a page per document at its route (`docs/config.md` → `docs/config.html`, a README → its folder's `index.html`), a sidebar of every page, the links around each page (what it links to, what links to it, the code it describes), and `map.html`, the map of the docs' links. Links between docs go to the other page, images are copied beside it, and a link to any other file goes to the file on the forge (`forge` in the config). Every link is relative, so the folder serves from anywhere. Links, emphasis, lists and quotes nested more than 16 deep inside one another are shown as the text written. cornfield's own docs are built this way and published to GitHub Pages by `.github/workflows/pages.yml`.
 
 ## Testing one
 
