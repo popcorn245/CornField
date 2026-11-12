@@ -6,14 +6,15 @@
  */
 
 import { state, touchScene, pageInstance } from './state.js';
-import { computeDegreeCentrality, layoutOrbit, computeLaneLayout } from './layout.js';
+import { computeDegreeCentrality } from './layout.js';
+import { layoutMap } from './engine/topology.js';
 import { buildDataFlow } from './flows.js';
 import { render, fitGraphToViewport, fitPadding, ensureFlowLoop } from './render.js';
-import { orderAddedLast, pinLanes, placeAddedNodes } from './proposal-model.js';
+import { orderAddedLast } from './proposal-model.js';
 import { renderLayerToggles } from './layers.js';
 import { clearScenario } from './scenario-ui.js';
 import { measureParams } from './bench.js';
-import { mergeLive, placeLiveNodes } from './live-model.js';
+import { mergeLive } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
 import { syncHint } from './hint.js';
 import { ensurePagePieces } from './page-pieces.js';
@@ -82,64 +83,10 @@ export function setMap(nodes, edges) {
   renderLayerToggles();
 }
 
+/** Where the nodes sit: the House view's plan here (house-model.js, PHY-11), every other view the engine's one layout (engine/topology.js `layoutMap`) */
 function applyLayout() {
-  computeDegreeCentrality(); // node sizes: by degree on the full map ...
-  if (state.view === 'house') { applyHouseLayout(state); return; } // the House view (house-model.js, PHY-11): the plan, its bands and tray
-  if (state.view === 'dataflow') {
-    state.flow.tiers.forEach((t) => t.nodes.forEach((n) => { n.r = Math.min(n.r, 13); })); // ... all small in the lanes
-    if (!(state.proposal && laneLayoutAround())) computeLaneLayout(state.flow);
-  } else if (state.proposal || state.nodes.some((n) => n.live)) {
-    layoutOrbitAround(); // the code map keeps its places; what a proposal adds and the live layer are placed beside it
-  } else {
-    layoutOrbit();
-  }
-}
-
-/**
- * The data-flow lanes while a proposal is open: the base map is laid out on its own and pinned, and
- * the added nodes take free cells (pinLanes). False when that cannot be done, and the lanes are laid out afresh.
- */
-function laneLayoutAround() {
-  const applied = { nodes: state.nodes, edges: state.edges };
-  const laid = state.baseNodes.map((n) => ({ ...n }));
-  state.nodes = laid;
-  state.edges = state.baseEdges;
-  computeDegreeCentrality();
-  const baseFlow = buildDataFlow(laid, state.baseEdges);
-  baseFlow.tiers.forEach((t) => t.nodes.forEach((n) => { n.r = Math.min(n.r, 13); }));
-  computeLaneLayout(baseFlow);
-  state.nodes = applied.nodes;
-  state.edges = applied.edges;
-  const pinned = pinLanes(state.flow, baseFlow);
-  touchScene();
-  return pinned;
-}
-
-/**
- * The orbit layout while a proposal is open: the base map is laid out on its own, exactly as it is
- * with no proposal, and the nodes that were there keep those places and sizes; only the added ones
- * are placed, next to their parent (placeAddedNodes). So opening a proposal, switching between
- * Before, Diff and After, and closing it never move a node that was already on the map.
- */
-function layoutOrbitAround() {
-  const applied = { nodes: state.nodes, edges: state.edges };
-  const laid = state.baseNodes.map((n) => ({ ...n }));
-  state.nodes = laid;
-  state.edges = state.baseEdges;
-  computeDegreeCentrality();
-  layoutOrbit(); // also sets the rings
-  const at = new Map(laid.map((n) => [n.id, n]));
-
-  state.nodes = applied.nodes;
-  state.edges = applied.edges;
-  computeDegreeCentrality();
-  state.nodes.forEach((n) => {
-    const was = at.get(n.id);
-    if (was) { n.x = was.x; n.y = was.y; n.r = was.r; }
-  });
-  placeAddedNodes(state.nodes, state.edges);
-  placeLiveNodes(state.nodes, state.edges);
-  touchScene();
+  if (state.view === 'house') { computeDegreeCentrality(); applyHouseLayout(state); return; }
+  layoutMap(pageInstance());
 }
 
 /** Switches between 'orbit' and 'dataflow'; the camera refits and the preset button follows */

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
-import { loadSample, SAMPLE } from '../helpers.js';
+import { loadSample, SAMPLE, EXPLORER } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { mount, STYLESHEETS } from '../../explorer/pieces/review.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -187,6 +187,25 @@ describe('engine/topology.js: the one function the map piece and this piece call
     piece.update({ proposal });
     for (const n of state.nodes) if (was.has(n.id)) expect([n.x, n.y], n.id).toEqual(was.get(n.id));
     expect(setMap).toBeTypeOf('function');
+  });
+
+  it('keeps every node small in the data-flow lanes with a proposal open, the added ones too (as cornfield\'s page does)', () => {
+    // the sample proposal adds pages, which the lanes leave out: a table is added too, which they hold
+    const withTable = structuredClone(proposal);
+    withTable.nodes.add.push({ id: 'table-receipts', label: 'receipts', type: 'table', table: 'receipts', parent: 'store-sqlite', desc: 'Receipts.' });
+    withTable.edges.add.push({ from: 'store-sqlite', to: 'table-receipts' }, { from: 'page-api-checkout', to: 'table-receipts', kind: 'writes', status: 'proposed', label: 'receipts.add' });
+    const { piece } = make({ topology: topology(), proposal: withTable });
+    const { state } = piece.inst;
+    piece.update({ view: 'dataflow' });
+    const laned = state.flow.tiers.flatMap((t) => t.nodes);
+    expect(laned.some((n) => n.mark === 'added')).toBe(true);
+    for (const n of laned) expect(n.r, n.id).toBeLessThanOrEqual(13);
+  });
+
+  it('is the one layout: cornfield\'s page (view.js) lays nothing out of its own but the House view', () => {
+    const view = fs.readFileSync(`${EXPLORER}/view.js`, 'utf8');
+    expect(view).toMatch(/layoutMap\(pageInstance\(\)\)/);
+    for (const own of ['layoutOrbit', 'computeLaneLayout', 'pinLanes', 'placeAddedNodes', 'placeLiveNodes']) expect(view, own).not.toMatch(new RegExp(`\\b${own}\\b`));
   });
 });
 
