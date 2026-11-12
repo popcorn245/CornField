@@ -393,6 +393,10 @@ describe('hostile and odd input: text only, no throw, and a plain word where the
     for (const view of ['house', 'nope', 7, null, {}, '<b>', 'dataflow', 'after', 'orbit', 'before']) piece.update({ view });
     expect(piece.inst.state.view).toBe('orbit');
     expect(piece.inst.state.proposalView).toBe('before');
+    piece.update({ view: 'dataflow' });
+    for (const view of ['house', 'nope', 7, null, '<b>']) piece.update({ view }); // not a view: nothing changes
+    expect(piece.inst.state.view).toBe('dataflow');
+    expect(piece.inst.state.proposalView).toBe('before');
     for (const config of [null, 7, 'x', { layers: 'x' }, { layers: [null, 7, { id: evil, label: evil, match: 'nope' }] }, { theme: 7 }, { layers: [{ id: 'l', label: evil, types: ['service'], default: 'off' }] }]) piece.update({ config });
     expect(markupIn(piece.elements[0])).toEqual({ img: 0, on: [], js: 0 });
     piece.destroy();
