@@ -9,6 +9,10 @@
  * The repo is generated (test/fixtures/big/make.js) into a folder under the OS temp dir (or `--dir <dir>`), then served by
  * cornfield's own server on 127.0.0.1 only, with no sign-in, so every route answers. Its state goes to a folder under the OS temp dir. Ctrl-C stops it. See README.md.
  *
+ *   node test/fixtures/big/serve.js --forge --port 3403 --embed http://tasks.corn.localhost:3713 --public http://map.corn.localhost:3403 [--forge-port 3503]
+ *     the same, with a sibling origin listed (`embed.origins`, docs/embedding.md); `--embed` takes origins separated by commas. `--public` is the URL the
+ *     browser opens it at when it is not 127.0.0.1 (a `*.localhost` name: Chromium resolves it to loopback, so two names are two origins on one machine;
+ *     test/fixtures/big/embed-proof.mjs uses it). It still listens on 127.0.0.1 only. `--forge-port` is the fake forge's port (default: the port + 100).
  *   node test/fixtures/big/serve.js --forge --port 3403 [--runner offline]   the same, with sign-in against a fake GitHub: sign in as a maintainer
  *     (open /auth/start), PRs, issues, threads, checks, a spec PR per rich proposal, and runs in every state (forge.js)
  */
@@ -17,7 +21,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { loadConfig } from '../../../core/config.js';
+import { loadConfig, embedOrigin } from '../../../core/config.js';
 import { listen } from '../../../server/server.js';
 import { writeBig, configText, retroTheme } from './make.js';
 import { startForgeWorld, readRepoFiles, SIGN_IN_ENV, REPO, MAINTAINER } from './forge.js';
@@ -83,6 +87,14 @@ export function describe(made, base) {
   ].join('\n');
 }
 
+/** The URL the browser opens the rig at: 127.0.0.1 unless `--public` names a loopback or `*.localhost` name (the rig never leaves this machine) */
+export function publicUrlOf(flag, port) {
+  if (!flag || flag === true) return `http://127.0.0.1:${port}`;
+  const u = new URL(String(flag));
+  if (u.protocol !== 'http:' || u.pathname !== '/' || !(u.hostname === 'localhost' || u.hostname.endsWith('.localhost') || u.hostname === '127.0.0.1')) throw new Error('--public is an http origin on localhost, a *.localhost name or 127.0.0.1: the rig is not for anything else.');
+  return u.origin;
+}
+
 async function main() {
   const flags = parseFlags(process.argv.slice(2));
   const theme = flags.theme && flags.theme !== true ? flags.theme : null;
@@ -95,9 +107,17 @@ async function main() {
   let serverConfig = { ...config, host: '127.0.0.1', port };
   let env = rigEnv();
   if (flags.forge) {
-    world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: port + 100, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
-    serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull', ...(flags.trigger ? { profiles: ['claude'], on: { 'spec.approved': { kind: 'code', profile: 'claude' } } } : {}) }, forge: { type: 'github', url: world.forge.url, repo: REPO }, ...(flags.lands ? { approveLands: true } : {}), publicUrl: `http://127.0.0.1:${port}` };
+    const forgePort = flags['forge-port'] && flags['forge-port'] !== true ? Number(flags['forge-port']) : port + 100;
+    world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: forgePort, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
+    serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull', ...(flags.trigger ? { profiles: ['claude'], on: { 'spec.approved': { kind: 'code', profile: 'claude' } } } : {}) }, forge: { type: 'github', url: world.forge.url, repo: REPO }, ...(flags.lands ? { approveLands: true } : {}), publicUrl: publicUrlOf(flags.public, port) };
     env = { ...env, ...SIGN_IN_ENV };
+  }
+  // Sibling origins that may read and decide a review (docs/embedding.md): exact origins, checked as the config checks them
+  if (flags.embed && flags.embed !== true) {
+    const origins = String(flags.embed).split(',').map((o) => embedOrigin(o.trim()));
+    const bad = origins.find((o) => 'problem' in o);
+    if (bad) throw new Error(`--embed: ${/** @type {{ problem: string }} */ (bad).problem}`);
+    serverConfig = { ...serverConfig, embed: { origins: origins.map((o) => /** @type {{ origin: string }} */ (o).origin) } };
   }
   const { url } = await listen(serverConfig, { env });
   console.log(`\n${flags.repo || flags.from ? 'Map' : 'Big map'}, ${config.theme && config.theme.css ? 'themed' : 'default theme'}${world ? ', signed-in states with a fake forge' : ''}: ${made.topology.nodes.length} nodes, ${made.topology.edges.length} edges, repo ${repo}`);

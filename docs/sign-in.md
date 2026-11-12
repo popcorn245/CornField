@@ -106,6 +106,10 @@ With a [hook](config.md#hooks) that subscribes to `spec.ready` (or to a [`thread
 - **A restart** drops no session (they are in the SQLite file), so the poll picks up as soon as it runs, with the sessions that were live.
 - **It only reads.** With that token the poll asks who its owner is, their permission, and the open spec PRs (their files, and a proposal it announces); it never writes. The log names whose sign-in it looks with each time that changes, and after `close()` a look in flight lists nothing.
 
+## Returning to another app
+
+A page on an origin listed in [`embed.origins`](embedding.md) can send the maintainer to `/auth/start?returnTo=<absolute URL>` and have the sign-in end back on it. `returnTo` is followed only when its origin is cornfield's own or exactly a listed one; anything else is ignored and the sign-in ends on the map as before. The session cookie is the same as ever (`HttpOnly`, `SameSite=Lax`, host-only), so another app's page reaches cornfield with it only when the two are on the same site, and a listed origin's page can read a few routes and make two writes with it, nothing more ([embedding](embedding.md)).
+
 ## Review tokens
 
 A maintainer can make **review tokens** in the dashboard, so a script or a chat bot can send their Approve or Send back through `POST /api/reviews` ([proposals.md](proposals.md#2-review-it)). They are kept in `review_tokens` in the same file: a SHA-256 hash (never the token, which is shown once), who made it, a label, when it was made, when it expires (30 days unless asked, 90 at most), when it was revoked and last used.
