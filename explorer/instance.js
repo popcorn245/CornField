@@ -16,7 +16,8 @@
  *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
- *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs
+ *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs;
+ *                   inst.onPageFocus(fn(event)): a focus anywhere in the page, outside the root too (a modal dialog's trap in a host's page)
  *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
@@ -296,6 +297,8 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
     onResize: (fn) => (win ? inst.listen(win, 'resize', () => fn()) : () => {}),
     /** Calls `fn()` when the page is shown again, or comes back from the back-forward cache. Removed by destroy(). */
     onPageShow: (fn) => (win ? inst.listen(win, 'pageshow', () => fn()) : () => {}),
+    /** Calls `fn(event)` for every focus that lands in the page, outside the root as well (which the root's own `focusin` never hears). Removed by destroy(). */
+    onPageFocus: (fn) => (doc ? inst.listen(doc, 'focusin', (e) => fn(e)) : () => {}),
     /** Calls `fn()` when the tab is hidden. Removed by destroy(). */
     onHide(fn) {
       if (!doc) return () => {};

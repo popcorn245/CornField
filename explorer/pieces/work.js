@@ -131,7 +131,7 @@ export function mount(root, inst, options = {}) {
     trapFocus: (keep) => {
       const offs = [scope.listen(ctx.root, 'focusin', keep)];
       const inModal = (e) => (e.composedPath ? e.composedPath() : [e.target]).some((n) => n && n.nodeType === 1 && n.getAttribute('aria-modal') === 'true');
-      if (inst.doc && ctx.root !== inst.doc) offs.push(scope.listen(inst.doc, 'focusin', (e) => { if (!inst.active() && !inModal(e)) keep(e); }));
+      if (ctx.root !== inst.doc) offs.push(scope.own(inst.onPageFocus((e) => { if (!inst.active() && !inModal(e)) keep(e); })));
       return () => offs.forEach((off) => off());
     },
   };

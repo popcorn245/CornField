@@ -297,7 +297,7 @@ describe('two instances in one document', () => {
   it('hands out what the map and the page use, and nothing more (spec 0011: the simplest thing; a later step adds what it needs)', () => {
     const inst = createInstance({ root: document.body });
     expect(Object.keys(inst).sort()).toEqual([
-      'active', 'ask', 'attach', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'ended', 'fetch', 'hidden', 'listen', 'offline', 'on', 'onHide', 'onNetwork', 'onPageHide', 'onPageShow', 'onResize', 'onSceneTouch', 'onShown',
+      'active', 'ask', 'attach', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'ended', 'fetch', 'hidden', 'listen', 'offline', 'on', 'onHide', 'onNetwork', 'onPageFocus', 'onPageHide', 'onPageShow', 'onResize', 'onSceneTouch', 'onShown',
       'onWindowFocus', 'own', 'reducedMotion', 'release', 'root', 'setSelection', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
     ]);
     inst.destroy();
