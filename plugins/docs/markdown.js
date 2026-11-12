@@ -29,14 +29,33 @@ export function slugify(text) {
   return text.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
 }
 
-/** A heading's or link text's plain words: the Markdown marks taken out */
+const NAMED_ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", nbsp: '\u00a0', copy: '\u00a9', reg: '\u00ae', hellip: '\u2026', mdash: '\u2014', ndash: '\u2013' };
+
+/** A character reference's text (`&lt;`, `&#60;`, `&#x3c;`); one this does not know stays as written */
+const decodeEntities = (s) => s.replace(/&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z]+));/g, (all, dec, hex, name) => {
+  if (name) return NAMED_ENTITIES[name] ?? all;
+  const cp = dec ? Number(dec) : parseInt(hex, 16);
+  return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : all;
+});
+
+/**
+ * A heading's or link text's plain words, the way GitHub reads a heading before it makes the anchor: a code span
+ * keeps its literal text (so `<tag>` in backticks stays, brackets and all), a real inline HTML tag outside code
+ * gives only its inner text, emphasis and links give their text, and a character reference is its character.
+ */
 export function plainText(src) {
-  return src
+  // What must reach the end as written (code spans, escaped marks) is set aside first, so no later step reads it
+  const kept = [];
+  const keep = (t) => `\u0000${kept.push(t) - 1}\u0000`;
+  const word = '[\\p{L}\\p{N}]';
+  return decodeEntities(String(src)
+    .replace(/\\([!-/:-@[-`{-~])/g, (_, c) => keep(c))
+    .replace(/(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g, (_, __, code) => keep(code.replace(/\n/g, ' ').replace(/^ (.*[^ ].*) $/, '$1')))
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/`+([^`]*)`+/g, '$1')
-    .replace(/(\*\*|__|\*|_)(.+?)\1/g, '$2')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\\(.)/g, '$1')
+    .replace(/<\/?[a-zA-Z][^<>]*>|<!--[\s\S]*?-->/g, '')
+    .replace(/(\*\*|\*)(?=\S)(.+?)\1/g, '$2')
+    .replace(new RegExp(`(?<!${word})(__|_)(?=\\S)(.+?)\\1(?!${word})`, 'gu'), '$2'))
+    .replace(/\u0000(\d+)\u0000/g, (_, n) => kept[n])
     .trim();
 }
 

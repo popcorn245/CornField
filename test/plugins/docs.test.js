@@ -52,6 +52,38 @@ describe('renderMarkdown', () => {
   });
 });
 
+describe('a heading anchor, as GitHub makes it from the rendered text', () => {
+  const ids = (...headings) => renderMarkdown(headings.map((h) => `## ${h}`).join('\n\n')).headings.map((h) => h.id);
+
+  it('keeps the name of a tag written in backticks, and drops its brackets', () => {
+    expect(ids('`<corn-review>`: the one-tag review')).toEqual(['corn-review-the-one-tag-review']);
+  });
+
+  it('keeps two tags in code, and a tag beside other inline code', () => {
+    expect(ids('`<corn-a>` and `<corn-b>`')).toEqual(['corn-a-and-corn-b']);
+    expect(ids('`<corn-scope>` and `src`: reading a cornfield server')).toEqual(['corn-scope-and-src-reading-a-cornfield-server']);
+  });
+
+  it('keeps only the inner text of a real inline HTML tag outside code, and the text of emphasis and links', () => {
+    expect(ids('Press <kbd>Ctrl</kbd> and <em>go</em>')).toEqual(['press-ctrl-and-go']);
+    expect(ids('A **bold**, *em* and [linked](x.md) word, snake_case_word and `<kbd>` raw')).toEqual(['a-bold-em-and-linked-word-snake_case_word-and-kbd-raw']);
+  });
+
+  it('reads a character reference as its character, which the anchor then drops', () => {
+    expect(ids('Use &lt;x&gt; here')).toEqual(['use-x-here']);
+    expect(ids('Fish &amp; chips')).toEqual(['fish--chips']);
+    expect(ids('Written `&lt;x&gt;` in code')).toEqual(['written-ltxgt-in-code']);
+  });
+
+  it('numbers a repeated heading, whatever its markup', () => {
+    expect(ids('`<corn-x>` notes', '`<corn-x>` notes', 'Corn-x notes', '<b>corn-x</b> notes')).toEqual(['corn-x-notes', 'corn-x-notes-1', 'corn-x-notes-2', 'corn-x-notes-3']);
+  });
+
+  it('keeps the heading text a reader sees (the tag in code stays)', () => {
+    expect(renderMarkdown('## `<corn-review>`: the review').headings[0].text).toBe('<corn-review>: the review');
+  });
+});
+
 describe('routes and links', () => {
   it('gives each doc a route, a site file and a page id; a README stands for its folder', () => {
     expect([docRoute('README.md'), docRoute('docs/adr/README.md'), docRoute('docs/config.md')]).toEqual(['/', '/docs/adr/', '/docs/config']);
@@ -135,6 +167,14 @@ describe('the docs deriver', () => {
     writeRepo(root);
     fs.writeFileSync(path.join(root, 'docs/guide.md'), '# The guide\n\n## Setup\n\n[no heading](adr/0001-first.md#nope)\n');
     expect((await deriveTopology({ root, derivers: [{ deriver: docs }] })).warnings).toEqual(['docs: docs/guide.md links to "adr/0001-first.md#nope", but docs/adr/0001-first.md has no heading "#nope".']);
+    writeRepo(root);
+  });
+
+  it('finds a heading with a tag in code, and still warns on one that is not there', async () => {
+    fs.writeFileSync(path.join(root, 'docs/guide.md'), '# The guide\n\n## `<corn-review>`: the one-tag review\n\n[ok](#corn-review-the-one-tag-review) [ok too](adr/0001-first.md#the-first-decision) [gone](#corn-review)\n');
+    fs.writeFileSync(path.join(root, 'docs/adr/0001-first.md'), '# 0001\n\n## The `<first>` decision\n');
+    const out = await deriveTopology({ root, derivers: [{ deriver: docs }] });
+    expect(out.warnings).toEqual(['docs: docs/guide.md links to "#corn-review", but docs/guide.md has no heading "#corn-review".']);
     writeRepo(root);
   });
 
