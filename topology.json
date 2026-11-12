@@ -10383,7 +10383,13 @@
       "to": "core-explorer-engine-server-load",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-site",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T17:43:44.141Z"
+  "updatedAt": "2026-11-12T21:50:40.869Z"
 }
