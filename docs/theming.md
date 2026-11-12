@@ -484,6 +484,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | Hook | What it is |
 |---|---|
 | `stage` | the area the map and the panels sit in |
+| `review` | the box the one-tag review lives in (`explorer/pieces/review.js`, the engine half of the coming `<corn-review>`): the query container its pieces' size rules ask, the containing block of its own fixed boxes, and the ground, colour and font the page's body gives the page. It holds a `stage` and its `dock`, as cornfield's page does. Not on cornfield's page |
 | `overlays` | the heading over the Layers menu's overlay rows ("Overlays": Runs in flight), which are marks over the map and not layers |
 | `layer-kinds`, `kind-key` | under a Layers row that holds nodes with a finer kind: the disclosure ("5 kinds") and, when open, one key row per kind (its letters, its name, its count). A key is not a toggle; a project that wants one declares a layer |
 | `layer-note` | on an off Layers row, "+1 shown by the proposal" (nodes of that layer drawn only because the open proposal touches them), or "hidden while reviewing" (a layer the open proposal does not touch, which the review hid: the row still turns it on, for the review only) |

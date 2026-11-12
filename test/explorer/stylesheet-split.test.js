@@ -12,7 +12,9 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { CSS_DIR, EXPLORER_DIR, linkedPieces, pieceFiles, readPiece } from './stylesheets.js';
+import { CSS_DIR, EXPLORER_DIR, HOST_ONLY, linkedPieces, pieceFiles, readPiece } from './stylesheets.js';
+// @ts-expect-error plain JS module, no declarations
+import { STYLESHEETS } from '../../explorer/pieces/review.js';
 
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const pieces = pieceFiles().filter((f) => f !== 'page.css');
@@ -48,9 +50,10 @@ describe('every piece has a file, and the page links each once', () => {
     expect(fs.existsSync(path.join(EXPLORER_DIR, 'explorer.css'))).toBe(false); // split, not copied
   });
 
-  it('links every file of explorer/css/ in index.html exactly once, base first and page last', () => {
+  it('links every file of explorer/css/ in index.html exactly once, base first and page last, but the files a host loads (HOST_ONLY)', () => {
     const linked = linkedPieces();
-    expect([...linked].sort()).toEqual(pieceFiles());
+    expect([...linked].sort()).toEqual(pieceFiles().filter((f) => !HOST_ONLY.includes(f)));
+    for (const f of HOST_ONLY) expect(linked, `${f} is for hosts: the page must not link it`).not.toContain(f);
     expect(new Set(linked).size).toBe(linked.length);
     expect(linked[0]).toBe('base.css');
     expect(linked.at(-1)).toBe('page.css');
@@ -76,6 +79,33 @@ describe('every piece has a file, and the page links each once', () => {
     const linked = linkedPieces();
     expect(linked.indexOf('sheets.css')).toBeGreaterThan(linked.indexOf('node-panel.css'));
     expect(linked.indexOf('sheets.css')).toBeLessThan(linked.indexOf('work.css'));
+  });
+});
+
+describe('the files a host loads (the one-tag review)', () => {
+  it('lists, in one exported list, every file the review needs, in the cascade\'s order, base first, its own file last, and never page.css', () => {
+    expect(STYLESHEETS[0]).toBe('base.css');
+    expect(STYLESHEETS.at(-1)).toBe('review.css');
+    expect(STYLESHEETS).not.toContain('page.css');
+    expect(new Set(STYLESHEETS).size).toBe(STYLESHEETS.length);
+    for (const f of STYLESHEETS) expect(pieceFiles(), f).toContain(f);
+    const page = linkedPieces();
+    const shared = STYLESHEETS.filter((f) => page.includes(f));
+    expect(shared, 'the order the page links them in is the cascade').toEqual([...shared].sort((a, b) => page.indexOf(a) - page.indexOf(b)));
+    // sheets after node-panel (the phone's dock rules), as on the page
+    expect(STYLESHEETS.indexOf('sheets.css')).toBeGreaterThan(STYLESHEETS.indexOf('node-panel.css'));
+  });
+
+  it('has every HOST_ONLY file named by that list, and nothing else unlinked', () => {
+    for (const f of HOST_ONLY) expect(STYLESHEETS).toContain(f);
+    expect(pieceFiles().filter((f) => !linkedPieces().includes(f)).sort()).toEqual([...HOST_ONLY].sort());
+  });
+
+  it('makes the review\'s box the query container its pieces ask, and its own containing block for fixed boxes', () => {
+    const rule = rules(strip(readPiece('review.css'))).find((r) => r.selectors.includes('[data-corn="review"]') && !r.ctx.length);
+    expect(rule.body).toMatch(/container:\s*corn-box corn-page\s*\/\s*size/);
+    expect(rule.body).toMatch(/contain:\s*layout/);
+    expect(rule.body).toMatch(/height:\s*100%/);
   });
 });
 
@@ -180,7 +210,8 @@ describe('a size rule is a container query on the piece\'s own box', () => {
         if (/(^|;|\s)(container|container-type|container-name|contain)\s*:/.test(r.body)) found.push(`${file}: ${r.selectors.join(', ')}`);
       }
     }
-    expect(found).toEqual(['page.css: body']);
+    // and the review's own box (css/review.css), which is the whole of what the review has: its fixed boxes are meant to be placed against it
+    expect(found).toEqual(['page.css: body', 'review.css: [data-corn="review"]']);
   });
 
   it('hands the pieces the window\'s 1vh for each height explorer.css wrote in vh, with the piece\'s own box as the fallback', () => {
@@ -209,6 +240,8 @@ describe('a size rule is a container query on the piece\'s own box', () => {
     const page = rules(strip(readPiece('page.css')));
     const decl = page.filter((r) => /--hx-(forge-w|col-w)\s*:/.test(r.body));
     expect(decl.length).toBeGreaterThan(5);
-    for (const f of pieces) expect(strip(readPiece(f)), f).not.toMatch(/--hx-(forge-w|col-w)\s*:/);
+    for (const f of pieces.filter((x) => x !== 'review.css')) expect(strip(readPiece(f)), f).not.toMatch(/--hx-(forge-w|col-w)\s*:/);
+    // the review's stage is its own box's: the column's width as container queries (it has no Work panel, so no --hx-forge-w)
+    expect(strip(readPiece('review.css'))).not.toMatch(/--hx-forge-w\s*:/);
   });
 });

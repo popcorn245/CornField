@@ -1,0 +1,249 @@
+// @vitest-environment happy-dom
+/**
+ * Spec 0011 D3, D4, D8: the review as one piece (explorer/pieces/review.js). One root, one instance, the map, the proposal's bar, the change list with its
+ * player, the decision and the node panel laid out in it; it takes a topology and a proposal as objects (no request), or a base and a slug; a phone is a
+ * narrow box, not a narrow window; nothing leaves the box, and destroy leaves nothing.
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import { loadSample, SAMPLE } from '../helpers.js';
+// @ts-expect-error plain JS modules, no declarations
+import { mount, STYLESHEETS } from '../../explorer/pieces/review.js';
+// @ts-expect-error plain JS modules, no declarations
+import { setTopology, setMap } from '../../explorer/engine/topology.js';
+// @ts-expect-error plain JS modules, no declarations
+import { createInstance } from '../../explorer/instance.js';
+// @ts-expect-error plain JS modules, no declarations
+import { isPhone, expandSheet } from '../../explorer/engine/sheets.js';
+// @ts-expect-error plain JS modules, no declarations
+import { sheetCap } from '../../explorer/sheet-model.js';
+
+const sample = loadSample();
+const proposal = JSON.parse(fs.readFileSync(`${SAMPLE}/docs/specs/proposals/0002-checkout.json`, 'utf8'));
+const topology = () => structuredClone({ nodes: sample.nodes, edges: sample.edges });
+const ctx2d = new Proxy({}, { get: (t, k) => (k === 'measureText' ? (text) => ({ width: String(text).length * 6 }) : k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+
+let restore = [];
+const live = { doc: new Set(), win: new Set() };
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal('requestAnimationFrame', (cb) => setTimeout(() => cb(performance.now()), 16));
+  vi.stubGlobal('cancelAnimationFrame', (id) => clearTimeout(id));
+  live.doc.clear();
+  live.win.clear();
+  for (const [target, set] of [[document, live.doc], [window, live.win]]) {
+    const add = target.addEventListener;
+    const remove = target.removeEventListener;
+    target.addEventListener = function (t, fn, o) { set.add(t); return add.call(this, t, fn, o); };
+    target.removeEventListener = function (t, fn, o) { return remove.call(this, t, fn, o); };
+    restore.push(() => { target.addEventListener = add; target.removeEventListener = remove; });
+  }
+  const realGet = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type) { return type === '2d' ? ctx2d : null; };
+  restore.push(() => { HTMLCanvasElement.prototype.getContext = realGet; });
+});
+afterEach(() => {
+  restore.forEach((fn) => fn());
+  restore = [];
+  document.body.innerHTML = '';
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+function host() {
+  const el = document.createElement('div');
+  document.body.append(el);
+  return el;
+}
+const make = (options = {}, el = host()) => ({ el, piece: mount(el, null, { renderer: 'canvas2d', ...options }) });
+const ids = (el) => [...el.querySelectorAll('[id]')].map((e) => e.id);
+
+describe('its layout: one root, with the places the cross-piece lookups expect', () => {
+  it('makes one box in the host, holding a stage, the dock, the bar, the column, the node panel and the player\'s place, named as the page names them', () => {
+    const { el, piece } = make({ topology: topology(), proposal });
+    expect(el.children.length).toBe(1);
+    const box = el.firstElementChild;
+    expect(box.getAttribute('data-corn')).toBe('review');
+    expect(box.getAttribute('part')).toBe('review');
+    for (const id of ['sheet-dock', 'proposal-bar', 'proposal-body', 'review-column', 'spec-drawer', 'drawer-backdrop', 'graph-canvas', 'map-announcer', 'review-decision']) {
+      expect(piece.inst.el(id), id).toBeTruthy();
+      expect(box.contains(piece.inst.el(id)), id).toBe(true);
+    }
+    expect(box.querySelector('[data-corn="stage"] > #sheet-dock')).toBeTruthy();
+    // the column and the bar are in the dock (changes.js and the player find the dock by id), the panel too, and the decision is the column's foot
+    const dock = piece.inst.el('sheet-dock');
+    for (const id of ['proposal-bar', 'review-column', 'spec-drawer']) expect(piece.inst.el(id).parentElement).toBe(dock);
+    expect(piece.inst.el('review-column').contains(piece.inst.el('review-decision'))).toBe(true);
+    expect(piece.inst.root).toBe(box);
+    expect(piece.inst.el('proposal-myedits')).toBe(null); // the what-if editor is not converted
+    expect(piece.inst.el('forge-panel')).toBe(null);
+    expect(piece.inst.el('legend-dropdown')).toBe(null);
+  });
+
+  it('exports the stylesheets a shell loads, in order', () => {
+    expect(STYLESHEETS).toEqual(['base.css', 'map.css', 'node-panel.css', 'proposal.css', 'changes.css', 'decision.css', 'sheets.css', 'review.css']);
+  });
+
+  it('gives every hook its part, the box included', () => {
+    const { el } = make({ topology: topology(), proposal });
+    for (const x of el.querySelectorAll('[data-corn]')) expect(x.getAttribute('part'), x.outerHTML.slice(0, 80)).toBe(x.getAttribute('data-corn'));
+  });
+});
+
+describe('what it takes', () => {
+  it('draws a topology and a proposal object with no request, the added nodes placed beside what was there', () => {
+    const fetch = vi.fn(() => Promise.reject(new Error('no server')));
+    const t = topology();
+    const before = JSON.stringify(t);
+    const { piece } = make({ topology: t, proposal, slug: '0002-checkout', source: 'pull/2', fetch: undefined });
+    expect(fetch).not.toHaveBeenCalled();
+    const { state } = piece.inst;
+    expect(state.proposal.title).toBe(proposal.title);
+    expect(state.nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
+    expect(state.nodes.some((n) => n.mark === 'added')).toBe(true);
+    expect(state.proposalSlug).toBe(null); // no base, no fetch: the name and source are not handed to pieces that would ask a server
+    expect(JSON.stringify(t)).toBe(before);
+    expect(piece.inst.el('proposal-title').textContent).toBe(proposal.title);
+    expect(piece.inst.el('review-column').hidden).toBe(false);
+  });
+
+  it('makes no request of any kind with objects handed in (the global fetch is never called)', () => {
+    const spy = vi.fn(() => Promise.reject(new Error('no')));
+    vi.stubGlobal('fetch', spy);
+    make({ topology: topology(), proposal, source: 'pull/2', slug: 'x' });
+    vi.advanceTimersByTime(2000);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('fetches a slug through its base, and only once there is a map to lay it on', async () => {
+    const calls = [];
+    const fetch = vi.fn(async (url) => { calls.push(String(url)); return String(url).includes('/proposals/') && String(url).endsWith('.json') ? new Response(JSON.stringify(proposal), { status: 200, headers: { 'X-Proposal-Source': 'checkout' } }) : new Response('{}', { status: 404 }); });
+    const { piece } = make({ base: 'http://map.example.test', fetch, proposal: '0002-checkout' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls.some((u) => u.includes('/proposals/0002-checkout.json'))).toBe(false); // no topology yet: held
+    piece.update({ topology: topology() });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls[0]).toBe('http://map.example.test/proposals/0002-checkout.json');
+    expect(piece.inst.state.proposal.title).toBe(proposal.title);
+  });
+
+  it('closes on null, switches Before / Diff / After, and takes the map\'s views by the same word', () => {
+    const { piece } = make({ topology: topology(), proposal });
+    const { state } = piece.inst;
+    piece.update({ view: 'after' });
+    expect(state.proposalView).toBe('after');
+    piece.update({ view: 'dataflow' });
+    expect(state.view).toBe('dataflow');
+    expect(state.proposalView).toBe('after');
+    piece.update({ view: 'map', proposal: null });
+    expect(state.view).toBe('orbit');
+    expect(state.proposal).toBe(null);
+    expect(piece.inst.el('review-column').hidden).toBe(true);
+  });
+
+  it('selects a node by id and tells the instance', () => {
+    const { piece } = make({ topology: topology() });
+    const seen = [];
+    piece.inst.on('selection', (e) => seen.push(e.node && e.node.id));
+    piece.update({ node: sample.nodes[2].id });
+    expect(seen).toEqual([sample.nodes[2].id]);
+  });
+});
+
+describe('engine/topology.js: the one function the map piece and this piece call', () => {
+  it('copies the topology in, builds the flow, and keeps the selection when its node is still there', () => {
+    const inst = createInstance({});
+    const t = topology();
+    expect(setTopology(inst, t)).toBe(true);
+    expect(inst.state.baseNodes).toHaveLength(t.nodes.length);
+    expect(inst.state.nodes[0]).not.toBe(t.nodes[0]);
+    expect(inst.state.flow).toBeTruthy();
+    inst.state.selectedNode = inst.state.nodes[1];
+    setTopology(inst, topology());
+    expect(inst.state.selectedNode.id).toBe(t.nodes[1].id);
+    setTopology(inst, { nodes: [t.nodes[0]], edges: [] });
+    expect(inst.state.selectedNode).toBe(null);
+    expect(setTopology(inst, null)).toBe(false);
+  });
+
+  it('lays a proposal\'s map out around the base: a node that was there keeps its place', () => {
+    const { piece } = make({ topology: topology() });
+    const { state } = piece.inst;
+    const was = new Map(state.nodes.map((n) => [n.id, [n.x, n.y]]));
+    piece.update({ proposal });
+    for (const n of state.nodes) if (was.has(n.id)) expect([n.x, n.y], n.id).toEqual(was.get(n.id));
+    expect(setMap).toBeTypeOf('function');
+  });
+});
+
+describe('a phone is a narrow box, not a narrow window', () => {
+  it('asks the box\'s width', () => {
+    const { el, piece } = make({ topology: topology(), proposal });
+    const box = el.firstElementChild;
+    const width = (w) => Object.defineProperty(box, 'clientWidth', { value: w, configurable: true });
+    width(390);
+    expect(isPhone(piece.inst)).toBe(true);
+    width(1100);
+    expect(isPhone(piece.inst)).toBe(false);
+  });
+});
+
+describe('a sheet is capped by the box, not the window', () => {
+  it('keeps the map 35% of the box\'s height', () => {
+    const { el, piece } = make({ topology: topology(), proposal });
+    const box = el.firstElementChild;
+    Object.defineProperty(box, 'clientWidth', { value: 390, configurable: true });
+    Object.defineProperty(box, 'clientHeight', { value: 500, configurable: true });
+    window.innerHeight = 900;
+    expandSheet(piece.inst, 'proposal');
+    expect(piece.inst.el('sheet-dock').style.getPropertyValue('--hx-sheet-cap')).toBe(`${sheetCap(500, 0)}px`);
+    expect(sheetCap(500, 0)).not.toBe(sheetCap(900, 0));
+  });
+});
+
+describe('nothing leaves the box', () => {
+  it('adds nothing to the document or the window, and nothing outside the host', () => {
+    const el = host();
+    const outside = document.body.innerHTML.replace(el.outerHTML, '');
+    mount(el, null, { renderer: 'canvas2d', topology: topology(), proposal });
+    expect(document.body.children.length).toBe(1); // the host, and nothing beside it
+    expect(document.body.innerHTML.replace(el.outerHTML, '')).toBe(outside);
+    // the few facts the instance itself listens to (instance.js: the tab shown or hidden, the network, the window's focus), never a key or a click
+    expect([...live.doc].filter((t) => t !== 'visibilitychange')).toEqual([]);
+    expect([...live.win].filter((t) => !['offline', 'online', 'focus', 'pagehide'].includes(t))).toEqual([]);
+    expect(document.documentElement.getAttributeNames()).toEqual([]);
+  });
+
+  it('removes those too on destroy', () => {
+    const removed = [];
+    const rd = document.removeEventListener;
+    document.removeEventListener = function (t, ...r) { removed.push(t); return rd.call(this, t, ...r); };
+    restore.push(() => { document.removeEventListener = rd; });
+    const { piece } = make({ topology: topology(), proposal });
+    piece.destroy();
+    expect(removed).toContain('visibilitychange');
+  });
+
+  it('destroys completely, 30 times over, and a second destroy does nothing', () => {
+    const el = host();
+    for (let i = 0; i < 30; i++) {
+      const piece = mount(el, null, { renderer: 'canvas2d', topology: topology(), proposal });
+      piece.destroy();
+      piece.destroy();
+    }
+    expect(el.innerHTML).toBe('');
+    expect(document.body.children.length).toBe(1);
+  });
+
+  it('is two reviews with nothing in common in one document', () => {
+    const a = make({ topology: topology(), proposal });
+    const b = make({ topology: topology() });
+    a.piece.update({ node: sample.nodes[2].id });
+    expect(a.piece.inst.state.selectedNode.id).toBe(sample.nodes[2].id);
+    expect(b.piece.inst.state.selectedNode).toBe(null);
+    expect(b.piece.inst.state.proposal).toBe(null);
+    a.piece.destroy();
+    expect(b.el.firstElementChild).toBeTruthy();
+    expect(b.piece.inst.el('graph-canvas')).toBeTruthy();
+  });
+});

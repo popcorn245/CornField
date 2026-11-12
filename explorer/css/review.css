@@ -1,0 +1,47 @@
+/*
+ * review.css: the review's own layout
+ * What only the one-tag review (explorer/pieces/review.js, `<corn-review>`) needs, and cornfield's page does not load: the box the whole review lives in,
+ * and the stage inside it that cornfield's page has in page.css. Every other rule the review reads is the pieces' own file (base, map, node-panel, proposal,
+ * changes, decision, sheets: review.js `STYLESHEETS` lists them in order, this one last).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (the review's box), a height rule on `corn-page`. base.css loads first.
+ */
+/* The box: where the review lives in a host's page. It fills the host (which gives it a height) and is never under 24rem, so a review dropped in with no
+   height is visible. It is the query container every piece's width and height rule asks (`corn-box`: its width, `corn-page`: its height), as the body is
+   on cornfield's page. `contain: layout` makes it the containing block of its own `position: fixed` descendants (a phone's tap-away behind the node panel,
+   the modal scrims) and a stacking context, so nothing in it is placed against the window or above the host's own layers. `all: initial` first: the host's
+   font, line height, colour and text settings stop here, as the page's body sets them for the page. */
+[data-corn="review"] {
+  all: initial;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 24rem;
+  overflow: hidden;
+  container: corn-box corn-page / size;
+  contain: layout;
+  background-color: var(--corn-ground);
+  background-image: var(--corn-ground-image);
+  color: var(--corn-text);
+  font-family: var(--corn-font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+/* The stage: the map and what lies over it (page.css has it for the page, with the same rules as media queries: here the box is as wide as the review) */
+.hx-stage { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; }
+/* The scenario player is one bar under the map, to the right of the review column: the stage tells it how wide the column is (page.css, as container queries) */
+@container corn-box (min-width: 768px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
+}
+@container corn-box (min-width: 768px) and (max-width: 1023px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
+}
+/* No header above the map and no hint on it: the bar sits at the top of the stage */
+.hx-proposal-bar { top: 12px; }
+/* A host's own rules on bare elements reach in (no shadow root: the host's CSS reaches each piece directly, spec 0011 D7); these are the few the pieces never
+   set, so they cannot be told apart from the host's: a border drawn round every canvas, an indent on every paragraph */
+[data-corn="review"] canvas { border: 0; }
+[data-corn="review"] :is(p, h1, h2, h3, h4) { text-indent: 0; font-variant: normal; }
