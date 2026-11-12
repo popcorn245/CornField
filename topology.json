@@ -8457,7 +8457,12 @@
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-embedding",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-theming",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T09:16:49.981Z"
+  "updatedAt": "2026-11-12T09:34:23.519Z"
 }

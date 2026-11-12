@@ -4,6 +4,25 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "sideEffects": true,
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./corn-map": {
+      "types": "./dist/types/corn-map.d.ts",
+      "default": "./dist/corn-map.js"
+    },
+    "./tokens.css": "./dist/tokens.css",
+    "./version.json": "./dist/version.json"
+  },
+  "files": [
+    "dist"
+  ],
   "description": "cornfield's interface as web components (spec 0011): thin StencilRS shells over the engine in ../explorer. Not published yet.",
   "scripts": {
     "dev": "vite",

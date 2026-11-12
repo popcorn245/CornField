@@ -75,7 +75,6 @@ export function mount(root, inst, options = {}) {
 
   // -- elements ---------------------------------------------------------------------------------------------------------------------
   const stage = options.stage === false ? null : hooked(inst, 'div', 'map-stage');
-  const home = stage || root;
   const help = hooked(inst, 'p', null, { id: 'map-keys-help', class: 'hx-sr-only' });
   help.textContent = options.keysHelp || KEYS_HELP;
   const announcer = hooked(inst, 'p', null, { id: 'map-announcer', class: 'hx-sr-only', role: 'status', 'aria-live': 'polite' });
