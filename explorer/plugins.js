@@ -38,16 +38,6 @@ export const failedSource = (slots) => Object.freeze({
   },
 });
 
-/** The config the server hands the browser; a page opened without the server reads as none */
-export async function loadClientConfig(fetcher = (...a) => globalThis.fetch(...a)) {
-  try {
-    const res = await fetcher('/cornfield/config.json', { cache: 'no-store' });
-    return res.ok ? await res.json() : {};
-  } catch {
-    return {};
-  }
-}
-
 /** An <img> for a brand image (the server's same-origin URL): decorative, the button it sits in carries the name; `alt` only shows if it fails to load */
 function brandImage(doc, src, kind, alt = '') {
   const img = doc.createElement('img');

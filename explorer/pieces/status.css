@@ -1,0 +1,24 @@
+/* The status of a map that loads from a server (explorer/pieces/status.js; components/src corn-map): the card in the middle of the stage while it
+   loads and when it cannot, and the quiet line of the version notice. Every colour, size and shape is a --corn-* token; a host restyles an element
+   with ::part(source-status), ::part(source-title), ::part(source-text), ::part(source-origin), ::part(source-sign-in), ::part(source-retry),
+   ::part(source-notice). cornfield's page has no source to load from and loads none of this. */
+[data-corn="source-status"] { position: absolute; z-index: 2; left: 50%; top: 50%; transform: translate(-50%, -50%); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--corn-space-3); width: min(26rem, calc(100% - var(--corn-space-6) * 2)); padding: var(--corn-space-6); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-lg); background: var(--corn-surface-1); color: var(--corn-text-2); box-shadow: var(--corn-shadow); text-align: center; font-family: var(--corn-font); font-size: var(--corn-text-md); line-height: 1.5; }
+[data-corn="source-status"][hidden] { display: none; }
+[data-corn="source-status"]:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+/* Loading (`running`) is quiet: a line of text on the ground, no card */
+[data-corn="source-status"][data-corn-state="running"] { padding: 0; border-color: transparent; background: transparent; box-shadow: none; color: var(--corn-text-3); }
+[data-corn="source-status"][data-corn-state="running"] [data-corn="source-title"] { font-size: var(--corn-text-md); font-weight: 400; color: var(--corn-text-3); }
+[data-corn="source-status"][data-corn-state="failure"] [data-corn="source-title"] { color: var(--corn-bad); }
+[data-corn="source-status"][data-corn-state="waiting"] [data-corn="source-title"] { color: var(--corn-accent-text); }
+[data-corn="source-title"], [data-corn="source-text"] { margin: 0; }
+[data-corn="source-title"] { font-size: var(--corn-text-lg); font-weight: 600; color: var(--corn-text); }
+[data-corn="source-text"] { overflow-wrap: anywhere; user-select: text; }
+[data-corn="source-origin"] { font-family: var(--corn-mono); color: var(--corn-warn); overflow-wrap: anywhere; user-select: all; }
+[data-corn="source-sign-in"], [data-corn="source-retry"] { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; min-height: max(var(--corn-control-height), 2.75rem); padding: 0 var(--corn-space-6); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); color: var(--corn-text); font-family: inherit; font-size: inherit; text-decoration: none; cursor: pointer; }
+[data-corn="source-sign-in"] { border-color: var(--corn-accent); background: var(--corn-accent); color: var(--corn-text-on-accent); font-weight: 600; }
+[data-corn="source-sign-in"]:hover { background: var(--corn-accent-hover); }
+[data-corn="source-retry"]:hover { background: var(--corn-surface-3); }
+[data-corn="source-sign-in"]:focus-visible, [data-corn="source-retry"]:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+/* The version notice: one quiet line along the bottom of the stage; the map goes on under it */
+[data-corn="source-notice"] { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; box-sizing: border-box; margin: 0; padding: var(--corn-space-3) var(--corn-space-6); background: var(--corn-surface-1); border-top: var(--corn-border) solid var(--corn-line-soft); color: var(--corn-text-2); font-family: var(--corn-font); font-size: var(--corn-text-sm); text-align: center; overflow-wrap: anywhere; }
+[data-corn="source-notice"][hidden] { display: none; }

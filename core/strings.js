@@ -104,6 +104,20 @@ export const STRINGS = Object.freeze({
   loading: 'Loading topology.json …',
   errorTitle: 'The map could not be loaded',
   retry: 'Retry',
+  // A map that loads from a cornfield server (a scope, or a map with a src) while it loads and when it cannot
+  sourceLoading: 'Loading the map …',
+  sourceSignedOut: 'You are not signed in to cornfield',
+  sourceSignInText: "This map is behind cornfield's sign-in.",
+  sourceNotMaintainer: "This map is for the project's maintainers",
+  sourceNotMaintainerText: 'You are signed in to cornfield, but not as a maintainer.',
+  sourceSignIn: 'Sign in to cornfield',
+  sourceNotListed: 'This page is not listed by that cornfield',
+  sourceNotListedHint: 'Add this origin to embed.origins on the server:',
+  sourceOffline: 'The map cannot be reached',
+  sourceOfflineText: 'Check the connection, then try again.',
+  sourceBadAddress: 'That is not the address of a cornfield server',
+  sourceVersion: 'This map and its server are different versions',
+  sourceSecondMap: 'This scope already has a map',
 });
 
 /** The longest a value may be, in characters */

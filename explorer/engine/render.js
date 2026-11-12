@@ -283,6 +283,7 @@ export function createMap(inst, opts = {}) {
   /** Ends the map: no frame is waiting, the renderer's GPU context and the label layer are released, nothing is called again */
   function destroy() {
     ended = true;
+    if (inst.map === map) inst.map = null; // an instance that outlives its map (a scope's) can be given another
     scheduler.cancel();
     // the end of this map: the renderer gives its WebGL context back too (`release`); a swap (setRenderer) only destroys, so the next renderer on the canvas has a live one
     if (renderer) { if (renderer.release) renderer.release(); else renderer.destroy(); renderer = null; rendererCanvas = null; }
