@@ -18,6 +18,7 @@ import { mergeLive } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
 import { syncHint } from './hint.js';
 import { ensurePagePieces } from './page-pieces.js';
+import { TOPOLOGY_PATH, fetchTopology } from './engine/source.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,11 +37,8 @@ export async function loadTopology() {
   try {
     // /?fixture=5k measures on the generated topology (bench.js, core/fixture.js)
     const { fixtureUrl } = measureParams(window.location.search);
-    const url = fixtureUrl || '/topology.json';
-    const res = await fetch(url + (url.includes('?') ? '&v=' : '?v=') + Date.now());
-    if (!res.ok) throw new Error(`GET ${url} answered ${res.status} ${res.statusText}`.trim());
-    const data = await res.json();
-    if (!Array.isArray(data.nodes) || data.nodes.length === 0) throw new Error(`${url} has no nodes`);
+    const url = fixtureUrl || TOPOLOGY_PATH;
+    const data = await fetchTopology(pageInstance(), url); // engine/source.js: the same read a scope makes, here of the page's own origin
     // The base stays as the file holds it; the map works on copies (the layout writes positions on them)
     state.baseNodes = data.nodes;
     state.baseEdges = Array.isArray(data.edges) ? data.edges : [];

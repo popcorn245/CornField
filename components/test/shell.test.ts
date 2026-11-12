@@ -58,8 +58,8 @@ describe('the shell holds no behaviour (D1)', () => {
   });
 
   it('has no member but properties, events, the lifecycle, the methods that hand a call to the piece, and the plumbing between them', () => {
-    const LIFECYCLE = ['connectedCallback', 'componentDidLoad', 'disconnectedCallback', 'componentDidRender'];
-    const PLUMBING = ['mountPiece', 'changed'];
+    const LIFECYCLE = ['connectedCallback', 'componentWillLoad', 'componentDidLoad', 'disconnectedCallback', 'componentDidRender'];
+    const PLUMBING = ['mountPiece', 'mountScope', 'unmountPiece', 'remount', 'changed', 'addressChanged'];
     for (const { name, file } of sources) {
       const code = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       const body = code.slice(code.indexOf('export class'));
@@ -74,6 +74,55 @@ describe('the shell holds no behaviour (D1)', () => {
     const from = path.join(dir, 'corn-map', 'corn-map.tsx');
     for (const spec of ['../../../../explorer/engine/render.js', '../../../../explorer/state.js', '../../../../explorer/instance.js', 'lodash', '../../util', '../../../../explorer/pieces/../state.js']) expect(allowed(spec, from), spec).toBe(false);
     for (const spec of ['@stencil/core', '../../../../explorer/pieces/map.js', './corn-map.css', '../../generated/default-tokens.css?inline']) expect(allowed(spec, from), spec).toBe(true);
+  });
+});
+
+describe('<corn-scope>', () => {
+  it('registers, has no shadow root, shows nothing of its own and leaves what is in it', async () => {
+    const scope = await make('<corn-scope><p>mine</p><corn-map renderer="canvas2d"></corn-map></corn-scope>') as unknown as Map & { shadowRoot: ShadowRoot | null };
+    expect(customElements.get('corn-scope')).toBeTruthy();
+    expect(scope.shadowRoot).toBe(null);
+    expect([...scope.children].map((c) => c.localName)).toEqual(['p', 'corn-map']);
+    await (scope.querySelector('corn-map') as Map).componentOnReady();
+    await frames(8);
+    scope.remove();
+    await frames(3);
+  });
+
+  it('takes src, theme (reflected) and use-theme as attributes, and topology, config and strings as properties', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch')); // the address is only an address here
+    const scope = await make('<corn-scope src="https://map.example.com" theme="dark" use-theme></corn-scope>') as unknown as HTMLElement & { src: string; theme: string; useTheme: boolean; topology: unknown; config: unknown; strings: unknown };
+    expect(scope.src).toBe('https://map.example.com');
+    expect(scope.theme).toBe('dark');
+    expect(scope.useTheme).toBe(true);
+    scope.theme = 'light';
+    await frames(2);
+    expect(scope.getAttribute('theme')).toBe('light');
+    scope.topology = topology();
+    scope.config = { version: '0.0.0' };
+    scope.strings = { approve: 'Ship it' };
+    await frames(2);
+    vi.restoreAllMocks();
+  });
+
+  it('a bad src is refused and said (cornError address), and nothing is fetched', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const seen: unknown[] = [];
+    document.addEventListener('cornError', (e) => seen.push((e as CustomEvent).detail), { once: true });
+    await make('<corn-scope src="ftp://map.example.com"></corn-scope>');
+    await frames(2);
+    expect(seen).toEqual([{ kind: 'address', message: 'is not http or https' }]);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+
+  it('is told apart from a piece by the event it answers: the nearest scope hears corn-scope-request and no other', async () => {
+    const outer = await make('<corn-scope id="o"><corn-scope id="i"><div id="piece"></div></corn-scope></corn-scope>') as unknown as HTMLElement;
+    const heard: string[] = [];
+    for (const id of ['o', 'i']) document.getElementById(id)!.addEventListener('corn-scope-request', () => heard.push(id), { capture: false });
+    document.getElementById('piece')!.dispatchEvent(new CustomEvent('corn-scope-request', { bubbles: true, composed: true, detail: { el: document.getElementById('piece'), claim() {} } }));
+    expect(heard).toEqual(['i']); // the inner scope answers first and stops it
+    void outer;
   });
 });
 

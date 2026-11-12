@@ -4,7 +4,8 @@
  * The engine as something a page can make more than one of (spec 0011 D2). `createInstance` returns the object that holds what
  * `state.js` held when the explorer was one program per document, and the things a piece of the explorer may reach:
  *
- *   inst.root       where the instance's elements are: a Document (cornfield's page), or an element or shadow root (a component)
+ *   inst.root       where the instance's elements are: a Document (cornfield's page), or an element or shadow root (a component); `attach(root)` moves it
+ *                   to the shadow root of the one piece that draws the map when the instance belongs to a scope (pieces/scope.js)
  *   inst.state      the explorer's state (instance-state.js): the topology, the layers, the camera, the selection, the view
  *   inst.base       the address of the cornfield server the instance talks to ('' = the page's own origin)
  *   inst.fetch      `fetch` bound to that base; inst.url(path) is a served path made absolute against it
@@ -46,6 +47,13 @@
  *   decision        { outcome: 'approved' | 'notes', review, slug, source, open }  the server took the review, after it answered (pieces/decision.js);
  *                   `open`: false when another proposal was opened, or this one closed, while it was sent
  *   auth            { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
+ *   source          { state, … }  where a scope's or a map's load from a cornfield server is (engine/source.js lists the states: loading, ready, sign-in,
+ *                   not-allowed, offline, server, address, version); pieces/status.js shows it and pieces/scope.js turns it into `cornAuth` and `cornError`
+ *   theme           { state: 'loading' | 'ready' | 'failed' | 'none' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`; 'none': taken back out): the map reads its tokens again
+ *   scope:theme     (none)  the scope's `theme` (light, dark, auto) or the mode it follows changed: the map draws again (pieces/scope.js)
+ *   piece:refused   { piece, reason, message, host }  a piece that cannot have this instance (a second map in a scope); the scope says it as `cornError`
+ *                   and tells `host` to ask again when the root is free
+ *   attach:released (none)  the piece that had the instance's root (`attach`) gave it back
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
@@ -90,7 +98,8 @@ const ABSOLUTE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
  * @param {Record<string, string>} [opts.strings] the host's own words
  * @param {object} [opts.state] a state object to adopt instead of a new one (state.js hands the page's to the page instance)
  */
-export function createInstance({ root = null, base = '', fetch: fetchOpt, strings = {}, state } = {}) {
+export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOpt, strings = {}, state } = {}) {
+  let root = rootOpt;
   const doc = root ? (root.nodeType === 9 ? /** @type {Document} */ (root) : root.ownerDocument) : null;
   const win = doc ? doc.defaultView : null;
   const events = new Map();
@@ -98,6 +107,8 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
   const slots = new Map();
   let destroyed = false;
   const fetchImpl = fetchOpt;
+  const initialRoot = root;
+  let attached = null;
 
   const on = (name, fn) => {
     let set = events.get(name);
@@ -106,11 +117,16 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
     return () => set.delete(fn);
   };
 
-  /** A served path made absolute against the base; anything already absolute (or no base) is returned as it was */
+  /**
+   * A served path made absolute against the base; anything already absolute (or no base) is returned as it was. A base with a path
+   * (`https://example.com/cornfield`, a server behind a proxy's prefix) keeps it: `/topology.json` is `https://example.com/cornfield/topology.json`.
+   */
   const url = (path) => {
     const p = String(path);
     if (!base || ABSOLUTE.test(p)) return p;
-    return new URL(p, base).href;
+    const at = new URL(base);
+    const prefix = at.pathname.replace(/\/+$/, '');
+    return new URL(prefix && p.startsWith('/') ? prefix + p : p, at).href;
   };
 
   /** The element whose computed style holds the tokens: the document's own for a page, else the root itself (a shadow root's host) */
@@ -205,6 +221,29 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
     // -- the instance's own elements ----------------------------------------------------------------------------------------------
     /** The element with this id inside the root, or null (ids are only unique inside one root) */
     el: (id) => (root ? root.querySelector(`[id="${String(id).replace(/["\\]/g, '\\$&')}"]`) : null),
+    /**
+     * Where the instance's elements are, once a piece has put them somewhere of its own: a scope (pieces/scope.js) makes the instance over its own
+     * element before any piece exists, and the one piece that draws the map attaches its shadow root, so `el`, `active` and the tokens are read
+     * there. One root at a time: a second attach throws (the engine holds one map per instance); the release gives back the root it had.
+     * @param {Document|Element|ShadowRoot} next
+     * @returns {() => void} release
+     */
+    attach(next) {
+      if (attached) throw new Error('This instance already has a map');
+      attached = next;
+      root = next;
+      inst.root = next;
+      const release = () => {
+        if (attached !== next) return;
+        attached = null;
+        root = initialRoot;
+        inst.root = initialRoot;
+        inst.release(release);
+        if (!destroyed) inst.emit('attach:released'); // a piece that was refused (a second map in a scope) may have it now
+      };
+      cleanups.push(release);
+      return release;
+    },
     /** The element with the focus in the root's own tree: a Document's or a shadow root's `activeElement`, or the document's when it is inside the root; else null */
     active: () => {
       if (!root || !doc) return null;

@@ -17,7 +17,7 @@ describe('the table', () => {
   it('is a short list of plain one-line words, camelCase keys', () => {
     const keys = Object.keys(STRINGS);
     expect(keys.length).toBeGreaterThanOrEqual(30);
-    expect(keys.length).toBeLessThanOrEqual(90);
+    expect(keys.length).toBeLessThanOrEqual(100);
     for (const [k, v] of Object.entries(STRINGS)) {
       expect(k).toMatch(/^[a-z][A-Za-z]*$/);
       expect(stringProblem(v), `${k} default`).toBeNull();

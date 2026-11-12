@@ -107,8 +107,8 @@ describe('the type declarations (D11)', () => {
     for (const p of map.properties) expect(text).toContain(`'${p.name}'`);
     for (const e of map.events) expect(text).toContain(`'${e.name}'`);
     for (const m of map.methods) expect(text).toContain(`'${m.name}'`);
-    expect(map.properties.map((p: { name: string }) => p.name).sort()).toEqual(['node', 'renderer', 'theme', 'topology', 'view']);
-    expect(map.events.map((e: { name: string }) => e.name).sort()).toEqual(['cornReady', 'cornSelect']);
+    expect(map.properties.map((p: { name: string }) => p.name).sort()).toEqual(['node', 'renderer', 'src', 'theme', 'topology', 'useTheme', 'view']);
+    expect(map.events.map((e: { name: string }) => e.name).sort()).toEqual(['cornAuth', 'cornError', 'cornReady', 'cornSelect']);
     expect(map.methods.map((m: { name: string }) => m.name).sort()).toEqual(['fit', 'focusNode', 'refresh']);
   });
 
@@ -144,7 +144,12 @@ describe('the type declarations (D11)', () => {
     `).join('\n')).toMatch(/sideways/);
   }, 30_000);
 
-  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, tokens.css and version.json', () => {
+  it('has an entry in the exports map for every component, with its declarations', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
+    for (const tag of componentTags()) expect(pkg.exports[`./${tag}`], tag).toEqual({ types: `./dist/types/${tag}.d.ts`, default: `./dist/${tag}.js` });
+  });
+
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-scope, tokens.css and version.json', () => {
     if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
     const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
     fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
@@ -153,11 +158,26 @@ describe('the type declarations (D11)', () => {
     fs.writeFileSync(file, `
       import { version, CornMap } from '@popcorn245/cornfield-components';
       import type { CornSelectDetail } from '@popcorn245/cornfield-components';
+      import { CornScope } from '@popcorn245/cornfield-components/corn-scope';
+      import type { CornAuthDetail, CornErrorDetail } from '@popcorn245/cornfield-components';
       import '@popcorn245/cornfield-components/corn-map';
       const v: string = version;
       const el = document.querySelector('corn-map')!;
       el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
-      void v; void CornMap;
+      el.src = 'https://map.example.com';
+      el.useTheme = true;
+      el.addEventListener('cornAuth', (e) => { const signIn: string = e.detail.signIn; const status: number = e.detail.status; void signIn; void status; });
+      const scope: HTMLCornScopeElement = document.createElement('corn-scope');
+      scope.src = 'https://map.example.com';
+      scope.theme = 'auto';
+      scope.useTheme = true;
+      scope.topology = { nodes: [{ id: 'a' }], edges: [] };
+      scope.config = { version: '1.2.3' };
+      scope.strings = { retry: 'Again' };
+      scope.addEventListener('cornAuth', (e) => { const d: CornAuthDetail = e.detail; void d; });
+      scope.addEventListener('cornError', (e) => { const d: CornErrorDetail = e.detail; if (d.kind === 'not-listed') void d.message; });
+      scope.addEventListener('cornReady', (e) => { const none: void = e.detail; void none; });
+      void v; void CornMap; void CornScope;
     `);
     fs.writeFileSync(path.join(app, 'package.json'), '{ "type": "module" }\n');
     // A bundler's resolution, and Node's own (node16, nodenext: relative imports in the declarations need their extension), with the declarations checked too
@@ -182,13 +202,18 @@ describe('the type declarations (D11)', () => {
       el.addEventListener('cornSelect', (e) => { const kind: 'node' | 'edge' = e.detail.kind; void kind; });
       el.zoomTo(3);
       el.focusNode(7);
+      const scope = document.querySelector('corn-scope')!;
+      scope.theme = 'blue';
+      scope.addEventListener('cornError', (e) => { if (e.detail.kind === 'gone') void 0; });
+      scope.src = 7;
     `);
-    expect(wrong.length).toBeGreaterThanOrEqual(5);
+    expect(wrong.length).toBeGreaterThanOrEqual(8);
     const text = wrong.join('\n');
     expect(text).toMatch(/sideways/);
     expect(text).toMatch(/blue/);
     expect(text).toMatch(/zoomTo/);
     expect(text).toMatch(/number/);
+    expect(text).toMatch(/and '"gone"' have no overlap/);
   });
 });
 
@@ -211,6 +236,23 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect(read(`chunks/${runtime[0]}`)).not.toContain('explorer/pieces');
   });
 
+  it('a map that is handed its data loads none of the scope: the loading, the states and the server\'s theme are a chunk of their own, imported only for a src', () => {
+    const reach = (entry: string, dynamic: boolean, seen = new Set<string>()): Set<string> => {
+      const text = read(entry);
+      const pattern = dynamic ? /(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g : /(?:from|import)\s*["'](\.[^"']+)["']/g;
+      for (const m of text.matchAll(pattern)) { const target = path.posix.normalize(path.posix.join(path.posix.dirname(entry), m[1])); if (!seen.has(target)) { seen.add(target); reach(target, dynamic, seen); } }
+      return seen;
+    };
+    // a string only each module holds (the build is not minified, but a module's path comment is not always kept)
+    const probes = { 'pieces/scope.js': '// ../explorer/pieces/scope.js', 'engine/source.js': '/cornfield/config.json', 'engine/theme-sheet.js': 'constructable stylesheets are not available', 'pieces/status.js': 'source-announcer' };
+    const statics = [...reach('corn-map.js', false)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(statics.includes(probe), module).toBe(false);
+    const all = [...reach('corn-map.js', true)].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(all.includes(probe), module).toBe(true);
+    // corn-scope has it at once: no second round trip for a scope
+    expect([...reach('corn-scope.js', false)].some((f) => read(f).includes('// ../explorer/pieces/scope.js'))).toBe(true);
+  });
+
   it('is ES modules that register the tag when loaded, and no more than that: no top-level fetch, no document write', () => {
     for (const f of ['index.js', 'corn-map.js']) expect(read(f)).not.toMatch(/\brequire\(|module\.exports/);
     const all = fs.readdirSync(path.join(dist, 'chunks')).map((f) => read(`chunks/${f}`)).join('\n');
@@ -230,17 +272,17 @@ describe('what a build leaves in dist/ (D11)', () => {
   it('ships tokens.css, the same text the elements add to a page, at zero specificity', () => {
     expect(read('tokens.css')).toBe(tokensCss());
     for (const line of read('tokens.css').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /\{\s*$/.test(l))) expect(line.trim().startsWith(':where(') || line.trim().startsWith('@media')).toBe(true);
-    expect(read('chunks/' + fs.readdirSync(path.join(dist, 'chunks')).find((f) => f.startsWith('corn-map-'))!)).toContain(':where(:root)');
+    expect(fs.readdirSync(path.join(dist, 'chunks')).map((f) => read(`chunks/${f}`)).join('\n')).toContain(':where(:root)');
   });
 
   it('ships the declarations next to the modules', () => {
-    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
+    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
-  it('is inside the size budget: the runtime chunk and corn-map with its engine, each at most 5% over what size-budget.json holds', () => {
+  it('is inside the size budget: the runtime chunk, corn-map with its engine, corn-map with what a src brings and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-map-src', 'corn-scope', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

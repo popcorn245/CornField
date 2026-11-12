@@ -8,6 +8,8 @@
  *     chunk loads, the element upgrades and draws a map from a `topology` property, and `version.json` says the server's version; all under the
  *     Content-Security-Policy docs/embedding.md gives a host (no `'unsafe-inline'`), with no violation
  *   - a host that is not listed: the server answers, the browser refuses the module for want of CORS, the tag stays unknown, no chunk is fetched
+ *   - the listed host with `<corn-map src>`, and with corn-scope.js and corn-map.js and a scope around a map: the scope's chunk loads from the server
+ *     (with CORS, without the cookie), the gated read carries the session to the server, and a signed-out visitor sees the server's sign-in
  * Needs the build (dist/; this builds it when it is not there) and a Chrome: CHROME_PATH where there is no Google Chrome.
  */
 import { execFileSync } from 'node:child_process';
@@ -58,10 +60,14 @@ describe('a host page loads the components from the cornfield server', () => {
         return res.end('corn-map { display: block; width: 640px; height: 420px; }');
       }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': hostPolicy(MAP) });
+      // `/?src`: a one-tag map that reads the server; `/?scope`: the two entries, a scope around a map
+      const query = new URL(req.url || '/', 'http://x').searchParams;
+      const scripts = query.has('scope') ? ['corn-scope.js', 'corn-map.js'] : ['corn-map.js'];
+      const body = query.has('scope') ? `<corn-scope src="${MAP}"><corn-map id="map" renderer="canvas2d"></corn-map></corn-scope>` : query.has('src') ? `<corn-map id="map" renderer="canvas2d" src="${MAP}"></corn-map>` : '<corn-map id="map"></corn-map>';
       return res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>host</title>
 <link rel="stylesheet" href="/host.css">
-<script type="module" src="${MAP}/cornfield/components/corn-map.js"></script></head>
-<body><corn-map id="map"></corn-map></body></html>`);
+${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f}"></script>`).join('\n')}</head>
+<body>${body}</body></html>`);
     });
     servers.push(server);
     return listen(server, port);
@@ -90,7 +96,7 @@ describe('a host page loads the components from the cornfield server', () => {
   });
 
   /** Opens a host page and records what the browser asked cornfield for, what it answered, and what the page's policy refused */
-  async function open(origin: string) {
+  async function open(origin: string, path = '/') {
     const context = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 900, height: 600 } });
     // A cookie for cornfield's own host is in the jar: the module request must still go without it
     await context.addCookies([{ name: 'cornfield', value: 'not-a-real-session', url: MAP }]);
@@ -105,7 +111,7 @@ describe('a host page loads the components from the cornfield server', () => {
       (window as any).__violations = [];
       document.addEventListener('securitypolicyviolation', (e) => (window as any).__violations.push(`${e.violatedDirective} ${e.blockedURI}`));
     });
-    await page.goto(`${origin}/`);
+    await page.goto(`${origin}${path}`);
     return { page, context, answers, failed, logged };
   }
 
@@ -179,6 +185,36 @@ describe('a host page loads the components from the cornfield server', () => {
     for (const a of answers) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
     await context.close();
   }, 60_000);
+
+  for (const [what, path] of [['a one-tag corn-map with src', '/?src'], ['corn-scope.js and corn-map.js, a scope around a map', '/?scope']]) {
+    it(`a listed host, ${what}: the scope's chunk comes from the server with CORS and no cookie, the reads carry the session to the server alone, and a signed-out visitor is shown the server's sign-in`, async () => {
+      const { page, context, answers, failed } = await open(LISTED, path);
+      const link = await page.evaluate(async () => {
+        await customElements.whenDefined('corn-map');
+        const el = document.querySelector('corn-map') as any;
+        for (let i = 0; i < 100; i++) {
+          const a = el.shadowRoot && el.shadowRoot.querySelector('a[data-corn="source-sign-in"]');
+          if (a) return { href: a.getAttribute('href'), title: el.shadowRoot.querySelector('[data-corn="source-title"]').textContent };
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return null;
+      });
+      // the cookie in the jar is not a session: the server says 401, and the map says sign in, with the way back to this page
+      expect(link).toEqual({ href: `${MAP}/auth/start?returnTo=${encodeURIComponent(`${LISTED}${path}`)}`, title: 'You are not signed in to cornfield' });
+      expect(failed).toEqual([]);
+      const scope = answers.filter((a) => /\/cornfield\/components\/chunks\/scope-[\w-]+\.js$/.test(a.url));
+      expect(scope).toHaveLength(1);
+      expect(scope[0].headers['access-control-allow-origin']).toBe(LISTED);
+      expect(scope[0].requestHeaders.cookie).toBeUndefined();
+      const config = answers.find((a) => a.url === `${MAP}/cornfield/config.json`)!;
+      expect(config.status).toBe(401);
+      expect(config.requestHeaders.cookie).toBe('cornfield=not-a-real-session'); // the session goes to the server's gated read
+      expect(config.headers['access-control-allow-credentials']).toBe('true');
+      for (const a of answers) if (!/\/cornfield\/config\.json$|\/topology\.json/.test(new URL(a.url).pathname)) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
+      expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
+      await context.close();
+    }, 60_000);
+  }
 
   it('docs/embedding.md gives a host exactly the policy this test ran under', () => {
     const doc = fs.readFileSync(path.join(REPO, 'docs', 'embedding.md'), 'utf8');

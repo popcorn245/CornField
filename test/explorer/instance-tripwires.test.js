@@ -51,6 +51,11 @@ export const CONVERTED = [
   'engine/strings.js',
   'engine/flow-ui.js',
   'engine/search-status.js',
+  // Step 3 (spec 0011 D5, D6): where the data comes from
+  'engine/source.js',
+  'engine/theme-sheet.js',
+  'pieces/scope.js',
+  'pieces/status.js',
   'selection-view.js',
   'selection-model.js',
   'layer-model.js',
