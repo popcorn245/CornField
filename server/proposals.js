@@ -119,7 +119,10 @@ export function sameOrigin(req, publicHost = null, embedOrigins = [], publicOrig
   if (origin !== undefined) {
     try {
       const given = new URL(origin);
-      if (given.host !== host.toLowerCase()) return false;
+      // A proxy may keep the scheme's default port in the Host (`:443`, `:80`), which an Origin never carries; any other difference is another origin
+      const sent = host.toLowerCase();
+      const port = given.protocol === 'https:' ? '443' : given.protocol === 'http:' ? '80' : null;
+      if (given.host !== sent && !(port && sent === `${given.host}:${port}`)) return false;
       if (publicOrigin && publicHost && new URL(`http://${host}`).hostname === String(publicHost).toLowerCase() && given.protocol !== new URL(publicOrigin).protocol) return false; // host and port equal the Host header's (above), so with the public port in it this is the exact origin
     } catch {
       return false; // `null`, or not a URL
