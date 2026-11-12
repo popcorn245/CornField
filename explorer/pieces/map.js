@@ -87,7 +87,7 @@ function refused(root, inst) {
   const made = place(inst, root, '<div data-corn="map-stage"></div>', null, 'stage');
   const status = mountStatus(made[0], inst, { follow: false });
   status.refuse('second-map');
-  inst.emit('piece:refused', { piece: 'map', reason: 'second-map', message: 'A scope holds one map.' });
+  inst.emit('piece:refused', { piece: 'map', reason: 'second-map', message: 'A scope holds one map.', host: root.nodeType === 11 ? /** @type {ShadowRoot} */ (root).host : root });
   const none = () => {};
   return {
     inst,

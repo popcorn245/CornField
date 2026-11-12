@@ -21,6 +21,8 @@
  *   that are already there        piece it finds; a piece that connected before its scope was defined asks again and is answered
  *
  * Pieces in a closed shadow root of someone else's component cannot be found by the walk. A piece that is removed leaves (its shell calls `leave`).
+ * A second map in a scope is refused (the engine holds one map per instance); when the map that has the scope leaves, the first refused map that
+ * is still in the page is told to ask again, and takes it.
  *
  * It reads no `location`: the page's address is a function the shell passes in (`pageUrl`), used for the sign-in's way back and to name the
  * origin a "not listed" message asks the server to list. It never navigates the window.
@@ -129,7 +131,23 @@ export function mountScope(host, options = {}) {
     readyFired = false;
     inst.on('source', onSource);
     inst.on('theme', onTheme);
-    inst.on('piece:refused', (d) => { if (options.onError) options.onError({ kind: d.reason, message: d.message }); });
+    // A second map waits: when the one that has the instance's root gives it back, the first that waits and is still in the page asks again
+    // (after the leaving map has finished ending, so the two never hold the instance's state at once)
+    const waiting = [];
+    inst.on('piece:refused', (d) => {
+      if (d.host && !waiting.includes(d.host)) waiting.push(d.host);
+      if (options.onError) options.onError({ kind: d.reason, message: d.message });
+    });
+    const mine = inst;
+    inst.on('attach:released', () => {
+      Promise.resolve().then(() => {
+        if (ended || inst !== mine) return;
+        while (waiting.length) {
+          const el = waiting.shift();
+          if (el.isConnected) { el.dispatchEvent(new Event(CHANGED)); return; }
+        }
+      });
+    });
     // The host's own light and dark and the system's: the tokens follow
     const watch = inst.win && inst.win.MutationObserver && inst.doc && inst.doc.documentElement ? new inst.win.MutationObserver(followMode) : null;
     if (watch) { watch.observe(inst.doc.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); inst.own(() => watch.disconnect()); }

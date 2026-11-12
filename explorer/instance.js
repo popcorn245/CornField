@@ -40,7 +40,9 @@
  *                   not-allowed, offline, server, address, version); pieces/status.js shows it and pieces/scope.js turns it into `cornAuth` and `cornError`
  *   theme           { state: 'loading' | 'ready' | 'failed' | 'none' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`; 'none': taken back out): the map reads its tokens again
  *   scope:theme     (none)  the scope's `theme` (light, dark, auto) or the mode it follows changed: the map draws again (pieces/scope.js)
- *   piece:refused   { piece, reason, message }  a piece that cannot have this instance (a second map in a scope); the scope says it as `cornError`
+ *   piece:refused   { piece, reason, message, host }  a piece that cannot have this instance (a second map in a scope); the scope says it as `cornError`
+ *                   and tells `host` to ask again when the root is free
+ *   attach:released (none)  the piece that had the instance's root (`attach`) gave it back
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
@@ -219,6 +221,7 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
         root = initialRoot;
         inst.root = initialRoot;
         inst.release(release);
+        if (!destroyed) inst.emit('attach:released'); // a piece that was refused (a second map in a scope) may have it now
       };
       cleanups.push(release);
       return release;

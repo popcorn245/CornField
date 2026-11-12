@@ -340,13 +340,18 @@ describe('<corn-scope>', () => {
     expect(card(b)!.getAttribute('data-corn-state')).toBe('failure');
     expect(b.shadowRoot!.querySelectorAll('canvas')).toHaveLength(0);
     expect(kinds()).toEqual(['second-map']);
-    // the first is a map still, and the second can take the scope when the first leaves
+    // the first is a map still, and the second takes the scope by itself when the first leaves, and draws the scope's map
+    const third = document.createElement('corn-map') as Piece;
+    third.setAttribute('renderer', 'canvas2d');
+    third.setAttribute('style', SIZE);
+    host.querySelector('corn-scope')!.append(third);
+    await third.componentOnReady();
+    await until(() => text(third).includes('already has a map'));
     a.remove();
-    await frames(3);
+    await until(() => !!b.shadowRoot!.querySelector('canvas') && lit(b) > 0 && !card(b));
+    expect(text(third)).toContain('already has a map'); // one map at a time: the third still waits
     b.remove();
-    host.querySelector('corn-scope')!.append(b);
-    await b.componentOnReady();
-    await until(() => !!b.shadowRoot!.querySelector('canvas'));
+    await until(() => !!third.shadowRoot!.querySelector('canvas') && lit(third) > 0 && !card(third));
   });
 
   it('two scopes on one page, two servers, stay independent: each map has its own map and its own selection', async () => {
