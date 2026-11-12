@@ -22,6 +22,9 @@ node test/fixtures/big/serve.js --forge --port 3403                 # add --them
 #      (`push=file` changes the proposal file; the answer lists what a landing merged: the rig keeps the PR open so it can be reviewed again)
 # (d) the same server, signed out: the real sign-in page, then where it lands
 #     open http://127.0.0.1:3403/?proposal=0100-new-flow-across-apps&source=pull/21 in a fresh browser profile
+# (e) a sibling origin listed (`embed.origins`, docs/embedding.md); `--public` is the name the browser opens it at (a `*.localhost` name), `--forge-port` the fake forge's port
+node test/fixtures/big/serve.js --forge --port 3711 --forge-port 3721 --public http://map.corn.localhost:3711 --embed http://tasks.corn.localhost:3713
+node test/fixtures/big/embed-proof.mjs     # the browser proof: two rigs and three blank host pages (ports 3711-3715, 3721-3722), Chromium, what it sent and what came back
 ```
 
 Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.

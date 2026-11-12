@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "spec": "0011",
+  "title": "cornfield in another app: the interface as web components",
+  "summary": "The explorer becomes an engine a page can make more than one of, in pieces that each own their markup. cornfield's own page mounts the pieces in the document; a new components package wraps the same pieces as web components, built with StencilRS, for another app to put on its own page. The server learns to answer a listed sibling origin: reads, and the review decision. The host app node stands for any app that embeds cornfield; it is not something to build.",
+  "nodes": {
+    "add": [
+      { "id": "pkg-components", "label": "components", "type": "pkg", "parent": "root", "file": "components", "desc": "The web components: thin StencilRS shells that each mount one piece of the explorer's engine in their own root. Built with Vite; the only part of cornfield with a build step." },
+      { "id": "core-explorer-instance", "label": "instance.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/instance.js", "desc": "Makes one running explorer: its state, its root element, a fetch bound to a base address, its strings, and how its pieces tell each other something changed. A page can make more than one." },
+      { "id": "core-explorer-page", "label": "page.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/page.js", "desc": "cornfield's own page shell: makes the one instance for the document, mounts every piece, and turns the address bar's deep links into the properties a host app would set." },
+      { "id": "core-server-embed", "label": "embed.js", "type": "core", "parent": "pkg-server", "file": "server/embed.js", "desc": "What a listed origin may ask: the CORS answer for reads, the check on writes (same origin, or a listed origin on the same site), and where sign-in may return to. With no origin listed, every response is as before." },
+      { "id": "ext-host-app", "label": "A host app", "type": "external", "parent": "root", "desc": "Any app on a sibling subdomain that puts cornfield's components on its own page. An archetype for the scenarios, never a named product." }
+    ],
+    "change": [
+      { "id": "core-explorer-state", "set": { "desc": "The shape of one instance's state. No longer a shared object: each instance has its own." }, "why": "31 modules import one shared state, so two maps on a page would share one selection" },
+      { "id": "core-explorer-main", "set": { "desc": "Starts cornfield's own page through the page shell." }, "why": "start-up, deep links and document-level listeners belong to the page, not to the pieces" },
+      { "id": "core-explorer-map-style", "set": { "desc": "The map's look, read from the tokens on the instance's root element and the theme's images from the instance's base address." }, "why": "tokens are read from the html element and images from a fixed path, which a component in another page cannot use" },
+      { "id": "core-explorer-forge-panel", "set": { "desc": "The Work panel, split into pieces that each own their markup, with native dialogs." }, "why": "2,649 lines in one module, with document-level focus traps" },
+      { "id": "core-server-server", "set": { "desc": "The HTTP server: routes, headers, the sign-in gate, and the answer to a listed sibling origin. Serves the built components." }, "why": "another origin's page can read nothing today: there are no CORS headers" },
+      { "id": "core-server-proposals", "set": { "desc": "Proposals, their reviews and the decision. A write is taken from the server's own page, or from a listed origin on the same site." }, "why": "the review decision must work from inside a host app" },
+      { "id": "core-server-auth", "set": { "desc": "Sign-in with GitHub or Forgejo (OAuth), sessions in an HttpOnly cookie, the admins-only guard every route passes through, and a return after sign-in to cornfield itself or to a listed origin." }, "why": "a maintainer who signs in from the host app should land back in it" },
+      { "id": "core-core-config", "set": { "desc": "Reads and checks cornfield.config.js, with embed.origins: the exact origins that may embed cornfield, empty by default." }, "why": "which origins are trusted is the maintainer's decision, written down" }
+    ]
+  },
+  "edges": {
+    "add": [
+      { "from": "pkg-components", "to": "core-explorer-instance", "dashed": true, "label": "imports" },
+      { "from": "core-explorer-page", "to": "core-explorer-instance", "dashed": true, "label": "imports" },
+      { "from": "core-explorer-main", "to": "core-explorer-page", "dashed": true, "label": "imports" },
+      { "from": "core-server-server", "to": "core-server-embed", "dashed": true, "label": "imports" },
+      { "from": "core-server-proposals", "to": "core-server-embed", "dashed": true, "label": "imports" },
+      { "from": "ext-host-app", "to": "pkg-components", "label": "loads" },
+      { "from": "ext-host-app", "to": "core-server-server", "label": "reads, decides" }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "review-inside-the-host-app",
+      "title": "The maintainer reviews and approves a proposal without leaving the host app",
+      "actor": "maintainer",
+      "steps": [
+        { "node": "ext-host-app", "text": "A task's page holds one tag, the review, with the server's address and the proposal's name." },
+        { "node": "pkg-components", "text": "The tag makes its own instance and mounts the map, the changes and the decision inside it." },
+        { "node": "core-server-embed", "text": "The host's origin is listed, so the reads are answered, with the maintainer's session." },
+        { "node": "core-explorer-instance", "text": "The map narrows to the change. Selecting here moves nothing else on the host's page." },
+        { "node": "core-server-proposals", "text": "Approve is a write from a listed origin on the same site: taken, and posted as the maintainer." },
+        { "node": "ext-host-app", "text": "The tag tells the host the decision, and the host moves its task on." }
+      ]
+    },
+    {
+      "id": "an-unlisted-page-is-refused",
+      "title": "A page that is not listed gets nothing",
+      "actor": "reader",
+      "steps": [
+        { "node": "core-core-config", "text": "The list of origins is empty, or does not hold this page's origin." },
+        { "node": "core-server-embed", "text": "A read gets no CORS answer, so the browser gives the page nothing." },
+        { "node": "core-server-proposals", "text": "A write is refused, as it is today." }
+      ]
+    },
+    {
+      "id": "the-map-with-no-server",
+      "title": "A host shows a map from data it fetched itself",
+      "actor": "reader",
+      "steps": [
+        { "node": "ext-host-app", "text": "The host fetches a topology by its own means and sets it on the map tag." },
+        { "node": "pkg-components", "text": "The map draws it. No cornfield server is asked for anything." },
+        { "node": "core-explorer-instance", "text": "A click on a node leaves as an event; the host opens its own panel." }
+      ]
+    }
+  ]
+}
