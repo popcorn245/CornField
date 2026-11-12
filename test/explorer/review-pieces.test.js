@@ -27,6 +27,8 @@ import { markedEdgeAt, showEdge } from '../../explorer/engine/proposal.js';
 import { keepAddress, openFromAddress } from '../../explorer/page-address.js';
 // @ts-expect-error plain JS modules, no declarations
 import { HOLD_MS } from '../../explorer/decision-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { credentialed } from '../../explorer/engine/connection.js';
 
 const sample = loadSample();
 const SIZE = { width: 800, height: 600 };
@@ -363,5 +365,55 @@ describe('the address bar is the page\'s', () => {
     const bad = await openFromAddress(inst, '?proposal=../x');
     expect(bad).toBe(false);
     expect(root.querySelector('#proposal-message').textContent.length).toBeGreaterThan(0);
+  });
+});
+
+describe('what a host hands in is data', () => {
+  it('only a URL on the base\'s origin carries the maintainer\'s session', async () => {
+    const fetch = server();
+    make({ base: 'https://map.example.test', fetch });
+    const get = credentialed(inst);
+    await get('/proposals');
+    await get('https://map.example.test/proposals/x/decision');
+    await get('https://elsewhere.example/steal');
+    await get('//elsewhere.example/steal');
+    expect(calls.map((c) => [c.url, c.init && c.init.credentials])).toEqual([
+      ['https://map.example.test/proposals', 'include'],
+      ['https://map.example.test/proposals/x/decision', 'include'],
+      ['https://elsewhere.example/steal', undefined],
+      ['//elsewhere.example/steal', undefined],
+    ]);
+  });
+
+  it('a hostile proposal object: its words are text everywhere, its ids never become markup, attributes or links', async () => {
+    make({ fetch: server() });
+    nodePanel.mount(root, inst);
+    const { bar } = mountAll();
+    const evil = '<img src=x onerror="window.__pwned=1"><b data-x>bold</b>"\'><svg onload=alert(1)>';
+    const id = 'n"><img src=x onerror=1>[0]\'';
+    const big = 'x'.repeat(200_000);
+    const hostile = {
+      version: 1, spec: evil, title: evil + big, summary: evil,
+      nodes: {
+        add: [{ id, label: evil, type: 'page', parent, desc: evil, links: [{ label: evil, url: 'javascript:alert(1)' }] }],
+        change: [{ id: parent, set: { desc: evil }, why: evil }],
+      },
+      edges: { add: [{ from: id, to: parent, kind: 'calls', label: evil }] },
+      scenarios: [{ id: 's"><img src=x onerror=1>', title: evil, stepMs: 1000, steps: [{ node: id, text: evil }, { node: parent, text: big }] }],
+    };
+    bar.update({ proposal: hostile, slug: 'x"><img>', source: 'pull/21"><img>' });
+    await vi.advanceTimersByTimeAsync(0);
+    // open the scenario, choose a step, select the hostile node, and pick its row in the change list
+    root.querySelector('[data-action="scenario-open"]').click();
+    root.querySelector('[data-action="scenario-step"]').click();
+    await vi.advanceTimersByTimeAsync(50);
+    root.querySelector('.hx-change-row[data-kind="node"]').click();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(root.querySelector('#proposal-title').textContent.startsWith(evil)).toBe(true);
+    expect(root.querySelectorAll('img, svg:not([aria-hidden]) b, b[data-x]').length).toBe(0);
+    const attrs = [...root.querySelectorAll('*')].flatMap((el) => [...el.attributes].map((a) => a.name));
+    expect(attrs.filter((a) => a.startsWith('on'))).toEqual([]);
+    expect(root.querySelectorAll('a[href^="javascript"], [src]').length).toBe(0);
+    expect(window.__pwned).toBeUndefined();
   });
 });

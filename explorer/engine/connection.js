@@ -13,8 +13,14 @@ export function notSentWords(inst, what) {
 
 /**
  * `fetch` for a read or a write that carries the maintainer's session: on the instance's own origin it is exactly `inst.fetch`; against a base
- * on another origin (a host app, docs/embedding.md) the request is credentialed, which the server answers for a listed origin.
+ * on another origin (a host app, docs/embedding.md) the request is credentialed, which the server answers for a listed origin. A URL on another
+ * origin than the base's (an absolute URL, a `//host` path) is fetched without credentials.
  */
 export function credentialed(inst) {
-  return (path, init) => inst.fetch(path, inst.base ? { credentials: 'include', ...init } : init);
+  return (path, init) => inst.fetch(path, inst.base && underBase(inst, path) ? { credentials: 'include', ...init } : init);
+}
+
+/** Whether `path`, made absolute against the instance's base (as `inst.fetch` makes it), is on the base's origin: only those carry the maintainer's session */
+function underBase(inst, path) {
+  try { return new URL(inst.url(String(path)), inst.base).origin === new URL(inst.base).origin; } catch { return false; }
 }
