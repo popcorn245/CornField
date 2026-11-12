@@ -17,6 +17,8 @@ import { createInstance } from '../../explorer/instance.js';
 import { isPhone, expandSheet } from '../../explorer/engine/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { sheetCap } from '../../explorer/sheet-model.js';
+// @ts-expect-error plain JS modules, no declarations
+import { NOTHING_TO_DECIDE } from '../../explorer/decision-model.js';
 
 const sample = loadSample();
 const proposal = JSON.parse(fs.readFileSync(`${SAMPLE}/docs/specs/proposals/0002-checkout.json`, 'utf8'));
@@ -113,6 +115,18 @@ describe('what it takes', () => {
     make({ topology: topology(), proposal, source: 'pull/2', slug: 'x' });
     vi.advanceTimersByTime(2000);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('says in words that there is nothing to decide with objects and no server, and offers no Approve or Send back that would do nothing', () => {
+    const { piece } = make({ topology: topology(), proposal, slug: '0002-checkout', source: 'pull/2' });
+    const foot = piece.inst.el('review-decision');
+    const line = foot.querySelector('[data-review-line]');
+    expect(foot.closest('[hidden]')).toBe(null);
+    expect(line.closest('[hidden]')).toBe(null);
+    expect(line.textContent).toBe(NOTHING_TO_DECIDE);
+    for (const b of foot.querySelectorAll('[data-review]')) expect(b.closest('[hidden]'), b.textContent).not.toBe(null);
+    piece.update({ proposal: null });
+    expect(line.closest('[hidden]')).not.toBe(null);
   });
 
   it('fetches a slug through its base, and only once there is a map to lay it on', async () => {
@@ -245,5 +259,37 @@ describe('nothing leaves the box', () => {
     a.piece.destroy();
     expect(b.el.firstElementChild).toBeTruthy();
     expect(b.piece.inst.el('graph-canvas')).toBeTruthy();
+  });
+});
+
+describe('in a shadow root, as the coming tag holds it', () => {
+  /** A plain element with an open shadow root, in the document: what a shell does at its least */
+  function shadowHost() {
+    const el = document.createElement('div');
+    document.body.append(el);
+    return el.attachShadow({ mode: 'open' });
+  }
+
+  it('finds its own elements and its own focus there (inst.active() is the focused element in the shadow root, not the host)', () => {
+    const root = shadowHost();
+    const piece = mount(root, null, { renderer: 'canvas2d', topology: topology(), proposal });
+    expect(piece.inst.root.getRootNode()).toBe(root);
+    for (const id of ['sheet-dock', 'proposal-bar', 'review-column', 'spec-drawer', 'graph-canvas', 'review-decision']) expect(piece.inst.el(id), id).toBeTruthy();
+    const title = piece.inst.el('proposal-title');
+    title.setAttribute('tabindex', '-1');
+    title.focus();
+    expect(root.activeElement).toBe(title);
+    expect(piece.inst.active()).toBe(title);
+    piece.inst.state.canvas.focus();
+    expect(piece.inst.active()).toBe(piece.inst.state.canvas);
+  });
+
+  it('puts no id in the document: two reviews in two shadow roots share none', () => {
+    const a = mount(shadowHost(), null, { renderer: 'canvas2d', topology: topology(), proposal });
+    const b = mount(shadowHost(), null, { renderer: 'canvas2d', topology: topology() });
+    expect(document.querySelectorAll('[id]').length).toBe(0);
+    expect(a.inst.el('graph-canvas')).not.toBe(b.inst.el('graph-canvas'));
+    a.destroy();
+    b.destroy();
   });
 });
