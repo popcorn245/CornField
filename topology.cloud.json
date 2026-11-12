@@ -23,10 +23,10 @@
       "id": "npm",
       "label": "npm registry",
       "roles": ["software"],
-      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names.",
+      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names, and the web components once armed (the release asks the registry whether that name exists yet).",
       "breaks": "At the next CI run or image build: the dev dependencies cannot install. A release cannot publish.",
       "plan": { "tier": "free" },
-      "match": { "packages": ["npm"] }
+      "match": { "packages": ["npm"], "hosts": ["registry.npmjs.org"] }
     },
     {
       "id": "docker-hub",

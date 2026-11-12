@@ -1,8 +1,25 @@
 {
   "name": "@popcorn245/cornfield-components",
   "version": "0.1.0",
-  "private": true,
+  "description": "cornfield's interface as web components (spec 0011): <corn-map> and what follows, thin StencilRS shells over the engine in cornfield. The same files are served by every cornfield server at /cornfield/components/.",
   "license": "MIT",
+  "author": "popcorn245 (https://github.com/popcorn245)",
+  "homepage": "https://github.com/popcorn245/CornField/blob/main/docs/embedding.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/popcorn245/CornField.git",
+    "directory": "components"
+  },
+  "bugs": {
+    "url": "https://github.com/popcorn245/CornField/issues"
+  },
+  "keywords": [
+    "web-components",
+    "custom-elements",
+    "topology",
+    "cornfield",
+    "stencil"
+  ],
   "type": "module",
   "sideEffects": true,
   "main": "dist/index.js",
@@ -23,7 +40,6 @@
   "files": [
     "dist"
   ],
-  "description": "cornfield's interface as web components (spec 0011): thin StencilRS shells over the engine in ../explorer. Not published yet.",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/build.mjs",
@@ -32,7 +48,8 @@
     "check:size": "node scripts/size-budget.mjs",
     "size:record": "node scripts/size-budget.mjs --record",
     "typecheck": "tsc --noEmit",
-    "check": "npm run build && npm test && npm run test:browser && npm run check:size"
+    "check": "npm run build && npm test && npm run test:browser && npm run check:size",
+    "prepublishOnly": "node scripts/release-guard.mjs"
   },
   "devDependencies": {
     "@popcorn245/stencilrs": "0.2.0",
@@ -45,5 +62,9 @@
     "typescript": "6.0.3",
     "vite": "8.3.4",
     "vitest": "5.0.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

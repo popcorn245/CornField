@@ -4,7 +4,11 @@ name: release
 # the GitHub release with the notes. Nothing is committed back to main (it is locked): the tag is the only record of a
 # version. Then, in this same run (a tag pushed with GITHUB_TOKEN starts no other workflow), the image and npm jobs
 # check that tag out, set the version in package.json from it, and publish: the Docker image to GHCR and the package
-# to npm, as `cornfield` and as `@popcorn245/cornfield`.
+# to npm, as `cornfield` and as `@popcorn245/cornfield`. The web components (components/, spec 0011 D11) ship under the same version:
+# the image builds them into itself (its Dockerfile has a builder stage that reads the version from the package.json set here), and
+# the components job builds them again for npm, stamps components/package.json with the version, and publishes
+# `@popcorn245/cornfield-components` once it is armed: by the NPM_TOKEN secret, or, after its first publish, by trusted publishing like
+# the npm job (until then it says it did not, and succeeds).
 #
 # OFF until the maintainer turns it on (RELEASING.md):
 #   - every job needs the repository variable CORNFIELD_RELEASE = "on"; without it a merge releases nothing;
@@ -183,3 +187,81 @@ jobs:
         run: |
           npm pkg set name=@popcorn245/cornfield
           npm publish --access public --provenance
+
+  # The web components, under cornfield's version (components/, spec 0011 D11). Built here with the released version stamped in (so dist/version.json
+  # and the `version` export say 0.48.0, and components/package.json says 0.48.0 in what is published), checked, and published to npm once the
+  # maintainer has armed it (the NPM_TOKEN secret for the first publish; see the publish step). Unarmed, this job still builds and checks, prints one
+  # line saying the package was not published, and succeeds. The token is only ever in the environment of the publish step, and is never printed.
+  components:
+    needs: version
+    if: ${{ needs.version.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # provenance (the same permission the npm job has; nothing else is added)
+    env:
+      CORNFIELD_RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: components/package-lock.json
+      - name: npm, at the pinned version the npm job uses (trusted publishing needs 11.5.1 or later)
+        run: npm install -g npm@11.21.0
+      # The build reads the version from the root package.json (components/scripts/shared.mjs), which the tag decides; the package carries it too
+      - name: The version, from the tag, in cornfield's package.json and in the components' (main keeps the version last set by hand)
+        run: |
+          set -eu
+          npm version --no-git-tag-version --allow-same-version "${VERSION}"
+          cd components
+          npm version --no-git-tag-version --allow-same-version "${VERSION}"
+      - name: Install (components/ has its own lockfile)
+        working-directory: components
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        working-directory: components
+        run: npm run build
+      - name: The build, the package and the tag say the same version
+        working-directory: components
+        run: |
+          set -eu
+          test "${CORNFIELD_RELEASE_TAG}" = "v${VERSION}"
+          test "$(node -p "require('./package.json').version")" = "${VERSION}"
+          test "$(node -p "require('./dist/version.json').cornfield")" = "${VERSION}"
+          test "$(node -p "require('./dist/manifest.json').cornfield")" = "${VERSION}"
+          grep -q "\"${VERSION}\"" dist/index.js
+          echo "@popcorn245/cornfield-components ${VERSION}: package, version.json, manifest.json and index.js agree."
+      - name: What would be published
+        working-directory: components
+        run: npm pack --dry-run
+      # Armed by the maintainer, never by accident. A secret is not readable in an `if`, so the step looks at its own environment, through a
+      # name of its own: setup-node exports a placeholder NODE_AUTH_TOKEN, which an empty step value might not replace. The value is never echoed.
+      #   - NPM_TOKEN set: publish (npm tries trusted publishing first and falls back to the token, as the npm job does);
+      #   - no NPM_TOKEN, and the package is already on npm: publish by trusted publishing, as the npm job does once its token is gone
+      #     (RELEASING.md: so deleting the token after the trusted publisher is set up does not stop the components quietly);
+      #   - no NPM_TOKEN, and the name has never been published: say so and succeed (not armed yet);
+      #   - the registry cannot say which: fail, rather than guess.
+      - name: Publish @popcorn245/cornfield-components (armed by the NPM_TOKEN secret, or by a first publish)
+        working-directory: components
+        env:
+          CORNFIELD_RELEASE: '1'
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            known="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Accept: application/vnd.npm.install-v1+json' https://registry.npmjs.org/@popcorn245%2fcornfield-components || true)"
+            case "${known}" in
+              200) echo "NPM_TOKEN is not set and @popcorn245/cornfield-components is on npm: publishing ${VERSION} by trusted publishing." ;;
+              404)
+                echo "NPM_TOKEN is not set: @popcorn245/cornfield-components ${VERSION} was built and checked but not published (RELEASING.md says where to add the token)."
+                exit 0 ;;
+              *) echo "npm's registry answered ${known} for @popcorn245/cornfield-components: cannot tell whether it is published, so nothing is." >&2; exit 1 ;;
+            esac
+          fi
+          NODE_AUTH_TOKEN="${NPM_TOKEN:-}" npm publish --access public --provenance

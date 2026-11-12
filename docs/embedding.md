@@ -31,6 +31,7 @@ A page on a listed origin that calls `fetch(url, { credentials: 'include' })` ge
 | `/proposals/<slug>/review` | the latest review (and, below, the one write) |
 | `/api/forge/pulls/<n>` | one pull request, with its files and checks (the proposal bar reads it) |
 | `/cornfield/theme.css`, `/cornfield/theme/<name>.css`, `/cornfield/theme/assets/…` | the look, so a component there can wear it |
+| `/cornfield/components/<file>` | the web components themselves, as module scripts ([below](#from-the-server)); open without a session |
 
 For a request whose `Origin` is exactly a listed origin the answer carries `Access-Control-Allow-Origin: <that origin>` (never `*`), `Access-Control-Allow-Credentials: true`, `Vary: Origin` and `Access-Control-Expose-Headers: X-Proposal-Sha256, X-Proposal-Source, X-Proposals-Forge-Error` (the headers the explorer reads from a proposal). The refusals on these routes carry them too, so the page can tell "sign in" (401) from "not found". The theme routes answer without a session and carry no `Allow-Credentials`: they hold nothing the session decides, so fetch them without credentials (the default).
 
@@ -80,6 +81,7 @@ The host app's policy governs what its pages may fetch. If it has one, allow cor
 
 - `connect-src https://map.example.com`: the `fetch` calls above.
 - `style-src https://map.example.com` for the theme's stylesheets, `font-src https://map.example.com` for the fonts they name, and `img-src https://map.example.com` for its images (all under `/cornfield/theme…`).
+- `script-src https://map.example.com` when you load the components from the server ([the exact policy](#the-hosts-content-security-policy-for-the-components)).
 
 ## Behind a reverse proxy
 
@@ -93,19 +95,78 @@ Chromium resolves `*.localhost` to this machine, so two names are two origins th
 
 cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there are two: [`<corn-map>`](#properties-events-and-methods) and [`<corn-scope>`](#corn-scope-and-src-reading-a-cornfield-server), which reads a cornfield server for the pieces inside it.
 
-**Not published yet, and not served yet.** The package, `@popcorn245/cornfield-components`, is private for now and is not on npm, and cornfield's server does not serve it. You build it from a checkout of cornfield, and the root package (`cornfield` on npm, the image) has no part in it: it takes no dependency and has no build step.
+### Getting the components
+
+Two ways, one build, one version number. The root package (`cornfield` on npm) has no part in either: it takes no dependency and has no build step, and a checkout that runs `node cli/cornfield.js` builds nothing.
+
+#### From the server
+
+Every cornfield **image** serves the components at `/cornfield/components/`, so they always match the server they talk to and a host needs one line:
+
+```html
+<script type="module" src="https://map.example.com/cornfield/components/corn-map.js"></script>
+```
+
+Your page's origin has to be in `embed.origins` (above): a browser fetches a module script from another origin with CORS, and without the cookie, and cornfield answers CORS only for a listed origin. For `https://tasks.example.com` the answer to the script and to each chunk it imports carries:
+
+```
+Access-Control-Allow-Origin: https://tasks.example.com
+Vary: Origin
+```
+
+and no `Access-Control-Allow-Credentials` (the modules are fetched without the cookie). From an origin that is not listed there is no `Access-Control-Allow-Origin`, so the browser refuses the module and the tag stays an unknown element; with no origin listed at all, nothing is added to any response.
+
+What is there (the files of the build, and only those; `manifest.json` lists them and is not itself served, a request for any other name, a folder, a dotfile or a path out of the folder is a plain 404):
+
+| File | What it is |
+|---|---|
+| `corn-map.js` | registers `<corn-map>`: load this one for the map |
+| `index.js` | registers every component, and exports `version` |
+| `chunks/runtime-<hash>.js` | the Stencil runtime, shared by every entry |
+| `chunks/corn-map-<hash>.js` | the map and the engine it wraps |
+| `tokens.css` | cornfield's default tokens at zero specificity (optional: [Tokens](#tokens-and-the-theme-attribute)) |
+| `version.json` | `{ "name": "@popcorn245/cornfield-components", "cornfield": "0.48.0" }` |
+| `types/*.d.ts` | the declarations, as text |
+
+**Caching.** Each answer has a strong `ETag` and the file's type with `nosniff`, and is compressed when the browser accepts it. `chunks/…-<hash>.js` are named by their content, so they are cached for a year (`public, max-age=31536000, immutable`). `corn-map.js`, `index.js`, `tokens.css`, `version.json` and the types are `no-cache`: the browser asks every time and gets a `304` when nothing changed, so a host always gets the version of the server it talks to, the moment that server is updated.
+
+**It is open.** The route answers before the sign-in guard, like the theme's stylesheets, because a module script is fetched without the cookie. It holds no secret: it is the published package, the same files as on GitHub and npm. What anyone who can reach the server learns from it, signed in or not:
+
+- the components' code, their type declarations and `tokens.css`;
+- **which cornfield this is**: the release number is in `version.json` and in `index.js` (`export const version`); `manifest.json` carries it too but is never served. A signed-out visitor could not learn it before: `/cornfield/config.json`, which also carries it, is behind the sign-in. It is kept open on purpose: a host needs it to tell a mismatch, and the code of every version is public anyway. Keep the server updated, as with any version you publish;
+- whether this server was built with the components (an image) or runs from a checkout (the `404` says so).
+
+Nothing of the map, the proposals, the repo, the config or the session is reachable this way. `Host` is checked before this route answers (`421` for a name the server does not answer to), and only `GET` and `HEAD` are answered here: any other method on these paths goes to the sign-in guard as before.
+
+**A checkout has no build.** cornfield has no build step, so a server started from a plain checkout has no components and answers `/cornfield/components/…` with a plain `404` that says so and how to build them (`cd components && npm ci && npm run build`: the server then serves `components/dist`, the one place it looks, beside its own `server/`). The image builds them while it is built and keeps only the result.
+
+#### From npm
+
+```sh
+npm install @popcorn245/cornfield-components
+```
+
+```js
+import '@popcorn245/cornfield-components/corn-map';   // registers <corn-map>; '@popcorn245/cornfield-components' registers every component
+```
+
+**Published from the next release once the maintainer adds the npm token** ([RELEASING.md](../RELEASING.md#the-web-components-on-npm)); until then the package is built in every release but not on npm, and the server is the way. The package has the same files as above (`dist/`), the type declarations (`types` in its `exports`), and `"sideEffects": true`: importing a module is what registers its custom element, so a bundler must not drop an `import '…/corn-map'` that uses nothing from it (`true` tells it not to).
+
+**One version.** The components are released with cornfield under the same number: `@popcorn245/cornfield-components@0.48.0` is the build of cornfield `0.48.0`, the one that cornfield's image serves, and `version.json`, the `version` export and the package say the same. Each release builds them with the version it just made. For a page that talks to a server, use the server's copy; if you install the package, keep it at your server's version (a later component with `src` will say when they differ by a minor or more).
+
+#### Building them yourself
 
 ```sh
 cd components
 npm ci
-npm run build        # dist/: ES modules, tokens.css, types/ and version.json
+npm run build        # dist/: ES modules, tokens.css, types/, version.json and manifest.json
 npm run dev          # the demo page, http://localhost:3639/demo/: two maps from the synthetic fixture, one light and one dark
 npm run check        # build, tests in happy-dom, tests in headless Chrome, the size budget (set CHROME_PATH where there is no Google Chrome)
 ```
 
 ### Loading it
 
-The build is ES modules: one file per component, one for all, and a shared chunk that holds the Stencil runtime. Copy `dist/` to where your app serves its files (or import it from your bundler) and load the one you want:
+The build is ES modules: one file per component, one for all, and a shared chunk that holds the Stencil runtime. Load it from the server (above), import it from your bundler, or copy `dist/` to where your app serves its files, and load the one you want:
 
 ```html
 <script type="module" src="/vendor/cornfield/corn-map.js"></script>   <!-- or index.js: every component -->
@@ -180,7 +241,7 @@ The map shows the state of the load in a box over itself (a polite live region s
 | version | the server's minor or major differs from the package's | a line along the bottom: "This map and its server are different versions" (`sourceVersion`) and both numbers; the map keeps working | none | `cornError` `{ kind: 'version' }` |
 | second map | a second `corn-map` in a scope | "This scope already has a map" (`sourceSecondMap`) | `failure` | `cornError` `{ kind: 'second-map' }` |
 
-- **Not listed and offline are told apart** by a second request: a fetch the browser refuses says nothing about why, so after it the scope asks `/cornfield/theme.css` with `mode: 'no-cors'` and no credentials. An answer the page may not read (opaque) means the server is there and did not answer this origin: not listed. No answer at all, or a browser that says it is offline: offline. (A host's own Content-Security-Policy that blocks the connection looks like offline: [the lines it needs](#with-a-content-security-policy-and-a-server).)
+- **Not listed and offline are told apart** by a second request: a fetch the browser refuses says nothing about why, so after it the scope asks `/cornfield/theme.css` with `mode: 'no-cors'` and no credentials. An answer the page may not read (opaque) means the server is there and did not answer this origin: not listed. No answer at all, or a browser that says it is offline: offline. (A host's own Content-Security-Policy that blocks the connection looks like offline: [the lines it needs](#the-hosts-content-security-policy-for-the-components).)
 - **Sign-in's way back** is `<src>/auth/start?returnTo=<the address of this page>`, read when the state is said (so a page that changed its address says the new one). The server follows it only for a listed origin ([signing in](#signing-in-and-returning)); a page address longer than 1,024 characters is not followed, and the sign-in then ends on the server's own page. A page that is not `http(s)` (a file) has no way back, and the link goes to the sign-in alone. **The component never sets `location`**: a person follows the link, or your page does with `signIn` from `cornAuth`.
 - **Retry** asks again (the config, then the map). After a map loads from a Retry, the focus goes to the map, as the box it was on is gone.
 
@@ -222,30 +283,28 @@ What a constructable stylesheet does not do, and so a theme that relied on it:
 
 ### With a Content-Security-Policy
 
-`<corn-map>` works under a strict policy such as `default-src 'self'; style-src 'self'`, with no `'unsafe-inline'` and no `'unsafe-eval'`, as long as you serve the files from your own origin:
+`<corn-map>` works under a strict policy such as `default-src 'self'; style-src 'self'`, with no `'unsafe-inline'` and no `'unsafe-eval'`, as long as you serve the files from your own origin (or load them from a cornfield server: [the exact policy](#the-hosts-content-security-policy-for-the-components)):
 
 - **Scripts:** the modules, from wherever you serve `dist/` (`script-src 'self'`, or that origin). They run no `eval`, start no worker and make no `blob:` or `data:` URL.
 - **Styles:** the component's own styles and the default tokens are constructable stylesheets (`adoptedStyleSheets`), which a policy does not govern, so `style-src` needs nothing for them. A `<link>` to `tokens.css` needs `style-src` to allow where it is served.
-- **Connections and images:** none for a map you hand its data. With `src` or a scope (see [below](#with-a-content-security-policy-and-a-server)), the server's origin.
+- **Connections and images:** none for a map you hand its data. With `src` or a scope (see [below](#the-hosts-content-security-policy-for-the-components)), the server's origin.
 
 (A browser without constructable stylesheets would fall back to a `<style>` element for the default tokens, which such a policy blocks; every browser that runs the components has them.) Tried in headless Chrome with that policy as a response header and a page whose own CSS resets every element: no violation reported, and the map is styled and drawn.
 
-#### With a Content-Security-Policy and a server
+### The host's Content-Security-Policy for the components
 
-A scope or a map with `src` talks to the server, so your policy must allow its origin (`https://map.example.com` below) for connections and images:
+If the host page has a Content-Security-Policy and loads the components from a cornfield server (`https://map.example.com`), with a scope or a map with `src` reading that server, this is what it needs, and it is enough:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self';
-  connect-src 'self' https://map.example.com;
-  img-src 'self' data: https://map.example.com
+Content-Security-Policy: default-src 'self'; script-src 'self' https://map.example.com; connect-src 'self' https://map.example.com; img-src 'self' https://map.example.com; style-src 'self'
 ```
 
-- **`connect-src https://map.example.com`**: the config, the map, the theme and the reach test are all `fetch` calls. A blocked connection looks like [offline](#what-the-person-sees-and-what-is-said): the browser tells the page nothing more.
-- **`img-src https://map.example.com`**: the icons of a theme's `theme.icons`, which the map draws.
-- **`style-src` needs nothing for the server's theme**: its text is read with `fetch`, and a constructable stylesheet and an element's `style` set from script are not governed by it. (`style-src 'self'` with no `'unsafe-inline'` was tried with `use-theme`.)
-- **`font-src https://map.example.com`** only if you load the theme's fonts yourself (above).
-- **Scripts** for the components themselves, from where you serve `dist/` (`script-src 'self'` or that origin). A scope runs no `eval`, no worker and no `blob:` URL, and never loads a script a config names.
-- Tried in headless Chrome against the synthetic rig with exactly the policy above on the host page: the map is read, drawn and themed, and no violation is reported (`node test/fixtures/big/scope-proof.mjs`).
+- `script-src https://map.example.com`: the entry and the chunks it imports. Nothing else of the components is script: no `eval`, no worker, no `blob:` or `data:` URL, and never a module a config names. When you install from npm and bundle, `script-src 'self'` is enough for the components.
+- `connect-src https://map.example.com`: the config, the map, the theme and the reach test are all `fetch` calls. A blocked connection looks like [offline](#what-the-person-sees-and-what-is-said): the browser tells the page nothing more. `<corn-map>` with a `topology` and no `src` makes none.
+- `img-src https://map.example.com`: the icons of a theme's `theme.icons`, which the map draws.
+- `style-src 'self'` and **no `'unsafe-inline'`**: the components' styles and the server's theme are constructable stylesheets, and the theme's tokens are set on the scope's element from script (`style.setProperty`); `style-src` governs neither, so nothing inline is needed. Add `https://map.example.com` to `style-src` only if you link its `tokens.css` or the theme's stylesheets yourself, and to `font-src` if you load the theme's fonts yourself ([above](#the-servers-theme-use-theme)).
+
+A page under exactly this policy loads the components from a listed origin and draws the map, in `components/test/host.test.ts`; the synthetic rig's proof (`node test/fixtures/big/scope-proof.mjs`) does the same with `src` and `use-theme`, and no violation is reported.
 
 ### Properties, events and methods
 
@@ -316,7 +375,6 @@ A screen reader finds an application named "Topology map", described by the map'
 - **No panels.** Selecting a node says so through `cornSelect`; what to show for it is your app's. The node panel, Layers and search are later components.
 - **No freeform positions.** Dragging a node and saving where it was put are cornfield's own page's; a map in your page stores nothing in your page's storage.
 - **Reduced motion** is read when the map is made: under it the flow packets stand still and the camera jumps where it would glide, as on the page.
-- **Not served by cornfield yet, and not on npm.** One `<script>` line from a server, and `npm install`, come later.
 
 ### The size it adds
 

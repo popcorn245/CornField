@@ -36,6 +36,14 @@ cornfield.example.org {
 
 Traefik: the labels in the compose file's commented block: a router for the `Host` on the `websecure` entrypoint with a certificate resolver, and the service's `loadbalancer.server.port` set to `3350`.
 
+## The web components
+
+The image is built in two stages. A builder stage installs [`components/`](../components)' own dev dependencies (Vite, StencilRS) and builds the web components with the version in `package.json`; the final image copies only the result, `components/dist` (a few hundred kB: ES modules, `tokens.css`, type declarations, `version.json`, `manifest.json`), beside the server. The final image has no Vite, no StencilRS and no `node_modules` from `components/`, and nothing changes at run time: no build, no new process, no new setting.
+
+The server serves those files at `/cornfield/components/` so another app of yours can load them with one `<script type="module">` line ([embedding](embedding.md#from-the-server)). The route answers without a session, because a browser fetches a module script without the cookie; it holds only the published package, and `version.json` there says which cornfield this is. Your reverse proxy passes it through like any other route and must keep `Origin` and `Vary`. A page on another origin can use it only if that origin is in `embed.origins`.
+
+A server started from a plain checkout (`node cli/cornfield.js`) has no build step and no components, and answers that route with a plain `404` that says how to build them. Only the image and the npm package of the components are built, in CI ([RELEASING.md](../RELEASING.md)).
+
 ## The data folder
 
 `/data` is a named volume (`cornfield-data`) holding `cornfield.db`: sessions (with maintainers' forge tokens, encrypted), the audit of every review posted, the forge cache. The image creates `/data` owned by its non-root user `node` (uid 1000), so a new named volume is created owned by it; cornfield keeps the folder `0700` and the file `0600`. With a bind mount instead of a volume, `chown 1000:1000` and `chmod 700` the host folder first. The repo is mounted read-only at `/repo`. The container runs as `node`, with a read-only root filesystem, no capabilities and `no-new-privileges`.

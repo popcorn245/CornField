@@ -19,6 +19,8 @@
  *   GET  /cornfield/theme.css, /cornfield/theme/<name>.css
  *                                       the stylesheets the config's `theme` names (css, names): those files only, as text/css
  *   GET  /cornfield/theme/assets/<path> an image or font beside the theme files (png, svg, webp, gif, avif, woff2, woff; 1 MB each)
+ *   GET  /cornfield/components/<file>   the built web components (components/dist, listed by its manifest.json), open without a session; a plain 404
+ *                                       that says how to build them when this checkout has none (server/components.js)
  *   GET  /cornfield/brand/<key>.<ext>   a brand image the config's `brand` names (logo, wordmark, favicon; svg or png, 512 KB each): those files only
  *   GET  /manifest.webmanifest          the web app manifest: the repo's title, or built from `brand` when the config sets one
  *   GET  /api/forge/…                   issues, pull requests, their files and checks, release notes: read from the forge (server/forge-routes.js)
@@ -75,6 +77,7 @@ import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
 import { createEmbed } from './embed.js';
+import { COMPONENTS_PREFIX, createComponents } from './components.js';
 import { createSpecPoll } from './spec-poll.js';
 import { createRunnerWatch, runnerPresence } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
@@ -280,7 +283,7 @@ export const HA_CACHE_MS = 30_000;
 /**
  * The server for one repo. It does not listen: `listen(config)` does, where server/bind.js allows.
  * @param {object} config a loaded config (core/config.js `loadConfig`)
- * @param {Parameters<typeof createAuth>[1] & { homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function }, landTimer?: { setTimeout: Function, clearTimeout: Function }, specPollTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
+ * @param {Parameters<typeof createAuth>[1] & { componentsDir?: string, homeAssistant?: object, hookFetch?: typeof fetch, hookTimer?: { setTimeout: Function, clearTimeout: Function }, landTimer?: { setTimeout: Function, clearTimeout: Function }, specPollTimer?: { setTimeout: Function, clearTimeout: Function } }} [opts] what sign-in reads (`env`, and tests' fakes;
  *   see server/auth.js); the Home Assistant URL and token are read from the same `env`, and `homeAssistant` is what
  *   `homeAssistantHouse` is handed besides them (the tests' fake WebSocket); `hookFetch` and `hookTimer` are the
  *   tests' fake network and clock for the event hooks (server/hooks.js); `landTimer` is the clock of landing on approval (server/lander.js); `specPollTimer` is the clock of the `spec.ready` poll (server/spec-poll.js)
@@ -313,6 +316,8 @@ export function createCornfieldServer(config, opts = {}) {
   const publicOrigin = config.publicUrl ? new URL(config.publicUrl).origin : null;
   // The sibling origins that may read and decide a review as the signed-in maintainer (server/embed.js): none unless `embed.origins` lists some
   const embed = createEmbed(config.embed?.origins ?? []);
+  // The web components, when built (components/dist; the image builds them, a checkout does not): served at /cornfield/components/, open (server/components.js)
+  const components = createComponents({ dir: opts.componentsDir ?? path.join(CORNFIELD_DIR, 'components', 'dist') });
   const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost, publicOrigin, embedOrigins: embed.origins };
   const fixtureCache = new Map();
   // What the line above Approve says an approval does besides posting (spec 0007 D1, server/decision.js): landing, and the run a trigger asks for
@@ -463,6 +468,9 @@ export function createCornfieldServer(config, opts = {}) {
     const runner = runnerRoute(reqPath);
     if (runner && !(reqPath === REQUESTS_PATH && req.method !== 'GET' && req.method !== 'HEAD')) return serveRunnerCall(req, res, runner, url, { config, auth, runs, now: opts.now });
     if (reqPath === REQUESTS_PATH) return serveAgentCall(req, res, { config, auth, runs, now: opts.now });
+    // The web components answer without a session: a browser fetches a module script from another origin without the cookie, and holds nothing secret
+    // (it is the published package). The CORS headers for a listed origin are already on the answer; a write to this prefix goes on to the guard as before
+    if ((req.method === 'GET' || req.method === 'HEAD') && reqPath.startsWith(COMPONENTS_PREFIX)) return components.serve(req, res, reqPath);
     // The look of the sign-in pages (cornfield's tokens and its sign-in stylesheet, the repo's theme, fonts and brand images) answers without a
     // session: a visitor sees the brand before they are in. Presentation files only, never data (docs/sign-in.md, "What answers without a session")
     if (auth.enabled && (req.method === 'GET' || req.method === 'HEAD')) {

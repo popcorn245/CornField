@@ -19,6 +19,7 @@ describe('the routes a listed origin may reach', () => {
       '/^\\/proposals\\/[^/]+\\/mockups$/ session GET,HEAD []', '/^\\/api\\/forge\\/pulls\\/[1-9]\\d{0,8}$/ session GET,HEAD []',
       '/^\\/api\\/forge\\/pulls\\/[1-9]\\d{0,8}\\/landing\\/cancel$/ session POST [content-type]',
       '/cornfield/theme.css open GET,HEAD []', '/^\\/cornfield\\/theme\\/[^/]+\\.css$/ open GET,HEAD []', '/^\\/cornfield\\/theme\\/assets\\/.+$/ open GET,HEAD []',
+      '/^\\/cornfield\\/components\\/.+$/ open GET,HEAD []',
     ]);
     expect(WRITES).toEqual(['PUT /proposals/<slug>/review', 'POST /api/forge/pulls/<n>/landing/cancel']);
   });
@@ -29,6 +30,10 @@ describe('the routes a listed origin may reach', () => {
     expect(shape('/api/forge/pulls/40/landing/cancel')).toBe('session POST [content-type]');
     expect(shape('/cornfield/theme/night.css')).toBe('open GET,HEAD');
     expect(shape('/cornfield/theme/assets/fonts/a.woff2')).toBe('open GET,HEAD');
+    expect(shape('/cornfield/components/corn-map.js')).toBe('open GET,HEAD');
+    expect(shape('/cornfield/components/chunks/runtime-AbCd1234.js')).toBe('open GET,HEAD');
+    expect(routeOf('/cornfield/components/')).toBeNull();
+    expect(routeOf('/cornfield/components')).toBeNull();
     for (const p of ['/api/review-tokens', '/api/review-tokens/1', '/api/agent-tokens', '/api/agent-runs', '/api/agent-runs/x', '/api/agent-requests', '/api/runs/x', '/api/reviews', '/api/forge/pulls', '/api/forge/pulls/40/merge',
       '/api/forge/pulls/40/rerun', '/api/forge/pulls/40/landing', '/api/forge/pulls/40/build', '/api/forge/issues', '/api/forge/threads', '/api/forge/pulls/0', '/api/forge/pulls/040', '/api/forge/pulls/1234567890',
       '/proposals/a/mockups/1', '/proposals/a/b/review', '/proposals/a', '/proposals/', '/auth/me', '/auth/start', '/auth/sign-out', '/', '/healthz', '/explorer/main.js', '/cornfield/house.json', '/cornfield/brand/logo.svg', '/cornfield/theme/a/b.css']) {

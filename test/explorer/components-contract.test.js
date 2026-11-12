@@ -131,10 +131,67 @@ describe('the root package takes nothing from the components (D1)', () => {
     expect(pkg.workspaces).toBeUndefined();
   });
 
-  it('does not ship them: the package files and the image are what they were', () => {
+  it('does not put them in cornfield\'s own npm package; the image gets only their build, from a builder stage (D11)', () => {
     expect(pkg.files).toEqual(['cli/', 'core/', 'explorer/', 'plugins/', 'server/', 'README.md', 'LICENSE', 'CHANGELOG.md']);
     const dockerfile = fs.readFileSync(path.join(CORNFIELD, 'Dockerfile'), 'utf8');
-    expect(dockerfile).not.toMatch(/components/);
+    const lines = dockerfile.split('\n').filter((l) => !l.trim().startsWith('#'));
+    const froms = lines.map((l, i) => [l, i]).filter(([l]) => /^FROM /.test(l));
+    expect(froms.map(([l]) => l)).toEqual(['FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS components', 'FROM node:22-alpine']);
+    // StencilRS publishes glibc binaries only (linux-x64-gnu, linux-arm64-gnu): on a musl base the build dies loading it (ERR_DLOPEN_FAILED, PR #245's
+    // first image job). The builder runs on glibc, on the build machine's own platform (never emulated); the final image stays Alpine
+    expect(froms[0][0]).not.toMatch(/alpine|musl|busybox|distroless|:\s*$/i);
+    expect(froms[0][0]).toMatch(/^FROM --platform=\$BUILDPLATFORM node:22-(?:bookworm|trixie|bullseye)(?:-slim)? AS components$/);
+    const builder = lines.slice(froms[0][1], froms[1][1]).join('\n');
+    const final = lines.slice(froms[1][1]).join('\n');
+    // the builder installs components/'s own dev dependencies from its own lockfile and builds
+    expect(builder).toMatch(/COPY components\/package\.json components\/package-lock\.json/);
+    expect(builder).toMatch(/cd components && npm ci /);
+    expect(builder).toMatch(/cd components && npm run build/);
+    // the final image takes the build's dist/ and nothing else of components/: no install, no sources, no node_modules
+    expect(final.split('\n').filter((l) => /components/.test(l))).toHaveLength(1);
+    expect(final).toMatch(/^COPY --from=components \/src\/components\/dist \.\/components\/dist$/m);
+    expect(final).not.toMatch(/COPY components|cd components|npm run build/);
+    expect(final).toMatch(/npm ci --omit=dev/);
+    // the build context lets the builder see components/ sources, and neither node_modules nor a build
+    const ignored = fs.readFileSync(path.join(CORNFIELD, '.dockerignore'), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+    expect(ignored).not.toContain('components');
+    expect(ignored).toEqual(expect.arrayContaining(['**/node_modules', 'components/dist']));
+  });
+
+  it('a checkout needs no build: the server answers the components\' route with a plain 404 when components/dist is not there (server/components.js)', () => {
+    const server = fs.readFileSync(path.join(CORNFIELD, 'server', 'components.js'), 'utf8');
+    expect(server).not.toMatch(/child_process|spawn|exec\(/);
+    expect(server).toContain("npm run build");
+  });
+
+  it('is released under cornfield\'s version: the release builds them with it, stamps the package, and publishes only once armed: by NPM_TOKEN, or after a first publish by trusted publishing (D11)', () => {
+    const workflow = fs.readFileSync(path.join(CORNFIELD, '.github', 'workflows', 'release.yml'), 'utf8');
+    const job = workflow.slice(workflow.indexOf('\n  components:\n'));
+    // the version from the tag, in cornfield's package.json (what the build reads) and in the package, before the build; the build is checked against it
+    expect(job.indexOf('npm version --no-git-tag-version')).toBeGreaterThan(0);
+    expect((job.match(/npm version --no-git-tag-version --allow-same-version "\$\{VERSION\}"/g) || [])).toHaveLength(2);
+    expect(job.indexOf('npm version')).toBeLessThan(job.indexOf('npm run build'));
+    expect(job).toContain("require('./dist/version.json').cornfield");
+    expect(job).toContain("require('./package.json').version");
+    // permissions: what the npm job has, nothing more
+    expect(job).toMatch(/permissions:\n\s+contents: read\n\s+id-token: write[^\n]*\n\s+env:/);
+    // the token lives in the environment of the publish step alone, under a name of its own (setup-node exports a placeholder NODE_AUTH_TOKEN), is
+    // tested for emptiness, handed to npm only for the publish, and never echoed
+    expect(job.match(/secrets\.NPM_TOKEN/g)).toHaveLength(1); // this job names the secret once, on the publish step
+    const publish = job.slice(job.indexOf('- name: Publish @popcorn245/cornfield-components'));
+    expect(publish).toContain('NPM_TOKEN: ${{ secrets.NPM_TOKEN }}');
+    expect(publish).toMatch(/if \[ -z "\$\{NPM_TOKEN:-\}" \]; then\n/);
+    expect(publish).toMatch(/\n\s+NODE_AUTH_TOKEN="\$\{NPM_TOKEN:-\}" npm publish --access public --provenance\n?$/);
+    expect(job.replace(publish, '').split('\n').filter((l) => !l.trim().startsWith('#')).join('\n')).not.toMatch(/NODE_AUTH_TOKEN|NPM_TOKEN:/);
+    expect(job).not.toMatch(/echo[^\n]*\$\{?(NODE_AUTH_TOKEN|NPM_TOKEN)/);
+    expect(job).not.toMatch(/set -[a-z]*x/);
+    // unarmed (no token, a name never published) it says so and succeeds; a registry that cannot say fails rather than guess
+    expect(publish).toMatch(/404\)\n\s+echo "NPM_TOKEN is not set[^\n]*\n\s+exit 0 ;;/);
+    expect(publish).toMatch(/\*\) echo [^\n]*exit 1 ;;/);
+    // the existing jobs and their outputs are as they were
+    for (const name of ['check', 'version', 'image', 'npm']) expect(workflow).toContain(`\n  ${name}:\n`);
+    expect(workflow).toContain('tag: ${{ steps.made.outputs.tag }}');
+    expect(workflow).toContain('version: ${{ steps.made.outputs.version }}');
   });
 
   it('runs the root suite without components/ installed: its tests are not collected', () => {
@@ -143,10 +200,12 @@ describe('the root package takes nothing from the components (D1)', () => {
     expect(config).toContain("'components/**'");
   });
 
-  it('the components are a package of their own: private for now, its own lockfile, pinned versions', () => {
+  it('the components are a package of their own: published under cornfield\'s version, its own lockfile, pinned versions', () => {
     const own = JSON.parse(fs.readFileSync(path.join(CORNFIELD, 'components', 'package.json'), 'utf8'));
     expect(own.name).toBe('@popcorn245/cornfield-components');
-    expect(own.private).toBe(true);
+    expect(own.private).toBeUndefined();
+    expect(own.version).toBe(pkg.version); // main holds the two equal; the release sets both from the tag
+    expect(own.publishConfig).toEqual({ access: 'public', provenance: true });
     expect(fs.existsSync(path.join(CORNFIELD, 'components', 'package-lock.json'))).toBe(true);
     for (const [name, version] of Object.entries({ ...own.devDependencies, ...own.dependencies })) expect(version, name).toMatch(/^\d+\.\d+\.\d+(-[\w.]+)?$/); // exact, as the StencilRS starter pins them
     expect(own.devDependencies['@popcorn245/stencilrs']).toBeTruthy();

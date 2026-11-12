@@ -104,14 +104,15 @@ export function typesFor(components) {
   for (const c of components) parts.push(`    '${c.tagName}': HTML${cls(c)}Element;`);
   parts.push('  }', '}', '');
   const index = [
-    "export * from './components';",
+    // `.js`: a consumer under moduleResolution node16/nodenext needs the extension (TypeScript maps it to components.d.ts); bundler takes it too
+    "export * from './components.js';",
     '/** The version of cornfield these components were built from (the server reports the same number) */',
     'export declare const version: string;',
     ...components.map((c) => `export declare const ${cls(c)}: { prototype: HTML${cls(c)}Element; new (): HTML${cls(c)}Element };`),
     '',
   ].join('\n');
   const files = { 'components.d.ts': `${parts.join('\n')}\n`, 'index.d.ts': index };
-  for (const c of components) files[`${c.tagName}.d.ts`] = `export * from './components';\nexport declare const ${cls(c)}: { prototype: HTML${cls(c)}Element; new (): HTML${cls(c)}Element };\n`;
+  for (const c of components) files[`${c.tagName}.d.ts`] = `export * from './components.js';\nexport declare const ${cls(c)}: { prototype: HTML${cls(c)}Element; new (): HTML${cls(c)}Element };\n`;
   return files;
 }
 
