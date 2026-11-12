@@ -822,3 +822,40 @@ describe('two Work panels in one document (step 6)', () => {
     expect(b.inst.strings.issuesAndPrs).toBeUndefined();
   });
 });
+
+describe('the pieces with no Work panel beside them (a review mounts none)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('requestAnimationFrame', () => 0);
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  });
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('the node panel shows no Threads and no Start a run, the bar no Answer, the account menu its Proposals entry, and nothing throws', async () => {
+    const one = mount('lone', topologyA());
+    const panel = nodePanel.mount(one.root, one.inst);
+    const bar = proposalPiece.mount(one.root, one.inst);
+    Object.assign(one.state, { proposal: { title: 'x' }, proposalSlug: '0042-x', proposalSource: 'pull/42' });
+    selectNode(one.inst, one.state.nodes[0]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(one.root.querySelector('#drawer-threads').textContent.trim()).toBe('');
+    expect(one.root.querySelector('[data-thread-open], [data-thread-start]')).toBe(null);
+    expect(one.root.querySelector('#drawer-run-btn').hidden).toBe(true);
+    one.inst.emit('proposal:bar', { open: true });
+    const answer = one.root.querySelector('[data-waiting-answer]');
+    expect(!answer || !!answer.closest('[hidden]')).toBe(true);
+    expect(one.root.querySelector('#proposal-wrap').hidden).toBe(false);
+    // what the Work panel would hear is said to nobody
+    expect(() => {
+      one.inst.emit('thread:open', { number: 5 });
+      one.inst.emit('thread:start', { node: one.state.nodes[0] });
+      one.inst.emit('work:answer', { run: 'run-x' });
+      one.inst.emit('threads:ensure');
+      one.inst.emit('forge:start', { slug: '0042-x', returnTo: '#drawer-run-btn' });
+    }).not.toThrow();
+    expect(one.inst.ask('work:on')).toBeUndefined();
+    bar.destroy();
+    panel.destroy();
+    one.inst.destroy();
+  });
+});
