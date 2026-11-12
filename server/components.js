@@ -91,7 +91,7 @@ export function createComponents({ dir }) {
       const realRoot = fs.realpathSync(root);
       if (real !== path.join(realRoot, ...name.split('/'))) return null;
     } catch { return null; }
-    const stamp = `${stats.size}:${stats.mtimeMs}`;
+    const stamp = `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}`;
     const known = bodies.get(name);
     if (known?.stamp === stamp) return known;
     try {

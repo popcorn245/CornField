@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { pipeline } from 'node:stream';
 import { PROPOSAL_FILE, createProposalLister } from './proposal-walk.js';
 
 /** Content-Type by lower-case file extension (with the dot) */
@@ -127,11 +128,11 @@ export function readMap(config) {
   return got ? JSON.parse(got.body.toString('utf8')) : null;
 }
 
-/** The ETag of each file served, by the real path served, with the size, mtime and inode it was taken at */
+/** The ETag of each file served, by the real path served, with the size, mtime, ctime and inode it was taken at */
 const etags = new Map();
 
 function etagOf(real, fd, stats) {
-  const stamp = `${stats.size}:${stats.mtimeMs}:${stats.ino}`;
+  const stamp = `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}`; // ctime too: a write that puts the mtime back still moves it
   const known = etags.get(real);
   if (known && known.stamp === stamp) return known.etag;
   try {
@@ -154,11 +155,11 @@ export function notFound(res, reqPath) {
 /**
  * Sends one file (it must be a plain file), `no-cache` with an ETag, so the browser asks every time and an
  * unchanged file answers 304. A missing file is a 404. `filePath` is the real path `inside` gave: it is opened once, without following a
- * link, and the type, the ETag and the body all come from that one descriptor. The Content-Type is the requested name's, not the target's.
+ * link, and the type, the ETag and the body all come from that one descriptor. The Content-Type is the file's own, by its real name.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {string|null} filePath
- * @param {string} reqPath for the 404's text and the type
+ * @param {string} reqPath for the 404's text
  */
 export function sendFile(req, res, filePath, reqPath) {
   let fd = null;
@@ -174,7 +175,9 @@ export function sendFile(req, res, filePath, reqPath) {
     return notFound(res, reqPath);
   }
   const etag = etagOf(filePath, fd, stats);
-  const headers = { 'Content-Type': mime(reqPath), 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', ...(etag ? { ETag: etag } : {}) };
+  // Typed by the file sent, not by the name asked for: with nosniff the type is binding, so a `.js` name that is a link to another kind of file
+  // in the repo is not run as a script (and a file that is not a link has one name, so the two agree)
+  const headers = { 'Content-Type': mime(filePath), 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', ...(etag ? { ETag: etag } : {}) };
   if (etag && matchesEtag(req.headers['if-none-match'], etag)) {
     fs.closeSync(fd);
     res.writeHead(304, headers);
@@ -185,10 +188,8 @@ export function sendFile(req, res, filePath, reqPath) {
     fs.closeSync(fd);
     return res.end();
   }
-  const body = fs.createReadStream(filePath, { fd, start: 0 });
-  body.on('error', () => res.destroy());
-  res.on('close', () => body.destroy());
-  body.pipe(res);
+  // `pipeline` closes the descriptor however the answer ends: sent, failed, the visitor gone mid-body, or gone before this was reached
+  pipeline(fs.createReadStream(filePath, { fd, start: 0 }), res, () => {});
 }
 
 // ---------------------------------------------------------------------------

@@ -62,7 +62,7 @@ import { BRAND_SVG_CSP, MANIFEST_PATH, appNameOf, brandAssetFile, brandImages, c
 import { clientStrings } from '../core/strings.js';
 import { clientLayers } from '../core/layers.js';
 import { MAX_THEME_ASSET_BYTES, MAX_THEME_BYTES, THEME_ASSET_PREFIX, THEME_NAME, THEME_SVG_CSP, clientTheme, cssProblems, cssUrls, fontOrigins, themeAssetFile, themeAssetPath, themeUrlTarget } from '../core/theme.js';
-import { decodePath, inside, named, notFound, readPlain, sendFile } from './files.js';
+import { decodePath, inside, isUnder, named, notFound, readPlain, sendFile } from './files.js';
 import { serveProposals } from './proposals.js';
 import { serveForge } from './forge-routes.js';
 import { hasAdapter } from './forge.js';
@@ -571,11 +571,15 @@ export function createCornfieldServer(config, opts = {}) {
     if (BROWSER_PLUGINS.has(reqPath)) return sendFile(req, res, inside(PLUGINS_DIR, reqPath.slice('/plugins/'.length)), reqPath);
     if (reqPath.startsWith('/repo/')) {
       const rel = reqPath.slice('/repo/'.length);
-      // The allowlist judges the name as written (a link inside the repo keeps the name it has); what is sent is the real file, if it is still in the repo
+      // The allowlist judges the name asked for, then the file it really is: a .js file, and (unless the import map names it) really inside a listed module folder
+      // (each judged by its own real path, so a module folder that is a link inside the repo works). A link in a module folder to anything else in
+      // the repo (a .env, a source, a database) is refused like a file that is not there
       const written = named(root, rel);
       const relNorm = written ? path.relative(root, written).split(path.sep).join('/') : null;
       const allowed = relNorm && relNorm.endsWith('.js') && (repoModules.files.includes(relNorm) || repoModules.dirs.some((d) => relNorm.startsWith(`${d}/`)));
-      return allowed ? sendFile(req, res, inside(root, rel), reqPath) : notFound(res, reqPath);
+      const real = allowed ? inside(root, rel) : null;
+      const isModule = real && real.endsWith('.js') && (repoModules.files.includes(relNorm) || repoModules.dirs.some((d) => { const dir = inside(root, d); return !!dir && isUnder(dir, real); }));
+      return isModule ? sendFile(req, res, real, reqPath) : notFound(res, reqPath);
     }
     return notFound(res, reqPath);
   }

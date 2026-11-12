@@ -69,6 +69,7 @@ async function readTopology(where) {
   if (!file) return null;
   try {
     const st = await fsp.stat(file);
+    if (!st.isFile()) return null; // a pipe would hold a reader thread for good
     const stamp = `${st.mtimeMs}:${st.size}`;
     const known = topologies.get(file);
     if (known && known.stamp === stamp) return known.topology;
