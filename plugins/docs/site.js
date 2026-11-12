@@ -17,7 +17,7 @@ import path from 'node:path';
 import { escapeHtml as esc } from '../../core/text.js';
 import { deriveTopology } from '../../core/derive.js';
 import { readTopology } from '../../core/validate.js';
-import { renderMarkdown } from './markdown.js';
+import { renderMarkdown, safeUrl } from './markdown.js';
 import docsDeriver, { resolveLink } from './index.js';
 
 /** The file a built site holds, so a rebuild knows the folder is its own */
@@ -33,10 +33,24 @@ export function sourceUrlOf(config) {
   return f.type === 'forgejo' ? `${origin}/${f.repo}/src/branch/main` : `${origin}/${f.repo}/blob/HEAD`;
 }
 
-/** A link from one site file to another, relative */
+/**
+ * A link from one site file to another, relative. A file name is data: a `%`, `#`, `?`, `\` (a browser reads it as `/`),
+ * space or control character is written as `%XX`, so the link names the file and nothing else; and a first segment
+ * that holds a `:` gets a leading `./`, or a browser reads it as a scheme (`javascript:x.html`).
+ */
 const relHref = (fromOutput, toOutput) => {
-  const rel = path.posix.relative(path.posix.dirname(fromOutput), toOutput);
-  return rel || path.posix.basename(toOutput);
+  const rel = path.posix.relative(path.posix.dirname(fromOutput), toOutput) || path.posix.basename(toOutput);
+  const href = rel.replace(/[%#?\\\u0000-\u0020\u007f]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`);
+  return href.split('/')[0].includes(':') ? `./${href}` : href;
+};
+
+/**
+ * A config's URL the site may link to: absolute http or https with a host (`https://`; not `https:x`, which a page
+ * on https reads as a path of its own), and one a browser reads as such (see `safeUrl`), or null
+ */
+const webUrl = (u) => {
+  const url = safeUrl(u);
+  return url && /^https?:\/\//i.test(url) ? url : null;
 };
 
 /**
@@ -48,6 +62,7 @@ const relHref = (fromOutput, toOutput) => {
  * @returns {Record<string, string | { copy: string }>}
  */
 export function siteFiles({ title, pages, nodes, edges, read, exists, isDir, sourceUrl = null }) {
+  sourceUrl = webUrl(sourceUrl);
   const files = {};
   const byId = new Map(pages.map((p) => [p.id, p]));
   const byFile = new Map(pages.map((p) => [p.file, p]));
@@ -162,7 +177,7 @@ function mapBody({ pages, nodes, out, back }) {
     const words = `<text class="${cls}" x="${f(tx)}" y="${f(y)}" text-anchor="${right ? 'start' : 'end'}" dominant-baseline="middle" transform="rotate(${f(deg)} ${f(x)} ${f(y)})">${esc(short)}</text>`;
     return href ? `<a href="${esc(href)}"><title>${esc(text)}</title>${dot}${words}</a>` : `<g><title>${esc(text)}</title>${dot}${words}</g>`;
   };
-  const docLabels = pages.map((p) => label(p.id, p.title, p.output, 'doc'));
+  const docLabels = pages.map((p) => label(p.id, p.title, relHref('map.html', p.output), 'doc'));
   const codeLabels = codeIds.map((id) => label(id, nodes.get(id).file || nodes.get(id).label, null, 'code'));
   const pad = 230;
   const svg = `<svg class="map" viewBox="${-pad} ${-pad / 2} ${size + 2 * pad} ${size + pad}" role="img" aria-label="The docs and their links">
@@ -173,7 +188,7 @@ ${codeLabels.join('\n')}
   const rows = pages.map((p) => {
     const to = out.get(p.id).map((id) => byId.get(id)?.title || nodes.get(id)?.file).filter(Boolean);
     const from = back.get(p.id).map((id) => byId.get(id).title);
-    return `<tr><td><a href="${esc(p.output)}">${esc(p.title)}</a><br><code>${esc(p.file)}</code></td><td>${to.length ? esc(to.join(', ')) : '—'}</td><td>${from.length ? esc(from.join(', ')) : '—'}</td></tr>`;
+    return `<tr><td><a href="${esc(relHref('map.html', p.output))}">${esc(p.title)}</a><br><code>${esc(p.file)}</code></td><td>${to.length ? esc(to.join(', ')) : '—'}</td><td>${from.length ? esc(from.join(', ')) : '—'}</td></tr>`;
   });
   const edgeCount = pages.reduce((s, p) => s + out.get(p.id).length, 0);
   return `<article class="doc wide">
