@@ -126,6 +126,70 @@ describe('the first fit follows the box (issue #253)', () => {
     expect(camera()).toEqual(before);
   });
 
+  it('a framing is not a fit: a node brought into view, then a new box, keeps the framing (as 0.46.1 does)', () => {
+    const size = { w: 1024, h: 716 };
+    const { piece, map, camera } = make(size, { topology: topology() });
+    map.resize();
+    expect(piece.focusNode(sample.nodes[3].id)).toBe(true);
+    for (let i = 0; i < 200; i++) frames(); // the flight lands (or jumps, under reduced motion)
+    const framed = camera();
+    size.w = 900; size.h = 600;
+    map.resize();
+    expect(camera()).toEqual(framed);
+  });
+
+  it('a box that changes while a flight is in the air keeps the flight going where it was going', () => {
+    const size = { w: 1024, h: 716 };
+    const { piece, state, map, camera } = make(size, { topology: topology() });
+    map.resize();
+    const fitted = camera();
+    piece.focusNode(sample.nodes[5].id);
+    frames(); // a frame or two of the glide: the camera has left the fit
+    expect(camera()).not.toEqual(fitted);
+    size.w = 800; size.h = 500;
+    map.resize();
+    const mid = camera();
+    expect(mid).not.toEqual(wanted(piece, state)); // not snapped back to the whole map
+    for (let i = 0; i < 200; i++) frames();
+    expect(camera()).not.toEqual(fitted);
+  });
+
+  it('a box that goes to nothing and comes back (a host hidden and shown) gives the same fit; after a pan, the same pan', () => {
+    const size = { w: 1024, h: 716 };
+    const { state, map, camera } = make(size, { topology: topology() });
+    map.resize();
+    const fitted = camera();
+    size.w = 0; size.h = 0;
+    map.resize();
+    expect(camera()).toEqual(fitted); // no fit to nothing
+    size.w = 1024; size.h = 716;
+    map.resize();
+    expect(camera()).toEqual(fitted);
+    state.camera.x -= 75;
+    const panned = camera();
+    size.w = 0; size.h = 0;
+    map.resize();
+    size.w = 1024; size.h = 716;
+    map.resize();
+    expect(camera()).toEqual(panned);
+  });
+
+  it('a new topology is fitted, and that fit is the one a new box makes again', () => {
+    const size = { w: 1024, h: 716 };
+    const { piece, state, map, camera } = make(size, { topology: topology() });
+    map.resize();
+    state.camera.x += 200; // the person moved the first map
+    const half = topology();
+    half.nodes = half.nodes.slice(0, Math.ceil(half.nodes.length / 2));
+    const ids = new Set(half.nodes.map((n) => n.id));
+    half.edges = half.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+    piece.update({ topology: half });
+    expect(camera()).toEqual(wanted(piece, state));
+    size.w = 700; size.h = 700;
+    map.resize();
+    expect(camera()).toEqual(wanted(piece, state));
+  });
+
   it("cornfield's own page calls the engine's fit itself (view.js): the same rule, with the page's padding", () => {
     const size = { w: 0, h: 0 };
     const { piece, state, map, camera } = make(size);
