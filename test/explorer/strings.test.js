@@ -204,7 +204,9 @@ describe('the code only asks for keys the table has', () => {
   it('every t(\'key\') in the explorer is a key, and every key is asked for or marked in the page', () => {
     const files = ['.', 'engine', 'pieces'].flatMap((d) => fs.readdirSync(path.join(EXPLORER, d)).filter((f) => f.endsWith('.js')).map((f) => path.join(d, f)));
     const asked = new Set();
-    for (const f of files) for (const m of fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\b(?:t|say)\((?:inst, )?'([A-Za-z]+)'\)/g)) asked.add(m[1]); // the pieces read their words with t(inst, 'key'); the Work piece's models are handed its `t` as `say`
+    // The pieces read their words with t(inst, 'key'); the models the Work piece hands its `t` call it `say` (a `say` elsewhere is another thing: theme-sheet.js says its state)
+    const SAY = ['runs-view.js', 'waiting-model.js'];
+    for (const f of files) for (const m of fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(SAY.includes(f) ? /\b(?:t|say)\((?:inst, )?'([A-Za-z]+)'\)/g : /\bt\((?:inst, )?'([A-Za-z]+)'\)/g)) asked.add(m[1]);
     expect(asked.size).toBeGreaterThan(10);
     for (const k of asked) expect(Object.keys(STRINGS), k).toContain(k);
     for (const m of (page + Object.values(workMarkup()).join('')).matchAll(/data-corn-string(?:-aria-label|-placeholder)?="([A-Za-z]+)"/g)) asked.add(m[1]); // the page's markup, and the Work piece's
