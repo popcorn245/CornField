@@ -433,6 +433,8 @@ export function mount(root, inst, options = {}) {
   //  Following the instance
   // ---------------------------------------------------------------------------
   scope.on('proposal:draw', ({ open }) => renderBar({ open }));
+  scope.on('changes:peek', (text) => { own('proposal-peek').textContent = text; }); // the review column's count line, for the phone's peek
+  scope.on('proposal:focus-title', () => { const title = own('proposal-title'); title.tabIndex = -1; title.focus(); }); // the decision hands the focus to the proposal's name
   scope.on('proposal:message', (m) => paintMessage(m));
   scope.on('proposal:listing', () => { renderMenu(); if (state.proposal) paintSource(); });
   scope.on('proposal:waiting', ({ run, key }) => paintWaitingLine(run, key));

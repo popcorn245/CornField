@@ -34,7 +34,7 @@
  *   decision  { outcome: 'approved' | 'notes', review, slug, source }  the server took the review: `review` is what it answered (verdict, at, by, posted…).
  *             Said after the answer, never before; the piece never navigates the window itself (the page, or a host, answers the event)
  *   auth      { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
- * What it follows: `proposal:bar` (the bar was drawn: start again for another proposal), `changes:paint` (the line follows what was played),
+ * `proposal:focus-title` (a Retry that worked: the focus goes to the proposal's name, which the bar owns). What it follows: `proposal:bar` (the bar was drawn: start again for another proposal), `changes:paint` (the line follows what was played),
  * `whatif:edits-changed`. What it asks of a neighbour that may not be there (nobody answering is a no): `changes:played-line`, `whatif:edits`
  * (the edits, else none), `whatif:form` ({ name } of an open form with words in it, else none), `whatif:describe` (one line each, else none). What it
  * tells one: `whatif:clear` (the edits went with a note), `mockups:refresh` (an approval covers the screens as they are now).
@@ -354,10 +354,7 @@ export function mount(root, inst, options = {}) {
     const retried = !!active && rootEl.contains(active) && active.matches('[data-review-retry]');
     ui.loadFailed = false;
     paint();
-    const title = inst.el('proposal-title');
-    if (!retried || !title) return;
-    title.tabIndex = -1;
-    title.focus();
+    if (retried) inst.emit('proposal:focus-title');
   }
 
   /** The latest admin review on the proposal's PR, as the server reads it from the comments (none yet is a 404) */

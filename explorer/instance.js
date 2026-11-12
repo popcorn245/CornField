@@ -36,9 +36,21 @@
  *   layers          (none)  a layer went on or off, or the layers were set (engine/layers.js): live.js starts or stops the live layer, a search moves its matches
  *   search          { query, current }  the search's query or its current match changed (pieces/search.js)
  *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js)
+ *   proposal        { change: 'opened' | 'view' | 'closed', slug, source, pinSource, view, proposal }  the open proposal changed (engine/proposal.js; the page writes the address from it)
+ *   proposal:draw   { open }  the bar and the review column draw again; proposal:bar { open }: they have, so what sits on the bar draws again
+ *   proposal:mark   { applied, effective, proposal }  before the map is laid out (the what-if editor marks its edits)
+ *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal; proposal:listing: the list the server gave was read
+ *   proposal:pull-head sha  the open proposal's PR was read; proposal:waiting { run, key }: a run waits on it (the bar's waiting line); proposal:waiting-reset
+ *   scenario:player { id, index, total, done, playing, checks } | null  the scenario player moved, or closed (engine/player.js)
+ *   changes:paint   (none)  the review column's lists were drawn again; changes:peek text: its count line, for a phone's peek
+ *   decision        { outcome: 'approved' | 'notes', review, slug, source }  the server took the review, after it answered (pieces/decision.js)
+ *   auth            { status: 401 | 403, during: 'facts' | 'review' | 'send' | 'landing' }  sign-in is needed: a read or the press was refused
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
+ *   node:show-edge  { edge }  show this edge in the panel (engine/proposal.js `showEdge`)
+ *   changes:show    'changes' | 'scenarios'  the review column shows that section; proposal:focus-title: the focus goes to the proposal's name
+ *   whatif:clear    (none)  the edits went with a note; mockups:refresh: an approval covers the screens as they are now; whatif:edits-changed: the edits changed
  *   node:show       { node, frame }  show this node in the panel (engine/selection.js `selectNode`, once the scene is up to date); node:close: close it;
  *                   node:focus: the focus goes into the open panel (Enter on the map)
  *   layers:redraw   (none)  draw the Layers menu again (engine/layers.js: a layer, the nodes or a review changed)
@@ -52,6 +64,10 @@
  *                           (live.js does); live:hydrate (emit) el: its photos
  *   forge:can-start (none)  can a run be started from here? -> boolean; forge:start (emit) { slug, returnTo }: open the Start dialog
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
+ *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
+ *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
+ *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
+ *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
  *
  *   What input.js asks of the page (requests, not news of a change; the page decides what each means):
  *   select          node    a tap on a node; `background`: a tap on the bare map; `grab`: a hand took the camera

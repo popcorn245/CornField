@@ -16,6 +16,8 @@
  *   proposal:mark    { applied, effective, proposal }  before the map is laid out: the what-if editor puts its `edit` mark on what the edits added or removed
  *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal: while one opens, or why it did not
  *   proposal:pull-head  sha  the PR of the open proposal was read: the review column keys what was seen by its head
+ *   proposal:focus-title  (none)  the focus goes to the proposal's name (a Retry in the decision worked; the bar answers)
+ *   changes:peek     text  the review column's count line for the phone's peek, for the bar to show (pieces/changes.js)
  * What it asks (`inst.ask`; nobody answering is a no):
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with the edits in); no answer: the proposal itself
  *   proposal:before-close  (none) -> false  keeps the proposal open (the what-if editor is asking whether to keep its edits)

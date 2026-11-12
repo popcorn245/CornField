@@ -23,7 +23,7 @@
  *
  *   mount(root, inst, options) -> { update, destroy, ... }
  *
- * What it follows: `proposal:draw` (the column draws), `proposal:pull-head` (the PR head the record is keyed by), `changes:show` ('changes' | 'scenarios'),
+ * What it tells: `changes:peek` (the phone's peek line: "6 changes · 3 scenarios for 2 personas", for the proposal's bar to show). What it follows: `proposal:draw` (the column draws), `proposal:pull-head` (the PR head the record is keyed by), `changes:show` ('changes' | 'scenarios'),
  * `layers` (a step's "Layer off"), `scenario:clear`. What it answers: `changes:opened-line` (title -> "Opened X: 6 changes, 3 scenarios for 2 personas."),
  * `changes:played-line` (-> "2 of 3 scenarios played"). What it says: `changes:paint` (the lists were drawn again: the decision line follows what was
  * played) and `scenario:player` (engine/player.js).
@@ -320,8 +320,7 @@ export function mount(root, inst, options = {}) {
     summary.textContent = (p && typeof p.summary === 'string' && p.summary) || '';
     summary.hidden = !summary.textContent;
     lists.scrollTop = scroll;
-    const peek = inst.el('proposal-peek');
-    if (peek) peek.textContent = peekLine();
+    inst.emit('changes:peek', peekLine()); // the phone's one line under the counts, which the proposal's bar shows
     if (key) {
       const again = [...lists.querySelectorAll('[data-focus-key]')].find((el) => el.getAttribute('data-focus-key') === key);
       if (again) again.focus();
