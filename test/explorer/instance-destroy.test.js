@@ -456,6 +456,29 @@ describe('the review pieces: proposal bar, change list with the player, decision
     inst.destroy();
   });
 
+  it('a destroy while the review is being sent: the answer says nothing, clears no edits and reads nothing more', async () => {
+    const calls = reviewFetch();
+    const { inst, root } = make();
+    const pieces = mountReview(root, inst);
+    await vi.advanceTimersByTimeAsync(0);
+    let answer;
+    const late = new Promise((r) => { answer = r; });
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn((url, init = {}) => ((init.method || 'GET') === 'PUT' ? (calls.push({ method: 'PUT', url: String(url) }), late) : realFetch(url, init))));
+    const said = vi.fn();
+    for (const name of ['decision', 'auth', 'whatif:clear', 'mockups:refresh']) inst.on(name, said);
+    root.querySelector('[data-review="approved"]').click();
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 100); // the hold is over, the PUT is in flight
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    pieces.end();
+    const before = calls.length;
+    answer(jsonRes(200, { verdict: 'approved', at: new Date().toISOString() }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(said).not.toHaveBeenCalled();
+    expect(calls.length).toBe(before); // no facts read again for a foot that is gone
+    inst.destroy();
+  });
+
   it('a destroy while the proposal is being fetched leaves the bar gone and the map as it was', async () => {
     const hold = [];
     reviewFetch({ hold });
