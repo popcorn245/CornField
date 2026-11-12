@@ -2997,6 +2997,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work panel as a piece on the instance (spec 0011 D2 and D3; CF-07, CF-42, spec 0001 section 4, spec 0010): the Work button with its badge, the panel with its tabs (Specs, PRs, Issues, Threads, … (explorer/pieces/work.js)"
+    },
+    {
+      "id": "core-explorer-engine-source-address",
+      "label": "source-address.js",
+      "type": "core",
+      "file": "explorer/engine/source-address.js",
+      "summary": "The addresses of a cornfield server (spec 0011 D6), apart from the load that uses them (engine/source.js re-exports all of this): checking a `src`, the server's sign-in and the origin of a page.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The addresses of a cornfield server (spec 0011 D6), apart from the load that uses them (engine/source.js re-exports all of this): checking a `src`, the server's sign-in and the origin of a page. (explorer/engine/source-address.js)"
+    },
+    {
+      "id": "core-explorer-pieces-review-source",
+      "label": "review-source.js",
+      "type": "core",
+      "file": "explorer/pieces/review-source.js",
+      "summary": "What a review with a `src` brings (spec 0011 D1, D5, D6, D7, D9): the load from a cornfield server and the states it shows, and the server's theme.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a review with a `src` brings (spec 0011 D1, D5, D6, D7, D9): the load from a cornfield server and the states it shows, and the server's theme. (explorer/pieces/review-source.js)"
     }
   ],
   "edges": [
@@ -8598,11 +8618,6 @@
       "label": "imports"
     },
     {
-      "from": "page-doc-docs-embedding",
-      "to": "page-doc-docs-theming",
-      "dashed": true
-    },
-    {
       "from": "page-doc-docs-theming",
       "to": "page-doc-docs-embedding",
       "dashed": true
@@ -9309,12 +9324,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-pieces-scope",
-      "to": "core-explorer-theme-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-pieces-status",
       "to": "core-core-text",
       "dashed": true,
@@ -9343,11 +9352,6 @@
       "to": "core-explorer-engine-source",
       "dashed": true,
       "label": "imports"
-    },
-    {
-      "from": "page-doc-docs-embedding",
-      "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
-      "dashed": true
     },
     {
       "from": "core-explorer-engine-source",
@@ -10118,7 +10122,56 @@
       "to": "core-core-text",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-source-address"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-review-source"
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-engine-theme-sheet",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review-source",
+      "to": "core-explorer-pieces-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-review-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-config",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T16:25:54.320Z"
+  "updatedAt": "2026-11-12T16:40:11.779Z"
 }

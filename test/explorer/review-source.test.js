@@ -365,3 +365,22 @@ describe('what it leaves (D3)', () => {
     piece.destroy();
   });
 });
+
+describe('what needs the Work panel is not there, and is not a button that does nothing (the review mounts no Work piece)', () => {
+  it('the node panel has no Threads section, no Start a thread and no Start a run, and the bar has no Answer', async () => {
+    const { piece, root, calls } = make({ src: BASE, proposal: '0002-checkout', source: 'pull/2' });
+    await until(() => calls.ready === 1);
+    const node = piece.inst.state.nodes.find((n) => n.mark === 'added') || piece.inst.state.nodes[0];
+    piece.update({ node: node.id });
+    await sleep(30);
+    expect(root.querySelector('[data-thread-start], [data-thread-open]')).toBe(null);
+    expect(root.querySelector('#drawer-threads').textContent.trim()).toBe('');
+    expect(root.querySelector('#drawer-run-btn').closest('[hidden]')).not.toBe(null);
+    expect(root.querySelector('[data-waiting-answer]')).toBe(null);
+    // nobody answers the Work panel's asks, so none of them is true here
+    expect(piece.inst.ask('work:on')).toBeUndefined();
+    expect(piece.inst.ask('forge:can-start')).toBeUndefined();
+    expect(piece.inst.ask('threads:index', node.id)).toBeUndefined();
+    piece.destroy();
+  });
+});
