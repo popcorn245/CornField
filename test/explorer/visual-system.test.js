@@ -124,9 +124,15 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
   });
 
   it('gives its rules no more weight than one class (an ancestor is in :where()), so a brand\'s [data-corn] hook still wins', () => {
-    // the rules of the density work: the ones that set a height from the control token or a panel's head height
-    const block = ALL.filter((r) => /var\(--hx-control-h\)|--corn-panel-head-height/.test(r.body)).map((r) => `${r.selectors.join(', ')} {${r.body}}`).join('\n');
-    const heavy = ALL.filter((r) => /--corn-panel-head-height/.test(r.body)).flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
+    // the rules of the density work (explorer.css's section, now in the pieces' files): the panel title, the panel head, the bars' controls, and
+    // every rule that sets a height from the control token or a panel's head height
+    const DENSITY = ['.hx-drawer-title', '.hx-forge-detail-title', '.hx-forge-notes-title', '.hx-confirm-title', '.hx-proposal-name', '.hx-forge-head', '.hx-drawer-head',
+      ':where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn', ':where(.hx-header) .hx-live-chip'];
+    const subject = (sel) => sel.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, '').trim().split(/[\s>+~]+/).pop();
+    const own = ALL.filter((r) => r.selectors.some((sel) => DENSITY.includes(sel) || DENSITY.slice(0, 7).some((d) => subject(sel).includes(d))) && /(^|;|\s)(min-)?height\s*:|font-size\s*:/.test(r.body));
+    expect(own.length).toBeGreaterThanOrEqual(3);
+    const block = [...own, ...ALL.filter((r) => /var\(--hx-control-h\)|--corn-panel-head-height/.test(r.body))].map((r) => `${r.selectors.join(', ')} {${r.body}}`).join('\n');
+    const heavy = [...own, ...ALL.filter((r) => /--corn-panel-head-height/.test(r.body))].flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
     expect(heavy).toEqual([]);
     expect(block).not.toMatch(/!important/);
   });

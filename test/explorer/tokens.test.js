@@ -302,7 +302,8 @@ describe('every stylesheet closes what it opens', () => {
     }
     return { end: depth, deepest, lowest };
   }
-  const sheets = ['tokens.css', 'house.css', 'sign-in.css', ...fs.readdirSync(path.join(EXPLORER, 'css')).filter((f) => f.endsWith('.css')).sort().map((f) => `css/${f}`)];
+  // every stylesheet of explorer/ and of explorer/css/, read from disk: a new file is checked without being listed here
+  const sheets = [...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.css')), ...fs.readdirSync(path.join(EXPLORER, 'css')).filter((f) => f.endsWith('.css')).sort().map((f) => `css/${f}`)];
 
   it('catches a lost closing brace', () => {
     expect(braces('@media (max-width: 1px) { .a { color: red; }\n.b { color: blue; }').end).toBe(1);
