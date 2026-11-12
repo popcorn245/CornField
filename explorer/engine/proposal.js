@@ -136,7 +136,9 @@ export async function openProposal(inst, slug, source = null) {
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
       const refused = res.status === 401 || res.status === 403; // a session that ended, or a login that is not a maintainer's: the sign-in is what to do
       if (refused) inst.emit('auth', { status: res.status, during: 'proposal' });
-      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${refused ? (res.status === 403 ? 'this is for the project\'s maintainers.' : 'you are not signed in.') : why || `the server had a problem (error ${res.status}).`}`);
+      // The server's own words, as every other refusal is said (cornfield's answers 401 "Sign in first."); words of ours only when it gave none
+      const fallback = refused ? (res.status === 403 ? 'this is for the project\'s maintainers.' : 'you are not signed in.') : `the server had a problem (error ${res.status}).`;
+      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${typeof why === 'string' && why ? why : fallback}`);
       err.notFound = res.status === 404;
       err.status = res.status;
       throw err;

@@ -55,7 +55,7 @@ function server(opts = {}) {
     if (u.pathname === '/proposals') return json(200, [{ slug: '0002-checkout', source: 'pull/2' }]);
     const named = /^\/proposals\/([^/]+)\.json$/.exec(u.pathname);
     if (named) {
-      if (opts.proposal401) return json(opts.proposal401, { error: 'no' });
+      if (opts.proposal401) return opts.bare ? new Response('', { status: opts.proposal401 }) : json(opts.proposal401, { error: opts.proposal401 === 401 ? 'Sign in first.' : 'Only maintainers can open this; ask one.' }); // the real server's words
       if (named[1] !== '0002-checkout') return json(404, { error: 'no such proposal' });
       return json(200, proposal, { 'X-Proposal-Source': 'pull%2F2', 'X-Proposal-Sha256': 'c'.repeat(64) });
     }
@@ -253,9 +253,16 @@ describe('a proposal that cannot be opened (D1)', () => {
     await until(() => calls.auth.length > 0);
     expect(calls.auth[0]).toEqual({ status: 401, signIn: signInUrl(BASE, PAGE), during: 'proposal' });
     await until(() => !!root.querySelector('[data-corn="source-sign-in"]'));
-    expect(root.querySelector('#proposal-message').textContent).toBe('0002-checkout could not be opened: you are not signed in.');
+    expect(root.querySelector('#proposal-message').textContent).toBe('0002-checkout could not be opened: Sign in first.'); // the server's words, as cornfield's page says them
     expect(calls.error[0].kind).toBe('proposal');
     piece.destroy();
+    // a server that says nothing: words of ours, never "error 401"
+    for (const [status, words] of [[401, 'you are not signed in.'], [403, 'this is for the project\'s maintainers.']]) {
+      const bare = make({ src: BASE, proposal: '0002-checkout' }, server({ proposal401: status, bare: true }));
+      await until(() => bare.calls.error.length > 0);
+      expect(bare.root.querySelector('#proposal-message').textContent).toBe(`0002-checkout could not be opened: ${words}`);
+      bare.piece.destroy();
+    }
   });
 });
 
