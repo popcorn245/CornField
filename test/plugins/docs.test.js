@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { renderMarkdown, markdownLinks, slugify } from '../../plugins/docs/markdown.js';
+import { renderMarkdown, markdownLinks, slugify, plainText } from '../../plugins/docs/markdown.js';
 import docs, { docRoute, docOutput, docPageId, resolveLink } from '../../plugins/docs/index.js';
 import { buildSite, sourceUrlOf, SITE_MARKER } from '../../plugins/docs/site.js';
 import { deriveTopology } from '../../core/derive.js';
@@ -49,6 +49,65 @@ describe('renderMarkdown', () => {
     ]);
     expect(renderMarkdown('[a](a.md)', { link: () => null }).html).toBe('<p>a</p>');
     expect(slugify('Stage 1: local only, until sign-in lands')).toBe('stage-1-local-only-until-sign-in-lands');
+  });
+});
+
+describe('a heading anchor, as GitHub makes it from the rendered text', () => {
+  const ids = (...headings) => renderMarkdown(headings.map((h) => `## ${h}`).join('\n\n')).headings.map((h) => h.id);
+
+  it('keeps the name of a tag written in backticks, and drops its brackets', () => {
+    expect(ids('`<corn-review>`: the one-tag review')).toEqual(['corn-review-the-one-tag-review']);
+  });
+
+  it('keeps two tags in code, and a tag beside other inline code', () => {
+    expect(ids('`<corn-a>` and `<corn-b>`')).toEqual(['corn-a-and-corn-b']);
+    expect(ids('`<corn-scope>` and `src`: reading a cornfield server')).toEqual(['corn-scope-and-src-reading-a-cornfield-server']);
+  });
+
+  it('keeps only the inner text of a real inline HTML tag outside code, and the text of emphasis and links', () => {
+    expect(ids('Press <kbd>Ctrl</kbd> and <em>go</em>')).toEqual(['press-ctrl-and-go']);
+    expect(ids('A **bold**, *em* and [linked](x.md) word, snake_case_word and `<kbd>` raw')).toEqual(['a-bold-em-and-linked-word-snake_case_word-and-kbd-raw']);
+  });
+
+  it('reads a character reference as its character, which the anchor then drops', () => {
+    expect(ids('Use &lt;x&gt; here')).toEqual(['use-x-here']);
+    expect(ids('Fish &amp; chips')).toEqual(['fish--chips']);
+    expect(ids('Written `&lt;x&gt;` in code')).toEqual(['written-ltxgt-in-code']);
+  });
+
+  it('numbers a repeated heading, whatever its markup', () => {
+    expect(ids('`<corn-x>` notes', '`<corn-x>` notes', 'Corn-x notes', '<b>corn-x</b> notes')).toEqual(['corn-x-notes', 'corn-x-notes-1', 'corn-x-notes-2', 'corn-x-notes-3']);
+  });
+
+  it('keeps the heading text a reader sees (the tag in code stays)', () => {
+    expect(renderMarkdown('## `<corn-review>`: the review').headings[0].text).toBe('<corn-review>: the review');
+  });
+
+  it('reads a backslash inside code as written, and an escaped backtick outside code as text', () => {
+    const h = renderMarkdown('## The `a\\*b` and `\\\\` marks\n\n## Not \\`code` here').headings;
+    expect(h.map((x) => x.text)).toEqual(['The a\\*b and \\\\ marks', 'Not `code` here']);
+    expect(h.map((x) => x.id)).toEqual(['the-ab-and--marks', 'not-code-here']);
+  });
+
+  it('cannot be made to swap in text it set aside, whatever characters the heading holds', () => {
+    const h = renderMarkdown('## `<x>` and \u00000\u0000 and \u00007\u0000').headings[0];
+    expect(h.text).toBe('<x> and �0� and �7�');
+    expect(h.id).toBe('x-and-0-and-7');
+  });
+
+  it('gives an image no text in the anchor, keeps marks on letters, and drops a no-break space or a tab', () => {
+    expect(ids('![logo](logo.png) CornField', 'Build ![CI](ci.svg)', 'हिन्दी शीर्षक', 'A&nbsp;B', 'Tab\there')).toEqual(['-cornfield', 'build-', 'हिन्दी-शीर्षक', 'ab', 'tabhere']);
+    expect(renderMarkdown('# ![logo](logo.png) CornField').title).toBe('logo CornField');
+  });
+
+  it('reads an autolink as its address, a link with a title as its text, and the common arrows as characters', () => {
+    expect(ids('See <https://example.com/a_b_c>', '[Link](x.md "a (note)") here', 'Before &rarr; after')).toEqual(['see-httpsexamplecoma_b_c', 'link-here', 'before--after']);
+  });
+
+  it('reads a huge or hostile heading in linear time', () => {
+    const t = performance.now();
+    for (const s of ['`'.repeat(300000) + 'a', ' _a'.repeat(100000), ' __a'.repeat(100000), '[a]('.repeat(100000), '[a](' + ' '.repeat(300000), '<!--'.repeat(100000), '['.repeat(300000)]) plainText(s);
+    expect(performance.now() - t).toBeLessThan(5000);
   });
 });
 
@@ -138,6 +197,14 @@ describe('the docs deriver', () => {
     writeRepo(root);
   });
 
+  it('finds a heading with a tag in code, and still warns on one that is not there', async () => {
+    fs.writeFileSync(path.join(root, 'docs/guide.md'), '# The guide\n\n## `<corn-review>`: the one-tag review\n\n[ok](#corn-review-the-one-tag-review) [ok too](adr/0001-first.md#the-first-decision) [gone](#corn-review)\n');
+    fs.writeFileSync(path.join(root, 'docs/adr/0001-first.md'), '# 0001\n\n## The `<first>` decision\n');
+    const out = await deriveTopology({ root, derivers: [{ deriver: docs }] });
+    expect(out.warnings).toEqual(['docs: docs/guide.md links to "#corn-review", but docs/guide.md has no heading "#corn-review".']);
+    writeRepo(root);
+  });
+
   it('maps nothing in a repo with no docs, and says so when the paths were asked for', async () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-nodocs-'));
     try {
@@ -183,6 +250,22 @@ describe('the site', () => {
     await expect(buildSite({ config, derivers: [], out: path.join(root, 'docs') })).rejects.toThrow(/not a site cornfield built/);
     await expect(buildSite({ config, derivers: [], out: path.dirname(root) })).rejects.toThrow(/must not hold the repo/);
     expect(fs.existsSync(path.join(root, 'docs/guide.md'))).toBe(true);
+  });
+
+  it('keeps a title that holds a tag (written in code, or as a character reference) as text on every page and in the map', async () => {
+    fs.writeFileSync(path.join(root, 'docs/guide.md'), '# `<script>alert(1)</script>` &lt;img src=x onerror=alert(2)&gt;\n\n[home](../README.md)\n');
+    try {
+      const config = await loadConfig(root, { env: {} });
+      const derived = await deriveTopology({ root, derivers: [{ deriver: docs }] });
+      expect(derived.nodes.find((n) => n.file === 'docs/guide.md').summary).toBe('<script>alert(1)</script> <img src=x onerror=alert(2)>');
+      const out = path.join(root, '_site');
+      await buildSite({ config, derivers: [], out });
+      const html = ['index.html', 'docs/guide.html', 'map.html'].map((f) => fs.readFileSync(path.join(out, f), 'utf8')).join('\n');
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &lt;img src=x onerror=alert(2)&gt;');
+      expect(html).not.toMatch(/<script|<img src=x/i);
+    } finally {
+      writeRepo(root);
+    }
   });
 
   it('points repo files at the forge only when there is one', () => {
