@@ -400,4 +400,4 @@ sources: {
 proxy: { '/api/': 'http://127.0.0.1:3245' },
 ```
 
-A repo-local module is served at `/repo/<path>`, with the other `.js` files in its folder; nothing else of the repo is served. When several sources give a live source, their answers are laid over each other.
+A repo-local module is served at `/repo/<path>`, with the other `.js` files in its folder; nothing else of the repo is served. A symlink there is followed only to a `.js` file that really lies in a module folder (or, for a name `importMap` lists, to a `.js` file in the repo); a link to anything else, in the repo or out of it, is a 404 like a file that is not there ([deploy.md](deploy.md#security-notes)). When several sources give a live source, their answers are laid over each other.

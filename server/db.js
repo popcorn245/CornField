@@ -402,6 +402,13 @@ export function openStore(dataDir, { file = DB_FILE, migrations = MIGRATIONS } =
   if (typeof dataDir !== 'string' || dataDir === '') throw new Error('openStore needs the data folder.');
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const where = path.join(dataDir, file);
+  // The file and the ones SQLite keeps beside it are plain files or not there yet, never a link: SQLite would write through one, and the
+  // chmod below would change its target (a data folder put inside a checkout could hold a committed link)
+  for (const name of [where, `${where}-wal`, `${where}-shm`, `${where}-journal`]) {
+    let stats = null;
+    try { stats = fs.lstatSync(name); } catch { /* not there yet */ }
+    if (stats && !stats.isFile()) throw new Error(`${name} is not a plain file: cornfield keeps its database only in plain files in the data folder.`);
+  }
   const db = new DatabaseSync(where);
   try {
     fs.chmodSync(where, 0o600);

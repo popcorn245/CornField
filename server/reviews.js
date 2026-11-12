@@ -48,7 +48,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { isMaintainer, ForgeError } from './forge.js';
-import { PROPOSAL_FILE } from './files.js';
+import { PROPOSAL_FILE, isUnder } from './files.js';
 import { MAX_MOCKUPS, mockupPathProblem } from '../core/proposal.js';
 import { defuse } from './defuse.js';
 
@@ -261,12 +261,18 @@ export async function postNote(forge, n, text) {
 //  Stage 1 reviews, once
 // ---------------------------------------------------------------------------
 
-/** What Stage 1 left: `<dataDir>/reviews/<source>/<slug>.review.json` files that are plain files */
+/**
+ * What Stage 1 left: `<dataDir>/reviews/<source>/<slug>.review.json` files that are plain files, in folders that really lie in the data folder
+ * (a `reviews` or `<source>` folder that is a link out of it is not read, and nothing in it is renamed)
+ */
 function stage1Files(dataDir) {
   const out = [];
   const base = path.join(dataDir, 'reviews');
   let sources = [];
+  let realData;
   try {
+    realData = fs.realpathSync(dataDir);
+    if (!isUnder(realData, fs.realpathSync(base))) return out;
     sources = fs.readdirSync(base);
   } catch {
     return out; // nothing was ever kept here: the usual case
@@ -274,6 +280,7 @@ function stage1Files(dataDir) {
   for (const dir of sources) {
     let names = [];
     try {
+      if (!isUnder(realData, fs.realpathSync(path.join(base, dir)))) continue;
       names = fs.readdirSync(path.join(base, dir));
     } catch { continue; }
     for (const name of names) {

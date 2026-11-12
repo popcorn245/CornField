@@ -5472,12 +5472,6 @@
     },
     {
       "from": "core-server-forge-routes",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-forge-routes",
       "to": "core-server-proposals",
       "dashed": true,
       "label": "imports"
@@ -6109,12 +6103,6 @@
     },
     {
       "from": "core-server-spec-poll",
-      "to": "core-core-validate",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-spec-poll",
       "to": "core-server-threads",
       "dashed": true,
       "label": "imports"
@@ -6498,12 +6486,6 @@
     {
       "from": "core-server-agent-runs",
       "to": "core-core-mentions",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-server-agent-runs",
-      "to": "core-core-validate",
       "dashed": true,
       "label": "imports"
     },
@@ -10456,6 +10438,29 @@
       "dashed": true
     },
     {
+      "from": "core-server-agent-runs",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-spec-poll",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-config",
+      "to": "page-doc-docs-deploy",
+      "dashed": true
+    },
+    {
       "from": "core-cli-cornfield",
       "to": "core-core-text",
       "dashed": true,
@@ -10570,5 +10575,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T23:32:34.816Z"
+  "updatedAt": "2026-11-12T23:49:55.477Z"
 }

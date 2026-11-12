@@ -601,6 +601,21 @@ describe('Stage 1 reviews, carried over once', () => {
     expect(fs.existsSync(file)).toBe(true);
   });
 
+  it('reads, posts and renames nothing through a reviews or source folder that is a link out of the data folder', async () => {
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-migrate-out-'));
+    try {
+      fs.mkdirSync(path.join(elsewhere, 'checkout'));
+      fs.writeFileSync(path.join(elsewhere, 'checkout', '0014-planner.review.json'), JSON.stringify({ version: 1, verdict: 'approved', note: 'OUTSIDE-MARKER-review-5e1a', edits: [], at: '2026-10-01T09:30:00.000Z' }));
+      try { fs.mkdirSync(path.join(dataDir, 'reviews')); fs.symlinkSync(path.join(elsewhere, 'checkout'), path.join(dataDir, 'reviews', 'checkout')); } catch { return; } // no symlinks here
+      expect(await migrate()).toEqual({ posted: [], superseded: [], skipped: [] });
+      fs.rmSync(path.join(dataDir, 'reviews'), { recursive: true });
+      fs.symlinkSync(elsewhere, path.join(dataDir, 'reviews'));
+      expect(await migrate()).toEqual({ posted: [], superseded: [], skipped: [] });
+      expect(posted()).toHaveLength(0);
+      expect(fs.readdirSync(path.join(elsewhere, 'checkout'))).toEqual(['0014-planner.review.json']); // not renamed
+    } finally { fs.rmSync(elsewhere, { recursive: true, force: true }); }
+  });
+
   it('has nothing to do, and asks the forge nothing, when no review was ever kept', async () => {
     fake.requests.length = 0;
     const forge = forgeOn(fake);
