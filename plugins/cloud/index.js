@@ -125,7 +125,12 @@ export default {
     }
 
     // CI workflows
-    const workflowFiles = WORKFLOW_DIRS.flatMap((dir) => ctx.list(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => `${dir}/${f}`));
+    // A workflow file that is a link out of the repo, or to nothing, is not read (core/repo.js): said, and left out
+    const workflowFiles = WORKFLOW_DIRS.flatMap((dir) => ctx.list(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => `${dir}/${f}`)).filter((file) => {
+      if (ctx.exists(file)) return true;
+      warnings.push(`cloud: ${file} ${ctx.inside(file) ? 'is a link to nothing' : 'is a link to somewhere outside the repo'}; it is not read.`);
+      return false;
+    });
     if (workflowFiles.length) {
       const yaml = await loadYaml();
       if (!yaml) warnings.push(`cloud: ${workflowFiles.length} CI workflow file(s) not read: install the optional dependency js-yaml to draw what CI pulls.`);
