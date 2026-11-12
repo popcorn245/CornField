@@ -249,13 +249,8 @@ function mountOn(root, inst, options, privateScope) {
   /** Where nodes sit for the current view (engine/topology.js) */
   const applyLayout = () => layoutMap(inst);
 
-  /** A fit asked for while the map has no box (a parent `display: none`, a box of no size) waits for one: fitted to nothing, the camera would be lost */
-  let fitWhenSized = false;
-  const fit = () => {
-    if (!state.nodes.length) return;
-    fitWhenSized = !state.width || !state.height;
-    if (!fitWhenSized) map.fitGraphToViewport(map.fitPadding());
-  };
+  /** The whole map in view. With no box yet the engine waits for one (engine/render.js), and fits again if the box changes before anyone moves the camera */
+  const fit = () => { if (state.nodes.length) map.fitGraphToViewport(map.fitPadding()); };
   const nodeById = (id) => state.nodes.find((n) => n.id === id) || null;
 
   // -- selection: one path for the page and a component ---------------------------------------------------------------------------------
@@ -302,7 +297,6 @@ function mountOn(root, inst, options, privateScope) {
 
   // -- the first frame ---------------------------------------------------------------------------------------------------------------------
   scope.own(map.onPaint(() => {
-    if (fitWhenSized && state.width && state.height) fit();
     if (ready || !state.nodes.length) return;
     ready = true;
     if (options.onReady) options.onReady();
