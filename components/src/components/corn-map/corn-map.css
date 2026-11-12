@@ -1,0 +1,5 @@
+/* The element fills the box its host gives it. With no height of its own it is as tall as the floor below, so a map dropped in is visible; any
+   height, min-height or flex rule of the host's wins. Nothing inside is sized from the viewport.
+   `display` is the one thing it keeps for itself: a page's `* { all: revert }` would make the element inline, which has no box to fill. */
+:host { display: block !important; position: relative; min-width: 0; min-height: 16rem; contain: layout; color: var(--corn-text); font-family: var(--corn-font); }
+:host([hidden]) { display: none !important; }

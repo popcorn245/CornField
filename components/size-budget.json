@@ -1,0 +1,8 @@
+{
+  "unit": "bytes, gzip level 9",
+  "tolerance": 0.05,
+  "budget": {
+    "runtime": 28021,
+    "corn-map": 59958
+  }
+}

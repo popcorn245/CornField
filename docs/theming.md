@@ -580,6 +580,55 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `summary` | the line of a disclosure that opens and folds (the proposal's problems, "Its edges (3)") |
 | `notice`, `message` | a notice in a panel (the Layers menu's note about the data-flow view too); a status line under a form or above the proposal bar (`data-corn-state="success"` or `"failure"`) |
 
+## Web components: tags, properties, events, methods and parts
+
+The explorer's pieces are also web components, for putting in another app's page ([docs/embedding.md](embedding.md) says how to load them). They are part of the public contract in the same way the tokens and the hooks are: **renaming or removing anything listed here is a breaking change**; adding one is not. [test/explorer/components-contract.test.js](../test/explorer/components-contract.test.js) fails when this section and the components' source disagree, in either direction.
+
+- **Tokens are the first way to theme a component.** Every `--corn-*` token inherits through the shadow root, so a rule on `:root`, on a wrapper or on one element sets it for the maps inside. The default values (everything in `tokens.css`) are added to the page by the first `corn-*` element, at zero specificity, so **any ordinary rule of yours overrides them**.
+- **Hooks are parts.** Inside a shadow root a page's `[data-corn="…"]` rule cannot reach, so every hook a piece makes is also a `part` of the same name: `corn-map::part(map-stage) { … }`. A `::part()` selects the element and not what is inside it.
+- **Light and dark** follow the page unless the element is told: with no `theme` attribute the page's own `<html data-theme>`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page. `theme="light"` or `theme="dark"` forces that mode for the element (the element declares that mode's tokens itself, so a rule of yours **on that element** sets one of them; a rule on `:root` does not reach a forced element).
+
+### Tags
+
+| Tag | Shadow root | What it is |
+|---|---|---|
+| `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in |
+
+### Properties
+
+| Tag | Property | Attribute | Values |
+|---|---|---|---|
+| `corn-map` | `topology` | none | the object `topology.json` holds, `{ nodes, edges }`; never changed by the map |
+| `corn-map` | `node` | `node` (reflected) | the id of the selected node, or none; it follows a click or a key |
+| `corn-map` | `view` | `view` | `map` or `dataflow` |
+| `corn-map` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
+| `corn-map` | `renderer` | `renderer` | `auto` or `canvas2d` |
+
+### Events
+
+All events bubble and cross the shadow root (`composed`), so a listener on any ancestor hears them.
+
+| Tag | Event | `detail` |
+|---|---|---|
+| `corn-map` | `cornSelect` | `{ id, kind }`: the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`); `kind` is `node` or `edge`, `id` is null when it was cleared |
+| `corn-map` | `cornReady` | none: the first frame with a map in it is drawn |
+
+### Methods
+
+| Tag | Method | What it does |
+|---|---|---|
+| `corn-map` | `fit()` | puts the whole map in view |
+| `corn-map` | `focusNode(id)` | selects the node and brings it into view |
+| `corn-map` | `refresh()` | reads the tokens again and draws, for a change the map cannot see (a rule added to the page's head, a class on `<html>`) |
+
+All three answer with a promise.
+
+### Parts
+
+| Tag | Parts |
+|---|---|
+| `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay` |
+
 ## Words
 
 A brand can speak in its own voice: `strings` in `cornfield.config.js` is a flat map that overrides the visible labels, so the menus say what the brand says.

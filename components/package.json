@@ -1,0 +1,30 @@
+{
+  "name": "@popcorn245/cornfield-components",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "cornfield's interface as web components (spec 0011): thin StencilRS shells over the engine in ../explorer. Not published yet.",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "check:size": "node scripts/size-budget.mjs",
+    "size:record": "node scripts/size-budget.mjs --record",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run build && npm test && npm run test:browser && npm run check:size"
+  },
+  "devDependencies": {
+    "@popcorn245/stencilrs": "0.2.0",
+    "@stencil/core": "5.0.0-beta.25",
+    "@stencil/unplugin": "5.0.0-beta.25",
+    "@vitest/browser-playwright": "5.0.4",
+    "axe-core": "4.13.0",
+    "happy-dom": "21.0.1",
+    "playwright": "1.64.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.4"
+  }
+}
