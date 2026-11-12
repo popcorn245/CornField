@@ -15,7 +15,9 @@ import { computeDegreeCentrality, layoutOrbit } from '../../explorer/engine/layo
 // @ts-expect-error plain JS modules, no declarations
 import { bindCanvasInput } from '../../explorer/input.js';
 // @ts-expect-error plain JS modules, no declarations
-import { mapStyleOf, styledScene } from '../../explorer/engine/map-style.js';
+import { looksWith, mapStyleOf, styledScene } from '../../explorer/engine/map-style.js';
+// @ts-expect-error plain JS modules, no declarations
+import { looksFor } from '../../explorer/scene.js';
 // @ts-expect-error plain JS modules, no declarations
 import { state as pageState } from '../../explorer/state.js';
 
@@ -214,6 +216,28 @@ describe('two instances in one document', () => {
     expect(a.refresh()).toBe(false);
     expect(a.get().version).toBe(versionA);
     expect(colour(a)).toMatch(/255,\s*0,\s*0|#ff0000/i);
+  });
+
+  it('the halos and the styled scene are each instance\'s own, even when both styles are at the same version', () => {
+    // Every instance gets the same looks object for a ground (scene.js looksFor); its styled copy is remembered. Two styles count their
+    // versions apart, so the same number can be two themes: what is remembered for one must never be handed to the other.
+    A.root.style.setProperty('--corn-map-selected', 'rgb(255, 0, 255)');
+    B.root.style.setProperty('--corn-map-selected', 'rgb(0, 255, 0)');
+    const a = mapStyleOf(A.inst);
+    const b = mapStyleOf(B.inst);
+    a.refresh();
+    b.refresh();
+    while (a.get().version < b.get().version) a.setIcons(null); // one change each: the same tokens, the version moves on
+    while (b.get().version < a.get().version) b.setIcons(null);
+    expect(a.get().version).toBe(b.get().version);
+    const looks = looksFor('dark');
+    const ringA = looksWith(looks, a.get()).halo.selected.ring;
+    const ringB = looksWith(looks, b.get()).halo.selected.ring;
+    expect(ringA).toMatch(/255,\s*0,\s*255|#ff00ff/i);
+    expect(ringB).toMatch(/0,\s*255,\s*0|#00ff00/i);
+    // the same for a scene drawn under both styles
+    const scene = A.map.getScene();
+    expect(styledScene(scene, a.get())).not.toBe(styledScene(scene, b.get()));
   });
 
   it('a change of style in one instance draws that map again and not the other', () => {

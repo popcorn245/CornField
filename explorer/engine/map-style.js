@@ -497,20 +497,22 @@ function compute(scene, style) {
   return out;
 }
 
+// Both memos hold the style they were made for, not its version: a style is a new frozen object at every change, and two instances' styles
+// count their versions apart, so the same version number can be two different themes (`looksFor` hands every instance the same looks object)
 const sceneMemo = new WeakMap();
 
 /**
  * `scene` in the style's colours, with the outline and icon of each node that has one: the same object when there is nothing to apply, and
- * the same result for the same scene and style version, so a renderer's cache of what it packed holds.
+ * the same result for the same scene and style, so a renderer's cache of what it packed holds.
  * @param {import('./scene.js').Scene} scene
  * @param {MapStyle} [style] the instance's (`mapStyleOf(inst).get()`); none: the scene as it is
  */
 export function styledScene(scene, style) {
   if (!style || (style.plain && !scene.greying)) return scene; // a review's greying is applied even with no theme
   const hit = sceneMemo.get(scene);
-  if (hit && hit.version === style.version) return hit.out;
+  if (hit && hit.style === style) return hit.out;
   const out = compute(scene, style);
-  sceneMemo.set(scene, { version: style.version, out });
+  sceneMemo.set(scene, { style, out });
   return out;
 }
 
@@ -524,7 +526,7 @@ const looksMemo = new WeakMap();
 export function looksWith(looks, style) {
   if (!style || style.plain) return looks;
   const hit = looksMemo.get(looks);
-  if (hit && hit.version === style.version) return hit.out;
+  if (hit && hit.style === style) return hit.out;
   const { values } = style;
   const halo = { ...looks.halo };
   for (const name of ['selected', 'match']) {
@@ -537,6 +539,6 @@ export function looksWith(looks, style) {
     if (c) mark[name] = { ...mark[name], color: c };
   }
   const out = { ...looks, halo, mark };
-  looksMemo.set(looks, { version: style.version, out });
+  looksMemo.set(looks, { style, out });
   return out;
 }
