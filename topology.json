@@ -2427,6 +2427,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "A CSS colour as the renderers can use it, read once here so every reader (the map's tokens in map-style.js, a node's own colour in scene.js) agrees on what a colour is. (explorer/css-color.js)"
+    },
+    {
+      "id": "page-doc-docs-specs-0011-cornfield-in-another-app",
+      "type": "page",
+      "label": "/docs/specs/0011-cornfield-in-another-app",
+      "file": "docs/specs/0011-cornfield-in-another-app.md",
+      "summary": "Spec 0011: cornfield in another app (the interface as web components)",
+      "r": 18,
+      "color": "#38bdf8",
+      "desc": "Spec 0011: cornfield in another app (the interface as web components) (docs/specs/0011-cornfield-in-another-app.md)."
     }
   ],
   "edges": [
@@ -8119,7 +8129,11 @@
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "app-docs",
+      "to": "page-doc-docs-specs-0011-cornfield-in-another-app"
     }
   ],
-  "updatedAt": "2026-11-11T23:22:59.553Z"
+  "updatedAt": "2026-11-12T05:50:50.860Z"
 }
