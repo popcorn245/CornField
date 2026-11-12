@@ -9441,12 +9441,6 @@
     },
     {
       "from": "core-explorer-engine-topology",
-      "to": "core-explorer-live-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-engine-topology",
       "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
@@ -9548,5 +9542,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T15:16:46.720Z"
+  "updatedAt": "2026-11-12T15:49:56.331Z"
 }
