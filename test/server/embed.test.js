@@ -434,7 +434,7 @@ describe('a listed sibling origin', () => {
       const targets = [
         ['GET', '/'], ['GET', '/healthz'], ['GET', '/cornfield/config.json'], ['GET', '/topology.json'], ['GET', '/topology.cloud.json'], ['GET', '/proposals'], ['GET', `/proposals/${SLUG}.json?${SRC}`],
         ['GET', `/proposals/${SLUG}/decision?${SRC}`], ['GET', `/proposals/${SLUG}/review?${SRC}`], ['GET', `/proposals/${SLUG}/mockups?${SRC}`], ['GET', '/api/forge/pulls/40'], ['GET', '/api/forge/pulls'],
-        ['GET', '/explorer/main.js'], ['GET', '/cornfield/theme.css'], ['GET', '/api/review-tokens'], ['GET', '/auth/me'], ['OPTIONS', '/proposals'], ['OPTIONS', `/proposals/${SLUG}/review?${SRC}`],
+        ['GET', '/explorer/main.js'], ['GET', '/cornfield/theme.css'], ['GET', '/cornfield/components/corn-map.js'], ['GET', '/cornfield/components/version.json'], ['OPTIONS', '/cornfield/components/corn-map.js'], ['GET', '/api/review-tokens'], ['GET', '/auth/me'], ['OPTIONS', '/proposals'], ['OPTIONS', `/proposals/${SLUG}/review?${SRC}`],
         ['PUT', `/proposals/${SLUG}/review?${SRC}`], ['POST', '/api/forge/pulls/40/landing/cancel'], ['GET', '/nope'],
       ];
       const settle = (r) => ({ status: r.status, headers: Object.fromEntries(Object.entries(r.headers).filter(([k]) => !['date', 'etag', 'content-length'].includes(k))), body: r.text.length > 0 });
@@ -454,8 +454,8 @@ describe('a listed sibling origin', () => {
       const without = await boot(undefined);
       const listed = await boot({ origins: [LISTED] });
       const strip = (h) => Object.fromEntries(Object.entries(h).filter(([k]) => !['date', 'etag', 'content-length'].includes(k)));
-      const onList = new Set(READS);
-      for (const target of ['/', '/healthz', '/explorer/main.js', '/api/forge/pulls', '/api/review-tokens', ...READS]) {
+      const onList = new Set([...READS, '/cornfield/components/corn-map.js']);
+      for (const target of ['/', '/healthz', '/explorer/main.js', '/api/forge/pulls', '/api/review-tokens', '/cornfield/components/corn-map.js', ...READS]) {
         for (const origin of [undefined, 'https://evil.example']) {
           const a = await raw(without.port, 'GET', target, { headers: { cookie: without.cookie, origin } });
           const b = await raw(listed.port, 'GET', target, { headers: { cookie: listed.cookie, origin } });

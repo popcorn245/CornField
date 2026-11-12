@@ -773,7 +773,7 @@
       "type": "external",
       "kind": "cloud",
       "file": "topology.cloud.json",
-      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names.",
+      "desc": "npm ci in CI and in the image; where a release publishes the package under both its names, and the web components once armed (the release asks the registry whether that name exists yet).",
       "roles": [
         "software"
       ],
@@ -2707,6 +2707,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)… (explorer/pieces/map.js)"
+    },
+    {
+      "id": "core-server-components",
+      "label": "components.js",
+      "type": "core",
+      "file": "server/components.js",
+      "summary": "The web components (components/, spec 0011 D11) served from this server, at `/cornfield/components/<file>`, so a host app loads them with one `<script type=\"module\" src=\"https://map.example.com/cor…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The web components (components/, spec 0011 D11) served from this server, at `/cornfield/components/<file>`, so a host app loads them with one `<script type=\"module\" src=\"https://map.example.com/cor… (server/components.js)"
     }
   ],
   "edges": [
@@ -3915,7 +3925,7 @@
       "to": "ext-npm",
       "kind": "calls",
       "status": "live",
-      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · test.yml: npm ci",
+      "label": "pages.yml: npm ci · release.yml: npm ci · release.yml: npm install · release.yml: downloads from registry.npmjs.org · test.yml: npm ci",
       "when": "deploy"
     },
     {
@@ -8912,7 +8922,44 @@
       "to": "core-explorer-pieces-adopt-tokens",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-components"
+    },
+    {
+      "from": "core-server-components",
+      "to": "core-server-compress",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-components",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-server",
+      "to": "core-server-components",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-deploy",
+      "to": "page-doc-releasing",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-releasing",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T11:16:09.153Z"
+  "updatedAt": "2026-11-12T13:28:22.778Z"
 }
