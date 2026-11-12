@@ -3,10 +3,10 @@
   "tolerance": 0.05,
   "budget": {
     "runtime": 28058,
-    "corn-map": 82181,
-    "corn-map-src": 93626,
-    "corn-review": 142026,
-    "corn-review-src": 151193,
-    "corn-scope": 64130
+    "corn-map": 72809,
+    "corn-map-src": 84248,
+    "corn-review": 142438,
+    "corn-review-src": 151601,
+    "corn-scope": 54621
   }
 }

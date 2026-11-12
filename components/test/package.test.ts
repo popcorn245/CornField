@@ -332,6 +332,27 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect(shared.some((f) => f.startsWith('chunks/') && !f.includes('runtime'))).toBe(true);
   });
 
+  it('a map alone loads none of the review, the two load one engine once, and no chunk imports back the chunk that imported it', () => {
+    const edges = (f: string, dynamic: boolean) => [...read(f).matchAll(dynamic ? /(?:from|import)\s*\(?\s*["'](\.[^"']+)["']/g : /(?:from|import)\s*["'](\.[^"']+)["']/g)].map((m) => path.posix.normalize(path.posix.join(path.posix.dirname(f), m[1])));
+    const reach = (entry: string, dynamic: boolean, seen = new Set<string>([entry])): Set<string> => { for (const t of edges(entry, dynamic)) if (!seen.has(t)) { seen.add(t); reach(t, dynamic, seen); } return seen; };
+    // a string only each review-side module holds: a map that shares a module with the review would carry the review's use of it (the size budget)
+    const probes = {
+      'engine/sheets.js': 'hx-sheet-handle', 'proposal-model.js': 'There is no proposal called', 'check-model.js': 'Expected allowed, but refused',
+      'cloud-panel.js': 'Breaks on renewal', 'outage-scenario.js': 'in the visitor\'s browser', 'selection-words.js': 'off screen', 'pieces/decision.js': 'data-review-undo',
+    };
+    const map = [...reach('corn-map.js', false)];
+    const mapText = map.map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(mapText.includes(probe), module).toBe(false);
+    const review = reach('corn-review.js', false);
+    const reviewText = [...review].map((f) => read(f)).join('\n');
+    for (const [module, probe] of Object.entries(probes)) expect(reviewText.includes(probe), module).toBe(true);
+    // one engine: every chunk a map loads but its own shell is one the review loads, so a page with both fetches each once
+    for (const f of map.filter((x) => x.startsWith('chunks/') && !x.startsWith('chunks/corn-map-'))) expect(review.has(f), f).toBe(true);
+    // no cycle: walking the chunks (dynamic imports too) never comes back to where it started
+    const files = ['index.js', ...componentTags().map((t) => `${t}.js`), ...fs.readdirSync(path.join(dist, 'chunks')).filter((f) => f.endsWith('.js')).map((f) => `chunks/${f}`)];
+    for (const f of files) for (const t of edges(f, true)) expect(reach(t, true).has(f), `${t} leads back to ${f}`).toBe(false);
+  });
+
   it('is ES modules that register the tag when loaded, and no more than that: no top-level fetch, no document write', () => {
     for (const f of ['index.js', 'corn-map.js']) expect(read(f)).not.toMatch(/\brequire\(|module\.exports/);
     const all = fs.readdirSync(path.join(dist, 'chunks')).map((f) => read(`chunks/${f}`)).join('\n');
