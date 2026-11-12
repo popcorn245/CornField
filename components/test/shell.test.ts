@@ -57,6 +57,19 @@ describe('the shell holds no behaviour (D1)', () => {
     }
   });
 
+  it('has no member but properties, events, the lifecycle, the methods that hand a call to the piece, and the plumbing between them', () => {
+    const LIFECYCLE = ['connectedCallback', 'componentDidLoad', 'disconnectedCallback', 'componentDidRender'];
+    const PLUMBING = ['mountPiece', 'changed'];
+    for (const { name, file } of sources) {
+      const code = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const body = code.slice(code.indexOf('export class'));
+      const plain = [...body.matchAll(/^ {2}(?:private |public )?(?:async )?(\w+)\s*\([^)]*\)\s*(?::\s*[^{]+)?\{/gm)].map((m) => m[1]);
+      for (const member of plain) expect([...LIFECYCLE, ...PLUMBING].includes(member) || /@Method\(\)\s*$/.test(body.slice(0, body.indexOf(`  async ${member}(`)).trimEnd() + '\n'), `${name}: ${member}`).toBe(true);
+      // every public method only hands the call to the piece, under its own name
+      for (const m of body.matchAll(/@Method\(\)\s*async\s+(\w+)\([^)]*\)[^{]*\{([^}]*)\}/g)) expect(m[2].trim(), `${name}.${m[1]}`).toMatch(new RegExp(`^if \\(this\\.piece\\) this\\.piece\\.${m[1]}\\([^;]*\\);$`));
+    }
+  });
+
   it('the check is not blind: it refuses the engine\'s other modules, the bridges, a package and a helper of the package\'s own', () => {
     const from = path.join(dir, 'corn-map', 'corn-map.tsx');
     for (const spec of ['../../../../explorer/engine/render.js', '../../../../explorer/state.js', '../../../../explorer/instance.js', 'lodash', '../../util', '../../../../explorer/pieces/../state.js']) expect(allowed(spec, from), spec).toBe(false);
