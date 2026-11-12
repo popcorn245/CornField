@@ -236,3 +236,74 @@ describe('mounting and unmounting', () => {
     expect(el.node).toBeTruthy();
   });
 });
+
+describe('in another app\'s layout', () => {
+  type Piece = { inst: { state: { nodes: Array<{ id: string; type: string; x: number; y: number }>; camera: { x: number; y: number; zoom: number }; width: number; height: number } } };
+  const stateOf = (el: HTMLElement) => (el as unknown as { piece: Piece }).piece.inst.state;
+  /** Presses and lets go on the screen point where a node is drawn, through whatever scales the element's box */
+  function tapNode(el: HTMLElement, index = 3) {
+    const s = stateOf(el);
+    const node = s.nodes.filter((n) => n.type !== 'root')[index];
+    const box = canvasOf(el).getBoundingClientRect();
+    const [sx, sy] = [box.width / s.width, box.height / s.height];
+    const at = { clientX: box.left + (s.camera.x + node.x * s.camera.zoom) * sx, clientY: box.top + (s.camera.y + node.y * s.camera.zoom) * sy, bubbles: true, composed: true, cancelable: true };
+    canvasOf(el).dispatchEvent(new MouseEvent('mousedown', at));
+    canvasOf(el).dispatchEvent(new MouseEvent('mouseup', at));
+    return node.id;
+  }
+
+  for (const [name, css] of [['scale(0.5)', 'transform: scale(0.5); transform-origin: 0 0'], ['zoom: 1.5', 'zoom: 1.5'], ['rtl', 'direction: rtl']]) {
+    it(`a tap selects the node under it in a parent with ${name}`, async () => {
+      const parent = document.createElement('section');
+      parent.setAttribute('style', css);
+      document.body.append(parent);
+      const el = await mountMap({ renderer: 'canvas2d' }, { topology: await smallTopology(10), parent });
+      const id = tapNode(el);
+      await frames(2);
+      expect(el.node).toBe(id);
+    });
+  }
+
+  it('a map made inside a hidden parent is fitted when it is shown, as one that was visible from the start', async () => {
+    const topology = await smallTopology(20);
+    const seen = await mountMap({ renderer: 'canvas2d' }, { topology });
+    const parent = document.createElement('section');
+    parent.style.display = 'none';
+    document.body.append(parent);
+    const el = document.createElement('corn-map') as HTMLElement & { topology: unknown; componentOnReady(): Promise<unknown> };
+    el.setAttribute('renderer', 'canvas2d');
+    el.setAttribute('style', 'width: 600px; height: 400px');
+    parent.append(el);
+    await el.componentOnReady();
+    el.topology = structuredClone(topology);
+    await frames(3);
+    parent.style.display = 'block';
+    await frames(6);
+    expect(stateOf(el).camera.zoom).toBeCloseTo(stateOf(seen).camera.zoom, 5);
+    expect(stateOf(el).camera.x).toBeCloseTo(stateOf(seen).camera.x, 3);
+  });
+
+  it('the wheel is the page\'s while the pointer only passes over: the map takes it with the focus, or with Ctrl or Cmd held', async () => {
+    const el = await mountMap({ renderer: 'canvas2d' }, { topology: await smallTopology(20) });
+    const canvas = canvasOf(el);
+    const box = canvas.getBoundingClientRect();
+    const wheel = (init: WheelEventInit = {}) => {
+      const e = new WheelEvent('wheel', { deltaY: -120, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, bubbles: true, composed: true, cancelable: true, ...init });
+      canvas.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const zoom = () => stateOf(el).camera.zoom;
+    const z0 = zoom();
+    expect(wheel()).toBe(false); // the page scrolls
+    expect(zoom()).toBe(z0);
+    expect(wheel({ ctrlKey: true })).toBe(true); // a trackpad's pinch, or Ctrl and the wheel
+    expect(zoom()).toBeGreaterThan(z0);
+    const z1 = zoom();
+    expect(wheel({ metaKey: true })).toBe(true);
+    expect(zoom()).toBeGreaterThan(z1);
+    canvas.focus();
+    const z2 = zoom();
+    expect(wheel()).toBe(true); // the map has the focus: the wheel zooms it
+    expect(zoom()).toBeGreaterThan(z2);
+  });
+});

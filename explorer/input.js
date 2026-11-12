@@ -51,10 +51,13 @@ export function bindCanvasInput(inst) {
 
   const canDragNodes = () => state.isFreeform && state.view === 'orbit';
 
+  /** Where the pointer is, in the map's own pixels: the canvas's box on the screen may be scaled (a transform or `zoom` on an ancestor in a host's page) */
   function getPointerPos(e) {
     const rect = state.canvas.getBoundingClientRect();
     const point = e.touches ? e.touches[0] : e;
-    return { x: point.clientX - rect.left, y: point.clientY - rect.top };
+    const sx = rect.width && state.width ? state.width / rect.width : 1;
+    const sy = rect.height && state.height ? state.height / rect.height : 1;
+    return { x: (point.clientX - rect.left) * sx, y: (point.clientY - rect.top) * sy };
   }
 
   // The topology node with this id (the grid answers with scene nodes, which are copies of the picture)
@@ -216,7 +219,11 @@ export function bindCanvasInput(inst) {
 
 
   const { canvas } = state;
+  // In another app's page (a root that is not the document) the wheel is the page's until the map is asked for it: the map has the focus
+  // (a click or Tab put it there), or Ctrl or Cmd is held (a trackpad's pinch comes so). A pointer passing over the map does not stop the page scrolling.
+  const embedded = !(inst.root && inst.root.nodeType === 9);
   const onWheel = (e) => {
+    if (embedded && !e.ctrlKey && !e.metaKey && inst.active() !== state.canvas) return;
     e.preventDefault();
     stopFlight();
     const p = getPointerPos(e);
