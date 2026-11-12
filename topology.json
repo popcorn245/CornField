@@ -2797,6 +2797,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The proposal's bar as a piece (spec 0011 D3, D4: `corn-proposal`): the open proposal's title and the copy under review, the counts, Before / Diff / After, Whole map, the ⋯ menu with Close, the prob… (explorer/pieces/proposal.js)"
+    },
+    {
+      "id": "core-explorer-engine-topology",
+      "label": "topology.js",
+      "type": "core",
+      "file": "explorer/engine/topology.js",
+      "summary": "Giving an instance its map (spec 0011 D2, D4: the engine half of the one-tag review).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Giving an instance its map (spec 0011 D2, D4: the engine half of the one-tag review). (explorer/engine/topology.js)"
+    },
+    {
+      "id": "core-explorer-pieces-review",
+      "label": "review.js",
+      "type": "core",
+      "file": "explorer/pieces/review.js",
+      "summary": "The review as one piece (spec 0011 D3, D4, D8): the engine half of the coming `<corn-review>`.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The review as one piece (spec 0011 D3, D4, D8): the engine half of the coming `<corn-review>`. (explorer/pieces/review.js)"
     }
   ],
   "edges": [
@@ -8557,12 +8577,6 @@
     },
     {
       "from": "core-explorer-pieces-map",
-      "to": "core-explorer-engine-layout",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
       "to": "core-explorer-engine-map-style",
       "dashed": true,
       "label": "imports"
@@ -8570,12 +8584,6 @@
     {
       "from": "core-explorer-pieces-map",
       "to": "core-explorer-engine-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
-      "to": "core-explorer-flow-build",
       "dashed": true,
       "label": "imports"
     },
@@ -9227,7 +9235,117 @@
       "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-topology"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-review"
+    },
+    {
+      "from": "core-explorer-engine-topology",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-topology",
+      "to": "core-explorer-flow-build",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-topology",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-topology",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-engine-topology",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-changes",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-decision",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-map",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-node-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-pieces-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-review",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T13:48:54.340Z"
+  "updatedAt": "2026-11-12T14:40:25.739Z"
 }
