@@ -162,7 +162,7 @@ describe('the root package takes nothing from the components (D1)', () => {
     expect(server).toContain("npm run build");
   });
 
-  it('is released under cornfield\'s version: the release builds them with it, stamps the package, and publishes only when NPM_TOKEN is set (D11)', () => {
+  it('is released under cornfield\'s version: the release builds them with it, stamps the package, and publishes only once armed: by NPM_TOKEN, or after a first publish by trusted publishing (D11)', () => {
     const workflow = fs.readFileSync(path.join(CORNFIELD, '.github', 'workflows', 'release.yml'), 'utf8');
     const job = workflow.slice(workflow.indexOf('\n  components:\n'));
     // the version from the tag, in cornfield's package.json (what the build reads) and in the package, before the build; the build is checked against it
@@ -173,13 +173,19 @@ describe('the root package takes nothing from the components (D1)', () => {
     expect(job).toContain("require('./package.json').version");
     // permissions: what the npm job has, nothing more
     expect(job).toMatch(/permissions:\n\s+contents: read\n\s+id-token: write[^\n]*\n\s+env:/);
-    // the token lives in the environment of the publish step alone, is tested for emptiness, and is never echoed
+    // the token lives in the environment of the publish step alone, under a name of its own (setup-node exports a placeholder NODE_AUTH_TOKEN), is
+    // tested for emptiness, handed to npm only for the publish, and never echoed
     expect(job.match(/secrets\.NPM_TOKEN/g)).toHaveLength(1); // this job names the secret once, on the publish step
     const publish = job.slice(job.indexOf('- name: Publish @popcorn245/cornfield-components'));
-    expect(publish).toContain('NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}');
-    expect(publish).toMatch(/if \[ -z "\$\{NODE_AUTH_TOKEN:-\}" \]; then\n\s+echo "NPM_TOKEN is not set[^\n]*\n\s+exit 0\n\s+fi\n\s+npm publish --access public --provenance/);
-    expect(job.replace(publish, '')).not.toContain('NODE_AUTH_TOKEN');
-    expect(job).not.toMatch(/echo[^\n]*\$\{?NODE_AUTH_TOKEN/);
+    expect(publish).toContain('NPM_TOKEN: ${{ secrets.NPM_TOKEN }}');
+    expect(publish).toMatch(/if \[ -z "\$\{NPM_TOKEN:-\}" \]; then\n/);
+    expect(publish).toMatch(/\n\s+NODE_AUTH_TOKEN="\$\{NPM_TOKEN:-\}" npm publish --access public --provenance\n?$/);
+    expect(job.replace(publish, '').split('\n').filter((l) => !l.trim().startsWith('#')).join('\n')).not.toMatch(/NODE_AUTH_TOKEN|NPM_TOKEN:/);
+    expect(job).not.toMatch(/echo[^\n]*\$\{?(NODE_AUTH_TOKEN|NPM_TOKEN)/);
+    expect(job).not.toMatch(/set -[a-z]*x/);
+    // unarmed (no token, a name never published) it says so and succeeds; a registry that cannot say fails rather than guess
+    expect(publish).toMatch(/404\)\n\s+echo "NPM_TOKEN is not set[^\n]*\n\s+exit 0 ;;/);
+    expect(publish).toMatch(/\*\) echo [^\n]*exit 1 ;;/);
     // the existing jobs and their outputs are as they were
     for (const name of ['check', 'version', 'image', 'npm']) expect(workflow).toContain(`\n  ${name}:\n`);
     expect(workflow).toContain('tag: ${{ steps.made.outputs.tag }}');
