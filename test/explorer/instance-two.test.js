@@ -162,6 +162,13 @@ describe('two instances in one document', () => {
     expect(A.state.camera.y).toBeCloseTo(start.y + 20);
     expect(B.state.camera).toEqual(cameraB);
 
+    // In an element root the wheel is the page's until the map is asked (input.js): passing over, it scrolls the page; with the focus it zooms
+    const passing = new WheelEvent('wheel', { deltaY: -100, clientX: 400, clientY: 300, bubbles: true, cancelable: true });
+    A.canvas.dispatchEvent(passing);
+    expect(passing.defaultPrevented).toBe(false);
+    expect(A.state.camera.zoom).toBe(start.zoom);
+    A.canvas.tabIndex = 0;
+    A.canvas.focus();
     A.canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 400, clientY: 300, bubbles: true, cancelable: true }));
     expect(A.state.camera.zoom).toBeGreaterThan(start.zoom);
     expect(B.state.camera).toEqual(cameraB);

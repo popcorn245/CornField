@@ -7,7 +7,7 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['test/**/*.test.js'],
-    exclude: ['**/node_modules/**', '**/.claude/**', 'test/fixtures/**'],
+    exclude: ['**/node_modules/**', '**/.claude/**', 'test/fixtures/**', 'components/**'], // components/ is its own package, with its own tests (spec 0011 D1): the root suite needs none of it installed
     testTimeout: process.env.CI ? 60_000 : 20_000,
     hookTimeout: process.env.CI ? 60_000 : 30_000,
     maxWorkers: Math.max(2, Math.floor(os.availableParallelism() / 2)),

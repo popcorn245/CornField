@@ -7,7 +7,7 @@
  * live is ever written to localStorage, sessionStorage or IndexedDB.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { recordedHouse } from '../helpers.js';
+import { recordedHouse, explorerPage } from '../helpers.js';
 
 /** The live source as an API-backed repo sets it up: its world route through a proxy path, a token, and where to make one */
 const apiSource = (opts = {}) => createLiveSource({ url: '/api/v1/world', tokenHref: '/pipeline', tokenHelp: 'Make one on the server: `api-admin token create <you>` (admins only)', ...opts });
@@ -27,7 +27,7 @@ import { selectNode } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createLiveSource, TOKEN_KEY, CLOUD_PATH } from '../../plugins/house/browser.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 const recorded = recordedHouse();
 

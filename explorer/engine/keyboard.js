@@ -60,7 +60,7 @@ export function centreOn(inst, node) {
 }
 
 function land(inst, node, order) {
-  if (!node) { announce(inst, 'No nodes are shown. Turn a layer on in the Layers menu.'); return; }
+  if (!node) { announce(inst, inst.el('legend-dropdown') ? 'No nodes are shown. Turn a layer on in the Layers menu.' : 'No nodes are shown.'); return; } // the Layers menu, when the instance has one
   selectNode(inst, node, { frame: true, source: 'keyboard' }); // the keyboard's selection frames the node and what it lights (spec 0008 D6)
   announce(inst, K.describeNode(node, order.length, order.indexOf(node)));
 }
@@ -132,7 +132,7 @@ function onMapKey(inst, e) {
       break;
     case 'close':
       clearSelection(inst, { source: 'keyboard' });
-      announce(inst, 'Panel closed');
+      announce(inst, inst.el('spec-drawer') ? 'Panel closed' : 'Selection cleared'); // a map with no node panel beside it (a component) has none to close
       break;
     case 'move':
       moveSelected(inst, action.dx, action.dy);

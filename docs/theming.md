@@ -403,7 +403,7 @@ The tokens above change what the explorer looks like; the hooks let a stylesheet
 - **Values** are short kebab-case nouns. One element has one `data-corn` value; a component used in many places (`row`, `field`, `badge`) has the same value everywhere, so scope it by its region: `[data-corn="layers-menu"] [data-corn="row"]`.
 - **Two companions:** `data-corn-kind` (a button's kind) and `data-corn-state` (a state). Their values are listed below and are public in the same way.
 - **A theme needs no `.hx-*` class, no id, no deep selector and no `!important`** to single out any part of the page: `[data-corn="compare-option"][aria-pressed="true"]` is the chosen one of Before / Diff / After, `[data-corn="diff-pill"][data-corn-state="removed"]` a node a proposal removes.
-- **No shadow DOM on cornfield's page.** The page uses none, so a stylesheet reaches everything with an ordinary selector. The node panel, the Layers menu and the search are pieces (`explorer/pieces/`) that a host app can mount in a shadow root (spec 0011), and there a stylesheet outside it reaches them by `part`: every element of those three pieces that has a `data-corn` hook has a `part` of the same name, on the page too (`[data-corn="layers-menu"] [data-corn="row"]` on the page, `corn-layers::part(row)` in a host). A part is the hook's name and is public in the same way.
+- **No shadow DOM on cornfield's own page.** The page uses none, so a stylesheet reaches everything with an ordinary selector. The map, the node panel, the Layers menu and the search are pieces (`explorer/pieces/`) that a host app can mount in a shadow root (spec 0011; the map already is one, `<corn-map>`: [docs/embedding.md](embedding.md)), and there a stylesheet outside it reaches them by `part`: every element of those pieces that has a `data-corn` hook has a `part` of the same name, on the page too (`[data-corn="layers-menu"] [data-corn="row"]` on the page, `corn-layers::part(row)` in a host). A part is the hook's name and is public in the same way.
 - **CSS only.** Hooks are for selectors, never for script: a plugin or a theme must not read them to change behaviour.
 - **What is on is in ARIA.** A tab, a layer row, a view button, a theme option or a Before / Diff / After option that is on has `aria-pressed="true"`; an open menu's button has `aria-expanded="true"`; a panel is open when it is not `inert` (`[data-corn="node-panel"]:not([inert])`), and a hidden one is `[hidden]`.
 
@@ -486,7 +486,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `layer-kinds`, `kind-key` | under a Layers row that holds nodes with a finer kind: the disclosure ("5 kinds") and, when open, one key row per kind (its letters, its name, its count). A key is not a toggle; a project that wants one declares a layer |
 | `layer-note` | on an off Layers row, "+1 shown by the proposal" (nodes of that layer drawn only because the open proposal touches them), or "hidden while reviewing" (a layer the open proposal does not touch, which the review hid: the row still turns it on, for the review only) |
 | `whole-map` | the proposal bar's "Whole map" switch (`data-corn-kind="secondary"`, `aria-pressed`; its words are `wholeMap`, its name and tooltip the full `showWholeMap`): off at every opening, kept across Before, Diff and After; on brings back every layer the viewer has on and the dimmed, coloured map Diff always showed. On a desk it sits on the title's row, beside the source; on a phone, with Edit |
-| `map-canvas`, `label-canvas`, `map-overlay` | the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
+| `map-stage`, `map-canvas`, `label-canvas`, `map-overlay` | the box the map's canvases sit in (made by the map piece for a component: cornfield's own page uses its `stage`), the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
 | `dock`, `sheet-handle`, `sheet-grip`, `backdrop` | the phone's bottom-sheet dock, a sheet's grab handle and the bar drawn in it, the tap-to-close layer behind the node panel on a phone; it is drawn clear there, so the node the map panned into the free band stays in view |
@@ -579,6 +579,55 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 | `control` | a text field, a number field, a select, a check box or a text area: the control inside a `field`, or on its own. The search fields are `search-input` and the note on Send back is `review-note`; the named-theme menu is `theme-picker` |
 | `summary` | the line of a disclosure that opens and folds (the proposal's problems, "Its edges (3)") |
 | `notice`, `message` | a notice in a panel (the Layers menu's note about the data-flow view too); a status line under a form or above the proposal bar (`data-corn-state="success"` or `"failure"`) |
+
+## Web components: tags, properties, events, methods and parts
+
+The explorer's pieces are also web components, for putting in another app's page ([docs/embedding.md](embedding.md) says how to load them). They are part of the public contract in the same way the tokens and the hooks are: **renaming or removing anything listed here is a breaking change**; adding one is not. [test/explorer/components-contract.test.js](../test/explorer/components-contract.test.js) fails when this section and the components' source disagree, in either direction.
+
+- **Tokens are the first way to theme a component.** Every `--corn-*` token inherits through the shadow root, so a rule on `:root`, on a wrapper or on one element sets it for the maps inside. The default values (everything in `tokens.css`) are added to the page by the first `corn-*` element, at zero specificity, so **any ordinary rule of yours overrides them**.
+- **Hooks are parts.** Inside a shadow root a page's `[data-corn="…"]` rule cannot reach, so every hook a piece makes is also a `part` of the same name: `corn-map::part(map-stage) { … }`. A `::part()` selects the element and not what is inside it.
+- **Light and dark** follow the page unless the element is told: with no `theme` attribute the page's own `<html data-theme>`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page. `theme="light"` or `theme="dark"` forces that mode for the element (the element declares that mode's tokens itself, so a rule of yours **on that element** sets one of them; a rule on `:root` does not reach a forced element).
+
+### Tags
+
+| Tag | Shadow root | What it is |
+|---|---|---|
+| `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in |
+
+### Properties
+
+| Tag | Property | Attribute | Values |
+|---|---|---|---|
+| `corn-map` | `topology` | none | the object `topology.json` holds, `{ nodes, edges }`; never changed by the map |
+| `corn-map` | `node` | `node` (reflected) | the id of the selected node, or none; it follows a click or a key |
+| `corn-map` | `view` | `view` | `map` or `dataflow` |
+| `corn-map` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
+| `corn-map` | `renderer` | `renderer` | `auto` or `canvas2d` |
+
+### Events
+
+All events bubble and cross the shadow root (`composed`), so a listener on any ancestor hears them.
+
+| Tag | Event | `detail` |
+|---|---|---|
+| `corn-map` | `cornSelect` | the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`), once per change. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node`, `edge`, or null when cleared; `id` is the node's id, `from->to` for an edge, or null; `source` is `tap`, `keyboard`, `api` or `state` |
+| `corn-map` | `cornReady` | none: the first frame with a map in it is drawn, once each time the element is put in the page |
+
+### Methods
+
+| Tag | Method | What it does |
+|---|---|---|
+| `corn-map` | `fit()` | puts the whole map in view |
+| `corn-map` | `focusNode(id)` | selects the node and brings it into view |
+| `corn-map` | `refresh()` | reads the tokens again and draws, for a token changed where the map cannot see it (a stylesheet added to the page's head, a class or a style on a wrapper); the `theme` attribute, `<html data-theme>` and the system's setting it follows by itself |
+
+All three answer with a promise.
+
+### Parts
+
+| Tag | Parts |
+|---|---|
+| `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay` |
 
 ## Words
 

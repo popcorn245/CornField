@@ -42,6 +42,7 @@ function addStandIn(canvas) {
   const standIn = canvas.ownerDocument.createElement('canvas');
   standIn.className = 'hx-overlay';
   standIn.setAttribute('data-corn', 'map-overlay');
+  standIn.setAttribute('part', 'map-overlay'); // a host styles it from outside a shadow root: every hook is a part too
   standIn.setAttribute('aria-hidden', 'true');
   canvas.after(standIn);
   return standIn;
