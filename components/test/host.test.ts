@@ -37,7 +37,7 @@ const LISTED = 'http://tasks.corn.localhost:3791';
 const STRANGER = 'http://other.corn.localhost:3792';
 
 /** The policy docs/embedding.md gives a host that loads the components from `server` (the doc is held to this text below) */
-export const hostPolicy = (server: string) => `default-src 'self'; script-src 'self' ${server}; connect-src 'self' ${server}; img-src 'self' ${server}; style-src 'self'`;
+export const hostPolicy = (server: string) => `default-src 'self'; script-src 'self' ${server}; connect-src 'self' ${server}; img-src 'self' data: ${server}; style-src 'self'`;
 
 const TOPOLOGY = {
   nodes: [
@@ -260,6 +260,28 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
     await page.evaluate(async () => { await customElements.whenDefined('corn-review'); await (document.querySelector('corn-review') as any).componentOnReady(); });
     await page.waitForTimeout(800);
     expect(answers.filter((a) => /review-source|config\.json|topology/.test(a.url))).toEqual([]);
+    expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
+    await context.close();
+  }, 60_000);
+
+  it('under that policy a review in a phone-wide box, a proposal open, reports no violation (its controls draw small data: images, as a theme may)', async () => {
+    const { page, context } = await open(LISTED, '/?review&plain');
+    const sample = JSON.parse(fs.readFileSync(path.join(REPO, 'test', 'fixtures', 'sample', 'topology.json'), 'utf8'));
+    const proposal = JSON.parse(fs.readFileSync(path.join(REPO, 'test', 'fixtures', 'sample', 'docs', 'specs', 'proposals', '0002-checkout.json'), 'utf8'));
+    const shown = await page.evaluate(async ([topology, object]) => {
+      await customElements.whenDefined('corn-review');
+      const el = document.querySelector('corn-review') as any;
+      await el.componentOnReady();
+      el.style.width = '390px'; // a phone's box: the bar is a sheet, with its view menu (CSSOM, which a policy does not govern)
+      el.style.height = '700px';
+      el.topology = topology;
+      el.proposal = object;
+      for (let i = 0; i < 50 && !el.shadowRoot.querySelector('#proposal-title')?.textContent; i++) await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 500));
+      const mode = el.shadowRoot.querySelector('.hx-proposal-mode');
+      return { title: el.shadowRoot.querySelector('#proposal-title').textContent, mode: !!mode && getComputedStyle(mode).display !== 'none' };
+    }, [{ nodes: sample.nodes, edges: sample.edges }, proposal]);
+    expect(shown).toEqual({ title: proposal.title, mode: true });
     expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
     await context.close();
   }, 60_000);

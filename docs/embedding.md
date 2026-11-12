@@ -2,12 +2,43 @@
 
 By default cornfield answers only its own page. With `embed.origins` you can list the origin of **another app of your own** (a task board, an internal portal) so that a page there can read the map and the proposals, and decide a review, as the maintainer who is signed in to cornfield in the same browser. This page has two halves. [The server's](#the-key): what it lets in, what it does not, and what listing an origin means; nothing there is on until you list an origin. [The components](#the-components): cornfield's interface as web components you put on your own page, which need no server at all when you hand them the data yourself.
 
-```js
-// cornfield.config.js, served at https://map.example.com
-export default {
-  embed: { origins: ['https://tasks.example.com'] },
-};
-```
+## The short version: a review in your app
+
+A maintainer opens a spec in your app (a task board, say, at `https://tasks.example.com`) and approves it or sends it back there, with their cornfield session. Five things:
+
+1. **List your app's origin on the cornfield server** (`https://map.example.com`), in `cornfield.config.js`, and restart it. The two must be on one site (`tasks.example.com` and `map.example.com`), so the session cookie travels ([why](#what-listing-an-origin-means)):
+
+   ```js
+   export default {
+     embed: { origins: ['https://tasks.example.com'] },
+   };
+   ```
+
+2. **Load the tag from that server**, one line in your page (or `npm install @popcorn245/cornfield-components` and `import '@popcorn245/cornfield-components/corn-review'`):
+
+   ```html
+   <script type="module" src="https://map.example.com/cornfield/components/corn-review.js"></script>
+   ```
+
+3. **Put the tag where the review goes, and give it a height** (it fills its box; about 1100 by 680 is comfortable, under 768px wide it is the phone layout):
+
+   ```html
+   <corn-review src="https://map.example.com" proposal="0042-retire-the-old-export" source="pull/31"></corn-review>
+   ```
+
+   ```css
+   corn-review { height: 680px; }   /* in your own stylesheet: a grid cell or a flex child works too */
+   ```
+
+4. **If your page has a Content-Security-Policy**, allow the server for scripts, fetches and images; nothing inline is needed ([the policy](#the-hosts-content-security-policy-for-the-components)):
+
+   ```
+   script-src 'self' https://map.example.com; connect-src 'self' https://map.example.com; img-src 'self' data: https://map.example.com; style-src 'self'
+   ```
+
+5. **Listen to what it says**, if your app wants to know: `cornDecision` (the server took Approve or Send back: `outcome`, `proposal`, `source`), `cornAuth` (the maintainer has to sign in: the review shows the link, `signIn`, and comes back to your page), `cornNavigate` (the proposal or its view changed: keep it in your own address so the way back from sign-in reopens it), `cornError` (something it could not do), `cornReady` (it is drawn).
+
+What it does not do yet: it is not part of a `<corn-scope>`, it has no what-if editor, no mockups (they open on cornfield itself), no Work panel and no list of proposals to choose from ([the limits](#what-it-does-not-do-yet)). The rest of this page is the detail: [the server's half](#the-key) and [the components](#the-components), with [`<corn-review>`](#corn-review-the-one-tag-review) first.
 
 ## The key
 
@@ -125,9 +156,9 @@ What is there (the files of the build, and only those; `manifest.json` lists the
 | `corn-scope.js` | registers `<corn-scope>` ([below](#corn-scope-and-src-reading-a-cornfield-server)) |
 | `index.js` | registers every component, and exports `version` |
 | `chunks/runtime-<hash>.js` | the Stencil runtime, shared by every entry |
-| `chunks/_corn-default-tokens-<hash>.js` | the engine every component shares, with the default tokens (the bundler names a shared chunk after its first module) |
-| `chunks/map-<hash>.js` | the map piece and what only it draws with |
-| `chunks/corn-review-<hash>.js` | the review: the proposal's bar, the change list and the scenario player, the node panel and the decision (the review loads it, and nothing else does) |
+| `chunks/engine-<hash>.js` | the engine every component shares, with the default tokens |
+| `chunks/map-<hash>.js` | the map piece and what it draws with: what a map and a review share, and a scope does not need |
+| `chunks/corn-review-<hash>.js` | the review: the proposal's bar, the change list and the scenario player, the node panel and the decision, and the engine's modules only they use (the review loads it, and nothing else does) |
 | `chunks/scope-<hash>.js` | a scope: `corn-scope.js` loads it at once, `corn-map.js` only when a map has a `src` |
 | `chunks/status-<hash>.js`, `chunks/source-address-<hash>.js` | reading a server, its states and the server's theme (and the address checks): what a map with a `src`, a scope and a review with a `src` share |
 | `chunks/review-source-<hash>.js` | what a review's `src` brings: loaded by `corn-review.js` only when a review has one |
@@ -190,13 +221,13 @@ It reads the map and the proposal from the cornfield server `src`, as the mainta
 
 - **A listed origin and a signed-in maintainer.** Your page's origin is in the server's [`embed.origins`](#the-key), the two are on one site ([signing in](#signing-in-and-returning)), and the maintainer has signed in to cornfield in this browser. Without that the review says so, in its box ([below](#what-the-person-sees-and-what-is-said-in-a-review)).
 - **A height from your page.** The element is `display: block` and fills **100% of the box your page gives it**; give it a height with your own CSS (`corn-review { height: 680px }`, a grid cell, a flex child). With none it is 24rem tall (the minimum of the box inside), so a review dropped in is visible, and it is never lower than that, however much room you leave. A host page's `html { font-size }` changes what 24rem is. About **1100 by 680** is comfortable: the change list sits at the left, the bar on top, the node panel on the right. **Under 768px by its own width** (not the window's) it is cornfield's phone layout, with the bar and the list as bottom sheets; give it a tall box there (390 by 700 works).
-- **The policy** of [a host that loads the components from the server](#the-hosts-content-security-policy-for-the-components): `script-src` and `connect-src` for the server's origin (and `img-src` for the theme's icons). It makes no inline style and no `eval`; the styles are constructable stylesheets.
+- **The policy** of [a host that loads the components from the server](#the-hosts-content-security-policy-for-the-components): `script-src` and `connect-src` for the server's origin, and `img-src` for it and `data:` (the theme's icons, and the small inline images of a few controls). It makes no inline style and no `eval`; the styles are constructable stylesheets.
 - **Nothing else of your page's**: it asks no other route and no other origin ([what it asks](#what-it-asks-and-with-what)).
 
 | Property | Attribute | What it is |
 |---|---|---|
-| `src` | `src` | the server's base address (`https://map.example.com`, with an optional path). Another value is refused and said (`address`), and nothing is asked: not even the proposal, of your own page's origin in its place. Read when the element connects: **a new `src` is a new review** (it is made again) |
-| `proposal` | `proposal` | the proposal's **name** (`0042-retire-the-old-export`), which the review reads from the server once it has the map; or, as a property only, the proposal **object**, shown for reading with no request for it (no Approve or Send back: a decision needs the name and the copy). `null` closes it. Not reflected |
+| `src` | `src` | the server's base address (`https://map.example.com`, with an optional path). Another value is refused and said (`address`), and nothing is asked: not even the proposal, of your own page's origin in its place. With none, nothing is asked of anyone: a proposal's name says there is no server to read it from. Read when the element connects: **a new `src` is a new review** (it is made again) |
+| `proposal` | `proposal` | the proposal's **name** (`0042-retire-the-old-export`), which the review reads from the server once it has the map; or, as a property only, the proposal **object**, shown for reading with no request for it (no Approve or Send back: a decision needs the name and the copy). `null` closes it. **It follows the reviewer**, as `view` does: `null` once they close the proposal in the bar, the name of a copy they open from it (an object stays the object). A value that is not a proposal's name is refused and said, and never asked for ([what it asks](#what-it-asks-and-with-what)). Not reflected |
 | `source` | `source` | which copy of the proposal: `checkout`, `pull/31` (a spec PR, the only kind a decision can be made on) or a worktree's name. With none, the server answers with the first copy it lists |
 | `view` | `view` (reflected) | `before`, `diff` or `after`. Set it to choose; **it follows the reviewer's own choice** on the bar, so reading it gives what is shown |
 | `node` | `node` (reflected) | the id of the selected node. Set it to select; it follows a click or a key, as a map's does |
@@ -208,14 +239,14 @@ It reads the map and the proposal from the cornfield server `src`, as the mainta
 
 | Event | `detail` |
 |---|---|
-| `cornReady` | none: the map is drawn and the proposal asked for is open (or has said why it is not), once each time the element is put in the page |
+| `cornReady` | none: the first frame is drawn that shows the proposal asked for open, its title on the bar (or the bar saying why it is not open), once each time the element is put in the page; the line above Approve may still be reading the PR |
 | `cornSelect` | once per change of the selection, whoever made it: the same as `corn-map`'s. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node` or `edge`, or null when cleared; `id` is the node's id, `from->to` for an edge, or null; `source` is `tap`, `keyboard`, `api` or `state` |
 | `cornNavigate` | the open proposal or its view changed: **what cornfield's own page would have put in its address bar**. Your page decides what to do with it (set its own address, keep it in state, ignore it); the component never touches `location` or `history`. Its fields: `proposal`, `source`, `view`, `change`. `proposal` is the name (null once closed, or for a proposal handed in as an object); `source` is the copy only when it was asked for by name (as the page leaves it out of the address otherwise); `view` is `before`, `diff` or `after`, or null once closed; `change` is `opened`, `view` or `closed` |
-| `cornDecision` | the server took Approve or Send back, **after it answered**, once per decision. Its fields: `outcome`, `proposal`, `source`, `open`, `review`. `outcome` is `approved` or `notes`; `proposal` and `source` name the proposal **the decision was for**, read when the button was pressed (never from what is open when the answer comes); `open` is false when another proposal was opened, or this one closed, while it was sent; `review` is what the server answered: `{ verdict, at, by, posted, … }` (`posted: false` when the same approval stood already, and nothing new was posted) |
+| `cornDecision` | the server took Approve or Send back, **after it answered**, once per decision. Its fields: `outcome`, `proposal`, `source`, `open`, `review`. `outcome` is `approved` or `notes`; `proposal` and `source` name the proposal **the decision was for**, read when the button was pressed (never from what is open when the answer comes); `open` is false when another proposal was opened, or this one closed, while it was sent; `review` is what the server answered: `{ verdict, at, by, posted, … }` (`posted: false` when the same approval stood already, and nothing new was posted). A refusal (409, 403, 401, 429, a failure, no answer) is never a `cornDecision`. **A review that is gone hears no answer**: an element taken out of the page, or given a new `src`, while its PUT is in flight (the second or so after the hold) says nothing, though the server may have taken it; the next review of that proposal shows the decision that stands |
 | `cornAuth` | the server answered a read or the press with 401 or 403: the maintainer has to sign in. The review shows [the card](#what-the-person-sees-and-what-is-said-in-a-review); your page may show its own. Its fields: `status`, `signIn`, `during`. `signIn` is `<src>/auth/start?returnTo=<this page>`; `during` says what was refused: `load` (the map), `proposal` (opening it), `facts` (the line above Approve), `review` (reading the last decision), `send` (the press) or `landing` (Undo) |
 | `cornError` | something the review could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` (as [a map's](#what-the-person-sees-and-what-is-said)) or `proposal` (the proposal did not open: there is none of that name, or the server refused or failed; `message` is what the bar says) |
 
-Events bubble and cross the shadow root (`composed`). `cornSelect` and `cornNavigate` fire for a change you made yourself as well; setting `proposal`, `view` or `node` to what is shown already does nothing and says nothing, so **answering an event by setting the property it describes does not loop** (set `proposal` to the name `cornNavigate` gave and the proposal stays open, whichever copy the server found). `cornAuth` with `during: 'facts'` is said once, not every half minute while the poll is refused.
+Events bubble and cross the shadow root (`composed`). `cornSelect` and `cornNavigate` fire for a change you made yourself as well (`cornSelect`'s `source` is `api` then; `cornNavigate` says what changed, not who changed it); setting `proposal`, `source`, `view` or `node` to what is shown already does nothing and says nothing, so **answering an event by setting the property it describes does not loop** (set `proposal` to the name `cornNavigate` gave and the proposal stays open, whichever copy the server found). `cornAuth` with `during: 'facts'` is said once, not every half minute while the poll is refused.
 
 | Method | What it does |
 |---|---|
@@ -251,7 +282,24 @@ The same as on cornfield's page, one engine. **Approve** takes no note: one line
 
 #### What it asks, and with what
 
-The rows of the [request table](#corn-scope-and-src-reading-a-cornfield-server) above: the config and the map, the proposal, the facts, the last review, the PR's chip, and for a decision the two writes (`PUT /proposals/<name>/review` and `POST /api/forge/pulls/<n>/landing/cancel`), **all with the session** (`credentials: 'include'`) **and only to `src`'s own origin**; the theme without. Every one is on a route of the server's [list](#what-a-listed-origin-may-read), and nothing is asked of any other origin. The requests a decision makes are byte for byte what cornfield's own page sends for the same steps, but for the address being absolute and `credentials: 'include'` (`test/fixtures/big/review-proof.mjs` records both and compares).
+Only these, every one on a route of the server's [list](#what-a-listed-origin-may-read), **to `src`'s own origin and no other**; the session (`credentials: 'include'`) goes with each but the theme's, and **none follows a redirect** (`redirect: 'error'`: cornfield answers none of these with one, and a server that did would send the request, with that other site's cookies, wherever it named; it fails instead, as a request with no answer does). `<name>` is the proposal's name, one path segment: a value that is not a proposal's name (`..`, a path, a URL, markup: a letter or digit first, then letters, digits, `.`, `_` and `-`, at most 200) is never put in a request, and the bar says "“..” is not a proposal's name." (`cornError` `proposal`). `source` is always a query parameter, encoded.
+
+| Request | Credentials | When |
+|---|---|---|
+| `GET /cornfield/config.json` | the session, `cache: 'no-store'` | each load, unless you handed in both `topology` and `config` |
+| `GET /topology.json?v=<time>` | the session | each load, unless you handed in `topology` |
+| `GET /cornfield/theme.css`, `/cornfield/theme/<name>.css` | none (`omit`) | with `use-theme` |
+| `/cornfield/theme/assets/<icon>` | none, as an image (`crossorigin="anonymous"`) | the icons the config's `theme.icons` names |
+| `HEAD /cornfield/theme.css` | none, `mode: 'no-cors'` | only after a read got no answer (not listed, or offline) |
+| `GET /proposals/<name>.json[?source=<source>]` | the session, `no-store` | opening the proposal |
+| `GET /proposals` | the session, `no-store` | only when that answered 404: the same name under another source, offered as a button |
+| `GET /api/forge/pulls/<n>` | the session | the proposal's PR, for the bar, when `source` is `pull/<n>` |
+| `GET /proposals/<name>/review?source=<source>` | the session, `no-store` | the last decision, when the proposal opens |
+| `GET /proposals/<name>/decision?source=<source>[&fresh=1]` | the session, `no-store` | the line above Approve: when it opens, again while it is open, and (`fresh=1`) at the end of a hold and after a decision |
+| `PUT /proposals/<name>/review?source=<source>` | the session, `Content-Type: application/json`, `{"verdict","note","edits":[],"sha256","headSha"}` | Approve or Send back, once the hold is over |
+| `POST /api/forge/pulls/<n>/landing/cancel` | the session, `Content-Type: application/json`, `{}` | Cancel landing, while an approval's landing waits |
+
+With no `src` (and so no server) it asks nothing at all: a proposal handed in as an object is shown for reading, and a name says that there is no server to read it from. The requests a decision makes are byte for byte what cornfield's own page sends for the same steps (method, path, query, headers, body, and their order), but for the address being absolute, `credentials: 'include'` and `redirect: 'error'`: `node test/fixtures/big/review-requests.mjs` records both and compares them.
 
 #### What it does not do yet
 
@@ -365,7 +413,7 @@ The map shows the state of the load in a box over itself (a polite live region s
 | `/cornfield/theme/assets/…` | the browser's own for a CSS image (your page's cookies for that server's site) | the images the server's theme names, with `use-theme`, when a piece shows them |
 | `HEAD /cornfield/theme.css` | none, `mode: 'no-cors'` | only after a read got no answer, to tell not listed from offline |
 
-Nothing else: not `/topology.cloud.json` (the map does not use it), no proposal route, no write, and nothing to any origin but `src`, whatever the config or the theme names (a theme's reference to another origin is dropped: [below](#the-servers-theme-use-theme)). The session goes only to `src`'s own origin. A path on `src` is kept. When the components themselves come from the server, a map with a `src` also fetches `chunks/scope-<hash>.js` from there, once, as a module (with CORS, without the cookie).
+Nothing else: not `/topology.cloud.json` (the map does not use it), no proposal route, no write, no redirect followed (`redirect: 'error'` on each of these, the session's and the theme's), and nothing to any origin but `src`, whatever the config or the theme names (a theme's reference to another origin is dropped: [below](#the-servers-theme-use-theme)). The session goes only to `src`'s own origin. A path on `src` is kept. When the components themselves come from the server, a map with a `src` also fetches `chunks/scope-<hash>.js` from there, once, as a module (with CORS, without the cookie).
 
 #### The server's theme (`use-theme`)
 
@@ -402,12 +450,12 @@ What a constructable stylesheet does not do, and so a theme that relied on it:
 If the host page has a Content-Security-Policy and loads the components from a cornfield server (`https://map.example.com`), with a scope or a map with `src` reading that server, this is what it needs, and it is enough:
 
 ```
-Content-Security-Policy: default-src 'self'; script-src 'self' https://map.example.com; connect-src 'self' https://map.example.com; img-src 'self' https://map.example.com; style-src 'self'
+Content-Security-Policy: default-src 'self'; script-src 'self' https://map.example.com; connect-src 'self' https://map.example.com; img-src 'self' data: https://map.example.com; style-src 'self'
 ```
 
 - `script-src https://map.example.com`: the entry and the chunks it imports. Nothing else of the components is script: no `eval`, no worker, no `blob:` or `data:` URL, and never a module a config names. When you install from npm and bundle, `script-src 'self'` is enough for the components.
 - `connect-src https://map.example.com`: the config, the map, the theme and the reach test are all `fetch` calls. A blocked connection looks like [offline](#what-the-person-sees-and-what-is-said): the browser tells the page nothing more. `<corn-map>` with a `topology` and no `src` makes none.
-- `img-src https://map.example.com`: the icons of a theme's `theme.icons`, which the map draws.
+- `img-src https://map.example.com`: the icons of a theme's `theme.icons`, which the map draws. And `img-src data:`: a few of the controls draw a small inline image (the review's view menu on a phone, a chevron), and a server's theme may hold `data:` images, which it keeps ([below](#the-servers-theme-use-theme)); without it those are refused and reported, and the rest works.
 - `style-src 'self'` and **no `'unsafe-inline'`**: the components' styles and the server's theme are constructable stylesheets, and the theme's tokens are set on the scope's element from script (`style.setProperty`); `style-src` governs neither, so nothing inline is needed. Add `https://map.example.com` to `style-src` only if you link its `tokens.css` or the theme's stylesheets yourself, and to `font-src` if you load the theme's fonts yourself ([above](#the-servers-theme-use-theme)).
 
 A page under exactly this policy loads the components from a listed origin and draws the map, in `components/test/host.test.ts`; the synthetic rig's proof (`node test/fixtures/big/scope-proof.mjs`) does the same with `src` and `use-theme`, and no violation is reported.
@@ -496,4 +544,4 @@ A screen reader finds an application named "Topology map", described by the map'
 
 ### The size it adds
 
-The build records the gzipped size of the shared runtime, of `corn-map` and of `corn-review` with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 82.2 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11 kB more, once, when it first has one; **`corn-review` 142.0 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **151.2 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 64.1 kB. The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once. The price of sharing is that a map alone now loads what the review uses of the modules they share: `corn-map` was 70.7 kB before the review arrived (about 11 kB less).
+The build records the gzipped size of the shared runtime, of `corn-map` and of `corn-review` with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 72.8 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11.4 kB more, once, when it first has one; **`corn-review` 142.4 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **151.5 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 54.6 kB. The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once, and a map alone loads none of the review: what only a review uses (the sheets, the bar's, the list's and the panel's words, the checks, the decision) is in modules a map does not import, as a test of the build holds.

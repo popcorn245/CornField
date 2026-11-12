@@ -615,7 +615,7 @@ The explorer's pieces are also web components, for putting in another app's page
 | `corn-map` | `src` | `src` | the address of a cornfield server, for a map with no scope around it; ignored inside a scope |
 | `corn-map` | `useTheme` | `use-theme` | wear the server's theme (with `src`, no scope) |
 | `corn-review` | `src` | `src` | the address of a cornfield server: an `http(s)` origin and an optional path; the review reads the config, the map and the proposal from it and decides on it; another value is refused and said; read when the element connects, a new one is a new review |
-| `corn-review` | `proposal` | `proposal` | the proposal's name (the review reads it from the server), or, as a property only, the proposal object, shown for reading; not reflected |
+| `corn-review` | `proposal` | `proposal` | the proposal's name (the review reads it from the server), or, as a property only, the proposal object, shown for reading; it follows the reviewer (null once closed in the bar, the name of a copy opened from it); a value that is not a proposal's name is refused and said; not reflected |
 | `corn-review` | `source` | `source` | which copy of the proposal: `checkout`, `pull/<n>` or a worktree's name; with none the server answers with the first it lists |
 | `corn-review` | `view` | `view` (reflected) | `before`, `diff` or `after`; it follows the reviewer's own choice on the bar |
 | `corn-review` | `node` | `node` (reflected) | the id of the selected node, or none; it follows a click or a key |
