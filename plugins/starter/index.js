@@ -35,6 +35,7 @@
  */
 
 import { LANGUAGES, TEST_FILES, docSummary, expandMembers, goImports, goManifest, goWorkDirs, manifestLanguage, pyName, pythonImports, pythonManifest, rustManifest, rustName, rustUses } from './languages.js';
+import { leavesRepo, outsideProblem } from '../../core/repo.js';
 
 const DEFAULT_EXTENSIONS = LANGUAGES.js.extensions;
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', '__fixtures__', 'fixtures']);
@@ -105,17 +106,10 @@ const readJson = (io, rel) => {
 };
 const join = (dir, name) => (dir ? `${dir}/${name}` : name);
 
-/** Every file under `dir` that `test` accepts, not going into the folders `prune` names */
-function walkPruned(io, dir, prune, test) {
-  if (!prune.length) return io.walk(dir, test);
-  const skip = new Set(prune);
-  return io.list(dir).flatMap((name) => {
-    const child = join(dir, name);
-    if (!io.isDir(child)) return test(child) ? [child] : [];
-    if (skip.has(name) || name.endsWith('.egg-info')) return [];
-    return walkPruned(io, child, prune, test);
-  }).filter((f) => !f.split('/').some((s) => s === 'node_modules' || s === '.git'));
-}
+/** Every file under `dir` that `test` accepts, not going into the folders `prune` names: the repo's own walk, so a symlink out of the repo or a loop of links is not followed */
+const walkPruned = (io, dir, prune, test) => (prune.length
+  ? io.walk(dir, test, undefined, undefined, (name) => prune.includes(name) || name.endsWith('.egg-info'))
+  : io.walk(dir, test));
 
 /** The language most of a folder's source files are in (JavaScript when there are none) */
 function languageOf(io, dir) {
@@ -178,10 +172,13 @@ function uvMembers(io) {
 }
 
 /** The repo's packages: `[{ dir, lang, name, summary, manifest, deps }]` */
-function findPackages(io, options) {
+function findPackages(io, options, problems) {
   const rootManifest = readJson(io, 'package.json') || {};
   const ws = Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : rootManifest.workspaces?.packages;
-  if (Array.isArray(options.packages)) return expandPatterns(options.packages, io).map((dir) => packageAt(io, dir, languageOf(io, dir)));
+  if (Array.isArray(options.packages)) {
+    const named = options.packages.filter((p) => !(leavesRepo(io, String(p).replace(/\\/g, '/').replace(/\/\*$/, '')) && problems.push(outsideProblem('starter', p))));
+    return expandPatterns(named, io).map((dir) => packageAt(io, dir, languageOf(io, dir)));
+  }
   const others = otherPackages(io);
   let js = [];
   if (Array.isArray(ws) && ws.length) js = expandPatterns(ws, io);
@@ -248,7 +245,8 @@ const starter = {
     const isTest = (f, lang) => (TEST_FILES[lang] || TEST_FILES.js).test(f) || TEST_FILES.js.test(f) || f.split('/').some((s) => TEST_DIRS.has(s));
     const isSourceOf = (lang) => (f) => extOf(lang).some((e) => f.endsWith(e)) && (options.tests || !isTest(f, lang));
     const rootManifest = readJson(ctx, 'package.json') || {};
-    const packages = findPackages(ctx, options);
+    const problems = [];
+    const packages = findPackages(ctx, options, problems);
     const nodes = [{ id: 'root', label: rootManifest.name || ctx.config?.title || 'repo', type: 'root', ...(ctx.exists('package.json') ? { file: 'package.json' } : {}) }];
     const edges = [];
     const warnings = [];
@@ -363,7 +361,7 @@ const starter = {
       edges.push({ from: moduleId(a), to: moduleId(b), dashed: true, label: 'imports' });
     }
     if (!packages.length) warnings.push('starter: no packages found (no npm workspaces, Go modules, Rust crates or Python packages, and no top-level folder with source files). Set derivers: [{ use: "starter", options: { packages: ["src"] } }].');
-    return { nodes, edges, warnings, info: { packages: packages.map((p) => ({ id: pid(p.dir), dir: p.dir, name: p.name, language: p.lang })) } };
+    return { nodes, edges, warnings, problems, info: { packages: packages.map((p) => ({ id: pid(p.dir), dir: p.dir, name: p.name, language: p.lang })) } };
   },
 };
 

@@ -25,6 +25,8 @@
  * hand-written page under that app is removed. YAML needs the optional dependency js-yaml.
  */
 
+import { leavesRepo, outsideProblem } from '../../core/repo.js';
+
 const SPEC_FILE = /(?:^|\/)(?:openapi|swagger|[\w.-]+\.openapi|opencollection)\.(?:json|ya?ml)$/i;
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE'];
 export const DEFAULT_APP = 'app-api';
@@ -127,9 +129,10 @@ export function specKind(doc) {
 }
 
 /** The specs to read: `[{ file, app, prefix }]` */
-function specsOf(ctx, options, warnings) {
-  if (Array.isArray(options.specs)) return options.specs.map((s) => ({ app: DEFAULT_APP, ...s }));
-  if (typeof options.file === 'string') return [{ file: options.file, app: options.app || DEFAULT_APP, prefix: options.prefix }];
+function specsOf(ctx, options, warnings, problems) {
+  const inRepo = (s) => !(leavesRepo(ctx, s.file) && problems.push(outsideProblem('openapi', s.file)));
+  if (Array.isArray(options.specs)) return options.specs.map((s) => ({ app: DEFAULT_APP, ...s })).filter(inRepo);
+  if (typeof options.file === 'string') return [{ file: options.file, app: options.app || DEFAULT_APP, prefix: options.prefix }].filter(inRepo);
   const found = ctx.walk('', (f) => SPEC_FILE.test(f));
   if (found.length > 1) {
     warnings.push(`openapi: ${found.length} API description files (${found.join(', ')}); name the ones to draw: { use: 'openapi', options: { specs: [{ file, app }] } }.`);
@@ -145,7 +148,8 @@ const openapi = {
   async derive(ctx) {
     const options = ctx.options || {};
     const warnings = [];
-    const specs = specsOf(ctx, options, warnings);
+    const problems = [];
+    const specs = specsOf(ctx, options, warnings, problems);
     const nodes = [];
     const edges = [];
     const ownedIds = [];
@@ -191,7 +195,7 @@ const openapi = {
       }
       if (!endpoints.length) warnings.push(`openapi: ${spec.file} describes no endpoints.`);
     }
-    return { nodes, edges, warnings, ownedIds, pageOwners, info: { specs: specs.map((s) => ({ file: s.file, app: s.app })) } };
+    return { nodes, edges, warnings, problems, ownedIds, pageOwners, info: { specs: specs.map((s) => ({ file: s.file, app: s.app })) } };
   },
 };
 

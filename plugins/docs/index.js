@@ -18,6 +18,7 @@
 
 import path from 'node:path';
 import { markdownLinks, renderMarkdown } from './markdown.js';
+import { leavesRepo, outsideProblem } from '../../core/repo.js';
 
 export const DEFAULT_PATHS = ['README.md', 'docs'];
 
@@ -44,7 +45,7 @@ export function docFiles(io, paths, refuse = () => {}) {
   const told = new Set();
   for (const p of paths) {
     const rel = path.posix.normalize(p.replace(/^\.\/+/, '').replace(/\/+$/, '') || '.');
-    if (path.isAbsolute(p) || path.win32.isAbsolute(p) || rel === '..' || rel.startsWith('../') || !inside(rel)) { refuse(`docs: ${JSON.stringify(p)} is outside the repo; only files and folders of the repo are read.`, 'problem'); continue; }
+    if (leavesRepo({ inside }, p)) { refuse(outsideProblem('docs', p), 'problem'); continue; }
     if (io.isDir(rel)) {
       io.walk(rel, isMarkdown, (f, why) => { const m = `docs: ${f || '.'} ${SKIPPED[why]}.`; if (!told.has(m)) { told.add(m); refuse(m, 'warning'); } }, seen).forEach((f) => out.add(f));
     } else if (isMarkdown(rel) && io.exists(rel)) out.add(rel);

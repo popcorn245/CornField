@@ -10389,7 +10389,72 @@
       "to": "core-core-repo",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-compose",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-openapi",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-starter",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-world",
+      "to": "pkg-core",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-docs-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-openapi-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-starter-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-world-index",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-cloud",
+      "to": "page-doc-docs-derivers",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T21:50:40.869Z"
+  "updatedAt": "2026-11-12T22:45:25.944Z"
 }

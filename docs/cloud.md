@@ -40,6 +40,6 @@ The cloud deriver draws the services outside your house (or company) that the co
 | Tailnet | the machines of a world file (the `world` deriver, listed before `cloud`) with `tailnet: true`, by hostname; an entry claims them with `"tailnet": true` in its `match` | the machine, `run` |
 | Caddy | the Caddyfiles named in `options.caddyfiles: [{ file, from }]`: DNS-01 providers, resolvers, the ACME CA | the node named, `renew` |
 
-Options: `{ ownDomains, code, ci: { from }, dockerfiles, caddyfiles }`. `ownDomains` are never outside (your own domains). A repo's own deriver can add evidence of any kind (`lib`, `route`, `env`…) before the cloud deriver runs.
+Options: `{ ownDomains, code, ci: { from }, dockerfiles, caddyfiles }`; a `code` folder or a Caddyfile that leaves the repo is refused as a `validate` problem ([derivers.md](derivers.md#a-path-in-config-that-leaves-the-repo)). `ownDomains` are never outside (your own domains). A repo's own deriver can add evidence of any kind (`lib`, `route`, `env`…) before the cloud deriver runs.
 
 Without a `topology.cloud.json` the deriver only says how many outside hosts and sources it found, so a first `sync` never fails on it.

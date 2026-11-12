@@ -31,6 +31,7 @@
 
 import { CLOUD_FILE, deriveCloud, EVIDENCE_KINDS } from '../../core/cloud.js';
 import { hostsIn } from './hosts.js';
+import { leavesRepo, outsideProblem } from '../../core/repo.js';
 import { caddyEvidence, dockerfileSources, imageRef, workflowSources } from './sources.js';
 
 const WORKFLOW_DIRS = ['.github/workflows', '.forgejo/workflows'];
@@ -75,6 +76,7 @@ export default {
     const known = [...ctx.nodes, ...((ctx.map && ctx.map.nodes) || []).filter((n) => !ctx.nodes.some((d) => d.id === n.id))];
     const evidence = [];
     const warnings = [];
+    const problems = [];
     const nodes = [];
     const edges = [];
     const add = (piece) => evidence.push(piece);
@@ -89,7 +91,7 @@ export default {
     };
 
     // Hosts in code and pages
-    const roots = Array.isArray(options.code) ? options.code
+    const roots = Array.isArray(options.code) ? options.code.filter((dir) => !(leavesRepo(ctx, dir) && problems.push(outsideProblem('cloud', dir))))
       : (ctx.info.starter?.packages || []).map((p) => p.dir);
     const files = [...new Set(roots.flatMap((dir) => ctx.walk(dir === '.' ? '' : dir, (f) => (CODE_FILE.test(f) || PAGE_FILE.test(f)) && !NOT_SHIPPED.test(f))))].sort();
     for (const file of files) {
@@ -145,6 +147,7 @@ export default {
 
     // Caddyfiles the config names
     for (const { file, from } of options.caddyfiles || []) {
+      if (leavesRepo(ctx, file)) { problems.push(outsideProblem('cloud', file)); continue; }
       if (!ctx.exists(file)) { warnings.push(`cloud: caddyfile ${file} does not exist.`); continue; }
       for (const e of caddyEvidence(ctx.read(file))) add({ ...e, from, when: 'renew', file });
     }
@@ -152,7 +155,7 @@ export default {
     if (!ctx.exists(CLOUD_FILE)) {
       const hosts = new Set(evidence.filter((e) => e.match.kind === 'host').map((e) => e.match.value));
       if (evidence.length) warnings.push(`cloud: the code reaches ${hosts.size} outside host(s) and ${evidence.length - [...evidence].filter((e) => e.match.kind === 'host').length} other outside source(s); add ${CLOUD_FILE} to draw them (docs/cloud.md).`);
-      return { nodes: [], edges: [], warnings, evidence: [] };
+      return { nodes: [], edges: [], warnings, problems, evidence: [] };
     }
     // What the derivers before this one found (a repo's own deriver may add `lib`, `route`, `env` … evidence)
     const all = [...(ctx.evidence || []), ...evidence];
@@ -170,6 +173,7 @@ export default {
       nodes: [...nodes, ...cloud.nodes],
       edges: [...edges, ...cloud.edges],
       warnings: [...warnings, ...cloud.warnings],
+      problems,
       ownedIds: [...nodes.map((n) => n.id), ...cloud.ownedIds],
       evidence,
       info: { unknownPlans: cloud.unknown },
