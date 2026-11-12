@@ -91,3 +91,28 @@ export function throttle(ctx, userId, key, at) {
   mine.push(at);
   return () => { t.busy.delete(key); };
 }
+
+/** How many writes refused for their origin are written down per person per minute; the rest are refused without a row */
+export const REFUSED_ORIGIN_ROWS_PER_MINUTE = 1;
+
+/**
+ * Writes down a write refused because it did not come from cornfield's own page: a page on a sibling subdomain is same-site,
+ * so the maintainer's cookie rides along, and a trace of "a page tried to act as you" is worth keeping. At most
+ * `REFUSED_ORIGIN_ROWS_PER_MINUTE` a minute per person, counted under a key of its own, so such a page neither uses up the
+ * person's own budget (`ATTEMPTS_PER_MINUTE`) nor grows the audit table faster than that. A row that cannot be written is
+ * logged; the refusal stands either way.
+ * @param {{ auth: { record: Function } }} ctx
+ * @param {import('node:http').IncomingMessage} req
+ * @param {{ login: string, userId: string }} who
+ * @param {{ action: string, target: string, request?: object, answer: object }} entry the route's own row, as it would have been
+ * @param {number} at
+ */
+export async function noteRefusedOrigin(ctx, req, who, { action, target, request = {}, answer }, at) {
+  if (countAttempt(ctx, `origin|${who.userId}`, at, REFUSED_ORIGIN_ROWS_PER_MINUTE)) return;
+  const header = (name) => (typeof req.headers[name] === 'string' ? String(req.headers[name]).slice(0, 200) : null);
+  try {
+    await ctx.auth.record({ login: who.login, action, target, request: { ...request, refused: 'origin', origin: header('origin'), site: header('sec-fetch-site') }, status: 403, answer });
+  } catch (err) {
+    console.error(`[cornfield] a write refused for its origin could not be written down: ${err instanceof Error ? err.message : err}`);
+  }
+}

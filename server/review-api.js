@@ -40,7 +40,7 @@ import { sameOrigin, readBody } from './proposals.js';
 import { REVIEW_LIMIT } from './reviews.js';
 import { MAX_ACTIVE, MAX_DAYS, DEFAULT_DAYS, bearerOf, daysOf, findToken, labelProblem, listTokens, mintToken, revokeToken, touchToken } from './review-tokens.js';
 import { refusal, submitReview } from './submit-review.js';
-import { Refused, countAttempt } from './throttle.js';
+import { Refused, countAttempt, noteRefusedOrigin } from './throttle.js';
 
 export const REVIEWS_PATH = '/api/reviews';
 export const TOKENS_PATH = '/api/review-tokens';
@@ -209,10 +209,15 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
   }
 
   // A change: from cornfield's own page only, as JSON, counted and written down, and the forge asked who this is now
-  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie
+  const what = revoke ? 'revoke' : 'mint';
+  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(scope !== 'review' ? { scope } : {}), ...(revoke ? { id: Number(revoke[2]) } : {}) });
+  // The origin first, before the flood count: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up
+  // their budget. It is written down at most once a minute (server/throttle.js `noteRefusedOrigin`)
   if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
     req.resume();
-    send(res, 403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+    const answer = { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' };
+    await noteRefusedOrigin(ctx, req, session, { action: 'review-token', target: config.forge.repo, request, answer }, now());
+    send(res, 403, answer);
     return true;
   }
   const flood = countAttempt(ctx, session.userId, now());
@@ -221,8 +226,6 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
     send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
     return true;
   }
-  const what = revoke ? 'revoke' : 'mint';
-  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(scope !== 'review' ? { scope } : {}), ...(revoke ? { id: Number(revoke[2]) } : {}) });
   let rowId = null;
   /** @type {{ status: number, body: object }} */
   let out;

@@ -715,15 +715,16 @@ describe('the pipeline steps', () => {
       expect(last()).toMatchObject({ action: 'build', status: 403 });
     });
 
-    it('refuses a request from another origin, before anything is counted or written down', async () => {
+    it('refuses a request from another origin before it is counted, and writes it down at most once a minute', async () => {
       const before = rows().length;
-      for (const headers of [{ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }, { origin: undefined, 'sec-fetch-site': undefined }]) {
+      for (const headers of [{ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }, { origin: undefined, 'sec-fetch-site': undefined }, { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }]) {
         const res = await post(SPEC, { digest: 'a'.repeat(32) }, { headers });
         expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
-        clock += 10_000;
+        clock += 40_000;
       }
       expect(wrote()).toEqual([]);
-      expect(rows()).toHaveLength(before);
+      expect(rows()).toHaveLength(before + 2); // the first and the third: the second came within the first's minute
+      expect(last()).toMatchObject({ action: 'spec', status: 403, request: { refused: 'origin' } });
     });
 
     it('wants JSON, and takes POST (a plan is a GET at the same address; anything else is a 405)', async () => {

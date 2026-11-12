@@ -352,7 +352,7 @@ describe('the forge actions', () => {
   });
 
   describe('where from, and how often', () => {
-    it('refuses a request from another origin, whatever header says so, before anything is counted or written down', async () => {
+    it('refuses a request from another origin, whatever header says so, before it is counted; one row a minute says so', async () => {
       const before = rows().length;
       const tries = [
         { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
@@ -362,11 +362,13 @@ describe('the forge actions', () => {
       ];
       for (const headers of tries) {
         const res = await act(12, 'merge', { sha: ABC }, { headers });
-        expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
-        clock += 10_000;
+        expect([res.status, res.json]).toEqual([403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' }]);
+        clock += 61_000; // past the minute of the row before
       }
       expect(wrote()).toEqual([]);
-      expect(rows()).toHaveLength(before);
+      expect(rows()).toHaveLength(before + 4);
+      expect(last()).toMatchObject({ action: 'merge', target: 'owner/name#12', status: 403, request: { action: 'merge', number: 12, refused: 'origin', origin: null, site: null }, answer: { code: 'forbidden' } });
+      expect(rows().at(-4).request).toMatchObject({ origin: 'https://evil.example', site: 'cross-site' });
     });
 
     it('refuses a wrong Host before any route (DNS rebinding)', async () => {
@@ -431,7 +433,9 @@ describe('the forge actions', () => {
         const res = await act(12, 'merge', { sha: ABC }, { headers: { origin: 'https://sibling.example', 'sec-fetch-site': 'same-site' } });
         expect([res.status, res.json.code]).toEqual([403, 'forbidden']);
       }
-      expect(rows()).toHaveLength(before);
+      // one row for the minute, whatever the count: such a page cannot grow the audit table
+      expect(rows()).toHaveLength(before + 1);
+      expect(last()).toMatchObject({ action: 'merge', status: 403, request: { refused: 'origin', origin: 'https://sibling.example', site: 'same-site' } });
       expect(wrote()).toEqual([]);
       // the maintainer's own write is not rate limited: it reaches the forge's checks (409 as in the ceiling test above), not a 429
       expect((await act(12, 'merge', { sha: ABC })).status).not.toBe(429);

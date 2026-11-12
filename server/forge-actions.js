@@ -51,7 +51,7 @@ import { ForgeError, RERUN_STATES, canRerun, isMaintainer, hasAdapter } from './
 import { sameOrigin } from './proposals.js';
 import { planSpec, planBuild, startSpec, openBuildIssue } from './pipeline.js';
 import { PROPOSAL_FILE } from './files.js';
-import { Refused, throttle, countAttempt } from './throttle.js';
+import { Refused, throttle, countAttempt, noteRefusedOrigin } from './throttle.js';
 
 // The limits live in server/throttle.js (reviews share them); these are re-exported for the callers that always had them here
 export { COOLDOWN_MS, PER_MINUTE, ATTEMPTS_PER_MINUTE, countAttempt } from './throttle.js';
@@ -160,7 +160,7 @@ export function actionOf(reqPath) {
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {{ n: number, action: 'merge' | 'rerun' | 'spec' | 'build' }} what
- * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
+ * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, record: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveAction(req, res, what, ctx, send) {
@@ -174,18 +174,21 @@ export async function serveAction(req, res, what, ctx, send) {
     req.resume();
     return send(403, { ok: false, error: `${DOING[action]} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
   }
-  // Past the ceiling nothing is written down: a flood of refused attempts cannot grow the audit table
-  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up their budget
+  const target = `${config.forge.repo}#${n}`;
+  // The origin first, before the flood count: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up
+  // their budget. It is written down at most once a minute (`noteRefusedOrigin`), so such a page cannot grow the audit table either
   if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
     req.resume();
-    return send(403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+    const answer = { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' };
+    await noteRefusedOrigin(ctx, req, session, { action, target, request: { action, number: n }, answer }, now());
+    return send(403, answer);
   }
+  // Past the ceiling nothing is written down: a flood of refused attempts cannot grow the audit table
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
     req.resume();
     return send(flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
   }
-  const target = `${config.forge.repo}#${n}`;
   /** @type {Record<string, unknown>} */
   const request = { action, number: n };
   let rowTarget = target;
@@ -305,7 +308,7 @@ export async function serveAction(req, res, what, ctx, send) {
  * caller has found the path and the method to be this; every refusal is in words and written down, as in `serveAction`.
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {{ config: any, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, begin: Function, finish: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
+ * @param {{ config: any, session: { login: string, userId: string } | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function, begin: Function, finish: Function, record: Function }, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ctx
  * @param {(status: number, body: object, headers?: object) => void} send
  */
 export async function serveIdea(req, res, ctx, send) {
@@ -322,17 +325,19 @@ export async function serveIdea(req, res, ctx, send) {
     req.resume();
     return send(403, { ok: false, error: `${DOING.idea} is done as the signed-in maintainer: set up sign-in first (docs/sign-in.md).`, code: 'forbidden' });
   }
-  // The origin first, before anything is counted or written down: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up their budget
+  const target = config.forge.repo;
+  // The origin first, before the flood count, and written down at most once a minute: as in `serveAction`
   if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
     req.resume();
-    return send(403, { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' });
+    const answer = { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' };
+    await noteRefusedOrigin(ctx, req, session, { action: 'idea', target, request: { action: 'idea' }, answer }, now());
+    return send(403, answer);
   }
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
     req.resume();
     return send(flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
   }
-  const target = config.forge.repo;
   /** @type {Record<string, unknown>} */
   const request = { action: 'idea' };
   let rowId = null;
