@@ -159,8 +159,12 @@ describe('the type declarations (D11)', () => {
       el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
       void v; void CornMap;
     `);
-    const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, lib: ['lib.dom.d.ts', 'lib.es2022.d.ts'], types: [] });
-    expect(ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+    fs.writeFileSync(path.join(app, 'package.json'), '{ "type": "module" }\n');
+    // A bundler's resolution, and Node's own (node16, nodenext: relative imports in the declarations need their extension), with the declarations checked too
+    for (const [module, moduleResolution] of [[ts.ModuleKind.ESNext, ts.ModuleResolutionKind.Bundler], [ts.ModuleKind.Node16, ts.ModuleResolutionKind.Node16], [ts.ModuleKind.NodeNext, ts.ModuleResolutionKind.NodeNext]] as const) {
+      const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module, moduleResolution, lib: ['lib.dom.d.ts', 'lib.es2022.d.ts'], types: [], skipLibCheck: false });
+      expect(ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')), ts.ModuleResolutionKind[moduleResolution]).toEqual([]);
+    }
     const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
     for (const [entry, target] of Object.entries(pkg.exports) as Array<[string, string | Record<string, string>]>) {
       for (const file of typeof target === 'string' ? [target] : Object.values(target)) expect(fs.existsSync(path.join(PACKAGE, file)), `${entry} -> ${file}`).toBe(true);
