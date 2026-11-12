@@ -10,11 +10,12 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import net from 'node:net';
+import { execFileSync, spawn } from 'node:child_process';
 // @ts-expect-error plain JS modules, no declarations
 import { createCornfieldServer } from '../../server/server.js';
 // @ts-expect-error plain JS modules, no declarations
-import { inside, isUnder, listProposalFiles, readMap, readPlain } from '../../server/files.js';
+import { inside, isUnder, listProposalFiles, readMap, readPlain, sendFile } from '../../server/files.js';
 // @ts-expect-error plain JS modules, no declarations
 import { loadConfig } from '../../core/config.js';
 import { CORNFIELD, freePort } from '../helpers.js';
@@ -173,25 +174,67 @@ describe.skipIf(!canLink)('a link in the repo that leads outside it', () => {
 });
 
 describe.skipIf(!canLink)('a link that stays in the repo, and a repo reached through a link', () => {
-  it('is still served, typed by the name asked for', async () => {
+  it('is still served, typed by the file it really is', async () => {
     const w = world();
     fs.mkdirSync(path.join(w.repo, 'data'));
-    fs.writeFileSync(path.join(w.repo, 'data/map.json'), JSON.stringify({ nodes: [], edges: [], note: 'in-repo' }));
-    fs.writeFileSync(path.join(w.repo, 'data/lib.txt'), 'export const a = 1;');
+    fs.writeFileSync(path.join(w.repo, 'data/map.txt'), JSON.stringify({ nodes: [], edges: [], note: 'in-repo' }));
     fs.writeFileSync(path.join(w.repo, 'data/house.json'), JSON.stringify({ at: '2026-01-01T00:00:00.000Z', rooms: ['kitchen'] }));
     w.link('web/alias.js', path.join(w.repo, 'web/live.js'));
-    w.link('web/lib.js', path.join(w.repo, 'data/lib.txt'));
     fs.rmSync(path.join(w.repo, 'topology.json'));
-    w.link('topology.json', 'data/map.json'); // a relative link
+    w.link('topology.json', 'data/map.txt'); // a relative link, to a file of another type
     w.link('house.json', path.join(w.repo, 'data/house.json'));
     const s = await serve(w.repo);
     try {
-      expect((await ask(s.port, '/repo/web/alias.js')).body).toContain('create');
-      const lib = await ask(s.port, '/repo/web/lib.js');
-      expect(lib.body).toBe('export const a = 1;');
-      expect(lib.headers['content-type']).toBe('application/javascript; charset=utf-8');
-      expect((await ask(s.port, '/topology.json')).body).toContain('in-repo');
+      const alias = await ask(s.port, '/repo/web/alias.js');
+      expect(alias.body).toContain('create');
+      expect(alias.headers['content-type']).toBe('application/javascript; charset=utf-8');
+      const map = await ask(s.port, '/topology.json');
+      expect(map.body).toContain('in-repo');
+      expect(map.headers['content-type']).toBe('application/octet-stream'); // with nosniff, what the bytes are, not what the name says
+      expect(map.headers['x-content-type-options']).toBe('nosniff');
       expect(JSON.parse((await ask(s.port, '/cornfield/house.json')).body).data.rooms).toEqual(['kitchen']);
+    } finally { await s.close(); }
+  });
+
+  it('serves from a module folder only a .js file really in a listed module folder, not a link to another file of the repo', async () => {
+    const w = world();
+    const SECRET = 'INREPO-MARKER-not-a-module-9d3b';
+    fs.writeFileSync(path.join(w.repo, '.env'), `TOKEN=${SECRET}`);
+    fs.mkdirSync(path.join(w.repo, 'server'));
+    fs.writeFileSync(path.join(w.repo, 'server/db.js'), `export const secret = '${SECRET}';`);
+    fs.writeFileSync(path.join(w.repo, 'web/notes.txt'), SECRET);
+    w.link('web/env.js', path.join(w.repo, '.env'));
+    w.link('web/db.js', path.join(w.repo, 'server/db.js'));
+    w.link('web/notes.js', path.join(w.repo, 'web/notes.txt'));
+    w.link('web/lib.js', path.join(w.repo, 'server/db.js')); // a name the import map lists
+    const s = await serve(w.repo);
+    try {
+      const missing = await ask(s.port, '/repo/web/missing.js');
+      for (const name of ['env', 'db', 'notes']) {
+        const res = await ask(s.port, `/repo/web/${name}.js`);
+        expect(res.status, name).toBe(404);
+        expect(everything(res)).not.toContain(SECRET);
+        expect(res.headers).toEqual({ ...missing.headers, date: res.headers.date, 'content-length': res.headers['content-length'] });
+      }
+      // the import map names the file: the config chose it, and a .js file in the repo is what the name leads to
+      expect((await ask(s.port, '/repo/web/lib.js')).status).toBe(200);
+    } finally { await s.close(); }
+  });
+
+  it('serves a module folder that is itself a link to a folder in the repo', async () => {
+    const w = world();
+    fs.mkdirSync(path.join(w.repo, 'src'));
+    fs.renameSync(path.join(w.repo, 'web'), path.join(w.repo, 'src/web'));
+    fs.symlinkSync(path.join(w.repo, 'src/web'), path.join(w.repo, 'web'));
+    fs.writeFileSync(path.join(w.repo, 'src/web/more.js'), 'export const more = 1;');
+    fs.symlinkSync(path.join(w.base, 'outside/x.js'), path.join(w.repo, 'src/web/out.js'));
+    const s = await serve(w.repo);
+    try {
+      expect((await ask(s.port, '/repo/web/live.js')).status).toBe(200);
+      expect((await ask(s.port, '/repo/web/more.js')).body).toBe('export const more = 1;');
+      const out = await ask(s.port, '/repo/web/out.js');
+      expect(out.status).toBe(404);
+      expect(everything(out)).not.toContain(MARK);
     } finally { await s.close(); }
   });
 
@@ -336,5 +379,56 @@ describe.skipIf(!canLink)('proposals found through a link', () => {
     const found = await listProposalFiles(where(through));
     expect(found.map((e) => e.slug)).toEqual(['0001-in']);
     expect(found[0].file).toBe(path.join(w.repo, 'real-props/0001-in.json'));
+  });
+});
+
+describe('a file that is not a plain file, a visitor who leaves, a file written in place', () => {
+  const hasFifo = process.platform !== 'win32' && (() => { try { execFileSync('mkfifo', ['--help'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+
+  it.skipIf(!hasFifo)('answers a pipe at a file\'s path as a file that is not there, without waiting on it', async () => {
+    const w = world();
+    for (const name of ['house.json', 'topology.cloud.json', 'topology.json', 'web/pipe.js']) execFileSync('mkfifo', [path.join(w.repo, name === 'topology.json' ? 'map.pipe' : name)]);
+    fs.rmSync(path.join(w.repo, 'topology.json'));
+    fs.symlinkSync('map.pipe', path.join(w.repo, 'topology.json'));
+    const s = await serve(w.repo);
+    try {
+      for (const p of ['/cornfield/house.json', '/topology.cloud.json', '/topology.json', '/repo/web/pipe.js']) expect((await ask(s.port, p)).status, p).toBe(404);
+    } finally { await s.close(); }
+  });
+
+  it.skipIf(!fs.existsSync('/proc/self/fd'))('closes the file when the visitor has gone before it is sent, and when they leave mid-body', async () => {
+    const w = world();
+    const big = path.join(w.repo, 'web/big.js');
+    fs.writeFileSync(big, `// ${'x'.repeat(1 << 22)}\n`);
+    const open = () => fs.readdirSync('/proc/self/fd').filter((f) => { try { return fs.readlinkSync(`/proc/self/fd/${f}`) === big; } catch { return false; } }).length;
+    // as the server does after an asynchronous step (the sign-in gate): the answer may already be closed
+    const server = http.createServer((req, res) => setTimeout(() => sendFile(req, res, big, '/big.js'), 20));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
+    const port = /** @type {import('node:net').AddressInfo} */ (server.address()).port;
+    try {
+      for (let i = 0; i < 20; i++) {
+        await new Promise((resolve) => { const s = net.connect(port, '127.0.0.1', () => { s.write('GET /big.js HTTP/1.1\r\nHost: x\r\n\r\n'); s.destroy(); resolve(undefined); }); });
+        await new Promise((resolve) => { const req = http.get({ host: '127.0.0.1', port, path: '/big.js', agent: false }, (res) => res.once('data', () => { req.destroy(); resolve(undefined); })); req.on('error', () => resolve(undefined)); });
+      }
+      for (let t = 0; t < 50 && open() > 0; t++) await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(open()).toBe(0);
+    } finally { server.closeAllConnections(); server.close(); }
+  });
+
+  it('gives no 304 for a file written in place with its size and time put back', async () => {
+    const w = world();
+    const file = path.join(w.repo, 'web/same.js');
+    const when = new Date('2026-01-01T00:00:00Z');
+    fs.writeFileSync(file, 'export const n = 1;');
+    fs.utimesSync(file, when, when);
+    const s = await serve(w.repo);
+    try {
+      const first = await ask(s.port, '/repo/web/same.js');
+      fs.writeFileSync(file, 'export const n = 2;');
+      fs.utimesSync(file, when, when);
+      const again = await ask(s.port, '/repo/web/same.js', { 'If-None-Match': first.headers.etag });
+      expect(again.status).toBe(200);
+      expect(again.body).toBe('export const n = 2;');
+    } finally { await s.close(); }
   });
 });
