@@ -325,7 +325,9 @@ describe('<corn-review>', () => {
     const seen: unknown[] = [];
     document.addEventListener('cornError', (e) => seen.push((e as CustomEvent).detail), { once: true });
     const el = await made('<corn-review src="ftp://map.example.com" proposal="0042-retire"></corn-review>');
-    await frames(4);
+    // the refusal follows the lazy import of the piece that reads `src`, which a busy runner does not finish in a fixed number of frames
+    for (let i = 0; i < 60 && !seen.length; i++) await frames(1);
+    await frames(2); // and nothing more is said, or fetched, after it
     expect(seen).toEqual([{ kind: 'address', message: 'is not http or https' }]);
     expect(q(el, '[data-corn="source-status"]:not([hidden])')?.textContent).toMatch(/address/i);
     expect(fetched).not.toHaveBeenCalled();
