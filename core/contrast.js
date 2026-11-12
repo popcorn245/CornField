@@ -7,7 +7,7 @@
  *   resolveProps(sheets, state)          the custom properties in force for a page: `{ mode, system?, name? }` over `[css, …]` in load order
  *   expand(value, props)                 a value with its var()s replaced, or { problem } naming the property and why (capped: never a hang)
  *   resolveColor(props, name | value)    a token (or a value) as [r, g, b, a], or { problem } when it cannot be worked out
- *   contrastPairs()                      every pair explorer.css paints, text at 4.5:1 and the state-bearing UI at 3:1
+ *   contrastPairs()                      every pair the explorer's stylesheets paint, text at 4.5:1 and the state-bearing UI at 3:1
  *   contrastProblems(themes)             every pair below WCAG AA, for light and dark, on either system setting, over the ground and its image
  *   themesToCheck(config)                what a repo's check reads: tokens.css, then `theme.css`, then each `theme.names` file
  *   checkThemeContrast(config)           the check for `cornfield validate`, always run (cornfield's own tokens when there is no theme)
@@ -344,9 +344,9 @@ export function resolveColor(props, nameOrValue) {
 
 const SURFACES = ['--corn-surface-1', '--corn-surface-2', '--corn-surface-3'];
 const GROUND = '--corn-ground';
-/** A tint as explorer.css writes it: the token at a share over what is beneath */
+/** A tint as the explorer's stylesheets write it: the token at a share over what is beneath */
 const tint = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, transparent)`;
-/** A hue pulled toward the text colour, as explorer.css writes it for a hue that must read as text */
+/** A hue pulled toward the text colour, as they write it for a hue that must read as text */
 const toText = (token, pct) => `color-mix(in srgb, var(${token}) ${pct}%, var(--corn-text))`;
 
 /** Text tokens: read on the ground and on every surface */
@@ -361,8 +361,8 @@ export const SOFT_PAIRS = Object.freeze([
 /** Solid fills that carry `--corn-ground` as their text (a pressed data-flow button, a chip, the What-if toggle, the House chip) */
 export const SOLID_FILLS = Object.freeze(['--corn-ok', '--corn-warn', '--corn-bad', '--corn-info', '--corn-hue-orange', '--corn-hue-lime', '--corn-added-text', '--corn-edit-text']);
 /**
- * Text that explorer.css paints on something other than a token surface: a category hue as text, or text on a tint it mixes itself.
- * `[fg, bg, where]`, each the value explorer.css writes (test/core/contrast.test.js holds this list to explorer.css).
+ * Text that the explorer's stylesheets paint on something other than a token surface: a category hue as text, or text on a tint it mixes itself.
+ * `[fg, bg, where]`, each the value they write (test/core/contrast.test.js holds this list to explorer/css/).
  */
 export const PAINTED_TEXT = Object.freeze([
   ['--corn-hue-fuchsia', GROUND, 'ROM, a milestone, a link button'], ['--corn-hue-fuchsia', '--corn-surface-1', ''], ['--corn-hue-fuchsia', '--corn-surface-2', ''],
@@ -405,7 +405,7 @@ export const UI_PAIRS = Object.freeze([
   ...['--corn-ok', '--corn-edit-text', '--corn-bad', '--corn-warn', '--corn-text-3'].flatMap((fg) => ['--corn-surface-2', '--corn-surface-3'].map((bg) => [fg, bg, 'a state pill\'s border'])),
 ]);
 
-/** The dots that name a diff mark in the bar, the change list and the legend (explorer.css `.hx-mark-dot--*`), each a ring on the ground */
+/** The dots that name a diff mark in the bar, the change list and the legend (explorer/css/base.css `.hx-mark-dot--*`), each a ring on the ground */
 const DIFF_DOT_PAIRS = Object.freeze(['added', 'changed', 'removed', 'edit'].map((m) => [`--corn-${m}`, GROUND, `the ${m} mark's dot`]));
 
 /**

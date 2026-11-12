@@ -8,6 +8,7 @@ import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
 import { createSheetModel, sheetCap, mapFloorPx, MAP_FLOOR, STUB_PX } from '../../explorer/sheet-model.js';
 
+import { explorerCss } from './stylesheets.js';
 describe('sheet model', () => {
   it('starts every sheet as a peek', () => {
     const m = createSheetModel();
@@ -135,8 +136,8 @@ describe('spec 0010 D7: two sheets, one expanded, a stub, the map keeps 35%', ()
 });
 
 describe('the phone\'s backdrop (F32)', () => {
-  const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
-  const phone = css.slice(css.indexOf('@media (max-width: 767px) {\n  .hx-dock'));
+  const css = explorerCss();
+  const phone = css.slice(css.indexOf('@container corn-box (max-width: 767px) {\n  .hx-dock')); // a phone's rules: the dock's container query (sheets.css)
 
   it('draws nothing over the free band the selected node is panned into, but stays a tap target', () => {
     const rule = phone.match(/\.hx-stage\[data-sheet-open="drawer"\] \.hx-backdrop:not\(\[hidden\]\) \{([^}]*)\}/);

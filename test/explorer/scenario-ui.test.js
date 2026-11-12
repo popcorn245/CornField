@@ -15,6 +15,7 @@ import { state, touchScene } from '../../explorer/state.js';
 import { setRenderer } from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets, sheetState, expandSheet, measureCovered } from '../../explorer/sheets.js';
+import { explorerCss } from './stylesheets.js';
 import {
   clearScenario, demoScenario, getPlayer, initScenarioUi, maybeStartDemo, onPlayerChange, playScenario, setCloseFocus, setNextScenario, stopScenario, tickScenario, wantsFrames,
   // @ts-expect-error plain JS modules, no declarations
@@ -88,7 +89,7 @@ describe('the bar', () => {
   });
 
   it('is one row under the map to the right of the review column, and a phone\'s peek keeps Previous, Pause, Next and Close in a row of 44px targets', () => {
-    const css = fs.readFileSync(path.join(here, '../../explorer', 'explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toMatch(/\.hx-player \{ position: absolute; left: calc\(var\(--hx-col-w, 0px\) \+ 24px\); right: 12px; bottom: 12px;/);
     expect(css).toMatch(/\.hx-stage:has\(\.hx-review-column:not\(\[hidden\]\)\) \{ --hx-col-w: 400px; \}/);
     expect(css).toMatch(/\.hx-player\[data-sheet-state="peek"\] > :not\(\.hx-sheet-handle\):not\(\.hx-player-controls\):not\(\.hx-player-text\):not\(\.hx-player-side\)/);

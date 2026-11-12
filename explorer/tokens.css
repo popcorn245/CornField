@@ -2,7 +2,7 @@
    The explorer's design tokens (docs/theming.md)
    ==========================================================================
    The ONLY file in explorer/ that holds a literal colour, font, size, radius, border width, shadow or spacing:
-   explorer.css and house.css read these `--corn-*` custom properties and nothing else (a test holds it,
+   explorer/css/*.css and house.css read these `--corn-*` custom properties and nothing else (a test holds it,
    test/explorer/tokens.test.js). A brand re-skins the explorer by loading a stylesheet after this one that
    redefines some of them.
 
@@ -312,7 +312,7 @@
   color-scheme: light;
 }
 
-/* A phone's density: controls are 44px tall (the target), and a panel pads by 16px under 640px. explorer.css floors a phone's control at 44px whatever
+/* A phone's density: controls are 44px tall (the target), and a panel pads by 16px under 640px. css/base.css floors a phone's control at 44px whatever
    a brand sets (max(44px, …)); a brand that sets --corn-panel-pad on :root sets a phone's too, unless it sets it again under the same query */
 @media (max-width: 767px) { :root { --corn-control-height: 44px; } }
 @media (max-width: 639px) { :root { --corn-panel-pad: var(--corn-space-5); } }

@@ -59,7 +59,8 @@ export const markup = ({ edit = true } = {}) => ({
     + '</div>'
     + '<div class="hx-proposal-tools">'
     // The review narrows the map to the change; this puts the whole map back, as Diff always was (engine/layers.js setWholeMap). Off at every opening.
-    // Its words are "Whole map", which read right pressed or not; its name and tooltip are the full "Show the whole map".
+    // Its words are "Whole map", which read right pressed or not; its name and tooltip are the full "Show the whole map". On a desk it sits beside
+    // the title, so the bar keeps its rows (css/proposal.css)
     + '<button data-corn="whole-map" data-corn-kind="secondary" type="button" id="proposal-whole" class="hx-btn" data-action="proposal-whole" aria-pressed="false" aria-label="Show the whole map" title="Show the whole map" data-peek-ok data-corn-string="wholeMap" data-corn-string-aria-label="showWholeMap">Whole map</button>'
     // The what-if editor's two buttons (whatif.js): My edits is shown only while there are edits
     + (edit ? '<button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>'

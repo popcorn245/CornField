@@ -1,0 +1,75 @@
+/*
+ * header.css: the header (CF-41)
+ * The top bar of cornfield's page: the brand, the View switch (Map, Flow, House, Fit). The header's other parts have files of their own:
+ * layers.css (the Layers chip), search.css, work.css (the Work toggle), live.css, account.css. The header is cornfield's page shell's (corn-
+ * explorer, a later step); its box is the body, which page.css makes the `corn-box` container.
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+/* Headings and titles take the display family (the same as the body unless a brand sets it) */
+.hx-title { font-family: var(--corn-font-display); }
+/* ==== the header (CF-41) ===============================================================================================
+   Left to right: the brand, the View switch (Map, Flow, House, Fit), the Layers chip, the live chip; at the right the search,
+   the Work toggle and the one account menu (account-menu.js). Everything reads the --corn-* tokens. From 768px it is a desktop
+   header; below it is a phone's: Map, Flow, House, a search icon and the account initial, with the Layers chip, the live chip
+   and Fit floating on the map (placed from the header's corner). The header has no backdrop-filter of its own: it sits above
+   the map, not over it, and one would keep its menus' .glass blur from working (they would show the map through). */
+.hx-header {
+  position: relative;
+  flex: none;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--corn-space-3);
+  padding: 0 var(--corn-space-4);
+  z-index: 20;
+  background: var(--corn-surface-1);
+  border-bottom: var(--corn-border) solid var(--corn-line);
+}
+.hx-header-left, .hx-header-right { display: flex; align-items: center; gap: var(--corn-space-3); min-width: 0; }
+.hx-header-right { flex: none; }
+.hx-only-wide { display: none; }
+.hx-only-mobile { display: inline-flex; }
+/* The brand: logo and wordmark; a click resets the view */
+.hx-brand { display: flex; align-items: center; gap: var(--corn-space-3); flex: none; min-width: var(--hx-control-h); min-height: var(--hx-control-h); padding: 0; border: 0; background: none; }
+.hx-title { font-size: var(--corn-text-base); font-weight: 600; letter-spacing: -0.01em; color: var(--corn-text); }
+.hx-mark { flex: none; }
+.hx-mark-bg { fill: var(--corn-accent); }
+.hx-mark-fg { fill: var(--corn-text-on-accent); }
+.hx-mark-line { fill: none; stroke: var(--corn-text-on-accent); stroke-width: 1.5; }
+/* The View switch: Map, Flow and House (aria-pressed says which is on), and Fit at its end */
+.hx-view { display: inline-flex; align-items: center; flex: none; padding: calc(var(--corn-space-1) / 2); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); }
+.hx-view-btn, .hx-view-fit { display: inline-flex; align-items: center; justify-content: center; height: var(--hx-seg-inner); border: 0; border-radius: var(--corn-radius-sm); background: transparent; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 500; white-space: nowrap; }
+.hx-view-btn { padding: 0 var(--corn-space-4); }
+.hx-view-btn:hover, .hx-view-fit:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-view-btn[aria-pressed="true"] { background: var(--corn-accent); color: var(--corn-text-on-accent); font-weight: 600; }
+.hx-view-fit { width: var(--hx-seg-inner); margin-left: var(--corn-space-1); border-left: var(--corn-border) solid var(--corn-line); border-radius: 0 var(--corn-radius-sm) var(--corn-radius-sm) 0; color: var(--corn-text-3); }
+@container corn-box (min-width: 768px) {
+  .hx-header { height: 52px; padding: 0 var(--corn-space-5); gap: var(--corn-space-5); }
+  .hx-header-left { gap: var(--corn-space-5); }
+  .hx-header-right { gap: var(--corn-space-3); }
+  .hx-brand { min-width: 0; min-height: var(--hx-control-h); }
+  .hx-only-wide { display: inline; }
+  .hx-only-mobile { display: none; }
+  /* A narrow desktop (768 to about 900 px, signed in): the search gives up width before it runs over the Layers chip; the left group
+             keeps its own (the right group shrinks, the search down to its min-width) */
+  .hx-header-left { flex: none; }
+  .hx-header-right { flex: 0 1 auto; min-width: 0; }
+}
+@container corn-box (max-width: 767px) {
+  /* Not for a desktop: the brand keeps its logo and shows its wordmark; with no wordmark the logo stands alone (the button keeps its name) */
+  .hx-title:not(:has([data-corn="brand-wordmark"])) { display: none; }
+  .hx-header { padding: 0 var(--corn-space-3); }
+  /* Too narrow for the row (320px, or a repo's longer words): the left scrolls sideways rather than run under the right.
+             The padding keeps the focus rings inside the scrolled box; what sits on the map is placed from the header, so it is not clipped */
+  .hx-header-left { gap: var(--corn-space-1); margin-inline: calc(var(--corn-space-1) * -1); padding: var(--corn-space-1); overflow-x: auto; scrollbar-width: none; }
+  .hx-header-left::-webkit-scrollbar { display: none; }
+  .hx-header-right { gap: var(--corn-space-1); }
+  .hx-view { padding: 0; }
+  .hx-view-btn { min-width: var(--hx-control-h); height: var(--hx-seg-inner); padding: 0 var(--corn-space-2); }
+  .hx-view-fit { position: absolute; top: calc(100% + var(--corn-space-4)); right: var(--corn-space-4); width: var(--hx-control-h); height: var(--hx-control-h); margin: 0; border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); box-shadow: var(--corn-shadow); }
+}
+/* A brand wordmark that does not fit leaves the logo (header-fit.js measures); a row that still scrolls shows it at its edge */
+.hx-header-left[data-brand-short] .hx-title { display: none; }
+.hx-header-left[data-overflow] { -webkit-mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); mask: linear-gradient(to right, var(--corn-text) calc(100% - var(--corn-space-6)), transparent); }

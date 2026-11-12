@@ -88,7 +88,7 @@ describe('the sign-in pages wear the theme and the brand', () => {
       expect(r.headers['content-type']).toMatch(type);
     }
     // Everything else of the explorer, the data and the config stay behind the sign-in
-    for (const p of ['/explorer/explorer.css', '/explorer/main.js', '/topology.json', '/cornfield/config.json', '/explorer/../server/auth.js']) {
+    for (const p of ['/explorer/css/base.css', '/explorer/main.js', '/topology.json', '/cornfield/config.json', '/explorer/../server/auth.js']) {
       expect([p, (await get(port, p)).status]).toEqual([p, 401]);
     }
   });

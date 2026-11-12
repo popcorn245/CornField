@@ -1,0 +1,68 @@
+/*
+ * decision.css: the decision
+ * Approve and Send back, the line above Approve, the note that opens on Send back, the hold with Undo, a landing that waits (spec 0007).
+ * Read by corn-decision (D4).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+/* The review (review.js, TOPO-12): the status line and the note that opens on Send back. It is in the toolbar, just before Send back and
+   Approve (the note's Tab goes on to them); from 768px it takes a row of its own under the toolbar, on a phone it sits under the counts */
+.hx-review { flex: 1 0 100%; order: 1; display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-review[hidden], .hx-review:not(:has(> :not([hidden]))) { display: none; }
+.hx-review-form { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-review-form[hidden] { display: none; }
+.hx-review-label { color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-review-note { width: 100%; min-height: 44px; resize: vertical; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); line-height: 1.4; user-select: text; }
+.hx-review-note:focus { outline: var(--corn-focus-width) solid var(--corn-added-text); outline-offset: calc(var(--corn-focus-offset) / 2); }
+.hx-review-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-3); }
+.hx-btn--approve { border-color: color-mix(in srgb, var(--corn-added) 50%, transparent); color: var(--corn-added-text); }
+.hx-btn--approve:hover { background: color-mix(in srgb, var(--corn-added) 20%, transparent); color: var(--corn-added-text); }
+.hx-review-status { margin: 0; color: var(--corn-added-text); font-variant-numeric: tabular-nums; }
+.hx-review-status[hidden], .hx-review-msg[hidden], .hx-review-line[hidden] { display: none; }
+.hx-review-msg { margin: 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-removed) 12%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-removed) 35%, transparent); color: var(--corn-bad); line-height: 1.4; }
+.hx-review-line { margin: 0; color: var(--corn-text-2); line-height: 1.4; }
+.hx-proposal-actions { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-proposal-actions { margin-left: auto; }
+.hx-proposal-actions .hx-btn { height: var(--hx-control-h); justify-content: center; padding: 0 var(--corn-space-5); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-proposal-actions .hx-btn--approve, .hx-proposal-actions .hx-btn--approve:hover { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); font-weight: 600; }
+.hx-proposal-actions .hx-btn:disabled { opacity: 0.4; cursor: default; }
+@container corn-box (max-width: 767px) {
+  .hx-review { grid-column: 1 / -1; order: 3; }
+  .hx-proposal-actions { grid-column: 1 / -1; order: 4; display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; gap: var(--corn-space-3); }
+  .hx-proposal-actions .hx-btn { height: auto; min-height: 44px; padding: var(--corn-space-2) var(--corn-space-3); white-space: normal; text-align: center; font-size: var(--corn-text-md); }
+  .hx-review .hx-btn { min-height: 44px; }
+}
+.hx-forge-cta .hx-btn--approve { flex: 1; }
+@container corn-box (max-width: 767px) {
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions { order: 4; grid-template-columns: 1fr; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-proposal-actions .hx-btn--approve { display: none; }
+}
+.hx-rc-foot { flex: none; display: flex; flex-direction: column; gap: var(--corn-space-2); padding: var(--corn-space-3) var(--corn-space-4); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-rc-foot .hx-review { flex: none; order: 0; }
+.hx-rc-foot .hx-proposal-actions { margin-left: auto; }
+@container corn-box (max-width: 767px) {
+  .hx-rc-foot { padding: var(--corn-space-3) 0 0; } /* after both lists, in the sheet's own flow: nothing overlaps the rows above it */
+  .hx-rc-foot .hx-proposal-actions { margin-left: 0; width: 100%; }
+}
+.hx-decision-line { margin: 0; color: var(--corn-text-2); font-size: var(--corn-text-sm); line-height: 1.5; }
+.hx-decision-line[hidden], .hx-review-ask[hidden], .hx-hold[hidden], .hx-review-landing[hidden], .hx-sent-edits[hidden] { display: none; }
+.hx-review-ask { margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid color-mix(in srgb, var(--corn-warn) 55%, transparent); background: color-mix(in srgb, var(--corn-warn) 14%, transparent); color: var(--corn-text); line-height: 1.4; }
+.hx-review-landing { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); color: var(--corn-text-2); }
+.hx-review-landing p { margin: 0; line-height: 1.4; }
+.hx-sent-edits { color: var(--corn-text-2); }
+.hx-sent-edits summary { cursor: pointer; min-height: 24px; }
+.hx-hold { height: 3px; border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-accent) 22%, transparent); overflow: hidden; }
+.hx-hold-fill { display: block; height: 100%; width: 100%; background: var(--corn-accent); transform-origin: left center; animation-name: hx-hold-drain; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes hx-hold-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.hx-proposal-actions .hx-btn[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.hx-proposal-actions .hx-btn[data-holding="true"] { opacity: 1; font-variant-numeric: tabular-nums; }
+.hx-review-undo[hidden] { display: none; }
+@container corn-box (max-width: 767px) {
+  .hx-review-undo { min-height: 44px; min-width: 44px; order: 1; grid-column: 1 / -1; } /* a row of its own under Send back and Approve: never where the finger that pressed is */
+  .hx-review-landing .hx-btn { min-height: 44px; }
+  .hx-proposal-bar:has(.hx-review-form:not([hidden])) .hx-decision-line { display: none; } /* the note's sheet shows the send back line under the note, not Approve's */
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-hold { display: none; }
+  .hx-hold-fill { animation: none; }
+}

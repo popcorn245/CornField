@@ -3,7 +3,7 @@
  *
  * A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all
  * (CF review F54). A browser scrolls a focused control only until it is "mostly" visible, and the last tab was left a few pixels under
- * the strip's edge, with its focus ring cut. `scroll-padding-inline` in explorer.css says how much room to leave; this asks for the scroll.
+ * the strip's edge, with its focus ring cut. `scroll-padding-inline` in css/work.css says how much room to leave; this asks for the scroll.
  */
 
 /** The strips: a scroll container whose children are tabbed to */

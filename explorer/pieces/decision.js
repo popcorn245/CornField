@@ -88,6 +88,8 @@ export const markup = () => ({
     + '</div>'
     + '<div class="hx-proposal-actions">'
     + '<button data-corn-kind="secondary" type="button" class="hx-btn" data-review="notes" data-peek-ok title="Send it back to the drafting agent with a note and your edits" data-corn-string="sendBack">Send back</button>'
+    // Undo before Approve, not after it: Approve keeps its place under the pointer, so the second click of a double click lands on the held button
+    // (which ignores it), never on Undo; on a phone Undo takes a row of its own under the two (css/decision.css)
     + '<button type="button" class="hx-btn hx-review-undo" data-review-undo data-corn-kind="secondary" hidden></button>'
     + '<button type="button" class="hx-btn hx-btn--approve" data-review="approved" data-peek-ok title="Sign this proposal off" data-corn-kind="approve" data-corn-string="approve">Approve</button>'
     + '</div>'
