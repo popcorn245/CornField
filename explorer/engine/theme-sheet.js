@@ -248,6 +248,28 @@ export async function readCapped(res, max, what = 'the answer') {
 }
 
 /**
+ * The mode ('light' | 'dark') the server's tokens are for: the element's own `theme` choice, else the page's `data-theme`, else the system's.
+ * @param {ReturnType<typeof import('../instance.js').createInstance>} inst
+ * @param {unknown} choice 'light' | 'dark' | 'auto' (anything else is 'auto')
+ */
+export function modeOf(inst, choice) {
+  if (choice === 'light' || choice === 'dark') return choice;
+  const root = inst.doc && inst.doc.documentElement;
+  const own = root ? root.getAttribute('data-theme') : null;
+  if (own === 'light' || own === 'dark') return own;
+  const query = inst.win && inst.win.matchMedia ? inst.win.matchMedia('(prefers-color-scheme: light)') : null;
+  return query && query.matches ? 'light' : 'dark';
+}
+
+/** Calls `onChange` when the page's own `data-theme` or the system's light and dark change (they are what `modeOf` reads); ends with the instance */
+export function watchMode(inst, onChange) {
+  const watch = inst.win && inst.win.MutationObserver && inst.doc && inst.doc.documentElement ? new inst.win.MutationObserver(onChange) : null;
+  if (watch) { watch.observe(inst.doc.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); inst.own(() => watch.disconnect()); }
+  const query = inst.win && inst.win.matchMedia ? inst.win.matchMedia('(prefers-color-scheme: light)') : null;
+  if (query && query.addEventListener) { query.addEventListener('change', onChange); inst.own(() => query.removeEventListener('change', onChange)); }
+}
+
+/**
  * The server's theme for one scope.
  * @param {ReturnType<typeof import('../instance.js').createInstance>} inst
  * @param {object} [opts]

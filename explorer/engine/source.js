@@ -33,34 +33,31 @@ import { setStrings } from './strings.js';
 import { setProjectLayers } from './layers.js';
 import { mapStyleOf } from './map-style.js';
 import { sessionInit } from './connection.js';
+import { parseSource, signInUrl, originOf, SIGN_IN_PATH } from './source-address.js';
+
+export { parseSource, signInUrl, originOf, SIGN_IN_PATH };
 
 export const CONFIG_PATH = '/cornfield/config.json';
 export const TOPOLOGY_PATH = '/topology.json';
 /** A route that answers a listed origin without a session: the reach test for a fetch that got no answer */
 export const REACH_PATH = '/cornfield/theme.css';
-export const SIGN_IN_PATH = '/auth/start';
 export const SOURCE_STATES = Object.freeze(['loading', 'ready', 'sign-in', 'not-allowed', 'offline', 'server', 'address', 'version']);
 
-/** A control character, a space or a backslash (a browser reads `\` as `/`): never in an address */
-const BAD_CHAR = /[\u0000- \u007f\\]/;
-
 /**
- * An address of a cornfield server, checked: an http(s) origin with an optional path, and nothing else (no user name, no query, no fragment).
- * `base` is what the instance is made with: the origin and the path without a trailing slash.
- * @param {unknown} src
- * @returns {{ ok: true, base: string, origin: string } | { ok: false, problem: string }}
+ * What a state of the load tells a host as `cornError` (`{ kind, message? }`), or null for a state that is not a failure: the one place the states and the
+ * error kinds meet (pieces/scope.js and pieces/review-source.js both say them)
+ * @param {{ state: string, [key: string]: any }} detail a `source` event's detail
+ * @returns {{ kind: 'not-listed' | 'offline' | 'server' | 'address' | 'version', message?: string } | null}
  */
-export function parseSource(src) {
-  if (typeof src !== 'string' || !src.trim()) return { ok: false, problem: 'is empty' };
-  const text = src.trim();
-  if (BAD_CHAR.test(text)) return { ok: false, problem: 'has a space, a control character or a backslash' };
-  let u;
-  try { u = new URL(text); } catch { return { ok: false, problem: 'is not an address (an http or https address, as the server is opened in a browser)' }; }
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return { ok: false, problem: 'is not http or https' };
-  if (!/^https?:\/\/[^/?#]/i.test(text)) return { ok: false, problem: 'has no host' };
-  if (u.username || u.password) return { ok: false, problem: 'has a user name or password' };
-  if (text.includes('?') || text.includes('#')) return { ok: false, problem: 'has a query or a fragment' };
-  return { ok: true, base: u.origin + u.pathname.replace(/\/+$/, ''), origin: u.origin };
+export function errorOf(detail) {
+  switch (detail.state) {
+    case 'not-allowed': return { kind: 'not-listed', message: detail.origin };
+    case 'offline': return { kind: 'offline' };
+    case 'server': return { kind: 'server', message: detail.message };
+    case 'address': return { kind: 'address', message: detail.problem };
+    case 'version': return { kind: 'version', message: `${detail.package} / ${detail.server}` };
+    default: return null;
+  }
 }
 
 /** The numbers of a version, or null */
@@ -82,27 +79,6 @@ export function compareVersions(a, b) {
   if (x[0] !== y[0]) return 'major';
   if (x[1] !== y[1]) return 'minor';
   return x[2] !== y[2] ? 'patch' : 'same';
-}
-
-/**
- * The server's sign-in, which ends on the page it was asked from: `<base>/auth/start?returnTo=<page URL>` (docs/sign-in.md). The server follows
- * `returnTo` only for an origin its `embed.origins` lists. A page that is not http(s) (a file, about:blank) has nothing to return to. A user name
- * or password in the page's address (`https://user:pass@tasks.example.com/`) is never sent to the server: it is taken out (the server would refuse
- * such a `returnTo` anyway).
- * @param {string} base
- * @param {string} pageUrl
- */
-export function signInUrl(base, pageUrl) {
-  let back = '';
-  if (typeof pageUrl === 'string' && /^https?:\/\//i.test(pageUrl)) {
-    try {
-      const u = new URL(pageUrl);
-      u.username = '';
-      u.password = '';
-      back = `?returnTo=${encodeURIComponent(u.href)}`;
-    } catch { back = ''; }
-  }
-  return `${base}${SIGN_IN_PATH}${back}`;
 }
 
 /** Why a read failed: `auth` (401 or 403: sign in), `server` (it answered, and not with what was asked for) or `network` (no answer the page may read) */
@@ -303,11 +279,6 @@ export function createSource(inst, { version = '', pageUrl = () => '', onConfig 
     holderOf(inst).source = null;
   });
   return source;
-}
-
-/** The origin of a page address, or '' */
-export function originOf(url) {
-  try { return /^https?:/i.test(url) ? new URL(url).origin : ''; } catch { return ''; }
 }
 
 const holderOf = (inst) => inst.slot('source', () => ({ source: null }));

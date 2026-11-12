@@ -17,11 +17,13 @@
  *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal: while one opens, or why it did not
  *   proposal:pull-head  sha  the PR of the open proposal was read: the review column keys what was seen by its head
  *   proposal:focus-title  (none)  the focus goes to the proposal's name (a Retry in the decision worked; the bar answers)
+ *   proposal:failed  { slug, source, status, notFound, message }  a proposal asked for by name did not open, once, with the words the bar says (a host's `cornError`)
  *   changes:peek     text  the review column's count line for the phone's peek, for the bar to show (pieces/changes.js)
  * What it asks (`inst.ask`; nobody answering is a no):
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with the edits in); no answer: the proposal itself
  *   proposal:before-close  (none) -> false  keeps the proposal open (the what-if editor is asking whether to keep its edits)
  *   work:open-specs  (none) -> true  the Work panel's Specs tab is open for a bad link's way on; no answer: the bar opens its Proposals menu
+ *   proposal:specs-list  (none) -> false  there is no list of specs to open here (the review in another app): a bad link's ways leave that button out; no answer: there is one
  *   map:set  { nodes, edges } -> true  the page lays the map out again from these (view.js setMap, not yet an instance's)
  * And emits to the node panel: node:show-edge { edge }.
  *
@@ -48,8 +50,8 @@ const memory = (inst) => inst.slot('proposal', () => ({ pinnedSource: false, lis
 /** The name the bar gives the open proposal */
 export const titleOf = (state) => (state.proposal && typeof state.proposal.title === 'string' && state.proposal.title) || state.proposalSlug || 'Proposal';
 
-/** The way on every bad link offers: the list of specs */
-const specsWay = (inst) => ({ label: t(inst, 'openSpecsList'), way: 'specs' });
+/** The way on every bad link offers: the list of specs. Not where the instance says it has none to open (the review in another app asks `proposal:specs-list`: false), so a button never goes nowhere */
+const specsWay = (inst) => (inst.ask('proposal:specs-list') === false ? null : { label: t(inst, 'openSpecsList'), way: 'specs' });
 
 // ---------------------------------------------------------------------------
 //  The list the server gives
@@ -123,8 +125,11 @@ export async function openProposal(inst, slug, source = null) {
     if (!res.ok) {
       let why = '';
       try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
+      const refused = res.status === 401 || res.status === 403; // a session that ended, or a login that is not a maintainer's: the sign-in is what to do
+      if (refused) inst.emit('auth', { status: res.status, during: 'proposal' });
+      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${refused ? (res.status === 403 ? 'this is for the project\'s maintainers.' : 'you are not signed in.') : why || `the server had a problem (error ${res.status}).`}`);
       err.notFound = res.status === 404;
+      err.status = res.status;
       throw err;
     }
     const found = res.headers.get('X-Proposal-Source');
@@ -141,12 +146,17 @@ export async function openProposal(inst, slug, source = null) {
     console.error('Opening the proposal failed', err);
     // Said plainly, with the ways on: the Specs list, and the same name under another source when the list has one
     // (a failure that is not "no such proposal" can be asked for again, or let go of: Retry and Close)
-    setMessage(inst, err.message || `${slug} could not be opened.`, true, err.notFound ? [specsWay(inst)] : [{ label: 'Retry', way: 'retry', slug, source }, { label: 'Close', way: 'close' }]);
+    let message = err.message || `${slug} could not be opened.`;
+    setMessage(inst, message, true, err.notFound ? [specsWay(inst)].filter(Boolean) : [{ label: 'Retry', way: 'retry', slug, source }, { label: 'Close', way: 'close' }]);
     if (err.notFound && token === m.openToken) {
       await loadProposalList(inst);
       const sources = new Set((Array.isArray(m.listing) ? m.listing : []).map((e) => e && e.source));
-      if (token === m.openToken) setMessage(inst, notFoundWords(slug, source, sources), true, [...otherCopies(m.listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay(inst)]);
+      if (token === m.openToken) {
+        message = notFoundWords(slug, source, sources);
+        setMessage(inst, message, true, [...otherCopies(m.listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay(inst)].filter(Boolean));
+      }
     }
+    if (token === m.openToken) inst.emit('proposal:failed', { slug, source, status: err.status || 0, notFound: !!err.notFound, message });
     return false;
   }
 }

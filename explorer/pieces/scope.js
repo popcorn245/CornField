@@ -31,10 +31,9 @@
 
 import { createInstance } from '../instance.js';
 import { adoptDefaultTokens } from './adopt-tokens.js';
-import { createSource, parseSource } from '../engine/source.js';
-import { createServerTheme } from '../engine/theme-sheet.js';
+import { createSource, parseSource, errorOf } from '../engine/source.js';
+import { createServerTheme, modeOf, watchMode } from '../engine/theme-sheet.js';
 import { keepLayersIn } from '../engine/layers.js';
-import { resolveTheme } from '../theme-model.js';
 import { mount as mountStatus } from './status.js';
 import { CHANGED, REQUEST, infoOf } from './scope-link.js';
 
@@ -91,15 +90,7 @@ export function mountScope(host, options = {}) {
   }
 
   // -- the mode (light or dark) the server's tokens are for ------------------------------------------------------------------------------
-  function modeNow() {
-    const choice = THEMES.includes(props.theme) ? props.theme : 'auto';
-    if (choice === 'light' || choice === 'dark') return choice;
-    const root = inst.doc && inst.doc.documentElement;
-    const own = root ? root.getAttribute('data-theme') : null;
-    if (own === 'light' || own === 'dark') return own;
-    const query = inst.win && inst.win.matchMedia ? inst.win.matchMedia('(prefers-color-scheme: light)') : null;
-    return resolveTheme('system', !!(query && query.matches));
-  }
+  const modeNow = () => modeOf(inst, props.theme);
   function followMode() {
     if (serverTheme) serverTheme.setMode(modeNow());
     if (inst) inst.emit('scope:theme');
@@ -146,10 +137,7 @@ export function mountScope(host, options = {}) {
       });
     });
     // The host's own light and dark and the system's: the tokens follow
-    const watch = inst.win && inst.win.MutationObserver && inst.doc && inst.doc.documentElement ? new inst.win.MutationObserver(followMode) : null;
-    if (watch) { watch.observe(inst.doc.documentElement, { attributes: true, attributeFilter: ['data-theme'] }); inst.own(() => watch.disconnect()); }
-    const query = inst.win && inst.win.matchMedia ? inst.win.matchMedia('(prefers-color-scheme: light)') : null;
-    if (query && query.addEventListener) { query.addEventListener('change', followMode); inst.own(() => query.removeEventListener('change', followMode)); }
+    watchMode(inst, followMode);
     serverTheme.setMode(modeNow());
     if (parsed && !parsed.ok) source.say({ state: 'address', problem: parsed.problem });
     source.provide({ topology: props.topology || undefined, config: props.config || undefined, strings: props.strings || undefined });
@@ -165,12 +153,10 @@ export function mountScope(host, options = {}) {
       case 'sign-in':
         if (options.onAuth) options.onAuth({ status: detail.status, signIn: detail.signIn });
         break;
-      case 'not-allowed': if (options.onError) options.onError({ kind: 'not-listed', message: detail.origin }); break;
-      case 'offline': if (options.onError) options.onError({ kind: 'offline' }); break;
-      case 'server': if (options.onError) options.onError({ kind: 'server', message: detail.message }); break;
-      case 'address': if (options.onError) options.onError({ kind: 'address', message: detail.problem }); break;
-      case 'version': if (options.onError) options.onError({ kind: 'version', message: `${detail.package} / ${detail.server}` }); break;
-      default:
+      default: {
+        const error = errorOf(detail);
+        if (error && options.onError) options.onError(error);
+      }
     }
   }
   function onTheme(detail) {
