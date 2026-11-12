@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended, and the order it is mounted in
- * beside the proposal piece (spec 0011 D2, D3).
+ * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended, the order it is mounted in
+ * beside the proposal piece, and the one-dialog rule (spec 0011 D2, D3).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
@@ -156,6 +156,44 @@ describe('the Work piece and the proposal piece, in either order', () => {
     expect(one.q('[data-forge-kind="specs"]').getAttribute('aria-pressed')).toBe('true');
     one.work.destroy();
     expect(one.inst.ask('work:open-specs')).toBeUndefined();
+    one.inst.destroy();
+  });
+});
+
+describe('one dialog at a time', () => {
+  it('Start an agent opened while a spec\'s plan is being read: the plan, when it comes, opens no second dialog over it', async () => {
+    const srv = server({ hold: ['/api/forge/issues/5/spec'] });
+    const one = make(srv);
+    await settle();
+    one.work.openForge({ tab: 'issues' });
+    await settle();
+    click(one.q('[data-forge-spec="5"]')); // the plan is asked for, and held
+    await settle();
+    click(one.q('[data-forge-agent="issue:5"]'));
+    await settle();
+    expect(one.q('#agent-start').hidden).toBe(false);
+    srv.release();
+    await settle();
+    expect(one.q('#forge-confirm').hidden).toBe(true);
+    expect(one.root.contains(document.activeElement) && one.q('#agent-start').contains(document.activeElement)).toBe(true);
+    one.work.destroy();
+    one.inst.destroy();
+  });
+
+  it('the confirm step open: Start an agent asked for from outside (the node panel, a link) does not open', async () => {
+    const srv = server();
+    const one = make(srv);
+    await settle();
+    one.work.openForge({ tab: 'pulls' });
+    await settle();
+    click(one.q('[data-forge-pr="7"]'));
+    await settle();
+    click(one.q('[data-forge-merge]'));
+    expect(one.q('#forge-confirm').hidden).toBe(false);
+    one.inst.emit('forge:start', { slug: '0042-x', returnTo: '#drawer-run-btn' });
+    await settle();
+    expect(one.q('#agent-start').hidden).toBe(true);
+    one.work.destroy();
     one.inst.destroy();
   });
 });

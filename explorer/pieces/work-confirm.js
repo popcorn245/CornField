@@ -45,7 +45,7 @@ export function install(ctx) {
 
   /** Opens the confirm step for landing the selected pull request: what will land, exactly */
   function openConfirm(opener) {
-    if (!confirmEl() || ui.confirm || ui.busy || !ui.detail || mergeBlock(ui.detail)) return;
+    if (!confirmEl() || ui.confirm || ui.agent || ui.busy || !ui.detail || mergeBlock(ui.detail)) return; // one dialog at a time
     showConfirm(confirmMerge(ui.detail, fn.forgeName(), ui.config && ui.config.forge && ui.config.forge.mergeMethod), t('landIt'), { opener, kind: 'merge' });
   }
 
@@ -66,7 +66,7 @@ export function install(ctx) {
    * was done before says so and stops; otherwise the confirm step shows the plan and nothing is made until it is confirmed.
    */
   async function askPlan(action, n, slug, opener) {
-    if (ui.busy || ui.confirm || !confirmEl()) return;
+    if (ui.busy || ui.confirm || ui.agent || !confirmEl()) return;
     ui.busy = `plan:${action}`;
     ui.actNote = null;
     announce(action === 'spec' ? `Looking at what a spec for issue ${n} would make` : `Looking at the build issue for ${slug}`);
@@ -87,6 +87,7 @@ export function install(ctx) {
       return;
     }
     fn.paint();
+    if (ui.agent) return; // Start an agent was opened while the plan was read: one dialog at a time, and that one has the focus
     const what = action === 'spec' ? confirmSpec(plan, fn.forgeName()) : confirmBuild(plan, fn.forgeName());
     showConfirm(what, what.go, { opener, kind: action, plan, n, slug });
   }

@@ -27,7 +27,7 @@ export function install(ctx) {
    * profile, brief and limits filled in, all editable, and the request will carry `retryOf`. `brief` is that run's whole brief when the list's was cut
    */
   async function openAgent(ref, opener, again = null, brief = null) {
-    if (!agentEl() || ui.agent) return;
+    if (!agentEl() || ui.agent || ui.confirm) return; // one dialog at a time
     const at = ref.indexOf(':');
     const type = ref.slice(0, at);
     const value = ref.slice(at + 1);
