@@ -22,7 +22,7 @@ import { PERSONAS_FILE, validatePersonas } from './personas.js';
 import { CLOUD_FILE, cloudNodeProblems } from './cloud.js';
 import { deriveTopology } from './derive.js';
 import { missingPaths, planSync } from './sync.js';
-import { repoPaths, repoReader } from './repo.js';
+import { reachable, repoPaths, repoReader } from './repo.js';
 import { checkThemeContrast } from './contrast.js';
 import { layerTokenWarnings, mapTokenWarnings, nodeColorNotes, nodeColorWarnings, quoted } from './map-tokens.js';
 import { layersMapWarnings } from './layers.js';
@@ -260,7 +260,7 @@ export async function validateRepo({ config, derivers, topology = readTopology(c
   if (!topology) return { errors: [`${config.topology} is missing: run cornfield sync to make it.`], warnings: [], derived: null, notes: [] };
   const errors = validateTopology(topology);
   try {
-    errors.push(...missingPaths(topology, repoPaths(config.root)));
+    errors.push(...missingPaths(topology, repoPaths(config.root), reachable(repoReader(config.root))));
   } catch (err) {
     errors.push(`Checking the paths the map cites failed: ${err.message}`);
   }

@@ -26,7 +26,7 @@ import { pathToFileURL } from 'node:url';
 import { DERIVER_CONTRACT, deriveTopology, deriverProblems } from './derive.js';
 import { planSync, missingPaths } from './sync.js';
 import { validateTopology } from './validate.js';
-import { repoReader, repoPaths } from './repo.js';
+import { reachable, repoReader, repoPaths } from './repo.js';
 import { BUILTIN_DERIVERS, CORNFIELD_DIR, DEFAULTS } from './config.js';
 
 export { DERIVER_CONTRACT, deriverProblems };
@@ -70,14 +70,15 @@ export { DERIVER_CONTRACT, deriverProblems };
 
 /**
  * The readers a deriver gets, rooted at the repo (core/repo.js). Paths are relative, with forward slashes;
- * text is read with LF line ends.
+ * text is read with LF line ends. A path whose real path (symlinks followed) is outside the repo is not there: `read` throws,
+ * `exists` and `isDir` say no, `list` is empty.
  * @typedef {object} RepoReader
  * @property {string} root the repo's absolute folder
  * @property {(rel: string) => string} read
  * @property {(rel: string) => boolean} exists
  * @property {(rel: string) => boolean} isDir
  * @property {(rel: string) => string[]} list a folder's entries, sorted
- * @property {(rel: string, test?: (file: string) => boolean, onSkip?: (rel: string, reason: 'outside' | 'walked' | 'missing') => void, seen?: Set<string>) => string[]} walk every file under a folder that `test` accepts, skipping node_modules, .git and the like; a symlink is followed only while it stays in the repo, and a real folder is walked once (`onSkip` hears of each link left out; walks that share `seen` read a folder once between them)
+ * @property {(rel: string, test?: (file: string) => boolean, onSkip?: (rel: string, reason: 'outside' | 'walked' | 'missing') => void, seen?: Set<string>, skipDir?: (name: string) => boolean) => string[]} walk every file under a folder that `test` accepts, skipping node_modules, .git and the like; a symlink is followed only while it stays in the repo, and a real folder is walked once (`onSkip` hears of each link left out; walks that share `seen` read a folder once between them; `skipDir` names more folders to leave out)
  * @property {(rel: string) => boolean} inside whether a path is in the repo once its symlinks are followed
  */
 
@@ -295,7 +296,7 @@ export async function runDeriver(deriver, { root, files, options = {}, config = 
       topology,
       changes,
       schemaProblems: validateTopology(topology),
-      pathProblems: missingPaths({ nodes: topology.nodes.filter((n) => (own.nodes || []).some((m) => m.id === n.id)), edges: [] }, repoPaths(dir)),
+      pathProblems: missingPaths({ nodes: topology.nodes.filter((n) => (own.nodes || []).some((m) => m.id === n.id)), edges: [] }, repoPaths(dir), reachable(repoReader(dir))),
       validateProblems,
       driftProblems,
       unowned,
