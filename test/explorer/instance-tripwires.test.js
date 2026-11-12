@@ -34,6 +34,8 @@ export const CONVERTED = [
   'renderer.js',
   'renderer-canvas2d.js',
   'renderer-webgl.js',
+  'pieces/map.js',
+  'flow-build.js',
 ];
 
 /** What the not-yet-converted modules import in place of an instance: no converted module may */

@@ -24,7 +24,8 @@ import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { closeDrawer, selectNode } from '../../explorer/panels.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const node = (id, type, file, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: '#336699', label: id, degree: 1, ...(file ? { file } : {}), ...extra });

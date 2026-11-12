@@ -21,7 +21,8 @@ import { initKeyboard, resetKeyboardForTests, frameThem } from '../../explorer/k
 // @ts-expect-error plain JS modules, no declarations
 import { stopFlight, tickFlight } from '../../explorer/fly.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 const node = (id, type, label, x, y, extra = {}) => ({ id, type, x, y, r: 20, color: '#336699', label, ...extra });

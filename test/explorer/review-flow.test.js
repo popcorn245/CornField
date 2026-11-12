@@ -33,7 +33,8 @@ import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MI
 import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-const page = fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
 

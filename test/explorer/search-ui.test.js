@@ -25,7 +25,8 @@ import { stopFlight, tickFlight, flying } from '../../explorer/fly.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 

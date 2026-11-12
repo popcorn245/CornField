@@ -20,8 +20,19 @@ export const sampleRegistry = () => readJson(path.join(SAMPLE, 'topology.cloud.j
 export const samplePersonas = () => readJson(path.join(SAMPLE, 'topology.personas.json'));
 /** A house answer as a source gives it (the sample's house file, with its time) */
 export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00.000Z', ...readJson(path.join(SAMPLE, 'cornfield.house.json')) } });
-/** The explorer page as the server serves it, before the import map goes in */
-export const explorerPage = () => fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+/**
+ * What explorer/pieces/map.js makes in the page's stage, as markup (a test of the piece holds that it makes exactly this): index.html keeps only
+ * the place for it (`<!-- map-slot -->`), and a test that builds the page's body from the file puts the map's elements there
+ */
+export const MAP_ELEMENTS_HTML = '<canvas id="graph-canvas" data-corn="map-canvas" part="map-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help"></canvas>'
+  + '<p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node\'s panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>'
+  + '<p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>'
+  + '<canvas id="label-canvas" data-corn="label-canvas" part="label-canvas" aria-hidden="true"></canvas>';
+/** index.html with the map's elements where the page's stage keeps their place */
+export const withMapElements = (html) => html.replace(/<!-- map-slot[\s\S]*?-->/, MAP_ELEMENTS_HTML);
+
+/** The explorer page as the server serves it, before the import map goes in (and, for a test, with the map's elements in their place) */
+export const explorerPage = () => withMapElements(fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8'));
 
 /** A port nothing listens on right now */
 export async function freePort() {

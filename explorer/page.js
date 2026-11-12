@@ -31,7 +31,7 @@
 import { state, nodeById, startPageInstance } from './state.js';
 import { initSearch, setQuery, stepMatch } from './search.js';
 import { createMap } from './engine/render.js';
-import { createRenderer, rendererPreference } from './renderer.js';
+import { rendererPreference } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './engine/layout.js';
 import { measureCovered } from './sheets.js';
 import { stopFlight } from './fly.js';
@@ -41,7 +41,7 @@ import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
 import { initReviewColumn } from './review-column.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
-import { bindCanvasInput } from './input.js';
+import { mount as mountMap } from './pieces/map.js';
 import { initProposals } from './proposal.js';
 import { followDeepLink } from './deep-link.js';
 import { initWhatIf } from './whatif.js';
@@ -201,27 +201,25 @@ export function startPage() {
   map = createMap(inst, { measureCovered }); // the camera, the scene and the frame loop of this instance (engine/render.js)
   const mapStyle = mapStyleOf(inst);
   initTheme(); // light or dark, before the first scene is built (theme.js)
-  mapStyle.watch(); // the map reads --corn-map-* from the theme, and again when it changes (engine/map-style.js)
-  mapStyle.onChange(() => render());
-  state.canvas = $('graph-canvas');
-  state.labelCanvas = $('label-canvas');
-  // A 2d context that only measures text (layout.js labelWidth): the map canvas may be WebGL, and a
-  // canvas that gave a WebGL context can never give a 2d one
-  state.ctx = document.createElement('canvas').getContext('2d');
-  // WebGL2, or Canvas 2D when it is missing or the address says ?renderer=canvas2d (the address is read here, not by the renderer)
-  map.setRenderer(createRenderer(state.canvas, { prefer: rendererPreference(window.location.search), mapStyle: mapStyle.get }));
+  // The map's canvases, their keys' help and the announcer are made by the map piece (pieces/map.js, also what <corn-map> mounts), into this stage.
+  // It watches the theme's tokens (the map reads --corn-map-* from the theme, and again when it changes), makes the renderer (WebGL2, or Canvas 2D
+  // when it is missing or the address says ?renderer=canvas2d: the address is read here, not by the renderer), binds the canvas and follows the box's size.
+  // The page keeps what a tap on a node means (its panel) and the keys (keyboard.js, which also drives the panels): `handleTaps` and `keyboard` are off.
+  mountMap(document.querySelector('[data-corn="stage"]'), inst, {
+    stage: false, keyboard: false, handleTaps: false, measureCovered,
+    renderer: rendererPreference(window.location.search) === 'canvas2d' ? 'canvas2d' : 'auto',
+    keysHelp: "Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.",
+  });
   loadFreeformPositions(inst);
   // What a tap on the map asks of the page: a node's panel, the normal view, the end of a flight to a match
   inst.on('select', (node) => selectNode(node));
   inst.on('background', () => closeDrawer());
   inst.on('grab', () => stopFlight());
-  bindCanvasInput(inst);
   initKeyboard(); // the map, the panel, the search and the Layers menu by keyboard (keyboard.js)
   initAccountMenu(); // the one menu at the right of the header (account-menu.js)
   initSheets();
   initScenarioUi();
   initReviewColumn(); // the review column: the changes, and the personas with their scenarios (review-column.js)
-  map.watchSize(); // the map follows its box (a ResizeObserver on the stage), in place of the window's resize event
   initSearch(); // the count, the list and the stepping of both search fields (search.js)
 
   map.resize();

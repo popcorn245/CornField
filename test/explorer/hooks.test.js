@@ -47,13 +47,13 @@ const hooks = tableValues('## The hooks').filter((v, i, a) => a.indexOf(v) === i
 const kinds = tableValues('### Button kinds: `data-corn-kind`');
 const states = tableValues('### States: `data-corn-state`');
 
-const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
+const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), ...fs.readdirSync(path.join(EXPLORER, 'pieces')).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, 'pieces', f)), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
 const source = SOURCES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 /** Every literal value written as `data-corn="x"` or `dataset.corn = 'x'` (the attribute, in markup and in script) */
 const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);
 // explorer/plugins.js sets the brand images' hook from the image's kind: setAttribute('data-corn', `brand-${kind}`), kind 'logo' or 'wordmark'
 const brandImages = /setAttribute\('data-corn', `brand-\$\{kind\}`\)/.test(source) && /brandImage\(doc, [^)]*'logo'/.test(source) && /brandImage\(doc, [^)]*'wordmark'/.test(source) ? ['brand-logo', 'brand-wordmark'] : [];
-const used = [...new Set([...literal('attr', /\bdata-corn="([^"$]+)"/g), ...literal('js', /\.dataset\.corn = '([^']+)'/g), ...literal('set', /setAttribute\('data-corn', '([^']+)'\)/g), ...brandImages])];
+const used = [...new Set([...literal('attr', /\bdata-corn="([^"$]+)"/g), ...literal('js', /\.dataset\.corn = '([^']+)'/g), ...literal('set', /setAttribute\('data-corn', '([^']+)'\)/g), ...literal('piece', /\bhooked\(inst, '[a-z]+', '([a-z0-9-]+)'/g), ...brandImages])]; // explorer/pieces/*.js make a hook and its part together: hooked(inst, tag, name)
 const usedKinds = [...new Set(literal('kind', /\bdata-corn-kind="([^"$]+)"/g))];
 // Most states are worked out by corn-state.js; the rest are written as literals
 const usedStates = [...new Set([...literal('attr', /\bdata-corn-state="([^"$]+)"/g), ...literal('js', /\.dataset\.cornState = '([^']+)'/g)])];

@@ -23,7 +23,8 @@ import { state, escHtml } from '../../explorer/state.js';
 import { initReview, resetReviewForTests } from '../../explorer/review.js';
 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 const $ = (id) => document.getElementById(id);

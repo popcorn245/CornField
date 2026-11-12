@@ -2527,6 +2527,36 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "cornfield's own page: the shell that mounts the engine in the document (spec 0011 D1, D2). (explorer/page.js)"
+    },
+    {
+      "id": "core-explorer-flow-build",
+      "label": "flow-build.js",
+      "type": "core",
+      "file": "explorer/flow-build.js",
+      "summary": "The data-flow preset's fold (pure: no state, no DOM), so a piece that runs on an instance (explorer/pieces/map.js) can build the preset without importing flows.js, which still reads the page's shar…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The data-flow preset's fold (pure: no state, no DOM), so a piece that runs on an instance (explorer/pieces/map.js) can build the preset without importing flows.js, which still reads the page's shar… (explorer/flow-build.js)"
+    },
+    {
+      "id": "core-explorer-pieces-adopt-tokens",
+      "label": "adopt-tokens.js",
+      "type": "core",
+      "file": "explorer/pieces/adopt-tokens.js",
+      "summary": "The default `--corn-*` tokens for a page that has no cornfield stylesheet of its own (spec 0011 D7).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The default `--corn-*` tokens for a page that has no cornfield stylesheet of its own (spec 0011 D7). (explorer/pieces/adopt-tokens.js)"
+    },
+    {
+      "id": "core-explorer-pieces-map",
+      "label": "map.js",
+      "type": "core",
+      "file": "explorer/pieces/map.js",
+      "summary": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map as a piece (spec 0011 D3): the stage, its two canvases and the keyboard help, made, wired and ended in one place, for cornfield's own page (explorer/page.js mounts it into the page's stage)… (explorer/pieces/map.js)"
     }
   ],
   "edges": [
@@ -8185,12 +8215,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-input",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-keyboard",
       "dashed": true,
       "label": "imports"
@@ -8338,7 +8362,102 @@
       "to": "core-explorer-instance",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-flow-build"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-adopt-tokens"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-map"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-flow-build",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-pieces-map",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-engine-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-flow-build",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-input",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-renderer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T08:21:57.171Z"
+  "updatedAt": "2026-11-12T09:16:49.981Z"
 }

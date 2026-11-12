@@ -27,7 +27,8 @@ import { selectNode } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { createLiveSource, TOKEN_KEY, CLOUD_PATH } from '../../plugins/house/browser.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 const recorded = recordedHouse();
 

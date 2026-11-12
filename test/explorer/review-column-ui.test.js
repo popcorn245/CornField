@@ -36,7 +36,8 @@ import { reviewBody } from '../../explorer/review-model.js';
 import { selectNode } from '../../explorer/panels.js';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
-const page = fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8');
+import { withMapElements } from '../helpers.js';
+const page = withMapElements(fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8'));
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const node = (id        , type        , x        , y        , extra         = {}) => ({ id, type, x, y, r: 20, color: '#336699', label: id, ...extra });
