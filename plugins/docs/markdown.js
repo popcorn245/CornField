@@ -562,12 +562,74 @@ function fenceOf(line) {
   if (!m || line.includes('`', m[0].length)) return null;
   return [line, m[1], /^\s*([^`\s]*)/.exec(line.slice(m[0].length))[1]];
 }
-const HEADING = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
+const LINE_BREAK = /[\n\r\u2028\u2029]/;
+/**
+ * A heading line's `[line, level, text]`, or null: one to six `#`, then a space or tab (or the end of the line), the text
+ * and an optional closing run of `#`. (Read by hand: the one expression for it, `/^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/`,
+ * tries every split of a long run of spaces. As the expression's `.` did, a line with a line break in it is no heading.)
+ */
+function headingOf(line) {
+  let i = 0;
+  while (i < 3 && line[i] === ' ') i++;
+  const start = i;
+  while (line[i] === '#') i++;
+  const level = i - start;
+  if (level < 1 || level > 6) return null;
+  if (i < line.length && line[i] !== ' ' && line[i] !== '\t') return null;
+  if (LINE_BREAK.test(line)) return null;
+  while (line[i] === ' ' || line[i] === '\t') i++;
+  let end = line.length;
+  while (end > i && (line[end - 1] === ' ' || line[end - 1] === '\t')) end--;
+  // Cut a closing run of `#` that a space or tab sets off from the text
+  let j = end;
+  while (j > i && line[j - 1] === '#') j--;
+  if (j < end && j > i && (line[j - 1] === ' ' || line[j - 1] === '\t')) {
+    end = j;
+    while (end > i && (line[end - 1] === ' ' || line[end - 1] === '\t')) end--;
+  }
+  return [line, level, line.slice(i, end)];
+}
 const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 const QUOTE = /^ {0,3}> ?/;
-const LIST_ITEM = /^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)(.*)$/;
+const LIST_MARK = /^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)/;
+/**
+ * A list item line's `[line, indent, marker, spaces, rest of the line]`, or null. (The prefix only is matched by the
+ * expression; with a `(.*)$` after it, a run of spaces and a line break at the end of the line made it try every split.)
+ */
+function listItem(line) {
+  const m = LIST_MARK.exec(line);
+  if (!m || LINE_BREAK.test(line)) return null;
+  return [line, m[1], m[2], m[3], line.slice(m[0].length)];
+}
 const HTML_START = /^ {0,3}<\/?(p|div|img|br|hr|details|summary|table|picture|center|section|!--)(?=[\s/>]|$)/i;
-const TABLE_SEP = /^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const SPACES = /\s*/y;
+const SEP_CELL = /:?-+:?\s*/y;
+/**
+ * Whether a line is a table's separator row: cells of dashes with an optional colon at either end, between pipes (the
+ * outer two optional). (By hand: the expression for it, `/^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/`, tries every split of a long run of spaces.)
+ */
+function isTableSep(line) {
+  let i = 0;
+  while (i < 3 && line[i] === ' ') i++;
+  // Up to three spaces and a pipe; with no pipe the spaces are read as the cell's own leading spaces
+  if (line[i] !== '|') i = 0; else i++;
+  for (;;) {
+    SPACES.lastIndex = i;
+    SPACES.test(line);
+    SEP_CELL.lastIndex = SPACES.lastIndex;
+    if (!SEP_CELL.test(line)) return false;
+    i = SEP_CELL.lastIndex;
+    if (i === line.length) return true;
+    if (line[i] !== '|') return false;
+    SPACES.lastIndex = i + 1;
+    SPACES.test(line);
+    i = SPACES.lastIndex;
+    if (i === line.length) return true;
+  }
+}
+
+/** How many empty cells a document's tables may add to rows shorter than their header (see renderBlocks) */
+const MAX_PADDING = 65536;
 
 const isBlank = (l) => /^\s*$/.test(l);
 const indentOf = (l) => /^ */.exec(l.replace(/\t/g, '    '))[0].length;
@@ -592,12 +654,16 @@ function cells(line) {
 }
 
 /** Whether a line starts a block other than a paragraph (it interrupts a paragraph) */
-const startsBlock = (line) => fenceOf(line) || HEADING.test(line) || RULE.test(line) || QUOTE.test(line) || HTML_START.test(line) || (LIST_ITEM.test(line) && !isBlank(LIST_ITEM.exec(line)[4]));
+const startsBlock = (line) => {
+  if (fenceOf(line) || headingOf(line) || RULE.test(line) || QUOTE.test(line) || HTML_START.test(line)) return true;
+  const item = listItem(line);
+  return Boolean(item) && !isBlank(item[4]);
+};
 
 /**
  * Lines of Markdown as HTML.
  * @param {string[]} lines
- * @param {{ link: Function, headings: object[], slugs: Map<string, number> }} ctx
+ * @param {{ link: Function, headings: object[], slugs: Map<string, number>, padding: number }} ctx (padding: the empty cells a table may still add)
  * @param {boolean} [tight] paragraphs without <p> (a tight list item)
  * @param {number} [depth] how many lists and quotes these lines sit in (from MAX_NEST on, a list or quote is text)
  */
@@ -623,10 +689,9 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
       continue;
     }
 
-    const heading = HEADING.exec(line);
+    const heading = headingOf(line);
     if (heading) {
-      const level = heading[1].length;
-      const text = heading[2] || '';
+      const [, level, text] = heading;
       const base = headingSlug(text);
       const n = ctx.slugs.get(base) || 0;
       ctx.slugs.set(base, n + 1);
@@ -653,7 +718,7 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
       continue;
     }
 
-    if (line.includes('|') && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1]) && lines[i + 1].includes('-')) {
+    if (line.includes('|') && i + 1 < lines.length && isTableSep(lines[i + 1]) && lines[i + 1].includes('-')) {
       const head = cells(line);
       const align = cells(lines[i + 1]).map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : null));
       const cell = (tag, text, k) => `<${tag}${align[k] ? ` style="text-align:${align[k]}"` : ''}>${renderInline(text, ctx)}</${tag}>`;
@@ -661,13 +726,20 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
       const rows = [];
       while (i < lines.length && !isBlank(lines[i]) && lines[i].includes('|')) {
         const row = cells(lines[i++]);
-        rows.push(`<tr>${head.map((_, k) => cell('td', row[k] ?? '', k)).join('')}</tr>`);
+        // A short row is padded with empty cells to the header's width. A wide header over many short rows would so make output
+        // in the square of the input, so a document adds at most MAX_PADDING such cells: a row that would pass that keeps its own
+        let width = head.length;
+        if (row.length < width) {
+          if (width - row.length <= ctx.padding) ctx.padding -= width - row.length;
+          else width = row.length;
+        }
+        rows.push(`<tr>${head.slice(0, width).map((_, k) => cell('td', row[k] ?? '', k)).join('')}</tr>`);
       }
       out.push(`<div class="table"><table>\n<thead><tr>${head.map((h, k) => cell('th', h, k)).join('')}</tr></thead>\n<tbody>\n${rows.join('\n')}\n</tbody>\n</table></div>`);
       continue;
     }
 
-    const item = depth < MAX_NEST && LIST_ITEM.exec(line);
+    const item = depth < MAX_NEST && listItem(line);
     if (item) {
       const ordered = /\d/.test(item[2]);
       const kind = ordered ? item[2].slice(-1) : item[2];
@@ -675,28 +747,31 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
       const items = [];
       let loose = false;
       while (i < lines.length) {
-        const m = LIST_ITEM.exec(lines[i]);
+        const m = listItem(lines[i]);
         if (!m || (/\d/.test(m[2]) ? m[2].slice(-1) : m[2]) !== kind) break;
         const contentIndent = m[1].length + m[2].length + Math.min(m[3].length || 1, 4);
         const body = [m[4]];
         i++;
         let sawBlank = false;
+        let filled = m[4] === '' ? 0 : 1;
         while (i < lines.length) {
           const l = lines[i];
           if (isBlank(l)) { sawBlank = true; body.push(''); i++; continue; }
           if (indentOf(l) >= contentIndent) {
-            if (sawBlank && body.filter((b) => b !== '').length) loose = loose || !LIST_ITEM.test(l.slice(contentIndent));
-            body.push(l.replace(/\t/g, '    ').slice(contentIndent));
+            if (sawBlank && filled) loose = loose || !listItem(l.slice(contentIndent));
+            const text = l.replace(/\t/g, '    ').slice(contentIndent);
+            body.push(text);
+            if (text !== '') filled++;
             sawBlank = false;
             i++;
             continue;
           }
           // A lazy continuation of the item's paragraph
-          if (!sawBlank && !startsBlock(l) && !LIST_ITEM.test(l)) { body.push(l.trim()); i++; continue; }
+          if (!sawBlank && !startsBlock(l) && !listItem(l)) { body.push(l.trim()); i++; filled++; continue; }
           break;
         }
         while (body.length && body[body.length - 1] === '') body.pop();
-        if (sawBlank && i < lines.length && LIST_ITEM.test(lines[i])) loose = true;
+        if (sawBlank && i < lines.length && listItem(lines[i])) loose = true;
         items.push(body);
       }
       const tag = ordered ? 'ol' : 'ul';
@@ -723,7 +798,7 @@ function renderBlocks(lines, ctx, tight = false, depth = 0) {
  * @returns {{ html: string, title: string | null, headings: { level: number, text: string, id: string }[] }}
  */
 export function renderMarkdown(text, { link = (href) => href } = {}) {
-  const ctx = { link, headings: [], slugs: new Map() };
+  const ctx = { link, headings: [], slugs: new Map(), padding: MAX_PADDING };
   const html = renderBlocks(String(text).replace(/\r\n?/g, '\n').split('\n'), ctx);
   const h1 = ctx.headings.find((h) => h.level === 1);
   return { html, title: h1 ? h1.text : null, headings: ctx.headings };
