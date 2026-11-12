@@ -5,7 +5,15 @@
  * explorer/tokens.css (docs/theming.md; test/explorer/tokens.test.js fails on any literal left here). Light and dark are tokens.css's
  * business: nothing here names a theme. Classes are prefixed hx-. Nothing here asks what the document says: no `:root`, `html` or `body`
  * rule, no unit of the window (`vw`, `vh`), no `position: fixed`; the rules of the page itself are in page.css. A width rule is a
- * container query on `corn-box`, the piece's own box (page.css names the stage and the body; a component names its host).
+ * container query on `corn-box`, the piece's own box (page.css names the body; a component names its host).
+ *
+ * A component's host: `container: corn-box corn-page / size` and a definite height, so the width rules, the screen-height rules (`corn-page`)
+ * and the `cqw`/`cqh` sizes all read the host. A host that is only `corn-box / inline-size` gets the width rules, but no `corn-page` rule
+ * applies (neither the short-screen one nor the tall one), and `cqh` falls through to the nearest size container above it, or to the small
+ * viewport where there is none: a menu or a sheet is then capped by the window's height, not the host's. With no container at all no width
+ * rule applies and `cqw` is the viewport's too. The few fixed boxes (a dialog, a phone's menu) are placed against the window, unless something
+ * around them is their containing block: a transform or filter above the host, or the host itself in a browser from before mid-2024, where a
+ * container was also layout-contained (page.css: why the page's only container is the body).
  */
 *, *::before, *::after { box-sizing: border-box; }
 /* Private properties. A control is the token's height on a desk and never under 44px in a narrow box: a brand that sets --corn-control-height
