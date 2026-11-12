@@ -21,6 +21,7 @@ export default {
   links: [{ label: 'Docs', href: 'https://example.org/docs' }],
   layers: { add: [{ key: 'jobs', label: 'Background jobs', match: { type: 'service', kind: ['timer', 'job'] } }], off: ['jobs'] },
   theme: { css: './tools/cornfield/theme.css', fonts: ['https://fonts.googleapis.com/css2?family=Nunito&display=swap'], names: { day: './tools/cornfield/day.css', night: './tools/cornfield/night.css' }, default: 'day' },
+  embed: { origins: ['https://tasks.example.com'] },
   proxy: { '/api/': 'http://127.0.0.1:3245' },
   importMap: {},
   dataDir: null,
@@ -51,6 +52,7 @@ export default {
 | `brand` | `{ logo?, wordmark?, favicon?, appName?, color?, background? }`: a repo's own logo, name and colours in cornfield's chrome, and a web app manifest. Images from the repo only. [Brand](#brand) |
 | `layers` | `{ add?, off?, order? }`: the project's own layers in the Layers menu, as data (a `match` of `type`, `kind`, `parent`, `field`; never a pattern or a function), which layers start off, and the order of the rows. [Layers](#layers) |
 | `strings` | `{ approve?, sendBack?, … }`: the repo's own words for about forty visible labels, plain text, one line. [Strings](#strings) |
+| `embed` | `{ origins: [] }` (the default: none): the exact origins of other apps of yours (`https://tasks.example.com`; `https` only, `http` for `localhost`, `*.localhost`, `127.0.0.1` and `[::1]`; no path, no wildcard) whose pages may read the map and the proposals, and decide a review, as the maintainer signed in to cornfield in the same browser. **Every script on a listed origin can ask as that maintainer**: list only an app you trust with your login. [Embedding](embedding.md) |
 | `proxy` | same-origin paths for a source's own API: `{ '/api/': 'http://127.0.0.1:3245' }` |
 | `importMap` | bare imports a repo-local source module needs: `{ name: '/repo/path/to/module.js' }` |
 | `dataDir` | cornfield's own state: `cornfield.db`, its SQLite file (private to its owner: it holds sessions). Default: `~/.cornfield/<repo folder>`, never inside the checkout |

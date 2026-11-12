@@ -51,6 +51,7 @@ import { hashPullMockups } from './mockups.js';
 import { readDecision } from './decision.js';
 import { findPullProposal, forgeWords, listPullProposals, pullNumber, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { serveMockups } from './mockups.js';
+import { listedWrite } from './embed.js';
 
 // The review's checks live in server/reviews.js; these are re-exported for the callers that always had them here
 export { REVIEW_LIMIT, MAX_REVIEW_EDITS, MAX_NOTE_CHARS, validateReview } from './reviews.js';
@@ -102,10 +103,13 @@ function ownHostName(host, publicHost) {
  * another domain that resolves here (DNS rebinding) is no more welcome than any other site.
  * @param {import('node:http').IncomingMessage} req
  * @param {string|null} [publicHost] the host of the configured public URL, which is the server's own too
+ * @param {readonly string[]} [embedOrigins] the listed sibling origins (config `embed.origins`) a request may also come from; only for the review PUT and the Undo of a landing
  */
-export function sameOrigin(req, publicHost = null) {
+export function sameOrigin(req, publicHost = null, embedOrigins = []) {
   const host = req.headers.host;
   if (typeof host !== 'string' || !ownHostName(host, publicHost)) return false;
+  // The two writes a listed sibling origin may make pass their list here (server/embed.js `listedWrite`); every other caller passes none
+  if (embedOrigins.length && listedWrite(req.headers, embedOrigins)) return true;
   const origin = req.headers.origin;
   const site = req.headers['sec-fetch-site'];
   if (origin === undefined && site === undefined) return false;
@@ -278,7 +282,7 @@ async function getDecision(res, where, forgeFor, signedIn, slug, n, fresh) {
 
 /** PUT /proposals/<slug>/review?source=pull/<n>: posts the review as a comment on the PR, as the signed-in maintainer */
 async function putPullReview(req, res, where, forgeFor, signedIn, slug, n) {
-  if (!sameOrigin(req, where.publicHost)) {
+  if (!sameOrigin(req, where.publicHost, where.embedOrigins ?? [])) {
     req.resume();
     return send(res, 403, { error: 'A review is only taken from cornfield\'s own page' });
   }
