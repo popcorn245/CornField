@@ -80,6 +80,9 @@ export const CONVERTED = [
   'outage-model.js',
   'scenario.js',
   'waiting-model.js',
+  // The one-tag review: the composed piece and the engine function that gives an instance its map (spec 0011 D3, D4)
+  'pieces/review.js',
+  'engine/topology.js',
   // Step 6 (spec 0011 D2 and D3): the Work panel (its shell, a part per tab and the two dialogs) and what it stands on
   'pieces/work.js',
   'pieces/work-markup.js',

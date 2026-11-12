@@ -38,7 +38,7 @@
 import { escapeHtml as escHtml } from '../../core/text.js';
 import { t } from '../engine/strings.js';
 import { markStateAttr } from '../corn-state.js';
-import { isPhone, expandSheet, PHONE_QUERY, visibleMapRect } from '../engine/sheets.js';
+import { isPhone, expandSheet, onPhoneChange, visibleMapRect } from '../engine/sheets.js';
 import { pullNumberOf } from '../proposal-model.js';
 import { clearSelection } from '../engine/selection.js';
 import { onLayersChange } from '../engine/layers.js';
@@ -453,14 +453,7 @@ export function mount(root, inst, options = {}) {
   const watch = (el, fn) => { if (el && typeof RO === 'function') { const ro = new RO(fn); ro.observe(el); scope.own(() => ro.disconnect()); } };
   watch(inst.el('proposal-bar'), () => placeColumn());
   watch(col, () => shareRoom()); // the window's height changed
-  if (inst.win && typeof inst.win.matchMedia === 'function') {
-    const mq = inst.win.matchMedia(PHONE_QUERY);
-    if (mq && mq.addEventListener) {
-      const onPhone = () => { if (state.proposal) renderColumn(); };
-      mq.addEventListener('change', onPhone);
-      scope.own(() => mq.removeEventListener('change', onPhone));
-    }
-  }
+  scope.own(onPhoneChange(inst, () => { if (state.proposal) renderColumn(); })); // the window's width, or the box's where the review has one (engine/sheets.js)
 
   scope.own(() => {
     gone = true;

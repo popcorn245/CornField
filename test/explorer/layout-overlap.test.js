@@ -120,6 +120,13 @@ describe('odd shapes', () => {
     expect(overlaps(state.nodes)).toEqual([]);
   });
 
+  it('a chain of parents thousands deep is laid out, every node placed, with no stack overflow', () => {
+    const chain = Array.from({ length: 3000 }, (_, i) => N(`d${i}`, 'service', 12));
+    lay(map({ nodes: chain, edges: [E('tool', 'd0'), ...chain.slice(1).map((n, i) => E(chain[i].id, n.id))] }));
+    expect(state.nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
+    expect(state.nodes.filter((n) => n.id !== 'root' && n.x === 0 && n.y === 0).map((n) => n.id)).toEqual([]);
+  });
+
   it('children and grandchildren of a node on the data ring', () => {
     lay(map({ nodes: [N('rom', 'rom'), N('st', 'store'), N('tb', 'table'), N('tb2', 'table')], edges: [E('tool', 'st'), E('st', 'tb')] },
       kids('rom', 3, 'page'), kids('rom-0', 4), kids('rom-1', 4), kids('tb', 9, 'page'), kids('tb-0', 5)));

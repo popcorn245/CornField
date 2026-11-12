@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Review harness</title>
+<!--
+  A host app's page with a review piece or two in it (explorer/pieces/review.js), for tests and for eyes. Open it by a *.localhost name that the rig lists
+  (`--embed`), with ?objects=1100x680 (a box fed objects: no server) and/or ?rig=390x700 (a box with a base on the rig: Approve and Send back post),
+  &theme=light|dark, &base=<rig origin>, &slug=, &source=, &view=. harness.js loads the stylesheets the piece names (`STYLESHEETS`) and mounts.
+  The host's own styles (host.css) are unrelated to cornfield's: they are here to show what leaks in or out. &shadow=1 mounts each review in a shadow root.
+-->
+<link rel="stylesheet" href="/host.css" />
+</head>
+<body>
+<header class="site"><h1>Tasks</h1><nav><a href="#board">Board</a><a href="#calendar">Calendar</a></nav></header>
+<main>
+  <p class="note">A host page with its own styles. The boxes below hold a review each; the first is fed objects, the second has a base on the rig.</p>
+  <section id="card-objects" hidden><h2>Objects handed in</h2><div class="box" id="objects" data-box="objects"></div></section>
+  <section id="card-rig" hidden><h2>On the rig</h2><div class="box" id="rig" data-box="rig"></div></section>
+  <section><h2>Another heading</h2><p>Some text of the host's own, after the reviews, so the page has a bottom and something to scroll to.</p><button type="button" id="host-button">A host button</button></section>
+</main>
+<script type="module" src="/harness.js"></script>
+</body>
+</html>
