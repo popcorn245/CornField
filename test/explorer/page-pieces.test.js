@@ -16,7 +16,7 @@ import { setRenderer } from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
-import { RESULT_MS } from '../../explorer/feedback.js';
+import { RESULT_MS } from '../../explorer/engine/feedback.js';
 
 const html = explorerPage();
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -44,7 +44,7 @@ describe('the header before the scripts run', () => {
 
   it('keeps as stand-ins exactly the pieces\' markup, without ids', () => {
     const stands = standInsOf(html);
-    expect(Object.keys(stands).sort()).toEqual(['layers/menu', 'search/field']);
+    expect(Object.keys(stands).sort()).toEqual(['layers/menu', 'search/field', 'work/button']);
     for (const [place, markup] of Object.entries(stands)) {
       const [name, slot] = place.split('/');
       expect(squash(markup), place).toBe(squash(standIn(PIECE_MARKUP[name]()[slot])));

@@ -19,7 +19,9 @@ import { hintText, hintWords, syncHint, dismissHint, resetHintForTests, mapCover
 // @ts-expect-error plain JS modules, no declarations
 import { fitLeft, SHORT_ATTR, OVERFLOW_ATTR } from '../../explorer/header-fit.js';
 // @ts-expect-error plain JS modules, no declarations
-import { revealInStrip, watchFocusRoom } from '../../explorer/focus-room.js';
+import { revealInStrip } from '../../explorer/focus-room.js';
+// @ts-expect-error plain JS modules, no declarations
+import { ensurePagePieces, pagePiece } from '../../explorer/page-pieces.js';
 // @ts-expect-error plain JS modules, no declarations
 import { houseOffered } from '../../explorer/house-model.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -188,7 +190,11 @@ describe('a tab brought into view keeps its ring (F54)', () => {
   });
 
   it('follows focus once watched', () => {
-    const stop = watchFocusRoom(document);
+    // The Work piece listens for focus in its own root (pieces/work.js) once it has started, and stops when it ends
+    document.body.innerHTML = /<body>([\s\S]*)<\/body>/.exec(explorerPage({ pieces: ['map'] }))[1].replace(/<script[\s\S]*?<\/script>/g, ''); // the Work piece makes its own markup
+    ensurePagePieces();
+    pagePiece('work').update({ config: { forge: { type: 'github', repo: 'o/n' }, signIn: { login: 'm' } } });
+    const stop = () => pagePiece('work').destroy();
     const tab = document.querySelector('.hx-forge-tab[data-forge-kind="deploys"]');
     let n = 0;
     tab.scrollIntoView = () => { n++; };

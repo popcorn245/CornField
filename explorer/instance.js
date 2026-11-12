@@ -16,7 +16,8 @@
  *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
- *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onHide(fn): the few window facts the review needs
+ *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs;
+ *                   inst.onPageFocus(fn(event)): a focus anywhere in the page, outside the root too (a modal dialog's trap in a host's page)
  *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
@@ -54,6 +55,10 @@
  *   piece:refused   { piece, reason, message, host }  a piece that cannot have this instance (a second map in a scope); the scope says it as `cornError`
  *                   and tells `host` to ask again when the root is free
  *   attach:released (none)  the piece that had the instance's root (`attach`) gave it back
+ *   work:waiting    { total }  what waits on the maintainer changed (specs to decide plus runs that need an answer; pieces/work.js): the page puts the number before its title
+ *   work:available  { on }  the Work panel started (a forge in the config and somebody signed in), or ended: the account menu's Proposals entry is only for a cornfield without it
+ *   runs:map        { active }  runs are on the map, or none is (pieces/work.js, runs-map.js): the Layers menu shows its legend while there are
+ *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work panel opens the thread, or its New idea form)
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
@@ -74,6 +79,10 @@
  *   forge:can-start (none)  can a run be started from here? -> boolean; forge:start (emit) { slug, returnTo }: open the Start dialog
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
+ *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
+ *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
+ *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)
+ *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the Work panel opens on Runs at that run, its reply field focused
  *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
  *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
  *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
@@ -288,6 +297,12 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
     onWindowFocus: (fn) => (win ? inst.listen(win, 'focus', () => fn()) : () => {}),
     /** Calls `fn()` when the page is going away (a tab closed, a reload). Removed by destroy(). */
     onPageHide: (fn) => (win ? inst.listen(win, 'pagehide', () => fn()) : () => {}),
+    /** Calls `fn()` when the window is resized. Removed by destroy(). */
+    onResize: (fn) => (win ? inst.listen(win, 'resize', () => fn()) : () => {}),
+    /** Calls `fn()` when the page is shown again, or comes back from the back-forward cache. Removed by destroy(). */
+    onPageShow: (fn) => (win ? inst.listen(win, 'pageshow', () => fn()) : () => {}),
+    /** Calls `fn(event)` for every focus that lands in the page, outside the root as well (which the root's own `focusin` never hears). Removed by destroy(). */
+    onPageFocus: (fn) => (doc ? inst.listen(doc, 'focusin', (e) => fn(e)) : () => {}),
     /** Calls `fn()` when the tab is hidden. Removed by destroy(). */
     onHide(fn) {
       if (!doc) return () => {};

@@ -415,3 +415,21 @@ describe('hostile and odd input: text only, no throw, and a plain word where the
     expect(errors).toEqual([]);
   }, 30_000);
 });
+
+describe('with no Work panel in it', () => {
+  it('offers nothing that would need one: no Threads and no Start a run in the node panel, no Answer on the bar, and nothing throws', async () => {
+    const { piece } = make({ topology: topology(), proposal, slug: '0002-checkout', source: 'pull/2' });
+    const { inst } = piece;
+    const { selectNode } = await import('../../explorer/engine/selection.js');
+    selectNode(inst, inst.state.nodes[0]);
+    vi.advanceTimersByTime(50);
+    expect(inst.el('drawer-threads').textContent.trim()).toBe('');
+    expect(piece.elements[0].querySelector('[data-thread-open], [data-thread-start]')).toBe(null);
+    expect(inst.el('drawer-run-btn').hidden).toBe(true);
+    inst.emit('proposal:bar', { open: true });
+    const answer = piece.elements[0].querySelector('[data-waiting-answer]');
+    expect(!answer || !!answer.closest('[hidden]')).toBe(true);
+    expect(() => { inst.emit('thread:open', { number: 1 }); inst.emit('work:answer', { run: 'x' }); inst.emit('forge:start', { slug: 'x' }); }).not.toThrow();
+    expect(inst.ask('work:on')).toBeUndefined();
+  });
+});
