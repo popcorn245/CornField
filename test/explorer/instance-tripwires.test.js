@@ -59,12 +59,28 @@ export const CONVERTED = [
   'sheet-model.js',
   'file-url.js',
   'capped.js',
+  // Step 5 (spec 0011 D2 and D3): the proposal's bar, the review column with the player, the decision, and what they stand on
+  'pieces/proposal.js',
+  'pieces/changes.js',
+  'pieces/decision.js',
+  'engine/proposal.js',
+  'engine/player.js',
+  'engine/checks.js',
+  'engine/connection.js',
+  'proposal-model.js',
+  'review-model.js',
+  'decision-model.js',
+  'scenario-list-model.js',
+  'check-model.js',
+  'outage-model.js',
+  'scenario.js',
+  'waiting-model.js',
 ];
 
 /** What the not-yet-converted modules import in place of an instance: no converted module may */
 const BRIDGES = [
   'state.js', 'render.js', 'map-style.js', 'layout.js', // step 1
-  'hint.js', 'fly.js', 'feedback.js', 'keyboard.js', 'sheets.js', 'panels.js', 'layers.js', 'search.js', 'search-status.js', 'flows.js', 'page-pieces.js', // step 4 (strings.js is a bridge too, but it imports nothing of the page: the pure models read their words through it, and the converted modules import those)
+  'hint.js', 'fly.js', 'feedback.js', 'keyboard.js', 'sheets.js', 'panels.js', 'layers.js', 'search.js', 'search-status.js', 'flows.js', 'page-pieces.js', 'proposal.js', 'review-column.js', 'scenario-ui.js', 'check.js', 'review.js', 'waiting-line.js', 'connection.js', 'page-address.js', // step 5; // step 4 (strings.js is a bridge too, but it imports nothing of the page: the pure models read their words through it, and the converted modules import those)
 ];
 
 /** The code of a module: comments and the contents of nothing else removed, so a word in a sentence trips nothing */

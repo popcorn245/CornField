@@ -14,11 +14,13 @@
  *   scene.js    what is drawn (contract)    renderer.js  how it is drawn: renderer-webgl.js or renderer-canvas2d.js
  *   pieces/     the node panel, the Layers menu and the search: pieces mounted where index.html has their places (page-pieces.js)
  *   view.js     loading and view switching  input.js    mouse and touch
- *   proposal.js the proposal overlay (picker, Before / Diff / After); proposal-model.js its pure half
+ *   pieces/proposal.js the proposal's bar (the picker, Before / Diff / After); engine/proposal.js opening one; proposal-model.js its pure half
+ *   pieces/changes.js the review column and the scenario player (engine/player.js, engine/checks.js); pieces/decision.js Approve and Send back
+ *   page-address.js  ?proposal=, ?source= and ?proposalView= in the address bar
  *   whatif.js   what-if edits on an open proposal (add, remove, draw, steps, undo); whatif-model.js its pure half
- *   review.js   approve a proposal or send it back with a note and the edits; review-model.js its pure half
+ *   review-model.js, decision-model.js  the words and the choices of the decision (pure)
  *   deep-link.js  ?run=, ?issue= and ?proposal=…&start=1 land on a run, an issue and a Start dialog
- *   scenario.js the player's pure core      scenario-ui.js  its bar, keys and camera
+ *   scenario.js the player's pure core
  *   bench.js    /?bench=1 stopwatch and /?fixture=5k (the generated topology, from the server)
  *   keyboard.js the map by keyboard and the screen reader's announcer; keyboard-model.js its pure half
  *   live.js     the live layer: the chip, polling, laying a live source's answer over the map; live-model.js its pure half
@@ -34,22 +36,21 @@ import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './en
 import { measureCovered } from './sheets.js';
 import { setProjectLayers } from './layers.js';
 import { closeDrawer } from './panels.js';
-import { ensurePagePieces, pieceSlots } from './page-pieces.js';
-import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
+import { ensurePagePieces, mergePagePieceOptions, pieceSlots } from './page-pieces.js';
+import { maybeStartDemo, playOutage } from './scenario-ui.js';
 import { initSheets } from './sheets.js';
-import { initReviewColumn } from './review-column.js';
 import { loadTopology, setView, syncViewUi } from './view.js';
 import { mount as mountMap, KEYS_HELP_WITH_PANEL } from './pieces/map.js';
-import { initProposals } from './proposal.js';
+import { keepAddress, openFromAddress } from './page-address.js';
+import './proposal.js'; // the old names the modules not yet on an instance use (hooks)
+import { initReview } from './review.js'; // what the decision asks of the what-if editor and the mockups
 import { followDeepLink } from './deep-link.js';
 import { initWhatIf } from './whatif.js';
-import { initReview } from './review.js';
 import { initMockups } from './mockups.js';
 import { benchMeta, measureParams, readoutLines, resultLine, runBench, showReadout } from './bench.js';
 import { initLive } from './live.js';
 import { initHouse } from './house.js';
 import { houseOffered } from './house-model.js';
-import { initChecks } from './check.js';
 import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
@@ -180,12 +181,11 @@ export function startPage() {
     renderer: rendererPreference(window.location.search) === 'canvas2d' ? 'canvas2d' : 'auto',
   });
   loadFreeformPositions(inst);
-  ensurePagePieces(); // the node panel, the Layers menu and the search, mounted where index.html has their places (page-pieces.js)
+  ensurePagePieces(); // the node panel, the Layers menu, the search, the proposal's bar, the review column and the decision, mounted where index.html has their places (page-pieces.js)
+  keepAddress(inst); // ?proposal= follows the open proposal (page-address.js)
   initKeyboard(); // the map by keyboard (the panel's, the Layers menu's and the search's keys are their pieces') (engine/keyboard.js)
   initAccountMenu(); // the one menu at the right of the header (account-menu.js)
   initSheets();
-  initScenarioUi();
-  initReviewColumn(); // the review column: the changes, and the personas with their scenarios (review-column.js)
 
   map.resize();
   syncViewUi();
@@ -200,14 +200,15 @@ export function startPage() {
     const forgeOn = initForgePanel(config); // issues and PRs: only when the config names a forge (forge-panel.js)
     initReviewTokens(config); // review tokens for the review API: only for somebody signed in (review-tokens.js)
     initWhatIf(); // before a proposal can open, so its edits come with it
-    initReview(); // after it: the review controls sit under the edit controls on the bar
+    initReview(); // the decision follows the what-if editor's edits
     initMockups(); // a proposal's screens open from the node they name
-    const proposalOpened = await initProposals();
+    // /?proposal=<slug> (&source=, &proposalView=) opens a proposal, as a host would ask for one (page-address.js)
+    const proposalOpened = await openFromAddress(inst, window.location.search);
     // The live layer (live.js): loads only once a live layer goes on in the Layers menu; with no source it stays off
     initLive({ source: liveSource, onSelectionGone: closeDrawer });
     // The House view (house.js): a source's floor renderer draws the plan under the map (plain room boxes without one); /?view=house opens it
     initHouse({ floor: floorRenderer, offered: houseOffered(houseSource, state.nodes) }); // no house source and no house in the map: no House button
-    initChecks({ checker }); // scenarios ask the source's checker, when there is one (check.js)
+    mergePagePieceOptions('changes', { checker }); // scenarios ask the source's checker, when there is one (pieces/changes.js)
     if (new URLSearchParams(window.location.search).get("view") === "dataflow") setView("dataflow");
     // /?run=, /?issue= and /?proposal=…&start=1 land on a run, an issue's Start button and a proposal's Start dialog (deep-link.js)
     followDeepLink({ proposalOpened, forgeOn }).catch((err) => console.error('Following the link failed', err));

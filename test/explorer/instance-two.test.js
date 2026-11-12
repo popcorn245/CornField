@@ -32,6 +32,14 @@ import { selectNode, clearSelection } from '../../explorer/engine/selection.js';
 import { applyStrings } from '../../explorer/engine/strings.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initKeyboard } from '../../explorer/engine/keyboard.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as proposalPiece from '../../explorer/pieces/proposal.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as changesPiece from '../../explorer/pieces/changes.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as decisionPiece from '../../explorer/pieces/decision.js';
+// @ts-expect-error plain JS modules, no declarations
+import { HOLD_MS } from '../../explorer/decision-model.js';
 
 const sample = loadSample();
 /** Two different maps: all of the sample, and the sample without its pages (and the edges that touch them) */
@@ -287,8 +295,8 @@ describe('two instances in one document', () => {
   it('hands out what the map and the page use, and nothing more (spec 0011: the simplest thing; a later step adds what it needs)', () => {
     const inst = createInstance({ root: document.body });
     expect(Object.keys(inst).sort()).toEqual([
-      'active', 'ask', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'fetch', 'hidden', 'listen', 'on', 'onSceneTouch', 'onShown', 'own', 'reducedMotion',
-      'release', 'root', 'setSelection', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
+      'active', 'ask', 'base', 'destroy', 'doc', 'dpr', 'el', 'emit', 'ended', 'fetch', 'hidden', 'listen', 'offline', 'on', 'onHide', 'onNetwork', 'onPageHide', 'onSceneTouch', 'onShown',
+      'onWindowFocus', 'own', 'reducedMotion', 'release', 'root', 'setSelection', 'slot', 'state', 'store', 'strings', 'tokenElement', 'tokenReader', 'touchScene', 'url', 'viewEdges', 'win',
     ]);
     inst.destroy();
   });
@@ -521,5 +529,175 @@ describe('two instances, each with its own node panel, Layers menu and search', 
     selectNode(a.inst, a.state.nodes.find((n) => n.type === 'app')); // no panel to open, and nothing breaks
     expect(a.state.selectedNode).not.toBeNull();
     a.panel = nodePanel.mount(a.root, a.inst); a.layers = layersPiece.mount(a.root, a.inst, { storageKey: null }); a.search = searchPiece.mount(a.root, a.inst); // for afterEach
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+//  Step 5: the proposal's bar, the change list, the player and the decision, twice
+// ---------------------------------------------------------------------------
+describe('two instances, each with its own proposal bar, change list, player and decision', () => {
+  let a;
+  let b;
+  let calls;
+  const facts = (n) => ({ pull: { number: n, draft: false, head: String(n).repeat(40).slice(0, 40) }, checks: { total: 1, passed: 1, running: 0, failed: [] }, lands: false, landing: null, run: null });
+  const res = (status, data) => ({ ok: status < 400, status, redirected: false, headers: new Headers(), json: async () => data });
+  /** A proposal of its own: one added page under the first app, one scenario walking to it */
+  const proposalOf = (name, parent) => ({
+    version: 1, spec: name, title: `Spec ${name}`, summary: `Adds /${name}.`,
+    nodes: { add: [{ id: `page-${name}`, label: `/${name}`, type: 'page', parent }] },
+    edges: {},
+    scenarios: [{ id: `walk-${name}`, title: `Walk ${name}`, stepMs: 1000, steps: [{ node: `page-${name}`, text: `It opens ${name}.` }, { node: parent, text: 'And its parent.' }] }],
+  });
+  const piecesOn = (one, name, number) => {
+    const parent = one.state.nodes.find((n) => n.type === 'app').id;
+    Object.assign(one.state, { baseNodes: one.state.nodes.map((n) => ({ ...n })), baseEdges: one.state.edges.map((e) => ({ ...e })) });
+    one.proposal = proposalPiece.mount(one.root, one.inst);
+    one.changes = changesPiece.mount(one.root, one.inst);
+    one.decision = decisionPiece.mount(one.root, one.inst);
+    one.number = number;
+    one.name = name;
+    one.pr = proposalOf(name, parent);
+    return one;
+  };
+  const open = (one) => one.proposal.update({ proposal: one.pr, slug: `00${one.number}-${one.name}`, source: `pull/${one.number}`, sha256: String(one.number).repeat(64).slice(0, 64) });
+  const q = (one, sel) => one.root.querySelector(sel);
+  const click = (el) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+  beforeEach(async () => {
+    calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const method = init.method || 'GET';
+      calls.push({ method, url: String(url), body: init.body ? JSON.parse(String(init.body)) : undefined });
+      const m = /\/proposals\/00(\d+)-[a-z]+\/(decision|review)/.exec(String(url));
+      if (m && m[2] === 'decision') return res(200, facts(Number(m[1])));
+      if (m && m[2] === 'review') return method === 'PUT' ? res(200, { verdict: 'approved', at: new Date().toISOString(), by: 'maintainer' }) : res(404, { error: 'No review yet' });
+      return res(404, { error: 'no' });
+    }));
+    a = piecesOn(A, 'alpha', 21);
+    b = piecesOn(B, 'beta', 22);
+    open(a);
+    open(b);
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  afterEach(() => {
+    for (const one of [a, b]) { one.decision.destroy(); one.changes.destroy(); one.proposal.destroy(); }
+  });
+
+  it('each shows its own proposal in its own bar and list, with the same ids twice in the document', () => {
+    expect(document.querySelectorAll('#proposal-bar')).toHaveLength(2);
+    expect(document.querySelectorAll('#review-column')).toHaveLength(2);
+    expect(document.querySelectorAll('#review-decision')).toHaveLength(2);
+    expect(q(a, '#proposal-title').textContent).toBe('Spec alpha');
+    expect(q(b, '#proposal-title').textContent).toBe('Spec beta');
+    expect(q(a, '#review-lists').textContent).toContain('/alpha');
+    expect(q(a, '#review-lists').textContent).not.toContain('/beta');
+    expect(q(b, '#review-lists').textContent).toContain('Walk beta');
+    expect(q(a, '#proposal-bar').hidden).toBe(false);
+    expect(A.state.proposalSlug).toBe('0021-alpha');
+    expect(B.state.proposalSlug).toBe('0022-beta');
+    for (const one of [a, b]) for (const el of one.root.querySelectorAll('[data-corn]')) expect(el.getAttribute('part'), el.outerHTML.slice(0, 80)).toBe(el.getAttribute('data-corn'));
+  });
+
+  it('switching Before, Diff and After in one changes nothing in the other', () => {
+    const sceneB = B.map.getScene();
+    const buildsB = B.map.sceneBuilds();
+    click(q(a, '[data-action="proposal-view"][data-view="after"]'));
+    expect(A.state.proposalView).toBe('after');
+    expect(q(a, '[data-view="after"]').getAttribute('aria-pressed')).toBe('true');
+    expect(q(a, '[data-view="diff"]').getAttribute('aria-pressed')).toBe('false');
+    expect(B.state.proposalView).toBe('diff');
+    expect(q(b, '[data-view="diff"]').getAttribute('aria-pressed')).toBe('true');
+    expect(q(b, '[data-view="after"]').getAttribute('aria-pressed')).toBe('false');
+    expect(B.map.getScene()).toBe(sceneB);
+    expect(B.map.sceneBuilds()).toBe(buildsB);
+    click(q(a, '[data-action="proposal-whole"]')); // Whole map, too
+    expect(A.state.review.whole).toBe(true);
+    expect(B.state.review.whole).toBe(false);
+    expect(q(b, '#proposal-whole').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('playing a scenario in one puts a player there and nowhere else', async () => {
+    click(q(a, '[data-action="scenario-open"]'));
+    click(q(a, '[data-action="scenario-step"]'));
+    expect(q(a, '.hx-player')).toBeTruthy();
+    expect(q(a, '.hx-player-title').textContent).toBe('Walk alpha');
+    expect(A.state.scenario).not.toBeNull();
+    expect(q(b, '.hx-player')).toBeNull();
+    expect(B.state.scenario).toBeNull();
+    expect(q(b, '[aria-current="step"]')).toBeNull();
+    expect(q(a, '[aria-current="step"]')).toBeTruthy();
+    click(q(a, '[data-action="scenario-close"]'));
+    expect(q(a, '.hx-player')).toBeNull();
+  });
+
+  it('pressing Approve in one holds, sends and announces for that one, and the other keeps its button and sends nothing', async () => {
+    const said = [];
+    a.inst.on('decision', (d) => said.push(['a', d]));
+    b.inst.on('decision', (d) => said.push(['b', d]));
+    const approveA = q(a, '[data-review="approved"]');
+    const approveB = q(b, '[data-review="approved"]');
+    click(approveA);
+    expect(approveA.dataset.holding).toBe('true');
+    expect(approveB.dataset.holding).toBe('false');
+    expect(q(b, '[data-review-undo]').hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 50);
+    const puts = calls.filter((c) => c.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    expect(puts[0].url).toBe('/proposals/0021-alpha/review?source=pull%2F21');
+    expect(puts[0].body).toMatchObject({ verdict: 'approved', sha256: '21'.repeat(32) });
+    expect(said.map(([who, d]) => [who, d.outcome, d.slug])).toEqual([['a', 'approved', '0021-alpha']]);
+    expect(q(a, '[data-review-verdict]').textContent).toBe('Approved');
+    expect(q(b, '[data-review-verdict]').textContent).toBe('');
+    expect(approveB.textContent).toBe('Approve');
+    expect(calls.some((c) => c.method !== 'GET' && c.url.includes('0022'))).toBe(false);
+  });
+
+  it('Approve in one while a hold counts down in the other: each sends its own, at its own time; Undo in one leaves the other\'s hold', async () => {
+    const said = [];
+    a.inst.on('decision', (d) => said.push(['a', d.slug]));
+    b.inst.on('decision', (d) => said.push(['b', d.slug]));
+    click(q(a, '[data-review="approved"]'));
+    await vi.advanceTimersByTimeAsync(2000);
+    click(q(b, '[data-review="approved"]'));
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('true');
+    // B's Undo, while A still holds
+    click(q(b, '[data-review-undo]'));
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('false');
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    click(q(b, '[data-review="approved"]')); // and again: B's hold now ends 2 s after A's
+    await vi.advanceTimersByTimeAsync(HOLD_MS - 2000 + 100);
+    expect(calls.filter((c) => c.method === 'PUT').map((c) => c.url)).toEqual(['/proposals/0021-alpha/review?source=pull%2F21']);
+    expect(said).toEqual([['a', '0021-alpha']]);
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('true');
+    await vi.advanceTimersByTimeAsync(2100);
+    expect(calls.filter((c) => c.method === 'PUT').map((c) => c.url)).toEqual(['/proposals/0021-alpha/review?source=pull%2F21', '/proposals/0022-beta/review?source=pull%2F22']);
+    expect(said).toEqual([['a', '0021-alpha'], ['b', '0022-beta']]);
+    expect(q(a, '[data-review-verdict]').textContent).toBe('Approved');
+    expect(q(b, '[data-review-verdict]').textContent).toBe('Approved');
+  });
+
+  it('the same proposal open in both: a press in one holds and sends there only, and Escape in the other stops nothing', async () => {
+    b.proposal.update({ proposal: a.pr, slug: '0021-alpha', source: 'pull/21', sha256: '21'.repeat(32) });
+    await vi.advanceTimersByTimeAsync(0);
+    click(q(a, '[data-review="approved"]'));
+    q(b, '#review-note').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(q(a, '[data-review="approved"]').dataset.holding).toBe('true');
+    expect(q(b, '[data-review="approved"]').dataset.holding).toBe('false');
+    await vi.advanceTimersByTimeAsync(HOLD_MS + 100);
+    expect(calls.filter((c) => c.method === 'PUT')).toHaveLength(1);
+    expect(q(a, '[data-review-verdict]').textContent).toBe('Approved');
+    expect(q(b, '[data-review-verdict]').textContent).toBe(''); // it reads its own reviews; the page that did not press says nothing it was not told
+  });
+
+  it('closing one proposal leaves the other open', () => {
+    a.proposal.update({ proposal: null });
+    expect(A.state.proposal).toBeNull();
+    expect(q(a, '#proposal-bar').hidden).toBe(true);
+    expect(q(a, '#review-column').hidden).toBe(true);
+    expect(B.state.proposal).not.toBeNull();
+    expect(q(b, '#proposal-bar').hidden).toBe(false);
+    expect(q(b, '#review-column').hidden).toBe(false);
   });
 });

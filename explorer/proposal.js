@@ -1,714 +1,81 @@
 /**
  * @module explorer/proposal
  *
- * The proposal overlay on the page (spec 0012 B2, TOPO-09): the picker that lists what the server
- * finds (`GET /proposals`), `/?proposal=<slug>` opening one directly, the bar with the counts chip,
- * the Before / Diff / After control, the problems a proposal has and a Close button that returns
- * to the plain map, plus the legend rows and picking a marked edge. What the three views show is
- * decided by scene.js (buildScene); where an added node sits by view.js; the pure parts (the chip's
- * words, the address, the panel rows) are in proposal-model.js and tested without a page.
+ * A bridge (spec 0011 D2 and D3, step 5): opening a proposal is the instance's (engine/proposal.js) and the proposal's bar is a piece
+ * (pieces/proposal.js). This file keeps the old names for the modules that are not yet on an instance (whatif.js, forge-panel.js, mockups.js, tests),
+ * bound to the page's instance and to the pieces the page mounts. It goes when the last of those callers is converted.
  *
- *   state.baseNodes / baseEdges   topology.json, untouched
- *   state.proposal                the parsed proposal, or null
- *   state.nodes / state.edges     the base (copied) or `applyProposal(base, proposal)`
- *   state.proposalView            'before' | 'diff' | 'after'
+ * The `hooks` object is the old chain a module assigned to, each overwriting or wrapping the last. It is kept as accessors that register the function
+ * as a listener of the instance (one registration per hook: assigning again takes the last one back), so a chain that wraps `hooks.bar` still works:
  *
- * What-if editing (TOPO-11) keeps its own list of edits and calls `rebuildProposalMap(effective)`
- * with `applyEdits(state.proposal, edits)`: the map is redrawn from the edited proposal while
- * `state.proposal` stays the robot's.
+ *   hooks.effective  -> ask proposal:effective       hooks.mark -> event proposal:mark           hooks.beforeClose -> ask proposal:before-close
+ *   hooks.closed     -> event proposal {closed}      hooks.bar  -> event proposal:bar            hooks.openSpecs   -> ask work:open-specs
+ *   hooks.reviewed   -> event decision
  */
 
-import { state, touchScene, viewEdges, nameOf, escHtml } from './state.js';
-import { render, getScene, fitGraphToViewport, fitPadding, isNodeVisible, ensureFlowLoop, screenToWorld, getMinZoom } from './render.js';
-import { frameNodes, largestGroup, READ_ZOOM, FRAME_ZOOM_MIN } from './camera.js';
-import { setMap } from './view.js';
-import { closeDrawer, selectNode } from './panels.js';
-import { beginReview, endReview, renderLayerToggles, reviewLayersLine, setWholeMap } from './layers.js';
-import { edgePoint, looksFor } from './scene.js';
-import { onThemeChange } from './theme.js';
-import { looksWith, onMapStyleChange } from './map-style.js';
-import {
-  PROPOSAL_VIEWS, MARK_WORDS, chipText, barCounts, parseProposalQuery, proposalPanelHtml, touchedIds, viewWords, jumpWords,
-  sourceChip, pullNumberOf, notFoundWords, otherCopies, malformedLinkWords,
-  yoursText,
-} from './proposal-model.js';
-import { renderReviewColumn, reviewOpenedLine, showSection, setPullHead } from './review-column.js';
-import { applyProposal, edgeKey, proposalProblems, summarize } from '../core/proposal.js';
-import { reviewWords } from './review-model.js';
-import { collapseSheet, visibleMapRect, isPhone } from './sheets.js';
-import { announce } from './keyboard.js';
-import { t } from './strings.js';
-import { markStateAttr } from './corn-state.js';
-import { isOffline } from './connection.js';
+import { pageInstance } from './state.js';
+import { pageMap } from './render.js';
+import { ensurePagePieces, pagePiece } from './page-pieces.js';
+import * as E from './engine/proposal.js';
+import { problemsHtml as problems, proposalRowHtml as row } from './pieces/proposal.js';
+import { openFromAddress, keepAddress } from './page-address.js';
 
-const $ = (id) => document.getElementById(id);
+/** The page's instance, with its map and its pieces there */
+const page = () => { pageMap(); ensurePagePieces(); return pageInstance(); };
 
-/**
- * What-if editing (whatif.js, TOPO-11) plugs into the overlay here, so this file never imports it:
- *  - `effective(proposal)`   the proposal the map is drawn from: `proposal` with the maintainer's edits in (called when one opens, and on a plain rebuild)
- *  - `mark(applied, effective, proposal)`   puts the `edit` mark on what the edits added or removed, before the map is laid out
- *  - `beforeClose()`   returns false to keep the proposal open (it is asking whether to keep the edits)
- *  - `closed()`   the proposal was closed
- *  - `bar(open)`   the bar was drawn: redraw the editing controls
- *  - `openSpecs()`   the Work panel's Specs tab, for a bad link's way on (forge-panel.js sets it; without it the header's Proposals menu opens)
- *  - `reviewed()`   a review was posted (Approve or Send back): what waits on the maintainer is read again (forge-panel.js sets it)
- */
-export const hooks = { effective: null, mark: null, beforeClose: null, closed: null, bar: null, openSpecs: null, reviewed: null };
-
-/** Whether the open proposal's source goes in the address (see `showProposal`) */
-let pinnedSource = false;
-
-/** What the server listed last: `[{ slug, title, summary, spec, source, counts, errors, review, error? }]`, or null before the first answer */
-let listing = null;
-let listingProblem = null;
-/** Why the server left the open spec PRs out of the last listing (the forge could not be asked), or null */
-let forgeProblem = null;
-/** When the listing was last read (ms), and who wants to hear of a new one (the Work panel's Specs tab, forge-panel.js) */
-let listingAt = 0;
-const listingWatchers = new Set();
-
-/** What the server listed last, for the Work panel's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
-export const proposalListing = () => ({ entries: listing, problem: listingProblem, forgeProblem, at: listingAt });
-/** Calls `fn` each time the list is read again; returns the way to stop */
-export function onProposalListing(fn) {
-  listingWatchers.add(fn);
-  return () => listingWatchers.delete(fn);
-}
-
-// ---------------------------------------------------------------------------
-//  Loading and closing
-// ---------------------------------------------------------------------------
-
-/** Asks the server for the proposals it can serve */
-export async function loadProposalList() {
-  try {
-    let res;
-    try { res = await fetch('/proposals', { cache: 'no-store' }); } catch { throw new Error(isOffline() ? 'You are offline.' : 'cornfield could not be reached. Check that it is still running.'); }
-    if (!res.ok) throw new Error(`The server could not list them (error ${res.status}).`);
-    let body;
-    try { body = await res.json(); } catch { throw new Error('cornfield sent a list this page could not read.'); }
-    if (!Array.isArray(body)) throw new Error('cornfield sent something that is not a list of proposals.');
-    listing = body;
-    listingProblem = null;
-    const said = res.headers.get('X-Proposals-Forge-Error');
-    forgeProblem = said ? decodeURIComponent(said) : null;
-  } catch (err) {
-    listing = null;
-    forgeProblem = null;
-    listingProblem = err.message || 'cornfield did not answer.'; // always a plain sentence made above, never a parser's or a runtime's own words
-  }
-  listingAt = Date.now();
-  renderMenu();
-  for (const fn of listingWatchers) fn();
-  return listing;
-}
-
-/**
- * Opens a proposal by name: fetches it from the server and shows it. `source` is where the server found it
- * (`checkout` or a worktree's name); without one the server answers with the first it lists.
- * @returns {Promise<boolean>} whether it opened
- */
-export async function openProposal(slug, source = null) {
-  const token = ++openToken;
-  setMessage(`Opening ${slug} …`);
-  try {
-    let res;
-    try { res = await fetch(`/proposals/${encodeURIComponent(slug)}.json${source ? `?source=${encodeURIComponent(source)}` : ''}`, { cache: 'no-store' }); } catch { throw new Error(isOffline() ? `${slug} could not be opened: you are offline.` : `${slug} could not be opened: cornfield could not be reached.`); }
-    if (!res.ok) {
-      let why = '';
-      try { why = (await res.json()).error || ''; } catch { /* no body */ }
-      const err = new Error(res.status === 404 ? notFoundWords(slug, source) : `${slug} could not be opened: ${why || `the server had a problem (error ${res.status}).`}`);
-      err.notFound = res.status === 404;
-      throw err;
-    }
-    const found = res.headers.get('X-Proposal-Source');
-    let item;
-    try { item = await res.json(); } catch { throw new Error(`${slug} could not be opened: cornfield sent a file this page could not read.`); }
-    const sha256 = res.headers.get('X-Proposal-Sha256'); // the version on screen: a review names it, so a push since is refused, not approved unseen
-    showProposal(item, { slug, source: source || (found ? decodeURIComponent(found) : null), pinSource: !!source, view: 'diff', fit: true, sha256 });
-    // said once, here: a proposal opens on a person's asking, never on a background refresh
-    announce([reviewOpenedLine($('proposal-title').textContent), reviewLayersLine()].filter(Boolean).join(' ')); // and, once, which layers the review hid
-    return true;
-  } catch (err) {
-    console.error('Opening the proposal failed', err);
-    // Said plainly, with the ways on: the Specs list, and the same name under another source when the list has one
-    // (a failure that is not "no such proposal" can be asked for again, or let go of: Retry and Close)
-    setMessage(err.message || `${slug} could not be opened.`, true, err.notFound ? [specsWay()] : [{ label: 'Retry', way: 'retry', slug, source }, { label: 'Close', way: 'close' }]);
-    if (err.notFound && token === openToken) {
-      await loadProposalList();
-      const sources = new Set((Array.isArray(listing) ? listing : []).map((e) => e && e.source));
-      if (token === openToken) setMessage(notFoundWords(slug, source, sources), true, [...otherCopies(listing, slug, source).map((c) => ({ label: c.label, way: 'open', slug: c.slug, source: c.source })), specsWay()]);
-    }
-    return false;
-  }
-}
-
-/** The way on every bad link offers: the list of specs */
-const specsWay = () => ({ label: t('openSpecsList'), way: 'specs' });
-/** Which `openProposal` is the latest, so a slow answer never writes over a newer one */
-let openToken = 0;
-
-/**
- * Puts a parsed proposal on the map. The map's nodes and edges become `applyProposal(base, proposal)`.
- * @param {object} proposal
- * @param {{slug?: string|null, source?: string|null, pinSource?: boolean, view?: 'before'|'diff'|'after', fit?: boolean, sha256?: string|null}} [opts]
- *   `sha256`: the file's SHA-256 as the server sent it (X-Proposal-Sha256): a review names it (spec 0007)
- *   `fit`: fit the camera to what the proposal touches and what it connects to (default true).
- *   `pinSource`: put `&source=` in the address (it was asked for by name; otherwise `/?proposal=<slug>` finds the same one)
- */
-export function showProposal(proposal, { slug = null, source = null, pinSource = false, view, fit = true, sha256 = null } = {}) {
-  state.proposal = proposal;
-  beginReview(); // the map narrows to the change: a review of its own, the viewer's layers untouched (layers.js, layer-model.js)
-  state.proposalSlug = slug;
-  state.proposalSource = source;
-  state.proposalSha256 = typeof sha256 === 'string' && /^[0-9a-f]{64}$/.test(sha256) ? sha256 : null;
-  pinnedSource = pinSource;
-  if (view) state.proposalView = view;
-  else if (!PROPOSAL_VIEWS.includes(state.proposalView)) state.proposalView = 'diff';
-  rebuildProposalMap(hooks.effective ? hooks.effective(proposal) : proposal, { fit });
-  syncAddress();
-  closeMenu();
-}
-
-/**
- * Redraws the map from `proposal` laid over the base, and the bar from `state.proposal`. Call it
- * after anything the map is built from changes. `effective` is the proposal to apply: `state.proposal`,
- * or an edited copy of it (what-if edits, TOPO-11).
- * @param {object} [effective]
- * @param {{fit?: boolean}} [opts]
- */
-export function rebuildProposalMap(effective = hooks.effective ? hooks.effective(state.proposal) : state.proposal, { fit = false } = {}) {
-  const base = { nodes: state.baseNodes, edges: state.baseEdges };
-  let applied;
-  state.effectiveProposal = effective;
-  try {
-    state.proposalErrors = proposalProblems(base, effective).errors;
-    applied = applyProposal(base, effective);
-    if (hooks.mark) hooks.mark(applied, effective, state.proposal);
-  } catch (err) {
-    // A file so malformed that it cannot be read at all: the plain map, and the reason
-    state.proposalErrors = [{ path: '', message: `This proposal could not be read: ${err.message}` }];
-    applied = { nodes: state.baseNodes.map((n) => ({ ...n, mark: 'none' })), edges: state.baseEdges.map((e) => ({ ...e, mark: 'none' })) };
-  }
-  swapMap(applied.nodes, applied.edges);
-  renderBar(); // first: the fit below leaves out what the bar covers, so the bar must be laid out
-  renderLayerToggles(); // the menu follows the layers the change touches
-  if (fit) fitToChange();
-  render();
-  ensureFlowLoop();
-}
-
-/** Closes the proposal: the plain map comes back, as it was, and the address loses `?proposal=` */
-export function closeProposal() {
-  if (hooks.beforeClose && hooks.beforeClose() === false) return;
-  state.proposal = null;
-  state.effectiveProposal = null;
-  state.proposalSlug = null;
-  state.proposalSource = null;
-  state.proposalSha256 = null;
-  state.proposalErrors = [];
-  endReview(); // the viewer's own layers are what is drawn again, exactly as they were
-  swapMap(state.baseNodes.map((n) => ({ ...n })), state.baseEdges);
-  fitGraphToViewport(fitPadding());
-  render();
-  ensureFlowLoop();
-  renderBar();
-  syncAddress();
-  if (hooks.closed) hooks.closed();
-}
-
-/** Switches between Before, Diff and After; no node moves. Entering Diff fits the camera to the change. */
-export function setProposalView(view, { quiet = false } = {}) {
-  if (!state.proposal || !PROPOSAL_VIEWS.includes(view) || state.proposalView === view) return;
-  state.proposalView = view;
-  touchScene();
-  if (state.selectedNode && !isNodeVisible(state.selectedNode)) closeDrawer(); // it is not in this view
-  if (view === 'diff') fitToChange();
-  render();
-  renderBar();
-  syncAddress();
-  if (!quiet) announce(viewWords(view));
-}
-
-/** Hands the map new nodes and edges, keeping the selection on the same node */
-function swapMap(nodes, edges) {
-  const selected = state.selectedNode ? state.selectedNode.id : null;
-  setMap(nodes, edges);
-  state.selectedEdge = null;
-  if (selected) {
-    const again = state.nodes.find((n) => n.id === selected);
-    if (again) state.selectedNode = again;
-    else closeDrawer();
-  }
-  touchScene();
-}
-
-/**
- * Frames what the proposal changes (nodes added, changed or removed, and both ends of a changed edge; not what they connect to) in the part of the
- * map nothing covers (the bar, the review column, the node panel, a phone's sheets), at a zoom up to 1 so their labels read. Only what is drawn counts: a change on a
- * layer that is off is not framed (the map would centre on ground the viewer cannot see). When the change is wider than FRAME_ZOOM_MIN shows,
- * the biggest part of it that fits there is framed, not the whole at a zoom where it is a speck (the change list reaches the rest). A proposal that changes nothing drawn shows the whole map.
- */
-function fitToChange() {
-  const { touched } = touchedIds(state.nodes, viewEdges());
-  const items = state.nodes.filter((n) => touched.has(n.id) && isNodeVisible(n));
-  const rect = visibleMapRect();
-  const opts = { padding: fitPadding(), maxZoom: 1, minZoom: getMinZoom() };
-  // The whole change when it fits at FRAME_ZOOM_MIN or closer; else the biggest part of it that does (camera.js)
-  const group = largestGroup(items, rect, { ...opts, minZoom: Math.max(opts.minZoom, FRAME_ZOOM_MIN) });
-  const cam = items.length ? frameNodes(group, rect, opts) : null;
-  if (!cam) { fitGraphToViewport(fitPadding()); return; }
-  Object.assign(state.camera, cam);
-  render();
-}
-
-/** `?proposal=` (and `source`, `proposalView`) follow the open proposal, without a new history entry; other parameters stay */
-function syncAddress() {
-  if (typeof history === 'undefined' || typeof location === 'undefined') return;
-  try {
-    const params = new URLSearchParams(location.search);
-    ['proposal', 'source', 'proposalView'].forEach((k) => params.delete(k));
-    if (state.proposal && state.proposalSlug) {
-      params.set('proposal', state.proposalSlug);
-      if (pinnedSource && state.proposalSource) params.set('source', state.proposalSource);
-      if (state.proposalView !== 'diff') params.set('proposalView', state.proposalView);
-    }
-    const query = params.toString();
-    history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
-  } catch { /* the address is a convenience */ }
-}
-
-// ---------------------------------------------------------------------------
-//  The bar: title, counts chip, Before / Diff / After, problems, Close
-// ---------------------------------------------------------------------------
-
-/** One line in the bar instead of a proposal: while one opens, or why it did not (with `ways`, the buttons that go on from there) */
-function setMessage(text, isError = false, ways = []) {
-  const bar = $('proposal-bar');
-  if (!bar) return;
-  bar.hidden = false;
-  bar.classList.toggle('is-error', isError);
-  $('proposal-body').hidden = true;
-  const msg = $('proposal-message');
-  msg.hidden = false;
-  msg.textContent = text;
-  const box = $('proposal-ways');
-  if (!box) return;
-  box.hidden = ways.length === 0;
-  box.innerHTML = ways.map((w) => `<button type="button" class="hx-btn" data-action="proposal-way" data-way="${escHtml(w.way)}"${w.slug ? ` data-slug="${escHtml(w.slug)}"` : ''}${w.source ? ` data-source="${escHtml(w.source)}"` : ''} data-peek-ok data-corn-kind="quiet">${escHtml(w.label)}</button>`).join('');
-}
-
-// ---------------------------------------------------------------------------
-//  Which copy is open: the chip after the title
-// ---------------------------------------------------------------------------
-
-/** The spec PRs read for the chip, by number: `{ pull, checks }` of `GET /api/forge/pulls/<n>`; kept, so a proposal opened again shows it at once and then asks again */
-const pullInfo = new Map();
-/** The proposal the PR was last asked for (`source/slug`): asked again when another opens, not each time the bar is drawn */
-let pullAskedFor = null;
-
-const safeHref = (u) => (typeof u === 'string' && /^https?:\/\//i.test(u) ? u : null);
-
-/** The chip says which copy is under review: a PR (number, draft or open, the checks in words) linking to it, or a local draft and where. It only tells. */
-function paintSource() {
-  const chip = $('proposal-source');
-  if (!chip) return;
-  const source = state.proposal ? state.proposalSource : null;
-  chip.hidden = !source;
-  if (!source) return;
-  const n = pullNumberOf(source);
-  const known = n ? pullInfo.get(n) : null;
-  const entry = n && Array.isArray(listing) ? listing.find((e) => e.slug === state.proposalSlug && e.source === source) : null;
-  const words = sourceChip(source, (known && known.pull) || (entry && entry.pull) || null, known ? known.checks : null);
-  chip.textContent = words.text;
-  if (words.state) chip.dataset.cornState = words.state; else delete chip.dataset.cornState;
-  const href = safeHref(words.href);
-  if (href) { chip.setAttribute('href', href); chip.setAttribute('target', '_blank'); chip.setAttribute('rel', 'noreferrer'); chip.title = 'Open this pull request'; } else {
-    chip.removeAttribute('href'); chip.removeAttribute('target'); chip.removeAttribute('rel'); chip.title = words.label;
-  }
-  const key = `${source}/${state.proposalSlug}`;
-  if (n && pullAskedFor !== key) { pullAskedFor = key; loadPullInfo(n); }
-}
-
-/** Reads the PR's state and checks once for this opening of the bar (the server keeps its own short cache); a forge that cannot say leaves the chip as it is */
-async function loadPullInfo(n) {
-  try {
-    const res = await fetch(`/api/forge/pulls/${n}`);
-    const body = res.ok ? await res.json() : null;
-    if (body && body.ok !== false && body.pull) pullInfo.set(n, { pull: body.pull, checks: Array.isArray(body.checks) ? body.checks : null });
-    if (body && body.pull && pullNumberOf(state.proposalSource) === n) setPullHead(body.pull.head && typeof body.pull.head.sha === 'string' ? body.pull.head.sha : ''); // what was seen is kept per PR head
-  } catch { /* no forge, or not signed in: the chip keeps what it has */ }
-  if (state.proposal && pullNumberOf(state.proposalSource) === n) paintSource();
-}
-
-/** The problems a proposal has, as the bar lists them (at most `max`, then "and N more") */
-export function problemsHtml(errors, max = 8) {
-  const shown = errors.slice(0, max).map((e) => `<li>${e.path ? `<code class="hx-code">${escHtml(e.path)}</code> ` : ''}${escHtml(e.message)}</li>`);
-  if (errors.length > max) shown.push(`<li class="hx-faint">and ${errors.length - max} more</li>`);
-  return shown.join('');
-}
-
-const asList = (v) => (Array.isArray(v) ? v : []);
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
-export function renderBar() {
-  const bar = $('proposal-bar');
-  if (!bar) return;
-  const open = !!state.proposal;
-  bar.hidden = !open;
-  const legend = $('proposal-legend');
-  if (legend) legend.hidden = !open;
-  if (!open) { closeMore(); toggleMode(false); collapseSheet('proposal'); renderReviewColumn(); if (hooks.bar) hooks.bar(false); return; }
-
-  bar.classList.remove('is-error');
-  $('proposal-message').hidden = true;
-  $('proposal-body').hidden = false;
-  const p = state.proposal;
-  $('proposal-title').textContent = (p && typeof p.title === 'string' && p.title) || state.proposalSlug || 'Proposal';
-  paintSource();
-  const summary = $('proposal-summary');
-  summary.textContent = (p && typeof p.summary === 'string' && p.summary) || '';
-  summary.hidden = !summary.textContent;
-  $('proposal-title').title = summary.textContent; // the bar stays one row: the summary is also the title's tooltip, and leads the review column
-
-  const counts = summarize(p);
-  const chip = $('proposal-chip');
-  // The counts name their lists: the changes part shows the Changes section, "5 scenarios" the Scenarios section (the review column, review-column.js)
-  const parts = barCounts(counts);
-  chip.innerHTML = parts.map((c) => {
-    const dot = c.mark ? `<span class="hx-mark-dot hx-mark-dot--${c.mark}" data-corn="mark-dot"${markStateAttr(c.mark)} aria-hidden="true"></span>` : '';
-    if (!c.mark && /scenarios?$/.test(c.text)) return `<button type="button" class="hx-proposal-count" data-action="review-show-scenarios" data-corn-kind="quiet" title="Show the personas and their scenarios">${escHtml(c.text)}</button>`;
-    return `<button type="button" class="hx-proposal-count" data-action="review-show-changes" data-corn-kind="quiet" title="Show the list of changes">${dot}${escHtml(c.text)}</button>`;
-  }).join('<span class="hx-proposal-sep" aria-hidden="true"> · </span>');
-  // The reviewer's own edits are a part of their own, never added to the proposal's numbers (spec 0007 D5)
-  const yours = yoursText(state.whatIf && state.whatIf.edits, !!state.whatIfOff);
-  if (yours) chip.insertAdjacentHTML('beforeend', `<span class="hx-proposal-sep" aria-hidden="true"> · </span><span class="hx-proposal-count hx-proposal-yours"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit" aria-hidden="true"></span>${escHtml(yours)}</span>`);
-  $('proposal-mode').textContent = t(state.proposalView);
-
-  for (const btn of bar.querySelectorAll('[data-action="proposal-view"]')) {
-    const on = btn.dataset.view === state.proposalView;
-    btn.setAttribute('aria-pressed', String(on));
-    btn.classList.toggle('is-on', on);
-  }
-
-  const whole = $('proposal-whole'); // the switch is the review's: off at every opening, kept across Before, Diff and After
-  if (whole) { // the pressed look is the one the bar's other chosen buttons have (it holds on hover)
-    const on = !!(state.review && state.review.whole);
-    whole.setAttribute('aria-pressed', String(on));
-    whole.title = t('showWholeMap'); // the words are short ("Whole map"); the tooltip says it in full, as its name does
-    whole.classList.toggle('hx-btn--active', on);
-  }
-
-  const errors = state.proposalErrors || [];
-  const box = $('proposal-errors');
-  box.hidden = errors.length === 0;
-  if (errors.length) {
-    $('proposal-errors-count').textContent = `${plural(errors.length, 'problem')} in this proposal`;
-    $('proposal-errors-list').innerHTML = problemsHtml(errors);
-  }
-  renderReviewColumn();
-  if (hooks.bar) hooks.bar(true);
-}
-
-/**
- * Picks a row of the changes list: select it, centre it in the part of the map the review column, the node panel and (on a phone) the sheets leave free,
- * at a zoom where its label reads, and make sure the current view shows it
- */
-export function focusChange(kind, key, { select = true } = {}) {
-  const item = kind === 'edge' ? state.edges.find((e) => edgeKey(e) === key) : state.nodes.find((n) => n.id === key);
-  if (!item) return;
-  const ends = (kind === 'edge' ? [state.nodes.find((n) => n.id === item.from), state.nodes.find((n) => n.id === item.to)] : [item]).filter(Boolean);
-  if (!ends.length) return;
-  if (state.proposalView !== 'diff' && ends.some((n) => !isNodeVisible(n))) setProposalView('diff', { quiet: true }); // Before or After hides what it removes or adds
-  if (select) { if (kind === 'edge') showEdgePanel(item); else selectNode(item); }
-  // The panel is open now, so what it covers is known
-  const cam = frameNodes(ends, visibleMapRect(), { padding: fitPadding(), maxZoom: Math.max(READ_ZOOM, state.camera.zoom), minZoom: getMinZoom() });
-  if (cam) Object.assign(state.camera, cam);
-  render();
-  announce(jumpWords(MARK_WORDS[item.mark] || item.mark, kind === 'edge' ? `${nameOf(item.from)} to ${nameOf(item.to)}` : item.label));
-}
-
-// ---------------------------------------------------------------------------
-//  The ⋯ menu (a menu button) and the phone's Before / Diff / After switcher
-// ---------------------------------------------------------------------------
-
-const moreItems = () => [...document.querySelectorAll('#proposal-more-menu [role="menuitem"]')];
-
-function moreOpen() {
-  const menu = $('proposal-more-menu');
-  return !!menu && !menu.hidden;
-}
-
-/** Closes the ⋯ menu; `refocus` puts focus back on its button (Escape, or a choice made) */
-function closeMore(refocus = false) {
-  const menu = $('proposal-more-menu');
-  const btn = $('proposal-more');
-  if (menu) menu.hidden = true;
-  if (btn) { btn.setAttribute('aria-expanded', 'false'); if (refocus) btn.focus(); }
-}
-
-function openMore(which = 'first') {
-  const menu = $('proposal-more-menu');
-  if (!menu) return;
-  menu.hidden = false;
-  $('proposal-more').setAttribute('aria-expanded', 'true');
-  const items = moreItems();
-  (which === 'last' ? items[items.length - 1] : items[0])?.focus();
-}
-
-/** On a phone the mode button shows the compare switcher under the counts; from 768px the switcher is always there */
-function toggleMode(force) {
-  const bar = $('proposal-bar');
-  const on = typeof force === 'boolean' ? force : bar.dataset.modeOpen !== 'true';
-  bar.dataset.modeOpen = String(on);
-  $('proposal-mode').setAttribute('aria-expanded', String(on));
-}
-
-function onMoreKey(e) {
-  const btn = $('proposal-more');
-  if (e.target === btn && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); openMore(e.key === 'ArrowUp' ? 'last' : 'first'); return; }
-  if (!moreOpen()) return;
-  if (e.key === 'Escape') { e.preventDefault(); closeMore(true); return; }
-  if (e.key === 'Tab') { closeMore(); return; }
-  const items = moreItems();
-  const at = items.indexOf(document.activeElement);
-  if (at < 0) return;
-  const next = { ArrowDown: (at + 1) % items.length, ArrowUp: (at - 1 + items.length) % items.length, Home: 0, End: items.length - 1 }[e.key];
-  if (next === undefined) return;
-  e.preventDefault();
-  items[next].focus();
-}
-
-// ---------------------------------------------------------------------------
-//  The picker
-// ---------------------------------------------------------------------------
-
-function menuOpen() {
-  const menu = $('proposal-menu');
-  return !!menu && !menu.hidden;
-}
-
-function closeMenu() {
-  const menu = $('proposal-menu');
-  if (menu) menu.hidden = true;
-  const btn = $('proposal-btn');
-  if (btn) btn.setAttribute('aria-expanded', 'false');
-}
-
-async function toggleMenu() {
-  const menu = $('proposal-menu');
-  if (!menu) return;
-  if (menuOpen()) return closeMenu();
-  menu.hidden = false;
-  $('proposal-btn').setAttribute('aria-expanded', 'true');
-  if (!listing) renderMenu(true);
-  await loadProposalList(); // always ask again: worktrees come and go
-}
-
-function where(entry) {
-  if (entry.pull) return `Spec PR #${entry.pull.number}${entry.pull.draft ? ' (draft)' : ''}${entry.pull.author ? ` by ${entry.pull.author}` : ''}`;
-  return entry.source === 'checkout' ? 'In the checkout' : `In worktree ${entry.source}`;
-}
-
-/** One row of the picker */
-export function proposalRowHtml(entry, current) {
-  const mine = current && current.slug === entry.slug && current.source === entry.source;
-  const head = `<span class="hx-proposal-title">${escHtml(entry.title || entry.slug)}</span>`;
-  const meta = [`<span class="hx-proposal-where">${escHtml(where(entry))}</span>`];
-  if (entry.spec) meta.push(`<span>spec ${escHtml(entry.spec)}</span>`);
-  if (entry.error) {
-    return `<div class="hx-proposal-item is-broken" data-corn="row">${head}<span class="hx-proposal-sum hx-error-text">${escHtml(entry.error)}</span><span class="hx-proposal-meta">${meta.join('')}</span></div>`;
-  }
-  if (entry.counts) meta.push(`<span>${escHtml(chipText(entry.counts))}</span>`);
-  const reviewed = reviewWords(entry.review, Date.now()); // "Approved 3 minutes ago", from the listing
-  if (reviewed) meta.push(`<span class="hx-proposal-reviewed">${escHtml(reviewed)}</span>`);
-  if (entry.errors) meta.push(`<span class="hx-warn">${escHtml(plural(entry.errors, 'problem'))}</span>`);
-  return `<button type="button" class="hx-proposal-item${mine ? ' is-current' : ''}" data-action="open-proposal" data-slug="${escHtml(entry.slug)}" data-source="${escHtml(entry.source)}" data-corn="row">${head}${entry.summary ? `<span class="hx-proposal-sum">${escHtml(entry.summary)}</span>` : ''}<span class="hx-proposal-meta">${meta.join('')}</span></button>`;
-}
-
-function renderMenu(loading = false) {
-  const menu = $('proposal-menu');
-  if (!menu) return;
-  const current = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
-  let body;
-  if (loading && !listing) body = '<p class="hx-faint hx-proposal-empty">Looking for proposals …</p>';
-  else if (listingProblem) body = `<p class="hx-error-text hx-proposal-empty">The list could not be loaded: ${escHtml(listingProblem)}</p>`;
-  else if (!listing || listing.length === 0) body = '<p class="hx-faint hx-proposal-empty">No proposals</p>';
-  else body = `<div class="hx-proposal-list" role="list">${listing.map((e) => `<div role="listitem">${proposalRowHtml(e, current)}</div>`).join('')}</div>`;
-  const forge = forgeProblem && !listingProblem ? `<p class="hx-error-text hx-proposal-empty">The spec PRs could not be listed: ${escHtml(forgeProblem)}</p>` : '';
-  menu.innerHTML = `<div class="hx-menu-title hx-menu-head" data-corn="menu-title"><span>${escHtml(t('proposals'))}</span></div>${forge}${body}`;
-}
-
-// ---------------------------------------------------------------------------
-//  Picking an edge, and its panel
-// ---------------------------------------------------------------------------
-
-/** The kind a scene edge reports for an applied one (an ownership link has none) */
-const kindOf = (e) => e.kind || (e.dashed ? 'usage' : 'ownership');
-
-/**
- * The marked edge under a point of the map, or null: the nearest one within `tolerance` world units,
- * measured along the drawn curve. Only the edges of the current scene, so a hidden one is never hit.
- * @param {number} x world
- * @param {number} y world
- * @param {number} tolerance world units
- */
-export function markedEdgeAt(x, y, tolerance) {
-  let best = null;
-  let bestDistance = tolerance;
-  for (const edge of getScene().edges) {
-    if (edge.mark === 'none') continue;
-    for (let k = 0; k <= 1; k += 1 / 20) {
-      const p = edgePoint(edge, k);
-      const d = Math.hypot(p.x - x, p.y - y);
-      if (d <= bestDistance) { best = edge; bestDistance = d; }
-    }
-  }
-  if (!best) return null;
-  return viewEdges().find((e) => e.from === best.from && e.to === best.to && kindOf(e) === best.kind) || null;
-}
-
-/** Fills the side panel for an edge: what it is, and what the proposal says about it */
-export function showEdgePanel(edge) {
-  closeDrawer(); // clears a node selection and any panel still loading
-  state.selectedEdge = edge;
-  const row = (label, value) => (value ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">${escHtml(label)}</div><div class="hx-fact-v">${escHtml(value)}</div></div>` : '');
-  const facts = row('Kind', kindOf(edge)) + row('Flow', edge.flow) + row('Label', edge.label) + row('Reads', Array.isArray(edge.keys) ? edge.keys.join(', ') : '');
-
-  $('drawer-title').textContent = `${nameOf(edge.from)} → ${nameOf(edge.to)}`;
-  $('drawer-title').classList.remove('hx-mono');
-  $('drawer-badge').textContent = 'Edge';
-  $('drawer-host').textContent = '';
-  $('drawer-diff').hidden = true;
-  $('drawer-description').textContent = '';
-  $('drawer-description').hidden = true;
-  $('drawer-meta-list').innerHTML = `${facts ? `<div class="hx-facts">${facts}</div>` : ''}
-    <div class="hx-facts">
-      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">From</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.from)}">${escHtml(nameOf(edge.from))}</button></div></div>
-      <div class="hx-fact" data-corn="section"><div class="hx-fact-k">To</div><div class="hx-fact-v"><button data-corn="node-link" type="button" class="hx-linkbtn" data-action="select-node" data-id="${escHtml(edge.to)}">${escHtml(nameOf(edge.to))}</button></div></div>
-    </div>${proposalPanelHtml(edge)}`;
-  $('drawer-open-btn').hidden = true;
-  $('drawer-file-btn').hidden = true;
-  $('drawer-run-btn').hidden = true;
-  $('spec-drawer').classList.add('drawer-open');
-  $('spec-drawer').inert = false; // closed, the panel is inert (MAP-02): open for an edge, its links and its Close are reached as a node's are
-  $('drawer-backdrop').hidden = false;
-  touchScene();
-  render();
-}
-
-/** A click on the canvas that picks no node but lands on a marked edge opens that edge */
-function bindEdgePicking() {
-  const canvas = state.canvas;
-  if (!canvas) return;
-  let down = null;
-  canvas.addEventListener('mousedown', (e) => { down = { x: e.clientX, y: e.clientY }; });
-  canvas.addEventListener('click', (e) => {
-    if (!state.proposal || state.proposalView === 'before') return; // Before has no marked edges
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return; // a drag
-    const rect = canvas.getBoundingClientRect();
-    const p = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-    const zoom = state.camera.zoom;
-    const onNode = state.nodes.some((n) => isNodeVisible(n) && Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 6 / zoom);
-    if (onNode) return; // a node: the map's own selection handles it
-    const edge = markedEdgeAt(p.x, p.y, 8 / zoom);
-    if (edge) showEdgePanel(edge);
+// The old hooks: each is a function a module assigned, registered as a listener of the page instance
+const ADAPT = {
+  effective: (fn) => ['proposal:effective', (proposal) => fn(proposal)],
+  mark: (fn) => ['proposal:mark', ({ applied, effective, proposal }) => { fn(applied, effective, proposal); }],
+  beforeClose: (fn) => ['proposal:before-close', () => fn()],
+  closed: (fn) => ['proposal', ({ change }) => { if (change === 'closed') fn(); }],
+  bar: (fn) => ['proposal:bar', ({ open }) => { fn(open); }],
+  openSpecs: (fn) => ['work:open-specs', () => { fn(); return true; }],
+  reviewed: (fn) => ['decision', ({ open }) => { if (open !== false) fn(); }], // as before: not when another proposal was opened while it was sent
+};
+const kept = {};
+const stops = {};
+export const hooks = {};
+for (const name of Object.keys(ADAPT)) {
+  kept[name] = null;
+  Object.defineProperty(hooks, name, {
+    enumerable: true,
+    get: () => kept[name],
+    set(fn) {
+      if (stops[name]) { stops[name](); stops[name] = null; }
+      kept[name] = typeof fn === 'function' ? fn : null;
+      if (kept[name]) { const [event, listener] = ADAPT[name](kept[name]); stops[name] = pageInstance().on(event, listener); }
+    },
   });
 }
 
-// ---------------------------------------------------------------------------
-//  Wiring
-// ---------------------------------------------------------------------------
-
-const ACTIONS = {
-  'toggle-proposals-menu': () => toggleMenu(),
-  'open-proposal': (el) => openProposal(el.dataset.slug, el.dataset.source || null),
-  'close-proposal': () => closeProposal(),
-  'proposal-whole': () => { setWholeMap(!(state.review && state.review.whole)); renderBar(); }, // "Show the whole map": announced by layers.js, the focus stays on the switch
-  'proposal-view': (el) => { setProposalView(el.dataset.view); toggleMode(false); },
-  'toggle-proposal-mode': () => toggleMode(),
-  'toggle-proposal-more': () => (moreOpen() ? closeMore() : openMore()),
-  'review-show-changes': () => showSection('changes'),
-  'review-show-scenarios': () => showSection('scenarios'),
-  'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'retry' ? retryOpen(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'close' ? closeAfterFailure() : openSpecs()),
-  'proposal-focus': (el) => focusChange(el.dataset.kind, el.dataset.key),
-};
-
-function onClick(e) {
-  const target = e.target.closest ? e.target.closest('[data-action]') : null;
-  const action = target && ACTIONS[target.dataset.action];
-  if (action) action(target);
-  // A choice in the ⋯ menu closes it back onto its button (Close may stop at the what-if confirm); a click anywhere else just closes it
-  if (moreOpen() && !(target && target.dataset.action === 'toggle-proposal-more')) closeMore(!!(target && target.closest('#proposal-more-menu')));
-  // Any click outside the picker closes it
-  const wrap = $('proposal-wrap');
-  if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
-}
-
-/** Retry, after a proposal failed to open: the bar is drawn anew either way, so the focus goes somewhere stated, the proposal's name once it opened or the new Retry if it failed again */
-async function retryOpen(slug, source) {
-  const opened = await openProposal(slug, source);
-  const to = opened ? $('proposal-title') : document.querySelector('#proposal-ways [data-way="retry"]');
-  if (!to) return;
-  if (opened) to.tabIndex = -1;
-  to.focus();
-}
-
-/** Close, after a proposal failed to open: the bar goes, and the focus goes to the map, never the page */
-function closeAfterFailure() {
-  closeProposal();
-  const map = $('graph-canvas');
-  if (map) map.focus();
-}
-
-/** A bad link's way on: the Work panel's Specs tab when there is one, else the header's Proposals menu */
-function openSpecs() {
-  if (hooks.openSpecs) { hooks.openSpecs(); return; }
-  if (!menuOpen()) toggleMenu();
-}
-
-function onKey(e) {
-  if (e.key === 'Escape' && menuOpen()) closeMenu();
-  onMoreKey(e);
-}
-
-/** The marks' colours for the legend and the panel (the --hx-mark-* variables), the same the map draws on this ground */
-function setMarkColours(theme) {
-  const root = document.documentElement.style;
-  const { mark: looks } = looksWith(looksFor(theme)); // the theme's --corn-map-added|changed|removed|edit, when it sets them
-  for (const mark of Object.keys(looks)) root.setProperty(`--hx-mark-${mark}`, looks[mark].color);
-}
-let stopMarkColours = null;
-let stopMarkStyle = null;
+/** What the server listed last, for the Work panel's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
+export const proposalListing = () => E.proposalListing(pageInstance());
+/** Calls `fn` each time the list is read again; returns the way to stop */
+export const onProposalListing = (fn) => E.onProposalListing(pageInstance(), fn);
+export const loadProposalList = () => E.loadProposalList(page());
+export const openProposal = (slug, source = null) => E.openProposal(page(), slug, source);
+export const showProposal = (proposal, opts) => E.showProposal(page(), proposal, opts);
+export const rebuildProposalMap = (effective, opts) => E.rebuildProposalMap(page(), effective, opts);
+export const closeProposal = () => E.closeProposal(page());
+export const setProposalView = (view, opts) => E.setProposalView(page(), view, opts);
+export const focusChange = (kind, key, opts) => E.focusChange(page(), kind, key, opts);
+export const markedEdgeAt = (x, y, tolerance) => E.markedEdgeAt(page(), x, y, tolerance);
+export const showEdgePanel = (edge) => E.showEdge(page(), edge);
+export const renderBar = () => E.drawBar(page());
+export const problemsHtml = problems;
+export const proposalRowHtml = row;
 
 /**
- * Starts the overlay: the mark colours the legend and the panel use, the buttons, picking an
- * edge, and `/?proposal=<slug>` (and `&source=`, `&proposalView=`) when the address asks for one.
- * Call once the map has loaded (the proposal is laid over it).
+ * Starts the overlay on the page: the pieces are mounted, and `/?proposal=<slug>` (and `&source=`, `&proposalView=`) opens one, as page.js does.
  * @returns {Promise<boolean>} whether a proposal from the address opened (false when it asked for none)
  */
 export async function initProposals() {
-  setMarkColours(state.theme);
-  if (!stopMarkColours) stopMarkColours = onThemeChange(setMarkColours);
-  if (!stopMarkStyle) stopMarkStyle = onMapStyleChange(() => setMarkColours(state.theme)); // a theme stylesheet that finishes loading later
-
-  // Once, however many times this runs
-  document.removeEventListener('click', onClick);
-  document.removeEventListener('keydown', onKey);
-  document.addEventListener('click', onClick);
-  document.addEventListener('keydown', onKey);
-  bindEdgePicking();
-  renderBar();
-
-  const asked = parseProposalQuery(location.search);
-  if (!asked) {
-    // A link whose `proposal` is not a proposal's name: said plainly (the value as text, never markup or a link), with the Specs list
-    const bad = malformedLinkWords(location.search);
-    if (bad) setMessage(bad, true, [specsWay()]);
-    return false;
-  }
-  const ok = await openProposal(asked.slug, asked.source);
-  if (ok && asked.view) { setProposalView(asked.view, { quiet: true }); announce(`${reviewOpenedLine($('proposal-title').textContent)} ${viewWords(state.proposalView)}.`); }
-  return ok;
+  const inst = page();
+  keepAddress(inst);
+  E.drawBar(inst);
+  return openFromAddress(inst, typeof location === 'undefined' ? '' : location.search);
 }
 
+/** The bar piece the page mounted, or null */
+export const proposalPiece = () => pagePiece('proposal');

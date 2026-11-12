@@ -12,7 +12,14 @@ import { markup as layersMarkup } from '../explorer/pieces/layers.js';
 import { markup as searchMarkup } from '../explorer/pieces/search.js';
 import { markup as mapMarkup, KEYS_HELP_WITH_PANEL } from '../explorer/pieces/map.js';
 
-const PIECE_MARKUP = { 'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, map: () => mapMarkup({ keysHelp: KEYS_HELP_WITH_PANEL }) };
+import { markup as proposalMarkup } from '../explorer/pieces/proposal.js';
+import { markup as changesMarkup } from '../explorer/pieces/changes.js';
+import { markup as decisionMarkup } from '../explorer/pieces/decision.js';
+
+const PIECE_MARKUP = {
+  'node-panel': nodePanelMarkup, layers: layersMarkup, search: searchMarkup, map: () => mapMarkup({ keysHelp: KEYS_HELP_WITH_PANEL }),
+  proposal: proposalMarkup, changes: changesMarkup, decision: decisionMarkup,
+};
 
 export const CORNFIELD = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SAMPLE = path.join(CORNFIELD, 'test', 'fixtures', 'sample');
@@ -40,9 +47,10 @@ export function explorerPage({ pieces = false } = {}) {
   const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
   if (!pieces) return page;
   const wanted = (name) => pieces === true || pieces.includes(name);
-  return page
-    .replace(/<!--corn-placeholder:([a-z-]+)\/([a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1\/\2-->)/g, (all, name) => (wanted(name) ? '' : all)) // the stand-in goes when the piece comes (engine/piece.js place)
-    .replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (all, name, slot) => (wanted(name) ? withParts(PIECE_MARKUP[name]()[slot]) : all));
+  let out = page.replace(/<!--corn-placeholder:([a-z-]+)\/([a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1\/\2-->)/g, (all, name) => (wanted(name) ? '' : all)); // the stand-in goes when the piece comes (engine/piece.js place)
+  // a piece's markup may keep a place for another (the review column holds the decision's foot): fill those too
+  for (let i = 0; i < 3; i++) out = out.replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (all, name, slot) => (wanted(name) ? withParts(PIECE_MARKUP[name]()[slot]) : all));
+  return out;
 }
 
 /** The stand-in index.html keeps for a piece's markup until the piece is mounted: the same markup, with its parts, without ids (nor what points at them) */

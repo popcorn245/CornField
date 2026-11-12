@@ -301,12 +301,16 @@ export function mount(root, inst, options = {}) {
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);
+  // The marks legend is there while a proposal is open (the proposal's bar says so: engine/proposal.js)
+  const showLegend = (open) => { const legend = own('proposal-legend'); if (legend) legend.hidden = !open; };
+  scope.on('proposal:draw', ({ open }) => showLegend(open));
   // ... and when the map's own tokens change (a named theme, its stylesheet arriving, light and dark): the same signal the map is drawn again on
   scope.own(mapStyleOf(inst).onChange(() => { if (!redrawing(inst)) renderLayerToggles(); }));
   scope.own(() => made.forEach((el) => el.remove()));
 
   syncView();
   renderLayerToggles();
+  showLegend(!!inst.state.proposal);
 
   return {
     elements: made,
