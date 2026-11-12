@@ -447,6 +447,28 @@ describe('the server\'s theme (use-theme)', () => {
     expect(map(host).shadowRoot!.adoptedStyleSheets.every((s) => ![...s.cssRules].some((r) => r.cssText.includes('letter-spacing')))).toBe(true);
   });
 
+  it('turned off, takes back everything it added: the tokens, the sheet in each piece, and the map is drawn again in the look it had without it', async () => {
+    const plain = await page(`<corn-scope src="${at('hostile')}" theme="dark"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
+    await until(() => lit(map(plain)) > 0);
+    await frames(4);
+    await sleep(300);
+    const unthemed = pixelsOf(canvasOf(map(plain))).hash;
+    plain.remove();
+    const host = await page(`<corn-scope id="s" src="${at('hostile')}" theme="dark" use-theme><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
+    const scope = host.querySelector('#s') as Piece;
+    const el = map(host);
+    await until(() => scope.style.getPropertyValue('--corn-ground') === '#1a1640' && lit(el) > 0);
+    await frames(4);
+    await sleep(300);
+    expect(pixelsOf(canvasOf(el)).hash).not.toBe(unthemed); // the theme's ground is drawn
+    scope.useTheme = false;
+    await until(() => scope.style.length === 0);
+    await frames(4);
+    await sleep(300);
+    expect(el.shadowRoot!.adoptedStyleSheets.some((s) => [...s.cssRules].some((r) => r.cssText.includes('letter-spacing')))).toBe(false);
+    expect(pixelsOf(canvasOf(el)).hash).toBe(unthemed);
+  });
+
   it('names nothing but the server: a theme that points at another origin in every way CSS can load leaves no trace of it, and that origin is asked nothing', async () => {
     const away = (await (await fetch('/fake/origin.json')).json()).origin as string;
     await fetch('/fake/other-hits.json'); // forget what came before

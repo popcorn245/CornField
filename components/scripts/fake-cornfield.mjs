@@ -19,7 +19,7 @@ import http from 'node:http';
 const THEME = `
 @import url("/fake/ok/imported.css");
 @font-face { font-family: "Fake Pixel"; src: url("/cornfield/theme/assets/fonts/fake.woff2") format("woff2"); }
-:root { --corn-accent: #c8102e; --corn-ok: #118833; --corn-ground: #1a1640; --brand-private: 12px; --corn-ground-image: url("/cornfield/theme/assets/bg.png"); }
+:root { --corn-accent: #c8102e; --corn-ok: #118833; --corn-ground: #1a1640; --corn-map-edge-width: 8; --brand-private: 12px; --corn-ground-image: url("/cornfield/theme/assets/bg.png"); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --corn-ground: #fdf3dc; --corn-accent: #b00b1e; } }
 :root[data-theme="light"] { --corn-ground: #fdf3dc; --corn-accent: #b00b1e; }
 body { display: none !important; background: red; }

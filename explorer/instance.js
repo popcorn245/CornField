@@ -38,7 +38,7 @@
  *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js)
  *   source          { state, … }  where a scope's or a map's load from a cornfield server is (engine/source.js lists the states: loading, ready, sign-in,
  *                   not-allowed, offline, server, address, version); pieces/status.js shows it and pieces/scope.js turns it into `cornAuth` and `cornError`
- *   theme           { state: 'loading' | 'ready' | 'failed' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`): the map reads its tokens again
+ *   theme           { state: 'loading' | 'ready' | 'failed' | 'none' }  the server's theme sheet (engine/theme-sheet.js, with `use-theme`; 'none': taken back out): the map reads its tokens again
  *   scope:theme     (none)  the scope's `theme` (light, dark, auto) or the mode it follows changed: the map draws again (pieces/scope.js)
  *   piece:refused   { piece, reason, message }  a piece that cannot have this instance (a second map in a scope); the scope says it as `cornError`
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)

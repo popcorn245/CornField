@@ -308,7 +308,7 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
   };
 
   const theme = {
-    /** 'none' (not asked for), 'loading', 'ready' or 'failed' */
+    /** 'none' (not asked for, or taken back out), 'loading', 'ready' or 'failed' */
     state: () => state,
     /** The adopted sheet, once there is one */
     sheet: () => sheet,
@@ -394,7 +394,7 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
       sheet = null;
       layers = [];
       paint();
-      state = 'none';
+      say('none'); // the pieces read their tokens again: the map is drawn in the look it had without the theme
     },
     destroy() {
       destroyed = true;
