@@ -44,10 +44,13 @@ const relHref = (fromOutput, toOutput) => {
   return href.split('/')[0].includes(':') ? `./${href}` : href;
 };
 
-/** A config's URL the site may link to: absolute http or https, and one a browser reads as such (see `safeUrl`), or null */
+/**
+ * A config's URL the site may link to: absolute http or https with a host (`https://`; not `https:x`, which a page
+ * on https reads as a path of its own), and one a browser reads as such (see `safeUrl`), or null
+ */
 const webUrl = (u) => {
   const url = safeUrl(u);
-  return url && /^https?:/i.test(url) ? url : null;
+  return url && /^https?:\/\//i.test(url) ? url : null;
 };
 
 /**
