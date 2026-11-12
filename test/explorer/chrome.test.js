@@ -30,7 +30,7 @@ import { chipModel, failureWords } from '../../explorer/live-model.js';
 import { NO_SOURCE } from '../../explorer/plugins.js';
 
 import { explorerCss } from './stylesheets.js';
-const html = explorerPage();
+const html = explorerPage({ pieces: true }); // the pieces' markup in its places
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = explorerCss();
 const rule = (selector) => {

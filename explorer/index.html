@@ -59,45 +59,41 @@
         </button>
       </div>
 
-      <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left -->
+      <!-- The Layers chip: how many of the layers are on; it opens the layers menu. On a phone it sits on the map, top left. It is a piece (explorer/pieces/layers.js): page.js mounts it here. Until then a stand-in (its markup without ids) holds its place, so the first paint has the chip and nothing moves when the piece comes; test/explorer/page-pieces.test.js keeps the two the same -->
+      <!--corn-placeholder:layers/menu-->
       <div class="hx-menu-wrap hx-layers">
-        <button type="button" id="legend-toggle-btn" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" aria-controls="legend-dropdown" data-corn="layers-button"><span data-corn-string="layers">Layers</span><span id="layers-count" class="hx-layers-count" data-corn="count"></span></button>
-
-        <!-- Interactive section toggles and the legend -->
-        <div id="legend-dropdown" class="hx-menu glass" hidden data-corn="layers-menu">
-          <div class="hx-menu-title hx-menu-head" data-corn="menu-title">
+        <button type="button" class="hx-layers-chip" data-action="toggle-layers-menu" aria-expanded="false" data-corn="layers-button" part="layers-button"><span data-corn-string="layers">Layers</span><span class="hx-layers-count" data-corn="count" part="count"></span></button>
+        <div class="hx-menu glass" hidden data-corn="layers-menu" part="layers-menu">
+          <div class="hx-menu-title hx-menu-head" data-corn="menu-title" part="menu-title">
             <span>Section Toggles</span>
             <span class="hx-menu-links">
-              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="layers-all" data-corn-kind="quiet" data-corn-string="layersAll">All</button>
+              <button type="button" class="hx-textbtn hx-textbtn--accent" data-action="layers-all" data-corn="layers-all" part="layers-all" data-corn-kind="quiet" data-corn-string="layersAll">All</button>
               <span class="hx-faint">•</span>
-              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn="layers-none" data-corn-kind="quiet" data-corn-string="layersNone">None</button>
+              <button type="button" class="hx-textbtn" data-action="layers-none" data-corn="layers-none" part="layers-none" data-corn-kind="quiet" data-corn-string="layersNone">None</button>
             </span>
           </div>
           <div class="hx-menu-body">
-          <p id="layers-preset-note" class="hx-note" data-corn="notice" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
-          <div id="layer-toggles-container" class="hx-toggles"></div>
-          <div id="flow-legend" hidden></div>
-          <div id="edge-key" class="hx-menu-section" data-corn="legend-key"></div>
-          <div id="cloud-legend" class="hx-menu-section" data-corn="menu-section" hidden></div>
-
-          <!-- What the marks of agent runs mean, while there are runs on the map (runs-map.js) -->
-          <div id="runs-legend" class="hx-menu-section" data-corn="menu-section" hidden>
-            <div class="hx-menu-title" data-corn="menu-title"><span>Agent runs</span></div>
+          <p class="hx-note" data-corn="notice" part="notice" hidden>The data-flow view shows its own tiers and ignores these toggles. Switch it off to use them.</p>
+          <div class="hx-toggles"></div>
+          <div hidden></div>
+          <div class="hx-menu-section" data-corn="legend-key" part="legend-key"></div>
+          <div class="hx-menu-section" data-corn="menu-section" part="menu-section" hidden></div>
+          <div class="hx-menu-section" data-corn="menu-section" part="menu-section" hidden>
+            <div class="hx-menu-title" data-corn="menu-title" part="menu-title"><span>Agent runs</span></div>
             <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--flight" aria-hidden="true"></span><span>In flight: a pulsing ring (still under reduced motion)</span></div>
             <div class="hx-legend-row"><span class="hx-run-swatch hx-run-swatch--collision" aria-hidden="true"></span><span>Collision: dashed ring, ⚠ and the words, where two open runs change one node</span></div>
           </div>
-
-          <!-- What a proposal's marks mean, while one is open (proposal.js) -->
-          <div id="proposal-legend" class="hx-menu-section" data-corn="menu-section" hidden>
-            <div class="hx-menu-title" data-corn="menu-title"><span>Proposal marks</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added" data-corn="mark-dot" data-corn-state="added"></span><span>Added: dashed ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" data-corn-state="changed"></span><span>Changed: solid ring</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed" data-corn="mark-dot" data-corn-state="removed"></span><span>Removed: faded ring, label struck through</span></div>
-            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" data-corn-state="edit"></span><span>Your edit: dotted ring, long-dashed line</span></div>
+          <div class="hx-menu-section" data-corn="menu-section" part="menu-section" hidden>
+            <div class="hx-menu-title" data-corn="menu-title" part="menu-title"><span>Proposal marks</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--added" data-corn="mark-dot" part="mark-dot" data-corn-state="added"></span><span>Added: dashed ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--changed" data-corn="mark-dot" part="mark-dot" data-corn-state="changed"></span><span>Changed: solid ring</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--removed" data-corn="mark-dot" part="mark-dot" data-corn-state="removed"></span><span>Removed: faded ring, label struck through</span></div>
+            <div class="hx-legend-row"><span class="hx-mark-dot hx-mark-dot--edit" data-corn="mark-dot" part="mark-dot" data-corn-state="edit"></span><span>Your edit: dotted ring, long-dashed line</span></div>
           </div>
-          </div><!-- .hx-menu-body: the rows scroll, the title with All and None stays (spec 0009 D8) -->
+          </div>
         </div>
       </div>
+      <!--corn-piece:layers/menu-->
 
       <!-- The live layer's chip (explorer/live.js, spec 0029): shown once a live layer is on; a dot on a phone, its line on tap -->
       <div id="live-wrap" class="hx-menu-wrap hx-live" data-tone="idle" hidden>
@@ -110,24 +106,26 @@
     </div>
 
     <div class="hx-header-right">
-      <!-- Search: a field with its key hint on a desktop; an icon that opens the search bar on a phone -->
-      <button type="button" id="mobile-search-toggle" class="hx-hdr-icon hx-only-mobile" data-corn="mobile-search-button" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">
+      <!-- Search: a field with its key hint on a desktop; an icon that opens the search bar on a phone. It is a piece (explorer/pieces/search.js): page.js mounts it here, in place of the stand-in below (as the Layers chip's) -->
+      <!--corn-placeholder:search/field-->
+      <button type="button" class="hx-hdr-icon hx-only-mobile" data-corn="mobile-search-button" part="mobile-search-button" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">
         <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
       </button>
 
-      <div class="hx-search" role="search" data-corn="search">
+      <div class="hx-search" role="search" data-corn="search" part="search">
         <svg class="hx-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
-        <input type="text" id="node-search" class="hx-search-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" aria-keyshortcuts="/" data-corn="search-input" />
-        <kbd class="hx-kbd" data-corn="search-key" aria-hidden="true">/</kbd>
-        <span id="search-steps" class="hx-search-steps" data-corn="search-steps" hidden>
-          <span id="search-count" class="hx-search-count" data-corn="search-count" aria-hidden="true"></span>
+        <input type="text" class="hx-search-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" aria-keyshortcuts="/" data-corn="search-input" part="search-input" />
+        <kbd class="hx-kbd" data-corn="search-key" part="search-key" aria-hidden="true">/</kbd>
+        <span class="hx-search-steps" data-corn="search-steps" part="search-steps" hidden>
+          <span class="hx-search-count" data-corn="search-count" part="search-count" aria-hidden="true"></span>
           <button type="button" class="hx-search-btn" data-action="search-prev" aria-label="Previous match" title="Previous match (Shift+Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 10.5L8 6l4.5 4.5" /></svg></button>
           <button type="button" class="hx-search-btn" data-action="search-next" aria-label="Next match" title="Next match (Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 5.5L8 10l4.5-4.5" /></svg></button>
           <button type="button" class="hx-search-btn" data-action="clear-search" aria-label="Clear search" title="Clear search (Escape)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
         </span>
-        <div id="search-status" class="hx-search-status" role="status" aria-live="polite" data-corn="search-status"></div>
-        <div id="search-results" class="hx-search-results" data-corn="search-results" hidden></div>
+        <div class="hx-search-status" role="status" aria-live="polite" data-corn="search-status" part="search-status"></div>
+        <div class="hx-search-results" data-corn="search-results" part="search-results" hidden></div>
       </div>
+      <!--corn-piece:search/field-->
 
       <!-- The Work toggle (explorer/forge-panel.js): opens the Work panel; shown only when the config names a forge -->
       <button type="button" id="forge-btn" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-controls="forge-panel" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button">
@@ -183,19 +181,8 @@
     </div>
   </header>
 
-  <!-- Mobile search bar -->
-  <div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden data-corn="mobile-search">
-    <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" data-corn="search-input" />
-    <button type="button" class="hx-textbtn" data-action="close-mobile-search" data-corn-kind="quiet">Cancel</button>
-    <span id="mobile-search-steps" class="hx-search-steps" data-corn="search-steps" hidden>
-          <span id="mobile-search-count" class="hx-search-count" data-corn="search-count" aria-hidden="true"></span>
-          <button type="button" class="hx-search-btn" data-action="search-prev" aria-label="Previous match" title="Previous match (Shift+Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 10.5L8 6l4.5 4.5" /></svg></button>
-          <button type="button" class="hx-search-btn" data-action="search-next" aria-label="Next match" title="Next match (Enter)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 5.5L8 10l4.5-4.5" /></svg></button>
-          <button type="button" class="hx-search-btn" data-action="clear-search" aria-label="Clear search" title="Clear search (Escape)" data-corn-kind="icon"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
-        </span>
-    <div id="mobile-search-status" class="hx-search-status" role="status" aria-live="polite" data-corn="search-status"></div>
-    <div id="mobile-search-results" class="hx-search-results" data-corn="search-results" hidden></div>
-  </div>
+  <!-- Mobile search bar: part of the search piece, which mounts it here -->
+  <!--corn-piece:search/bar-->
 
   <!-- The map -->
   <div class="hx-stage" role="main" data-corn="stage">
@@ -367,32 +354,8 @@
       </div>
     </aside>
 
-    <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile -->
-    <aside id="spec-drawer" class="hx-drawer glass" aria-label="Node details" inert data-corn="node-panel">
-      <div class="hx-drawer-body">
-        <div class="hx-drawer-head">
-          <div class="hx-drawer-id">
-            <p class="hx-kicker"><span id="drawer-badge" data-corn="badge">Atom</span><span id="drawer-host" data-corn="node-host"></span><span id="drawer-diff" class="hx-diffpill" data-corn="diff-pill" hidden></span></p>
-            <h2 id="drawer-title" class="hx-drawer-title" data-corn="node-title">&lt;pop-button&gt;</h2>
-          </div>
-          <button type="button" class="hx-close" data-action="close-drawer" aria-label="Close" data-corn-kind="icon">✕</button>
-        </div>
-
-        <p id="drawer-description" class="hx-lead" hidden></p>
-
-        <div class="hx-block">
-          <div id="drawer-meta-list" class="hx-meta"></div>
-        </div>
-      </div>
-
-      <div class="hx-drawer-foot" data-corn="node-foot">
-        <a data-corn="open-link" id="drawer-file-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open file ↗</a>
-        <a data-corn="open-link" id="drawer-open-btn" data-corn-kind="primary" class="hx-open" href="#" target="_blank" rel="noreferrer" hidden>Open route ↗</a>
-        <button data-corn-kind="secondary" type="button" id="drawer-run-btn" class="hx-btn hx-foot-btn" data-action="start-run" data-corn-string="startRun" hidden>Start a run</button>
-        <button data-corn-kind="quiet" type="button" class="hx-btn hx-btn--quiet hx-foot-btn" data-action="copy-spec" data-corn-string="copySpec">Copy Spec</button>
-        <p id="copy-spec-result" class="hx-forge-result" data-corn="result" hidden></p>
-      </div>
-    </aside>
+    <!-- Node panel: a slide-over on desktop, a bottom sheet on mobile. It is a piece (explorer/pieces/node-panel.js): page.js mounts it here -->
+    <!--corn-piece:node-panel/drawer-->
     </div>
 
     <div class="hx-hint glass" data-corn="hint">
@@ -409,7 +372,7 @@
       <button type="button" class="hx-btn hx-btn--active" data-action="retry" data-corn-kind="primary" data-corn-string="retry">Retry</button>
     </div>
 
-    <div id="drawer-backdrop" class="hx-backdrop" data-action="close-drawer" hidden data-corn="backdrop"></div>
+    <!--corn-piece:node-panel/backdrop-->
 
   </div>
 
