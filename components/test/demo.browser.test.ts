@@ -40,6 +40,7 @@ describe('the demo page', () => {
     const review = doc.querySelector('#review')!;
     for (let i = 0; i < 100 && !review.hasAttribute('data-ready'); i++) await sleep(100);
     expect(review.hasAttribute('data-ready')).toBe(true);
+    for (let i = 0; i < 50 && !(review.shadowRoot!.querySelector('#proposal-title')?.textContent || '').length; i++) await sleep(100);
     expect(review.shadowRoot!.querySelector('#proposal-title')!.textContent!.length).toBeGreaterThan(3);
     expect(review.shadowRoot!.querySelector('#review-line')!.textContent).toMatch(/read only/);
     expect(win.getComputedStyle(review.shadowRoot!.querySelector('button')!).fontStyle).not.toBe('italic'); // the page's `button` rule is the page's

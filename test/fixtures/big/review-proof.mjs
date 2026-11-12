@@ -529,7 +529,7 @@ async function main() {
       }); };
       const states = [
         ['open', context, `?p=${SL[0]}&s=pull/21`, async (a) => { await opened(a); await lineRead(a); await sleep(800); }],
-        ['node selected', context, `?p=${SL[0]}&s=pull/21`, async (a) => { await opened(a); await lineRead(a); await sh(a.page, '.hx-change-row[data-kind="node"]').click(); await sleep(1000); }],
+        ['node selected', context, `?p=${SL[0]}&s=pull/21`, async (a) => { await opened(a); await lineRead(a); await a.page.evaluate(() => document.querySelector('corn-review').shadowRoot.querySelector('.hx-change-row[data-kind="node"]').click()); await sleep(1000); }],
         ['missing', context, '?p=0999-nothing', async (a) => { await until(async () => /no proposal/i.test((await state(a.page)).message || ''), 30_000); await sleep(500); }],
         ['not listed', null, `?p=${SL[0]}`, async (a) => { await until(() => sh(a.page, '[data-corn="source-origin"]').count().then((n) => n > 0), 30_000); }],
       ];

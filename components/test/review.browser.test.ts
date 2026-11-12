@@ -254,13 +254,14 @@ describe('config never becomes script (D10)', () => {
   it('a config that names plugin modules, a link and a brand with a script scheme: none is fetched, imported or evaluated, and the review is as it was', async () => {
     listen();
     const scripts = document.scripts.length;
+    const modules = document.querySelectorAll('link[rel="modulepreload"], script[type="module"]').length;
     const el = await review(`src="${at('plugins')}" proposal="0001-fake"`);
     await until(() => seen('cornReady').length > 0);
     await sleep(300);
     expect(title(el)).toBe('A fake change');
     expect(calls.filter((c) => /plugins\/(checker|logo)\.js|live\.js/.test(c.url))).toEqual([]);
     expect(document.scripts.length).toBe(scripts);
-    expect(document.querySelectorAll('link[rel="modulepreload"], script[type="module"]').length).toBe(0);
+    expect(document.querySelectorAll('link[rel="modulepreload"], script[type="module"]').length).toBe(modules);
     expect(el.shadowRoot!.querySelector('a[href^="javascript:"]')).toBe(null);
     expect((el as unknown as { checker?: unknown }).checker ?? null).toBe(null); // only a host hands one in
   });

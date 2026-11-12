@@ -212,8 +212,10 @@ function compare(a, b) {
     const t = byName.get(s.name);
     if (!t) { console.log(`MISSING in the tag: ${s.name}`); diffs++; continue; }
     const out = [];
-    const fa = s.log.filter((l) => !l.startsWith('EVENT')).map(norm).filter(ours);
-    const fb = t.log.filter((l) => !l.startsWith('EVENT')).map(norm).filter(ours);
+    // the load's own announcement ("Loading the map …", the source-announcer) is the tag's alone: the page has no server to load from
+    const same = (l) => !l.startsWith('EVENT') && !l.startsWith('LIVE source-');
+    const fa = s.log.filter(same).map(norm).filter(ours);
+    const fb = t.log.filter(same).map(norm).filter(ours);
     compared += fa.length;
     if (JSON.stringify(fa) !== JSON.stringify(fb)) out.push(`  log page:\n    ${fa.join('\n    ')}\n  log tag:\n    ${fb.join('\n    ')}`);
     if (s.focus !== t.focus) out.push(`  focus page=${s.focus} tag=${t.focus}`);
@@ -245,4 +247,5 @@ async function main() {
   }
 }
 
+if (process.argv.includes('--from')) { const j = JSON.parse(fs.readFileSync(arg('--from'), 'utf8')); process.exit(compare(j.page, j.tag) ? 1 : 0); }
 main().catch((err) => { console.error(err.stack || err.message); process.exit(1); });
