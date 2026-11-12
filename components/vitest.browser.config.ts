@@ -3,7 +3,8 @@ import stencilrs from '@popcorn245/stencilrs/vite';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 import type { BrowserCommand } from 'vitest/node';
-import { cornTokens, define, demoTopology, server } from './scripts/shared.mjs';
+import { fakeCornfield } from './scripts/fake-cornfield.mjs';
+import { cornTokens, define, demoTopology, server, version } from './scripts/shared.mjs';
 
 const executablePath = process.env.CHROME_PATH;
 
@@ -12,7 +13,7 @@ const colorScheme: BrowserCommand<['light' | 'dark']> = async (ctx, scheme) => {
 const viewport: BrowserCommand<[number, number]> = async (ctx, width, height) => { await (ctx as any).page.setViewportSize({ width, height }); };
 
 export default defineConfig({
-  plugins: [cornTokens(), demoTopology(), stencilrs()],
+  plugins: [cornTokens(), demoTopology(), fakeCornfield(version), stencilrs()],
   define,
   server,
   optimizeDeps: { include: ['@stencil/core/app-data', '@stencil/core/runtime/client/standalone', 'axe-core'] },

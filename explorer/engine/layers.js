@@ -178,6 +178,7 @@ function changed(inst) {
   inst.touchScene();
   inst.emit('layers');
   redrawLayers(inst);
+  if (!inst.map) return; // a scope sets the project's layers before the map piece is there; it draws them when it comes
   inst.map.render();
   inst.map.ensureFlowLoop();
 }

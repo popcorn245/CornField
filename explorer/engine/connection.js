@@ -17,10 +17,20 @@ export function notSentWords(inst, what) {
  * origin than the base's (an absolute URL, a `//host` path) is fetched without credentials.
  */
 export function credentialed(inst) {
-  return (path, init) => inst.fetch(path, inst.base && underBase(inst, path) ? { credentials: 'include', ...init } : init);
+  return (path, init) => inst.fetch(path, sessionInit(inst, path, init));
+}
+
+/**
+ * The one rule for the maintainer's session (credentialed() here, and engine/source.js's reads of the config and the map): the fetch options for
+ * `path`, with `credentials: 'include'` added when the instance has a base and `path` is on the base's own origin, else `init` as it was
+ * (`undefined` stays `undefined`, so a request of the page's own is unchanged). What the caller set itself wins.
+ */
+export function sessionInit(inst, path, init) {
+  return inst.base && underBase(inst, path) ? { credentials: 'include', ...init } : init;
 }
 
 /** Whether `path`, made absolute against the instance's base (as `inst.fetch` makes it), is on the base's origin: only those carry the maintainer's session */
-function underBase(inst, path) {
+export function underBase(inst, path) {
+  if (!inst.base) return false;
   try { return new URL(inst.url(String(path)), inst.base).origin === new URL(inst.base).origin; } catch { return false; }
 }

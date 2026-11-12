@@ -48,8 +48,9 @@ describe('the documented components', () => {
       for (const p of t.props) {
         const row = mine.find((r) => ticked(r[1])[0] === p.name);
         const object = /[{}]|Array/.test(p.type);
+        const attribute = p.name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`); // Stencil dash-cases a camelCase property (`useTheme` is `use-theme`)
         if (object) expect(row[2], p.name).toBe('none');
-        else expect(ticked(row[2])[0], p.name).toBe(p.name);
+        else expect(ticked(row[2])[0], p.name).toBe(attribute);
         expect(/reflect:\s*true/.test(p.options), `${t.tag} ${p.name} reflected`).toBe(/reflected/.test(row[2]));
       }
     }
@@ -101,7 +102,8 @@ describe('the documented components', () => {
   });
 
   it('lists every part: exactly the hooks the piece makes (each is a part of the same name)', () => {
-    const piece = fs.readFileSync(path.join(EXPLORER, 'pieces', 'map.js'), 'utf8');
+    // the map piece's own markup, and the status box it mounts (pieces/status.js): the parts of `corn-map` with a source
+    const piece = ['map.js', 'status.js'].map((f) => fs.readFileSync(path.join(EXPLORER, 'pieces', f), 'utf8')).join('\n');
     const renderer = fs.readFileSync(path.join(EXPLORER, 'renderer.js'), 'utf8');
     const made = [...piece.matchAll(/\bdata-corn="([a-z0-9-]+)"/g)].map((m) => m[1]); // its markup and its stage: each hook gets its part when placed (engine/piece.js)
     const stand = /setAttribute\('data-corn', '(map-overlay)'\)/.exec(renderer)[1]; // the second renderer's stand-in canvas

@@ -34,6 +34,10 @@
       "types": "./dist/types/corn-map.d.ts",
       "default": "./dist/corn-map.js"
     },
+    "./corn-scope": {
+      "types": "./dist/types/corn-scope.d.ts",
+      "default": "./dist/corn-scope.js"
+    },
     "./tokens.css": "./dist/tokens.css",
     "./version.json": "./dist/version.json"
   },

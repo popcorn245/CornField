@@ -2797,6 +2797,56 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The proposal's bar as a piece (spec 0011 D3, D4: `corn-proposal`): the open proposal's title and the copy under review, the counts, Before / Diff / After, Whole map, the ⋯ menu with Close, the prob… (explorer/pieces/proposal.js)"
+    },
+    {
+      "id": "core-explorer-engine-source",
+      "label": "source.js",
+      "type": "core",
+      "file": "explorer/engine/source.js",
+      "summary": "Where the map's data comes from (spec 0011 D6): `/cornfield/config.json` and `/topology.json` of a cornfield server, read through an instance and applied to it.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Where the map's data comes from (spec 0011 D6): `/cornfield/config.json` and `/topology.json` of a cornfield server, read through an instance and applied to it. (explorer/engine/source.js)"
+    },
+    {
+      "id": "core-explorer-engine-theme-sheet",
+      "label": "theme-sheet.js",
+      "type": "core",
+      "file": "explorer/engine/theme-sheet.js",
+      "summary": "The server's theme in another app's page (spec 0011 D7): `/cornfield/theme.css` (and the named theme the config makes the default), read once for a scope and given to its pieces in two parts that g…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The server's theme in another app's page (spec 0011 D7): `/cornfield/theme.css` (and the named theme the config makes the default), read once for a scope and given to its pieces in two parts that g… (explorer/engine/theme-sheet.js)"
+    },
+    {
+      "id": "core-explorer-pieces-scope-link",
+      "label": "scope-link.js",
+      "type": "core",
+      "file": "explorer/pieces/scope-link.js",
+      "summary": "The part of the scope protocol (pieces/scope.js) a piece needs, and nothing of the scope itself: how a piece asks for the scope around it (`joinScope`), the two event names, and what a scope's inst…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The part of the scope protocol (pieces/scope.js) a piece needs, and nothing of the scope itself: how a piece asks for the scope around it (`joinScope`), the two event names, and what a scope's inst… (explorer/pieces/scope-link.js)"
+    },
+    {
+      "id": "core-explorer-pieces-scope",
+      "label": "scope.js",
+      "type": "core",
+      "file": "explorer/pieces/scope.js",
+      "summary": "What the pieces inside a `<corn-scope>` share (spec 0011 D5): one instance (one selection, one camera, one topology), and where its data comes from.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What the pieces inside a `<corn-scope>` share (spec 0011 D5): one instance (one selection, one camera, one topology), and where its data comes from. (explorer/pieces/scope.js)"
+    },
+    {
+      "id": "core-explorer-pieces-status",
+      "label": "status.js",
+      "type": "core",
+      "file": "explorer/pieces/status.js",
+      "summary": "What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet \"Loading\", \"You are not signed in to cornfield\" (or, for a 403, \"This map is for the projec…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet \"Loading\", \"You are not signed in to cornfield\" (or, for a 403, \"This map is for the projec… (explorer/pieces/status.js)"
     }
   ],
   "edges": [
@@ -7699,12 +7749,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-engine-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-engine-render",
       "dashed": true,
       "label": "imports"
@@ -7748,12 +7792,6 @@
     {
       "from": "core-explorer-page",
       "to": "core-explorer-keyboard",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
-      "to": "core-explorer-layers",
       "dashed": true,
       "label": "imports"
     },
@@ -9227,7 +9265,152 @@
       "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-source"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-theme-sheet"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-scope-link"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-scope"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-status"
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-pieces-scope-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-pieces-scope",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-theme-sheet",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-adopt-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-scope-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-status",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-status",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-status",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-status",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-engine-source",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-embedding",
+      "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
+      "dashed": true
+    },
+    {
+      "from": "core-explorer-engine-source",
+      "to": "core-explorer-engine-connection",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T13:48:54.340Z"
+  "updatedAt": "2026-11-12T14:49:07.794Z"
 }

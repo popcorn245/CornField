@@ -110,7 +110,7 @@ With a [hook](config.md#hooks) that subscribes to `spec.ready` (or to a [`thread
 
 ## Returning to another app
 
-A page on an origin listed in [`embed.origins`](embedding.md) can send the maintainer to `/auth/start?returnTo=<absolute URL>` and have the sign-in end back on it. `returnTo` is read only when an origin is listed, and followed only when its origin is cornfield's own or exactly a listed one; anything else is ignored and the sign-in ends on the map as before. The session cookie is the same as ever (`HttpOnly`, `SameSite=Lax`, host-only), so another app's page reaches cornfield with it only when the two are on the same site, and a listed origin's page can read a few routes and make two writes with it, nothing more ([embedding](embedding.md)).
+A page on an origin listed in [`embed.origins`](embedding.md) can send the maintainer to `/auth/start?returnTo=<absolute URL>` and have the sign-in end back on it. `returnTo` is read only when an origin is listed, and followed only when its origin is cornfield's own or exactly a listed one; anything else is ignored and the sign-in ends on the map as before. The session cookie is the same as ever (`HttpOnly`, `SameSite=Lax`, host-only), so another app's page reaches cornfield with it only when the two are on the same site, and a listed origin's page can read a few routes and make two writes with it, nothing more ([embedding](embedding.md)). A `<corn-map src>` or `<corn-scope src>` on that page does it for you: when the server answers 401 it shows a link to exactly this address, with the page as `returnTo`, and says `cornAuth` ([the states](embedding.md#what-the-person-sees-and-what-is-said)); it never navigates by itself.
 
 ## Review tokens
 
