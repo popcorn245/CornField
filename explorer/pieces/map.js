@@ -38,14 +38,13 @@
 import { createInstance } from '../instance.js';
 import { createMap } from '../engine/render.js';
 import { mapStyleOf } from '../engine/map-style.js';
-import { computeDegreeCentrality, computeLaneLayout, layoutOrbit } from '../engine/layout.js';
+import { layoutMap, setTopology as installTopology } from '../engine/topology.js';
 import { initKeyboard, resetKeyboard } from '../engine/keyboard.js';
 import { selectNode, clearSelection } from '../engine/selection.js';
 import { stopFlight } from '../engine/fly.js';
 import { scopeOf, place } from '../engine/piece.js';
 import { createRenderer } from '../renderer.js';
 import { bindCanvasInput } from '../input.js';
-import { buildDataFlow } from '../flow-build.js';
 import { resolveTheme } from '../theme-model.js';
 import { escapeHtml } from '../../core/text.js';
 import { adoptDefaultTokens } from './adopt-tokens.js';
@@ -149,14 +148,8 @@ export function mount(root, inst, options = {}) {
   // -- the renderer, the layout --------------------------------------------------------------------------------------------------------
   installRenderer();
 
-  /** Where nodes sit for the current view */
-  function applyLayout() {
-    computeDegreeCentrality(inst);
-    if (state.view === 'dataflow' && state.flow) {
-      state.flow.tiers.forEach((tier) => tier.nodes.forEach((n) => { n.r = Math.min(n.r, 13); })); // all small in the lanes
-      computeLaneLayout(inst, state.flow);
-    } else layoutOrbit(inst);
-  }
+  /** Where nodes sit for the current view (engine/topology.js) */
+  const applyLayout = () => layoutMap(inst);
 
   /** A fit asked for while the map has no box (a parent `display: none`, a box of no size) waits for one: fitted to nothing, the camera would be lost */
   let fitWhenSized = false;
@@ -224,21 +217,9 @@ export function mount(root, inst, options = {}) {
 
   // -- changes ---------------------------------------------------------------------------------------------------------------------------------
   function setTopology(topology) {
-    const nodes = topology && Array.isArray(topology.nodes) ? topology.nodes.filter((n) => n && typeof n.id === 'string') : [];
-    const edges = topology && Array.isArray(topology.edges) ? topology.edges.filter((e) => e && typeof e.from === 'string' && typeof e.to === 'string') : [];
     const keep = state.selectedNode ? state.selectedNode.id : null; // the selection outlives a new topology that has its node
-    // The host's object is never changed: the map works on copies (the layout writes positions on them)
-    state.baseNodes = nodes;
-    state.baseEdges = edges;
-    state.nodes = nodes.map((n) => ({ ...n }));
-    state.edges = edges.map((e) => ({ ...e }));
-    state.mapNodes = state.nodes;
-    state.mapEdges = state.edges;
-    state.flow = buildDataFlow(state.nodes, state.edges);
+    installTopology(inst, topology); // the base map, the data-flow preset and the selection kept or cleared (engine/topology.js)
     const again = keep ? nodeById(keep) : null;
-    // The same id is the same selection (the instance says nothing); none is a change it says once
-    if (again) { state.selectedEdge = null; state.selectedNode = again; } else if (state.selectedNode || state.selectedEdge) { state.selectedNode = null; state.selectedEdge = null; }
-    inst.touchScene();
     if (state.nodes.length) { applyLayout(); fit(); }
     const asked = !again && pendingNode ? nodeById(pendingNode) : null; // the node the host asked for before the map had it
     if (asked) selectNode(inst, asked, { source: 'api' });
