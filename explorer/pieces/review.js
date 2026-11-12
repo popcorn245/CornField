@@ -57,6 +57,7 @@ import { setProjectLayers } from '../engine/layers.js';
 import { applyStrings, setStrings } from '../engine/strings.js';
 import { withParts } from '../engine/piece.js';
 import { PROPOSAL_VIEWS } from '../proposal-model.js';
+import { NOTHING_TO_DECIDE } from '../decision-model.js';
 
 /**
  * The files of explorer/css/ the review needs, in the order to load them (the cascade's): after the default tokens (explorer/tokens.css, or the
@@ -127,7 +128,7 @@ export function mount(root, inst, options = {}) {
   const proposalPiece = mountProposal(box, inst, { slots: { bar: at['proposal/bar'], menu: at['proposal/menu'] }, edit: false });
   const changesPiece = mountChanges(box, inst, { slots: { column: at['changes/column'] }, checker: options.checker });
   const foot = markersIn(doc, box)['decision/foot']; // the column keeps a place for it
-  const decisionPiece = mountDecision(box, inst, { slots: { foot }, now: options.now });
+  const decisionPiece = mountDecision(box, inst, { slots: { foot }, now: options.now, unnamed: NOTHING_TO_DECIDE }); // handed an object with no server, it says so
 
   // The review lays the map out from what the engine hands over (a proposal's nodes and edges are the base with marks): nodes that were there keep their place
   const stopAsking = inst.on('map:set', ({ nodes, edges }) => { setMap(inst, nodes, edges); return true; });
