@@ -8133,7 +8133,12 @@
     {
       "from": "app-docs",
       "to": "page-doc-docs-specs-0011-cornfield-in-another-app"
+    },
+    {
+      "from": "page-doc-docs-specs-0011-cornfield-in-another-app",
+      "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T05:50:50.860Z"
+  "updatedAt": "2026-11-12T06:29:01.295Z"
 }

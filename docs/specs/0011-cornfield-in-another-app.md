@@ -1,6 +1,6 @@
 # Spec 0011: cornfield in another app (the interface as web components)
 
-Status: **draft, for discussion** (2026-11-12). Nothing here is built. The maintainer set the direction in chat and answered four opening questions; the rest is proposed, and the eleven questions at the end are open. Its proposal is [proposals/0011-cornfield-in-another-app.json](proposals/0011-cornfield-in-another-app.json).
+Status: **approved** (maintainer, in chat, 2026-11-12: "as recommended, go"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). Every open question is answered as recommended. Not yet built. Its proposal is [proposals/0011-cornfield-in-another-app.json](proposals/0011-cornfield-in-another-app.json).
 
 A maintainer who plans work in one app and reviews it in cornfield jumps between two apps for one task. The aim is that they do not: cornfield's interface becomes a set of web components that another app puts on its own page, taking the sections it wants. The smallest case is one tag that works when dropped in.
 
@@ -221,6 +221,8 @@ How the code is shared:
 ```
 
 ## Open questions for the maintainer
+
+**Answered 2026-11-12:** the maintainer took every recommendation below.
 
 1. **Thin shells over one shared engine**, not an interface written again in JSX (D1)? Recommendation: **yes**. It is the most code shared, and StencilRS still gives the properties, events, lifecycle, tests and packaging.
 2. **Shadow roots on the leaf pieces**, with tokens inheriting, every hook also a part, and a whole theme handed in (D7)? Recommendation: **yes**.
