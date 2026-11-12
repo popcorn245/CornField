@@ -8,7 +8,8 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+import { explorerCss } from './stylesheets.js';
+const css = explorerCss(['explorer.css'], { stripComments: true });
 
 /** Top-level blocks as { head, body }, so `@media` bodies can be read again */
 function blocks(text) {
@@ -22,7 +23,7 @@ function blocks(text) {
 }
 const rules = (list) => list.flatMap(({ head, body }) => (head.startsWith('@') ? [] : [{ selectors: head.split(',').map((s) => s.trim()), body }]));
 const top = blocks(css);
-const phone = top.filter((b) => /^@media/.test(b.head) && /max-width:\s*767px|pointer:\s*coarse/.test(b.head)).flatMap((b) => rules(blocks(b.body)));
+const phone = top.filter((b) => /^@(media|container)/.test(b.head) && /max-width:\s*767px|pointer:\s*coarse/.test(b.head)).flatMap((b) => rules(blocks(b.body)));
 const desk = rules(top);
 
 /** The px a selector is given for `prop` by the last rule in `set` that names it exactly */

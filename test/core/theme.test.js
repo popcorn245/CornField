@@ -205,7 +205,7 @@ describe('assets beside a theme: what a url() may name', () => {
   it('accepts a data: image, and nothing from elsewhere or of another kind', () => {
     expect(themeUrlTarget('data:image/png;base64,iVBORw0KGgo=', '/cornfield/theme.css')).toEqual({ data: true });
     expect(themeUrlTarget('data:image/svg+xml,%3Csvg%3E', '/cornfield/theme.css')).toEqual({ data: true });
-    for (const ref of ['', 'data:text/html,<b>', 'https://evil.example/a.png', '//evil.example/a.png', 'http://localhost/cornfield/theme/assets/a.png', '/cornfield/theme.css', '/explorer/explorer.css', 'theme/assets/a.js', 'theme/assets/a.css', 'theme/assets/a.html', 'theme/assets/%2e%2e/%2e%2e/secret.png', 'theme/assets/..%2Fsecret.png', 'theme/assets/a%5Cb.png', 'theme/assets/.git/x.png', 'theme/assets/a%00.png', 'theme/assets/%E2%80%A5/a.png', 'theme/assets/']) {
+    for (const ref of ['', 'data:text/html,<b>', 'https://evil.example/a.png', '//evil.example/a.png', 'http://localhost/cornfield/theme/assets/a.png', '/cornfield/theme.css', '/explorer/css/base.css', 'theme/assets/a.js', 'theme/assets/a.css', 'theme/assets/a.html', 'theme/assets/%2e%2e/%2e%2e/secret.png', 'theme/assets/..%2Fsecret.png', 'theme/assets/a%5Cb.png', 'theme/assets/.git/x.png', 'theme/assets/a%00.png', 'theme/assets/%E2%80%A5/a.png', 'theme/assets/']) {
       expect(themeUrlTarget(ref, '/cornfield/theme.css').problem, ref).toBeTruthy();
     }
   });

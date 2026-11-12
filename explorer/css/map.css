@@ -1,0 +1,43 @@
+/*
+ * map.css: the map
+ * The stage's contents: the map's canvases, the hint, the loading and error states, the marks of agent runs drawn over the map (runs-
+ * map.js). Read by corn-map (D4).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+@container corn-box (max-width: 767px) {
+  .hx-stage .hx-hint { top: 68px; }
+}
+#graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#graph-canvas:active { cursor: grabbing; }
+#label-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* The Canvas 2D that stands in for the map canvas when its WebGL2 shaders fail (renderer.js): same place, pointer goes through */
+.hx-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.hx-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: var(--corn-space-2); max-width: 85cqw; padding: var(--corn-space-1) var(--corn-space-4); border-radius: var(--corn-radius-pill); font-size: var(--corn-text-2xs); color: var(--corn-text-2); pointer-events: none; z-index: 10; white-space: nowrap; }
+.hx-hint span:last-child { overflow: hidden; text-overflow: ellipsis; }
+@container corn-box (min-width: 640px) {
+  .hx-hint { font-size: var(--corn-text-xs); }
+}
+.hx-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--corn-text-3); font-size: var(--corn-text-md); z-index: 5; text-align: center; }
+.hx-state--error { display: flex; flex-direction: column; align-items: center; gap: var(--corn-space-3); width: min(440px, calc(100cqw - 32px)); padding: var(--corn-space-6); border-radius: var(--corn-radius-lg); color: var(--corn-text-2); user-select: text; }
+.hx-state--error strong { color: var(--corn-bad); font-size: var(--corn-text-lg); }
+.hx-state--error p { font-size: var(--corn-text-sm); line-height: 1.5; }
+.hx-state--error #error-message { font-family: var(--corn-mono); color: var(--corn-warn); word-break: break-word; }
+#graph-canvas.is-drawing-edge { touch-action: none; }
+#graph-canvas:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); }
+.hx-run-overlay { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.hx-run-overlay[hidden] { display: none; }
+.hx-run-mark { position: absolute; width: 0; height: 0; --r: 14px; }
+.hx-run-ring { position: absolute; left: calc(var(--r) * -1); top: calc(var(--r) * -1); width: calc(var(--r) * 2); height: calc(var(--r) * 2); box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-added); }
+/* In flight: the ring pulses outward and fades; when motion is reduced it is a still, slightly thicker ring */
+.hx-run-mark--flight .hx-run-ring { animation: hx-run-pulse 1.8s ease-out infinite; }
+@keyframes hx-run-pulse { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.55); opacity: 0.1; } }
+.hx-run-overlay.is-static .hx-run-ring { animation: none; transform: none; opacity: 1; border-width: calc(var(--corn-border-strong) + var(--corn-border)); }
+@media (prefers-reduced-motion: reduce) {
+  .hx-run-ring { animation: none !important; transform: none; opacity: 1; border-width: calc(var(--corn-border-strong) + var(--corn-border)); }
+}
+/* Collision: dashed, a sign and words; the same ring whether or not colour is seen */
+.hx-run-mark--collision .hx-run-ring { border: calc(var(--corn-border-strong) + var(--corn-border)) dashed var(--corn-map-collision); animation: none; }
+.hx-run-tag { position: absolute; left: 0; top: calc(var(--r) + 4px); transform: translateX(-50%); white-space: nowrap; padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-map-collision); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-map-collision); font-size: var(--corn-text-xs); font-weight: 700; }
+.hx-run-swatch { display: inline-block; width: 14px; height: 14px; flex: none; box-sizing: border-box; border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-added); }
+.hx-run-swatch--collision { border: var(--corn-border-strong) dashed var(--corn-map-collision); }

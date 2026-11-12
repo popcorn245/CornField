@@ -37,10 +37,11 @@ import { OFFLINE_WORDS, ONLINE_WORDS, resetConnectionForTests } from '../../expl
 import { resetFeedbackForTests, RESULT_MS } from '../../explorer/feedback.js';
 import { explorerPage } from '../helpers.js';
 
+import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 const NOW = Date.parse('2026-11-05T12:00:00Z');
 const MAP = { nodes: [{ id: 'root', type: 'root', x: 0, y: 0, r: 20, color: '#336699', label: 'root', degree: 0 }], edges: [] };
 const $ = (id) => document.getElementById(id);
@@ -286,7 +287,7 @@ describe('the seven run states differ without colour (F34)', () => {
     expect(css).toMatch(/\/\* =+\n {3}The Work panel's states/);
     // a node button is not drawn as a pill, and nothing animates under reduced motion
     expect(css).toMatch(/\.hx-forge-node \{[^}]*border-radius: var\(--corn-radius-sm\)/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ \.hx-state-spin \{ animation: none/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\) \{\s*\.hx-state-spin \{ animation: none/);
   });
 
   it('draw the state in the thread row and the pull request detail too', async () => {

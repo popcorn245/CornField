@@ -1,0 +1,288 @@
+/*
+ * work.css: the Work panel
+ * The Work panel (forge-panel.js, runs-view.js) and its tabs (Specs, PRs, Issues, Threads, Runs, Deploys): the slide-over from the left from
+ * 768px, a bottom sheet below; the Work toggle in the header; the states, results and skeletons. Read by corn-work (D4); its tabs follow as
+ * pieces of their own.
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+/* The Work toggle: opens the Work panel (forge-panel.js says in the tag which pull request is lit) */
+.hx-work { display: inline-flex; align-items: center; gap: var(--corn-space-2); height: var(--hx-control-h); padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 600; white-space: nowrap; }
+.hx-work:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-work[aria-expanded="true"] { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); }
+.hx-forge-lit { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-warn); background: var(--corn-ground); color: var(--corn-warn); font-size: var(--corn-text-2xs); }
+@container corn-box (max-width: 767px) {
+  .hx-work { height: var(--hx-control-h); min-width: var(--hx-control-h); justify-content: center; padding: 0 var(--corn-space-3); }
+  .hx-forge-lit { display: none; }
+}
+/* ---- the issues and PRs panel (forge-panel.js, CF-07) -------------------------------------------
+   A slide-over from the left from 768px (the node panel is the one from the right), a bottom sheet in #sheet-dock below.
+   Closed, it is inert (forge-panel.js), and off screen or not displayed. Only the tokens above are used, so it follows the theme. */
+.hx-forge { --hx-forge-status-w: 56px; }
+.hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
+.hx-forge * { touch-action: pan-y; }
+.hx-forge.forge-open { pointer-events: auto; }
+.hx-forge:not(.forge-open) { box-shadow: none; }
+@container corn-box (min-width: 768px) {
+  .hx-forge { position: absolute; top: 0; left: 0; bottom: 0; width: var(--hx-forge-w); border-left: 0; transform: translateX(-100%); box-shadow: var(--corn-shadow-lg); }
+  .hx-forge.forge-open { transform: translateX(0); }
+}
+@container corn-box (max-width: 767px) {
+  .hx-forge:not(.forge-open) { display: none; }
+  .hx-forge { max-height: 60cqh; }
+}
+.hx-forge-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-4); padding: var(--corn-panel-pad); overflow-y: auto; user-select: text; font-size: var(--corn-text-sm); }
+.hx-forge-head { display: flex; align-items: center; gap: var(--corn-space-3); padding-bottom: var(--corn-space-3); border-bottom: var(--corn-border) solid var(--corn-line-soft); }
+.hx-forge-head .hx-drawer-title { flex: 1; min-width: 0; }
+.hx-forge-status, .hx-forge-rate { font-size: var(--corn-text-xs); line-height: 1.5; }
+.hx-forge-controls { display: flex; flex-direction: column; gap: var(--corn-space-3); padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); } /* the Filter chip's box */
+/* The tabs, in the order of the loop: underlined here, pills that scroll sideways on a phone (below) */
+.hx-forge-tabs { display: flex; gap: calc(var(--corn-space-1) / 2); margin: 0 calc(var(--corn-space-4) * -1); padding: 0 var(--corn-space-4); border-bottom: var(--corn-border) solid var(--corn-line); overflow-x: auto; scrollbar-width: none; }
+.hx-forge-tabs::-webkit-scrollbar { display: none; }
+.hx-forge-tab { flex: none; display: inline-flex; align-items: baseline; min-height: var(--hx-control-h); gap: var(--corn-space-1); padding: var(--corn-space-2) var(--corn-space-3) var(--corn-space-3); border: 0; border-bottom: var(--corn-border-strong) solid transparent; background: none; white-space: nowrap; color: var(--corn-text-2); font-size: var(--corn-text-sm); font-weight: 500; }
+.hx-forge-tab:hover { color: var(--corn-text); }
+.hx-forge-tab[aria-pressed="true"] { border-bottom-color: var(--corn-accent); color: var(--corn-text); font-weight: 600; }
+.hx-forge-tab:focus-visible, .hx-forge-chip:focus-visible, .hx-forge-back:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); }
+.hx-forge-count { color: var(--corn-text-3); font-size: var(--corn-text-xs); font-weight: 500; }
+.hx-forge-count[hidden] { display: none; }
+/* A tab's count holds its width before it is read, so the tabs do not move when the counts arrive (issue #192): it is empty, not hidden; Deploys has none and keeps `hidden` */
+.hx-forge-tab .hx-forge-count { display: inline-block; min-width: 2ch; }
+/* The status line and the Filter chip; the focus is put on the title (a heading, tabindex -1) when the panel opens, so it shows no ring */
+.hx-forge-body > * { flex-shrink: 0; } /* a tall detail scrolls the body; it must not squash the tabs */
+.hx-forge .hx-drawer-title:focus-visible, .hx-forge-notes-title:focus-visible { outline: none; }
+.hx-forge-bar { display: flex; align-items: center; gap: var(--corn-space-3); min-height: 28px; }
+.hx-forge-bar .hx-forge-status { flex: 1; min-width: 0; }
+.hx-forge-chip { flex: none; display: inline-flex; align-items: center; gap: var(--corn-space-1); min-height: 24px; padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-forge-chip:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-forge-chip[aria-expanded="true"], .hx-forge-chip.is-on { border-color: var(--corn-accent); color: var(--corn-text); }
+.hx-forge-bar[hidden], .hx-forge-chip[hidden], .hx-forge-controls[hidden], .hx-forge-foot[hidden], .hx-forge-detail[hidden], .hx-forge-notes[hidden] { display: none; }
+.hx-forge-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--corn-space-2) var(--corn-space-3); }
+.hx-forge-field { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); min-width: 0; font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-3); }
+.hx-forge-field--text { grid-column: 1 / -1; }
+/* The Start dialog's four limits: two a row, under their legend */
+.hx-forge-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--corn-space-2) var(--corn-space-3); margin: 0; padding: 0; border: 0; }
+.hx-forge-limits > legend { padding: 0 0 var(--corn-space-1); }
+.hx-forge-select, .hx-forge-input { width: 100%; min-width: 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
+.hx-forge-input::placeholder { color: var(--corn-text-3); }
+.hx-forge-input:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-forge-notice { padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-warn); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); color: var(--corn-text-2); line-height: 1.5; }
+.hx-forge-list, .hx-forge-checks, .hx-forge-files { display: flex; flex-direction: column; gap: var(--corn-space-1); margin: 0; padding: 0; list-style: none; }
+.hx-forge-item { display: flex; align-items: stretch; gap: var(--corn-space-1); }
+.hx-forge-row { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--corn-space-1); padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); color: var(--corn-text); text-align: left; text-decoration: none; font-size: var(--corn-text-sm); }
+a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface-3); }
+.hx-forge-row[aria-pressed="true"] { border-color: var(--corn-accent-text); border-left-width: calc(var(--corn-border-strong) * 2); background: var(--corn-surface-3); }
+.hx-forge-title { font-weight: 600; overflow-wrap: anywhere; }
+.hx-forge-meta { color: var(--corn-text-3); font-size: var(--corn-text-xs); overflow-wrap: anywhere; }
+.hx-forge-labels { display: flex; flex-wrap: wrap; gap: var(--corn-space-1); }
+.hx-forge-label { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); color: var(--corn-text-2); font-size: var(--corn-text-2xs); }
+.hx-forge-out { flex: none; display: flex; align-items: center; justify-content: center; width: 32px; border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-info); text-decoration: none; }
+.hx-forge-out:hover { background: var(--corn-surface-3); }
+.hx-forge-empty { padding: var(--corn-space-3) calc(var(--corn-space-1) / 2); }
+/* A state is a word as well as a colour: open, merged, a check's result */
+.hx-forge-state { display: inline-block; padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid currentColor; font-size: var(--corn-text-2xs); font-weight: 700; }
+.hx-forge-state--open, .hx-forge-state--success { color: var(--corn-ok); }
+.hx-forge-state--merged { color: var(--corn-edit-text); }
+.hx-forge-state--closed, .hx-forge-state--failure { color: var(--corn-bad); }
+.hx-forge-state--draft, .hx-forge-state--running, .hx-forge-state--queued { color: var(--corn-warn); }
+.hx-forge-state--neutral, .hx-forge-state--skipped, .hx-forge-state--cancelled { color: var(--corn-text-3); }
+.hx-forge-detail { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-forge-detail-title, .hx-forge-notes-title { margin: 0; min-width: 0; font-size: var(--corn-text-lg); font-weight: 700; letter-spacing: -0.01em; color: var(--corn-text); overflow-wrap: anywhere; }
+/* A section's label, in sentence case */
+.hx-forge-sub, .hx-forge-subact, .hx-forge-runs-title { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-3); }
+.hx-forge-confirm-title { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-2); }
+.hx-forge-check { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); }
+.hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 24px; }
+.hx-forge-lights { flex-basis: 100%; font-size: var(--corn-text-xs); line-height: 1.5; }
+.hx-forge-key { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-1); font-size: var(--corn-text-xs); }
+.hx-forge-file { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); padding: var(--corn-space-1) 0; border-top: var(--corn-border) solid var(--corn-line-soft); overflow-wrap: anywhere; }
+.hx-forge-fstatus { flex: none; min-width: var(--hx-forge-status-w); color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-forge-del { color: var(--corn-bad); }
+.hx-forge-act { align-self: flex-start; min-height: 24px; padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); }
+.hx-forge-why { margin: 0; font-size: var(--corn-text-xs); line-height: 1.5; }
+.hx-forge-step { display: flex; flex-direction: column; gap: var(--corn-space-1); }
+.hx-forge-startspec { flex: none; align-self: center; }
+.hx-forge-notice--ok { border-color: var(--corn-ok); }
+.hx-forge-nodes { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: var(--corn-space-1); padding-left: calc(var(--hx-forge-status-w) + var(--corn-space-2)); }
+/* A node button is a button (a square corner, a filled face, an arrow), never a state pill */
+.hx-forge-node { padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-3); color: var(--corn-text); font-size: var(--corn-text-xs); }
+.hx-forge-node::after { content: ' \2192'; }
+.hx-forge-node:hover { background: var(--corn-surface-3); }
+.hx-forge-work-filters { display: flex; flex-wrap: wrap; gap: var(--corn-space-2) var(--corn-space-4); }
+.hx-forge-work-filters[hidden], .hx-forge-filters[hidden] { display: none; }
+.hx-forge-toggle { display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 24px; color: var(--corn-text-2); font-size: var(--corn-text-sm); }
+.hx-forge-toggle input { accent-color: var(--corn-accent-text); }
+.hx-forge-toggle input:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-forge-group { display: flex; flex-direction: column; gap: var(--corn-space-1); margin: 0 0 var(--corn-space-3); list-style: none; }
+.hx-forge-gtitle { margin: 0; font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-text); overflow-wrap: anywhere; }
+.hx-forge-gout { margin-left: var(--corn-space-1); }
+.hx-forge-agentline { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--corn-space-1) / 2) var(--corn-space-2); }
+.hx-forge-agent { display: inline-block; padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-pill); border: var(--corn-border) solid currentColor; color: var(--corn-edit-text); font-size: var(--corn-text-2xs); font-weight: 700; }
+.hx-forge-why { font-size: var(--corn-text-xs); overflow-wrap: anywhere; }
+.hx-forge-notes, .hx-forge-confirm { display: flex; flex-direction: column; gap: var(--corn-space-3); }
+.hx-forge-preview { width: 100%; min-height: 12em; resize: vertical; padding: var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font-family: var(--corn-mono); font-size: var(--corn-text-xs); line-height: 1.5; font-weight: 400; text-transform: none; letter-spacing: 0; user-select: text; }
+.hx-forge-preview:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-forge-actions { display: flex; flex-wrap: wrap; gap: var(--corn-space-3); }
+.hx-forge-msg { padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); color: var(--corn-text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.hx-forge-msg--bad { border-color: var(--corn-warn); }
+.hx-forge-confirm { padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-added-text); border-radius: var(--corn-radius); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); line-height: 1.5; }
+.hx-forge-runs { display: flex; flex-direction: column; gap: var(--corn-space-2); margin: var(--corn-space-1) 0 var(--corn-space-3); }
+.hx-forge-runs[hidden] { display: none; }
+/* A Specs row: title and state on one line, a line of what it is, the facts */
+.hx-forge-line { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-forge-line .hx-forge-title { flex: 1; min-width: 0; }
+.hx-forge-sum { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-forge-facts { display: flex; flex-wrap: wrap; gap: 0 var(--corn-space-3); }
+.hx-forge-add { color: var(--corn-added-text); }
+.hx-forge-chg { color: var(--corn-warn); }
+/* A selection replaces the list, with a back control named by the list; Land it is the one primary action */
+.hx-forge-back { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 28px; margin-left: calc(var(--corn-space-2) * -1); padding: 0 var(--corn-space-3) 0 var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-forge-back:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-forge-dmeta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-1) var(--corn-space-3); }
+.hx-forge-cta { display: flex; flex-wrap: wrap; gap: var(--corn-space-3); }
+.hx-forge-cta .hx-btn { min-height: 32px; justify-content: center; }
+.hx-forge-cta .hx-btn[disabled] { background: var(--corn-surface-3); border-color: var(--corn-line); color: var(--corn-text-3); box-shadow: none; cursor: default; }
+.hx-forge-open { text-decoration: none; color: var(--corn-text-2); }
+.hx-forge-runline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); margin: 0; color: var(--corn-text-2); } /* a line of text with a state pill, not a box: it is not a control */
+/* The foot of a list: Release notes … on PRs, New idea on Specs and Threads */
+.hx-forge-foot { display: flex; flex-direction: column; gap: var(--corn-space-3); margin-top: auto; padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-forge-foot > .hx-btn { align-self: flex-start; }
+@container corn-box (max-width: 767px) {
+  /* A phone: the tabs are pills, and everything a thumb has to hit is 44px */
+  .hx-forge-tabs { gap: var(--corn-space-2); padding-bottom: var(--corn-space-3); border-bottom: 0; }
+  .hx-forge-tab { align-items: center; min-height: 44px; padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); }
+  .hx-forge-tab[aria-pressed="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+  .hx-forge-tab[aria-pressed="true"] .hx-forge-count { color: inherit; }
+  .hx-forge .hx-btn, .hx-forge .hx-close, .hx-forge-chip, .hx-forge-back, .hx-forge-node, .hx-forge-toggle, .hx-forge-select, .hx-forge-input, .hx-forge-check .hx-link, .hx-forge-out { min-height: 44px; min-width: 44px; }
+  .hx-forge .hx-close { display: inline-flex; align-items: center; justify-content: center; }
+}
+/* Threads (forge-panel.js, docs/threads.md): messages as written, read-only; a node's "Threads" opens one */
+.hx-thread-msgs { display: flex; flex-direction: column; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
+.hx-thread-msg { display: flex; flex-direction: column; gap: var(--corn-space-1); padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); }
+.hx-thread-body { margin: 0; color: var(--corn-text); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.hx-thread-nodes { padding-left: 0; }
+.hx-thread-compose { font-family: inherit; min-height: 8em; }
+.hx-thread-open { display: block; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+#forge-idea[hidden], #idea-form[hidden], #idea-message[hidden] { display: none; }
+/* The Runs view (forge-panel.js, runs-view.js): each run, its limits beside what was reported, its timeline; the compare puts profiles side by side */
+.hx-runs-list { display: flex; flex-direction: column; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
+.hx-run { display: flex; flex-direction: column; gap: var(--corn-space-1); padding: var(--corn-space-3) var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius); background: var(--corn-surface-2); overflow-wrap: anywhere; min-width: 0; }
+.hx-run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--corn-space-1) var(--corn-space-3); }
+.hx-run-actions { display: flex; flex-wrap: wrap; gap: var(--corn-space-2); }
+.hx-run-collide { margin: 0; padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border: var(--corn-border) dashed var(--corn-warn); border-radius: var(--corn-radius-sm); color: var(--corn-warn); font-weight: 600; }
+.hx-run-limits { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--corn-space-3); margin: 0; font-size: var(--corn-text-xs); }
+.hx-run-limits dt { color: var(--corn-text-2); font-weight: 600; }
+.hx-run-limits dd { margin: 0; color: var(--corn-text-2); }
+.hx-run-timeline { display: flex; flex-direction: column; gap: var(--corn-space-1); margin: 0; padding: 0 0 0 var(--corn-space-5); font-size: var(--corn-text-xs); }
+.hx-run-timeline li { color: var(--corn-text-2); }
+.hx-run-timeline time { color: var(--corn-text-2); margin-right: var(--corn-space-2); }
+.hx-run-note { display: block; color: var(--corn-text-2); white-space: pre-wrap; }
+.hx-run-compare { border: var(--corn-border) solid var(--corn-line); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-added-text); border-radius: var(--corn-radius); padding: var(--corn-space-3); display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-run-compare-title { margin: 0; font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-text); }
+.hx-run-columns { display: grid; grid-template-columns: 1fr; gap: var(--corn-space-3); margin: 0; padding: 0; list-style: none; }
+@container corn-box (min-width: 1100px) {
+  .hx-run-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container corn-box (min-width: 1100px) and (max-width: 1599px) {
+  .hx-stage:has(.drawer-open) .hx-run-columns { grid-template-columns: 1fr; }
+}
+/* A scroll container never cuts a focus ring: a row that is tabbed to stops short of the edge by the ring's width and offset */
+.hx-forge-body { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+/* The Work tabs scroll sideways: a tab brought into view stops short of the edge by the strip's own padding */
+.hx-forge-tabs { scroll-padding-inline: var(--corn-space-4); }
+.hx-forge-count, .hx-forge-lit, .hx-run-limits dd { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-forge { transition: none; animation: none; }
+}
+.hx-run .hx-link { display: inline-flex; align-items: center; min-height: 24px; } /* a run card's links sit on lines 14px apart: 24px at a desk (WCAG 2.5.8) */
+@container corn-box (max-width: 767px) {
+  .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
+}
+/* ==========================================================================
+   The Work panel's states, results, disabled controls, loading and empty lists, and its fixed top (the 0.34 design review)
+   ========================================================================== */
+/* A state is a word, an icon and a colour: the colour comes from a --corn-run-<state> token, the icon is a shape of its own (corn-state.js), and
+   the waiting pill is solid, since a run that waits needs the maintainer and should stand out most. A pill is never a button: it has no hover. */
+.hx-forge-state { display: inline-flex; align-items: center; gap: var(--corn-space-1); }
+.hx-state-icon { flex: none; width: 1em; height: 1em; }
+.hx-forge-state--requested { color: var(--corn-run-requested); }
+.hx-forge-state--claimed { color: var(--corn-run-claimed); }
+.hx-forge-state--working { color: var(--corn-run-working); }
+.hx-forge-state--waiting { color: var(--corn-run-waiting-ink); background: var(--corn-run-waiting); border-color: var(--corn-run-waiting); border-width: var(--corn-border-strong); }
+.hx-forge-state--done { color: var(--corn-run-done); }
+.hx-forge-state--failed { color: var(--corn-run-failed); }
+.hx-forge-state--stopped { color: var(--corn-run-stopped); }
+.hx-state-spin { transform-origin: 6px 6px; animation: hx-state-turn 1.2s linear infinite; }
+@keyframes hx-state-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .hx-state-spin { animation: none; }
+}
+/* What an action came to, by the control that was used: the words, and a mark that is not a colour */
+.hx-forge-result { margin: 0; padding: var(--corn-space-1) var(--corn-space-3); border-left: calc(var(--corn-border-strong) * 2) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text); line-height: 1.5; overflow-wrap: anywhere; }
+.hx-forge-result[hidden] { display: none; }
+.hx-forge-result[data-corn-state="success"] { border-left-color: var(--corn-ok); }
+.hx-forge-result[data-corn-state="failure"] { border-left-color: var(--corn-bad); }
+.hx-forge-result[data-corn-state="success"]::before { content: '\2713  '; }
+.hx-forge-result[data-corn-state="failure"]::before { content: '\2715  '; }
+/* A disabled control looks disabled: no fill, a dashed edge, the quiet text colour and a cursor that says so */
+.hx-forge .hx-btn:disabled, .hx-forge-act:disabled, .hx-forge-cta .hx-btn[disabled] { background: none; border-style: dashed; color: var(--corn-text-3); box-shadow: none; cursor: not-allowed; }
+/* Retry, in a notice, sits at the end of the line */
+.hx-forge-notice .hx-btn { margin-left: var(--corn-space-2); }
+.hx-forge-runs .hx-forge-notice[hidden], .hx-forge-notice[hidden] { display: none; }
+/* A list that is being read holds its height: rows of a row's size, a quiet bar in each */
+.hx-forge-skeleton { display: flex; flex-direction: column; gap: var(--corn-space-2); min-height: 64px; padding: var(--corn-space-3); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius); list-style: none; }
+.hx-forge-skeleton > span { display: block; height: 10px; border-radius: var(--corn-radius-sm); background: var(--corn-surface-3); }
+.hx-forge-skeleton > span:last-child { width: 55%; }
+.hx-forge-skeleton-line > span { display: inline-block; width: 55%; height: 10px; vertical-align: middle; border-radius: var(--corn-radius-sm); background: var(--corn-surface-3); } /* one line of the runner line or the totals, while they load */
+.hx-forge-empty { line-height: 1.5; }
+/* The panel's title row and tabs stay in place while a list scrolls; the body's padding is taken up by the top so nothing shows above it */
+.hx-forge-body { --hx-forge-pad: var(--corn-panel-pad); --hx-forge-padx: var(--corn-panel-pad); }
+.hx-forge-top { position: sticky; top: calc(var(--hx-forge-pad) * -1); z-index: 3; display: flex; flex-direction: column; gap: var(--corn-space-4); margin: calc(var(--hx-forge-pad) * -1) calc(var(--hx-forge-padx) * -1) 0; padding: var(--hx-forge-pad) var(--hx-forge-padx) 0; background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); } /* opaque: the panel's surface over the ground, so a list scrolls under it without showing through */
+.hx-forge-top .hx-forge-tabs { margin: 0 calc(var(--hx-forge-padx) * -1); padding: 0 var(--hx-forge-padx); }
+/* Where the tabs run on past an edge (a phone), they fade out on that side: a mask (only its alpha counts, so any opaque token does), so it works on any surface and in any theme */
+.hx-forge-top .hx-forge-tabs { mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); -webkit-mask-image: linear-gradient(to right, transparent 0, var(--corn-ground) var(--hx-fade-l, 0px), var(--corn-ground) calc(100% - var(--hx-fade-r, 0px)), transparent 100%); }
+.hx-forge-top[data-more~="start"] { --hx-fade-l: calc(var(--corn-space-6) * 1.5); }
+.hx-forge-top[data-more~="end"] { --hx-fade-r: calc(var(--corn-space-6) * 1.5); }
+/* ==========================================================================
+   What is waiting on you (spec 0010): the one number's badge, the Specs groups, each row's review state, the search, the Runs headings
+   ========================================================================== */
+/* The badge: filled, in the waiting colour the solid waiting pill already uses, so one number looks the same on the Work button and on the tabs */
+.hx-waiting-badge, .hx-forge-count--waiting { border-radius: var(--corn-radius-pill); background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); font-weight: 700; }
+.hx-waiting-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; height: 1.6em; padding: 0 var(--corn-space-1); font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; font-size: var(--corn-text-xs); line-height: 1; }
+.hx-waiting-badge[hidden] { display: none; }
+/* On a tab the badge keeps the count's own width (the tab does not move when a count becomes a badge): its fill reaches past the digits into the tab's own
+   right padding, by a margin that gives the room back (content-box, so the padding is added to the count's 2ch and the margin takes exactly that away
+   again), and keeps the tab's gap from its word on the left */
+.hx-forge-tab .hx-forge-count.hx-forge-count--waiting, .hx-forge-tab[aria-pressed="true"] .hx-forge-count.hx-forge-count--waiting { box-sizing: content-box; padding: 0 var(--corn-space-1); margin: 0 calc(var(--corn-space-1) * -2) 0 0; text-align: center; background: var(--corn-run-waiting); color: var(--corn-run-waiting-ink); }
+.hx-work .hx-waiting-badge { margin-right: calc(var(--corn-space-2) * -1); }
+/* A group of the Specs list: its header says who must act and how many; Drafts past ten rows fold behind it */
+.hx-spec-group > .hx-forge-list { margin: 0; padding: 0; }
+.hx-spec-group > .hx-forge-list[hidden] { display: none; }
+.hx-forge-gtoggle { display: inline-flex; align-items: center; gap: var(--corn-space-2); min-height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hx-forge-gtoggle::before { content: '\25B8'; font-size: var(--corn-text-xs); }
+.hx-forge-gtoggle[aria-expanded="true"]::before { content: '\25BE'; }
+.hx-forge-gtoggle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+/* A Runs heading is an item of the flat list, so a run's card (and a reply typed in it) is never moved into a section */
+.hx-run-heading { list-style: none; margin: var(--corn-space-3) 0 var(--corn-space-1); }
+.hx-run-heading:first-child { margin-top: 0; }
+/* A spec sent back is not a colour alone: a dashed edge and a turning arrow, and its words */
+.hx-forge-state--sent-back { color: var(--corn-run-stopped); border-style: dashed; }
+.hx-forge-reviewed { color: var(--corn-text-2); }
+.hx-forge-unread { margin: var(--corn-space-1) 0 0; color: var(--corn-bad); overflow-wrap: anywhere; }
+.hx-forge-specsearch { margin: 0 0 var(--corn-space-2); }
+.hx-forge-specsearch[hidden] { display: none; }
+.hx-forge-specsearch .hx-forge-field { width: 100%; }
+@container corn-box (max-width: 767px) {
+  .hx-forge-gtoggle { min-height: 44px; }
+  .hx-forge-unread .hx-btn { min-height: 44px; }
+}
+.hx-runner-dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--corn-space-1); border-radius: 50%; background: var(--corn-warn); vertical-align: middle; }
+.hx-runner-dot[hidden] { display: none; }
+.hx-forge-detail-title, .hx-forge-notes-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }
+/* The head of a panel: its title row. The Work panel and the node panel start at one edge (the padding is --corn-panel-pad) and the head is at least this tall */
+.hx-forge-head { min-height: var(--corn-panel-head-height); }
+/* The controls of a bar that had no height of their own */
+/* (the waiting line's Answer is in the proposal bar too, so it is the bar's height; it is a strip's action elsewhere, at its own size) */
+:where(.hx-forge-head, .hx-player-controls, .hx-player-as, .hx-proposal-bar .hx-waiting-line) .hx-btn { height: var(--hx-control-h); }

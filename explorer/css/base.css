@@ -1,0 +1,159 @@
+/*
+ * base.css: what every piece of the explorer needs, whether it sits in cornfield's page or in a shadow root in another app (spec 0011 D8).
+ * The shared control and panel rules (buttons, inputs, the menu box, glass, focus rings, the marks' dots, screen-reader text) and the private
+ * properties `--hx-*`. Plain CSS: every colour, font, size, radius, border width, shadow and spacing is a --corn-* token from
+ * explorer/tokens.css (docs/theming.md; test/explorer/tokens.test.js fails on any literal left here). Light and dark are tokens.css's
+ * business: nothing here names a theme. Classes are prefixed hx-. Nothing here asks what the document says: no `:root`, `html` or `body`
+ * rule, no unit of the window (`vw`, `vh`), no `position: fixed`; the rules of the page itself are in page.css. A width rule is a
+ * container query on `corn-box`, the piece's own box (page.css names the body; a component names its host).
+ *
+ * A component's host: `container: corn-box corn-page / size` and a definite height, so the width rules, the screen-height rules (`corn-page`)
+ * and the `cqw`/`cqh` sizes all read the host. A host that is only `corn-box / inline-size` gets the width rules, but no `corn-page` rule
+ * applies (neither the short-screen one nor the tall one), and `cqh` falls through to the nearest size container above it, or to the small
+ * viewport where there is none: a menu or a sheet is then capped by the window's height, not the host's. With no container at all no width
+ * rule applies and `cqw` is the viewport's too. The few fixed boxes (a dialog, a phone's menu) are placed against the window, unless something
+ * around them is their containing block: a transform or filter above the host, or the host itself in a browser from before mid-2024, where a
+ * container was also layout-contained (page.css: why the page's only container is the body).
+ */
+*, *::before, *::after { box-sizing: border-box; }
+/* Private properties. A control is the token's height on a desk and never under 44px in a narrow box: a brand that sets --corn-control-height
+   (on :root, or on one scope) cannot take a phone's targets under 44px; one that sets it higher than 44px gets its height there too. A segmented
+   control (View, Before / Diff / After, the theme choice) is the control height outside; its buttons are that less the frame (the padding and the
+   two borders), or the full height in a narrow box, where each button is the 44px target and the frame is outside it. They are set on every element
+   rather than on :root, so they exist inside a shadow root too; a container query cannot style its own container, so the container's own rules
+   (the body's) reads none of them. A height that explorer.css wrote in `vh` reads `var(--hx-vh, 1cqh)`: page.css sets `--hx-vh` to the window's 1vh,
+   so cornfield's page is as it was on a phone whose toolbar comes and goes, and a piece elsewhere sizes from its own box. */
+* { --hx-control-h: var(--corn-control-height); --hx-seg-inner: calc(var(--hx-control-h) - var(--corn-space-1) - 2 * var(--corn-border)); }
+@container corn-box (max-width: 767px) {
+  * { --hx-control-h: max(44px, var(--corn-control-height)); --hx-seg-inner: var(--hx-control-h); }
+}
+/* theme.pixelated (docs/config.md#theme): small pixel-art images are sampled without smoothing, in the page as on the map (map-style.js).
+   page.css sets --hx-pixelated where the document says so; a custom property inherits into a shadow root, <html data-pixelated> does not. */
+img { image-rendering: var(--hx-pixelated, auto); }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+.glass {
+  background: var(--corn-surface-1);
+  backdrop-filter: blur(var(--corn-blur));
+  -webkit-backdrop-filter: blur(var(--corn-blur));
+  border: var(--corn-border) solid var(--corn-line);
+  box-shadow: var(--corn-shadow);
+}
+.glass-header {
+  background: color-mix(in srgb, var(--corn-ground) 88%, transparent);
+  backdrop-filter: blur(var(--corn-blur));
+  -webkit-backdrop-filter: blur(var(--corn-blur));
+  border-bottom: var(--corn-border) solid var(--corn-line);
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--corn-text) 18%, transparent); border-radius: var(--corn-radius-pill); }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--corn-text) 28%, transparent); }
+.hx-faint { color: var(--corn-text-3); }
+.hx-mono { font-family: var(--corn-mono); font-size: var(--corn-text-2xs); }
+.hx-strong { color: var(--corn-text-2); }
+.hx-bold { font-weight: 700; }
+.hx-name { color: var(--corn-text-2); }
+.hx-accent { color: var(--corn-accent-text); }
+.hx-good { color: var(--corn-ok); }
+.hx-warn { color: var(--corn-warn); }
+.hx-rom { color: var(--corn-hue-fuchsia); }
+.hx-link { color: var(--corn-info); text-decoration: underline; }
+.hx-link-faint { color: var(--corn-text-3); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); }
+.hx-link-faint:hover { color: var(--corn-warn); }
+.hx-code { color: var(--corn-warn); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); }
+.hx-chips { display: flex; flex-wrap: wrap; gap: var(--corn-space-1); padding-top: var(--corn-space-1); }
+.hx-pt { padding-top: var(--corn-space-3); }
+/* Freeform layout is a switch */
+.hx-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: var(--corn-radius-pill); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-3); }
+.hx-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--corn-text-3); transition: transform 0.15s; }
+[aria-checked="true"] > .hx-switch { background: var(--corn-accent); border-color: var(--corn-accent); }
+[aria-checked="true"] > .hx-switch::after { background: var(--corn-text-on-accent); transform: translateX(12px); }
+@media (prefers-reduced-motion: reduce) {
+  .hx-switch::after { transition: none; }
+}
+.hx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--corn-space-2);
+  padding: var(--corn-space-1) var(--corn-space-3);
+  border-radius: var(--corn-radius-sm);
+  border: var(--corn-border) solid var(--corn-line);
+  background: var(--corn-surface-2);
+  color: var(--corn-text-2);
+  font-size: var(--corn-text-xs);
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.hx-btn:hover { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-btn:focus-visible, .hx-textbtn:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-btn--active, .hx-btn--active:hover { background: var(--corn-accent); border-color: var(--corn-accent-text); color: var(--corn-text-on-accent); box-shadow: var(--corn-shadow-sm); }
+.hx-btn--quiet { font-weight: 500; color: var(--corn-text-3); }
+.hx-btn--icon { width: 28px; height: 28px; padding: 0; justify-content: center; font-size: var(--corn-text-base); }
+.hx-btn--rom { width: 100%; justify-content: center; margin-top: var(--corn-space-1); padding: var(--corn-space-2); background: color-mix(in srgb, var(--corn-hue-fuchsia) 20%, transparent); border-color: color-mix(in srgb, var(--corn-hue-fuchsia) 40%, transparent); color: color-mix(in srgb, var(--corn-hue-fuchsia) 60%, var(--corn-text)); font-weight: 700; }
+.hx-btn--rom:hover { background: color-mix(in srgb, var(--corn-hue-fuchsia) 30%, transparent); }
+.hx-input {
+  width: 128px;
+  padding: var(--corn-space-1) var(--corn-space-3) var(--corn-space-1) var(--corn-space-6);
+  border-radius: var(--corn-radius-sm);
+  border: var(--corn-border) solid var(--corn-line);
+  background: color-mix(in srgb, var(--corn-ground) 80%, transparent);
+  color: var(--corn-text);
+  font: inherit;
+  font-size: var(--corn-text-sm);
+  outline: none;
+  transition: width 0.2s, border-color 0.2s;
+  user-select: text;
+}
+.hx-input:focus { width: 208px; border-color: var(--corn-focus); }
+.hx-input::placeholder { color: var(--corn-text-3); }
+.hx-input--wide, .hx-input--wide:focus { width: 100%; flex: 1; }
+.hx-menu-wrap { position: relative; flex: none; }
+.hx-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: var(--corn-space-3);
+  width: 288px;
+  max-width: calc(100cqw - 24px);
+  max-height: calc(100cqh - 80px);
+  overflow-y: auto;
+  padding: var(--corn-space-4);
+  border-radius: var(--corn-radius-lg);
+  font-size: var(--corn-text-xs);
+  z-index: 50;
+  user-select: none;
+}
+.hx-textbtn { padding: calc(var(--corn-space-1) / 2) var(--corn-space-1); border: 0; border-radius: var(--corn-radius-xs); background: none; color: var(--corn-text-3); font-size: var(--corn-text-2xs); font-weight: 600; }
+.hx-textbtn:hover { background: var(--corn-line-soft); color: var(--corn-text-2); }
+.hx-textbtn--accent { color: var(--corn-accent-text); }
+.hx-close { width: var(--hx-control-h); height: var(--hx-control-h); flex: none; border: 0; border-radius: var(--corn-radius-sm); background: var(--corn-surface-2); color: var(--corn-text-3); font-weight: 700; font-size: var(--corn-text-base); }
+.hx-close:hover { color: var(--corn-text); }
+/* The marks' colours, shared with the picture: the diff tokens, whose light values are theme-model.js `lightColor` of the dark ones */
+.hx-mark-dot { display: inline-block; width: 12px; height: 12px; flex: none; margin-right: var(--corn-space-2); border-radius: 50%; border: var(--corn-border-strong) solid var(--corn-changed); vertical-align: -2px; }
+.hx-mark-dot--added { border-color: var(--corn-added); border-style: dashed; }
+.hx-mark-dot--changed { border-color: var(--corn-changed); }
+.hx-mark-dot--removed { border-color: var(--corn-removed); background: color-mix(in srgb, var(--corn-removed) 25%, transparent); }
+.hx-mark-dot--edit { border-color: var(--corn-edit); border-style: dotted; } /* a dotted ring: not the changed mark's solid one, with or without colour */
+/* ---- a panel glyph (MAP-01) ----------------------------------------------------------------------
+   A panel glyph's colour comes from script (the flow or kind it stands for, --glyph): mixed with the text colour by
+   --corn-glyph-mix (all of it on dark, 45% on light), so a pale yellow arrow still reads on the light ground. */
+.hx-glyph { color: var(--glyph); color: color-mix(in srgb, var(--glyph) var(--corn-glyph-mix), var(--corn-text)); }
+/* ---- keyboard and screen reader (MAP-02, keyboard.js) ------------------------------------------
+   Text only a screen reader reads (the heading, the map's keys, the announcer); a focus ring on everything that
+   takes the focus, the map included (the more specific rings above still win where they are set). */
+.hx-sr-only { position: absolute !important; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+:where(button, a[href], summary, select, textarea, [tabindex]):focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+@media (prefers-reduced-motion: reduce) {
+  .hx-input, .hx-btn, .hx-menu { transition: none; animation: none; }
+}
+.hx-btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; } /* a review being posted: the button keeps the focus */
+@container corn-box (max-width: 767px) {
+  /* A thumb target: a narrow box or a coarse pointer (test/explorer/target-size.test.js holds the list over every file) */
+  .hx-textbtn { min-height: 44px; min-width: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-textbtn { min-height: 44px; min-width: 44px; }
+}

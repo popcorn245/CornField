@@ -113,7 +113,7 @@ Today the explorer is one program per document. It becomes something a page can 
 ### D8. One stylesheet per piece, sized by its own box
 
 - `explorer.css` (1,512 lines) is split into one file per piece. cornfield's page links them all. Each component names its own. The same files serve both.
-- **Width rules become container queries** on the piece's own box. cornfield's page makes its stage a container, so the page lays out as it does today. `prefers-color-scheme` and `prefers-reduced-motion` stay media queries.
+- **Width rules become container queries** on the piece's own box. cornfield's page makes its body the container (the window's box, which holds everything: not the stage, which holds fixed boxes that a browser from before mid-2024 would pin to it), so the page lays out as it does today. `prefers-color-scheme` and `prefers-reduced-motion` stay media queries.
 - Rules on `body`, `:root` and `*` move to a `page.css` that only cornfield's page loads.
 - A piece fills the box its host gives it. Nothing inside is sized from the viewport.
 - **Dialogs become native `<dialog>` elements**, opened modally. That puts them in the top layer from inside a shadow root and keeps focus in them, in place of today's three document-level focus traps.

@@ -1,0 +1,48 @@
+/*
+ * live.css: the live layer
+ * The live chip in the toolbar and its menu (live.js, spec 0029). A part of cornfield's page shell for now: it is not one of D4's pieces,
+ * and its chip sits in the header.
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+@container corn-box (max-width: 767px) {
+  /* The live chip sits on the map too, left of Fit */
+  .hx-header .hx-live { position: absolute; top: calc(100% + var(--corn-space-4)); right: calc(var(--corn-space-4) + var(--corn-space-3) + var(--hx-control-h)); }
+}
+.hx-live-chip { max-width: 240px; min-width: 0; }
+@container corn-box (min-width: 768px) {
+  .hx-live-chip-text { display: inline-block; min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+}
+@container corn-box (min-width: 768px) and (max-width: 1023px) {
+  /* A narrow desktop (768 to 1023px): the header has no room for the chip's words beside a signed-in search, Work and account (a scenario's step
+           turns the live layer on, and the header ran 100px past the page). The chip is its dot, as on a phone; its line is in its menu and its name in aria-label */
+  .hx-live-chip-text { display: none; }
+}
+.hx-live-chip-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--corn-text-3); }
+.hx-live[data-tone="ok"] .hx-live-chip-dot { background: var(--corn-ok); box-shadow: 0 0 calc(var(--corn-glow) * 0.75) color-mix(in srgb, var(--corn-ok) 70%, transparent); }
+.hx-live[data-tone="stale"] .hx-live-chip-dot { background: var(--corn-changed); }
+.hx-live[data-tone="error"] .hx-live-chip-dot { background: var(--corn-removed); box-shadow: 0 0 calc(var(--corn-glow) * 0.75) color-mix(in srgb, var(--corn-removed) 60%, transparent); }
+.hx-live[data-tone="error"] .hx-live-chip { border-color: color-mix(in srgb, var(--corn-removed) 40%, transparent); }
+.hx-menu--live { width: 320px; }
+.hx-live-line { margin: 0 0 var(--corn-space-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); line-height: 1.4; user-select: text; }
+.hx-live-line--main { color: var(--corn-text); font-weight: 600; }
+.hx-live-row { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-3); margin-top: var(--corn-space-3); }
+.hx-live-tag { margin-left: var(--corn-space-2); padding: 0 var(--corn-space-1); border-radius: var(--corn-radius-xs); background: var(--corn-ok-soft); color: var(--corn-ok); font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.hx-live-photo { display: block; max-width: 100%; max-height: 180px; margin: var(--corn-space-2) 0; border-radius: var(--corn-radius-sm); object-fit: cover; }
+.hx-live-list { margin: var(--corn-space-1) 0 0; padding: 0 0 0 var(--corn-space-1); list-style: none; font-size: var(--corn-text-sm); line-height: 1.6; }
+/* The token field (live.js): shown while the live layer is off for want of a token */
+.hx-live-token { margin: var(--corn-space-3) 0 var(--corn-space-1); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line-soft); }
+.hx-live-token-label { display: block; margin-bottom: var(--corn-space-1); color: var(--corn-text); font-size: var(--corn-text-sm); font-weight: 600; }
+.hx-live-token-row { display: flex; gap: var(--corn-space-2); align-items: center; margin-bottom: var(--corn-space-2); }
+.hx-live-token-input { flex: 1; min-width: 0; padding: var(--corn-space-2) var(--corn-space-3); font-size: var(--corn-text-sm); }
+.hx-live-token-input:focus { outline: none; border-color: var(--corn-focus); }
+.hx-live-help code { font-family: var(--corn-mono); font-size: var(--corn-text-2xs); color: var(--corn-text-2); overflow-wrap: anywhere; }
+.hx-live-second { font-size: var(--corn-text-xs); }
+.hx-live-buttons { display: inline-flex; gap: var(--corn-space-2); }
+@container corn-box (max-width: 767px) {
+  /* On a phone the chip is its dot on the map (its line is in the menu), and the menu spans the screen under it */
+  .hx-live-chip { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
+  /* fixed (spec 0011 D8): as the Layers menu: spans the window under the chip */
+  .hx-menu--live { position: fixed; top: calc(56px + var(--corn-space-4) + 44px); left: 12px; right: 12px; width: auto; max-width: none; }
+}
+:where(.hx-header) .hx-live-chip { height: var(--hx-control-h); }
