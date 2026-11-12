@@ -34,6 +34,10 @@
       "types": "./dist/types/corn-map.d.ts",
       "default": "./dist/corn-map.js"
     },
+    "./corn-review": {
+      "types": "./dist/types/corn-review.d.ts",
+      "default": "./dist/corn-review.js"
+    },
     "./corn-scope": {
       "types": "./dist/types/corn-scope.d.ts",
       "default": "./dist/corn-scope.js"

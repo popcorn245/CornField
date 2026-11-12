@@ -47,7 +47,7 @@ describe('the documented components', () => {
       expect(mine.map((r) => ticked(r[1])[0]).sort(), t.tag).toEqual(t.props.map((p) => p.name).sort());
       for (const p of t.props) {
         const row = mine.find((r) => ticked(r[1])[0] === p.name);
-        const object = /[{}]|Array/.test(p.type);
+        const object = /[{}]|Array/.test(p.type) && !/^string\b/.test(p.type); // `proposal` is a name or an object: it has the attribute for the name
         const attribute = p.name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`); // Stencil dash-cases a camelCase property (`useTheme` is `use-theme`)
         if (object) expect(row[2], p.name).toBe('none');
         else expect(ticked(row[2])[0], p.name).toBe(attribute);
@@ -90,8 +90,9 @@ describe('the documented components', () => {
         const fields = [...decl[1].matchAll(/^\s*(\w+)\??:/gm)].map((f) => f[1]).sort();
         const row = rows(sub('Events')).find((r) => ticked(r[0])[0] === t.tag && ticked(r[1])[0] === event);
         expect(fieldsIn(row[2]), `${t.tag} ${event} in theming.md`).toEqual(fields);
-        const line = embedding.split('\n').find((l) => l.startsWith(`| \`${event}\` |`));
-        expect(fieldsIn(line), `${event} in embedding.md`).toEqual(fields);
+        // the same event name is on more than one tag (`cornAuth`): its table row in embedding.md is the one whose fields these are
+        const lines = embedding.split('\n').filter((l) => l.startsWith(`| \`${event}\` |`));
+        expect(lines.map(fieldsIn), `${t.tag} ${event} in embedding.md`).toContainEqual(fields);
       }
     }
   });
@@ -109,6 +110,25 @@ describe('the documented components', () => {
     const stand = /setAttribute\('data-corn', '(map-overlay)'\)/.exec(renderer)[1]; // the second renderer's stand-in canvas
     const parts = rows(sub('Parts')).find((r) => ticked(r[0])[0] === 'corn-map');
     expect(ticked(parts[1]).sort()).toEqual([...new Set([...made, stand])].sort());
+  });
+
+  it('lists every part of corn-review: exactly the hooks of the modules its piece reaches (each is a part of the same name)', () => {
+    // pieces/review.js and every module it imports, statically or by `import()` (the load a `src` brings is one): the map, the status card, the node panel, the
+    // proposal's bar, the change list with the player, the decision and what they make their markup from
+    const seen = new Set();
+    const walk = (file) => {
+      if (seen.has(file) || !fs.existsSync(file)) return;
+      seen.add(file);
+      for (const m of fs.readFileSync(file, 'utf8').matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+\.js)['"]/g)) walk(path.resolve(path.dirname(file), m[1]));
+    };
+    walk(path.join(EXPLORER, 'pieces', 'review.js'));
+    expect([...seen].map((f) => path.relative(EXPLORER, f))).toEqual(expect.arrayContaining(['pieces/map.js', 'pieces/status.js', 'pieces/node-panel.js', 'pieces/proposal.js', 'pieces/changes.js', 'pieces/decision.js', 'engine/player.js', 'pieces/review-source.js']));
+    const made = new Set([...seen].flatMap((f) => [...fs.readFileSync(f, 'utf8').matchAll(/\bdata-corn=\\?"([a-z0-9-]+)\\?"/g)].map((m) => m[1])));
+    made.add('map-overlay'); // the second renderer's stand-in canvas (renderer.js)
+    const parts = rows(sub('Parts')).find((r) => ticked(r[0])[0] === 'corn-review');
+    expect(ticked(parts[1]).sort()).toEqual([...made].sort());
+    // it is the one the review's own state of the box names, and the three the host puts its hand on first
+    for (const part of ['review', 'stage', 'dock', 'decision', 'review-bar', 'proposal-bar', 'proposal-title', 'review-column', 'node-panel', 'scenario-player', 'source-status', 'source-sign-in', 'empty']) expect(made.has(part), part).toBe(true);
   });
 
   it('documents the theme attribute\'s values, and the component says them the same', () => {

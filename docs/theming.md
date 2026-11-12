@@ -588,7 +588,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 
 The explorer's pieces are also web components, for putting in another app's page ([docs/embedding.md](embedding.md) says how to load them). They are part of the public contract in the same way the tokens and the hooks are: **renaming or removing anything listed here is a breaking change**; adding one is not. [test/explorer/components-contract.test.js](../test/explorer/components-contract.test.js) fails when this section and the components' source disagree, in either direction.
 
-- **The server's theme** is asked for, never assumed: `use-theme` on a `corn-scope` (or a `corn-map` with `src`) fetches the server's `theme.css`, adopts its rules into each piece's shadow root, where the hooks apply as written, and copies **only** its `--corn-*` declarations of the `:root`, light and dark blocks onto the scope's element. In another app's page a theme names nothing but its server: a `url()` to another origin (in a rule, a token, an `image-set()`, any at-rule) is dropped, as `cornfield validate` refuses it here. What a constructable stylesheet drops: an `@import`, and an `@font-face`, which defines no font from inside a shadow root, so **a host that wants the theme's fonts declares them itself**, with a `@font-face` of its own naming the server's `/cornfield/theme/assets/…` file ([docs/embedding.md](embedding.md#the-servers-theme-use-theme)).
+- **The server's theme** is asked for, never assumed: `use-theme` on a `corn-scope` (or a `corn-map` or `corn-review` with `src`) fetches the server's `theme.css`, adopts its rules into each piece's shadow root, where the hooks apply as written, and copies **only** its `--corn-*` declarations of the `:root`, light and dark blocks onto the scope's element. In another app's page a theme names nothing but its server: a `url()` to another origin (in a rule, a token, an `image-set()`, any at-rule) is dropped, as `cornfield validate` refuses it here. What a constructable stylesheet drops: an `@import`, and an `@font-face`, which defines no font from inside a shadow root, so **a host that wants the theme's fonts declares them itself**, with a `@font-face` of its own naming the server's `/cornfield/theme/assets/…` file ([docs/embedding.md](embedding.md#the-servers-theme-use-theme)).
 - **Tokens are the first way to theme a component.** Every `--corn-*` token inherits through the shadow root, so a rule on `:root`, on a wrapper or on one element sets it for the maps inside. The default values (everything in `tokens.css`) are added to the page by the first `corn-*` element, at zero specificity, so **any ordinary rule of yours overrides them**.
 - **Hooks are parts.** Inside a shadow root a page's `[data-corn="…"]` rule cannot reach, so every hook a piece makes is also a `part` of the same name: `corn-map::part(map-stage) { … }`. A `::part()` selects the element and not what is inside it.
 - **Light and dark** follow the page unless the element is told: with no `theme` attribute the page's own `<html data-theme>`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page. `theme="light"` or `theme="dark"` forces that mode for the element (the element declares that mode's tokens itself, so a rule of yours **on that element** sets one of them; a rule on `:root` does not reach a forced element).
@@ -599,6 +599,7 @@ The explorer's pieces are also web components, for putting in another app's page
 |---|---|---|
 | `corn-scope` | no | Where the data comes from and what the pieces inside it share: one instance (one selection, one camera, one topology); `src` is the address of a cornfield server it reads; it shows nothing of its own |
 | `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in, or from a server (`src`, or the scope's) |
+| `corn-review` | yes | The one-tag review: a proposal on the map, what it changes, its scenarios and Approve and Send back, from a server (`src`) or from objects the host hands in. It makes its own instance: not yet a member of a `corn-scope` |
 
 ### Properties
 
@@ -611,6 +612,17 @@ The explorer's pieces are also web components, for putting in another app's page
 | `corn-map` | `renderer` | `renderer` | `auto` or `canvas2d` |
 | `corn-map` | `src` | `src` | the address of a cornfield server, for a map with no scope around it; ignored inside a scope |
 | `corn-map` | `useTheme` | `use-theme` | wear the server's theme (with `src`, no scope) |
+| `corn-review` | `src` | `src` | the address of a cornfield server: an `http(s)` origin and an optional path; the review reads the config, the map and the proposal from it and decides on it; another value is refused and said; read when the element connects, a new one is a new review |
+| `corn-review` | `proposal` | `proposal` | the proposal's name (the review reads it from the server), or, as a property only, the proposal object, shown for reading; not reflected |
+| `corn-review` | `source` | `source` | which copy of the proposal: `checkout`, `pull/<n>` or a worktree's name; with none the server answers with the first it lists |
+| `corn-review` | `view` | `view` (reflected) | `before`, `diff` or `after`; it follows the reviewer's own choice on the bar |
+| `corn-review` | `node` | `node` (reflected) | the id of the selected node, or none; it follows a click or a key |
+| `corn-review` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
+| `corn-review` | `useTheme` | `use-theme` | wear the server's theme (with `src`) |
+| `corn-review` | `topology` | none | the object `topology.json` holds, for a host that fetches for itself |
+| `corn-review` | `config` | none | the object `/cornfield/config.json` holds, for a host that fetches for itself |
+| `corn-review` | `strings` | none | the host's own words (`strings` keys to text); when set they are the words spoken, the server's are not mixed in |
+| `corn-review` | `checker` | none | the permission checker for the scenarios, a module the host imported itself: `{ check(items, { signal }) }`; never loaded from a config |
 | `corn-scope` | `src` | `src` | the address of a cornfield server: an `http(s)` origin and an optional path; another value is refused and said |
 | `corn-scope` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
 | `corn-scope` | `useTheme` | `use-theme` | wear the server's theme |
@@ -628,6 +640,12 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 | `corn-map` | `cornReady` | none: the first frame with a map in it is drawn, once each time the element is put in the page |
 | `corn-map` | `cornAuth` | with `src` and no scope: the server wants a sign-in. Its fields: `status`, `signIn`. `signIn` is `<src>/auth/start?returnTo=<this page>`; the component never navigates the window |
 | `corn-map` | `cornError` | with `src` and no scope: something it could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version` or `theme` |
+| `corn-review` | `cornReady` | none: the map is drawn and the proposal asked for is open (or has said why it is not), once each time the element is put in the page |
+| `corn-review` | `cornSelect` | the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`), once per change. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node`, `edge`, or null when cleared; `id` is the node's id, `from->to` for an edge, or null; `source` is `tap`, `keyboard`, `api` or `state` |
+| `corn-review` | `cornNavigate` | the open proposal or its view changed: what cornfield's own page would put in its address bar, for the host to answer or not; the component never touches the host's address. Its fields: `proposal`, `source`, `view`, `change`. `proposal` is the name, or null once closed; `source` is the copy only when it was asked for by name; `view` is `before`, `diff`, `after`, or null once closed; `change` is `opened`, `view` or `closed` |
+| `corn-review` | `cornDecision` | the server took a decision, once per decision, after it answered, from the decision's own detail and never from what is open now. Its fields: `outcome`, `proposal`, `source`, `open`, `review`. `outcome` is `approved` or `notes` (a send back); `open` is false when another proposal was opened, or this one closed, while it was sent; `review` is what the server answered |
+| `corn-review` | `cornAuth` | the server answered a read or the press with 401 or 403: the review shows the sign-in card, and the host may show its own. Its fields: `status`, `signIn`, `during`. `signIn` is the server's sign-in, which returns to this page; `during` is `load`, `proposal`, `facts`, `review`, `send` or `landing` |
+| `corn-review` | `cornError` | something the review could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` or `proposal` (the proposal did not open) |
 | `corn-scope` | `cornReady` | none: the scope has its data (read from the server, or handed in), once per server |
 | `corn-scope` | `cornAuth` | the server answered a gated read with 401 or 403. Its fields: `status`, `signIn`. `signIn` is the server's sign-in, which returns to this page |
 | `corn-scope` | `cornError` | something the pieces could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` or `second-map` |
@@ -639,6 +657,9 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 | `corn-map` | `fit()` | puts the whole map in view |
 | `corn-map` | `focusNode(id)` | selects the node and brings it into view |
 | `corn-map` | `refresh()` | reads the tokens again and draws, for a token changed where the map cannot see it (a stylesheet added to the page's head, a class or a style on a wrapper); the `theme` attribute, `<html data-theme>` and the system's setting it follows by itself |
+| `corn-review` | `fit()` | puts the whole map in view |
+| `corn-review` | `focusNode(id)` | selects the node and brings it into view |
+| `corn-review` | `refresh()` | reads the tokens again and draws, as the map's does |
 
 All three answer with a promise.
 
@@ -647,6 +668,7 @@ All three answer with a promise.
 | Tag | Parts |
 |---|---|
 | `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay`, and with a source `source-status`, `source-title`, `source-text`, `source-origin`, `source-sign-in`, `source-retry`, `source-notice`, `source-announcer` |
+| `corn-review` | `backdrop`, `badge`, `compare`, `compare-option`, `control`, `count`, `decision`, `dialog-scrim`, `diff-block`, `diff-pill`, `dock`, `empty`, `field-change`, `frame-button`, `hint`, `hint-icon`, `label-canvas`, `lines-by-kind`, `lines-kind`, `lines-switch`, `map-canvas`, `map-overlay`, `map-stage`, `mark-dot`, `menu-section`, `menu-title`, `message`, `more`, `node-foot`, `node-host`, `node-link`, `node-panel`, `node-title`, `notice`, `open-link`, `persona-group`, `proposal-bar`, `proposal-changes`, `proposal-counts`, `proposal-errors`, `proposal-head`, `proposal-menu`, `proposal-mode`, `proposal-source`, `proposal-title`, `proposal-ways`, `proposals-button`, `proposals-menu`, `result`, `review`, `review-bar`, `review-column`, `review-label`, `review-note`, `review-state`, `row`, `scenario-fill`, `scenario-list`, `scenario-player`, `scenario-track`, `section`, `sent-edits`, `sheet-grip`, `source-announcer`, `source-notice`, `source-origin`, `source-retry`, `source-sign-in`, `source-status`, `source-text`, `source-title`, `stage`, `state-icon`, `state-pill`, `step`, `step-list`, `summary`, `swatch`, `tab`, `tabs`, `text-link`, `whole-map` |
 | `corn-scope` | none: it has no shadow root and shows nothing of its own |
 
 ## Words

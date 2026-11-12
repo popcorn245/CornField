@@ -10,6 +10,9 @@
  *   - a host that is not listed: the server answers, the browser refuses the module for want of CORS, the tag stays unknown, no chunk is fetched
  *   - the listed host with `<corn-map src>`, and with corn-scope.js and corn-map.js and a scope around a map: the scope's chunk loads from the server
  *     (with CORS, without the cookie), the gated read carries the session to the server, and a signed-out visitor sees the server's sign-in
+ *   - the listed host with `<corn-review src proposal>`: one script line, corn-review.js and the review's chunks load from the server with CORS and no
+ *     cookie (the loader of a `src` among them, once), the gated read carries the session to the server alone, and a signed-out visitor is shown the card
+ *     with the server's sign-in and `cornAuth` says it; a review handed its data loads no loader and asks nothing
  * Needs the build (dist/; this builds it when it is not there) and a Chrome: CHROME_PATH where there is no Google Chrome.
  */
 import { execFileSync } from 'node:child_process';
@@ -57,13 +60,13 @@ describe('a host page loads the components from the cornfield server', () => {
     const server = http.createServer((req, res) => {
       if (req.url === '/host.css') {
         res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
-        return res.end('corn-map { display: block; width: 640px; height: 420px; }');
+        return res.end('corn-map { display: block; width: 640px; height: 420px; } corn-review { display: block; width: 900px; height: 560px; }');
       }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': hostPolicy(MAP) });
       // `/?src`: a one-tag map that reads the server; `/?scope`: the two entries, a scope around a map
       const query = new URL(req.url || '/', 'http://x').searchParams;
-      const scripts = query.has('scope') ? ['corn-scope.js', 'corn-map.js'] : ['corn-map.js'];
-      const body = query.has('scope') ? `<corn-scope src="${MAP}"><corn-map id="map" renderer="canvas2d"></corn-map></corn-scope>` : query.has('src') ? `<corn-map id="map" renderer="canvas2d" src="${MAP}"></corn-map>` : '<corn-map id="map"></corn-map>';
+      const scripts = query.has('scope') ? ['corn-scope.js', 'corn-map.js'] : query.has('review') ? ['corn-review.js'] : ['corn-map.js'];
+      const body = query.has('plain') ? '<corn-review id="review"></corn-review>' : query.has('review') ? `<corn-review id="review" src="${MAP}" proposal="0042-retire-the-old-export"></corn-review>` : query.has('scope') ? `<corn-scope src="${MAP}"><corn-map id="map" renderer="canvas2d"></corn-map></corn-scope>` : query.has('src') ? `<corn-map id="map" renderer="canvas2d" src="${MAP}"></corn-map>` : '<corn-map id="map"></corn-map>';
       return res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>host</title>
 <link rel="stylesheet" href="/host.css">
 ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f}"></script>`).join('\n')}</head>
@@ -215,6 +218,51 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
       await context.close();
     }, 60_000);
   }
+
+  it('a listed host, a one-tag corn-review with src: the loader comes from the server with CORS and no cookie, the reads carry the session to the server alone, and a signed-out visitor is shown the server\'s sign-in, with cornAuth', async () => {
+    const { page, context, answers, failed } = await open(LISTED, '/?review');
+    await page.evaluate(() => { (window as any).__events = []; for (const t of ['cornAuth', 'cornError', 'cornReady']) document.addEventListener(t, (e) => (window as any).__events.push({ type: t, detail: (e as CustomEvent).detail })); });
+    const link = await page.evaluate(async () => {
+      await customElements.whenDefined('corn-review');
+      const el = document.querySelector('corn-review') as any;
+      await el.componentOnReady();
+      for (let i = 0; i < 100; i++) {
+        const a = el.shadowRoot && el.shadowRoot.querySelector('a[data-corn="source-sign-in"]');
+        if (a) return { href: a.getAttribute('href'), title: el.shadowRoot.querySelector('[data-corn="source-title"]').textContent, region: el.shadowRoot.querySelector('[data-corn="review"]').getAttribute('role') };
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return null;
+    });
+    expect(link).toEqual({ href: `${MAP}/auth/start?returnTo=${encodeURIComponent(`${LISTED}/?review`)}`, title: 'You are not signed in to cornfield', region: 'region' });
+    expect(failed).toEqual([]);
+    const entry = answers.find((a) => a.url === `${MAP}/cornfield/components/corn-review.js`)!;
+    expect(entry.status).toBe(200);
+    expect(entry.headers['access-control-allow-origin']).toBe(LISTED);
+    expect(entry.requestHeaders.cookie).toBeUndefined();
+    const loader = answers.filter((a) => /\/chunks\/review-source-[\w-]+\.js$/.test(a.url));
+    expect(loader).toHaveLength(1);
+    expect(loader[0].headers['access-control-allow-origin']).toBe(LISTED);
+    expect(loader[0].requestHeaders.cookie).toBeUndefined();
+    const config = answers.find((a) => a.url === `${MAP}/cornfield/config.json`)!;
+    expect(config.status).toBe(401);
+    expect(config.requestHeaders.cookie).toBe('cornfield=not-a-real-session');
+    // signed out, so no map, and the proposal was never asked for: nothing of it went to the server
+    expect(answers.some((a) => /\/proposals/.test(a.url))).toBe(false);
+    for (const a of answers) if (!/\/cornfield\/config\.json$|\/topology\.json/.test(new URL(a.url).pathname)) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
+    const events = await page.evaluate(() => (window as any).__events);
+    expect(events.filter((e: { type: string }) => e.type === 'cornAuth')).toEqual([{ type: 'cornAuth', detail: { status: 401, signIn: link!.href, during: 'load' } }]);
+    expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
+    await context.close();
+  }, 60_000);
+
+  it('a listed host, a corn-review with no src: no loader is fetched and nothing is asked of the server', async () => {
+    const { page, context, answers } = await open(LISTED, '/?review&plain');
+    await page.evaluate(async () => { await customElements.whenDefined('corn-review'); await (document.querySelector('corn-review') as any).componentOnReady(); });
+    await page.waitForTimeout(800);
+    expect(answers.filter((a) => /review-source|config\.json|topology/.test(a.url))).toEqual([]);
+    expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
+    await context.close();
+  }, 60_000);
 
   it('docs/embedding.md gives a host exactly the policy this test ran under', () => {
     const doc = fs.readFileSync(path.join(REPO, 'docs', 'embedding.md'), 'utf8');
