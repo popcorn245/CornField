@@ -492,6 +492,23 @@ describe('the server\'s theme (use-theme)', () => {
     expect(map(host).shadowRoot!.adoptedStyleSheets.every((s) => ![...s.cssRules].some((r) => r.cssText.includes('letter-spacing')))).toBe(true);
   });
 
+  it('light and dark follow the scope\'s theme, else the page\'s <html data-theme>, else the system; two scopes wear two servers\' themes side by side', async () => {
+    const { commands } = await import('vitest/browser');
+    await (commands as any).colorScheme('dark');
+    const host = await page(`<corn-scope id="a" src="${at('hostile')}" use-theme><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope><corn-scope id="b" src="${at('leaky')}" use-theme theme="dark"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
+    const [a, b] = [host.querySelector('#a') as Piece, host.querySelector('#b') as Piece];
+    const accent = (el: Element) => getComputedStyle(el.querySelector('corn-map')!).getPropertyValue('--corn-accent').trim();
+    await until(() => accent(a) === '#c8102e' && accent(b) === '#0a7d3b'); // the system is dark: the base block
+    await (commands as any).colorScheme('light');
+    await until(() => accent(a) === '#b00b1e'); // the system's light block
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await until(() => accent(a) === '#c8102e'); // the page's own choice wins over the system
+    a.theme = 'light';
+    await until(() => accent(a) === '#b00b1e'); // and the scope's over the page's
+    expect(accent(b)).toBe('#0a7d3b'); // the other scope, its own server's
+    await (commands as any).colorScheme('dark');
+  });
+
   it('turned off, takes back everything it added: the tokens, the sheet in each piece, and the map is drawn again in the look it had without it', async () => {
     const plain = await page(`<corn-scope src="${at('hostile')}" theme="dark"><corn-map renderer="canvas2d" style="${SIZE}"></corn-map></corn-scope>`);
     await until(() => lit(map(plain)) > 0);
