@@ -28,12 +28,14 @@
  *   selection       { node, edge, previous: { node, edge }, source }  THE selection changed: another node (by id), another edge, or none. `source` says
  *                   who: 'tap' (the map or the panel's Close), 'keyboard', 'search', 'link' (a link or a list row in the panel), 'api' (a program calling
  *                   engine/selection.js), or 'state' (an assignment to `state.selectedNode` or `state.selectedEdge`: an edge picked on the map is one).
- *                   `node: null` is a clear. Not fired when the same node is chosen again, or when nothing was selected and nothing is
+ *                   `node: null` is a clear. Said once per change, in order, and `previous` is what the listeners last heard: not when the same node
+ *                   is chosen again or nothing was selected and nothing is; a change a listener makes while it is said is said after every
+ *                   listener has heard the first
  *   scene           (none)  touchScene(): what the picture is built from changed (`onSceneTouch`)
  *   layers          (none)  a layer went on or off, or the layers were set (engine/layers.js): live.js starts or stops the live layer, a search moves its matches
  *   search          { query, current }  the search's query or its current match changed (pieces/search.js)
  *   node:painted    { node }  the node panel was filled for this node (pieces/node-panel.js)
- *   announce        text  what a screen reader should be told (engine/keyboard.js `announce`); the page also writes it in `#map-announcer`
+ *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
  *
  *   What a piece is asked to do (`emit`ted to it):
  *   node:show       { node, frame }  show this node in the panel (engine/selection.js `selectNode`, once the scene is up to date); node:close: close it;
@@ -45,40 +47,13 @@
  *   What a piece asks of a neighbour that may not be there (`ask`: the first answer that is not `undefined`; nobody answering is a no):
  *   search:active   (none)  is a search with matches on? -> boolean (the map's N and P step through its matches then)
  *   search:step     by      step to the next (+1) or previous (-1) match -> boolean, whether there was one
- *   live:section    node    the live layer's block for the node panel -> HTML; live:hydrate (emit) el: its photos
+ *   live:section    node    the live layer's block for the node panel -> HTML, put in the panel as it is: whoever answers escapes what it shows
+ *                           (live.js does); live:hydrate (emit) el: its photos
  *   forge:can-start (none)  can a run be started from here? -> boolean; forge:start (emit) { slug, returnTo }: open the Start dialog
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
  *
  *   What input.js asks of the page (requests, not news of a change; the page decides what each means):
  *   select          node    a tap on a node; `background`: a tap on the bare map; `grab`: a hand took the camera
- *
- *   inst.el         an element of the instance by id, found inside its root and never by document id
- *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
- *   inst.slot       what a module keeps for this instance (its map style), made on first use
- *   inst.map        the map (engine/render.js createMap sets it)
- *   inst.destroy()  runs every clean-up, so nothing the instance set up outlives it
- *
- * The events of an instance (name: detail). Every one is per instance; an unlisted name is not part of the contract.
- *   selection       { node, edge, previous: { node, edge }, source }  THE selection changed: another node (by id) or another edge, or none. Fired for a tap
- *                   (`source: 'tap'`), the keyboard (`'keyboard'`), a search (`'search'`), a link or a list row (`'link'`), a program (`'api'`), an edge
- *                   picked on the map (`'state'`: the page sets `state.selectedEdge`), a clear (`node: null`, `'tap'`, `'keyboard'`, `'api'`...), and a
- *                   plain assignment to `state.selectedNode` or `state.selectedEdge` (`'state'`). Not fired when the same node is chosen again
- *   select          node         a tap on a node (input.js): a request, the page decides what selecting means; `background`: a tap on the bare map; `grab`: a hand took the camera
- *   scene           (none)       touchScene(): the picture is built from something that changed (onSceneTouch)
- *   node:show       { node, frame }   asks the node panel to show this node (engine/selection.js selectNode, after the scene is up to date)
- *   node:close      (none)       asks the node panel to close (engine/selection.js clearSelection)
- *   node:painted    { node }     the node panel was filled for this node
- *   layers          (none)       a layer went on or off, or the layers were set (the Layers menu); live.js starts or stops the live layer on it
- *   layers:draw     (none)       the Layers menu was drawn again
- *   search          { query, current }   the query or the current match changed (the search piece)
- *   search:step     by           asks the search piece to step to the next (+1) or previous (-1) match; answers whether it did (`ask`)
- *   search:active   (none)       asks whether a search with matches is on (`ask`)
- *   view            view         the view changed ('orbit', 'dataflow', 'house'): the Layers chip follows (view.js)
- *   theme           (none)       light or dark changed (the host says so: theme.js on the page): the dots and legends are drawn again
- *   announce        text         what a screen reader should be told (the page writes it in `#map-announcer`)
- *   scenario:clear  (none)       a selection ends a playing scenario (scenario-ui.js answers on the page)
- *   live:section    node         asks the live layer for the node panel's section; answers HTML (`ask`); live:hydrate: el (photos)
- *   forge:can-start (none)       asks whether a run can be started (`ask`); forge:start: { slug, returnTo } opens the Start dialog
  *
  * A module that is "on the instance" takes `inst` and reads nothing global: no shared state, no `document.getElementById`, no
  * listener on `document` or `window`, no `location`, no `history`, no fetch of a literal path (test/explorer/instance-tripwires.test.js).
@@ -131,14 +106,36 @@ export function createInstance({ root = null, base = '', fetch: fetchOpt, string
   const theState = state || createState();
   let selNode = theState.selectedNode || null;
   let selEdge = theState.selectedEdge || null;
+  // The `selection` event says each change once, against what its listeners last heard (`heard`), in order: a change made while it is
+  // being said (a listener that selects) is said after every listener has heard the first, and a quiet change a later one overtook says nothing
+  let heard = { node: selNode, edge: selEdge };
+  const queue = [];
+  let saying = false;
+  const differs = (a, b) => (a.node ? a.node.id : null) !== (b.node ? b.node.id : null) || a.edge !== b.edge;
+  const say = (source) => {
+    queue.push(source);
+    if (saying) return;
+    saying = true;
+    try {
+      while (queue.length) {
+        const why = queue.shift();
+        const now = { node: selNode, edge: selEdge };
+        if (destroyed || !differs(heard, now)) continue;
+        const previous = heard;
+        heard = now;
+        inst.emit('selection', { ...now, previous, source: why });
+      }
+    } finally { saying = false; }
+  };
   const commit = (nextNode, nextEdge, source, quiet) => {
     const previous = { node: selNode, edge: selEdge };
     selNode = nextNode || null;
     selEdge = nextEdge || null;
-    const changed = (previous.node ? previous.node.id : null) !== (selNode ? selNode.id : null) || previous.edge !== selEdge;
-    const say = () => { if (changed && !destroyed) inst.emit('selection', { node: selNode, edge: selEdge, previous, source }); };
-    if (!quiet) say();
-    return { changed, previous, announce: say };
+    const changed = differs(previous, { node: selNode, edge: selEdge });
+    let said = false;
+    const announce = () => { if (said) return; said = true; if (changed) say(source); };
+    if (!quiet) announce();
+    return { changed, previous, announce };
   };
   Object.defineProperty(theState, 'selectedNode', { enumerable: true, configurable: true, get: () => selNode, set: (v) => { commit(v, selEdge, 'state', false); } });
   Object.defineProperty(theState, 'selectedEdge', { enumerable: true, configurable: true, get: () => selEdge, set: (v) => { commit(selNode, v, 'state', false); } });

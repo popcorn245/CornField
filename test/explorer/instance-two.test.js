@@ -382,6 +382,32 @@ describe('two instances, each with its own node panel, Layers menu and search', 
     expect(seen).toEqual([['tap', n1.id, null], ['keyboard', n2.id, null], ['state', n2.id, 'calls'], ['state', n1.id, 'calls'], ['api', null, null]]);
   });
 
+  it('the selection event is said once per change, in order, never inside itself, with what was last heard as `previous`', () => {
+    const [n1, n2, n3] = a.state.nodes.filter((n) => n.type === 'app' || n.type === 'service');
+    const id = (x) => (x ? x.id : null);
+    // a listener that selects while the event is being said: every listener hears the first change before anyone hears the second
+    const first = [];
+    const second = [];
+    const offA = a.inst.on('selection', (d) => { first.push([id(d.previous.node), id(d.node)]); if (id(d.node) === n1.id) a.state.selectedNode = n2; });
+    const offB = a.inst.on('selection', (d) => second.push([id(d.previous.node), id(d.node)]));
+    selectNode(a.inst, n1, { source: 'tap' });
+    expect(second).toEqual([[null, n1.id], [n1.id, n2.id]]);
+    expect(first).toEqual([[null, n1.id], [n1.id, n2.id]]);
+    offA();
+    // a quiet change that a later one overtook says nothing of its own, and is said only once however often it is told to
+    second.length = 0;
+    const held = a.inst.setSelection(n3, null, { source: 'api', quiet: true });
+    a.state.selectedNode = n1;
+    held.announce();
+    held.announce();
+    expect(second).toEqual([[n2.id, n1.id]]);
+    const twice = a.inst.setSelection(n2, null, { source: 'api', quiet: true });
+    twice.announce();
+    twice.announce();
+    expect(second).toEqual([[n2.id, n1.id], [n1.id, n2.id]]);
+    offB();
+  });
+
   it('toggling a layer in one redraws that menu and leaves the other\'s rows, counts and scene alone', () => {
     const rowsB = q(b, '#layer-toggles-container').innerHTML;
     const chipB = q(b, '#layers-count').textContent;
