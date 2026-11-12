@@ -181,8 +181,9 @@ export function applyConfig(inst, config) {
  * @param {object} [opts]
  * @param {string} [opts.version] the package's version, compared with the server's (`config.version`)
  * @param {() => string} [opts.pageUrl] the page's address, for the sign-in's way back
+ * @param {(config: object) => void} [opts.onConfig] called with each config taken, the host's or the server's (a scope starts the server's theme on it)
  */
-export function createSource(inst, { version = '', pageUrl = () => '' } = {}) {
+export function createSource(inst, { version = '', pageUrl = () => '', onConfig = () => {} } = {}) {
   let destroyed = false;
   let current = null;
   let controller = null;
@@ -263,6 +264,7 @@ export function createSource(inst, { version = '', pageUrl = () => '' } = {}) {
     if (own.strings) useStrings(config);
     const drift = compareVersions(version, config.version);
     if (version && (drift === 'minor' || drift === 'major')) source.say({ state: 'version', server: String(config.version), package: version, drift });
+    onConfig(config);
   }
 
   /** What a failed read says. A fetch that was refused outright says nothing about why: the server is told apart from "not listed" by asking a route that answers anyone */

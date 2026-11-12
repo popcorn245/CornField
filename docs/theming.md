@@ -486,6 +486,7 @@ The header was reworked in CF-41. `zoom` is gone with the zoom buttons (pinch, t
 | `layer-kinds`, `kind-key` | under a Layers row that holds nodes with a finer kind: the disclosure ("5 kinds") and, when open, one key row per kind (its letters, its name, its count). A key is not a toggle; a project that wants one declares a layer |
 | `layer-note` | on an off Layers row, "+1 shown by the proposal" (nodes of that layer drawn only because the open proposal touches them), or "hidden while reviewing" (a layer the open proposal does not touch, which the review hid: the row still turns it on, for the review only) |
 | `whole-map` | the proposal bar's "Whole map" switch (`data-corn-kind="secondary"`, `aria-pressed`; its words are `wholeMap`, its name and tooltip the full `showWholeMap`): off at every opening, kept across Before, Diff and After; on brings back every layer the viewer has on and the dimmed, coloured map Diff always showed. On a desk it sits on the title's row, beside the source; on a phone, with Edit |
+| `source-status`, `source-title`, `source-text`, `source-origin`, `source-sign-in`, `source-retry`, `source-notice`, `source-announcer` | a map that reads a cornfield server (spec 0011; a `corn-scope`, or a `corn-map` with `src`; [docs/embedding.md](embedding.md#what-the-person-sees-and-what-is-said)): the box over the map while it loads and when it cannot (`data-corn-state`: `running` loading, drawn quiet and without a box; `waiting` the server wants a sign-in; `failure` not listed, a server error, a bad address or a second map in the scope; `stopped` offline), its title and its sentence, the page's origin the server should list (inside the sentence), the link to the server's sign-in (`data-corn-kind="primary"`, `target="_top"`) and Retry (`secondary`), the one quiet line along the bottom that says the package and the server are different versions, and the polite live region (out of sight) that says each state once. Their words are the `source…` keys of [Words](#words) |
 | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay` | the box the map's canvases sit in (made by the map piece for a component: cornfield's own page uses its `stage`), the map's canvas, the canvas its labels are drawn on, a canvas stacked over it (the second renderer's) |
 | `run-overlay`, `run-mark` | the layer of agent-run marks over the map, one mark |
 | `house-under`, `house-plan`, `house-over`, `house-bar` | the House view: the layer under the map, the floor plan, the layer over the map, its bar of floors and people |
@@ -584,6 +585,7 @@ Every dialog box ends in `-dialog`, so `[data-corn$="-dialog"]` styles all of th
 
 The explorer's pieces are also web components, for putting in another app's page ([docs/embedding.md](embedding.md) says how to load them). They are part of the public contract in the same way the tokens and the hooks are: **renaming or removing anything listed here is a breaking change**; adding one is not. [test/explorer/components-contract.test.js](../test/explorer/components-contract.test.js) fails when this section and the components' source disagree, in either direction.
 
+- **The server's theme** is asked for, never assumed: `use-theme` on a `corn-scope` (or a `corn-map` with `src`) fetches the server's `theme.css`, adopts its rules into each piece's shadow root, where the hooks apply as written, and copies **only** its `--corn-*` declarations of the `:root`, light and dark blocks onto the scope's element ([docs/embedding.md](embedding.md#the-servers-theme-use-theme) says what a constructable stylesheet drops: an `@import`, an `@font-face`).
 - **Tokens are the first way to theme a component.** Every `--corn-*` token inherits through the shadow root, so a rule on `:root`, on a wrapper or on one element sets it for the maps inside. The default values (everything in `tokens.css`) are added to the page by the first `corn-*` element, at zero specificity, so **any ordinary rule of yours overrides them**.
 - **Hooks are parts.** Inside a shadow root a page's `[data-corn="…"]` rule cannot reach, so every hook a piece makes is also a `part` of the same name: `corn-map::part(map-stage) { … }`. A `::part()` selects the element and not what is inside it.
 - **Light and dark** follow the page unless the element is told: with no `theme` attribute the page's own `<html data-theme>`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page. `theme="light"` or `theme="dark"` forces that mode for the element (the element declares that mode's tokens itself, so a rule of yours **on that element** sets one of them; a rule on `:root` does not reach a forced element).
@@ -592,7 +594,8 @@ The explorer's pieces are also web components, for putting in another app's page
 
 | Tag | Shadow root | What it is |
 |---|---|---|
-| `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in |
+| `corn-scope` | no | Where the data comes from and what the pieces inside it share: one instance (one selection, one camera, one topology); `src` is the address of a cornfield server it reads; it shows nothing of its own |
+| `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in, or from a server (`src`, or the scope's) |
 
 ### Properties
 
@@ -603,6 +606,14 @@ The explorer's pieces are also web components, for putting in another app's page
 | `corn-map` | `view` | `view` | `map` or `dataflow` |
 | `corn-map` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
 | `corn-map` | `renderer` | `renderer` | `auto` or `canvas2d` |
+| `corn-map` | `src` | `src` | the address of a cornfield server, for a map with no scope around it; ignored inside a scope |
+| `corn-map` | `useTheme` | `use-theme` | wear the server's theme (with `src`, no scope) |
+| `corn-scope` | `src` | `src` | the address of a cornfield server: an `http(s)` origin and an optional path; another value is refused and said |
+| `corn-scope` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
+| `corn-scope` | `useTheme` | `use-theme` | wear the server's theme |
+| `corn-scope` | `topology` | none | the object `topology.json` holds, for a host that fetches for itself |
+| `corn-scope` | `config` | none | the object `/cornfield/config.json` holds, for a host that fetches for itself |
+| `corn-scope` | `strings` | none | the host's own words (`strings` keys to text); they win over the server's |
 
 ### Events
 
@@ -612,6 +623,11 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 |---|---|---|
 | `corn-map` | `cornSelect` | the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`), once per change. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node`, `edge`, or null when cleared; `id` is the node's id, `from->to` for an edge, or null; `source` is `tap`, `keyboard`, `api` or `state` |
 | `corn-map` | `cornReady` | none: the first frame with a map in it is drawn, once each time the element is put in the page |
+| `corn-map` | `cornAuth` | with `src` and no scope: the server wants a sign-in. Its fields: `status`, `signIn`. `signIn` is `<src>/auth/start?returnTo=<this page>`; the component never navigates the window |
+| `corn-map` | `cornError` | with `src` and no scope: something it could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version` or `theme` |
+| `corn-scope` | `cornReady` | none: the scope has its data (read from the server, or handed in), once per server |
+| `corn-scope` | `cornAuth` | the server answered a gated read with 401 or 403. Its fields: `status`, `signIn`. `signIn` is the server's sign-in, which returns to this page |
+| `corn-scope` | `cornError` | something the pieces could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` or `second-map` |
 
 ### Methods
 
@@ -627,7 +643,8 @@ All three answer with a promise.
 
 | Tag | Parts |
 |---|---|
-| `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay` |
+| `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay`, and with a source `source-status`, `source-title`, `source-text`, `source-origin`, `source-sign-in`, `source-retry`, `source-notice`, `source-announcer` |
+| `corn-scope` | none: it has no shadow root and shows nothing of its own |
 
 ## Words
 
@@ -733,6 +750,16 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `loading` | Loading topology.json … |
 | `errorTitle` | The map could not be loaded |
 | `retry` | Retry |
+| `sourceLoading` | Loading the map … |
+| `sourceSignIn` | Sign in to cornfield |
+| `sourceSignInText` | This map is behind cornfield's sign-in. |
+| `sourceNotListed` | This page is not listed by that cornfield |
+| `sourceNotListedHint` | Add this origin to embed.origins on the server: |
+| `sourceOffline` | The map cannot be reached |
+| `sourceOfflineText` | Check the connection, then try again. |
+| `sourceBadAddress` | That is not the address of a cornfield server |
+| `sourceVersion` | This map and its server are different versions |
+| `sourceSecondMap` | This scope already has a map |
 <!-- strings:end -->
 
 The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openFile` ("Open file") is the primary action when the node has a file and the config names a forge; `openRoute` ("Open route") is primary when there is no such file and the quiet second action when there is; `startRun` ("Start a run") is new.

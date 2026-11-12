@@ -102,8 +102,8 @@ describe('the type declarations (D11)', () => {
     for (const p of map.properties) expect(text).toContain(`'${p.name}'`);
     for (const e of map.events) expect(text).toContain(`'${e.name}'`);
     for (const m of map.methods) expect(text).toContain(`'${m.name}'`);
-    expect(map.properties.map((p: { name: string }) => p.name).sort()).toEqual(['node', 'renderer', 'theme', 'topology', 'view']);
-    expect(map.events.map((e: { name: string }) => e.name).sort()).toEqual(['cornReady', 'cornSelect']);
+    expect(map.properties.map((p: { name: string }) => p.name).sort()).toEqual(['node', 'renderer', 'src', 'theme', 'topology', 'useTheme', 'view']);
+    expect(map.events.map((e: { name: string }) => e.name).sort()).toEqual(['cornAuth', 'cornError', 'cornReady', 'cornSelect']);
     expect(map.methods.map((m: { name: string }) => m.name).sort()).toEqual(['fit', 'focusNode', 'refresh']);
   });
 
@@ -221,17 +221,17 @@ describe('what a build leaves in dist/ (D11)', () => {
   it('ships tokens.css, the same text the elements add to a page, at zero specificity', () => {
     expect(read('tokens.css')).toBe(tokensCss());
     for (const line of read('tokens.css').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => /\{\s*$/.test(l))) expect(line.trim().startsWith(':where(') || line.trim().startsWith('@media')).toBe(true);
-    expect(read('chunks/' + fs.readdirSync(path.join(dist, 'chunks')).find((f) => f.startsWith('corn-map-'))!)).toContain(':where(:root)');
+    expect(fs.readdirSync(path.join(dist, 'chunks')).map((f) => read(`chunks/${f}`)).join('\n')).toContain(':where(:root)');
   });
 
   it('ships the declarations next to the modules', () => {
-    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
+    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
-  it('is inside the size budget: the runtime chunk and corn-map with its engine, each at most 5% over what size-budget.json holds', () => {
+  it('is inside the size budget: the runtime chunk, corn-map with its engine and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-scope', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

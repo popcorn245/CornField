@@ -1,5 +1,5 @@
-// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, and of corn-map with its engine (what corn-map.js pulls in besides the
-// runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
+// The size budget (spec 0011 D11): the gzipped size of the runtime chunk, of corn-map with its engine and of corn-scope with what it loads (what each
+// entry pulls in besides the runtime), against size-budget.json. A build more than 5% over a budget fails; `--record` writes what the build measures as the new budget.
 //   node scripts/size-budget.mjs [--record]
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,9 +24,9 @@ function reach(entry, seen = new Set()) {
 export function measure() {
   const runtime = readdirSync(join(dist, 'chunks')).find((f) => f.startsWith('runtime-'));
   if (!runtime) throw new Error('no runtime chunk in dist/chunks');
-  const files = [...reach('corn-map.js')];
-  const own = files.filter((f) => !f.startsWith('chunks/runtime-'));
-  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own.reduce((sum, f) => sum + gz(f), 0) };
+  const own = (entry) => [...reach(entry)].filter((f) => !f.startsWith('chunks/runtime-')).reduce((sum, f) => sum + gz(f), 0);
+  // Each is what the entry loads besides the runtime; the two share the engine's chunk, so they do not add up
+  return { runtime: gz(`chunks/${runtime}`), 'corn-map': own('corn-map.js'), 'corn-scope': own('corn-scope.js') };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
