@@ -324,7 +324,7 @@ export function createServerTheme(inst, { defaults = '' } = {}) {
 
   const fetchText = async (path, signal) => {
     // The theme answers a listed origin without a session and without Allow-Credentials: asked for without credentials
-    const res = await inst.fetch(path, { credentials: 'omit', signal });
+    const res = await inst.fetch(path, { credentials: 'omit', redirect: 'error', signal }); // and never elsewhere: a redirect is not followed
     if (!res.ok) throw new Error(`GET ${path} answered ${res.status}`);
     return readCapped(res, MAX_THEME_TEXT, path);
   };

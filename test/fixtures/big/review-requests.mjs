@@ -1,8 +1,8 @@
 /**
  * The requests of a decision in `<corn-review>` are the requests cornfield's own page sends for the same steps (spec 0011 D1, D9: one engine, so the
  * server cannot tell which asked): this runs the same steps on both, records every request each script sends and what the person sees after each step, and
- * compares them. The allowed difference is exactly the two things another origin needs: the address is absolute (`origin=<the server>` for `origin=self`)
- * and the session is asked for (`credentials: 'include'`). Runs by hand: Playwright, Chromium, the built package; ports 3930 to 3939.
+ * compares them. The allowed difference is exactly what another origin needs: the address is absolute (`origin=<the server>` for `origin=self`),
+ * the session is asked for (`credentials: 'include'`) and no redirect is followed with it (`redirect: 'error'`). Runs by hand: Playwright, Chromium, the built package; ports 3930 to 3939.
  *
  *   node test/fixtures/big/review-requests.mjs [--only approve,sendback,stale,refusals,signedout] [--json <file>]
  *
@@ -69,7 +69,7 @@ const INIT = () => {
     if (keep(url)) {
       const p = new URL(url, location.href);
       const h = init && init.headers ? JSON.stringify(init.headers) : '';
-      window.__log.push(`FETCH ${(init && init.method) || 'GET'} ${(p.pathname + p.search).replace(/[?&]v=\d+/, '')} origin=${p.origin === location.origin ? 'self' : p.origin} cred=${init && 'credentials' in init ? init.credentials : '-'} cache=${(init && init.cache) || '-'} h=${h} body=${init && init.body !== undefined ? init.body : '-'} keys=${init ? Object.keys(init).filter((k) => k !== 'credentials').join(',') : '-'}`);
+      window.__log.push(`FETCH ${(init && init.method) || 'GET'} ${(p.pathname + p.search).replace(/[?&]v=\d+/, '')} origin=${p.origin === location.origin ? 'self' : p.origin} cred=${init && 'credentials' in init ? init.credentials : '-'} redirect=${(init && init.redirect) || '-'} cache=${(init && init.cache) || '-'} h=${h} body=${init && init.body !== undefined ? init.body : '-'} keys=${init ? Object.keys(init).filter((k) => k !== 'credentials' && k !== 'redirect').join(',') : '-'}`);
     }
     return of.apply(this, arguments);
   };
@@ -195,14 +195,14 @@ const STEPS = [
 
 /** The allowed difference: the address absolute to the server and the session asked for */
 const norm = (l) => l
-  .replace(/ origin=\S+ cred=\S+/, ' <origin,cred>')
+  .replace(/ origin=\S+ cred=\S+ redirect=\S+/, ' <origin,cred>')
   .replace(/"at":"[^"]+"/g, '"at":"<t>"')
   .replace(/\d+ (seconds?|minutes?) ago/g, '<ago>')
   .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, '<hh:mm>');
 
 function compare(a, b) {
   const creds = { page: new Set(), tag: new Set() };
-  for (const [k, list] of [['page', a], ['tag', b]]) for (const s of list) for (const l of s.log) { const m = / origin=(\S+) cred=(\S+)/.exec(l); if (m) creds[k].add(`${m[1].replace(/:\d+$/, ':<port>')} ${m[2]}`); }
+  for (const [k, list] of [['page', a], ['tag', b]]) for (const s of list) for (const l of s.log) { const m = / origin=(\S+) cred=(\S+) redirect=(\S+)/.exec(l); if (m) creds[k].add(`${m[1].replace(/:\d+$/, ':<port>')} ${m[2]} redirect=${m[3]}`); }
   console.log('origin,cred page:', [...creds.page], ' tag:', [...creds.tag]);
   const byName = new Map(b.map((s) => [s.name, s]));
   let diffs = 0;
