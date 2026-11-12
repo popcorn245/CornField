@@ -252,6 +252,22 @@ describe('the site', () => {
     expect(fs.existsSync(path.join(root, 'docs/guide.md'))).toBe(true);
   });
 
+  it('keeps a title that holds a tag (written in code, or as a character reference) as text on every page and in the map', async () => {
+    fs.writeFileSync(path.join(root, 'docs/guide.md'), '# `<script>alert(1)</script>` &lt;img src=x onerror=alert(2)&gt;\n\n[home](../README.md)\n');
+    try {
+      const config = await loadConfig(root, { env: {} });
+      const derived = await deriveTopology({ root, derivers: [{ deriver: docs }] });
+      expect(derived.nodes.find((n) => n.file === 'docs/guide.md').summary).toBe('<script>alert(1)</script> <img src=x onerror=alert(2)>');
+      const out = path.join(root, '_site');
+      await buildSite({ config, derivers: [], out });
+      const html = ['index.html', 'docs/guide.html', 'map.html'].map((f) => fs.readFileSync(path.join(out, f), 'utf8')).join('\n');
+      expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &lt;img src=x onerror=alert(2)&gt;');
+      expect(html).not.toMatch(/<script|<img src=x/i);
+    } finally {
+      writeRepo(root);
+    }
+  });
+
   it('points repo files at the forge only when there is one', () => {
     expect(sourceUrlOf({ forge: { type: 'github', url: 'https://github.com', repo: 'a/b' } })).toBe('https://github.com/a/b/blob/HEAD');
     expect(sourceUrlOf({ forge: { type: 'forgejo', url: 'https://git.example.org/', repo: 'a/b' } })).toBe('https://git.example.org/a/b/src/branch/main');
