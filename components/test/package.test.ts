@@ -116,7 +116,7 @@ describe('the type declarations (D11)', () => {
       typed.view = 'dataflow';
       typed.theme = 'dark';
       typed.renderer = 'canvas2d';
-      typed.addEventListener('cornSelect', (e) => { const id: string | null = e.detail.id; const kind: 'node' | 'edge' = e.detail.kind; void id; void kind; });
+      typed.addEventListener('cornSelect', (e) => { const id: string | null = e.detail.id; const kind: 'node' | 'edge' | null = e.detail.kind; const source: string = e.detail.source; void id; void kind; void source; });
       typed.addEventListener('cornReady', (e) => { const none: void = e.detail; void none; });
       typed.addEventListener('click', (e) => { void e.clientX; });
       const made: HTMLCornMapElement = document.createElement('corn-map');
@@ -126,6 +126,43 @@ describe('the type declarations (D11)', () => {
     `)).toEqual([]);
   });
 
+  it('declares the tag as a JSX intrinsic element a consumer merges into its own JSX namespace, with typed properties and on<Event> handlers', () => {
+    expect(compile(`
+      import type { LocalJSX, CornSelectDetail } from './types/components';
+      const props: LocalJSX.IntrinsicElements['corn-map'] = { node: 'a', view: 'map', theme: 'light', onCornSelect: (e) => { const d: CornSelectDetail = e.detail; void d; } };
+      void props;
+    `)).toEqual([]);
+    expect(compile(`
+      import type { LocalJSX } from './types/components';
+      const props: LocalJSX.IntrinsicElements['corn-map'] = { view: 'sideways' };
+      void props;
+    `).join('\n')).toMatch(/sideways/);
+  }, 30_000);
+
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, tokens.css and version.json', () => {
+    if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
+    const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
+    fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
+    fs.symlinkSync(PACKAGE, path.join(app, 'node_modules', '@popcorn245', 'cornfield-components'), 'dir');
+    const file = path.join(app, 'main.ts');
+    fs.writeFileSync(file, `
+      import { version, CornMap } from '@popcorn245/cornfield-components';
+      import type { CornSelectDetail } from '@popcorn245/cornfield-components';
+      import '@popcorn245/cornfield-components/corn-map';
+      const v: string = version;
+      const el = document.querySelector('corn-map')!;
+      el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
+      void v; void CornMap;
+    `);
+    const program = ts.createProgram([file], { strict: true, noEmit: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, lib: ['lib.dom.d.ts', 'lib.es2022.d.ts'], types: [] });
+    expect(ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
+    const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
+    for (const [entry, target] of Object.entries(pkg.exports) as Array<[string, string | Record<string, string>]>) {
+      for (const file of typeof target === 'string' ? [target] : Object.values(target)) expect(fs.existsSync(path.join(PACKAGE, file)), `${entry} -> ${file}`).toBe(true);
+    }
+    expect(pkg.files).toEqual(['dist']);
+  }, 30_000);
+
   it('and is refused when it is wrong: a view that does not exist, a detail read as a string, a method that is not there', () => {
     const wrong = compile(`
       const el = document.querySelector('corn-map')!;
@@ -133,6 +170,7 @@ describe('the type declarations (D11)', () => {
       el.theme = 'blue';
       el.addEventListener('cornSelect', (e) => { const id: string = e.detail.id; void id; });
       el.addEventListener('cornSelect', (e) => { const kind: 'page' = e.detail.kind; void kind; });
+      el.addEventListener('cornSelect', (e) => { const kind: 'node' | 'edge' = e.detail.kind; void kind; });
       el.zoomTo(3);
       el.focusNode(7);
     `);

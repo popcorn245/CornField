@@ -11,5 +11,6 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['test/**/*.test.ts'],
     exclude: ['test/**/*.browser.test.ts'],
+    testTimeout: 30_000, // the type tests run the TypeScript compiler, a second or more each
   },
 });

@@ -93,7 +93,7 @@ describe('<corn-map>', () => {
     expect(ready).toHaveBeenCalledTimes(1);
   });
 
-  it('node selects and follows the selection: cornSelect carries { id, kind }, and the attribute is reflected both ways', async () => {
+  it('node selects and follows the selection: cornSelect carries { id, kind, source }, and the attribute is reflected both ways', async () => {
     const el = await make();
     el.topology = topology();
     await frames(2);
@@ -102,20 +102,45 @@ describe('<corn-map>', () => {
     const [a, b] = [sample.nodes[2].id, sample.nodes[4].id];
     el.node = a;
     await frames(2);
-    expect(seen).toEqual([{ id: a, kind: 'node' }]);
+    expect(seen).toEqual([{ id: a, kind: 'node', source: 'api' }]);
+    el.node = a; // the selection already: no change, no event
+    await frames(2);
+    expect(seen).toHaveLength(1);
     expect(el.getAttribute('node')).toBe(a);
     await el.focusNode(b);
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: b, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: b, kind: 'node', source: 'api' });
     expect(el.node).toBe(b);
     expect(el.getAttribute('node')).toBe(b);
     el.setAttribute('node', a);
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: a, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: a, kind: 'node', source: 'api' });
     el.node = null;
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: null, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: null, kind: null, source: 'api' });
+    expect(el.hasAttribute('node')).toBe(false);
     expect(seen).toHaveLength(4);
+  });
+
+  it('an edge selection reaches cornSelect (the instance\'s selection event), clears node, and is not undone by that', async () => {
+    const el = await make();
+    el.topology = topology();
+    await frames(2);
+    const seen: Array<{ id: string | null; kind: string | null }> = [];
+    el.addEventListener('cornSelect', (e) => seen.push((e as CustomEvent).detail));
+    // What a proposal does on cornfield's page (proposal.js): an edge picked, by assignment. The test reaches the piece the shell holds.
+    const state = (el as unknown as { piece: { inst: { state: { edges: Array<{ from: string; to: string }>; selectedEdge: unknown; selectedNode: unknown } } } }).piece.inst.state;
+    const edge = state.edges[0];
+    state.selectedEdge = edge;
+    await frames(2);
+    expect(seen).toEqual([{ id: `${edge.from}->${edge.to}`, kind: 'edge', from: edge.from, to: edge.to, source: 'state' }]);
+    expect(el.node).toBe(null);
+    expect(el.hasAttribute('node')).toBe(false);
+    expect(state.selectedEdge).toBe(edge); // node going to null came from the map: it is not passed back to clear the edge
+    el.theme = 'light'; // another render: still no echo
+    await frames(2);
+    expect(state.selectedEdge).toBe(edge);
+    expect(seen).toHaveLength(1);
   });
 
   it('a key on the canvas selects, and the event is composed: a listener on any ancestor of the element hears it', async () => {

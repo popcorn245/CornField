@@ -84,22 +84,22 @@ describe('selection', () => {
 
     el.node = a;
     await frames(2);
-    expect(seen).toEqual([{ id: a, kind: 'node' }]);
+    expect(seen).toEqual([{ id: a, kind: 'node', source: 'api' }]);
     expect(el.getAttribute('node')).toBe(a);
 
     await el.focusNode(b);
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: b, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: b, kind: 'node', source: 'api' });
     expect(el.node).toBe(b);
     expect(el.getAttribute('node')).toBe(b);
 
     el.setAttribute('node', a); // the attribute is a way in too
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: a, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: a, kind: 'node', source: 'api' });
 
     el.node = null;
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: null, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: null, kind: null, source: 'api' });
     expect(el.hasAttribute('node')).toBe(false);
     expect(seen).toHaveLength(4);
   });
@@ -114,9 +114,10 @@ describe('selection', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].id).toBeTruthy();
     expect(el.node).toBe(seen[0].id);
+    expect(seen[0]).toMatchObject({ kind: 'node', source: 'keyboard' });
     await userEvent.keyboard('{Escape}');
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: null, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: null, kind: null, source: 'keyboard' });
   });
 
   it('a click on a node selects it, and a click on the bare map clears it (a real mouse)', async () => {
@@ -133,9 +134,10 @@ describe('selection', () => {
     expect(seen.find((s) => s.id)).toBeTruthy();
     const picked = seen.find((s) => s.id)!.id;
     expect(el.node).toBe(picked);
+    expect(seen.find((s) => s.id)).toMatchObject({ kind: 'node', source: 'tap' });
     await userEvent.click(canvas, { position: { x: 3, y: 3 } });
     await frames(2);
-    expect(seen.at(-1)).toEqual({ id: null, kind: 'node' });
+    expect(seen.at(-1)).toEqual({ id: null, kind: null, source: 'tap' });
   });
 
   it('keyboard shortcuts act only while focus is inside the map', async () => {
