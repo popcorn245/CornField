@@ -287,7 +287,7 @@
       "label": "flows.js",
       "type": "core",
       "file": "explorer/flows.js",
-      "summary": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block…",
+      "summary": "Data flow on the map (a bridge for the legend and the panel's block, which live on the instance in engine/flow-ui.js; they go from here when the last module that is not on an instance stops calling…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Data flow on the map: - how a flow edge is styled (its colour and label per kind; scene.js turns that into the curve, arrowhead and packet a renderer draws), - the legend and the \"Data flows\" block… (explorer/flows.js)"
@@ -347,7 +347,7 @@
       "label": "layers.js",
       "type": "core",
       "file": "explorer/layers.js",
-      "summary": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean.",
+      "summary": "A bridge (spec 0011 D2 and D3, step 4): the layers are now the instance's (engine/layers.js) and the Layers menu is a piece (pieces/layers.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Layers menu: one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean. (explorer/layers.js)"
@@ -407,7 +407,7 @@
       "label": "panels.js",
       "type": "core",
       "file": "explorer/panels.js",
-      "summary": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, …",
+      "summary": "A bridge (spec 0011 D2 and D3, step 4): the node panel is now a piece (pieces/node-panel.js) and choosing a node is the instance's (engine/selection.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The side panel that opens when a node is selected: what the node is, and what the map knows about its data: the flows it is on, the tables a page reads and writes, the services behind an endpoint, … (explorer/panels.js)"
@@ -557,7 +557,7 @@
       "label": "sheets.js",
       "type": "core",
       "file": "explorer/sheets.js",
-      "summary": "The phone's bottom sheets (spec 0012, TOPO-18).",
+      "summary": "A bridge (spec 0011 D2, step 4): the phone's bottom sheets now live in engine/sheets.js, one set per instance (the node panel registers its own, pieces/node-panel.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The phone's bottom sheets (spec 0012, TOPO-18). (explorer/sheets.js)"
@@ -1278,7 +1278,7 @@
       "label": "keyboard.js",
       "type": "core",
       "file": "explorer/keyboard.js",
-      "summary": "The map by keyboard, and what a screen reader hears (MAP-02).",
+      "summary": "A bridge (spec 0011 D2, step 4): the map by keyboard and the screen reader's announcer now live in engine/keyboard.js, one per instance; the keys of the node panel, the Layers menu and the search b…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The map by keyboard, and what a screen reader hears (MAP-02). (explorer/keyboard.js)"
@@ -1974,7 +1974,7 @@
       "label": "strings.js",
       "type": "core",
       "file": "explorer/strings.js",
-      "summary": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries).",
+      "summary": "A bridge (spec 0011 D2, step 4): the words now live on the instance (`inst.strings`, read with `t(inst, key)` from engine/strings.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries). (explorer/strings.js)"
@@ -2024,7 +2024,7 @@
       "label": "search-status.js",
       "type": "core",
       "file": "explorer/search-status.js",
-      "summary": "The polite live region by each search field (F24): what a screen reader hears of a search.",
+      "summary": "A bridge (spec 0011 D2, step 4): the search's live region now lives in engine/search-status.js, one per instance.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The line by the search field that says a search found nothing (\"No match for “xyz”\"), in a polite live region so a screen reader says it too (F24). (explorer/search-status.js)"
@@ -2074,7 +2074,7 @@
       "label": "feedback.js",
       "type": "core",
       "file": "explorer/feedback.js",
-      "summary": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together.",
+      "summary": "A bridge (spec 0011 D2, step 4): the results of actions now live on the instance (engine/feedback.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/feedback.js)"
@@ -2114,7 +2114,7 @@
       "label": "hint.js",
       "type": "core",
       "file": "explorer/hint.js",
-      "summary": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56).",
+      "summary": "A bridge (spec 0011 D2, step 4): the hint at the map's corner now lives in engine/hint.js, one per instance.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56). (explorer/hint.js)"
@@ -2323,7 +2323,7 @@
       "label": "fly.js",
       "type": "core",
       "file": "explorer/fly.js",
-      "summary": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again.",
+      "summary": "A bridge (spec 0011 D2, step 4): the camera's flight now lives in engine/fly.js, one per instance.",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The camera flying to a place: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again. (explorer/fly.js)"
@@ -2343,7 +2343,7 @@
       "label": "search.js",
       "type": "core",
       "file": "explorer/search.js",
-      "summary": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field…",
+      "summary": "A bridge (spec 0011 D2 and D3, step 4): search is now a piece (pieces/search.js).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "Search on the page (spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, under the field… (explorer/search.js)"
@@ -2413,7 +2413,7 @@
       "label": "selection-view.js",
       "type": "core",
       "file": "explorer/selection-view.js",
-      "summary": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them.",
+      "summary": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js), on an instance: which nodes the selection lights, how many of them are off screen, and the camera th…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "The page side of a selection's reach (spec 0008 D5 and D6; the rules are in selection-model.js): which nodes the selection lights, how many of them are off screen, and the camera that frames them. (explorer/selection-view.js)"
@@ -2527,6 +2527,156 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "cornfield's own page: the shell that mounts the engine in the document (spec 0011 D1, D2). (explorer/page.js)"
+    },
+    {
+      "id": "core-explorer-engine-feedback",
+      "label": "feedback.js",
+      "type": "core",
+      "file": "explorer/engine/feedback.js",
+      "summary": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "One way to say what an action came to: **where the person is looking** (by the control they used) and **to a screen reader** (the live region), together. (explorer/engine/feedback.js)"
+    },
+    {
+      "id": "core-explorer-engine-flow-ui",
+      "label": "flow-ui.js",
+      "type": "core",
+      "file": "explorer/engine/flow-ui.js",
+      "summary": "Data flow in the Layers menu and the node panel, on an instance: the legend of the flow lines and the \"Sends to / Gets from\" block of a node's panel.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Data flow in the Layers menu and the node panel, on an instance: the legend of the flow lines and the \"Sends to / Gets from\" block of a node's panel. (explorer/engine/flow-ui.js)"
+    },
+    {
+      "id": "core-explorer-engine-fly",
+      "label": "fly.js",
+      "type": "core",
+      "file": "explorer/engine/fly.js",
+      "summary": "The camera flying to a place, on an instance: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The camera flying to a place, on an instance: a short glide to `{ x, y, zoom }`, as the scenario player's steps do, so a match chosen in a search is not a jump the eye has to find again. (explorer/engine/fly.js)"
+    },
+    {
+      "id": "core-explorer-engine-hint",
+      "label": "hint.js",
+      "type": "core",
+      "file": "explorer/engine/hint.js",
+      "summary": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56), on an instance.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The hint at the map's corner (\"Click a node for what it is\"; CF review F56), on an instance. (explorer/engine/hint.js)"
+    },
+    {
+      "id": "core-explorer-engine-keyboard",
+      "label": "keyboard.js",
+      "type": "core",
+      "file": "explorer/engine/keyboard.js",
+      "summary": "The map by keyboard, and what a screen reader hears (MAP-02), on an instance.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map by keyboard, and what a screen reader hears (MAP-02), on an instance. (explorer/engine/keyboard.js)"
+    },
+    {
+      "id": "core-explorer-engine-layers",
+      "label": "layers.js",
+      "type": "core",
+      "file": "explorer/engine/layers.js",
+      "summary": "The layers of the map, on an instance: one per kind of node (apps, pages, tables, services, ...), the project's own on top of them, which are on, what the viewer chose, and what a review of a propo…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The layers of the map, on an instance: one per kind of node (apps, pages, tables, services, ...), the project's own on top of them, which are on, what the viewer chose, and what a review of a propo… (explorer/engine/layers.js)"
+    },
+    {
+      "id": "core-explorer-engine-piece",
+      "label": "piece.js",
+      "type": "core",
+      "file": "explorer/engine/piece.js",
+      "summary": "What every piece of the explorer (explorer/pieces/) does the same way (spec 0011 D3): scopeOf(inst) the piece's own end: `listen`, `on`, `timer`, `own` as the instance's, and `destroy()` which take…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "What every piece of the explorer (explorer/pieces/) does the same way (spec 0011 D3): scopeOf(inst) the piece's own end: `listen`, `on`, `timer`, `own` as the instance's, and `destroy()` which take… (explorer/engine/piece.js)"
+    },
+    {
+      "id": "core-explorer-engine-search-status",
+      "label": "search-status.js",
+      "type": "core",
+      "file": "explorer/engine/search-status.js",
+      "summary": "The polite live region by each search field (F24), on an instance: what a screen reader hears of a search.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The polite live region by each search field (F24), on an instance: what a screen reader hears of a search. (explorer/engine/search-status.js)"
+    },
+    {
+      "id": "core-explorer-engine-selection",
+      "label": "selection.js",
+      "type": "core",
+      "file": "explorer/engine/selection.js",
+      "summary": "Choosing a node, and choosing none, on an instance (spec 0008 D5 and D6; the rules of what a selection lights are in selection-model.js).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Choosing a node, and choosing none, on an instance (spec 0008 D5 and D6; the rules of what a selection lights are in selection-model.js). (explorer/engine/selection.js)"
+    },
+    {
+      "id": "core-explorer-engine-sheets",
+      "label": "sheets.js",
+      "type": "core",
+      "file": "explorer/engine/sheets.js",
+      "summary": "The phone's bottom sheets (spec 0012, TOPO-18).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The phone's bottom sheets (spec 0012, TOPO-18). (explorer/engine/sheets.js)"
+    },
+    {
+      "id": "core-explorer-engine-strings",
+      "label": "strings.js",
+      "type": "core",
+      "file": "explorer/engine/strings.js",
+      "summary": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries), on an instance: `inst.strings` hold…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The words a repo may say in its own voice (core/strings.js is the table; `strings` in cornfield.config.js the overrides, which `/cornfield/config.json` carries), on an instance: `inst.strings` hold… (explorer/engine/strings.js)"
+    },
+    {
+      "id": "core-explorer-page-pieces",
+      "label": "page-pieces.js",
+      "type": "core",
+      "file": "explorer/page-pieces.js",
+      "summary": "cornfield's page mounts the pieces (explorer/pieces/) into the document (spec 0011 D3).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "cornfield's page mounts the pieces (explorer/pieces/) into the document (spec 0011 D3). (explorer/page-pieces.js)"
+    },
+    {
+      "id": "core-explorer-pieces-layers",
+      "label": "layers.js",
+      "type": "core",
+      "file": "explorer/pieces/layers.js",
+      "summary": "The Layers menu as a piece (spec 0011 D3): one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Layers menu as a piece (spec 0011 D3): one toggle per kind of node (apps, pages, tables, services, ...) with its count, plus the legend of what the lines mean. (explorer/pieces/layers.js)"
+    },
+    {
+      "id": "core-explorer-pieces-node-panel",
+      "label": "node-panel.js",
+      "type": "core",
+      "file": "explorer/pieces/node-panel.js",
+      "summary": "The node panel as a piece (spec 0011 D3): the side panel that opens when a node is selected, with what the node is and what the map knows about its data: the flows it is on, the tables a page reads…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The node panel as a piece (spec 0011 D3): the side panel that opens when a node is selected, with what the node is and what the map knows about its data: the flows it is on, the tables a page reads… (explorer/pieces/node-panel.js)"
+    },
+    {
+      "id": "core-explorer-pieces-search",
+      "label": "search.js",
+      "type": "core",
+      "file": "explorer/pieces/search.js",
+      "summary": "Search as a piece (spec 0011 D3; spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, un…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "Search as a piece (spec 0011 D3; spec 0008 D3 and D4); search-model.js decides what is found and in what order, this shows it: - the count in the field (\"33 matches\", \"3 of 33\", \"No match\") and, un… (explorer/pieces/search.js)"
     },
     {
       "id": "core-explorer-flow-build",
@@ -3186,18 +3336,6 @@
     },
     {
       "from": "core-explorer-layers",
-      "to": "core-explorer-cloud-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
       "to": "core-explorer-render",
       "dashed": true,
       "label": "imports"
@@ -3264,43 +3402,13 @@
     },
     {
       "from": "core-explorer-panels",
-      "to": "core-explorer-cloud-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
       "to": "core-explorer-live",
       "dashed": true,
       "label": "imports"
     },
     {
       "from": "core-explorer-panels",
-      "to": "core-explorer-proposal-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
       "to": "core-explorer-scenario-ui",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-sheets",
       "dashed": true,
       "label": "imports"
     },
@@ -3523,12 +3631,6 @@
     {
       "from": "core-explorer-scene",
       "to": "core-explorer-proposal-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-sheets",
-      "to": "core-explorer-sheet-model",
       "dashed": true,
       "label": "imports"
     },
@@ -4489,18 +4591,6 @@
       "to": "core-explorer-theme"
     },
     {
-      "from": "core-explorer-flows",
-      "to": "core-explorer-theme-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-theme-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-layers",
       "to": "core-explorer-theme",
       "dashed": true,
@@ -4543,42 +4633,6 @@
     {
       "from": "pkg-explorer",
       "to": "core-explorer-keyboard"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-keyboard-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-layout",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-explorer-keyboard",
@@ -4961,12 +5015,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-mockups-model",
-      "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-mockups",
       "to": "core-core-proposal",
       "dashed": true,
@@ -4987,12 +5035,6 @@
     {
       "from": "core-explorer-mockups",
       "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-mockups-model",
       "dashed": true,
       "label": "imports"
     },
@@ -6588,12 +6630,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-plugins",
       "to": "core-explorer-strings",
       "dashed": true,
@@ -6618,12 +6654,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-strings",
-      "to": "core-core-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-server-server",
       "to": "core-core-strings",
       "dashed": true,
@@ -6638,18 +6668,6 @@
     {
       "from": "pkg-explorer",
       "to": "core-explorer-capped"
-    },
-    {
-      "from": "core-explorer-flows",
-      "to": "core-explorer-capped",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-capped",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-explorer-panels",
@@ -6678,12 +6696,6 @@
       "to": "core-explorer-file-url"
     },
     {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-file-url",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-cloud-model",
       "to": "core-explorer-capped",
       "dashed": true,
@@ -6700,18 +6712,6 @@
     {
       "from": "pkg-server",
       "to": "core-server-compress"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search-status",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
     },
     {
       "from": "core-server-proxy",
@@ -6733,12 +6733,6 @@
     },
     {
       "from": "core-explorer-scenario",
-      "to": "core-explorer-camera",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-sheets",
       "to": "core-explorer-camera",
       "dashed": true,
       "label": "imports"
@@ -6837,12 +6831,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-feedback",
-      "to": "core-explorer-keyboard",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-forge-panel",
       "to": "core-explorer-connection",
       "dashed": true,
@@ -6850,12 +6838,6 @@
     },
     {
       "from": "core-explorer-forge-panel",
-      "to": "core-explorer-feedback",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
       "to": "core-explorer-feedback",
       "dashed": true,
       "label": "imports"
@@ -6929,18 +6911,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-hint",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-hint",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-view",
       "to": "core-explorer-hint",
       "dashed": true,
@@ -6988,12 +6958,6 @@
     },
     {
       "from": "core-explorer-live",
-      "to": "core-explorer-corn-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
       "to": "core-explorer-corn-state",
       "dashed": true,
       "label": "imports"
@@ -7410,36 +7374,6 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-layers",
-      "to": "core-core-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-layer-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-map-style",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-scene",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-strings",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-renderer-canvas2d",
       "to": "core-explorer-kind-letters",
       "dashed": true,
@@ -7487,12 +7421,6 @@
     },
     {
       "from": "core-explorer-fly",
-      "to": "core-explorer-flows",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-fly",
       "to": "core-explorer-render",
       "dashed": true,
       "label": "imports"
@@ -7516,55 +7444,7 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-search",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-scene",
-      "to": "core-explorer-search-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-fly",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-keyboard",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-layers",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-panels",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-scene",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
       "to": "core-explorer-search-model",
       "dashed": true,
       "label": "imports"
@@ -7577,19 +7457,7 @@
     },
     {
       "from": "core-explorer-search",
-      "to": "core-explorer-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
       "to": "core-explorer-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-search",
-      "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
     },
@@ -7718,44 +7586,8 @@
       "label": "imports"
     },
     {
-      "from": "core-explorer-keyboard",
-      "to": "core-explorer-selection-view",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
       "from": "core-explorer-kind-letters",
       "to": "core-explorer-glyphs",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-core-schema",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-explorer-edge-key",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-keyboard",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-selection-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-panels",
-      "to": "core-explorer-selection-view",
       "dashed": true,
       "label": "imports"
     },
@@ -7803,31 +7635,7 @@
     },
     {
       "from": "core-explorer-selection-view",
-      "to": "core-explorer-fly",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-selection-view",
-      "to": "core-explorer-render",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-selection-view",
       "to": "core-explorer-selection-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-selection-view",
-      "to": "core-explorer-sheets",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-selection-view",
-      "to": "core-explorer-state",
       "dashed": true,
       "label": "imports"
     },
@@ -7856,12 +7664,6 @@
     {
       "from": "core-explorer-css-color",
       "to": "core-explorer-theme-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-layers",
-      "to": "core-core-color",
       "dashed": true,
       "label": "imports"
     },
@@ -7898,12 +7700,6 @@
     },
     {
       "from": "core-explorer-check",
-      "to": "core-explorer-layer-model",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-flows",
       "to": "core-explorer-layer-model",
       "dashed": true,
       "label": "imports"
@@ -8287,12 +8083,6 @@
     },
     {
       "from": "core-explorer-page",
-      "to": "core-explorer-search",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-page",
       "to": "core-explorer-sheets",
       "dashed": true,
       "label": "imports"
@@ -8360,6 +8150,660 @@
     {
       "from": "core-explorer-state",
       "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-feedback"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-flow-ui"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-fly"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-hint"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-keyboard"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-layers"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-piece"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-search-status"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-selection"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-sheets"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-strings"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-page-pieces"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-layers"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-node-panel"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-search"
+    },
+    {
+      "from": "core-explorer-engine-feedback",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-flow-ui",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-flow-ui",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-flow-ui",
+      "to": "core-explorer-flow-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-flow-ui",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-flow-ui",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-hint",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-keyboard",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-keyboard",
+      "to": "core-explorer-engine-layout",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-keyboard",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-keyboard",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-keyboard",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-core-schema",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-layers",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-search-status",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-selection",
+      "to": "core-explorer-engine-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-selection",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-sheets",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-sheets",
+      "to": "core-explorer-sheet-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-strings",
+      "to": "core-core-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-feedback",
+      "to": "core-explorer-engine-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-feedback",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-flows",
+      "to": "core-explorer-engine-flow-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-fly",
+      "to": "core-explorer-engine-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-hint",
+      "to": "core-explorer-engine-hint",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-keyboard",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-layers",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-mockups-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-pieces-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-pieces-node-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-pieces-search",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-render",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page-pieces",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-page",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-panels",
+      "to": "core-explorer-pieces-node-panel",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-core-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-edge-key",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-flow-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-camera",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-capped",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-cloud-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-feedback",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-flow-ui",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-file-url",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-mockups-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-selection-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-node-panel",
+      "to": "core-explorer-selection-view",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-layers",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-search-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-selection",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-layer-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-search-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search-status",
+      "to": "core-explorer-engine-search-status",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search-status",
+      "to": "core-explorer-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-search",
+      "to": "core-explorer-pieces-search",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-engine-fly",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-selection-view",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-engine-sheets",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-sheets",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-state",
+      "to": "core-explorer-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-strings",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-view",
+      "to": "core-explorer-page-pieces",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-engine-piece",
+      "to": "core-explorer-engine-strings",
       "dashed": true,
       "label": "imports"
     },
@@ -8454,15 +8898,15 @@
       "label": "imports"
     },
     {
-      "from": "page-doc-docs-theming",
-      "to": "page-doc-docs-embedding",
-      "dashed": true
-    },
-    {
       "from": "page-doc-docs-embedding",
       "to": "page-doc-docs-theming",
       "dashed": true
+    },
+    {
+      "from": "page-doc-docs-theming",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-12T09:34:23.519Z"
+  "updatedAt": "2026-11-12T10:54:45.498Z"
 }

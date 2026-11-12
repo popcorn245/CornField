@@ -29,7 +29,7 @@ import { chipModel, failureWords } from '../../explorer/live-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NO_SOURCE } from '../../explorer/plugins.js';
 
-const html = explorerPage();
+const html = explorerPage({ pieces: true }); // the pieces' markup in its places
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
 const rule = (selector) => {

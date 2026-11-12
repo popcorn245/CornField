@@ -124,7 +124,7 @@ describe('theme.js', () => {
   it('the Layers menu draws its dots in the theme\'s colours, again when it changes', async () => {
     fakeMedia(false);
     pageWithToggle();
-    document.body.insertAdjacentHTML('beforeend', '<div id="layer-toggles-container"></div><div id="flow-legend"></div><div id="cloud-legend"></div>');
+    document.body.insertAdjacentHTML('beforeend', '<!--corn-piece:layers/menu-->'); // the place of the Layers menu: the bridge mounts the piece there, which makes its container and legends
     const { initTheme, setThemeChoice } = await import('../../explorer/theme.js');
     const { renderLayerToggles, LAYER_DEFS } = await import('../../explorer/layers.js');
     const { lightColor } = await import('../../explorer/theme-model.js');

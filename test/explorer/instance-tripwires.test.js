@@ -36,10 +36,36 @@ export const CONVERTED = [
   'renderer-webgl.js',
   'pieces/map.js',
   'flow-build.js',
+  // Step 4 (spec 0011 D2 and D3): the three pieces around the map and what they stand on
+  'pieces/node-panel.js',
+  'pieces/layers.js',
+  'pieces/search.js',
+  'engine/piece.js',
+  'engine/selection.js',
+  'engine/layers.js',
+  'engine/sheets.js',
+  'engine/keyboard.js',
+  'engine/feedback.js',
+  'engine/fly.js',
+  'engine/hint.js',
+  'engine/strings.js',
+  'engine/flow-ui.js',
+  'engine/search-status.js',
+  'selection-view.js',
+  'selection-model.js',
+  'layer-model.js',
+  'edge-key.js',
+  'search-model.js',
+  'sheet-model.js',
+  'file-url.js',
+  'capped.js',
 ];
 
 /** What the not-yet-converted modules import in place of an instance: no converted module may */
-const BRIDGES = ['state.js', 'render.js', 'map-style.js', 'layout.js'];
+const BRIDGES = [
+  'state.js', 'render.js', 'map-style.js', 'layout.js', // step 1
+  'hint.js', 'fly.js', 'feedback.js', 'keyboard.js', 'sheets.js', 'panels.js', 'layers.js', 'search.js', 'search-status.js', 'flows.js', 'page-pieces.js', // step 4 (strings.js is a bridge too, but it imports nothing of the page: the pure models read their words through it, and the converted modules import those)
+];
 
 /** The code of a module: comments and the contents of nothing else removed, so a word in a sentence trips nothing */
 export function codeOf(source) {
@@ -84,10 +110,8 @@ export const RULES = {
 const OWN_RULES = ['reaches the document or window itself'];
 /** Where a converted module may break a rule, and why */
 const EXEMPT = { 'instance.js': ['reaches the document or window itself', 'listens on document or window'] }; // the instance's own window and document: onShown, fetch
-/** Where a module a converted one imports may, and why. Each is code no converted module calls, in a file it imports for something else */
-const CHAIN_EXEMPT = {
-  'capped.js': ['looks an element up by document id'], // toggleCapped, the node panel's "N more" button (panels.js); the scene imports only capped(). Step 4 moves the panel
-};
+/** Where a module a converted one imports may, and why. Each is code no converted module calls, in a file it imports for something else (none now: capped.js moved onto the list with the node panel) */
+const CHAIN_EXEMPT = {};
 
 /** The files a module imports (static and dynamic, relative ones), resolved */
 export function importsOf(file, source = fs.readFileSync(file, 'utf8')) {

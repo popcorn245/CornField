@@ -16,6 +16,16 @@ import { createRenderer } from '../../explorer/renderer.js';
 import { mapStyleOf } from '../../explorer/engine/map-style.js';
 // @ts-expect-error plain JS modules, no declarations
 import { bindCanvasInput } from '../../explorer/input.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as nodePanel from '../../explorer/pieces/node-panel.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as layersPiece from '../../explorer/pieces/layers.js';
+// @ts-expect-error plain JS modules, no declarations
+import * as searchPiece from '../../explorer/pieces/search.js';
+// @ts-expect-error plain JS modules, no declarations
+import { initKeyboard } from '../../explorer/engine/keyboard.js';
+// @ts-expect-error plain JS modules, no declarations
+import { selectNode } from '../../explorer/engine/selection.js';
 
 const protoWith = (obj, key) => { let p = obj; while (p && !Object.prototype.hasOwnProperty.call(p, key)) p = Object.getPrototypeOf(p); return p; };
 
@@ -74,7 +84,7 @@ function glCanvas(canvas) {
 /** One map as a page or a component would make it: a root, an instance, the map, input, the style watch, a WebGL renderer */
 function make() {
   const root = document.createElement('div');
-  root.innerHTML = '<div class="hx-stage"><canvas id="graph-canvas"></canvas><canvas id="label-canvas"></canvas></div>';
+  root.innerHTML = '<div class="hx-stage"><canvas id="graph-canvas"></canvas><canvas id="label-canvas"></canvas><div id="sheet-dock" class="hx-dock"></div></div>';
   document.body.append(root);
   const inst = createInstance({ root });
   const canvas = inst.el('graph-canvas');
@@ -212,5 +222,88 @@ describe('inst.destroy()', () => {
     expect(order).toEqual(['third', 'first']);
     expect(quiet).toHaveBeenCalledTimes(1);
     quiet.mockRestore();
+  });
+});
+
+
+/** The three pieces of a page on an instance, as a page would mount them: the node panel in the dock, the others in the root. `end()` destroys them all */
+function mountPieces(root, inst) {
+  const marker = inst.el('sheet-dock').appendChild(document.createComment('corn-piece:node-panel/drawer'));
+  const pieces = [
+    nodePanel.mount(root, inst, { slots: { drawer: marker } }),
+    layersPiece.mount(root, inst, { storageKey: null }),
+    searchPiece.mount(root, inst),
+  ];
+  const end = () => { pieces.forEach((p) => p.destroy()); marker.remove(); };
+  return Object.assign(pieces, { end });
+}
+
+describe('the pieces: node panel, Layers menu, search', () => {
+  it('have things to take back: listeners, observers, a timer, markup', () => {
+    const { inst, root } = make();
+    const before = snapshot();
+    const pieces = mountPieces(root, inst);
+    initKeyboard(inst);
+    const after = snapshot();
+    expect(after.listeners).toBeGreaterThan(before.listeners + 15);
+    expect(root.querySelector('#spec-drawer') && root.querySelector('#legend-dropdown') && root.querySelector('#node-search')).toBeTruthy();
+    selectNode(inst, inst.state.nodes[0]);
+    pieces.end();
+    expect(root.querySelector('#spec-drawer')).toBeNull();
+    expect(root.querySelector('#legend-dropdown')).toBeNull();
+    expect(root.querySelector('#node-search')).toBeNull();
+    inst.destroy();
+  });
+
+  it('mounted and destroyed 50 times on one instance, add nothing: the only things left are the instance\'s (the dock\'s observers)', () => {
+    const { inst, root } = make();
+    const first = mountPieces(root, inst);
+    first.end();
+    const once = snapshot();
+    const cleanups = vi.spyOn(inst, 'own');
+    for (let i = 0; i < 50; i++) {
+      const pieces = mountPieces(root, inst);
+      selectNode(inst, inst.state.nodes[i % 2]); // a panel filled, a sheet registered
+      pieces.end();
+    }
+    expect(snapshot()).toEqual(once);
+    expect(root.querySelectorAll('[data-corn="node-panel"], [data-corn="layers-menu"], [data-corn="search"], [data-corn="mobile-search"]')).toHaveLength(0);
+    cleanups.mockRestore();
+    inst.destroy();
+  });
+
+  it('made and destroyed 50 times with their instance, leave no listener, observer, timer or context behind', () => {
+    const before = snapshot();
+    for (let i = 0; i < 50; i++) {
+      const { inst, root } = make();
+      mountPieces(root, inst);
+      initKeyboard(inst);
+      selectNode(inst, inst.state.nodes[0]);
+      inst.root.querySelector('#node-search').dispatchEvent(new Event('input', { bubbles: true }));
+      inst.destroy();
+      root.remove();
+    }
+    expect(snapshot()).toEqual(before);
+  });
+
+  it('are what does it: 50 pieces mounted and not destroyed leave listeners behind', () => {
+    const { inst, root } = make();
+    const base = snapshot().listeners;
+    for (let i = 0; i < 50; i++) mountPieces(root, inst);
+    expect(snapshot().listeners).toBeGreaterThan(base + 50 * 10);
+    inst.destroy();
+  });
+
+  it('the copy timer, the focus timer and the search status timer do not outlive their piece', async () => {
+    const { inst, root } = make();
+    const pieces = mountPieces(root, inst);
+    const quiet = snapshot().timers;
+    inst.root.querySelector('[data-action="toggle-mobile-search"]').click(); // the focus timer
+    const input = inst.root.querySelector('#node-search');
+    input.value = 'zzzz'; input.dispatchEvent(new Event('input', { bubbles: true })); // the status timer
+    expect(snapshot().timers).toBeGreaterThan(quiet);
+    pieces.end();
+    inst.destroy();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

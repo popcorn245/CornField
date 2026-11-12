@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import axe from 'axe-core';
 import { STRINGS } from '../../core/strings.js';
+import { explorerPage } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { t, setStrings, applyStrings, resetStringsForTests } from '../../explorer/strings.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -23,8 +24,7 @@ import { state, escHtml } from '../../explorer/state.js';
 import { initReview, resetReviewForTests } from '../../explorer/review.js';
 
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-import { withMapElements } from '../helpers.js';
-const page = withMapElements(fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8'));
+const page = explorerPage({ pieces: true }); // the pieces' markup in its places
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
 const $ = (id) => document.getElementById(id);
@@ -198,9 +198,9 @@ describe('accessible names follow the visible label', () => {
 
 describe('the code only asks for keys the table has', () => {
   it('every t(\'key\') in the explorer is a key, and every key is asked for or marked in the page', () => {
-    const files = fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js'));
+    const files = ['.', 'engine', 'pieces'].flatMap((d) => fs.readdirSync(path.join(EXPLORER, d)).filter((f) => f.endsWith('.js')).map((f) => path.join(d, f)));
     const asked = new Set();
-    for (const f of files) for (const m of fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bt\('([A-Za-z]+)'\)/g)) asked.add(m[1]);
+    for (const f of files) for (const m of fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bt\((?:inst, )?'([A-Za-z]+)'\)/g)) asked.add(m[1]); // the pieces read their words with t(inst, 'key')
     expect(asked.size).toBeGreaterThan(10);
     for (const k of asked) expect(Object.keys(STRINGS), k).toContain(k);
     for (const m of page.matchAll(/data-corn-string(?:-aria-label|-placeholder)?="([A-Za-z]+)"/g)) asked.add(m[1]);

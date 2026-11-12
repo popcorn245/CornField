@@ -15,6 +15,8 @@ import { setRenderer } from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { renderLayerToggles } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
+import { ensurePagePieces } from '../../explorer/page-pieces.js';
+// @ts-expect-error plain JS modules, no declarations
 import { proposalRowHtml } from '../../explorer/proposal.js';
 // @ts-expect-error plain JS modules, no declarations
 import { runsHtml } from '../../explorer/runs-view.js';
@@ -47,7 +49,8 @@ const hooks = tableValues('## The hooks').filter((v, i, a) => a.indexOf(v) === i
 const kinds = tableValues('### Button kinds: `data-corn-kind`');
 const states = tableValues('### States: `data-corn-state`');
 
-const SOURCES = [path.join(EXPLORER, 'index.html'), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, f)), ...fs.readdirSync(path.join(EXPLORER, 'pieces')).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, 'pieces', f)), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
+// The pieces (explorer/pieces/) and the engine (explorer/engine/) hold markup too: the node panel's, the Layers menu's and the search's
+const SOURCES = [path.join(EXPLORER, 'index.html'), ...['.', 'pieces', 'engine'].flatMap((d) => fs.readdirSync(path.join(EXPLORER, d)).filter((f) => f.endsWith('.js')).map((f) => path.join(EXPLORER, d, f))), path.join(CORNFIELD, 'plugins/house/browser.js'), path.join(CORNFIELD, 'server/auth.js')]; // the sign-in pages (server/auth.js) are markup too
 const source = SOURCES.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
 /** Every literal value written as `data-corn="x"` or `dataset.corn = 'x'` (the attribute, in markup and in script) */
 const literal = (name, re) => [...source.matchAll(re)].map((m) => m[1]);
@@ -140,7 +143,8 @@ describe('every control has a hook', () => {
   });
 
   // A control made by script: `x = document.createElement('button')`, and then a hook or a kind set on `x` itself in the lines that build it
-  const MADE = /(?:\b([A-Za-z_$][\w$]*)\s*=\s*)?\b\w+\.createElement\((['"`])(button|a|input|select|textarea|summary)\2\)/g;
+  // (the receiver may be dotted: the pieces make elements with `inst.doc.createElement`)
+  const MADE = /(?:\b([A-Za-z_$][\w$]*)\s*=\s*)?\b[\w.]+\.createElement\((['"`])(button|a|input|select|textarea|summary)\2\)/g;
   /** The line of each control a source makes by script with no `data-corn` or `data-corn-kind` of its own */
   function unhookedMade(text) {
     const out = [];
@@ -192,7 +196,7 @@ describe('the parts 0.35 added hooks to', () => {
     ['explorer/index.html', 'proposal-mode', /id="proposal-mode"[^>]*data-corn="proposal-mode"/],
     ['explorer/index.html', 'compare', /id="proposal-seg"[^>]*data-corn="compare"/],
     ['explorer/index.html', 'filter-chip', /data-corn="filter-chip"[^>]*id="forge-filter-chip"/],
-    ['explorer/index.html', 'diff-pill', /id="drawer-diff"[^>]*data-corn="diff-pill"/],
+    ['explorer/pieces/node-panel.js', 'diff-pill', /id="drawer-diff"[^>]*data-corn="diff-pill"/],
     ['explorer/review.js', 'review-note', /<textarea data-corn="review-note" id="review-note"/],
     ['explorer/capped.js', 'more', /<button data-corn="more" data-corn-kind="quiet"/],
     ['explorer/forge-panel.js', 'tag', /class="hx-forge-label" data-corn="tag"/],
@@ -202,7 +206,7 @@ describe('the parts 0.35 added hooks to', () => {
     ['explorer/forge-panel.js', 'node-chip', /<button data-corn="node-chip"/],
     ['explorer/forge-panel.js', 'file', /class="hx-forge-file" data-corn="file"/],
     ['explorer/runs-view.js', 'run-actions', /class="hx-run-actions" data-corn="run-actions"/],
-    ['explorer/panels.js', 'diff-block', /class="hx-diff hx-diff--\$\{escHtml\(kind\)\}" data-corn="diff-block"/],
+    ['explorer/pieces/node-panel.js', 'diff-block', /class="hx-diff hx-diff--\$\{escHtml\(kind\)\}" data-corn="diff-block"/],
     ['explorer/live.js', 'live-chip state', /btn\.dataset\.cornState = live/],
   ];
   for (const [file, name, re] of PLACES) {
@@ -260,13 +264,13 @@ describe('the retro fixture theme, the proof that hooks are enough', () => {
 
 // --- The page and some panels, mounted -------------------------------------------------------------------------------
 
-const html = explorerPage();
+const html = explorerPage(); // with the pieces' places: page.js mounts them (page-pieces.js), and so does each test below
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (sel) => document.querySelector(sel);
 const hook = (name) => $(`[data-corn="${name}"]`);
 
 describe('the mounted page', () => {
-  beforeEach(() => { document.body.innerHTML = body; });
+  beforeEach(() => { document.body.innerHTML = body; ensurePagePieces(); });
 
   it('has the main regions, each on its real element', () => {
     expect(hook('header').tagName).toBe('HEADER');
@@ -358,6 +362,7 @@ describe('the mounted page', () => {
 describe('markup made by script', () => {
   beforeEach(() => {
     document.body.innerHTML = body;
+    ensurePagePieces();
     Object.assign(state, { nodes: [{ id: 'a', type: 'page', x: 100, y: 100, r: 20, color: '#fff', label: 'a' }, { id: 'b', type: 'app', x: 300, y: 100, r: 20, color: '#fff', label: 'b' }], edges: [{ from: 'a', to: 'b', kind: 'calls' }], width: 800, height: 600, camera: { x: 0, y: 0, zoom: 1 }, coveredBottom: 0, scenario: null, proposal: undefined, theme: 'dark', activeLayers: {} });
     state.canvas = document.getElementById('graph-canvas');
     vi.stubGlobal('requestAnimationFrame', () => 0);

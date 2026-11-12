@@ -4,6 +4,7 @@
  * the same shapes the renderers draw (they read the same constants), nothing from the map in it.
  */
 import { describe, it, expect } from 'vitest';
+import { explorerPage } from '../helpers.js';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
@@ -15,8 +16,7 @@ import { renderFlowLegend } from '../../explorer/flows.js';
 // @ts-expect-error plain JS modules, no declarations
 import { state } from '../../explorer/state.js';
 
-import { withMapElements } from '../helpers.js';
-const page = withMapElements(fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8'));
+const page = explorerPage({ pieces: true }); // the Layers menu (with the Key) is a piece: its markup in its place
 
 describe('the Key', () => {
   it('draws a row for every family of end mark, owns, usage and proposed, each as an SVG with the real line', () => {
