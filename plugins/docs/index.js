@@ -24,6 +24,9 @@ export const DEFAULT_PATHS = ['README.md', 'docs'];
 const isMarkdown = (f) => /\.md$/i.test(f);
 const isReadme = (f) => /^readme\.md$/i.test(path.posix.basename(f));
 
+/** What a docs warning says of a link the walk leaves out (core/repo.js `walk`) */
+const SKIPPED = { outside: 'is a link to somewhere outside the repo; it is not followed', walked: 'leads to a folder already read; it is not read again', missing: 'is a link to nothing; it is not read' };
+
 /** The files the site writes itself: a doc's page may not land on one (see `docOutputs`) */
 export const SITE_OUTPUTS = ['map.html', 'site.css', '.cornfield-site'];
 
@@ -37,11 +40,13 @@ export const SITE_OUTPUTS = ['map.html', 'site.css', '.cornfield-site'];
 export function docFiles(io, paths, refuse = () => {}) {
   const out = new Set();
   const inside = io.inside || (() => true);
+  const seen = new Set(); // the real folders read so far: two paths that reach one folder read it once
+  const told = new Set();
   for (const p of paths) {
     const rel = path.posix.normalize(p.replace(/^\.\/+/, '').replace(/\/+$/, '') || '.');
-    if (path.isAbsolute(p) || path.win32.isAbsolute(p) || rel === '..' || rel.startsWith('../') || !inside(rel)) { refuse(`docs: "${p}" is outside the repo; only files and folders of the repo are read.`, 'problem'); continue; }
+    if (path.isAbsolute(p) || path.win32.isAbsolute(p) || rel === '..' || rel.startsWith('../') || !inside(rel)) { refuse(`docs: ${JSON.stringify(p)} is outside the repo; only files and folders of the repo are read.`, 'problem'); continue; }
     if (io.isDir(rel)) {
-      io.walk(rel, isMarkdown, (f, why) => refuse(why === 'outside' ? `docs: ${f} is a link to somewhere outside the repo; it is not followed.` : `docs: ${f} leads to a folder already read; it is not read again.`, 'warning')).forEach((f) => out.add(f));
+      io.walk(rel, isMarkdown, (f, why) => { const m = `docs: ${f || '.'} ${SKIPPED[why]}.`; if (!told.has(m)) { told.add(m); refuse(m, 'warning'); } }, seen).forEach((f) => out.add(f));
     } else if (isMarkdown(rel) && io.exists(rel)) out.add(rel);
   }
   return [...out].sort();
@@ -124,7 +129,9 @@ export default {
     const empty = { nodes: [], edges: [], info: { pages: [] } };
     if (!files.length) return { ...empty, warnings: [...warnings, ...(ctx.options?.paths ? [`docs: no Markdown in ${paths.join(', ')}.`] : [])], problems };
 
-    const { outputs, renamed } = docOutputs(files);
+    // Two docs that would be one page id are a problem (below); only the first is placed, and only its name can clash
+    const ids = new Set();
+    const { outputs, renamed } = docOutputs(files.filter((f) => !ids.has(docPageId(f)) && ids.add(docPageId(f))));
     for (const [file, output, other] of renamed) warnings.push(`docs: ${file} would be page ${docOutput(file)}, ${other ? `which ${other} has` : 'which the site writes itself'}; it is written to ${output}.`);
     const nodes = [{ id: appId, type: 'app', label, file: paths.map((p) => p.replace(/^\.\/+/, '').replace(/\/+$/, '')).find((p) => ctx.exists(p) && ctx.inside(p)) }];
     const edges = [];

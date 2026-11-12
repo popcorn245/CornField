@@ -156,7 +156,65 @@ describe('a symlink that stays in the repo', () => {
     put('docs/d.md', '# D\n');
     fs.symlinkSync('../shared', path.join(repo, 'docs/team'));
     const all = repoReader(repo).walk('', (f) => f.endsWith('.md'));
-    expect(all.filter((f) => f.endsWith('y.md'))).toHaveLength(1);
+    // by its own name: a link to a folder the walk reaches anyway is left to the folder, whatever the order
+    expect(all.filter((f) => f.endsWith('y.md'))).toEqual(['shared/y.md']);
+    expect(repoReader(repo).walk('docs', (f) => f.endsWith('.md'))).toEqual(['docs/d.md', 'docs/team/y.md']);
+  });
+
+  linked('is read once when two paths reach one folder, and a plain overlap is not a warning', async () => {
+    put('docs/d.md', '# D\n');
+    fs.symlinkSync('docs', path.join(repo, 'manual'));
+    const out = await derive(['README.md', 'docs', 'manual', '.', 'docs']);
+    expect(out.nodes.filter((n) => n.type === 'page').map((n) => n.file)).toEqual(['README.md', 'docs/d.md']);
+    expect(out.warnings).toEqual(['docs: manual leads to a folder already read; it is not read again.']);
+  });
+
+  linked('counts the repo as inside when its own path is a link to it', async () => {
+    put('docs/d.md', '# D\n\n![p](p.png) [r](../README.md)\n');
+    put('docs/p.png', 'PNGDATA');
+    fs.symlinkSync('repo', path.join(base, 'via'));
+    const config = await loadConfig(path.join(base, 'via'), { env: {} });
+    const res = await buildSite({ config, derivers: [{ deriver: docs, options: { paths: ['README.md', 'docs'] } }], out: path.join(base, 'site') });
+    expect(res.files).toEqual(['.cornfield-site', 'docs/d.html', 'docs/p.png', 'index.html', 'map.html', 'site.css']);
+    expect(res.warnings).toEqual([]);
+    expect(res.problems).toEqual([]);
+    expect(repoReader(path.join(base, 'via')).inside('docs/d.md')).toBe(true);
+  });
+});
+
+describe('a folder beside the repo whose name starts with the repo\'s', () => {
+  linked('is outside, by path and by symlink', async () => {
+    put('o.md', `# Other\n\n${MARKER}\n`, path.join(base, 'repo-other'));
+    fs.symlinkSync('../repo-other', path.join(repo, 'other'));
+    put('docs/d.md', '# D\n\n[o](../other/o.md)\n');
+    const io = repoReader(repo);
+    expect(io.inside('../repo-other/o.md')).toBe(false);
+    expect(io.inside('other/o.md')).toBe(false);
+    expect(io.inside('other')).toBe(false);
+    expect(io.walk('', () => true)).not.toContain('other/o.md');
+    const res = await build(['README.md', 'docs', 'other', '../repo-other']);
+    expect(res.problems).toEqual([
+      'docs: "other" is outside the repo; only files and folders of the repo are read.',
+      'docs: "../repo-other" is outside the repo; only files and folders of the repo are read.',
+    ]);
+    expect(res.warnings).toEqual(['docs: docs/d.md links to "../other/o.md", which leads outside the repo.']);
+    for (const f of everything(res.out)) expect(fs.readFileSync(f, 'utf8')).not.toContain(MARKER);
+  });
+});
+
+describe('a link to nothing', () => {
+  linked('is left out with a warning, a loop of links too, and does not stop the build', async () => {
+    put('docs/d.md', '# D\n\n[x](gone.md) [y](../README.md/x)\n');
+    fs.symlinkSync('../outside/none.md', path.join(repo, 'docs/gone.md'));
+    fs.symlinkSync('round.md', path.join(repo, 'docs/round.md'));
+    const out = await derive(['README.md', 'docs']);
+    expect(out.nodes.filter((n) => n.type === 'page').map((n) => n.file)).toEqual(['README.md', 'docs/d.md']);
+    expect(out.warnings).toEqual(['docs: docs/gone.md is a link to nothing; it is not read.', 'docs: docs/round.md is a link to nothing; it is not read.']);
+    // a link to something that is not there stays a broken link, which fails validate
+    expect(out.problems).toEqual([
+      'docs: docs/d.md links to "gone.md", but docs/gone.md is not in the repo.',
+      'docs: docs/d.md links to "../README.md/x", but README.md/x is not in the repo.',
+    ]);
   });
 });
 
