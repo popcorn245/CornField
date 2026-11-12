@@ -95,6 +95,47 @@ async function sendBack(page, wait) {
 /** What differs only because a base on another origin makes a request credentialed and absolute: removed before comparing */
 const same = (a, b) => JSON.stringify(a.map((s) => ({ name: s.name, log: s.log.map(({ cred, ...r }) => r) }))) === JSON.stringify(b.map((s) => ({ name: s.name, log: s.log.map(({ cred, ...r }) => r) })));
 
+/**
+ * What only a shadow root can show (the harness's `&shadow=1`): the host's own rules stop at it, the lookups and the focus are the box's, two reviews put
+ * no id in the document, the box carries what its stylesheet says (the query container, `contain: layout`, `all: initial`), the phone's fixed backdrop
+ * stays in the box, and the wheel is the host page's until the map has the focus
+ */
+async function shadowChecks(page, tag) {
+  const facts = await page.evaluate(() => {
+    const o = window.harness.pieces.objects; const r = window.harness.pieces.rig;
+    const box = o.elements[0]; const cs = getComputedStyle(box);
+    const btn = o.inst.el('proposal-whole'); const bs = getComputedStyle(btn);
+    btn.focus();
+    const active = o.inst.active() === btn;
+    o.inst.state.canvas.focus();
+    const canvasActive = o.inst.active() === o.inst.state.canvas;
+    return {
+      inShadow: box.getRootNode() instanceof ShadowRoot && r.elements[0].getRootNode() instanceof ShadowRoot,
+      hostRules: { transform: bs.textTransform, font: bs.fontFamily.slice(0, 30), canvasBorder: getComputedStyle(o.inst.state.canvas).borderTopWidth },
+      box: { container: `${cs.containerName} / ${cs.containerType}`, contain: cs.contain, lineHeight: cs.lineHeight, textAlign: cs.textAlign },
+      active, canvasActive,
+      documentIds: [...document.querySelectorAll('[id]')].map((e) => e.id).sort().join(','),
+      lookups: ['sheet-dock', 'proposal-bar', 'review-column', 'spec-drawer', 'graph-canvas', 'review-decision'].every((id) => o.inst.el(id) && r.inst.el(id) && o.inst.el(id) !== r.inst.el(id)),
+    };
+  });
+  check(tag('both reviews are in shadow roots'), facts.inShadow);
+  check(tag('the host\'s rules on bare elements stop at the shadow root (no uppercase buttons, no Georgia, no dotted canvas border)'), facts.hostRules.transform === 'none' && !/Georgia/.test(facts.hostRules.font) && facts.hostRules.canvasBorder === '0px', JSON.stringify(facts.hostRules));
+  check(tag('the box is the query container, contains its layout and starts from initial values'), /corn-box corn-page \/ size/.test(facts.box.container) && /layout/.test(facts.box.contain) && facts.box.textAlign !== 'justify', JSON.stringify(facts.box));
+  check(tag('inst.active() is the focused element inside the shadow root'), facts.active && facts.canvasActive);
+  check(tag('two reviews put no id in the document, and find their own elements'), facts.lookups && !/sheet-dock|graph-canvas|proposal-bar/.test(facts.documentIds), facts.documentIds);
+  // the wheel: over the map with no focus it scrolls the host's page; with the map focused it zooms the map
+  const wheel = async (focus) => {
+    await page.evaluate((f) => { window.scrollTo(0, 0); const o = window.harness.pieces.objects; if (f) o.inst.state.canvas.focus(); else document.getElementById('host-button').focus(); }, focus);
+    const b = await page.evaluate(() => { const r = window.harness.pieces.objects.inst.state.canvas.getBoundingClientRect(); return { x: r.x + r.width * 0.7, y: r.y + r.height * 0.5 }; });
+    const z0 = await page.evaluate(() => window.harness.pieces.objects.inst.state.camera.zoom);
+    await page.mouse.move(b.x, b.y); await page.mouse.wheel(0, 300); await new Promise((r) => setTimeout(r, 400));
+    return page.evaluate((z) => ({ scrolled: window.scrollY > 0, zoomed: window.harness.pieces.objects.inst.state.camera.zoom !== z }), z0);
+  };
+  const free = await wheel(false); const focused = await wheel(true);
+  check(tag('the wheel scrolls the host page over an unfocused map, and zooms the map once it has the focus'), free.scrolled && !free.zoomed && focused.zoomed && !focused.scrolled, JSON.stringify({ free, focused }));
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
 async function main() {
   const { chromium } = await loadPlaywright();
   const base = path.join(os.tmpdir(), `cornfield-review-proof-${PORT}`);
@@ -108,18 +149,22 @@ async function main() {
   const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true });
   const axe = axeSource();
 
-  for (const scheme of ['light', 'dark']) {
+  // Each review in a plain box of the host's page, then in the shadow root of a plain custom element under a strict CSP (`&shadow=1`, serve.mjs `?csp=1`):
+  // how the coming <corn-review> holds it
+  for (const [shadow, scheme] of [[false, 'light'], [false, 'dark'], [true, 'light'], [true, 'dark']]) {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
+    await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`)); });
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${MAP_ORIGIN}/auth/start`, { waitUntil: 'networkidle' });
-    await page.goto(`${HOST_ORIGIN}/?objects=1100x680&rig=390x700&theme=${scheme}`, { waitUntil: 'networkidle' });
+    await page.goto(`${HOST_ORIGIN}/?objects=1100x680&rig=390x700&theme=${scheme}&base=${MAP_ORIGIN}${shadow ? '&shadow=1&csp=1' : ''}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => document.documentElement.dataset.harness === 'ready');
     await page.waitForFunction(() => window.harness.pieces.rig.inst.state.proposal, null, { timeout: 20000 });
     await wait(1500);
-    const tag = (s) => `${scheme}: ${s}`;
-    await shot(page, `${scheme}-01-open`);
+    const tag = (s) => `${shadow ? 'shadow, ' : ''}${scheme}: ${s}`;
+    const pre = `${shadow ? 'shadow-' : ''}${scheme}`;
+    await shot(page, `${pre}-01-open`);
     const info = await page.evaluate(() => {
       const o = window.harness.pieces.objects; const r = window.harness.pieces.rig;
       const box = (p) => p.elements[0].getBoundingClientRect();
@@ -132,34 +177,34 @@ async function main() {
 
     // Before / Diff / After and Whole map, in the wide box
     const ow = (sel) => page.locator(`[data-box="objects"] ${sel}`);
-    for (const view of ['before', 'after', 'diff']) { await ow(`[data-action="proposal-view"][data-view="${view}"]`).click(); await wait(400); if (view !== 'diff') await shot(page, `${scheme}-02-view-${view}`); }
+    for (const view of ['before', 'after', 'diff']) { await ow(`[data-action="proposal-view"][data-view="${view}"]`).click(); await wait(400); if (view !== 'diff') await shot(page, `${pre}-02-view-${view}`); }
     check(tag('Before, After, Diff switch'), await page.evaluate(() => window.harness.pieces.objects.inst.state.proposalView) === 'diff');
-    await ow('[data-action="proposal-whole"]').click(); await wait(500); await shot(page, `${scheme}-03-whole-map`);
+    await ow('[data-action="proposal-whole"]').click(); await wait(500); await shot(page, `${pre}-03-whole-map`);
     check(tag('Whole map is on'), await page.evaluate(() => window.harness.pieces.objects.inst.state.review.whole) === true);
     await ow('[data-action="proposal-whole"]').click(); await wait(300);
     // a changed node and a changed edge
     await ow('[data-action="proposal-focus"][data-kind="node"]').first().click(); await wait(700);
-    await shot(page, `${scheme}-04-node-panel`);
+    await shot(page, `${pre}-04-node-panel`);
     check(tag('a changed node opens the node panel'), await page.evaluate(() => window.harness.pieces.objects.inst.el('spec-drawer').classList.contains('drawer-open') && !!window.harness.pieces.objects.inst.state.selectedNode));
     await ow('[data-action="proposal-focus"][data-kind="edge"]').first().click(); await wait(700);
-    await shot(page, `${scheme}-05-edge-panel`);
+    await shot(page, `${pre}-05-edge-panel`);
     check(tag('a changed edge opens the edge panel'), await page.evaluate(() => window.harness.pieces.objects.inst.el('spec-drawer').classList.contains('drawer-open') && !!window.harness.pieces.objects.inst.state.selectedEdge));
     // a scenario
     await page.evaluate(() => window.harness.pieces.objects.inst.state.canvas.focus());
     await page.keyboard.press('Escape'); await wait(300);
     await ow('.hx-sc-row').first().click(); await wait(300);
     await ow('.hx-step').first().click(); await wait(900);
-    await shot(page, `${scheme}-06-player`);
+    await shot(page, `${pre}-06-player`);
     check(tag('a scenario plays: the player bar is in the box'), await page.evaluate(() => { const p = window.harness.pieces.objects; const bar = p.inst.el('review-column') && p.elements[0].querySelector('.hx-player'); return !!bar && p.elements[0].contains(bar) && !!p.inst.state.scenario; }));
     await page.keyboard.press('Escape'); await wait(300);
     // the phone's sheets in the narrow box
     const rig = (sel) => page.locator(`[data-box="rig"] ${sel}`);
     await rig('.hx-sheet-handle').first().click(); await wait(500);
-    await shot(page, `${scheme}-07-phone-expanded`);
+    await shot(page, `${pre}-07-phone-expanded`);
     await page.evaluate(() => { const r = window.harness.pieces.rig; const n = r.inst.state.nodes.find((x) => x.mark === 'added'); r.update({ node: n.id }); });
-    await wait(700); await shot(page, `${scheme}-08-phone-node`);
+    await wait(700); await shot(page, `${pre}-08-phone-node`);
     await rig('#spec-drawer').click({ position: { x: 60, y: 30 }, force: true }); await wait(500); // the node panel (a peek: a tap anywhere on it) expanded: its tap-away backdrop is drawn
-    await shot(page, `${scheme}-09-phone-node-expanded`);
+    await shot(page, `${pre}-09-phone-node-expanded`);
     const fixed = await page.evaluate(() => {
       const r = window.harness.pieces.rig; const box = r.elements[0].getBoundingClientRect();
       const inside = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.left >= box.left - 1 && b.right <= box.right + 1 && b.top >= box.top - 1 && b.bottom <= box.bottom + 1; };
@@ -174,14 +219,15 @@ async function main() {
     });
     check(tag('the two pieces are independent'), indep.r && indep.o !== indep.r, JSON.stringify(indep));
     const body = await page.evaluate(() => ({ kids: [...document.body.children].map((e) => e.tagName + (e.id ? `#${e.id}` : '')), head: document.head.querySelectorAll('style').length, htmlAttrs: document.documentElement.getAttributeNames().sort() }));
-    check(tag('nothing is appended to the body (and no <style> to the head)'), body.kids.join(',') === 'HEADER,MAIN,SCRIPT' && body.head === 1, JSON.stringify(body));
+    check(tag('nothing is appended to the body (and no <style> to the head)'), body.kids.join(',') === 'HEADER,MAIN,SCRIPT' && body.head === 0, JSON.stringify(body));
+    if (shadow) await shadowChecks(page, tag);
     // axe
     if (axe) {
       await page.evaluate(() => window.harness.pieces.rig.update({ node: null }));
       await wait(300);
       await page.evaluate(axe);
       for (const name of ['objects', 'rig']) {
-        const res = await page.evaluate(async (n) => { const r = await window.axe.run(document.querySelector(`[data-box="${n}"]`), { resultTypes: ['violations'] }); return r.violations.map((v) => `${v.id}: ${v.nodes.length}`); }, name);
+        const res = await page.evaluate(async (n) => { const r = await window.axe.run(document.querySelector(`[data-box="${n}"]`), { resultTypes: ['violations'] }); return r.violations.map((v) => `${v.id}: ${v.nodes.length} ${v.nodes.slice(0, 2).map((x) => JSON.stringify(x.target)).join(' ')}`); }, name);
         check(tag(`axe on the ${name} box`), res.length === 0, res.join('; '));
       }
     }
@@ -189,10 +235,12 @@ async function main() {
     const gone = await page.evaluate(() => {
       const before = [...document.body.querySelectorAll('*')].length;
       for (const n of ['objects', 'rig']) window.harness.pieces[n].destroy();
-      return { before, after: [...document.body.querySelectorAll('*')].length, boxes: document.querySelectorAll('[data-corn="review"]').length, kids: document.querySelector('[data-box="objects"]').childNodes.length + document.querySelector('[data-box="rig"]').childNodes.length };
+      const roots = ['objects', 'rig'].map((n) => window.harness.root(n));
+      return { before, after: [...document.body.querySelectorAll('*')].length, boxes: roots.reduce((k, r) => k + r.querySelectorAll('[data-corn="review"]').length, 0), kids: roots.reduce((k, r) => k + r.childNodes.length, 0) };
     });
     check(tag('destroy leaves nothing in the host'), gone.boxes === 0 && gone.kids === 0, JSON.stringify(gone));
     check(tag('no page errors'), errors.length === 0, errors.join('; '));
+    if (shadow) { const csp = await page.evaluate(() => window.__csp); check(tag('no Content-Security-Policy violation under style-src \'self\''), csp.length === 0, csp.slice(0, 5).join('; ')); }
     await ctx.close();
   }
 
@@ -205,7 +253,7 @@ async function main() {
     page.setDefaultTimeout(8000);
     const opened = () => page.waitForFunction(() => { const t = document.getElementById('proposal-title'); const l = document.querySelector('[data-review-line]'); return t && t.textContent && l && l.textContent && !/Reading|Checking/i.test(l.textContent); }, null, { timeout: 25000 }).catch(() => {});
     const go = async (slug, pr) => {
-      if (kind === 'page') { await page.goto(`http://127.0.0.1:${PAGE.port}/?proposal=${slug}&source=pull/${pr}`, { waitUntil: 'networkidle' }); } else { await page.goto(`${HOST_ORIGIN}/?rig=1100x680&slug=${slug}&source=pull/${pr}&theme=dark`, { waitUntil: 'networkidle' }); }
+      if (kind === 'page') { await page.goto(`http://127.0.0.1:${PAGE.port}/?proposal=${slug}&source=pull/${pr}`, { waitUntil: 'networkidle' }); } else { await page.goto(`${HOST_ORIGIN}/?rig=1100x680&slug=${slug}&source=pull/${pr}&theme=dark&shadow=1&csp=1&base=${MAP_ORIGIN}`, { waitUntil: 'networkidle' }); }
       await opened(); await wait(600);
     };
     await page.goto(kind === 'page' ? `http://127.0.0.1:${PAGE.port}/auth/start` : `${MAP_ORIGIN}/auth/start`, { waitUntil: 'networkidle' });

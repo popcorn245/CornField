@@ -1,0 +1,25 @@
+/* The host app's own styles (test/fixtures/review/index.html), unrelated to cornfield's: here to show what leaks in or out. A file, not an inline
+   <style>, so the page runs under a strict `style-src 'self'` (serve.mjs `?csp=1`). */
+  html { font-size: 17px; }
+  body { margin: 0; font: 15px/1.8 Georgia, "Times New Roman", serif; letter-spacing: 0.01em; color: #2b2a28; background: #f4efe6; text-align: justify; }
+  :root[data-theme="dark"] body { color: #e8e2d6; background: #1b1a18; }
+  header.site { display: flex; align-items: baseline; gap: 2rem; padding: 0.6rem 1.5rem; background: #8a3b12; color: #fff; }
+  header.site h1 { margin: 0; font-size: 1.4rem; text-transform: uppercase; letter-spacing: 0.12em; }
+  header.site nav a { color: #ffd9b8; margin-right: 1rem; }
+  main { padding: 1rem 1.5rem 3rem; }
+  main > section { margin: 0 0 2rem; padding: 1rem 1.2rem 1.4rem; background: rgba(255, 255, 255, 0.55); border: 2px solid #c7b79c; border-radius: 0; }
+  :root[data-theme="dark"] main > section { background: rgba(255, 255, 255, 0.05); border-color: #5c5446; }
+  h2 { margin: 0.2em 0 0.4em; font-size: 1.5rem; font-variant: small-caps; text-transform: lowercase; border-bottom: 3px double currentColor; }
+  h3 { margin: 1em 0 0.3em; font-size: 1.2rem; color: #8a3b12; }
+  p { margin: 1em 0; text-indent: 1.5em; }
+  button { padding: 0.7em 1.4em; margin: 0.2em; border: 3px outset #8a3b12; background: #c0562a; color: #fff; font: italic 16px/2 Georgia, serif; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 0; cursor: crosshair; }
+  button:hover { background: #e07a3c; }
+  a { color: #a02c00; text-decoration: wavy underline; }
+  ul, ol { padding-left: 2.5em; } li { margin: 0.5em 0; }
+  input, textarea, select { font: 16px/2 Georgia, serif; border: 4px groove #8a3b12; padding: 0.5em; background: #fff8ee; color: #000; }
+  details { border: 1px dashed #8a3b12; padding: 0.5em; } summary { font-weight: bold; text-transform: uppercase; }
+  canvas { border: 5px dotted #8a3b12; }
+  svg { fill: #8a3b12; }
+  div, span { word-spacing: 0.3em; }
+  .box { resize: both; overflow: hidden; max-width: 100%; border: 2px solid #8a3b12; }
+  .note { font-size: 0.85rem; color: #6a5b44; margin: 0 0 0.6rem; }

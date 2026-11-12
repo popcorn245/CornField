@@ -8,33 +8,9 @@
   A host app's page with a review piece or two in it (explorer/pieces/review.js), for tests and for eyes. Open it by a *.localhost name that the rig lists
   (`--embed`), with ?objects=1100x680 (a box fed objects: no server) and/or ?rig=390x700 (a box with a base on the rig: Approve and Send back post),
   &theme=light|dark, &base=<rig origin>, &slug=, &source=, &view=. harness.js loads the stylesheets the piece names (`STYLESHEETS`) and mounts.
-  The styles below are the host's own and unrelated to cornfield's: they are here to show what leaks in or out.
+  The host's own styles (host.css) are unrelated to cornfield's: they are here to show what leaks in or out. &shadow=1 mounts each review in a shadow root.
 -->
-<style>
-  html { font-size: 17px; }
-  body { margin: 0; font: 15px/1.8 Georgia, "Times New Roman", serif; letter-spacing: 0.01em; color: #2b2a28; background: #f4efe6; text-align: justify; }
-  :root[data-theme="dark"] body { color: #e8e2d6; background: #1b1a18; }
-  header.site { display: flex; align-items: baseline; gap: 2rem; padding: 0.6rem 1.5rem; background: #8a3b12; color: #fff; }
-  header.site h1 { margin: 0; font-size: 1.4rem; text-transform: uppercase; letter-spacing: 0.12em; }
-  header.site nav a { color: #ffd9b8; margin-right: 1rem; }
-  main { padding: 1rem 1.5rem 3rem; }
-  main > section { margin: 0 0 2rem; padding: 1rem 1.2rem 1.4rem; background: rgba(255, 255, 255, 0.55); border: 2px solid #c7b79c; border-radius: 0; }
-  :root[data-theme="dark"] main > section { background: rgba(255, 255, 255, 0.05); border-color: #5c5446; }
-  h2 { margin: 0.2em 0 0.4em; font-size: 1.5rem; font-variant: small-caps; text-transform: lowercase; border-bottom: 3px double currentColor; }
-  h3 { margin: 1em 0 0.3em; font-size: 1.2rem; color: #8a3b12; }
-  p { margin: 1em 0; text-indent: 1.5em; }
-  button { padding: 0.7em 1.4em; margin: 0.2em; border: 3px outset #8a3b12; background: #c0562a; color: #fff; font: italic 16px/2 Georgia, serif; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 0; cursor: crosshair; }
-  button:hover { background: #e07a3c; }
-  a { color: #a02c00; text-decoration: wavy underline; }
-  ul, ol { padding-left: 2.5em; } li { margin: 0.5em 0; }
-  input, textarea, select { font: 16px/2 Georgia, serif; border: 4px groove #8a3b12; padding: 0.5em; background: #fff8ee; color: #000; }
-  details { border: 1px dashed #8a3b12; padding: 0.5em; } summary { font-weight: bold; text-transform: uppercase; }
-  canvas { border: 5px dotted #8a3b12; }
-  svg { fill: #8a3b12; }
-  div, span { word-spacing: 0.3em; }
-  .box { resize: both; overflow: hidden; max-width: 100%; border: 2px solid #8a3b12; }
-  .note { font-size: 0.85rem; color: #6a5b44; margin: 0 0 0.6rem; }
-</style>
+<link rel="stylesheet" href="/host.css" />
 </head>
 <body>
 <header class="site"><h1>Tasks</h1><nav><a href="#board">Board</a><a href="#calendar">Calendar</a></nav></header>
