@@ -12,216 +12,229 @@
  * point under the pointer, or between two fingers, still (camera.js).
  */
 
-import { state, touchScene } from './state.js';
-import { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom, setHoverNode, labelNodeAt, fitGraphToViewport, fitPadding } from './render.js';
 import { clusterIds } from './cluster.js';
 import { LANDMARK_TYPES } from './scene.js';
-import { saveFreeformPositions } from './layout.js';
-import { selectNode, closeDrawer } from './panels.js';
+import { saveFreeformPositions } from './engine/layout.js';
 import { hitTestScreen } from './spatial.js';
 import { zoomAbout, pinchStart, pinchCamera } from './camera.js';
-import { stopFlight } from './fly.js';
 
-let isDragging = false;
-let dragNode = null;
-let lastPos = { x: 0, y: 0 };
-let touchStartPos = { x: 0, y: 0 };
-let touchMoved = false;
-let pointerDownNode = null;
-let lastTapNode = null;
-let lastTapTime = 0;
-let pinch = null; // the start of a two-finger gesture (camera.js pinchStart)
-let downOnCanvas = false; // the press that is ending began on the map: a release elsewhere (a sheet's handle, a panel button) is not a tap on the background
+/**
+ * Listens on the instance's map canvas and returns how to stop (`inst.destroy()` also does). What the map cannot do itself it says through the
+ * instance, for the page shell (or the host) to answer: `inst.emit('select', node)` (a tap on a node), `inst.emit('background')` (a tap on the bare
+ * map: back to the normal view) and `inst.emit('grab')` (a hand takes the camera, so a flight to a match ends where it is).
+ * @param {ReturnType<typeof import('./instance.js').createInstance>} inst
+ */
+export function bindCanvasInput(inst) {
+  const { state } = inst;
+  const { render, getSpatialIndex, queueFrameWork, screenToWorld, getMinZoom, setHoverNode, labelNodeAt, fitGraphToViewport, fitPadding } = inst.map;
+  const selectNode = (node) => inst.emit('select', node);
+  const closeDrawer = () => inst.emit('background');
+  const stopFlight = () => inst.emit('grab');
 
-// What the pointer did since the last frame; applied once per frame by applyMoves
-let pendingPos = null;
-let pendingPinch = null;
-let pendingHover = null;
-let hovering = false;
-let restCursor = '';
+  let isDragging = false;
+  let dragNode = null;
+  let lastPos = { x: 0, y: 0 };
+  let touchStartPos = { x: 0, y: 0 };
+  let touchMoved = false;
+  let pointerDownNode = null;
+  let lastTapNode = null;
+  let lastTapTime = 0;
+  let pinch = null; // the start of a two-finger gesture (camera.js pinchStart)
+  let downOnCanvas = false; // the press that is ending began on the map: a release elsewhere (a sheet's handle, a panel button) is not a tap on the background
 
-const canDragNodes = () => state.isFreeform && state.view === 'orbit';
+  // What the pointer did since the last frame; applied once per frame by applyMoves
+  let pendingPos = null;
+  let pendingPinch = null;
+  let pendingHover = null;
+  let hovering = false;
+  let restCursor = '';
 
-function getPointerPos(e) {
-  const rect = state.canvas.getBoundingClientRect();
-  const point = e.touches ? e.touches[0] : e;
-  return { x: point.clientX - rect.left, y: point.clientY - rect.top };
-}
+  const canDragNodes = () => state.isFreeform && state.view === 'orbit';
 
-// The topology node with this id (the grid answers with scene nodes, which are copies of the picture)
-let byId = { nodes: null, size: -1, map: null };
-function topologyNode(id) {
-  if (byId.nodes !== state.nodes || byId.size !== state.nodes.length) {
-    byId = { nodes: state.nodes, size: state.nodes.length, map: new Map(state.nodes.map((n) => [n.id, n])) };
+  function getPointerPos(e) {
+    const rect = state.canvas.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    return { x: point.clientX - rect.left, y: point.clientY - rect.top };
   }
-  return byId.map.get(id) || null;
-}
 
-/** The topmost visible node under a screen point (a finger gets a wider reach), or null */
-function findNodeAt(screenX, screenY, isTouch) {
-  const hit = hitTestScreen(getSpatialIndex(), state.camera, screenX, screenY, isTouch);
-  return hit ? topologyNode(hit.id) : null;
-}
+  // The topology node with this id (the grid answers with scene nodes, which are copies of the picture)
+  let byId = { nodes: null, size: -1, map: null };
+  function topologyNode(id) {
+    if (byId.nodes !== state.nodes || byId.size !== state.nodes.length) {
+      byId = { nodes: state.nodes, size: state.nodes.length, map: new Map(state.nodes.map((n) => [n.id, n])) };
+    }
+    return byId.map.get(id) || null;
+  }
 
-const touchDistance = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-function touchMid(e) {
-  const rect = state.canvas.getBoundingClientRect();
-  return {
-    x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
-    y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
-  };
-}
+  /** The topmost visible node under a screen point (a finger gets a wider reach), or null */
+  function findNodeAt(screenX, screenY, isTouch) {
+    const hit = hitTestScreen(getSpatialIndex(), state.camera, screenX, screenY, isTouch);
+    return hit ? topologyNode(hit.id) : null;
+  }
 
-function onPointerDown(e) {
-  downOnCanvas = true;
-  stopFlight(); // the hand takes the camera: a flight to a match ends where it is
-  setHoverNode(null); // a press starts a tap or a drag: the chip that named a node under the pointer goes
-  if (e.touches && e.touches.length === 2) {
-    pinch = pinchStart(state.camera, touchDistance(e), touchMid(e));
+  const touchDistance = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  function touchMid(e) {
+    const rect = state.canvas.getBoundingClientRect();
+    return {
+      x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+      y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
+    };
+  }
+
+  function onPointerDown(e) {
+    downOnCanvas = true;
+    stopFlight(); // the hand takes the camera: a flight to a match ends where it is
+    setHoverNode(null); // a press starts a tap or a drag: the chip that named a node under the pointer goes
+    if (e.touches && e.touches.length === 2) {
+      pinch = pinchStart(state.camera, touchDistance(e), touchMid(e));
+      pendingPos = null;
+      isDragging = false;
+      dragNode = null;
+      pointerDownNode = null;
+      return;
+    }
+    const isTouch = !!(e.touches && e.touches.length > 0);
+    const p = getPointerPos(e);
+    touchStartPos = { x: p.x, y: p.y };
+    touchMoved = false;
     pendingPos = null;
+    pointerDownNode = findNodeAt(p.x, p.y, isTouch);
+
+    if (canDragNodes() && pointerDownNode) {
+      dragNode = pointerDownNode;
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    isDragging = true; // otherwise the canvas pans
+    lastPos = p;
+  }
+
+  /** One frame's worth of pointer movement: the pinch, the node being dragged, or the pan, from the latest position */
+  function applyMoves() {
+    if (pendingPinch && pinch) {
+      Object.assign(state.camera, pinchCamera(pinch, pendingPinch.dist, pendingPinch.mid, getMinZoom()));
+    }
+    pendingPinch = null;
+
+    const p = pendingPos;
+    pendingPos = null;
+    if (!p) return;
+    if (dragNode && canDragNodes()) {
+      const world = screenToWorld(p.x, p.y);
+      dragNode.x = world.x;
+      dragNode.y = world.y;
+      state.freeformPositions[dragNode.id] = { x: world.x, y: world.y };
+      inst.touchScene(); // positions changed: the next scene (and so the grid) is built once, from this frame's position
+      saveFreeformPositions(inst);
+    } else if (isDragging) {
+      state.camera.x += p.x - lastPos.x;
+      state.camera.y += p.y - lastPos.y;
+      lastPos = p;
+    }
+  }
+
+  /** Hover: a pointer cursor over a node. It changes no picture, so it asks for no draw. */
+  function applyHover() {
+    const p = pendingHover;
+    pendingHover = null;
+    if (!p || isDragging || dragNode) return;
+    const over = findNodeAt(p.x, p.y, false);
+    setHover(!!over);
+    setHoverNode(over ? over.id : null); // a node with no label is named by a chip (labels.js)
+  }
+
+  function setHover(over) {
+    if (over === hovering || !state.canvas) return;
+    if (over) restCursor = state.canvas.style.cursor;
+    hovering = over;
+    state.canvas.style.cursor = over ? 'pointer' : restCursor;
+  }
+
+  function onPointerMove(e) {
+    if (e.touches && e.touches.length === 2 && pinch) {
+      if (e.cancelable) e.preventDefault();
+      pendingPinch = { dist: touchDistance(e), mid: touchMid(e) };
+      queueFrameWork(applyMoves);
+      return;
+    }
+
+    const p = getPointerPos(e);
+    if (Math.hypot(p.x - touchStartPos.x, p.y - touchStartPos.y) > 8) touchMoved = true;
+
+    if ((dragNode && canDragNodes()) || isDragging) {
+      if (e.cancelable) e.preventDefault();
+      pendingPos = p; // the latest position wins; the frame applies it
+      queueFrameWork(applyMoves);
+      return;
+    }
+    if (!e.touches) {
+      pendingHover = p;
+      queueFrameWork(applyHover, { draw: false });
+    }
+  }
+
+  function onPointerUp(e) {
+    applyMoves(); // the last position the pointer reached counts, even if no frame has run since
+    const isTouch = !!(e.changedTouches && e.changedTouches.length > 0);
+    const rect = state.canvas.getBoundingClientRect();
+    const p = isTouch ? { x: e.changedTouches[0].clientX - rect.left, y: e.changedTouches[0].clientY - rect.top } : getPointerPos(e);
+
+    // Only a touch or click that started and ended on the same node, without dragging, inspects it
+    if (!touchMoved && downOnCanvas) {
+      if (pointerDownNode) {
+        const hitUp = findNodeAt(p.x, p.y, isTouch);
+        if (hitUp && hitUp.id === pointerDownNode.id) {
+          if (!canDragNodes()) {
+            selectNode(pointerDownNode);
+          } else {
+            // Freeform: a double tap inspects, so dragging a node does not open the panel
+            const now = Date.now();
+            if (lastTapNode && lastTapNode.id === pointerDownNode.id && now - lastTapTime < 380) {
+              selectNode(pointerDownNode);
+              lastTapNode = null;
+              lastTapTime = 0;
+            } else {
+              lastTapNode = pointerDownNode;
+              lastTapTime = now;
+            }
+          }
+        }
+      } else {
+        // A cluster's title (its hub's label) is not a node to select: a click on it frames the cluster (spec 0008 D1)
+        const titled = topologyNode(labelNodeAt(p.x, p.y));
+        if (titled && LANDMARK_TYPES.includes(titled.type) && titled.id !== 'root') fitGraphToViewport(fitPadding(), clusterIds(titled.id, state.edges));
+        else if (state.selectedNode) closeDrawer(); // the background was clicked: back to the normal view
+      }
+    }
     isDragging = false;
     dragNode = null;
     pointerDownNode = null;
-    return;
-  }
-  const isTouch = !!(e.touches && e.touches.length > 0);
-  const p = getPointerPos(e);
-  touchStartPos = { x: p.x, y: p.y };
-  touchMoved = false;
-  pendingPos = null;
-  pointerDownNode = findNodeAt(p.x, p.y, isTouch);
-
-  if (canDragNodes() && pointerDownNode) {
-    dragNode = pointerDownNode;
-    if (e.cancelable) e.preventDefault();
-    return;
-  }
-  isDragging = true; // otherwise the canvas pans
-  lastPos = p;
-}
-
-/** One frame's worth of pointer movement: the pinch, the node being dragged, or the pan, from the latest position */
-function applyMoves() {
-  if (pendingPinch && pinch) {
-    Object.assign(state.camera, pinchCamera(pinch, pendingPinch.dist, pendingPinch.mid, getMinZoom()));
-  }
-  pendingPinch = null;
-
-  const p = pendingPos;
-  pendingPos = null;
-  if (!p) return;
-  if (dragNode && canDragNodes()) {
-    const world = screenToWorld(p.x, p.y);
-    dragNode.x = world.x;
-    dragNode.y = world.y;
-    state.freeformPositions[dragNode.id] = { x: world.x, y: world.y };
-    touchScene(); // positions changed: the next scene (and so the grid) is built once, from this frame's position
-    saveFreeformPositions();
-  } else if (isDragging) {
-    state.camera.x += p.x - lastPos.x;
-    state.camera.y += p.y - lastPos.y;
-    lastPos = p;
-  }
-}
-
-/** Hover: a pointer cursor over a node. It changes no picture, so it asks for no draw. */
-function applyHover() {
-  const p = pendingHover;
-  pendingHover = null;
-  if (!p || isDragging || dragNode) return;
-  const over = findNodeAt(p.x, p.y, false);
-  setHover(!!over);
-  setHoverNode(over ? over.id : null); // a node with no label is named by a chip (labels.js)
-}
-
-function setHover(over) {
-  if (over === hovering || !state.canvas) return;
-  if (over) restCursor = state.canvas.style.cursor;
-  hovering = over;
-  state.canvas.style.cursor = over ? 'pointer' : restCursor;
-}
-
-function onPointerMove(e) {
-  if (e.touches && e.touches.length === 2 && pinch) {
-    if (e.cancelable) e.preventDefault();
-    pendingPinch = { dist: touchDistance(e), mid: touchMid(e) };
-    queueFrameWork(applyMoves);
-    return;
+    pinch = null;
+    pendingPinch = null;
+    downOnCanvas = false;
   }
 
-  const p = getPointerPos(e);
-  if (Math.hypot(p.x - touchStartPos.x, p.y - touchStartPos.y) > 8) touchMoved = true;
 
-  if ((dragNode && canDragNodes()) || isDragging) {
-    if (e.cancelable) e.preventDefault();
-    pendingPos = p; // the latest position wins; the frame applies it
-    queueFrameWork(applyMoves);
-    return;
-  }
-  if (!e.touches) {
-    pendingHover = p;
-    queueFrameWork(applyHover, { draw: false });
-  }
-}
-
-function onPointerUp(e) {
-  applyMoves(); // the last position the pointer reached counts, even if no frame has run since
-  const isTouch = !!(e.changedTouches && e.changedTouches.length > 0);
-  const rect = state.canvas.getBoundingClientRect();
-  const p = isTouch ? { x: e.changedTouches[0].clientX - rect.left, y: e.changedTouches[0].clientY - rect.top } : getPointerPos(e);
-
-  // Only a touch or click that started and ended on the same node, without dragging, inspects it
-  if (!touchMoved && downOnCanvas) {
-    if (pointerDownNode) {
-      const hitUp = findNodeAt(p.x, p.y, isTouch);
-      if (hitUp && hitUp.id === pointerDownNode.id) {
-        if (!canDragNodes()) {
-          selectNode(pointerDownNode);
-        } else {
-          // Freeform: a double tap inspects, so dragging a node does not open the panel
-          const now = Date.now();
-          if (lastTapNode && lastTapNode.id === pointerDownNode.id && now - lastTapTime < 380) {
-            selectNode(pointerDownNode);
-            lastTapNode = null;
-            lastTapTime = 0;
-          } else {
-            lastTapNode = pointerDownNode;
-            lastTapTime = now;
-          }
-        }
-      }
-    } else {
-      // A cluster's title (its hub's label) is not a node to select: a click on it frames the cluster (spec 0008 D1)
-      const titled = topologyNode(labelNodeAt(p.x, p.y));
-      if (titled && LANDMARK_TYPES.includes(titled.type) && titled.id !== 'root') fitGraphToViewport(fitPadding(), clusterIds(titled.id, state.edges));
-      else if (state.selectedNode) closeDrawer(); // the background was clicked: back to the normal view
-    }
-  }
-  isDragging = false;
-  dragNode = null;
-  pointerDownNode = null;
-  pinch = null;
-  pendingPinch = null;
-  downOnCanvas = false;
-}
-
-export function bindCanvasInput() {
   const { canvas } = state;
-  canvas.addEventListener('mousedown', onPointerDown);
-  canvas.addEventListener('mousemove', onPointerMove);
-  canvas.addEventListener('mouseleave', () => { pendingHover = null; setHover(false); setHoverNode(null); });
-  window.addEventListener('mouseup', onPointerUp);
-
-  canvas.addEventListener('touchstart', onPointerDown, { passive: false });
-  canvas.addEventListener('touchmove', onPointerMove, { passive: false });
-  window.addEventListener('touchend', onPointerUp, { passive: false });
-  window.addEventListener('touchcancel', onPointerUp, { passive: false });
-
-  canvas.addEventListener('wheel', (e) => {
+  const onWheel = (e) => {
     e.preventDefault();
     stopFlight();
     const p = getPointerPos(e);
     Object.assign(state.camera, zoomAbout(state.camera, e.deltaY < 0 ? 1.12 : 0.88, p.x, p.y, getMinZoom()));
     render(); // a camera change is cheap; the draw is one per frame however many wheel events arrive
-  }, { passive: false });
+  };
+  // The press and the drag begin on the canvas; the release can end anywhere, so it is heard on the instance's root
+  const root = inst.root || canvas;
+  const stops = [
+    inst.listen(canvas, 'mousedown', onPointerDown),
+    inst.listen(canvas, 'mousemove', onPointerMove),
+    inst.listen(canvas, 'mouseleave', () => { pendingHover = null; setHover(false); setHoverNode(null); }),
+    inst.listen(root, 'mouseup', onPointerUp),
+    inst.listen(canvas, 'touchstart', onPointerDown, { passive: false }),
+    inst.listen(canvas, 'touchmove', onPointerMove, { passive: false }),
+    inst.listen(root, 'touchend', onPointerUp, { passive: false }),
+    inst.listen(root, 'touchcancel', onPointerUp, { passive: false }),
+    inst.listen(canvas, 'wheel', onWheel, { passive: false }),
+  ];
+  return () => stops.forEach((off) => off());
 }

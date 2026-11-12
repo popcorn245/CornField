@@ -9,10 +9,9 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 
 const selectNode = vi.fn();
 const closeDrawer = vi.fn();
-vi.mock('../../explorer/panels.js', () => ({ selectNode: (n     ) => selectNode(n), closeDrawer: () => closeDrawer() }));
 
 // @ts-expect-error plain JS modules, no declarations
-import { state, touchScene } from '../../explorer/state.js';
+import { state, touchScene, pageInstance } from '../../explorer/state.js';
 import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { bindCanvasInput } from '../../explorer/input.js';
@@ -38,7 +37,11 @@ beforeAll(() => {
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0, toJSON() {} })           ;
   document.body.append(canvas);
   state.canvas = canvas;
-  bindCanvasInput();
+  const inst = pageInstance(); // the page's instance: input.js says what a tap asks for through it, and the page shell answers (page.js)
+  inst.on('select', (n) => selectNode(n));
+  inst.on('background', () => closeDrawer());
+  render.pageMap();
+  bindCanvasInput(inst);
 });
 
 beforeEach(() => {
@@ -74,7 +77,7 @@ beforeEach(() => {
 
 afterEach(() => {
   render.cancelFrame();
-  window.dispatchEvent(new MouseEvent('mouseup', { clientX: 0, clientY: 0 }));
+  document.dispatchEvent(new MouseEvent('mouseup', { clientX: 0, clientY: 0 }));
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -92,12 +95,12 @@ describe('hover', () => {
 
   it('answers the topmost node where circles overlap (tbl is later than root), and reaches 6 px past the circle', () => {
     mouse('mousedown', 110, 105);
-    mouse('mouseup', 110, 105, window);
+    mouse('mouseup', 110, 105, document);
     expect(selectNode).toHaveBeenCalledTimes(1);
     expect(selectNode.mock.calls[0][0]).toBe(state.nodes[3]); // tbl, drawn on top of root
     selectNode.mockClear();
     mouse('mousedown', 100 - 20 - 5, 100); // 5 px outside root's circle: inside the 6 px reach
-    mouse('mouseup', 100 - 20 - 5, 100, window);
+    mouse('mouseup', 100 - 20 - 5, 100, document);
     expect(selectNode.mock.calls[0][0]).toBe(state.nodes[0]);
   });
 
@@ -105,7 +108,7 @@ describe('hover', () => {
     state.activeLayers.app = false;
     touchScene();
     mouse('mousedown', 300, 100);
-    mouse('mouseup', 300, 100, window);
+    mouse('mouseup', 300, 100, document);
     expect(selectNode).not.toHaveBeenCalled();
   });
 
@@ -129,11 +132,11 @@ describe('hover', () => {
 describe('click and tap', () => {
   it('a click on a node selects it; a click on the background closes the panel when one is open', () => {
     mouse('mousedown', 300, 100);
-    mouse('mouseup', 300, 100, window);
+    mouse('mouseup', 300, 100, document);
     expect(selectNode).toHaveBeenCalledWith(state.nodes[1]);
     state.selectedNode = state.nodes[1];
     mouse('mousedown', 700, 500);
-    mouse('mouseup', 700, 500, window);
+    mouse('mouseup', 700, 500, document);
     expect(closeDrawer).toHaveBeenCalledTimes(1);
   });
 
@@ -142,27 +145,27 @@ describe('click and tap', () => {
     const handle = document.createElement('button');
     document.body.append(handle);
     mouse('mousedown', 400, 700, handle); // not the canvas
-    mouse('mouseup', 400, 700, window);
-    touchEvent('touchend', [], [touch(400, 700)], window); // a finger lifted off a sheet
+    mouse('mouseup', 400, 700, document);
+    touchEvent('touchend', [], [touch(400, 700)], document); // a finger lifted off a sheet
     expect(closeDrawer).not.toHaveBeenCalled();
     mouse('mousedown', 700, 500); // on the map: that one is the background
-    mouse('mouseup', 700, 500, window);
+    mouse('mouseup', 700, 500, document);
     expect(closeDrawer).toHaveBeenCalledTimes(1);
     handle.remove();
   });
 
   it('a finger reaches 16 px past the circle and at least 32 px', () => {
     touchEvent('touchstart', [touch(300 + 20 + 14, 100)]);
-    touchEvent('touchend', [], [touch(300 + 20 + 14, 100)], window);
+    touchEvent('touchend', [], [touch(300 + 20 + 14, 100)], document);
     expect(selectNode).toHaveBeenCalledWith(state.nodes[1]);
     selectNode.mockClear();
     // page has r = 10: its reach is the 32 px floor
     touchEvent('touchstart', [touch(500 + 30, 300)]);
-    touchEvent('touchend', [], [touch(500 + 30, 300)], window);
+    touchEvent('touchend', [], [touch(500 + 30, 300)], document);
     expect(selectNode).toHaveBeenCalledWith(state.nodes[2]);
     selectNode.mockClear();
     touchEvent('touchstart', [touch(500 + 40, 300)]);
-    touchEvent('touchend', [], [touch(500 + 40, 300)], window);
+    touchEvent('touchend', [], [touch(500 + 40, 300)], document);
     expect(selectNode).not.toHaveBeenCalled();
   });
 
@@ -170,7 +173,7 @@ describe('click and tap', () => {
     state.camera = { x: 200, y: 50, zoom: 2 };
     // app is at world (300, 100): screen (800, 250)
     mouse('mousedown', 800, 250);
-    mouse('mouseup', 800, 250, window);
+    mouse('mouseup', 800, 250, document);
     expect(selectNode).toHaveBeenCalledWith(state.nodes[1]);
   });
 });
@@ -192,13 +195,13 @@ describe('pan', () => {
     expect(cam.x).toBe(70);
     expect(cam.y).toBe(120);
     expect(drawn).toBe(2);
-    mouse('mouseup', 670, 620, window);
+    mouse('mouseup', 670, 620, document);
   });
 
   it('releasing before a frame has run still applies the last position', () => {
     mouse('mousedown', 600, 500);
     mouse('mousemove', 650, 520);
-    mouse('mouseup', 650, 520, window);
+    mouse('mouseup', 650, 520, document);
     expect(state.camera.x).toBe(50);
     expect(state.camera.y).toBe(20);
     expect(selectNode).not.toHaveBeenCalled(); // moved: not a click
@@ -227,7 +230,7 @@ describe('node drag in freeform', () => {
     render.getSpatialIndex();
     render.getSpatialIndex();
     expect(render.spatialBuilds()).toBe(grids + 1);
-    mouse('mouseup', 500, 140, window);
+    mouse('mouseup', 500, 140, document);
     expect(state.freeformPositions.app).toEqual({ x: 500, y: 140 });
     expect(selectNode).not.toHaveBeenCalled();
   });
@@ -236,15 +239,15 @@ describe('node drag in freeform', () => {
     mouse('mousedown', 300, 100);
     mouse('mousemove', 400, 400);
     frame();
-    mouse('mouseup', 400, 400, window);
+    mouse('mouseup', 400, 400, document);
     selectNode.mockClear();
     state.isFreeform = false;
     mouse('mousedown', 400, 400);
-    mouse('mouseup', 400, 400, window);
+    mouse('mouseup', 400, 400, document);
     expect(selectNode).toHaveBeenCalledWith(state.nodes[1]);
     selectNode.mockClear();
     mouse('mousedown', 300, 100);
-    mouse('mouseup', 300, 100, window);
+    mouse('mouseup', 300, 100, document);
     expect(selectNode).not.toHaveBeenCalled();
   });
 
@@ -309,7 +312,7 @@ describe('zoom keeps the point under the pointer still', () => {
     const moved = { x: state.camera.x + anchor.x * state.camera.zoom, y: state.camera.y + anchor.y * state.camera.zoom };
     expect(moved.x).toBeCloseTo(450, 6);
     expect(moved.y).toBeCloseTo(320, 6);
-    touchEvent('touchend', [], [touch(350, 320)], window);
+    touchEvent('touchend', [], [touch(350, 320)], document);
   });
 
   it('a pinch is coalesced like a pan: many touchmoves, one draw', () => {
@@ -318,7 +321,7 @@ describe('zoom keeps the point under the pointer still', () => {
     expect(drawn).toBe(0);
     frame();
     expect(drawn).toBe(1);
-    touchEvent('touchend', [], [touch(350, 300)], window);
+    touchEvent('touchend', [], [touch(350, 300)], document);
   });
 });
 
@@ -346,7 +349,7 @@ describe('a click on a cluster\'s title (spec 0008 D1)', () => {
     // the app's title sits under its disc: (300, 100) * 0.5 = (150, 50), label centred below it
     const at = { x: 150, y: 50 + 20 * 0.5 + 3 + 12 - 4 };
     mouse('mousedown', at.x, at.y);
-    mouse('mouseup', at.x, at.y, window           );
+    mouse('mouseup', at.x, at.y, document);
     expect(selectNode).not.toHaveBeenCalled();
     expect(state.camera).not.toEqual({ x: 0, y: 0, zoom: 0.5 }); // the camera moved to the cluster
     for (const n of state.nodes.filter((x         ) => ['app', 'kid1', 'kid2'].includes(x.id))) {
@@ -364,7 +367,7 @@ describe('a click on a cluster\'s title (spec 0008 D1)', () => {
     state.selectedNode = state.nodes[1];
     const root = { x: 100, y: 100 + 20 + 3 + 12 - 4 };
     mouse('mousedown', root.x, root.y);
-    mouse('mouseup', root.x, root.y, window           );
+    mouse('mouseup', root.x, root.y, document);
     expect(closeDrawer).toHaveBeenCalledTimes(1);
     expect(state.camera).toEqual({ x: 0, y: 0, zoom: 1 });
   });

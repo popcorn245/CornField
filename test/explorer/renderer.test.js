@@ -55,7 +55,7 @@ describe('renderer-canvas2d', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '../../explorer/renderer-canvas2d.js'), 'utf8');
     expect(src).not.toMatch(/state\.js/);
     expect(src).not.toMatch(/\bstate\b\./);
-    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './map-style.js', './kind-letters.js', './glyphs.js']);
+    expect([...src.matchAll(/from '([^']+)'/g)].map((m) => m[1])).toEqual(['./scene.js', './engine/map-style.js', './kind-letters.js', './glyphs.js']);
   });
 
   it('sizes the canvas for the device pixel ratio and scales the context to match', () => {
@@ -511,13 +511,13 @@ describe('render.js draws on demand', () => {
     const asleep = drawn.length;
     vi.advanceTimersByTime(5000);
     expect(drawn.length).toBe(asleep);
-    window.dispatchEvent(new Event('mousemove')); // any input wakes them
+    document.body.dispatchEvent(new Event('mousemove', { bubbles: true })); // any input wakes them
     vi.advanceTimersByTime(1000);
     expect(drawn.length).toBeGreaterThan(asleep + 20);
     // a key does too
     vi.advanceTimersByTime(40_000);
     const asleepAgain = drawn.length;
-    window.dispatchEvent(new Event('keydown'));
+    document.body.dispatchEvent(new Event('keydown', { bubbles: true }));
     vi.advanceTimersByTime(1000);
     expect(drawn.length).toBeGreaterThan(asleepAgain + 20);
   });

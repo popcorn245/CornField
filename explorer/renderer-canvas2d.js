@@ -9,7 +9,7 @@
  */
 
 import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
-import { GLYPH_TOKEN, ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { GLYPH_TOKEN, ICON_RATIO, PLAIN_STYLE, looksWith, styledScene } from './engine/map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 import { GLYPH_RATIO, glyphImage, glyphInk, showsGlyph } from './glyphs.js';
 
@@ -374,11 +374,11 @@ function drawNode(ctx, node, zoom, looks, style) {
 
 /**
  * @param {HTMLCanvasElement} canvas the canvas to draw on
- * @param {{mapStyle?: () => import('./map-style.js').MapStyle, layerMinEdges?: number}} [opts] `mapStyle`: where the theme's map tokens come from (default: the page's, map-style.js `getMapStyle`); `layerMinEdges`: how many drawn lines make the layer worth it (default LAYER_MIN_EDGES)
+ * @param {{mapStyle?: () => import('./map-style.js').MapStyle, layerMinEdges?: number}} [opts] `mapStyle`: where the theme's map tokens come from (the instance's: `mapStyleOf(inst).get`; none: no theme); `layerMinEdges`: how many drawn lines make the layer worth it (default LAYER_MIN_EDGES)
  * @returns {import('./scene.js').Renderer}
  */
 export function createCanvas2dRenderer(canvas, opts = {}) {
-  const styleOf = opts.mapStyle || getMapStyle;
+  const styleOf = opts.mapStyle || (() => PLAIN_STYLE);
   const ctx = canvas.getContext('2d');
   let width = 0;
   let height = 0;

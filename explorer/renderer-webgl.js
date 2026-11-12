@@ -25,7 +25,7 @@
  */
 
 import { ARROW, CORE_RATIO, EDGE_STRIKE, END_SHAPES, SHAPE_SIZES, MARK_MIN_PX, edgePoint, looksFor, parseColor } from './scene.js';
-import { GLYPH_TOKEN, ICON_RATIO, getMapStyle, looksWith, styledScene } from './map-style.js';
+import { GLYPH_TOKEN, ICON_RATIO, PLAIN_STYLE, looksWith, styledScene } from './engine/map-style.js';
 import { LETTER_MIN_PX, LETTER_RATIO, isLetterKey, letterImage, letterKey, lettersOfKey } from './kind-letters.js';
 import { GLYPH_MIN_PX, GLYPH_RATIO, glyphImage, glyphInk, glyphKey, glyphOfKey, isGlyphKey } from './glyphs.js';
 import { SHAPES } from '../core/schema.js';
@@ -441,7 +441,7 @@ function destroyGpu(gl, gpu) {
 /**
  * @param {HTMLCanvasElement} canvas the canvas to draw on (it must not have given a 2d context)
  * @param {{gl?: WebGL2RenderingContext, mapStyle?: () => import('./map-style.js').MapStyle}} [opts] `gl`: a context already taken from the canvas.
- *   `mapStyle`: where the theme's map tokens and icons come from (default: the page's, map-style.js `getMapStyle`)
+ *   `mapStyle`: where the theme's map tokens and icons come from: the instance's (`mapStyleOf(inst).get`); none: no theme
  * @returns {import('./scene.js').Renderer & {stats: {uploads: number, draws: number}}}
  * @throws {Error} when there is no WebGL2 context or a shader fails to compile or link
  */
@@ -449,7 +449,7 @@ export function createWebglRenderer(canvas, opts = {}) {
   const gl = opts.gl || canvas.getContext('webgl2', CONTEXT_ATTRS);
   if (!gl) throw new Error('WebGL2 is not available');
 
-  const styleOf = opts.mapStyle || getMapStyle;
+  const styleOf = opts.mapStyle || (() => PLAIN_STYLE);
   const stats = { uploads: 0, draws: 0 };
   let gpu = buildGpu(gl);
   let lost = false;
@@ -631,6 +631,9 @@ export function createWebglRenderer(canvas, opts = {}) {
       canvas.removeEventListener('webglcontextrestored', onRestored);
       if (gpu && !lost) destroyGpu(gl, gpu);
       gpu = null;
+      // Give the context back: a browser keeps only a handful of live ones, and a map that is made and ended (a component) must not use them up
+      try { const lose = !lost && gl.getExtension ? gl.getExtension('WEBGL_lose_context') : null; if (lose) lose.loseContext(); } catch { /* already gone */ }
+      lost = true;
     },
   };
 }

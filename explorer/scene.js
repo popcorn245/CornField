@@ -166,7 +166,7 @@
  * @property {() => void} destroy  releases what it holds
  */
 
-import { flowStyleOf } from './flows.js';
+import { flowStyleOf } from './flow-style.js';
 import { beforeOf, markIn, showsEdge, showsNode, touchedIds } from './proposal-model.js';
 import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } from './house-model.js';
 import { paintVerdict } from './check-model.js';

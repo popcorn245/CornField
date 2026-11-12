@@ -15,7 +15,7 @@ import { EXPLORER, CORNFIELD, explorerPage } from '../helpers.js';
 import { loadSources, combineSources, applyBranding, NO_SOURCE } from '../../explorer/plugins.js';
 import { create, HOUSE_PATH } from '../../plugins/house/browser.js';
 
-const BROWSER_DIRS = [EXPLORER, path.join(CORNFIELD, 'plugins/house')];
+const BROWSER_DIRS = [EXPLORER, path.join(EXPLORER, 'engine'), path.join(CORNFIELD, 'plugins/house')];
 const modules = () => BROWSER_DIRS.flatMap((d) => fs.readdirSync(d).filter((f) => f.endsWith('.js')).map((f) => path.join(d, f)));
 
 describe('the page', () => {
@@ -60,8 +60,8 @@ describe('every browser module', () => {
     }
   });
 
-  it('main.js: every data-action handler calls a name it imports or defines (nothing compiles it, so a missing import shows only on the click)', () => {
-    const src = fs.readFileSync(path.join(EXPLORER, 'main.js'), 'utf8');
+  it('page.js: every data-action handler calls a name it imports or defines (nothing compiles it, so a missing import shows only on the click)', () => {
+    const src = fs.readFileSync(path.join(EXPLORER, 'page.js'), 'utf8');
     const known = new Set();
     for (const [, names] of src.matchAll(/^import\s*\{([^}]*)\}\s*from/gm)) for (const n of names.split(',')) known.add(n.trim().split(/\s+as\s+/).pop());
     for (const [, n] of src.matchAll(/^(?:export\s+)?(?:async\s+)?(?:function\s+|const\s+|let\s+)([A-Za-z_$][\w$]*)/gm)) known.add(n);
