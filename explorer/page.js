@@ -32,7 +32,6 @@ import { createMap } from './engine/render.js';
 import { rendererPreference } from './renderer.js';
 import { clearFreeformPositions, layoutOrbit, loadFreeformPositions } from './engine/layout.js';
 import { measureCovered } from './sheets.js';
-import { setProjectLayers } from './layers.js';
 import { closeDrawer } from './panels.js';
 import { ensurePagePieces, pieceSlots } from './page-pieces.js';
 import { initScenarioUi, maybeStartDemo, playOutage } from './scenario-ui.js';
@@ -53,13 +52,13 @@ import { initChecks } from './check.js';
 import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
 import { initReviewTokens } from './review-tokens.js';
-import { loadClientConfig, loadSources, applyBranding } from './plugins.js';
+import { loadSources, applyBranding } from './plugins.js';
+import { applyConfig, fetchConfig } from './engine/source.js';
 import { initTheme, setThemeChoice } from './theme.js';
 import { initAccountMenu } from './account-menu.js';
 import { watchHeaderFit } from './header-fit.js';
 import { watchHint } from './hint.js';
 import { watchFocusRoom } from './focus-room.js';
-import { mapStyleOf } from './engine/map-style.js';
 
 /** The instance and its map: made by `startPage`, the one of this document */
 let inst;
@@ -169,7 +168,6 @@ async function runPageBench(frames, zoomFactor, sync) {
 export function startPage() {
   inst = startPageInstance({ root: document }); // the one instance of this document, the document its root; state.js hands the modules that are not yet on an instance its state
   map = createMap(inst, { measureCovered }); // the camera, the scene and the frame loop of this instance (engine/render.js)
-  const mapStyle = mapStyleOf(inst);
   initTheme(); // light or dark, before the first scene is built (theme.js)
   // The map piece (pieces/map.js, also what <corn-map> mounts) makes the map's canvases, their keys' help and the announcer where index.html keeps
   // `<!--corn-piece:map/stage-->`. It watches the theme's tokens (the map reads --corn-map-* from the theme, and again when it changes), makes the
@@ -190,7 +188,8 @@ export function startPage() {
   map.resize();
   syncViewUi();
   // /?proposal=<slug> opens a proposal over the map, /?view=dataflow the data-flow preset: both have a link
-  const configReady = loadClientConfig().then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); mapStyle.applyTheme(config.theme); setProjectLayers(config.layers); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
+  // The config is read and applied by engine/source.js, as a scope does it; a page opened without the server reads as no config
+  const configReady = fetchConfig(inst).catch(() => ({})).then((config) => { applyBranding(document, config); watchHeaderFit(document); watchHint(document); watchFocusRoom(document); applyConfig(inst, config); syncViewUi(); return config; }); // the brand, then the theme's icons for the map; the hint again, in the repo's words
   loadTopology().then(async (ok) => {
     if (!ok) return;
     // The sources the repo's cornfield.config.js names (plugins.js): a live layer, a house, devices, a checker; each optional
