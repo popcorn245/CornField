@@ -24,9 +24,10 @@ import { initSearch, setQuery, stepMatch, frameAll, currentResult, searchActive,
 import { stopFlight, tickFlight, flying } from '../../explorer/fly.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
+import { explorerPage } from '../helpers.js';
 
 import { explorerCss } from './stylesheets.js';
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 

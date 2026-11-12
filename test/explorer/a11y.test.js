@@ -44,10 +44,11 @@ import { initReviewColumn, resetReviewColumnForTests } from '../../explorer/revi
 
 // @ts-expect-error plain JS modules, no declarations
 import { initForgePanel, resetForgePanelForTests, openForge, closeForge } from '../../explorer/forge-panel.js';
+import { explorerPage } from '../helpers.js';
 
 import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = explorerCss(['tokens.css', 'explorer.css', 'house.css'], { asMedia: true }); // happy-dom has no container queries: the window is the page
 

@@ -45,6 +45,7 @@ export function dismissHint(inst) {
   const m = memory(inst);
   if (m.dismissed) return;
   m.dismissed = true;
+  if (!inst.el('instruction-badge-text')) return; // an instance with no hint (a map in another app's page) writes nothing in that page's storage
   try { const store = sessionOf(inst); if (store) store.setItem(HINT_STORAGE_KEY, '1'); } catch { /* storage blocked: it holds for this page load */ }
   syncHint(inst);
 }

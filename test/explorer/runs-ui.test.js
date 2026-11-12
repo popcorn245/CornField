@@ -28,10 +28,11 @@ import { aboutWords, statusWords, runMeta, canStop, canAnswer, answerBody, answe
 
 // @ts-expect-error plain JS modules, no declarations
 import { tokensUrl, revokeUrl } from '../../explorer/review-tokens-model.js';
+import { explorerPage } from '../helpers.js';
 
 import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
-const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 const NOW = Date.parse('2026-11-05T12:00:00Z');

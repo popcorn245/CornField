@@ -12,7 +12,7 @@ import * as render from '../../explorer/render.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode, closeDrawer } from '../../explorer/panels.js';
 
-const body = /<body>([\s\S]*)<\/body>/.exec(explorerPage())[1].replace(/<script[\s\S]*?<\/script>/g, '');
+const body = /<body>([\s\S]*)<\/body>/.exec(explorerPage({ pieces: ['map'] }))[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 const node = (id, type, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: '#336699', label: id, ...extra });
 const nodes = [

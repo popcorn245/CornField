@@ -27,8 +27,9 @@ import { GREY_LABEL_ALPHA } from '../../explorer/diff-marks.js';
 import { initScenarioUi, playScenario, stopScenario, clearScenario } from '../../explorer/scenario-ui.js';
 // @ts-expect-error plain JS modules, no declarations
 import { initSearch, setQuery, stepMatch, resetSearchForTests } from '../../explorer/search.js';
+import { explorerPage } from '../helpers.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
 const node = (id, type, extra = {}) => ({ id, type, x: 0, y: 0, r: 20, color: '#336699', label: id, ...extra });

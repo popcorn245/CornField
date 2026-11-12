@@ -35,6 +35,11 @@ function markersOf(doc, name) {
   return found;
 }
 
+/** The places of a piece the page mounts itself (the map: page.js), by slot: `{ stage: Comment }` */
+export function pieceSlots(name) {
+  return markersOf(pageInstance().doc, name);
+}
+
 /** Mounts each piece at its places in the document, or again where the places were replaced; ends one whose places are gone. Returns the handles by name. */
 export function ensurePagePieces() {
   const inst = pageInstance();

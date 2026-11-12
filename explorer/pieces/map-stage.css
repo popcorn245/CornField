@@ -1,0 +1,14 @@
+/* The map piece's own box, for a shadow root (explorer/pieces/map.js; components/src/corn-map). cornfield's page styles the same
+   elements from explorer.css (#graph-canvas, .hx-stage), so nothing here loads there. Every colour is a --corn-* token; a host
+   restyles an element with ::part(map-stage), ::part(map-canvas), ::part(label-canvas). */
+/* As tall as the host makes it, and never under 16rem: a map dropped in with no height is visible. A host that wants it lower says so on the
+   part: corn-map::part(map-stage) { min-height: 0 } */
+[data-corn="map-stage"] { display: block; position: relative; width: 100%; height: 100%; min-height: 16rem; overflow: hidden; background: var(--corn-ground-image), var(--corn-ground); }
+/* The canvas is out of flow: its own pixel size (set by the renderer) must not become the element's minimum width in a grid or a flex row */
+[data-corn="map-canvas"] { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+[data-corn="map-canvas"]:active { cursor: grabbing; }
+[data-corn="map-canvas"]:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); }
+[data-corn="label-canvas"] { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* The Canvas 2D that stands in for the map canvas when its WebGL2 shaders fail (renderer.js): same place, pointer goes through */
+[data-corn="map-overlay"] { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.hx-sr-only { position: absolute !important; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }

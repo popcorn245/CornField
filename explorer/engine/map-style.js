@@ -204,10 +204,12 @@ export function readMapTokens(read, extra = []) {
 //  Icons
 // ---------------------------------------------------------------------------
 
-function loadImage(url) {
+/** `crossOrigin`: 'anonymous' asks for the image with CORS and no cookie, which WebGL needs for one from another origin (spec 0011 D9) */
+function loadImage(url, crossOrigin = '') {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') { reject(new Error('no Image')); return; }
     const img = new Image();
+    if (crossOrigin) img.crossOrigin = crossOrigin; // before `src`
     img.onload = () => (img.naturalWidth > 0 && img.naturalHeight > 0 ? resolve(img) : reject(new Error(`${url} has no size`)));
     img.onerror = () => reject(new Error(`${url} did not load`));
     img.src = url;
@@ -348,7 +350,10 @@ export function createMapStyle(inst) {
     setIcons(theme, opts = {}) {
       const urls = theme && theme.icons && typeof theme.icons === 'object' ? theme.icons : {};
       pixelated = !!(theme && theme.pixelated === true);
-      const load = opts.load || ((url) => loadImage(inst.url(url)));
+      // An instance with a base may fetch from another origin (a component on a sibling's page): WebGL refuses an image it was not given by CORS,
+      // so the icons are asked for that way. A page on its own origin (no base) is unchanged.
+      const crossOrigin = inst.base ? 'anonymous' : '';
+      const load = opts.load || ((url) => loadImage(inst.url(url), crossOrigin));
       icons = Object.keys(urls).length ? createIconStore(urls, { ...opts, load, onChange: () => { changed(); if (opts.onChange) opts.onChange(); } }) : null;
       changed();
       return icons;

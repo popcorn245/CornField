@@ -186,13 +186,8 @@
 
   <!-- The map -->
   <div class="hx-stage" role="main" data-corn="stage">
-    <!-- The map takes the keyboard when it has the focus (keyboard.js): its keys are below, read out with its name -->
-    <canvas id="graph-canvas" tabindex="0" role="application" aria-roledescription="map" aria-label="Topology map" aria-describedby="map-keys-help" data-corn="map-canvas"></canvas>
-    <p id="map-keys-help" class="hx-sr-only">Arrow keys pan, plus and minus zoom, 0 fits the map. N and P select the next and the previous node, Home and End the first and the last. F frames the selected node and what it lights. Enter goes to the selected node's panel, Escape closes it. In Freeform, Alt and an arrow moves the selected node.</p>
-    <!-- What the keyboard landed on, said by a screen reader (keyboard.js) -->
-    <p id="map-announcer" class="hx-sr-only" role="status" aria-live="polite"></p>
-    <!-- Every label, drawn on its own transparent canvas over the map (explorer/labels.js); the map canvas still gets the pointer -->
-    <canvas id="label-canvas" aria-hidden="true" data-corn="label-canvas"></canvas>
+    <!-- The map: its canvas (focusable, its keys read out with its name), the help for its keys, the announcer the keyboard speaks in and the canvas its labels are drawn on, made here by explorer/pieces/map.js -->
+    <!--corn-piece:map/stage-->
     <!-- The nodes agent runs are changing, marked over the map (explorer/runs-map.js): a picture; the Runs view says the same in words -->
     <div id="run-overlay" class="hx-run-overlay" aria-hidden="true" hidden data-corn="run-overlay"></div>
 

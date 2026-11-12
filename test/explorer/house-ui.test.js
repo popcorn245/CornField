@@ -7,7 +7,7 @@
  * layer is unavailable, the phone's persona chips and Software toggle, and nothing written to browser storage.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { recordedHouse, testFloorHook } from '../helpers.js';
+import { recordedHouse, testFloorHook, explorerPage } from '../helpers.js';
 
 const floorRenderer = await testFloorHook();
 
@@ -33,7 +33,7 @@ import { createLiveSource, TOKEN_KEY, CLOUD_PATH } from '../../plugins/house/bro
 // @ts-expect-error plain JS modules, no declarations
 import { HOUSE_SCALE } from '../../explorer/house-model.js';
 
-const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
+const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
 const recorded = recordedHouse();
 

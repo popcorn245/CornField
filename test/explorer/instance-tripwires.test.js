@@ -34,6 +34,8 @@ export const CONVERTED = [
   'renderer.js',
   'renderer-canvas2d.js',
   'renderer-webgl.js',
+  'pieces/map.js',
+  'flow-build.js',
   // Step 4 (spec 0011 D2 and D3): the three pieces around the map and what they stand on
   'pieces/node-panel.js',
   'pieces/layers.js',
