@@ -25,6 +25,7 @@ import { stopFlight, tickFlight, flying } from '../../explorer/fly.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
 
+import { explorerCss } from './stylesheets.js';
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
@@ -360,9 +361,9 @@ describe('the map\'s half of it', () => {
 
   it('puts an open list over the panel and, on a phone, over the sheets, and degrades to the old stacking without :has()', () => {
     mount();
-    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     const z = (sel) => { const m = new RegExp(`${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{[^}]*z-index:\\s*(\\d+)`).exec(css); return m ? Number(m[1]) : null; };
-    const dock = Number(/@media[^{]*\{\s*\.hx-dock\s*\{[^}]*z-index:\s*(\d+)/.exec(css)[1]);
+    const dock = Number(/@(?:media|container)[^{]*\{\s*\.hx-dock\s*\{[^}]*z-index:\s*(\d+)/.exec(css)[1]);
     expect(z('.hx-header:has(.hx-search-results:not([hidden]))')).toBeGreaterThan(40); // the node panel
     expect(z('.hx-mobile-search:has(.hx-search-results:not([hidden]))')).toBeGreaterThan(dock); // the phone's sheets
     // each raise is a rule of its own: a browser without :has() drops only that rule
@@ -371,11 +372,11 @@ describe('the map\'s half of it', () => {
 
   it('gives up width in a narrow desktop header rather than run over the Layers chip', () => {
     mount();
-    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
-    const wide = /@media \(min-width: 768px\) \{([^@]*?)\n\}/.exec(css)[1];
-    expect(wide).toMatch(/\.hx-search \{[^}]*flex: 0 1 260px/); // it shrinks ...
-    expect(wide).toMatch(/\.hx-header-left \{ flex: none; \}/); // ... the left group does not ...
-    expect(wide).toMatch(/\.hx-header-right \{[^}]*min-width: 0/); // ... and the right group lets it
+    const css = explorerCss();
+    // from 768px, in the search's own file and the header's: the container query asks the box, which is as wide as the window on the page
+    expect(css).toMatch(/@container corn-box \(min-width: 768px\) \{[^@]*?\.hx-search \{[^}]*flex: 0 1 260px/); // it shrinks ...
+    expect(css).toMatch(/@container corn-box \(min-width: 768px\) \{[^@]*?\.hx-header-left \{ flex: none; \}/); // ... the left group does not ...
+    expect(css).toMatch(/@container corn-box \(min-width: 768px\) \{[^@]*?\.hx-header-right \{[^}]*min-width: 0/); // ... and the right group lets it
     expect(css).toMatch(/\.hx-search:has\(\.hx-search-steps:not\(\[hidden\]\)\) \{ flex-basis: 340px; \}/); // wider with a query, as room allows
   });
 

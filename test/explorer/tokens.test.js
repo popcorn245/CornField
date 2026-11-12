@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { EXPLORER, CORNFIELD } from '../helpers.js';
+import { explorerCss } from './stylesheets.js';
 // @ts-expect-error plain JS modules, no declarations
 import { contrast } from '../../core/color.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -67,11 +68,12 @@ export function literalsIn(prop, rawValue) {
   return found;
 }
 
-const files = fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.css') && f !== 'tokens.css');
+// explorer.css is one file per piece in explorer/css/ (spec 0011 D8): each is held to the contract on its own, with house.css
+const files = [...fs.readdirSync(path.join(EXPLORER, 'css')).filter((f) => f.endsWith('.css')).sort().map((f) => `css/${f}`), ...fs.readdirSync(EXPLORER).filter((f) => f.endsWith('.css') && f !== 'tokens.css')];
 
 describe('no literal outside tokens.css', () => {
   it('has stylesheets to check', () => {
-    expect(files).toEqual(expect.arrayContaining(['explorer.css', 'house.css']));
+    expect(files).toEqual(expect.arrayContaining(['css/base.css', 'css/page.css', 'css/work.css', 'house.css']));
   });
 
   for (const file of files) {
@@ -195,7 +197,7 @@ describe('tokens.css defines the documented tokens', () => {
     for (const t of ['--corn-control-height', '--corn-panel-pad', '--corn-panel-head-height']) {
       expect(have.has(t), `${t} in :root`).toBe(true);
       expect(documented, `${t} in docs/theming.md`).toContain(t);
-      expect(fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8'), `${t} read by explorer.css`).toContain(`var(${t})`);
+      expect(explorerCss(), `${t} read by the explorer's stylesheets`).toContain(`var(${t})`);
     }
     expect(darkBlock).toMatch(/--corn-control-height:\s*32px;/);
     expect(darkBlock).toMatch(/--corn-panel-pad:\s*calc\(var\(--corn-space-5\) \+ var\(--corn-space-1\)\);/);
@@ -300,7 +302,7 @@ describe('every stylesheet closes what it opens', () => {
     }
     return { end: depth, deepest, lowest };
   }
-  const sheets = fs.readdirSync(EXPLORER).filter(f => f.endsWith('.css'));
+  const sheets = ['tokens.css', 'house.css', 'sign-in.css', ...fs.readdirSync(path.join(EXPLORER, 'css')).filter((f) => f.endsWith('.css')).sort().map((f) => `css/${f}`)];
 
   it('catches a lost closing brace', () => {
     expect(braces('@media (max-width: 1px) { .a { color: red; }\n.b { color: blue; }').end).toBe(1);

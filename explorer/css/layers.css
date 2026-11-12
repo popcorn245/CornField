@@ -1,0 +1,92 @@
+/*
+ * layers.css: the Layers menu
+ * The Layers chip and its menu: the layer rows and their counts, the legend, the kinds key, the dots. Read by corn-layers (D4).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+.hx-menu-title { font-family: var(--corn-font-display); }
+/* The Layers chip: "Layers · 13 of 20" */
+.hx-layers-chip { display: inline-flex; align-items: center; gap: var(--corn-space-1); height: var(--hx-control-h); padding: 0 var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text-2); font-size: var(--corn-text-sm); white-space: nowrap; }
+.hx-layers-chip:hover, .hx-layers-chip[aria-expanded="true"] { background: var(--corn-surface-3); color: var(--corn-text); }
+.hx-layers-count { color: var(--corn-text-3); }
+.hx-layers-chip--dim { border-color: var(--corn-line-soft); }
+.hx-layers-chip--dim, .hx-layers-chip--dim .hx-layers-count { color: var(--corn-text-3); }
+@container corn-box (max-width: 767px) {
+  .hx-header .hx-layers { position: absolute; top: calc(100% + var(--corn-space-4)); left: var(--corn-space-4); }
+  .hx-layers-chip { height: var(--hx-control-h); padding: 0 var(--corn-space-5); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); box-shadow: var(--corn-shadow); }
+}
+.hx-toggle-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-menu-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: calc(var(--corn-space-1) / 2); font-size: var(--corn-text-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--corn-text-3); }
+.hx-menu-head { padding-bottom: var(--corn-space-2); border-bottom: var(--corn-border) solid var(--corn-line); margin-bottom: var(--corn-space-3); }
+.hx-menu-links { display: flex; align-items: center; gap: var(--corn-space-3); text-transform: none; letter-spacing: 0; }
+.hx-menu-section { padding-top: var(--corn-space-3); margin-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-note { padding: var(--corn-space-2) var(--corn-space-3); margin-bottom: var(--corn-space-3); border-radius: var(--corn-radius-sm); background: var(--corn-hue-orange-soft); color: var(--corn-hue-orange-text); font-size: var(--corn-text-xs); line-height: 1.4; }
+.hx-toggles { display: flex; flex-direction: column; gap: var(--corn-space-1); }
+.hx-toggle-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); color: var(--corn-text); text-align: left; transition: background 0.15s; }
+.hx-toggle-row:hover { background: var(--corn-surface-3); }
+.hx-toggle-row.is-off { background: color-mix(in srgb, var(--corn-ground) 40%, transparent); border-color: transparent; color: var(--corn-text-3); } /* off: dimmed by the fill, the text-3 colour and the dot, never by opacity on text */
+.hx-toggle-label, .hx-toggle-meta { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; transition: transform 0.15s; }
+.hx-toggle-row.is-off .hx-dot { transform: scale(0.75); opacity: 0.4; }
+.hx-toggle-name { font-size: var(--corn-text-xs); font-weight: 500; color: var(--corn-text-2); }
+.hx-toggle-row.is-off .hx-toggle-name { color: var(--corn-text-3); text-decoration: line-through; }
+.hx-count { padding: calc(var(--corn-space-1) / 2) var(--corn-space-2); border-radius: var(--corn-radius-xs); background: var(--corn-surface-3); color: var(--corn-text-2); font-size: var(--corn-text-2xs); }
+.hx-toggle-row.is-off .hx-count { background: color-mix(in srgb, var(--corn-ground) 40%, transparent); color: var(--corn-text-3); }
+.hx-tick { font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-ok); }
+.hx-toggle-row.is-off .hx-tick { color: var(--corn-text-3); }
+.hx-legend-row { display: flex; align-items: center; gap: var(--corn-space-3); padding: calc(var(--corn-space-1) / 2) 0; color: var(--corn-text-2); }
+.hx-legend-row--split { justify-content: space-between; }
+.hx-legend-label { display: flex; align-items: center; gap: var(--corn-space-3); font-weight: 500; }
+.hx-legend-swatch { width: 16px; flex: none; display: inline-flex; justify-content: center; }
+.hx-swatch-line { display: inline-block; width: 16px; height: 2px; border-radius: var(--corn-radius-xs); }
+.hx-swatch-indigo { border-top-color: var(--corn-accent-text); }
+.hx-legend-row .hx-mark-dot { margin-right: 0; }
+/* Numbers shown as data take the number face (a brand sets --corn-font-num; digits in a pixel face misread) */
+.hx-count, .hx-layers-count { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-dot { transition: none; animation: none; }
+}
+@container corn-box (max-width: 767px) {
+  .hx-toggle-row { min-height: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-toggle-row { min-height: 44px; }
+}
+/* ---------------------------------------------------------------------------
+   Project layers and finer kinds (spec 0009): the Layers menu holds its title (with All and None) while the rows scroll, the Overlays heading,
+   the "+N shown by the proposal" note and the kinds key under a row. Every colour is a token; a theme reaches each through its data-corn hook.
+   --------------------------------------------------------------------------- */
+.hx-layers .hx-menu { display: flex; flex-direction: column; overflow: hidden; }
+.hx-layers .hx-menu[hidden] { display: none; }
+.hx-layers .hx-menu-head { flex: none; }
+.hx-menu-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.hx-overlays { margin-top: var(--corn-space-3); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid var(--corn-line); }
+.hx-layer-note { font-size: var(--corn-text-2xs); }
+.hx-kinds { padding: 0 var(--corn-space-3) var(--corn-space-1) var(--corn-space-5); }
+.hx-kinds-btn { display: inline-flex; align-items: center; gap: var(--corn-space-1); }
+.hx-kind-keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-kind-key { display: flex; align-items: center; gap: var(--corn-space-3); padding: calc(var(--corn-space-1) / 2) 0; color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-kind-letter { display: inline-flex; align-items: center; justify-content: center; min-width: 1.6em; padding: 0 var(--corn-space-1); border-radius: var(--corn-radius-xs); background: var(--corn-surface-3); color: var(--corn-text); font-family: var(--corn-mono); font-size: var(--corn-text-2xs); font-weight: 700; }
+.hx-kind-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@container corn-box (max-width: 767px) {
+  /* On a phone the menu spans the screen, at most 70% of its height */
+  /* fixed (spec 0011 D8): the menu spans the window under the chip, placed from the window's edges; its anchor is the header's corner, which is outside the piece's box */
+  .hx-layers .hx-menu { position: fixed; top: calc(56px + var(--corn-space-4) + 44px + var(--corn-space-2)); left: 12px; right: 12px; width: auto; max-width: none; max-height: 70cqh; }
+  /* An open menu is over the phone's sheets (the dock, z-index 45), not under them: else a proposal's sheet hides its last rows, which no scroll reaches */
+  .hx-header:has(.hx-layers .hx-menu:not([hidden])) { z-index: 46; }
+  .hx-kinds-btn { min-height: 44px; }
+}
+/* ---------------------------------------------------------------------------
+   The Key (spec 0008 D7, edge-key.js): each kind of line drawn with its real style and end mark. The map says the kind by line style
+   and mark, never by colour alone, so the swatches are one ink; a `when` is told by ticks (cloud-model.js WHEN_STYLES)
+   --------------------------------------------------------------------------- */
+.hx-legend-swatch--wide { width: 44px; justify-content: flex-start; color: var(--corn-text-2); }
+.hx-key-line { display: block; overflow: visible; }
+.hx-key-note { margin: var(--corn-space-1) 0 0; font-size: var(--corn-text-xs); }
+/* A fill under 3:1 on the menu keeps its colour and gets an outline: the map's own (--corn-map-stroke, set inline as --hx-dot-ring) when the theme sets one */
+.hx-dot.is-ringed { outline: var(--corn-border) solid var(--hx-dot-ring, var(--corn-text-3)); outline-offset: 0; }
+/* The swatch before a kind's letters: the theme's --corn-map-kind-<type>-<kind>; decoration, the letters and the name stay */
+.hx-kind-swatch { margin-inline-end: calc(var(--corn-space-1) * -1); }
+.hx-kind-swatch.is-blank { visibility: hidden; }
+/* A Layers row the review hid: its name with "hidden while reviewing" under it */
+.hx-toggle-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }

@@ -35,6 +35,7 @@ import { reviewBody } from '../../explorer/review-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { selectNode } from '../../explorer/panels.js';
 
+import { explorerCss } from './stylesheets.js';
 const here = path.dirname(new URL(import.meta.url).pathname);
 const page = fs.readFileSync(path.resolve(here, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
@@ -407,12 +408,12 @@ describe('the column beside the other panels', () => {
     Object.defineProperty(sbody, 'scrollHeight', { value: 2000, configurable: true });
     shareRoom();
     expect(max()).toBe(240); // many scenarios: 40%
-    const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toContain('#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }');
     // on a phone the sheet scrolls, not a section: the rows never run under the decision
-    expect(css).toMatch(/@media \(max-width: 767px\) \{[^}]*\}[\s\S]*#rc-changes, #rc-scenarios \{ flex: none; max-height: none; min-height: 0; \}/);
+    expect(css).toMatch(/@container corn-box \(max-width: 767px\) \{[^}]*\}[\s\S]*#rc-changes, #rc-scenarios \{ flex: none; max-height: none; min-height: 0; \}/);
     // the Work panel moves the column only where both leave a map; the node panel takes the column's width under 1024px
-    expect(css).toContain('@media (min-width: 1280px) { .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); } }');
+    expect(explorerCss(['explorer.css'], { stripComments: true })).toMatch(/@container corn-box \(min-width: 1280px\) \{\s*\.hx-stage:has\(\.forge-open\) \.hx-review-column \{ left: calc\(var\(--hx-forge-w\) \+ 12px\); \}/);
     expect(css).toContain('.hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); }');
   });
 });
@@ -523,7 +524,7 @@ describe('on a phone (D1)', () => {
   });
 
   it('holds only the note and its buttons while a note is written, so they stay above the keyboard', () => {
-    const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toMatch(/\.hx-proposal-bar:has\(\.hx-review-form:not\(\[hidden\]\)\) :is\([^)]*\.hx-rc-scroll, \.hx-rc-tabs, \.hx-proposal-peek\) \{ display: none; \}/);
   });
 

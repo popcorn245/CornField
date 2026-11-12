@@ -7,9 +7,24 @@
   <!-- The server puts the config's import map here (server/server.js), for a repo-local source's bare imports -->
   <!--@importmap-->
 
-  <!-- The explorer's own stylesheet and modules (explorer/): no build step, no CDN -->
+  <!-- The explorer's own stylesheets (explorer/css/, one per piece: base.css first, page.css, the page's own, last; the order is the cascade's, and it is the order the one explorer.css had) and modules (explorer/): no build step, no CDN -->
   <link rel="stylesheet" href="/explorer/tokens.css" />
-  <link rel="stylesheet" href="/explorer/explorer.css" />
+  <link rel="stylesheet" href="/explorer/css/base.css" />
+  <link rel="stylesheet" href="/explorer/css/header.css" />
+  <link rel="stylesheet" href="/explorer/css/layers.css" />
+  <link rel="stylesheet" href="/explorer/css/search.css" />
+  <link rel="stylesheet" href="/explorer/css/account.css" />
+  <link rel="stylesheet" href="/explorer/css/live.css" />
+  <link rel="stylesheet" href="/explorer/css/map.css" />
+  <link rel="stylesheet" href="/explorer/css/node-panel.css" />
+  <link rel="stylesheet" href="/explorer/css/proposal.css" />
+  <link rel="stylesheet" href="/explorer/css/changes.css" />
+  <link rel="stylesheet" href="/explorer/css/decision.css" />
+  <link rel="stylesheet" href="/explorer/css/whatif.css" />
+  <link rel="stylesheet" href="/explorer/css/dialogs.css" />
+  <link rel="stylesheet" href="/explorer/css/sheets.css" />
+  <link rel="stylesheet" href="/explorer/css/work.css" />
+  <link rel="stylesheet" href="/explorer/css/page.css" />
   <link rel="stylesheet" href="/explorer/house.css" />
   <!-- The config's brand (server/server.js puts it here): the favicon, the web app manifest and the tab colour -->
   <!--@brand-->

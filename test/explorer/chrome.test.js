@@ -29,9 +29,10 @@ import { chipModel, failureWords } from '../../explorer/live-model.js';
 // @ts-expect-error plain JS modules, no declarations
 import { NO_SOURCE } from '../../explorer/plugins.js';
 
+import { explorerCss } from './stylesheets.js';
 const html = explorerPage();
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+const css = explorerCss();
 const rule = (selector) => {
   const at = css.indexOf(`${selector} {`);
   if (at < 0) throw new Error(`no rule ${selector}`);
@@ -242,7 +243,10 @@ describe('numbers have a hook and a face (F51)', () => {
   });
 
   it('sets numbers in --corn-font-num, with tabular figures', () => {
-    expect(css).toMatch(/\.hx-count, [^{]*\.hx-forge-count[^{]*\.hx-row-meta, \.hx-run-limits dd \{ font-family: var\(--corn-font-num\); font-variant-numeric: tabular-nums; \}/);
+    // one rule in the one file, split by piece: each selector is in a rule of its piece's file, with the number face
+    for (const sel of ['.hx-count', '.hx-layers-count', '.hx-forge-count', '.hx-forge-lit', '.hx-player-count', '.hx-ms', '.hx-row-meta', '.hx-run-limits dd']) {
+      expect(css, sel).toMatch(new RegExp(`(^|[\\s,}])${sel.replace(/[.]/g, '\\.')}(,[^{}]*)?\\s*\\{ font-family: var\\(--corn-font-num\\); font-variant-numeric: tabular-nums; \\}`));
+    }
     // and no earlier rule still names the code face for them (it would only be overridden)
     for (const sel of ['.hx-count', '.hx-forge-lit', '.hx-ms']) expect(css, sel).not.toMatch(new RegExp(`\\n\\${sel} \\{[^}]*--corn-mono`));
   });
@@ -269,7 +273,9 @@ describe('what a flat brand reaches (F49) and what never clips or moves (F54, F5
     expect(css).toMatch(/\.hx-mobile-search::before \{[^}]*background: var\(--corn-text-3\);[^}]*mask:/);
     expect(css).toMatch(/\.hx-proposal-mode::after \{[^}]*background: currentColor;[^}]*mask:/);
     // Forced colours repaint backgrounds: the two masked icons take the system text colour there, or they would vanish
-    expect(css).toMatch(/@media \(forced-colors: active\) \{\s*\.hx-mobile-search::before, \.hx-proposal-mode::after \{ background: CanvasText; \}/);
+    const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(bare).toMatch(/@media \(forced-colors: active\) \{\s*\.hx-mobile-search::before \{ background: CanvasText; \}/);
+    expect(bare).toMatch(/@media \(forced-colors: active\) \{\s*\.hx-proposal-mode::after \{ background: CanvasText; \}/);
     expect(css).not.toMatch(/\.hx-proposal-mode::after \{[^}]*border:/);
     expect(css).not.toMatch(/\.hx-proposal-mode::after \{[^}]*border-width/);
   });
@@ -282,9 +288,11 @@ describe('what a flat brand reaches (F49) and what never clips or moves (F54, F5
   });
 
   it('stops the panels, sheets and menus sliding under reduced motion', () => {
-    const at = css.indexOf('@media (prefers-reduced-motion: reduce)', css.indexOf('No panel, sheet or menu slides')); // the chrome contract's block, wherever other sections add theirs
-    const block = css.slice(at, css.indexOf('\n}', at));
-    for (const sel of ['.hx-drawer', '.hx-forge', '.hx-input', '.hx-menu', '.hx-sheet']) expect(block).toContain(sel);
-    expect(block).toMatch(/transition: none;/);
+    // the rule is split by piece (the drawer in node-panel.css, the Work panel in work.css, the sheets in sheets.css, the rest in base.css): each is in a
+    // reduced-motion block that sets `transition: none`
+    const blocks = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{((?:[^{}]|\{[^{}]*\})*)\}/g)].map((m) => m[1]);
+    for (const sel of ['.hx-drawer', '.hx-forge', '.hx-input', '.hx-menu', '.hx-sheet']) {
+      expect(blocks.some((b) => b.includes(sel) && /transition: none;/.test(b)), sel).toBe(true);
+    }
   });
 });

@@ -53,7 +53,7 @@ describe('cornfield serve', () => {
   });
 
   it('serves the explorer, its modules, the repo\'s map and what the sources need, without a CORS header', async () => {
-    for (const p of ['/', '/topology.json', '/topology.cloud.json', '/cornfield/config.json', '/cornfield/house.json', '/explorer/main.js', '/explorer/explorer.css', '/explorer/house.css', '/explorer/scene.js', '/explorer/plugins.js', '/core/proposal.js', '/core/schema.js', '/core/personas.js', '/core/cloud.js', '/core/text.js', '/plugins/house/browser.js', '/proposals']) {
+    for (const p of ['/', '/topology.json', '/topology.cloud.json', '/cornfield/config.json', '/cornfield/house.json', '/explorer/main.js', '/explorer/css/base.css', '/explorer/css/page.css', '/explorer/house.css', '/explorer/scene.js', '/explorer/plugins.js', '/core/proposal.js', '/core/schema.js', '/core/personas.js', '/core/cloud.js', '/core/text.js', '/plugins/house/browser.js', '/proposals']) {
       const res = await get(port, p);
       expect(res.status, p).toBe(200);
       expect(res.headers['access-control-allow-origin'], p).toBeUndefined();
@@ -61,7 +61,7 @@ describe('cornfield serve', () => {
   });
 
   it('sends the map, the page, scripts and styles compressed when asked, with Vary and a working ETag (F31)', async () => {
-    for (const p of ['/topology.json', '/', '/explorer/main.js', '/explorer/explorer.css', '/cornfield/config.json']) {
+    for (const p of ['/topology.json', '/', '/explorer/main.js', '/explorer/css/base.css', '/cornfield/config.json']) {
       const plain = await raw(port, 'GET', p, { 'Accept-Encoding': 'identity' });
       const res = await new Promise((resolve, reject) => {
         http.get({ host: '127.0.0.1', port, path: p, headers: { 'Accept-Encoding': 'gzip' }, agent: false }, (r) => {

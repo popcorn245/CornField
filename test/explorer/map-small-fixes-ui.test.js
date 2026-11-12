@@ -19,6 +19,7 @@ import { selectNode, closeDrawer } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { updateSearchStatus, NO_MATCH_DELAY_MS } from '../../explorer/search-status.js';
 
+import { explorerCss } from './stylesheets.js';
 const page = fs.readFileSync(path.resolve(__dirname, '../../explorer/index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 
@@ -123,7 +124,7 @@ describe('the service panel (F60)', () => {
 
   it('breaks the value at word boundaries only (the stylesheet says so)', () => {
     mount();
-    const css = fs.readFileSync(path.resolve(__dirname, '../../explorer/explorer.css'), 'utf8');
+    const css = explorerCss();
     expect(css).toMatch(/\.hx-fact-v\s*\{[^}]*overflow-wrap:\s*break-word/);
     expect(css).toMatch(/\.hx-fact-v\s*\{[^}]*word-break:\s*normal/);
   });

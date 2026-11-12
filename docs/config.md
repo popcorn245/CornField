@@ -228,7 +228,7 @@ theme: {
 
 | Key | What it is |
 |---|---|
-| `css` | one stylesheet inside the repo, written relative to it and ending in `.css`. The server serves it at `/cornfield/theme.css`, as `text/css` with `X-Content-Type-Options: nosniff`, and the page links it **after** `explorer.css` and `house.css`, so it can override them. |
+| `css` | one stylesheet inside the repo, written relative to it and ending in `.css`. The server serves it at `/cornfield/theme.css`, as `text/css` with `X-Content-Type-Options: nosniff`, and the page links it **after** cornfield's own stylesheets (`explorer/css/*.css`, then `house.css`), so it can override them. |
 | `fonts` | an allow-list (at most 8) of `https:` stylesheet URLs, such as a Google Fonts `css2?family=…` link. Each is added to the page as a `<link rel="stylesheet">` and to the CSP. Any other scheme (`http:`, `data:`, `javascript:`), a URL with credentials, an IP address or a wildcard is refused. |
 | `fontHosts` | the hosts the font *files* come from, for a `fonts` host that is not a known pair. At most 8 plain host names, like `files.example.org`. Only allowed with `fonts`. |
 | `names` | named themes: `{ name: './path.css' }`, at most 12. A name is lower-case letters, digits and hyphens (at most 32 characters). Each file is served at `/cornfield/theme/<name>.css`. |

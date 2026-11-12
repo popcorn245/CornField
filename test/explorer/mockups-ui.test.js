@@ -26,10 +26,11 @@ import { initMockups, resetMockupsForTests, refreshMockups, openMockup, closeMoc
 // @ts-expect-error plain JS modules, no declarations
 import { mockupsFor, mockupsSectionHtml, mockupUrl, stateWords, typeOf } from '../../explorer/mockups-model.js';
 
+import { explorerCss } from './stylesheets.js';
 const EXPLORER = path.resolve(__dirname, '../../explorer');
 const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
 const body = /<body>([\s\S]*)<\/body>/.exec(page)[1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = ['tokens.css', 'explorer.css', 'house.css'].map((f) => fs.readFileSync(path.join(EXPLORER, f), 'utf8')).join('\n');
+const css = explorerCss(['tokens.css', 'explorer.css', 'house.css']);
 
 const node = (id, type, x, y, extra = {}) => ({ id, type, x, y, r: 20, color: '#336699', label: id, degree: 1, ...extra });
 const MAP = {

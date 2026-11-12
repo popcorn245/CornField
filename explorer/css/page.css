@@ -1,0 +1,76 @@
+/*
+ * page.css: the rules only cornfield's own page loads (spec 0011 D8). A piece in another app gets base.css and its own file, never this one.
+ * What is here is what asks the document something or sizes from the window: the rules on `body` and `:root`, the page's own layout (the
+ * header above the stage, the stage filling the rest), the stage-wide properties the slide-over panels read (`--hx-forge-w`, `--hx-col-w`),
+ * and the two overlays that belong to the page, not to a piece (the offline notice, the bench readout). The page is the one place a width rule
+ * stays a media query: the stage is as wide as the window here.
+ *
+ * Two containers are named here, and only here, for the pieces' container queries:
+ *   corn-box   the piece's own box. The body (the header, the search bar and the dialogs are inside it) and the stage (the map, the panels and the
+ *              sheets are inside it) are both as wide as the window, so every width rule lays the page out exactly as the window's width did.
+ *              The nearest one wins: the stage for what is in it, the body for the rest.
+ *   corn-page  the body, with its height too: for the few rules that ask the height of the screen (a sheet's cap, a short window).
+ * `container-type: inline-size` here adds no layout containment in today's browsers, so the stacking of the header, the sheets and the panels is
+ * what it was; if one ever does, the header's z-index values below are where it would show.
+ */
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--corn-ground);
+  background-image: var(--corn-ground-image);
+  background-attachment: fixed;
+  color: var(--corn-text);
+  font-family: var(--corn-font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  touch-action: none;
+  container: corn-page corn-box / size;
+}
+
+/* theme.pixelated (docs/config.md#theme): <html data-pixelated> becomes a property that inherits, even into a shadow root (base.css reads it) */
+:root[data-pixelated] { --hx-pixelated: pixelated; }
+
+/* The stage: the map and what lies over it. A container, so the pieces in it size by its width (the page is as wide as the window) */
+.hx-stage { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; container: corn-box / inline-size; }
+@media (min-width: 768px) {
+  /* The panel's width is the stage's `--hx-forge-w`, so what makes room for it reads the same number (the Runs view's compare widens it, below) */
+  .hx-stage { --hx-forge-w: min(400px, calc(100% - 24px)); }
+}
+@media (min-width: 1100px) {
+  .hx-stage:has(.hx-forge .hx-run-compare) { --hx-forge-w: min(780px, calc(100% - 24px)); }
+}
+@media (min-width: 1100px) and (max-width: 1599px) {
+  /* With the node panel open as well, a 780px compare only fits beside it from 1600px: below that the panel keeps its width and the
+     profiles stack, so neither panel nor the proposal bar between them is covered */
+  .hx-stage:has(.hx-forge .hx-run-compare):has(.drawer-open) { --hx-forge-w: min(400px, calc(100% - 24px)); }
+}
+/* The scenario player is one bar under the map (spec 0006 D6). From 768px it sits at the foot of the map area, to the right of the review column;
+   the stage tells it how wide the column is */
+@media (min-width: 768px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 400px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(400px, var(--hx-forge-w)); }
+}
+@media (min-width: 1280px) {
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: calc(400px + var(--hx-forge-w)); }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
+  .hx-stage:has(.forge-open):has(.hx-review-column:not([hidden])) { --hx-col-w: max(320px, var(--hx-forge-w)); }
+}
+
+/* /?bench=1: the run's numbers, bottom left (bench.js) */
+.bench-readout {
+  position: fixed; left: 12px; bottom: 12px; z-index: 50; max-width: calc(100vw - 24px); padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 88%, transparent); color: var(--corn-text-2); font-family: var(--corn-mono); font-size: var(--corn-text-xs); line-height: 1.5; pointer-events: none;
+}
+.bench-readout p { margin: 0; }
+
+/* The page's one offline notice */
+.hx-offline {
+  position: fixed; top: 64px; /* below the header */ left: 50%; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100% - 32px)); margin: 0; padding: var(--corn-space-2) var(--corn-space-4); border: var(--corn-border-strong) solid var(--corn-warn); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text); box-shadow: var(--corn-shadow); line-height: 1.5;
+}
+.hx-offline[hidden] { display: none; }
+.hx-offline[data-corn-state="success"] { border-color: var(--corn-ok); }

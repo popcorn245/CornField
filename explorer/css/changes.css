@@ -1,0 +1,160 @@
+/*
+ * changes.css: the change list
+ * The review column (spec 0006, review-column.js): the changes, the personas and their scenarios; the scenario player, one bar under the map
+ * (spec 0006 D6) and its checked-scenario marks. Read by corn-changes (D4).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+.hx-change-row:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-change-row { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-1) var(--corn-space-2); border: 0; border-radius: var(--corn-radius-sm); background: none; text-align: left; font-size: var(--corn-text-xs); }
+.hx-change-row:hover { background: var(--corn-line-soft); }
+.hx-change-what { width: 56px; flex: none; color: var(--corn-text-3); }
+.hx-change-row .hx-name { min-width: 0; overflow-wrap: anywhere; } /* a long label wraps in its row: the list never scrolls sideways */
+.hx-change-row .hx-mark-dot { margin-right: 0; }
+.hx-player { position: absolute; left: calc(var(--hx-col-w, 0px) + 24px); right: 12px; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2) var(--corn-space-4); padding: var(--corn-space-3) var(--corn-space-4); border-radius: var(--corn-radius-lg); z-index: 25; overflow: hidden; }
+.hx-player .hx-close { width: var(--hx-control-h); height: var(--hx-control-h); font-size: var(--corn-text-sm); }
+.hx-player-speed { flex: none; height: var(--hx-control-h); padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); cursor: pointer; }
+.hx-player-speed:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-offset) / 2); }
+.hx-player-text { margin: 0; flex: 1 1 18em; min-width: 0; font-size: var(--corn-text-base); line-height: 1.4; color: var(--corn-text); user-select: text; overflow-wrap: anywhere; }
+.hx-player-who { color: var(--corn-text-2); font-weight: 600; }
+.hx-player-text .hx-player-verdict { margin-left: var(--corn-space-2); }
+.hx-player-count { color: var(--corn-accent-text); font-weight: 600; white-space: nowrap; }
+.hx-player-controls { display: flex; flex: none; gap: var(--corn-space-3); }
+.hx-player-side { display: flex; flex: none; align-items: center; gap: var(--corn-space-3); margin-left: auto; }
+.hx-player-controls .hx-btn { justify-content: center; white-space: nowrap; }
+.hx-player-controls .hx-btn[hidden] { display: none; }
+/* The glyphs are drawn, not said: the names are the words (an empty alternative after the slash keeps a screen reader from reading them) */
+.hx-player-prev::before { content: "◀" / ""; margin-right: var(--corn-space-2); }
+.hx-player-next::after { content: "▶" / ""; margin-left: var(--corn-space-2); }
+/* the pause mark is drawn (two bars), not a character: not every font has one */
+.hx-player-toggle[data-state="playing"]::before { content: "" / ""; display: inline-block; box-sizing: border-box; width: 1em; height: 1em; margin-right: var(--corn-space-2); border-left: calc(var(--corn-border-strong) * 1.5) solid currentColor; border-right: calc(var(--corn-border-strong) * 1.5) solid currentColor; }
+.hx-player-toggle[data-state="paused"]::before { content: "▶" / ""; margin-right: var(--corn-space-2); }
+.hx-player-toggle[data-state="done"]::before { content: "↻" / ""; margin-right: var(--corn-space-2); }
+.hx-player-controls .hx-btn:disabled { opacity: 0.4; cursor: default; }
+.hx-player-track { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--corn-line-soft); }
+.hx-player-fill { display: block; height: 100%; width: 0; background: var(--corn-accent-text); }
+@container corn-box (max-width: 767px) {
+  /* The scenario player: one row (Previous, Pause, Next, the counter and Close) in the peek; the text, the speed and the checks when it is open */
+  .hx-player { position: relative; left: auto; right: auto; bottom: auto; flex-wrap: wrap; max-height: 50cqh; overflow: hidden; gap: 0 var(--corn-space-3); padding: 0 var(--corn-space-4) var(--corn-space-3); --sheet-pb: var(--corn-space-3); }
+}
+/* ── Checked scenarios (PHY-10, check.js): the step's state on the player bar and the phone's sheet ──
+   The pill sits in the head, so the phone's peek shows it; the line and the As row are the expanded part. */
+.hx-player-verdict { flex: none; padding: calc(var(--corn-space-1) / 2) var(--corn-space-3); border-radius: var(--corn-radius-pill); font-size: var(--corn-text-xs); font-weight: 600; white-space: nowrap; border: var(--corn-border) solid var(--corn-line); color: var(--corn-text-2); background: color-mix(in srgb, var(--corn-text-3) 12%, transparent); }
+.hx-player-check { margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); font-size: var(--corn-text-md); line-height: 1.4; color: var(--corn-text-2); background: color-mix(in srgb, var(--corn-text-3) 10%, transparent); border-left: var(--corn-border-strong) solid color-mix(in srgb, var(--corn-text-3) 50%, transparent); user-select: text; }
+.hx-player-check-detail { display: block; font-size: var(--corn-text-xs); color: var(--corn-text-3); }
+.hx-player-verdict[data-tone="allowed"], .hx-player-check[data-tone="allowed"] { color: var(--corn-ok); background: var(--corn-ok-soft); border-color: color-mix(in srgb, var(--corn-ok) 60%, transparent); }
+.hx-player-verdict[data-tone="refused"], .hx-player-check[data-tone="refused"] { color: var(--corn-bad); background: color-mix(in srgb, var(--corn-removed) 16%, transparent); border-color: color-mix(in srgb, var(--corn-removed) 70%, transparent); }
+.hx-player-verdict[data-tone="mismatch"], .hx-player-check[data-tone="mismatch"] { color: var(--corn-warn); background: color-mix(in srgb, var(--corn-changed) 16%, transparent); border-color: color-mix(in srgb, var(--corn-changed) 70%, transparent); }
+.hx-player-verdict[data-tone="pending"] { opacity: 0.75; }
+.hx-player-as { display: flex; align-items: center; gap: var(--corn-space-3); flex-wrap: wrap; font-size: var(--corn-text-sm); color: var(--corn-text-2); }
+.hx-player-as-label { display: inline-flex; align-items: center; gap: var(--corn-space-2); }
+.hx-player-as .hx-btn { padding: var(--corn-space-1) var(--corn-space-3); font-size: var(--corn-text-sm); }
+.hx-player-as .hx-btn:disabled { opacity: 0.4; cursor: default; }
+.hx-player-as-sum { margin-left: auto; font-size: var(--corn-text-xs); }
+.hx-player-as[hidden], .hx-player-verdict[hidden], .hx-player-check[hidden] { display: none; }
+.hx-rc-scroll { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+.hx-player-count { font-family: var(--corn-font-num); font-variant-numeric: tabular-nums; }
+@container corn-box (max-width: 767px) {
+  .hx-player-controls .hx-btn { min-height: 44px; min-width: 44px; padding: 0 var(--corn-space-3); white-space: nowrap; }
+  /* On a phone the controls are glyphs, the names are said: ◀ ⏸ ▶ in a 44px row */
+  .hx-player-prev .hx-player-label, .hx-player-next .hx-player-label, .hx-player-toggle .hx-player-label { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .hx-player-prev::before, .hx-player-next::after, .hx-player-toggle::before { margin: 0; }
+  .hx-player-next-scenario { font-size: var(--corn-text-sm); }
+  .hx-player-controls { gap: var(--corn-space-2); }
+}
+/* ---------------------------------------------------------------------------
+   Target sizes (0.34 review, F57): a thumb target is 44x44 (hit area, the drawn size may be smaller), and a change row is
+   28px at a desk. Phone width or a coarse pointer. test/explorer/target-size.test.js holds this list.
+   --------------------------------------------------------------------------- */
+.hx-change-row { min-height: 28px; }
+@container corn-box (max-width: 767px) {
+  .hx-change-row, .hx-sc-row, .hx-step, .hx-rc-tab, .hx-player-speed, .hx-player .hx-close { min-height: 44px; }
+  .hx-player-speed, .hx-player .hx-close { min-width: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-change-row, .hx-sc-row, .hx-step, .hx-rc-tab, .hx-player-speed, .hx-player .hx-close { min-height: 44px; }
+  .hx-player-speed, .hx-player .hx-close { min-width: 44px; }
+}
+/* ==== the review column (spec 0006, review-column.js): the changes, and the personas with the scenarios that apply to them ==============
+   From 768px it is docked on the left of the map under the proposal bar (the free map is what it leaves: sheets.js visibleMapRect);
+   on a phone it is the expanded proposal sheet's body, a two-part switch at its top, its foot (the decision) always in view. */
+.hx-review-column { position: absolute; left: 12px; bottom: 12px; top: var(--hx-column-top, 150px); width: 400px; z-index: 14; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--corn-radius-lg); font-size: var(--corn-text-sm); user-select: text; }
+.hx-review-column[hidden] { display: none; }
+@container corn-box (max-width: 1023px) {
+  .hx-review-column { width: 320px; }
+}
+@container corn-box (min-width: 1280px) {
+  /* The Work panel: from 1280px the column moves over to make room for it; narrower, the panel lies over the column while it is open (moving it would leave the map a sliver) */
+  .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); }
+}
+@container corn-box (min-width: 768px) and (max-width: 1023px) {
+  /* The node panel (480px) and the 320px column do not both fit under 1024px: the column gives up its width, so the panel covers none of it */
+  .hx-stage:has(.drawer-open) .hx-review-column { width: min(320px, calc(100% - 504px)); }
+}
+.hx-rc-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-2); overflow: hidden; padding: var(--corn-space-3) var(--corn-space-4); }
+.hx-rc-lists { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--corn-space-4); }
+/* Both lists are on screen at once: the changes take what they need up to 40%, the scenarios the rest, each scrolling on its own */
+.hx-rc-section { display: flex; flex-direction: column; min-height: 0; }
+/* review-column.js measures the scenarios and sets --hx-changes-max: 40% while the scenarios need the rest, more when they are few */
+#rc-changes { flex: 0 1 auto; max-height: var(--hx-changes-max, 40%); }
+#rc-scenarios { flex: 1 1 0; min-height: min(12em, var(--hx-scenarios-need, 12em)); }
+.hx-change-list, .hx-rc-sbody { min-height: 0; overflow-y: auto; scroll-padding-block: var(--corn-space-2); }
+.hx-rc-h { flex: none; }
+.hx-rc-tabs { display: flex; gap: var(--corn-space-2); }
+.hx-rc-tabs[hidden] { display: none; }
+.hx-rc-tab { flex: 1; min-height: var(--hx-control-h); padding: 0 var(--corn-space-3); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text-3); font: inherit; font-weight: 600; cursor: pointer; }
+.hx-rc-tab[aria-selected="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+.hx-rc-tab:focus-visible, .hx-sc-row:focus-visible, .hx-step:focus-visible, .hx-rc-h:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-rc-section[hidden] { display: none; }
+.hx-rc-h { margin: 0 0 var(--corn-space-2); font-size: var(--corn-text-sm); font-weight: 700; color: var(--corn-text); }
+.hx-rc-h [data-corn="count"] { color: var(--corn-text-3); font-variant-numeric: tabular-nums; }
+.hx-rc-empty, .hx-rc-note, .hx-rc-coverage { margin: var(--corn-space-2) 0 0; line-height: 1.5; }
+.hx-rc-coverage { color: var(--corn-text-2); }
+.hx-change-list, .hx-sc-list, .hx-steps { margin: 0; padding: 0; list-style: none; }
+.hx-change-list { display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-persona { margin-top: var(--corn-space-4); }
+.hx-persona:first-of-type { margin-top: 0; }
+.hx-persona-name { margin: 0 0 var(--corn-space-1); font-size: var(--corn-text-xs); font-weight: 600; letter-spacing: 0.02em; color: var(--corn-text-3); overflow-wrap: anywhere; } /* a persona's name in its own words (0.39.0), not a label: sentence case */
+.hx-sc-list { display: flex; flex-direction: column; gap: var(--corn-space-1); }
+.hx-sc-row { display: flex; align-items: flex-start; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-2) var(--corn-space-2); border: var(--corn-border) solid var(--corn-line-soft); border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text); font: inherit; text-align: left; cursor: pointer; }
+.hx-sc-row:hover { background: color-mix(in srgb, var(--corn-accent-hover) 18%, transparent); }
+.hx-sc-caret { flex: none; width: 1em; color: var(--corn-text-3); }
+.hx-sc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-sc-title { font-weight: 600; overflow-wrap: anywhere; }
+.hx-sc-meta { font-size: var(--corn-text-xs); color: var(--corn-text-3); }
+.hx-sc-seen { flex: none; font-size: var(--corn-text-xs); color: var(--corn-added-text); white-space: nowrap; }
+.hx-steps { margin: var(--corn-space-1) 0 var(--corn-space-2) var(--corn-space-4); display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-steps[hidden] { display: none; }
+.hx-step { display: flex; align-items: flex-start; gap: var(--corn-space-3); width: 100%; padding: var(--corn-space-2) var(--corn-space-2); border: 0; border-left: var(--corn-border-strong) solid transparent; border-radius: var(--corn-radius-sm); background: none; color: var(--corn-text); font: inherit; font-size: var(--corn-text-xs); text-align: left; cursor: pointer; }
+.hx-step:hover { background: var(--corn-line-soft); }
+.hx-step[aria-current="step"] { border-left-color: var(--corn-accent-text); background: color-mix(in srgb, var(--corn-accent-hover) 22%, transparent); }
+.hx-step-n { flex: none; min-width: 1.4em; color: var(--corn-accent-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hx-step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-step-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--corn-space-3); }
+.hx-step-who { color: var(--corn-text-2); font-weight: 600; }
+.hx-step-where { font-weight: 600; overflow-wrap: anywhere; }
+.hx-step-mark { display: inline-flex; align-items: center; gap: var(--corn-space-1); color: var(--corn-text-3); }
+.hx-step-mark .hx-mark-dot { margin: 0; }
+.hx-step-text { color: var(--corn-text-2); line-height: 1.4; overflow-wrap: anywhere; }
+.hx-step-off { color: var(--corn-text-3); font-style: italic; }
+.hx-step-verdict { align-self: flex-start; white-space: normal; text-align: right; max-width: 40%; overflow-wrap: anywhere; }
+@container corn-box (max-width: 767px) {
+  /* The expanded proposal sheet: the column is its body, with no box of its own */
+  .hx-review-column { position: static; width: auto; max-height: none; overflow: visible; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .hx-rc-scroll, .hx-rc-lists, .hx-rc-section, .hx-change-list, .hx-rc-sbody { display: block; overflow: visible; max-height: none; min-height: 0; }
+  .hx-rc-scroll { padding: var(--corn-space-2) 0; }
+  .hx-rc-section[hidden] { display: none; }
+  /* the sheet scrolls, not a section: each section is as tall as its list (the desktop's 40% cap and 12em floor would let the rows run under the decision) */
+  #rc-changes, #rc-scenarios { flex: none; max-height: none; min-height: 0; }
+  .hx-rc-lists { display: flex; flex-direction: column; }
+  .hx-change-list { display: flex; }
+  .hx-step { min-height: 44px; }
+  .hx-sc-row, .hx-rc-tab { min-height: 44px; }
+  .hx-step-verdict { max-width: 45%; }
+}
+@container corn-box (min-width: 768px) {
+  .hx-stage:has(.drawer-open) .hx-player { right: 504px; }
+}
+.hx-player-as, .hx-player-check { flex: 1 0 100%; }
+.hx-player-speed[data-corn="control"] { color: var(--corn-text); }
+.hx-rc-sub { margin: var(--corn-space-2) 0 var(--corn-space-1); font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text); }

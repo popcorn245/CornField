@@ -17,6 +17,7 @@ import { TOKENS_FILE, UI_PAIRS, checkSheets, contrastSummary, checkThemeContrast
 // @ts-expect-error plain JS modules, no declarations
 import { DEFAULTS } from '../../core/config.js';
 import { CORNFIELD, EXPLORER, SAMPLE } from '../helpers.js';
+import { explorerCss } from '../explorer/stylesheets.js';
 
 const tokens = fs.readFileSync(TOKENS_FILE, 'utf8');
 const rounded = (c) => readColor(c).map((v, i) => (i < 3 ? Math.round(v) : Math.round(v * 1000) / 1000));
@@ -466,7 +467,7 @@ describe('the docs\' example brand stylesheet', () => {
 });
 
 describe('the two spots that were under AA', () => {
-  const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8');
+  const css = explorerCss();
   const ruleFor = (selector) => {
     const out = {};
     for (const rule of parseRulesOf(css)) if (rule.selector.split(',').map((s) => s.trim()).includes(selector)) Object.assign(out, rule.decls);
@@ -528,12 +529,12 @@ describe('the two spots that were under AA', () => {
   });
 });
 
-describe('the pair list matches what explorer.css paints', () => {
+describe('the pair list matches what the explorer stylesheets paint', () => {
   const pairs = new Set(contrastPairs().map((p) => `${p.fg} | ${p.bg}`));
   const norm = (v) => { const m = /^var\((--[\w-]+)\)$/.exec(v.trim()); return m ? m[1] : v.trim(); };
   /** Every rule of explorer.css and house.css, comments dropped, declarations as a map (the last of a property wins) */
-  const rules = ['explorer.css', 'house.css'].flatMap((f) => [...fs.readFileSync(path.join(EXPLORER, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .map(([, sel, body]) => ({ sel: sel.trim().replace(/\s+/g, ' '), decl: Object.fromEntries([...body.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)].map((m) => [m[1], m[2].trim()])) })));
+  const rules = [...explorerCss(['explorer.css', 'house.css'], { stripComments: true }).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, sel, body]) => ({ sel: sel.trim().replace(/\s+/g, ' '), decl: Object.fromEntries([...body.matchAll(/(?:^|;)\s*([\w-]+)\s*:\s*([^;]+)/g)].map((m) => [m[1], m[2].trim()])) }));
   // Rules whose colour is not text on the background of the same rule, and why each is still held
   const ELSEWHERE = {
     '.hx-chip': 'its fills are the modifiers below it: --corn-text-on-accent on --corn-accent, --corn-ground on the status fills',
@@ -545,7 +546,7 @@ describe('the pair list matches what explorer.css paints', () => {
     '.hx-house-plan .floor-map__label, .hx-house-plan .hx-plain-room text': 'a room\'s name, on the room\'s own lime tint (listed)',
   };
 
-  it('holds every text colour explorer.css sets with a background to that background, and every other one to the ground and a surface', () => {
+  it('holds every text colour the explorer stylesheets set with a background to that background, and every other one to the ground and a surface', () => {
     const holes = [];
     for (const { sel, decl } of rules) {
       const fg = decl.color ?? (/label|text\b/.test(sel) ? decl.fill : undefined);

@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EXPLORER } from '../helpers.js';
 
-const css = fs.readFileSync(path.join(EXPLORER, 'explorer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+import { explorerCss } from './stylesheets.js';
+const css = explorerCss(['explorer.css'], { stripComments: true });
 
 /** A selector list split at its top-level commas (not those inside :where(…) or :is(…)) */
 function splitList(head) {
@@ -39,7 +40,7 @@ function rules(text) {
       let depth = 1; let j = open + 1;
       while (j < src.length && depth) { if (src[j] === '{') depth++; else if (src[j] === '}') depth--; j++; }
       const body = src.slice(open + 1, j - 1);
-      if (head.startsWith('@media')) walk(body, `${media} ${head}`.trim());
+      if (/^@(media|container)\b/.test(head)) walk(body, `${media} ${head}`.trim());
       else if (!head.startsWith('@')) out.push({ selectors: splitList(head), body, media });
       i = j;
     }
@@ -106,7 +107,7 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
 
   it('makes a segmented control one height outside as well: its buttons are the token less the frame', () => {
     for (const sel of ['.hx-seg-btn', '.hx-view-btn', '.hx-account-seg-btn']) expect(declared(sel, 'height'), sel).toBe('var(--hx-seg-inner)');
-    const inner = declared(':root', '--hx-seg-inner');
+    const inner = declared('*', '--hx-seg-inner'); // on every element, not :root: it exists inside a shadow root too (base.css)
     expect(inner).toContain('var(--hx-control-h)');
     expect(inner).toContain('var(--corn-border)');
     // the frame is two thirds of a step of padding and two borders, so the outside of the control is the token
@@ -114,17 +115,18 @@ describe('a bar\'s controls are one height, --corn-control-height (read through 
   });
 
   it('reads the token only through --hx-control-h, which a phone floors at 44px: a brand that sets the token on :root (36px, say) cannot shrink a phone\'s targets', () => {
-    expect(declared(':root', '--hx-control-h')).toBe('var(--corn-control-height)');
-    const phone = ALL.filter((r) => /max-width: 767px/.test(r.media) && r.selectors.includes(':root') && /--hx-control-h\s*:/.test(r.body));
-    expect(phone.map((r) => r.body.trim())).toEqual(['--hx-control-h: max(44px, var(--corn-control-height));']);
+    expect(declared('*', '--hx-control-h')).toBe('var(--corn-control-height)');
+    const phone = ALL.filter((r) => /max-width: 767px/.test(r.media) && r.selectors.includes('*') && /--hx-control-h\s*:/.test(r.body));
+    expect(phone.map((r) => r.body.trim())).toEqual(['--hx-control-h: max(44px, var(--corn-control-height)); --hx-seg-inner: var(--hx-control-h);']);
     // no other rule reads the token itself, so none can bypass the floor
     const direct = ALL.filter((r) => /var\(--corn-control-height\)/.test(r.body) && !/--hx-control-h\s*:/.test(r.body));
     expect(direct.map((r) => r.selectors.join(', '))).toEqual([]);
   });
 
   it('gives its rules no more weight than one class (an ancestor is in :where()), so a brand\'s [data-corn] hook still wins', () => {
-    const block = css.slice(css.indexOf(':root { --hx-control-h'));
-    const heavy = rules(block).flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
+    // the rules of the density work: the ones that set a height from the control token or a panel's head height
+    const block = ALL.filter((r) => /var\(--hx-control-h\)|--corn-panel-head-height/.test(r.body)).map((r) => `${r.selectors.join(', ')} {${r.body}}`).join('\n');
+    const heavy = ALL.filter((r) => /--corn-panel-head-height/.test(r.body)).flatMap((r) => r.selectors).filter((sel) => { const [a, b, c] = specificity(sel); return a > 0 || b > 1 || (b === 1 && c > 0); });
     expect(heavy).toEqual([]);
     expect(block).not.toMatch(/!important/);
   });
