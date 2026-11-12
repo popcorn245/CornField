@@ -59,7 +59,7 @@ export const scopeInfo = (inst) => {
  * @param {string} [options.version] the package's version, compared with the server's
  * @param {() => string} [options.pageUrl] the page's address
  * @param {(detail: { status: number, signIn: string }) => void} [options.onAuth] the server wants a sign-in
- * @param {(detail: { kind: string, message?: string }) => void} [options.onError]
+ * @param {(detail: { kind: 'not-listed' | 'offline' | 'server' | 'address' | 'version' | 'theme' | 'second-map', message?: string }) => void} [options.onError]
  * @param {() => void} [options.onReady] the scope has its data (loaded, or handed in)
  */
 export function mountScope(host, options = {}) {
