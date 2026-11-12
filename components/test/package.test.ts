@@ -295,6 +295,10 @@ describe('what a build leaves in dist/ (D11)', () => {
     expect([...reach('index.js')].some((f) => f.includes(runtime[0]))).toBe(true);
     expect([...reach('corn-map.js')].some((f) => f.includes(runtime[0]))).toBe(true);
     expect(read(`chunks/${runtime[0]}`)).not.toContain('explorer/pieces');
+    // each chunk is named plainly, for what it is (the engine every component shares is `engine-<hash>.js`, not its first module's name)
+    const chunks = fs.readdirSync(path.join(dist, 'chunks'));
+    for (const f of chunks) expect(f, f).toMatch(/^[a-z][a-z0-9-]*-[\w-]{8}\.js$/);
+    expect(chunks.filter((f) => f.startsWith('engine-'))).toHaveLength(1);
   });
 
   it('a map that is handed its data loads none of the scope: the loading, the states and the server\'s theme are a chunk of their own, imported only for a src', () => {
