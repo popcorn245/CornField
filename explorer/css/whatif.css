@@ -1,0 +1,55 @@
+/*
+ * whatif.css: what-if editing
+ * What-if editing (whatif.js): the controls under the proposal bar, the panel, the drag that draws an edge.
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+/* With a proposal open the list is a row of its bar (scenario-ui.js mounts it there), so it opens in the bar's flow and the bar grows to hold it */
+.hx-whatif { margin-top: var(--corn-space-3); padding-top: var(--corn-space-3); border-top: var(--corn-border) solid color-mix(in srgb, var(--corn-edit) 30%, transparent); }
+.hx-whatif[hidden] { display: none; }
+.hx-whatif-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); }
+.hx-whatif .hx-btn:disabled { opacity: 0.4; cursor: default; }
+.hx-whatif .hx-btn[aria-pressed="true"], .hx-whatif .hx-btn--active { background: var(--corn-edit-text); border-color: var(--corn-edit); color: var(--corn-ground); }
+.hx-whatif-hint { margin: var(--corn-space-2) 0 0; color: var(--corn-edit-text); }
+.hx-whatif-msg { margin: var(--corn-space-2) 0 0; padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-removed) 12%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-removed) 35%, transparent); color: var(--corn-bad); line-height: 1.4; }
+.hx-whatif-msg[hidden], .hx-whatif-hint[hidden], .hx-whatif-notice[hidden], .hx-whatif-panel[hidden] { display: none; }
+.hx-whatif-notice { margin: var(--corn-space-2) 0 0; color: var(--corn-warn); }
+.hx-whatif-panel { margin-top: var(--corn-space-3); padding: var(--corn-space-3) var(--corn-space-3); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); border: var(--corn-border) solid color-mix(in srgb, var(--corn-edit) 25%, transparent); max-height: min(calc(40 * var(--hx-vh, 1cqh)), 320px); overflow: auto; }
+.hx-whatif-form { display: flex; flex-direction: column; gap: var(--corn-space-2); }
+.hx-whatif-field { display: flex; align-items: center; gap: var(--corn-space-3); color: var(--corn-text-2); }
+.hx-whatif-field > select, .hx-whatif-field > .hx-whatif-input { flex: 1; min-width: 0; }
+.hx-whatif-input, .hx-whatif-field select, .hx-whatif select { padding: var(--corn-space-1) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: inherit; font-size: var(--corn-text-sm); user-select: text; }
+.hx-whatif-input:focus, .hx-whatif-field select:focus { outline: var(--corn-focus-width) solid var(--corn-edit-text); outline-offset: calc(var(--corn-focus-offset) / 2); }
+.hx-whatif-help { margin: 0; font-size: var(--corn-text-xs); }
+.hx-whatif-pair { margin: 0; }
+.hx-whatif-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); }
+.hx-whatif-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--corn-space-1); }
+.hx-whatif-edit { display: flex; align-items: center; gap: var(--corn-space-3); }
+.hx-whatif-edit-text { flex: 1; min-width: 0; line-height: 1.4; }
+.hx-whatif-step { display: flex; align-items: flex-start; gap: var(--corn-space-2); padding: var(--corn-space-1); border-radius: var(--corn-radius-sm); }
+.hx-whatif-step.is-current { background: color-mix(in srgb, var(--corn-edit) 18%, transparent); }
+.hx-whatif-num { flex: none; width: 22px; height: 22px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--corn-edit) 30%, transparent); color: var(--corn-text); font-size: var(--corn-text-xs); font-weight: 700; cursor: pointer; }
+.hx-whatif-stepbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: calc(var(--corn-space-1) / 2); }
+.hx-whatif-stepbody .hx-whatif-input { width: 100%; }
+.hx-whatif-target { font-size: var(--corn-text-xs); }
+.hx-whatif-addstep { display: flex; flex-wrap: wrap; align-items: center; gap: var(--corn-space-2); margin-top: var(--corn-space-3); }
+.hx-whatif-addstep .hx-whatif-field { flex: 1 1 220px; }
+.hx-whatif-edges { color: var(--corn-text-2); }
+.hx-whatif-edges summary { cursor: pointer; }
+.hx-whatif-edges .hx-whatif-list { margin-top: var(--corn-space-2); max-height: 200px; overflow: auto; }
+.hx-rubber { position: absolute; inset: 0; pointer-events: none; z-index: 14; }
+.hx-rubber svg { display: block; overflow: visible; }
+.hx-rubber-line { stroke: var(--corn-edit); stroke-width: 3; stroke-dasharray: 8 6; stroke-linecap: round; }
+.hx-rubber-from, .hx-rubber-to { fill: color-mix(in srgb, var(--corn-edit) 15%, transparent); stroke: var(--corn-edit); stroke-width: 2; }
+@container corn-box (max-width: 767px) {
+  .hx-whatif .hx-btn { min-height: 44px; }
+  .hx-drawer .hx-whatif-drawer select, .hx-drawer .hx-whatif-edges summary { min-height: 44px; }
+}
+.hx-drawer .hx-whatif-drawer { align-items: flex-start; gap: var(--corn-space-2); font-size: var(--corn-text-md); color: var(--corn-text-2); }
+.hx-whatif-drawer:focus { outline: none; } /* it only holds the focus between two paints */
+.hx-drawer .hx-whatif-edgeto { display: flex; align-items: center; gap: var(--corn-space-2); align-self: stretch; }
+.hx-drawer .hx-whatif-edgeto .hx-whatif-field { flex: 1; min-width: 0; }
+.hx-drawer .hx-whatif-drawer select { max-width: 100%; }
+.hx-drawer .hx-whatif-edges { align-self: stretch; }
+.hx-whatif-edges .hx-whatif-list { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+.hx-whatif-row [aria-disabled="true"] { opacity: 0.55; cursor: default; }

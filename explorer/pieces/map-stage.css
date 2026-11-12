@@ -1,5 +1,5 @@
 /* The map piece's own box, for a shadow root (explorer/pieces/map.js; components/src/corn-map). cornfield's page styles the same
-   elements from explorer.css (#graph-canvas, .hx-stage), so nothing here loads there. Every colour is a --corn-* token; a host
+   elements from explorer/css/ (#graph-canvas, .hx-stage), so nothing here loads there. Every colour is a --corn-* token; a host
    restyles an element with ::part(map-stage), ::part(map-canvas), ::part(label-canvas). */
 /* As tall as the host makes it, and never under 16rem: a map dropped in with no height is visible. A host that wants it lower says so on the
    part: corn-map::part(map-stage) { min-height: 0 } */

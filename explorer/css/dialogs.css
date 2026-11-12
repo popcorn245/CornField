@@ -1,0 +1,50 @@
+/*
+ * dialogs.css: dialogs
+ * The review tokens dialog (review-tokens.js), the confirm dialog of the Work panel, and a proposal's mockup window (mockups.js). They
+ * become native <dialog> elements in a later step (D8); until then three of them are `position: fixed` over the window, each marked below.
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+.hx-confirm-title, .hx-mockup-title { font-family: var(--corn-font-display); }
+/* fixed (spec 0011 D8): a modal over the whole window, centred on it. It cannot be placed in a piece's box without changing the page; it becomes a native <dialog>, in the top layer, in a later step */
+.hx-mockup-dialog { position: fixed; z-index: 60; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: var(--corn-space-3); width: min(960px, calc(100cqw - 32px)); max-height: calc(100 * var(--hx-vh, 1cqh) - 32px); padding: var(--corn-space-4) var(--corn-space-4) var(--corn-space-4); border-radius: var(--corn-radius-lg); border: var(--corn-border) solid var(--corn-line); background: var(--corn-ground); color: var(--corn-text); box-shadow: var(--corn-shadow), 0 0 0 100cqmax var(--corn-scrim); }
+.hx-mockup-dialog:focus { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-mockup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--corn-space-4); }
+.hx-mockup-title { margin: 0; font-size: var(--corn-text-base); font-weight: 600; color: var(--corn-text); }
+.hx-mockup-stage { min-height: 0; overflow: auto; display: flex; justify-content: center; border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-mockup-ground); }
+.hx-mockup-img { display: block; max-width: 100%; height: auto; object-fit: contain; }
+.hx-mockup-frame { display: block; width: 100%; height: min(560px, calc(100 * var(--hx-vh, 1cqh) - 140px)); border: 0; background: var(--corn-mockup-ground); }
+/* fixed (spec 0011 D8): the scrim of a modal over the whole window; a native <dialog> and its ::backdrop take its place in a later step */
+.hx-confirm-scrim { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: var(--corn-space-5); background: var(--corn-scrim); }
+.hx-confirm-scrim[hidden] { display: none; }
+.hx-confirm { display: flex; flex-direction: column; gap: var(--corn-space-3); width: min(440px, 100%); max-height: 100%; overflow-y: auto; padding: var(--corn-space-5); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-lg); box-shadow: var(--corn-shadow-lg); font-size: var(--corn-text-sm); user-select: text; }
+.hx-confirm-title { margin: 0; font-size: var(--corn-text-lg); font-weight: 700; color: var(--corn-text); }
+.hx-confirm-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--corn-space-1) var(--corn-space-4); margin: 0; }
+.hx-confirm-facts dt { color: var(--corn-text-3); }
+.hx-confirm-facts dd { margin: 0; overflow-wrap: anywhere; color: var(--corn-text); }
+.hx-confirm-checks { display: flex; flex-direction: column; gap: var(--corn-space-1); margin: 0; padding: 0; list-style: none; }
+.hx-confirm-label { margin: 0; color: var(--corn-text-3); }
+.hx-confirm-pre { margin: 0; max-height: 140px; overflow: auto; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 80%, transparent); color: var(--corn-text); font: var(--corn-text-xs)/1.5 var(--corn-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.hx-confirm-pre:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-confirm-note { margin: 0; color: var(--corn-text-2); line-height: 1.5; }
+.hx-confirm-actions { display: flex; justify-content: flex-end; gap: var(--corn-space-3); }
+.hx-tokens-list { display: flex; flex-direction: column; gap: var(--corn-space-2); margin: 0; padding: 0; list-style: none; }
+.hx-tokens-item { display: grid; grid-template-columns: 1fr auto; gap: calc(var(--corn-space-1) / 2) var(--corn-space-3); align-items: center; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: color-mix(in srgb, var(--corn-ground) 55%, transparent); }
+.hx-tokens-item[data-state="revoked"], .hx-tokens-item[data-state="expired"] { opacity: 0.65; }
+.hx-tokens-label { font-weight: 600; color: var(--corn-text); overflow-wrap: anywhere; }
+.hx-tokens-meta { grid-column: 1; }
+.hx-tokens-item .hx-btn { grid-column: 2; grid-row: 1 / span 2; }
+.hx-tokens-row { display: flex; gap: var(--corn-space-3); align-items: center; }
+.hx-tokens-row .hx-forge-input { flex: 1; }
+.hx-tokens-form { display: grid; grid-template-columns: 1fr 5rem; gap: var(--corn-space-3); align-items: end; }
+.hx-tokens-form .hx-btn { grid-column: 1 / -1; justify-self: start; }
+.hx-confirm { scroll-padding-block: calc(var(--corn-focus-width) + var(--corn-focus-offset) + var(--corn-space-1)); }
+@container corn-box (max-width: 767px) {
+  .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select { min-height: 44px; }
+  .hx-confirm .hx-btn { min-width: 44px; }
+}
+@media (pointer: coarse) {
+  .hx-confirm .hx-btn, .hx-confirm .hx-forge-input, .hx-confirm .hx-forge-select { min-height: 44px; }
+  .hx-confirm .hx-btn { min-width: 44px; }
+}
+.hx-confirm-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }

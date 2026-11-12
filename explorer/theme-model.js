@@ -52,7 +52,7 @@ export function themeNameFrom(stored, names, fallback) {
 /** Where a named theme's stylesheet is served (server/server.js); '' for no named theme */
 export const themeNameHref = (name) => (/^[a-z0-9][a-z0-9-]{0,31}$/.test(name) ? `/cornfield/theme/${name}.css` : '');
 
-/** The light page's ground (--hx-bg in explorer.css): what the light colours are measured against */
+/** The light page's ground (--hx-bg, an alias of --corn-ground in tokens.css): what the light colours are measured against */
 export const LIGHT_GROUND = '#f4f6fa';
 /** The dark page's ground, for checking what the dark theme already does */
 export const DARK_GROUND = '#090d16';

@@ -33,10 +33,11 @@ import { freeRect, frameNodes, largestGroup, allInside, READ_ZOOM, FRAME_ZOOM_MI
 import { checksLine, sourceChip, notFoundWords, malformedLinkWords, otherCopies, pullNumberOf, touchedIds } from '../../explorer/proposal-model.js';
 import { explorerPage } from '../helpers.js';
 
+import { explorerCss } from './stylesheets.js';
 const here = path.dirname(new URL(import.meta.url).pathname);
 const page = explorerPage({ pieces: ['map'] });
 const body = /<body>([\s\S]*)<\/body>/.exec(page) [1].replace(/<script[\s\S]*?<\/script>/g, '');
-const css = fs.readFileSync(path.resolve(here, '../../explorer/explorer.css'), 'utf8');
+const css = explorerCss();
 
 const node = (id        , type        , x        , y        , extra         = {}) => ({ id, type, x, y, r: 20, color: '#336699', label: id, ...extra });
 // A map much bigger than the screen: the change is a small part of it, and the rest is far away

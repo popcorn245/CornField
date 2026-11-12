@@ -4,8 +4,8 @@
  * Keeps the header's left group (the brand, the View switch, the Layers chip) inside its box (CF review F46). A brand wordmark can be wider
  * than the room a phone leaves, and the group used to scroll sideways behind a scrollbar nobody could see, with House half out of sight.
  * Nothing here guesses a width: it measures. With the wordmark shown, if the group's content is wider than its box the wordmark goes
- * (`data-brand-short` on the group, explorer.css hides it and the logo stays); if the content still does not fit, `data-overflow` is set, and
- * explorer.css draws a fade at the edge it scrolls under, so a scroll is never silent. The brand button keeps its accessible name either way.
+ * (`data-brand-short` on the group, css/header.css hides it and the logo stays); if the content still does not fit, `data-overflow` is set, and
+ * css/header.css draws a fade at the edge it scrolls under, so a scroll is never silent. The brand button keeps its accessible name either way.
  */
 
 export const SHORT_ATTR = 'data-brand-short';
@@ -23,7 +23,7 @@ export function fitLeft(left) {
   left.removeAttribute(SHORT_ATTR);
   left.removeAttribute(OVERFLOW_ATTR);
   // A menu that is open hangs under its chip and past the group's edge; that is not the group's content running over, and the fade
-  // (explorer.css [data-overflow]) is a mask that would hide the menu itself. Measure with open menus out of the way, then put them back.
+  // (css/header.css [data-overflow]) is a mask that would hide the menu itself. Measure with open menus out of the way, then put them back.
   const open = [...left.querySelectorAll('.hx-menu')].filter((m) => !m.hidden).map((m) => [m, m.style.display]);
   open.forEach(([m]) => { m.style.display = 'none'; });
   try { return measure(left); } finally { open.forEach(([m, was]) => { m.style.display = was; }); }

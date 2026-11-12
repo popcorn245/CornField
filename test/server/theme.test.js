@@ -2,7 +2,7 @@
  * @vitest-environment node
  *
  * `theme` on the server (docs/config.md#theme): the repo's theme CSS is served same-origin as text/css with nosniff, only the
- * files the config names; the page links it after explorer.css; the Content-Security-Policy lists exactly the font hosts; the
+ * files the config names; the page links it after the explorer's stylesheets; the Content-Security-Policy lists exactly the font hosts; the
  * config the browser reads carries names and the default, never a path.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -78,11 +78,12 @@ describe('a theme in the config', () => {
     }
   });
 
-  it('puts the links after explorer.css and house.css: fonts, then the theme, then the default named theme', async () => {
+  it('puts the links after cornfield own stylesheets (explorer/css/, house.css): fonts, then the theme, then the default named theme', async () => {
     const html = (await ask(s.port, '/')).body;
     const at = (needle) => html.indexOf(needle);
-    expect(at('/explorer/explorer.css')).toBeGreaterThan(0);
-    expect(at('/explorer/house.css')).toBeGreaterThan(at('/explorer/explorer.css'));
+    expect(at('/explorer/css/base.css')).toBeGreaterThan(0);
+    expect(at('/explorer/css/page.css')).toBeGreaterThan(at('/explorer/css/base.css'));
+    expect(at('/explorer/house.css')).toBeGreaterThan(at('/explorer/css/page.css'));
     expect(at(`href="${GOOGLE.replace(/&/g, '&amp;')}"`)).toBeGreaterThan(at('/explorer/house.css'));
     expect(at('href="/cornfield/theme.css"')).toBeGreaterThan(at('fonts.googleapis.com'));
     expect(at('id="cf-theme-name-css" href="/cornfield/theme/night.css"')).toBeGreaterThan(at('href="/cornfield/theme.css"'));
@@ -100,7 +101,7 @@ describe('a theme in the config', () => {
     expect(boot).toBeGreaterThan(0);
     const links = [...head.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*>/g)];
     const own = (fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8').match(/<link rel="stylesheet"/g) || []).length;
-    expect(links.length).toBe(own + 3); // cornfield's own (explorer.css, house.css…), then the font, theme.css and the named theme
+    expect(links.length).toBe(own + 3); // cornfield's own (explorer/css/*, house.css…), then the font, theme.css and the named theme
     for (const l of links) expect(l.index, l[0]).toBeLessThan(boot);
     // nothing but whitespace between it and </head>, and the body after: no element is drawn before it runs
     expect(head.slice(boot).replace('<script src="/explorer/theme-boot.js"></script>', '').trim()).toBe('');

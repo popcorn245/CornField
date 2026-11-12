@@ -12,7 +12,7 @@
  *   --corn-map-added|changed|removed|edit     the diff: a proposal's marks on nodes and edges
  *   --corn-map-selected|match                 the halo of the selected node, and of a search hit
  *   --corn-map-lit                            the lines of the focus: the links the selection (or a walk's step) lights
- *   --corn-map-collision                      the collision mark of two runs on one node (a DOM mark: explorer.css reads it)
+ *   --corn-map-collision                      the collision mark of two runs on one node (a DOM mark: css/map.css reads it)
  *   --corn-map-font                           the font list of every label on the map (a list of families, `auto` for the map's own)
  *   --corn-map-edge-width                     the width of an ordinary line, in map px (`auto` keeps each line's own; the focus's and the marks' keep their proportion)
  *   --corn-map-label-min                      the smallest a label is drawn on screen, in px (11 by default; below 9px it is ignored; a hub's title is 2 more)
@@ -361,7 +361,7 @@ export function createMapStyle(inst) {
 
     /**
      * The config's part of the map theme once the page has it: loads the icons, sets the pixelated flag, and marks the root element
-     * `data-pixelated` (for the page, <html>) so a stylesheet can sample any DOM image without smoothing too (`image-rendering: pixelated`, explorer.css).
+     * `data-pixelated` (for the page, <html>) so a stylesheet can sample any DOM image without smoothing too (`image-rendering`, css/base.css, from page.css's `--hx-pixelated`).
      * @param {{icons?: Record<string, string>, pixelated?: boolean} | null | undefined} theme `config.theme` of /cornfield/config.json
      */
     applyTheme(theme, opts = {}) {

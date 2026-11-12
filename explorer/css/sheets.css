@@ -1,0 +1,134 @@
+/*
+ * sheets.css: phone sheets
+ * The phone's bottom sheets (sheets.js, TOPO-18; spec 0010 D7): the proposal bar, the scenario player, the node panel and the Work panel
+ * stack in #sheet-dock at the bottom of the map, a peek until a tap or swipe on the handle opens one. Cornfield's page shell only: no piece
+ * sheets itself. The dock is a descendant of the stage; its height rules ask the screen's, which is the `corn-page` container (the body).
+ * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
+ * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.
+ */
+/* ---- phone bottom sheets (sheets.js, TOPO-18) ----------------------------------------------------
+   Below 768px the proposal bar, the scenario player and the node panel stack in #sheet-dock at the bottom of
+   the map. Each is a peek (a handle, a title, a line or two) until a tap or swipe on its handle expands it
+   to at most half the screen (the node panel 60%) with its own scroll. From 768px the dock is display: contents and
+   none of this applies. */
+.hx-dock { display: contents; }
+.hx-sheet-handle { display: none; }
+@keyframes hx-sheet-in { from { transform: translateY(28px); opacity: 0; } }
+@container corn-box (max-width: 767px) {
+  .hx-dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 45; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; }
+  .hx-dock > * { pointer-events: auto; }
+  .hx-dock > .hx-sheet { position: relative; top: auto; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; margin: 0; transform: none; border-radius: var(--corn-radius-lg) var(--corn-radius-lg) 0 0; border-bottom: 0; box-shadow: var(--corn-shadow-sheet); overscroll-behavior: contain; animation: hx-sheet-in 0.2s ease-out; --sheet-pb: var(--corn-space-3); }
+  .hx-dock > .hx-sheet[data-sheet-last]:not(.hx-drawer) { padding-bottom: calc(var(--sheet-pb) + env(safe-area-inset-bottom, 0px)); }
+  .hx-sheet-handle { display: flex; flex: none; align-items: center; justify-content: center; width: 100%; height: 22px; padding: 0; border: 0; background: none; cursor: grab; touch-action: none; }
+  .hx-sheet-handle span { width: 40px; height: 5px; border-radius: var(--corn-radius-pill); background: var(--corn-surface-3); }
+  .hx-sheet-handle:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); border-radius: var(--corn-radius); }
+  .hx-player > .hx-sheet-handle { flex: 0 0 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-dock > .hx-sheet { animation: none; }
+  .hx-sheet, .hx-dock > .hx-sheet { transition: none; animation: none; }
+}
+@container corn-box (max-width: 767px) {
+  .hx-sheet-handle { height: 44px; } /* the grip is drawn the same; the button itself is 44px (a hit area stretched past it is clipped by the sheet above, and covers its title below) */
+}
+@media (pointer: coarse) {
+  .hx-sheet-handle { height: 44px; } /* the grip is drawn the same; the button itself is 44px (a hit area stretched past it is clipped by the sheet above, and covers its title below) */
+}
+/* ==========================================================================
+   Sheets on a phone (spec 0010 D7): two at most, one expanded, a stub for the other, and the map keeps 35% of the screen
+   ========================================================================== */
+.hx-sheet-stub { display: none; }
+@container corn-box (max-width: 767px) {
+  /* The node panel and Work take turns: the one displaced is hidden, not closed (its node stays selected) */
+  .hx-dock > .hx-sheet[data-sheet-away] { display: none; }
+  /* A stub: one 44px row with the sheet's title and its badge; a tap expands it, and the expanded one folds to a stub in its place */
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] { min-height: 44px; max-height: 44px; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+  .hx-dock > .hx-sheet[data-sheet-state="stub"] > :not(.hx-sheet-stub) { display: none !important; }
+  .hx-sheet-stub { display: flex; align-items: center; gap: var(--corn-space-3); width: 100%; min-height: 44px; padding: 0 var(--corn-space-1); border: 0; background: none; color: var(--corn-text); font: inherit; font-weight: 600; text-align: left; }
+  .hx-sheet-stub[hidden] { display: none; }
+  .hx-sheet-stub:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: calc(var(--corn-focus-width) * -1); border-radius: var(--corn-radius); }
+  .hx-sheet-stub-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-review > :not([data-review-hint]):not([data-review-msg]):not([data-review-line]):not([data-review-ask]):not([data-review-hold]):not([data-review-hold-live]):not([data-review-landing]) { display: none; } /* the peek keeps the line Approve points at, the question, the hold, a landing that waits, and a refusal */
+  /* While a scenario plays the proposal sheet folds to its title and counts: the player needs the room */
+  .hx-dock:has(> .hx-player) .hx-proposal-bar[data-sheet-state="peek"] .hx-rc-foot { display: none; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-whatif-panel { max-height: none; overflow: visible; }
+  .hx-proposal-bar[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(#proposal-message):not(#proposal-ways):not(#proposal-body), .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > :not(.hx-proposal-head), .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-head > :is(.hx-proposal-tools, .hx-proposal-more, .hx-proposal-more-menu) { display: none; }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (max-height: 480px) {
+    /* A short window (400% zoom is 225px tall): an open sheet may take the window, and the node panel's title wraps */
+    .hx-proposal-bar[data-sheet-state="expanded"] { max-height: calc(100cqh - var(--corn-space-3)); }
+  }
+}
+@container corn-box (max-width: 767px) {
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-chip { display: none; }
+  /* Opened, the sheet's switch carries the counts, so the head is one short row: Before / Diff / After, Edit and ⋯ */
+  .hx-proposal-bar[data-sheet-state="expanded"] { max-height: 62cqh; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-chip, .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-summary { display: none; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-counts { grid-column: 1; order: 3; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-tools { grid-column: 2; order: 4; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-head { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .hx-proposal-bar[data-sheet-state="expanded"] .hx-proposal-more .hx-btn--icon { grid-column: 3; order: 4; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-proposal-peek { display: block; color: var(--corn-text-2); }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (min-height: 481px) {
+    /* An expanded sheet is capped so the map keeps 35% of the screen: sheets.js writes `--hx-sheet-cap` (the screen less the map's share, less a stub). Not in a short
+                   window (400% zoom), where an open sheet may take the window. */
+    .hx-dock > .hx-proposal-bar[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50cqh), 50cqh); }
+  }
+}
+@container corn-box (max-width: 767px) {
+  .hx-player[data-sheet-state="expanded"] { overflow-y: auto; }
+  .hx-player[data-sheet-state="peek"] > :not(.hx-sheet-handle):not(.hx-player-controls):not(.hx-player-text):not(.hx-player-side):not(.hx-player-track):not(.hx-player-says) { display: none; } /* Previous, Pause and Next stay in the peek, with the counter and Close */
+  .hx-player[data-sheet-state="peek"] .hx-player-text { flex: 1 1 0; display: flex; align-items: center; gap: var(--corn-space-2); min-height: 44px; overflow: hidden; font-size: var(--corn-text-md); white-space: nowrap; }
+  .hx-player[data-sheet-state="peek"] .hx-player-step, .hx-player[data-sheet-state="peek"] .hx-player-who, .hx-player[data-sheet-state="peek"] .hx-player-sep { display: none; }
+  .hx-player[data-sheet-state="peek"] .hx-player-side .hx-player-speed { display: none; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-text { flex: 1 0 100%; order: 3; }
+  .hx-player[data-sheet-state="expanded"] .hx-player-title { position: static; width: auto; height: auto; clip: auto; clip-path: none; overflow: visible; order: 0; flex: 0 0 100%; font-size: var(--corn-text-sm); font-weight: 600; color: var(--corn-text-2); }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (max-height: 480px) {
+    .hx-player[data-sheet-state="expanded"] { max-height: calc(100cqh - var(--corn-space-3)); }
+  }
+}
+@container corn-box (max-width: 767px) {
+  /* The peek: the title, the one line of counts, and the decision; the lists wait for the sheet to open */
+  .hx-proposal-bar[data-sheet-state="peek"] #proposal-body > .hx-review-column { display: flex; }
+  .hx-proposal-bar[data-sheet-state="peek"] .hx-review-column > :not(.hx-rc-foot) { display: none; }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (min-height: 481px) {
+    .hx-dock > .hx-player[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 50cqh), 50cqh); }
+  }
+}
+@container corn-box (max-width: 767px) {
+  .hx-dock > .hx-drawer[data-sheet-last][data-sheet-state="peek"] { padding-bottom: calc(var(--sheet-pb) + env(safe-area-inset-bottom, 0px)); }
+  /* With the node panel expanded the backdrop stays as the tap that closes it, but draws nothing: the map above the sheet is the free band the
+             selected node was panned into (camera.js panIntoView), and a scrim or blur over it hides that node (issue #180) */
+  .hx-stage[data-sheet-open="drawer"] .hx-backdrop:not([hidden]) { display: block; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .hx-drawer[data-sheet-state="peek"] .hx-drawer-body { flex: none; padding: 0 var(--corn-space-5) var(--corn-space-3); gap: 0; overflow: hidden; }
+  .hx-drawer[data-sheet-state="peek"] .hx-drawer-body > :not(.hx-drawer-head), .hx-drawer[data-sheet-state="peek"] .hx-drawer-foot { display: none; }
+  .hx-drawer[data-sheet-state="peek"] .hx-drawer-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (max-height: 480px) {
+    .hx-drawer[data-sheet-state="peek"] .hx-drawer-title { overflow: visible; text-overflow: clip; white-space: normal; }
+  }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (min-height: 481px) {
+    .hx-dock > .hx-drawer[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60cqh), 60cqh); }
+  }
+}
+@container corn-box (max-width: 767px) {
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body { flex: none; padding: 0 var(--corn-space-5) var(--corn-space-3); gap: var(--corn-space-1); overflow: hidden; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-body > :not(.hx-forge-top):not(#forge-bar), .hx-forge[data-sheet-state="peek"] #forge-filter-chip, .hx-forge[data-sheet-state="peek"] .hx-forge-tabs { display: none; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-head { padding-bottom: 0; border-bottom: 0; }
+  .hx-forge[data-sheet-state="peek"] .hx-forge-head .hx-btn { display: none; }
+}
+@container corn-box (max-width: 767px) {
+  @container corn-page (min-height: 481px) {
+    .hx-dock > .hx-forge[data-sheet-state="expanded"] { max-height: min(var(--hx-sheet-cap, 60cqh), 60cqh); }
+  }
+}
