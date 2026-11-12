@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import { loadSample, SAMPLE, EXPLORER } from '../helpers.js';
 // @ts-expect-error plain JS modules, no declarations
-import { mount, STYLESHEETS } from '../../explorer/pieces/review.js';
+import { mount, STYLESHEETS, EMPTY_WORDS } from '../../explorer/pieces/review.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setTopology, setMap } from '../../explorer/engine/topology.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -311,4 +311,98 @@ describe('in a shadow root, as the coming tag holds it', () => {
     a.destroy();
     b.destroy();
   });
+});
+
+describe('hostile and odd input: text only, no throw, and a plain word where there is nothing to show', () => {
+  let errors;
+  let spy;
+  const onError = (e) => errors.push(e.error || e.message);
+  beforeEach(() => { errors = []; window.addEventListener('error', onError); spy = vi.spyOn(console, 'error').mockImplementation((...a) => errors.push(a.join(' '))); });
+  afterEach(() => { window.removeEventListener('error', onError); spy.mockRestore(); });
+  const evil = '<img src=x onerror="window.__pwned=1"><b data-x>bold</b>"\'><svg onload=alert(1)>';
+  const markupIn = (box) => {
+    const attrs = [...box.querySelectorAll('*')].flatMap((el) => [...el.attributes].map((a) => a.name));
+    return { img: box.querySelectorAll('img, b[data-x], [src]').length, on: attrs.filter((a) => a.startsWith('on')), js: box.querySelectorAll('a[href^="javascript"]').length };
+  };
+
+  it('a topology and a proposal with markup in every string and ids with quotes and brackets', async () => {
+    const id = (s) => `n"]>${s}[0]'<x>`;
+    const t = {
+      nodes: [
+        { id: id('a'), label: evil, type: 'service', desc: evil, links: [{ label: evil, url: 'javascript:alert(1)' }] },
+        { id: id('b'), label: evil, type: 'table', parent: id('a'), desc: evil },
+        { id: id('c'), label: evil, type: evil, desc: evil },
+      ],
+      edges: [{ from: id('a'), to: id('b'), kind: 'writes', label: evil }, { from: id('b'), to: id('a'), kind: evil, label: evil }, { from: id('c'), to: id('nowhere') }],
+    };
+    const p = {
+      version: 1, spec: evil, title: evil, summary: evil,
+      nodes: { add: [{ id: id('d'), label: evil, type: 'page', parent: id('a'), desc: evil }], change: [{ id: id('b'), set: { desc: evil }, why: evil }], remove: [{ id: id('c'), why: evil }] },
+      edges: { add: [{ from: id('d'), to: id('a'), kind: 'calls', label: evil }] },
+      scenarios: [{ id: `s"><img>`, title: evil, actor: evil, steps: [{ node: id('d'), text: evil }, { node: id('nowhere'), text: evil }] }],
+    };
+    const { el, piece } = make({ topology: t, proposal: p });
+    await vi.advanceTimersByTimeAsync(50);
+    piece.update({ node: id('d') });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(piece.inst.el('proposal-title').textContent).toBe(evil);
+    const row = el.querySelector('.hx-sc-row'); if (row) row.click();
+    const step = el.querySelector('.hx-step'); if (step) step.click();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(markupIn(el)).toEqual({ img: 0, on: [], js: 0 });
+    expect(window.__pwned).toBeUndefined();
+    piece.destroy();
+    expect(errors).toEqual([]);
+  });
+
+  it('cycles, an edge to a missing node, an empty topology, nothing at all, and a proposal for another map', async () => {
+    expect(make({}).el.querySelector('[data-corn="empty"]').hidden).toBe(true); // no word before a topology is handed in
+    const cycle = { nodes: [{ id: 'a', type: 'service' }, { id: 'b', type: 'service', parent: 'a' }, { id: 'c', type: 'service', parent: 'b' }], edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }, { from: 'c', to: 'a' }, { from: 'a', to: 'ghost' }] };
+    cycle.nodes[0].parent = 'c';
+    const { piece } = make({ topology: cycle });
+    expect(piece.inst.state.nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
+    for (const t of [{ nodes: [], edges: [] }, null, undefined, 'nodes', { nodes: 'x', edges: 7 }, { nodes: [null, 1, { id: 3 }, { id: 'ok' }], edges: [null, { from: 'ok' }] }]) piece.update({ topology: t });
+    expect(piece.inst.state.nodes.map((n) => n.id)).toEqual(['ok']);
+    const empty = piece.elements[0].querySelector('[data-corn="empty"]');
+    expect(empty.hidden).toBe(true);
+    piece.update({ topology: { nodes: [], edges: [] } });
+    expect(empty.hidden).toBe(false);
+    expect(empty.textContent).toBe(EMPTY_WORDS);
+    piece.update({ topology: cycle, proposal });
+    await vi.advanceTimersByTimeAsync(50);
+    // a proposal of another map opens on this one (its changes to nodes this map has not are left out by applyProposal), and says what it can
+    expect(piece.inst.el('proposal-title').textContent).toBe(proposal.title);
+    expect(piece.inst.state.nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
+    piece.destroy();
+    expect(errors).toEqual([]);
+  });
+
+  it('a proposal before its topology, both replaced while drawing, and views and config that are not what they should be', async () => {
+    const { piece } = make({ proposal });
+    expect(piece.inst.state.proposal).toBe(null);
+    piece.update({ topology: topology() });
+    expect(piece.inst.state.proposal.title).toBe(proposal.title);
+    for (let i = 0; i < 5; i++) {
+      piece.update({ topology: topology(), proposal: { ...proposal, title: `t${i}` } });
+      await vi.advanceTimersByTimeAsync(5);
+    }
+    expect(piece.inst.el('proposal-title').textContent).toBe('t4');
+    for (const view of ['house', 'nope', 7, null, {}, '<b>', 'dataflow', 'after', 'orbit', 'before']) piece.update({ view });
+    expect(piece.inst.state.view).toBe('orbit');
+    expect(piece.inst.state.proposalView).toBe('before');
+    for (const config of [null, 7, 'x', { layers: 'x' }, { layers: [null, 7, { id: evil, label: evil, match: 'nope' }] }, { theme: 7 }, { layers: [{ id: 'l', label: evil, types: ['service'], default: 'off' }] }]) piece.update({ config });
+    expect(markupIn(piece.elements[0])).toEqual({ img: 0, on: [], js: 0 });
+    piece.destroy();
+    expect(errors).toEqual([]);
+  });
+
+  it('5,000 nodes lay out and open a proposal', async () => {
+    const nodes = Array.from({ length: 5000 }, (_, i) => ({ id: `n${i}`, label: `n${i}`, type: i % 7 ? 'page' : 'service', parent: i % 7 ? `n${i - (i % 7)}` : undefined }));
+    const edges = nodes.slice(1).map((n, i) => ({ from: nodes[i].id, to: n.id }));
+    const { piece } = make({ topology: { nodes, edges }, proposal: { version: 1, title: 'big', nodes: { add: [{ id: 'new', type: 'page', parent: 'n0', label: 'new' }] }, edges: { add: [{ from: 'n1', to: 'new' }] } } });
+    expect(piece.inst.state.nodes.length).toBe(5001);
+    expect(piece.inst.state.nodes.every((n) => Number.isFinite(n.x) && Number.isFinite(n.y))).toBe(true);
+    piece.destroy();
+    expect(errors).toEqual([]);
+  }, 30_000);
 });

@@ -39,6 +39,8 @@
 @container corn-box (min-width: 768px) and (max-width: 1023px) {
   .hx-stage:has(.hx-review-column:not([hidden])) { --hx-col-w: 320px; }
 }
+/* A topology with no nodes: the words in the middle of the stage, over the empty map */
+.hx-review-empty { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; margin: 0; padding: var(--corn-space-5); text-align: center; color: var(--corn-text-2); font-size: var(--corn-text-md); pointer-events: none; }
 /* No header above the map and no hint on it: the bar sits at the top of the stage */
 .hx-proposal-bar { top: 12px; }
 /* A host's own rules on bare elements reach in (no shadow root: the host's CSS reaches each piece directly, spec 0011 D7); these are the few the pieces never

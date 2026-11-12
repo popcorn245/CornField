@@ -70,6 +70,9 @@ export const KEYS_HELP = "Arrow keys pan, plus and minus zoom, 0 fits the map. N
 
 const MAP_VIEWS = ['map', 'orbit', 'dataflow'];
 
+/** What the box says over a map with no nodes */
+export const EMPTY_WORDS = 'There is no map to show: the topology has no nodes.';
+
 /**
  * The layout: a stage (the map, and over it the dock, which holds the bar, the review column and the node panel, and the tap-away behind the panel on a
  * phone), as cornfield's page has, with each piece's place marked by a comment where its elements go before. The Proposals menu has a spare place of its own.
@@ -82,6 +85,7 @@ const LAYOUT = '<div class="hx-stage" data-corn="stage">'
   + '<!--corn-piece:node-panel/drawer-->'
   + '</div>'
   + '<!--corn-piece:node-panel/backdrop-->'
+  + '<p class="hx-review-empty" data-corn="empty" role="status" hidden></p>'
   + '</div>'
   + '<div class="hx-review-spare" hidden><!--corn-piece:proposal/menu--></div>';
 
@@ -170,6 +174,10 @@ export function mount(root, inst, options = {}) {
   /** The topology changed: the base map is the host's new one, laid out and fitted; an open proposal is laid over it again */
   function applyTopology(topology) {
     current.hasTopology = setTopology(inst, topology);
+    // A topology with nothing on it says so in words, never a blank box (no word before a topology is handed in: the host may still be loading it)
+    const empty = box.querySelector('.hx-review-empty');
+    empty.textContent = current.hasTopology ? '' : EMPTY_WORDS;
+    empty.hidden = current.hasTopology;
     if (!current.hasTopology) { inst.map.render(); return; }
     layoutMap(inst);
     if (state.proposal) rebuildProposalMap(inst, undefined, { fit: true });
