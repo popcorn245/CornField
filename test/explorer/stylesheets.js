@@ -26,14 +26,16 @@ export const readPiece = (name) => fs.readFileSync(path.join(CSS_DIR, name), 'ut
 
 /**
  * The text of some stylesheets, joined: `'explorer.css'` stands for all the pieces' files in link order (what explorer.css was), any other name is a
- * file of explorer/ (`'tokens.css'`, `'house.css'`). `stripComments` drops the comments.
+ * file of explorer/ (`'tokens.css'`, `'house.css'`). `stripComments` drops the comments. `asMedia` writes the container queries as media queries, for a
+ * test that puts the CSS in happy-dom, which has no container queries: there the window is the page's width, which is what the stage and the body are.
  */
-export function explorerCss(names = ['explorer.css'], { stripComments = false } = {}) {
+export function explorerCss(names = ['explorer.css'], { stripComments = false, asMedia = false } = {}) {
   const parts = [];
   for (const n of names) {
     if (n === 'explorer.css') for (const f of linkedPieces()) parts.push(readPiece(f));
     else parts.push(fs.readFileSync(path.join(EXPLORER_DIR, n), 'utf8'));
   }
   const text = parts.join('\n');
-  return stripComments ? text.replace(/\/\*[\s\S]*?\*\//g, '') : text;
+  const out = asMedia ? text.replace(/@container corn-(box|page) /g, '@media ') : text;
+  return stripComments ? out.replace(/\/\*[\s\S]*?\*\//g, '') : out;
 }

@@ -78,7 +78,7 @@ describe('a theme in the config', () => {
     }
   });
 
-  it('puts the links after the explorer's own stylesheets (explorer/css/, house.css): fonts, then the theme, then the default named theme', async () => {
+  it('puts the links after cornfield own stylesheets (explorer/css/, house.css): fonts, then the theme, then the default named theme', async () => {
     const html = (await ask(s.port, '/')).body;
     const at = (needle) => html.indexOf(needle);
     expect(at('/explorer/css/base.css')).toBeGreaterThan(0);
