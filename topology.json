@@ -2753,10 +2753,20 @@
       "label": "status.js",
       "type": "core",
       "file": "explorer/pieces/status.js",
-      "summary": "What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet \"Loading\", \"Sign in to cornfield\" with a real link to the server's sign-in, \"This page is n…",
+      "summary": "What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet \"Loading\", \"You are not signed in to cornfield\" (or, for a 403, \"This map is for the projec…",
       "r": 20,
       "color": "#14b8a6",
       "desc": "What a person sees while a map loads from a server, and when it cannot (spec 0011 D5, D6, D11): the quiet \"Loading\", \"Sign in to cornfield\" with a real link to the server's sign-in, \"This page is n… (explorer/pieces/status.js)"
+    },
+    {
+      "id": "core-explorer-pieces-scope-link",
+      "label": "scope-link.js",
+      "type": "core",
+      "file": "explorer/pieces/scope-link.js",
+      "summary": "The part of the scope protocol (pieces/scope.js) a piece needs, and nothing of the scope itself: how a piece asks for the scope around it (`joinScope`), the two event names, and what a scope's inst…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The part of the scope protocol (pieces/scope.js) a piece needs, and nothing of the scope itself: how a piece asks for the scope around it (`joinScope`), the two event names, and what a scope's inst… (explorer/pieces/scope-link.js)"
     }
   ],
   "edges": [
@@ -9030,19 +9040,7 @@
     },
     {
       "from": "core-explorer-pieces-map",
-      "to": "core-explorer-engine-source",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
       "to": "core-explorer-pieces-scope",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-map",
-      "to": "core-explorer-pieces-status",
       "dashed": true,
       "label": "imports"
     },
@@ -9116,7 +9114,29 @@
       "from": "page-doc-docs-embedding",
       "to": "page-doc-docs-specs-0011-cornfield-in-another-app",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-scope-link"
+    },
+    {
+      "from": "core-explorer-pieces-map",
+      "to": "core-explorer-pieces-scope-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-scope-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-status",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T13:49:46.681Z"
+  "updatedAt": "2026-11-12T14:38:32.084Z"
 }
