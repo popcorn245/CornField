@@ -29,7 +29,8 @@
  * theirs and is never taken from the body. A body that carries a credential, by key or by value, is 400 and nothing is posted.
  *
  * The `/api/agent-runs` routes are the signed-in maintainer's, behind the sign-in guard like every other action. The POSTs take a request
- * from cornfield's own page only (`sameOrigin`) with a JSON body and count toward the flood ceiling (server/throttle.js); a token is no way
+ * from cornfield's own page only (`sameOrigin`, checked first and never counted) with a JSON body and count toward the flood ceiling
+ * (server/throttle.js); a token is no way
  * to them (the guard reads cookies, never `Authorization`). They post with the session's own forge token (`auth.forgeFor`).
  */
 
@@ -38,7 +39,7 @@ import { sameOrigin, readBody } from './proposals.js';
 import { ANONYMOUS_PER_MINUTE, NO_TOKEN_LOGIN } from './review-api.js';
 import { bearerOf, findToken, touchToken } from './review-tokens.js';
 import { refusal } from './submit-review.js';
-import { Refused, countAttempt } from './throttle.js';
+import { Refused, countAttempt, noteRefusedOrigin } from './throttle.js';
 import { ForgeError } from './forge.js';
 
 export const REQUESTS_PATH = '/api/agent-requests';
@@ -70,7 +71,7 @@ function parseBody(body, what) {
   }
 }
 
-/** @typedef {{ config: any, auth: any, runs: import('./agent-runs.js').Runs | null, now?: () => number, publicHost?: string | null }} AgentContext */
+/** @typedef {{ config: any, auth: any, runs: import('./agent-runs.js').Runs | null, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} AgentContext */
 
 /**
  * `POST /api/agent-requests`. The caller has found the path to be this one; this runs before the sign-in guard.
@@ -204,13 +205,19 @@ export async function serveRunRoutes(req, res, reqPath, ctx) {
     return true;
   }
 
-  // A change: from cornfield's own page, as JSON; the engine counts the flood first and writes a row for everything after
+  // A change: from cornfield's own page, as JSON; past the origin, the engine counts the flood first and writes a row for everything after
   const ask = { forge: () => auth.forgeFor(session), who: { login: session.login, userId: session.userId }, limits: { auth, now: ctx.now } };
   let problem;
   let body = {};
-  if (!sameOrigin(req, ctx.publicHost ?? null)) {
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    // Refused before the engine counts anything: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up
+    // their budget. It is written down at most once a minute (server/throttle.js `noteRefusedOrigin`)
     req.resume();
-    problem = { status: 403, message: 'Do this from cornfield\'s own page.' };
+    const answer = { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' };
+    const action = m[2] === '/answer' ? 'agent-answer' : runId ? 'agent-stop' : 'agent-request';
+    await noteRefusedOrigin({ auth }, req, session, { action, target: ctx.config.forge?.repo ?? '', request: runId ? { runId } : {}, answer }, (ctx.now ?? Date.now)());
+    send(res, 403, answer);
+    return true;
   } else if (!/^application\/json(?:\s*;|$)/i.test(String(req.headers['content-type'] || ''))) {
     req.resume();
     problem = { status: 415, message: 'Send the request as JSON (Content-Type: application/json).' };

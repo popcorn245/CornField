@@ -46,7 +46,7 @@ Mentions are resolved against the map **on screen**, so a proposal opened on the
 
 ### What New idea asks of the server
 
-`POST /api/forge/threads { title, body }` is guarded like the other [actions](issues-and-prs.md#what-the-server-checks-again), in this order: POST only; a signed-in maintainer; a ceiling of attempts of any kind per person per minute (counted before anything is written down); a row in the audit (`actions`, action `idea`, **before** the forge is asked, with the title and the text's length, never the text); the same origin; JSON of at most 96 KB; not twice (the same title is not asked again for a few seconds, and 20 actions a minute per person); and the permission asked of the forge **now** with the maintainer's own token, so one removed a minute ago is refused. It only adds an issue; it changes and removes nothing.
+`POST /api/forge/threads { title, body }` is guarded like the other [actions](issues-and-prs.md#what-the-server-checks-again), in this order: POST only; a signed-in maintainer; the same origin (a refusal here is not counted toward the ceiling that follows, and is written down at most once a minute); a ceiling of attempts of any kind per person per minute (counted before anything is written down); a row in the audit (`actions`, action `idea`, **before** the forge is asked, with the title and the text's length, never the text); JSON of at most 96 KB; not twice (the same title is not asked again for a few seconds, and 20 actions a minute per person); and the permission asked of the forge **now** with the maintainer's own token, so one removed a minute ago is refused. It only adds an issue; it changes and removes nothing.
 
 ## Hooks
 

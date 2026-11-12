@@ -40,7 +40,7 @@ import { sameOrigin, readBody } from './proposals.js';
 import { REVIEW_LIMIT } from './reviews.js';
 import { MAX_ACTIVE, MAX_DAYS, DEFAULT_DAYS, bearerOf, daysOf, findToken, labelProblem, listTokens, mintToken, revokeToken, touchToken } from './review-tokens.js';
 import { refusal, submitReview } from './submit-review.js';
-import { Refused, countAttempt } from './throttle.js';
+import { Refused, countAttempt, noteRefusedOrigin } from './throttle.js';
 
 export const REVIEWS_PATH = '/api/reviews';
 export const TOKENS_PATH = '/api/review-tokens';
@@ -62,7 +62,7 @@ function send(res, status, body, headers = {}) {
 
 const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** @typedef {{ config: any, where: any, auth: any, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, now?: () => number, publicHost?: string | null }} ApiContext */
+/** @typedef {{ config: any, where: any, auth: any, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, now?: () => number, publicHost?: string | null, publicOrigin?: string | null }} ApiContext */
 
 /**
  * `POST /api/reviews`. The caller has found the path to be this one; this runs before the sign-in guard.
@@ -209,14 +209,23 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
   }
 
   // A change: from cornfield's own page only, as JSON, counted and written down, and the forge asked who this is now
+  const what = revoke ? 'revoke' : 'mint';
+  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(scope !== 'review' ? { scope } : {}), ...(revoke ? { id: Number(revoke[2]) } : {}) });
+  // The origin first, before the flood count: a same-site page's POST rides on the maintainer's cookie, and a refused one must not use up
+  // their budget. It is written down at most once a minute (server/throttle.js `noteRefusedOrigin`)
+  if (!sameOrigin(req, ctx.publicHost ?? null, [], ctx.publicOrigin ?? null)) {
+    req.resume();
+    const answer = { ok: false, error: 'Do this from cornfield\'s own page.', code: 'forbidden' };
+    await noteRefusedOrigin(ctx, req, session, { action: 'review-token', target: config.forge.repo, request, answer }, now());
+    send(res, 403, answer);
+    return true;
+  }
   const flood = countAttempt(ctx, session.userId, now());
   if (flood) {
     req.resume();
     send(res, flood.status, { ok: false, error: flood.message, code: flood.code }, flood.headers);
     return true;
   }
-  const what = revoke ? 'revoke' : 'mint';
-  const request = /** @type {Record<string, unknown>} */ ({ op: what, ...(scope !== 'review' ? { scope } : {}), ...(revoke ? { id: Number(revoke[2]) } : {}) });
   let rowId = null;
   /** @type {{ status: number, body: object }} */
   let out;
@@ -226,10 +235,6 @@ export async function serveTokenRoutes(req, res, reqPath, ctx) {
     } catch (err) {
       console.error(`[cornfield] the audit row of a review token could not be written: ${err instanceof Error ? err.message : err}`);
       throw new Refused(503, 'cornfield cannot write its audit log, so it will not change review tokens.', 'unavailable');
-    }
-    if (!sameOrigin(req, ctx.publicHost ?? null)) {
-      req.resume();
-      throw new Refused(403, 'Do this from cornfield\'s own page.', 'forbidden');
     }
     const body = revoke ? {} : await jsonBody(req);
     const forge = auth.forgeFor(session);
