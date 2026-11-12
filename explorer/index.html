@@ -7,7 +7,7 @@
   <!-- The server puts the config's import map here (server/server.js), for a repo-local source's bare imports -->
   <!--@importmap-->
 
-  <!-- The explorer's own stylesheets (explorer/css/, one per piece: base.css first, page.css, the page's own, last; the order is the cascade's, and it is the order the one explorer.css had) and modules (explorer/): no build step, no CDN -->
+  <!-- The explorer's own stylesheets (explorer/css/, one per piece: base.css first, page.css, the page's own, last; in an order that keeps the one explorer.css's cascade: test/explorer/stylesheet-split.test.js holds it) and modules (explorer/): no build step, no CDN -->
   <link rel="stylesheet" href="/explorer/tokens.css" />
   <link rel="stylesheet" href="/explorer/css/base.css" />
   <link rel="stylesheet" href="/explorer/css/header.css" />
@@ -214,7 +214,7 @@
           <div class="hx-proposal-tools">
             <!-- Shown only while there are what-if edits: off, the map is the proposal as written; the edits are kept and still go with a review (whatif.js) -->
             <!-- The review narrows the map to the change; this puts the whole map back, as Diff always was (layers.js setWholeMap). Off at every opening -->
-            <!-- Its words are "Whole map", which read right pressed or not; its name and tooltip are the full "Show the whole map". On a desk it sits beside the title, so the bar keeps its rows (explorer.css) -->
+            <!-- Its words are "Whole map", which read right pressed or not; its name and tooltip are the full "Show the whole map". On a desk it sits beside the title, so the bar keeps its rows (css/proposal.css) -->
             <button data-corn="whole-map" data-corn-kind="secondary" type="button" id="proposal-whole" class="hx-btn" data-action="proposal-whole" aria-pressed="false" aria-label="Show the whole map" title="Show the whole map" data-peek-ok data-corn-string="wholeMap" data-corn-string-aria-label="showWholeMap">Whole map</button>
             <button data-corn-kind="secondary" type="button" id="proposal-myedits" class="hx-btn" aria-pressed="true" data-peek-ok data-corn-string="myEdits" hidden>My edits</button>
             <button data-corn-kind="secondary" type="button" id="proposal-edit" class="hx-btn" aria-expanded="false" aria-controls="whatif" title="Try a change: add a node or an edge, reword a scenario">Edit</button>
