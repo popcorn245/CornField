@@ -610,8 +610,8 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 
 | Tag | Event | `detail` |
 |---|---|---|
-| `corn-map` | `cornSelect` | `{ id, kind }`: the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`); `kind` is `node` or `edge`, `id` is null when it was cleared |
-| `corn-map` | `cornReady` | none: the first frame with a map in it is drawn |
+| `corn-map` | `cornSelect` | the selection changed, whoever changed it (a click, a key, `node`, `focusNode()`), once per change. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node`, `edge`, or null when cleared; `id` is the node's id, `from->to` for an edge, or null; `source` is `tap`, `keyboard`, `api` or `state` |
+| `corn-map` | `cornReady` | none: the first frame with a map in it is drawn, once each time the element is put in the page |
 
 ### Methods
 
@@ -619,7 +619,7 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 |---|---|---|
 | `corn-map` | `fit()` | puts the whole map in view |
 | `corn-map` | `focusNode(id)` | selects the node and brings it into view |
-| `corn-map` | `refresh()` | reads the tokens again and draws, for a change the map cannot see (a rule added to the page's head, a class on `<html>`) |
+| `corn-map` | `refresh()` | reads the tokens again and draws, for a token changed where the map cannot see it (a stylesheet added to the page's head, a class or a style on a wrapper); the `theme` attribute, `<html data-theme>` and the system's setting it follows by itself |
 
 All three answer with a promise.
 

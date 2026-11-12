@@ -91,9 +91,9 @@ Chromium resolves `*.localhost` to this machine, so two names are two origins th
 
 ## The components
 
-cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield. So far there is one: `<corn-map>`.
+cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there is one: `<corn-map>`.
 
-**Not published yet.** The package, `@popcorn245/cornfield-components`, is private for now and is not on npm, and cornfield's server does not serve it yet. You build it from a checkout of cornfield, and the root package (`cornfield` on npm, the image) has no part in it: it takes no dependency and has no build step.
+**Not published yet, and not served yet.** The package, `@popcorn245/cornfield-components`, is private for now and is not on npm, and cornfield's server does not serve it. You build it from a checkout of cornfield, and the root package (`cornfield` on npm, the image) has no part in it: it takes no dependency and has no build step.
 
 ```sh
 cd components
@@ -112,52 +112,80 @@ The build is ES modules: one file per component, one for all, and a shared chunk
 <link rel="stylesheet" href="/vendor/cornfield/tokens.css">           <!-- optional: see Tokens below -->
 
 <corn-map id="map"></corn-map>
-<script>
+<script type="module">
   const map = document.querySelector('#map');
   map.topology = await (await fetch('/my/topology.json')).json();     // the object topology.json holds: { nodes, edges }
   map.addEventListener('cornSelect', (e) => openMyPanel(e.detail.id));
 </script>
 ```
 
-`corn-map` with a `topology` is complete: it asks no server for anything. (Fetching from a cornfield server with `src`, and showing a proposal, come with later components: they are not in `<corn-map>` yet.) The package's types declare the tag: `document.querySelector('corn-map')` is an `HTMLCornMapElement`, its properties are typed, and `addEventListener('cornSelect', …)` gives a typed `detail`.
+`corn-map` with a `topology` is complete: it asks no server for anything. (Fetching from a cornfield server with `src`, and showing a proposal, come with later components: they are not in `<corn-map>` yet.)
+
+**Types.** The package declares the tag: `document.querySelector('corn-map')` is an `HTMLCornMapElement`, its properties are typed, `addEventListener('cornSelect', …)` gives a typed `detail` (`CornSelectDetail`), and `document.createElement('corn-map')` knows the element. For JSX, `LocalJSX.IntrinsicElements` holds the tag with its properties and an `onCornSelect` handler; merge it into your framework's own JSX namespace, for React:
+
+```ts
+import type { LocalJSX } from '@popcorn245/cornfield-components';
+declare module 'react' { namespace JSX { interface IntrinsicElements extends LocalJSX.IntrinsicElements {} } }
+```
+
+### With a Content-Security-Policy
+
+`<corn-map>` works under a strict policy such as `default-src 'self'; style-src 'self'`, with no `'unsafe-inline'` and no `'unsafe-eval'`, as long as you serve the files from your own origin:
+
+- **Scripts:** the modules, from wherever you serve `dist/` (`script-src 'self'`, or that origin). They run no `eval`, start no worker and make no `blob:` or `data:` URL.
+- **Styles:** the component's own styles and the default tokens are constructable stylesheets (`adoptedStyleSheets`), which a policy does not govern, so `style-src` needs nothing for them. A `<link>` to `tokens.css` needs `style-src` to allow where it is served.
+- **Connections and images:** none. The map draws what you hand it.
+
+(A browser without constructable stylesheets would fall back to a `<style>` element for the default tokens, which such a policy blocks; every browser that runs the components has them.) Tried in headless Chrome with that policy as a response header and a page whose own CSS resets every element: no violation reported, and the map is styled and drawn.
 
 ### Properties, events and methods
 
 | Property | Attribute | What it is |
 |---|---|---|
-| `topology` | none | the map to draw: the object `topology.json` holds. It is not changed: the map works on copies |
-| `node` | `node` (reflected) | the id of the selected node. Set it to select; it follows a click or a key, so reading it gives the selection |
+| `topology` | none | the map to draw: the object `topology.json` holds. It is not changed: the map works on copies. A new object replaces the map (the selection stays when the new one has the node); what is not a node or an edge is left out |
+| `node` | `node` (reflected) | the id of the selected node. Set it to select; it follows a click or a key, so reading it gives the selection. A node the map has not got yet is selected when a topology brings it |
 | `view` | `view` | `map` (default) or `dataflow` |
 | `theme` | `theme` (reflected) | `light`, `dark`, or `auto` (the default): see Tokens |
 | `renderer` | `renderer` | `auto` (WebGL2 when there is one, default) or `canvas2d` |
 
 | Event | `detail` |
 |---|---|
-| `cornSelect` | `{ id, kind }` after every change of the selection, whoever made it (a click, a key, `node`, `focusNode()`): `kind` is `node` (an `edge` comes with proposals) and `id` is null when it was cleared |
-| `cornReady` | none: the first frame with a map in it is drawn |
+| `cornSelect` | once per change of the selection, whoever made it. Its fields: `id`, `kind`, `source`, `from`, `to`. `kind` is `node` or `edge`, or null when the selection was cleared (and `id` is null). `id` is the node's id, or `from->to` for an edge, whose ends are also in `from` and `to`. `source` says who: `tap`, `keyboard`, `api` (`node` or `focusNode()`), or `state` (a new topology without the selected node) |
+| `cornReady` | none: the first frame with a map in it is drawn, once each time the element is put in the page |
 
-Events bubble and cross the shadow root, so a listener on any ancestor hears them. `cornSelect` fires for a change you made yourself with `node` as well, and setting `node` to what it already is does nothing, so handling the event by setting `node` does not loop.
+Events bubble and cross the shadow root, so a listener on any ancestor hears them. `cornSelect` fires for a change you made yourself with `node` as well (`source` is `api`), and setting `node` to what is already selected does nothing and says nothing, so handling the event by setting `node` does not loop.
 
 | Method | What it does |
 |---|---|
 | `fit()` | puts the whole map in view |
-| `focusNode(id)` | selects the node and brings it into view (nothing happens when there is no such node) |
-| `refresh()` | reads the tokens again and draws: for a change the map cannot see (a rule added to the page's head, a class on `<html>`) |
+| `focusNode(id)` | selects the node and brings it and what it lights into view (nothing happens when there is no such node) |
+| `refresh()` | reads the tokens again and draws: for a token you change at run time where the map cannot see it (a stylesheet added to your page's head, a class or a style on a wrapper) |
 
-All three return a promise.
+All three return a promise. The map follows by itself the changes it can see: its `theme`, your `<html data-theme>` or class, and the system's light or dark; `refresh()` is for the rest.
 
-### Sizing
+### Sizing and layout
 
-The element is `display: block` and **fills the box its host gives it**: give `corn-map` a width and a height with your own CSS (`corn-map { height: 520px }`, a grid cell, a flex child) and the map follows it when it changes. With no height it is as tall as a small floor (16rem), so a map dropped in is visible. Nothing inside is sized from the window: a map in a 400px column of a wide window is a 400px map. The element keeps `display` for itself (a page's `* { all: revert }` would make it inline and give it no box); `[hidden]` hides it as usual.
+The element is `display: block` and **fills the box its host gives it**: give `corn-map` a width and a height with your own CSS (`corn-map { height: 520px }`, a grid cell, a flex child) and the map follows it when it changes. With no height it is 16rem tall, so a map dropped in is visible. Nothing inside is sized from the window: a map in a 400px column of a wide window is a 400px map.
+
+- **Your rules on the element win**: its display (a class with `display: none` hides it), its size, its margins. Nothing of the element's own is `!important` except `[hidden]`, which always hides it.
+- **The 16rem minimum is the stage's**, inside the shadow root, so a page that resets every element (`* { all: revert }`) still gets a visible map (the element itself goes inline, as such a page asks). To make a map lower than 16rem, say so on the part too: `corn-map { height: 120px } corn-map::part(map-stage) { min-height: 0 }`.
+- **It can wait unseen**: made inside a parent with `display: none`, or in a box of no size, it is fitted to its box when it gets one.
+- **A parent may scale it**: a tap lands on the node under it inside a `transform: scale()` or a CSS `zoom`, in a scrolled container, and on a right-to-left page. Under a CSS `zoom` the map is drawn at its unzoomed size and scaled, so it is softer.
+- **One element, one map.** Two on a page are two maps (each its own selection, camera and tokens); moved in the page, an element makes new canvases; removed, it ends its map and gives its WebGL context back, so making and removing many does not run the browser out of contexts.
+- **A large map** is laid out when it is set, on the main thread: 5,000 nodes and 15,000 edges took 1.8 s before the first frame in headless Chrome on the machine the tests run on.
+
+### The wheel and touch
+
+On your page **the wheel is your page's while the pointer only passes over the map**: the page scrolls. The map takes the wheel, to zoom, when it has the focus (a click on it, or Tab) or while Ctrl or Cmd is held, which is also how a trackpad's pinch arrives. On a touch screen a finger on the map pans it and two fingers zoom it, so the page does not scroll from inside the map: leave room around a map that fills a phone's width. (cornfield's own page, which is all map, zooms with the wheel as always.)
 
 ### Tokens and the `theme` attribute
 
 Every `--corn-*` token of cornfield's theme contract ([theming.md](theming.md)) inherits into the shadow root, and the map reads its own from the element, so **a map is themed like any other element: with CSS custom properties**.
 
-- **The defaults.** The first `corn-*` element on a page adds cornfield's default tokens to the document, once (`document.adoptedStyleSheets`), generated from `explorer/tokens.css` at build time with every selector at **zero specificity** (`:where(...)`). So any ordinary rule of yours overrides them: `:root { --corn-ground: #101a2e }` for every map, `.tasks { --corn-accent: #7a3e00 }` for the maps in one wrapper, `#board-map { --corn-map-node-app: #c0392b }` for one. The same sheet ships as `tokens.css` for a page that prefers a `<link>`.
-- **Light and dark.** With no `theme` attribute, the page's own `<html data-theme="light|dark">`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page (and the map follows when either changes). `theme="light"` or `theme="dark"` forces that mode for the element: the generated sheet declares that mode's tokens on the element itself. So to change a token for a forced element, put the rule **on that element** (`#board-map { --corn-ground: … }`); a rule on `:root` reaches an element that follows the page but not one that is forced.
+- **The defaults.** The first `corn-*` element on a page adds cornfield's default tokens to the document, once (`document.adoptedStyleSheets`; a second copy of the package on the page finds the first's sheet and adds none), generated from `explorer/tokens.css` at build time with every selector at **zero specificity** (`:where(...)`). So any ordinary rule of yours overrides them: `:root { --corn-ground: #101a2e }` for every map, `.tasks { --corn-accent: #7a3e00 }` for the maps in one wrapper, `#board-map { --corn-map-node-app: #c0392b }` for one. An element inside a shadow root of your own adds the sheet to that root as well, once, for the rules on its `theme` attribute. The same sheet ships as `tokens.css` for a page that prefers a `<link>`.
+- **Light and dark.** With no `theme` attribute, your page's own `<html data-theme="light|dark">`, else the system's `prefers-color-scheme`, decides, as on cornfield's own page (and the map follows when either changes). `theme="light"` or `theme="dark"` forces that mode for the element: the generated sheet declares that mode's tokens on the element itself. So to change a token for a forced element, put the rule **on that element** (`#board-map { --corn-ground: … }`); a rule on `:root` reaches an element that follows the page but not one that is forced.
 - **Two maps, two sets of tokens** work: each map reads the tokens at its own element.
-- **After changing a token at run time** with something the map cannot see, call `map.refresh()`. Changing the `theme` attribute does it for you.
+- **After changing a token at run time** where the map cannot see it, call `map.refresh()`. Changing the `theme` attribute, or your `<html>`'s `data-theme` or class, needs no call.
 - **One limit.** Inside a shadow root a rule cannot ask what `<html>` says, so a theme that restyles a part by light or dark has to do it through tokens.
 
 ### Parts
@@ -166,18 +194,17 @@ Every `data-corn` hook inside a component is also a `part` of the same name, so 
 
 ### Keyboard and screen readers
 
-The canvas is focusable (Tab), named "Topology map", and described by the map's keys. Its keys act **only while focus is inside the map**: arrows pan, `+` and `-` zoom, `0` fits, `N` and `P` (or `]` and `[`) select the next and the previous node, `Home` and `End` the first and the last, `F` frames the selected node and what it lights, `Escape` clears the selection. What the keyboard landed on is said in a polite live region inside the map. A key the map handled is marked `defaultPrevented`, and is not stopped: your own handlers still see it, and can tell by that flag that the map took it.
+A screen reader finds an application named "Topology map", described by the map's keys, and a polite status region that says where the keyboard landed. The canvas is reached by Tab. Its keys act **only while the focus is inside the map**: arrows pan, `+` and `-` zoom, `0` fits, `N` and `P` (or `]` and `[`) select the next and the previous node and bring it into view, `Home` and `End` the first and the last, `F` frames the selected node and what it lights, `Escape` clears the selection ("Selection cleared"). These are the keys of cornfield's own page, from the same code; the page's Enter (into its node panel) and Alt with an arrow (Freeform) do nothing in a map with no panel and no Freeform. A key the map handled is marked `defaultPrevented`, and is not stopped: your own handlers still see it, and can tell by that flag that the map took it.
 
 ### What it does not do yet
 
 - **No `src`, no fetching.** The map draws what you hand it. Reading from a cornfield server (and so the server half above) belongs to `corn-scope`, a later component.
 - **No proposal.** A proposal drawn on the map, with its Before, Diff and After, comes with the review components.
 - **No panels.** Selecting a node says so through `cornSelect`; what to show for it is your app's. The node panel, Layers and search are later components.
-- **No freeform positions, no flights.** Dragging a node, saving where it was put, and the animated camera are cornfield's own page's; `focusNode()` moves the camera at once.
-- **Reduced motion** is read when the map is made (the flow packets stand still), as on the page.
+- **No freeform positions.** Dragging a node and saving where it was put are cornfield's own page's; a map in your page stores nothing in your page's storage.
+- **Reduced motion** is read when the map is made: under it the flow packets stand still and the camera jumps where it would glide, as on the page.
 - **Not served by cornfield yet, and not on npm.** One `<script>` line from a server, and `npm install`, come later.
 
 ### The size it adds
 
-The build records the gzipped size of the shared runtime and of `corn-map` with its engine in `components/size-budget.json`, and CI fails when either grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose.
-
+The build records the gzipped size of the shared runtime and of `corn-map` with its engine in `components/size-budget.json`, and CI fails when either grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today: the runtime is 28.0 kB and `corn-map` with its engine 64.4 kB (gzip, level 9).

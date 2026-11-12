@@ -76,6 +76,25 @@ describe('the documented components', () => {
     expect(section).toMatch(/All three answer with a promise/);
   });
 
+  it('lists every field of an event\'s detail, and no other, here and in docs/embedding.md', () => {
+    const embedding = fs.readFileSync(path.join(CORNFIELD, 'docs', 'embedding.md'), 'utf8');
+    /** The fields a cell names: the ticked words between "Its fields:" and the next full stop */
+    const fieldsIn = (cell) => { const m = /Its fields: ([^.]*)\./.exec(cell); return m ? ticked(m[1]).sort() : null; };
+    for (const t of tags) {
+      for (const m of t.text.matchAll(/@Event\(\)\s*(\w+)!?:\s*EventEmitter<(\w+)>/g)) {
+        const [, event, type] = m;
+        if (type === 'void') continue;
+        const decl = new RegExp(`export interface ${type} \\{([^}]*)\\}`).exec(t.text);
+        expect(decl, `${t.tag} ${event}: ${type} is declared in the component's file`).toBeTruthy();
+        const fields = [...decl[1].matchAll(/^\s*(\w+)\??:/gm)].map((f) => f[1]).sort();
+        const row = rows(sub('Events')).find((r) => ticked(r[0])[0] === t.tag && ticked(r[1])[0] === event);
+        expect(fieldsIn(row[2]), `${t.tag} ${event} in theming.md`).toEqual(fields);
+        const line = embedding.split('\n').find((l) => l.startsWith(`| \`${event}\` |`));
+        expect(fieldsIn(line), `${event} in embedding.md`).toEqual(fields);
+      }
+    }
+  });
+
   it('events cross the shadow root, as documented: the sources keep Stencil\'s defaults for bubbles and composed', () => {
     for (const t of tags) expect(/@Event\(\s*\{[^}]*(bubbles|composed):\s*false/.test(t.text), t.tag).toBe(false);
     expect(section).toMatch(/bubble and cross the shadow root \(`composed`\)/);
