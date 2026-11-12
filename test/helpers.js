@@ -36,8 +36,16 @@ export const recordedHouse = () => ({ ok: true, data: { at: '2026-10-11T18:00:00
 export function explorerPage({ pieces = false } = {}) {
   const page = fs.readFileSync(path.join(EXPLORER, 'index.html'), 'utf8');
   if (!pieces) return page;
-  return page.replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
+  return page
+    .replace(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->[\s\S]*?(?=<!--corn-piece:\1-->)/g, '') // the stand-in goes when the piece comes (engine/piece.js place)
+    .replace(/<!--corn-piece:([a-z-]+)\/([a-z]+)-->/g, (_all, name, slot) => withParts(PIECE_MARKUP[name]()[slot]));
 }
+
+/** The stand-in index.html keeps for a piece's markup until the piece is mounted: the same markup, with its parts, without ids (nor what points at them) */
+export const standIn = (html) => withParts(html).replace(/ (?:id|aria-controls)="[^"]*"/g, '');
+/** The stand-ins of explorer/index.html, by `NAME/SLOT`: the markup between `<!--corn-placeholder:NAME/SLOT-->` and the piece's marker */
+export const standInsOf = (page) => Object.fromEntries([...page.matchAll(/<!--corn-placeholder:([a-z-]+\/[a-z]+)-->([\s\S]*?)<!--corn-piece:\1-->/g)].map((m) => [m[1], m[2]]));
+export { PIECE_MARKUP };
 
 /** A port nothing listens on right now */
 export async function freePort() {

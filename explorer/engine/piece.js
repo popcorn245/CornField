@@ -7,7 +7,8 @@
  *                             (the instance's own `destroy()` runs it too, if the piece is still there)
  *   place(inst, root, html, slots, slot)   makes the piece's elements from `html` and puts them where the host says: before the node `slots[slot]` if
  *                             it is given (cornfield's page leaves a marker comment where each goes), else at the end of `root`; returns the
- *                             elements, which the piece removes on `destroy`
+ *                             elements, which the piece removes on `destroy`. A stand-in the host's markup keeps before the marker for the
+ *                             first paint (`<!--corn-placeholder:NAME/SLOT-->` and the piece's markup without ids) goes when the piece comes
  *   withParts(html)           every hook of the markup also gets a `part` of the same name, so a host's stylesheet can reach it
  *                             from outside a shadow root (`::part(row)`)
  */
@@ -97,7 +98,41 @@ export function place(inst, root, html, slots, slot) {
   template.innerHTML = withParts(html);
   const made = [...template.content.children];
   const marker = slots && slot ? slots[slot] : null;
-  if (marker && marker.parentNode) marker.parentNode.insertBefore(template.content, marker);
-  else root.append(template.content);
+  if (marker && marker.parentNode) {
+    const stand = standInBefore(marker);
+    marker.parentNode.insertBefore(template.content, marker);
+    if (stand) takeOver(inst, stand, made);
+  } else root.append(template.content);
   return made;
+}
+
+/**
+ * The stand-in a host's static markup may hold for a piece, so the first paint has it before any script runs (cornfield's header: the
+ * Layers chip and the search field). It is the piece's markup without ids, between `<!--corn-placeholder:NAME/SLOT-->` and the piece's
+ * own marker, and goes when the piece comes. Returns its nodes, or null when there is none.
+ * @param {Node} marker
+ */
+function standInBefore(marker) {
+  const nodes = [];
+  const open = `corn-placeholder:${String(marker.data || '').replace(/^corn-piece:/, '')}`;
+  for (let n = marker.previousSibling; n; n = n.previousSibling) {
+    nodes.push(n);
+    if (n.nodeType === 8 && n.data === open) return nodes;
+  }
+  return null;
+}
+
+/** The piece takes the stand-in's place: what was typed in it and the focus carry over to the same control of the piece, and the stand-in goes */
+function takeOver(inst, stand, made) {
+  const controls = (els) => els.flatMap((el) => (el.nodeType === 1 ? [...(el.matches('button, input') ? [el] : []), ...el.querySelectorAll('button, input')] : []));
+  const before = controls(stand.slice().reverse());
+  const after = controls(made);
+  const active = inst.active();
+  before.forEach((el, i) => {
+    const next = after[i];
+    if (!next || next.tagName !== el.tagName) return;
+    if (el.tagName === 'INPUT' && el.value) next.value = el.value;
+    if (el === active) next.focus();
+  });
+  stand.forEach((n) => n.remove());
 }
