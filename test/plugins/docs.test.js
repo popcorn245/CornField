@@ -288,3 +288,199 @@ describe('the site', () => {
     }
   });
 });
+
+describe('inline Markdown', () => {
+  const html = (line) => renderMarkdown(line).html;
+
+  // What main rendered for each of these lines before the inline reader was made linear (nothing here may change)
+  it('renders legitimate but tricky lines as it always has', () => {
+    const cases = [
+    ["plain *em* and **strong** and ***both*** and _u_ and __uu__",
+      "<p>plain <em>em</em> and <strong>strong</strong> and <strong>*both</strong>* and <em>u</em> and <strong>uu</strong></p>"],
+    ["nested **bold *inner em* more** and *a **b** c*",
+      "<p>nested <strong>bold <em>inner em</em> more</strong> and <em>a <strong>b</strong> c</em></p>"],
+    ["[link](http://a.com/x_(y)_z \"ti(tle)\") and [b](<a b> 'x') and [c]( d  \"t\"  )",
+      "<p><a href=\"http://a.com/x_(y)_z\" title=\"ti(tle)\">link</a> and <a href=\"a b\" title=\"x\">b</a> and <a href=\"d\" title=\"t\">c</a></p>"],
+    ["`code [x](y) *a*` and ``a ` b`` and ` a ` and `unclosed",
+      "<p><code>code [x](y) *a*</code> and <code>a ` b</code> and <code>a</code> and `unclosed</p>"],
+    ["[a [nested] b](u) and [a](u(v(w))x) and [a](u(v) y",
+      "<p><a href=\"u\">a [nested] b</a> and <a href=\"u(v(w))x\">a</a> and [a](u(v) y</p>"],
+    ["![alt *x*](i.png \"t\") and [![img](i.png)](http://l.com) and ![a](<b c>)",
+      "<p><img src=\"i.png\" alt=\"alt x\" title=\"t\" loading=\"lazy\"> and <a href=\"http://l.com\"><img src=\"i.png\" alt=\"img\" loading=\"lazy\"></a> and <img src=\"b c\" alt=\"a\" loading=\"lazy\"></p>"],
+    ["\\*not em\\* \\[x\\](y) \\\\ \\` \\_ \\a end\\",
+      "<p>*not em* [x](y) \\ ` _ \\a end\\</p>"],
+    ["snake_case_name and _a_b_ and a_b_ and __init__ and _ a _ and * a *",
+      "<p>snake_case_name and <em>a_b</em> and a_b_ and <strong>init</strong> and _ a _ and * a *</p>"],
+    ["unbalanced ** and * and _ and __ and [x and x] and ](y) and [x](y",
+      "<p>unbalanced ** and * and _ and __ and [x and x] and ](y) and [x](y</p>"],
+    ["<http://a.com/b?c=d> <mailto:a@b.c> <notaurl> a < b > c <b>x</b> <!-- c -->",
+      "<p><a href=\"http://a.com/b?c=d\">http://a.com/b?c=d</a> <a href=\"mailto:a@b.c\">a@b.c</a> &lt;notaurl&gt; a &lt; b &gt; c &lt;b&gt;x&lt;/b&gt; &lt;!-- c --&gt;</p>"],
+    ["[a](u \"t\" x) [a](u 't') [a]() [a]( ) [](u) ![](u) [a](  )",
+      "<p>[a](u &quot;t&quot; x) <a href=\"u\" title=\"t\">a</a> a a <a href=\"u\"></a> <img src=\"u\" alt=\"\" loading=\"lazy\"> a</p>"],
+    ["[`a]`](u) [a\\]b](u) [a](u\\)v)",
+      "<p><a href=\"u\"><code>a]</code></a> <a href=\"u\">a]b</a> <a href=\"u)v\">a</a></p>"],
+    ["[[a]](u) [a][b] [a]: u",
+      "<p><a href=\"u\">[a]</a> [a][b] [a]: u</p>"],
+    ["*a*b *a*  *a *b* c* **a**b __a__b __a __b__ c__",
+      "<p><em>a</em>b <em>a</em>  <em>a *b</em> c* <strong>a</strong>b <strong>a__b __a __b</strong> c__</p>"],
+    ];
+    for (const [line, expected] of cases) expect(html(line), line).toBe(expected);
+  });
+
+  it('never lets a link, an image or a tag written in a doc become script', () => {
+    const cases = [
+    ["[x](javascript:alert(1))",
+      "<p>x</p>"],
+    ["[x](JaVaScRiPt:alert(1))",
+      "<p>x</p>"],
+    ["[x](data:text/html,<b>a</b>)",
+      "<p>x</p>"],
+    ["![x](javascript:alert(1))",
+      "<p>x</p>"],
+    ["![x](data:image/svg+xml,<svg onload=alert(1)>)",
+      "<p>![x](data:image/svg+xml,&lt;svg onload=alert(1)&gt;)</p>"],
+    ["[x](u \"a' onerror='alert(1)\")",
+      "<p><a href=\"u\" title=\"a&#39; onerror=&#39;alert(1)\">x</a></p>"],
+    ["[x](u '\" onerror=\"alert(1)')",
+      "<p><a href=\"u\" title=\"&quot; onerror=&quot;alert(1)\">x</a></p>"],
+    ["[x](\"onerror=alert(1))",
+      "<p><a href=\"&quot;onerror=alert(1)\">x</a></p>"],
+    ["[<script>alert(1)</script>](u)",
+      "<p><a href=\"u\">&lt;script&gt;alert(1)&lt;/script&gt;</a></p>"],
+    ["[<img src=x onerror=alert(1)>](u)",
+      "<p><a href=\"u\">&lt;img src=x onerror=alert(1)&gt;</a></p>"],
+    ["![<b>a</b> \"q\"](u \"<i>t</i>\")",
+      "<p><img src=\"u\" alt=\"a &quot;q&quot;\" title=\"&lt;i&gt;t&lt;/i&gt;\" loading=\"lazy\"></p>"],
+    ["<http://a.com/\"onmouseover=\"alert(1)>",
+      "<p><a href=\"http://a.com/&quot;onmouseover=&quot;alert(1)\">http://a.com/&quot;onmouseover=&quot;alert(1)</a></p>"],
+    ["[x](vbscript:a) [y](  javascript:a)",
+      "<p>x y</p>"],
+    ["[x](&#106;avascript:alert(1))",
+      "<p><a href=\"&amp;#106;avascript:alert(1)\">x</a></p>"],
+    ["[x](mailto:a@b.c) [y](https://a.com/?a=1&b=2) [z](#top) [w](../a.md)",
+      "<p><a href=\"mailto:a@b.c\">x</a> <a href=\"https://a.com/?a=1&amp;b=2\">y</a> <a href=\"#top\">z</a> <a href=\"../a.md\">w</a></p>"],
+    ["<p onclick=\"alert(1)\"><a href=\"javascript:alert(1)\" onclick=\"x\">t</a><img src=\"data:a\" onerror=\"x\"><img src=\"ok.png\" onerror=\"x\"><script>alert(1)</script></p>",
+      "<p><a>t</a><img loading=\"lazy\"><img src=\"ok.png\" loading=\"lazy\">alert(1)</p>"],
+    ];
+    for (const [line, expected] of cases) expect(html(line), line).toBe(expected);
+    // and the site's own link function still decides each target (null: the text without a link)
+    expect(renderMarkdown('[a](x.md) ![b](y.png)', { link: (h, { image }) => (image ? null : `/site/${h}`) }).html).toBe('<p><a href="/site/x.md">a</a> b</p>');
+  });
+
+  it('reads a link target as a browser does: a tab, a newline or a control character does not hide its scheme', () => {
+    for (const href of ['java\tscript:alert(1)', 'java\nscript:alert(1)', 'java\rscript:alert(1)', '\u0001javascript:alert(1)', '\u0000javascript:alert(1)', ' \tjavascript:alert(1)', 'data\t:text/html,x', 'vb\tscript:x']) {
+      const one = href.replace(/[\n\r]/g, '');
+      const md = `[x](${one}) ![y](${one})`;
+      expect(html(md), JSON.stringify(href)).not.toMatch(/href=|src=/);
+      const block = renderMarkdown(`<p><a href="${href}">x</a><img src="${href}"></p>`).html;
+      expect(block, JSON.stringify(href)).toBe('<p><a>x</a><img loading="lazy"></p>');
+    }
+    // A tab or a newline elsewhere is no scheme: a relative link and a web link are kept as written
+    expect(renderMarkdown('<p><a href="a\tb.md">x</a><a href="https://a.com/\tb">y</a></p>').html).toBe('<p><a href="a\tb.md">x</a><a href="https://a.com/\tb">y</a></p>');
+  });
+
+  it('keeps links, emphasis, lists and quotes nested 16 deep, and writes a deeper one as text', () => {
+    const links = (n, inner) => '['.repeat(n) + inner + '](u)'.repeat(n);
+    const count = (s, re) => (s.match(re) || []).length;
+    expect(count(html(links(16, 'a')), /<a href="u">/g)).toBe(16);
+    // The seventeenth stays as written, its marks and any tag in it escaped
+    const deep = html(links(17, '<b>x</b>'));
+    expect(count(deep, /<a href="u">/g)).toBe(16);
+    expect(deep).toContain('<a href="u">[&lt;b&gt;x&lt;/b&gt;](u)</a>');
+    // Emphasis counts as a level too: inside fifteen links it is read, inside sixteen it is text
+    expect(html(links(15, '*a* __b__'))).toContain('<a href="u"><em>a</em> <strong>b</strong></a>');
+    expect(html(links(16, '*a* __<i>b</i>__'))).toContain('<a href="u">*a* __&lt;i&gt;b&lt;/i&gt;__</a>');
+    expect(count(html('- '.repeat(16) + 'a'), /<ul>/g)).toBe(16);
+    expect(html('- '.repeat(17) + '<b>a')).toMatch(/<li>- &lt;b&gt;a<\/li>/);
+    expect(count(html('>'.repeat(16) + ' a'), /<blockquote>/g)).toBe(16);
+    expect(html('>'.repeat(17) + ' <b>a')).toMatch(/<blockquote>\n<p>&gt; &lt;b&gt;a<\/p>\n<\/blockquote>/);
+  });
+
+  it('reads a line of a hundred thousand nested marks, lists or quotes without running out of stack', () => {
+    for (const line of ['- '.repeat(100000) + 'a', '>'.repeat(200000) + 'a', '> 1. '.repeat(50000) + 'a', '['.repeat(50000) + 'a' + '](u)'.repeat(50000), '*'.repeat(200000) + 'a' + '*'.repeat(200000)]) {
+      expect(() => renderMarkdown(line)).not.toThrow();
+      expect(() => markdownLinks(line)).not.toThrow();
+    }
+  });
+});
+
+/** The best of a few runs of `fn`, in ms */
+const best = (fn, runs = 3) => {
+  let min = Infinity;
+  for (let r = 0; r < runs; r++) { const t = performance.now(); fn(); min = Math.min(min, performance.now() - t); }
+  return min;
+};
+
+describe('Markdown in linear time', () => {
+  // A line of one pattern over and over, at 64 KB and then 1 MB. Linear, each takes a few tens of milliseconds; the
+  // limits are far above that (a slow machine passes), and far below what a quadratic reader needs: it fails at 64 KB,
+  // and the 1 MB run (hours for it) is not reached
+  const SIZES = [[64 * 1024, 1000], [1024 * 1024, 5000]];
+  const PATTERNS = {
+    'a link that never ends': '[a](', 'an underscore run': '__a', 'a star run': '*a', 'an image start': '![', 'one backtick': '`',
+    'a code span that never ends': '`a', 'a longer backtick run': '``a`', 'a lone angle bracket': '<', 'an autolink that never ends': '<http://a',
+    'a backslash': '\\', 'an open bracket': '[', 'a close bracket': ']', 'a link and its destination, no text': '](', 'a destination in angle brackets': '[a](<',
+    'a destination with a parenthesis': '[a](x(', 'a title that never ends': '[a](u "', 'a bracket and a code span': '[`', 'a lone underscore': '_a ',
+    'a hard line break': 'a  \nb ', 'spaces after a link': '[a]( ',
+  };
+  const render = (s) => renderMarkdown(s).html;
+  for (const [what, unit] of Object.entries(PATTERNS)) {
+    it(`reads ${what} repeated to 1 MB in linear time`, () => {
+      for (const [size, limit] of SIZES) {
+        const s = unit.repeat(Math.ceil(size / unit.length));
+        const t = performance.now();
+        render(s);
+        expect(performance.now() - t, `${what} at ${size} bytes`).toBeLessThan(limit);
+      }
+    }, 60000);
+  }
+
+  it('reads brackets, parentheses, spaces and every mark mixed in linear time', () => {
+    const MIXED = {
+      'brackets open then closed': (n) => '['.repeat(n / 2) + ']'.repeat(n / 2),
+      'links nested': (n) => '[a'.repeat(n / 8) + '](u)'.repeat(n / 8),
+      'a little of everything': (n) => '[a](u) *b* _c_ `d` <e> \\f ![g](h) '.repeat(n / 36),
+      'parentheses around a link': (n) => '('.repeat(n / 2) + '[a]' + ')'.repeat(n / 2),
+      'a link then spaces': (n) => '[a](' + ' '.repeat(n),
+      'many links then spaces': (n) => '[a]('.repeat(n / 8) + ' '.repeat(n / 2),
+    };
+    for (const [what, make] of Object.entries(MIXED)) {
+      for (const [size, limit] of SIZES) {
+        const s = make(size);
+        const t = performance.now();
+        render(s);
+        expect(performance.now() - t, what).toBeLessThan(limit);
+      }
+    }
+  });
+
+  it('reads an HTML block with many tags, comments or fence lines in linear time', () => {
+    const lines = {
+      'tags that never end': '<p>' + '<a b'.repeat(300000), 'tags that end in a slash and a space': '<p>' + '<a b'.repeat(250000) + '/ >',
+      'comments that never end': '<p>' + '<!--'.repeat(250000), 'attributes with an open quote': '<p>' + '<img a="'.repeat(130000),
+      'a fence line with spaces and a backtick': '```' + ' '.repeat(1000000) + '`',
+    };
+    for (const [what, text] of Object.entries(lines)) {
+      for (const [size, limit] of SIZES) {
+        const t = performance.now();
+        renderMarkdown(text.slice(0, size));
+        expect(performance.now() - t, what).toBeLessThan(limit);
+      }
+    }
+  });
+
+  it('takes about four times as long for four times as much, over runs of the special characters', () => {
+    const marks = '[]()_*`\\<>!ab  \n"\'';
+    let seed = 20260513;
+    const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+    for (let k = 0; k < 30; k++) {
+      let unit = '';
+      for (let len = 1 + rnd(6); len > 0; len--) unit += marks[rnd(marks.length)];
+      const at = (size) => unit.repeat(Math.ceil(size / unit.length));
+      const small = best(() => render(at(20000)));
+      const large = best(() => render(at(80000)), 2);
+      // Four times the text; a quadratic reader takes sixteen times as long
+      expect(large, JSON.stringify(unit)).toBeLessThan(small * 9 + 150);
+    }
+  });
+});
