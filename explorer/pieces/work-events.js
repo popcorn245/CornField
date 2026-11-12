@@ -151,7 +151,7 @@ export function install(ctx) {
       const node = nodeById(nodeBtn.dataset.forgeNode);
       if (!node) return;
       selectNode(node, { frame: true });
-      if (isPhone()) collapseSheet('forge'); // the map and the node's sheet are what is wanted m.now
+      if (isPhone()) collapseSheet('forge'); // the map and the node's sheet are what is wanted now
       announce(`${node.label}, ${node.type}`);
       return;
     }
@@ -203,7 +203,7 @@ export function install(ctx) {
     else if (action.dataset.action === 'toggle-filters') { ui.filtersOpen = !ui.filtersOpen; fn.paintChip(); }
     else if (action.dataset.action === 'open-notes') fn.openNotes();
     else if (action.dataset.action === 'close-notes') fn.closeNotes();
-    else if (action.dataset.action === 'open-proposal' && isPhone()) collapseSheet('forge'); // the proposal's own bar and the map are what is wanted m.now
+    else if (action.dataset.action === 'open-proposal' && isPhone()) collapseSheet('forge'); // the proposal's own bar and the map are what is wanted now
     else if (action.dataset.action === 'idea-open') fn.toggleIdea(!ui.idea.open);
     else if (action.dataset.action === 'idea-send') {
       // Nothing of it may escape as an unhandled rejection: what went wrong is said, and the form is usable again

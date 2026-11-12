@@ -26,8 +26,8 @@
  *   (and GET /proposals, which the engine reads for the Specs tab: engine/proposal.js)
  *
  * Events and asks (instance.js lists them): hears `work:open-specs` (ask, answers true), `forge:can-start` (ask) and `forge:start`, `thread:open`,
- * `thread:start`, `threads:ensure`, `threads:index` (ask), `proposal:bar`, `proposal`, `decision`, `work:answer`, `scene`; says `work:waiting {total}`,
- * `work:available {on}`, `work:open {open}`, `proposal:waiting`, `proposal:waiting-reset`, `runs:map {active}`, `threads:changed`, `announce`.
+ * `thread:start`, `threads:ensure`, `threads:index` (ask), `proposal:bar`, `decision`, `work:answer`, `work:on` (ask), `scene`; says `work:waiting {total}`,
+ * `work:available {on}`, `proposal:waiting`, `proposal:waiting-reset`, `runs:map {active}`, `threads:changed`, `announce`.
  */
 
 import { place, scopeOf } from '../engine/piece.js';
@@ -81,7 +81,7 @@ export function mount(root, inst, options = {}) {
   // -- what the parts share: the state of this one panel, and the few things that are not functions ---------------------------------------
   /** @type {Record<string, any>} */
   const m = {
-    wired: false, runsTimer: 0, threadToken: 0, indexToken: 0, indexLoading: false, indexCache: null, listToken: 0, pullToken: 0, notesToken: 0,
+    runsTimer: 0, threadToken: 0, indexToken: 0, indexLoading: false, indexCache: null, listToken: 0, pullToken: 0, notesToken: 0,
     searchTimer: null, now: options.clock || (() => Date.now()), pageAway: false, specsTimer: 0, specsReading: false, primed: new Set(),
     shownKey: '', shownKind: '', returnTo: null, openerEl: null, merged: { entries: null, items: [] }, redrawRuns: new Set(), agentTrap: null, confirmTrap: null,
   };
@@ -259,7 +259,6 @@ export function mount(root, inst, options = {}) {
   }
 
   if (options.config) update({ config: options.config });
-  scope.own(() => { m.wired = false; });
 
   return {
     elements: made,
