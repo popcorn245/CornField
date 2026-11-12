@@ -1,5 +1,7 @@
-/* The element fills the box its host gives it. With no height of its own it is as tall as the floor below, so a map dropped in is visible; any
-   height, min-height or flex rule of the host's wins. Nothing inside is sized from the viewport.
-   `display` is the one thing it keeps for itself: a page's `* { all: revert }` would make the element inline, which has no box to fill. */
-:host { display: block !important; position: relative; min-width: 0; min-height: 16rem; contain: layout; color: var(--corn-text); font-family: var(--corn-font); }
+/* The element fills the box its host gives it, and the host's own rules on it win: its size, its display (a class that hides it), its margins.
+   Only `hidden` is !important: the attribute hides the element whatever the page's CSS says. Nothing else is: in a shadow root's :host an
+   !important beats every rule of the page, important or not, so with `display: block !important` a page's class could not hide the element.
+   The default size is the stage's (map-stage.css), inside the shadow root where no page rule reaches: a page that resets every element
+   (`* { all: revert }`) makes the element inline, and the map inside still has its box. Nothing inside is sized from the viewport. */
+:host { display: block; position: relative; min-width: 0; contain: layout; color: var(--corn-text); font-family: var(--corn-font); }
 :host([hidden]) { display: none !important; }

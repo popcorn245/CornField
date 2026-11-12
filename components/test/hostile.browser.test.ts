@@ -28,7 +28,7 @@ describe('a host page with hostile global CSS', () => {
   it('does not change the map: the same elements, the same boxes, the same picture', async () => {
     const topology = await smallTopology(40);
     // The host's box is the host's own (an inline style: what a page sets on the element it places); everything inside is the map's
-    const el = await mountMap({ renderer: 'canvas2d', theme: 'dark' }, { topology, style: 'width: 420px; height: 300px' });
+    const el = await mountMap({ renderer: 'canvas2d', theme: 'dark' }, { topology, style: 'display: block; width: 420px; height: 300px' });
     await frames(3);
     const before = { look: look(el), pixels: pixelsOf(canvasOf(el)), box: el.getBoundingClientRect().toJSON() };
     expect(Object.keys(before.look).length).toBeGreaterThanOrEqual(5);
@@ -43,9 +43,38 @@ describe('a host page with hostile global CSS', () => {
 
     expect(look(el)).toEqual(before.look);
     expect(pixelsOf(canvasOf(el))).toEqual(before.pixels);
-    expect(getComputedStyle(el).display).toBe('block'); // `all: revert` on the host would make it inline: the one thing it keeps for itself
     const canvas = canvasOf(el).getBoundingClientRect(); // the host's own border and padding (the page's rule) are the host's: what is inside is 420 by 300 still
     expect([canvas.width, canvas.height]).toEqual([420, 300]);
+  });
+
+  it('a page that resets every element makes the element inline, as it asked, and the map inside keeps its default box', async () => {
+    const el = await mountMap({ renderer: 'canvas2d' }, { topology: await smallTopology(40) });
+    const style = document.createElement('style');
+    style.setAttribute('data-hostile', '');
+    style.textContent = HOSTILE;
+    document.head.append(style);
+    await frames(4);
+    expect(getComputedStyle(el).display).toBe('inline'); // the page's rule wins on the element: nothing of the element's own is !important
+    const stage = el.shadowRoot!.querySelector('[data-corn="map-stage"]')!.getBoundingClientRect();
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    expect(stage.height).toBeGreaterThanOrEqual(16 * rem - 1); // the stage's own minimum, which no page rule reaches
+    expect(stage.width).toBeGreaterThan(200);
+    expect(canvasOf(el).getBoundingClientRect().height).toBeGreaterThanOrEqual(16 * rem - 1);
+  });
+
+  it('the page\'s own rules on the element win: a class hides it, a height sizes it, and a part can lower the default minimum', async () => {
+    const el = await mountMap({ renderer: 'canvas2d' }, { topology: await smallTopology(40), style: 'width: 600px' });
+    const style = document.createElement('style');
+    style.setAttribute('data-hostile', '');
+    style.textContent = 'corn-map.folded { display: none } corn-map.short { height: 120px } corn-map.short::part(map-stage) { min-height: 0 }';
+    document.head.append(style);
+    el.classList.add('folded');
+    await frames(2);
+    expect(getComputedStyle(el).display).toBe('none');
+    el.classList.replace('folded', 'short');
+    await frames(4);
+    expect(Math.round(el.getBoundingClientRect().height)).toBe(120);
+    expect(Math.round(canvasOf(el).getBoundingClientRect().height)).toBe(120);
   });
 
   it('and still takes input and says what it selects', async () => {
