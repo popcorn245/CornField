@@ -14,7 +14,8 @@
  *   update({ config, clock })   the config arrived (or changed): the panel starts, or does not. `isOn()` says which.
  *   destroy()                   every listener, timer and poll ends, the elements go, an answer still on its way is not heard
  *
- * What it asks of the server (all through `credentialed(inst)`, served paths only; docs/embedding.md lists which a sibling origin may reach: today none of these):
+ * What it asks of the server (all through `credentialed(inst)`, served paths only; server/embed.js `ROUTES` and docs/embedding.md say which a listed origin
+ * may reach: of these only GET /proposals, GET /api/forge/pulls/<n> and POST /api/forge/pulls/<n>/landing/cancel, which the proposal bar uses too):
  *   GET  /api/forge/{pulls,issues,threads}?state=<open|closed|all>&limit=100   GET /api/forge/deploys?limit=100   GET /api/forge/work
  *   GET  /api/forge/pulls/<n>   GET /api/forge/pulls/<n>/landing (approveLands)   POST /api/forge/pulls/<n>/landing/cancel {}
  *   POST /api/forge/pulls/<n>/merge {sha, ...}   POST /api/forge/pulls/<n>/rerun {sha, check}   GET /api/forge/pulls/<n>/build?slug=<slug>   POST /api/forge/pulls/<n>/build {digest, ...}
