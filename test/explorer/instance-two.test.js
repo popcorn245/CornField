@@ -791,11 +791,12 @@ describe('two Work panels in one document (step 6)', () => {
     expect(q(a, '#forge-confirm').hidden).toBe(false);
     expect(q(b, '#forge-confirm').hidden).toBe(true);
     expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
-    // a focus that lands elsewhere in A's root is brought back; in B's it is left alone
+    // a focus that lands elsewhere in A's root is brought back, and so is one in B's: B is behind A's scrim like the rest of the page
     q(a, '#forge-title').focus();
     expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
     q(b, '#forge-title').focus();
-    expect(b.inst.active()).toBe(q(b, '#forge-title'));
+    expect(a.inst.active()).toBe(q(a, '[data-action="forge-confirm-cancel"]'));
+    expect(b.inst.active()).toBe(null);
     q(a, '#forge-confirm').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(q(a, '#forge-confirm').hidden).toBe(true);
     expect(sa.calls.filter((c) => c.method === 'POST')).toEqual([]);

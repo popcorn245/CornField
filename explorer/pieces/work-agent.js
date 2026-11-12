@@ -10,15 +10,15 @@ import { trapTab } from '../focusables.js';
 import { option } from './work-common.js';
 
 export function install(ctx) {
-  const { ui, m, fn, root, $, scope } = ctx;
-  const { announce, t } = ctx.h;
+  const { inst, ui, m, fn, root, $ } = ctx;
+  const { announce, t, trapFocus } = ctx.h;
 
   const agentEl = () => $('agent-start');
 
   /** While the dialog is open the focus cannot leave it */
   function keepFocusInAgent(e) {
     const el = agentEl();
-    if (ui.agent && el && !el.contains(e.target)) $('agent-kind').focus();
+    if (ui.agent && el && !el.contains(inst.active())) $('agent-kind').focus(); // (the focus in the root's own tree: outside it, none)
   }
 
   /**
@@ -61,7 +61,7 @@ export function install(ctx) {
     go.disabled = false;
     go.removeAttribute('aria-busy');
     go.textContent = fn.askRunnerWords();
-    m.agentTrap = scope.listen(root, 'focusin', keepFocusInAgent);
+    m.agentTrap = trapFocus(keepFocusInAgent);
     agentEl().hidden = false;
     $('agent-kind').focus();
     announce(`${again ? t('startAgain') : t('startAgent')} on ${aboutWords(refs)}. ${confirmStartWords(refs, fn.forgeName())}`);

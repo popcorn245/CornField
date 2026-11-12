@@ -11,15 +11,15 @@ import { trapTab } from '../focusables.js';
 import { escapeHtml as escHtml } from '../../core/text.js';
 
 export function install(ctx) {
-  const { ui, m, fn, state, root, $, scope } = ctx;
-  const { announce, t } = ctx.h;
+  const { inst, ui, m, fn, $ } = ctx;
+  const { announce, t, trapFocus } = ctx.h;
 
   const confirmEl = () => $('forge-confirm');
 
   /** While the confirm step is open the focus cannot leave it: a focus that lands elsewhere is brought back */
   function keepFocusIn(e) {
     const el = confirmEl();
-    if (ui.confirm && el && !el.contains(e.target)) el.querySelector('[data-action="forge-confirm-cancel"]').focus();
+    if (ui.confirm && el && !el.contains(inst.active())) el.querySelector('[data-action="forge-confirm-cancel"]').focus(); // (the focus in the root's own tree: outside it, none)
   }
 
   /** Fills and opens the confirm step; the focus goes to Cancel. `what` is the model's: title, lines, checks, previews, note */
@@ -37,7 +37,7 @@ export function install(ctx) {
     go.removeAttribute('aria-busy');
     // The scrim covers the page for the pointer, aria-modal tells a reader the rest is out of play, and the focus stays in
     ui.confirm = state;
-    m.confirmTrap = scope.listen(root, 'focusin', keepFocusIn);
+    m.confirmTrap = trapFocus(keepFocusIn);
     el.hidden = false;
     el.querySelector('[data-action="forge-confirm-cancel"]').focus();
     announce(`${what.title} ${what.lines.map(([k, v]) => `${k}: ${v}`).join('. ')}. ${what.note} Cancel or ${goLabel}.`);

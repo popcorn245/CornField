@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended, the order it is mounted in
- * beside the proposal piece, and the one-dialog rule (spec 0011 D2, D3).
+ * The Work piece (pieces/work.js) on an instance of its own, as a host would mount it: what it must not do once it has ended, the order it is
+ * mounted in beside the proposal piece, the one-dialog rule, and the focus trap in a root that is not the document (spec 0011 D2, D3).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
@@ -196,4 +196,29 @@ describe('one dialog at a time', () => {
     one.work.destroy();
     one.inst.destroy();
   });
+});
+
+describe('the focus trap in a root that is not the document', () => {
+  for (const dialog of ['confirm', 'agent']) {
+    it(`brings the focus back when a script moves it to the host page behind the ${dialog} dialog`, async () => {
+      const srv = server();
+      const one = make(srv);
+      await settle();
+      one.work.openForge({ tab: 'pulls' });
+      await settle();
+      click(one.q('[data-forge-pr="7"]'));
+      await settle();
+      if (dialog === 'confirm') click(one.q('[data-forge-merge]')); else await one.work.openProposalStart('0042-x');
+      const box = one.q(dialog === 'confirm' ? '#forge-confirm' : '#agent-start');
+      expect(box.hidden).toBe(false);
+      expect(box.contains(document.activeElement)).toBe(true);
+      one.outside.focus();
+      expect(box.contains(document.activeElement)).toBe(true);
+      // closed, the trap is gone: the page has its focus back
+      one.work.destroy();
+      one.outside.focus();
+      expect(document.activeElement).toBe(one.outside);
+      one.inst.destroy();
+    });
+  }
 });

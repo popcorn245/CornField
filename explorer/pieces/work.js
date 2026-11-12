@@ -123,6 +123,17 @@ export function mount(root, inst, options = {}) {
     clearRunsOnMap: () => runsMap.clear(),
     setT,
     clearT,
+    /**
+     * Keeps the focus in an open dialog: `keep` hears every focus that lands inside the instance's root, and, when the root is not the document
+     * (an element or a shadow root in a host's page), every focus that lands outside the root too, which the root never hears, unless it landed in
+     * another open modal dialog (a second instance's: two traps never pull the focus between them). Returns how to stop.
+     */
+    trapFocus: (keep) => {
+      const offs = [scope.listen(ctx.root, 'focusin', keep)];
+      const inModal = (e) => (e.composedPath ? e.composedPath() : [e.target]).some((n) => n && n.nodeType === 1 && n.getAttribute('aria-modal') === 'true');
+      if (inst.doc && ctx.root !== inst.doc) offs.push(scope.listen(inst.doc, 'focusin', (e) => { if (!inst.active() && !inModal(e)) keep(e); }));
+      return () => offs.forEach((off) => off());
+    },
   };
   const ctx = { inst, ui: freshUi(), m, fn: {}, state: inst.state, root: inst.root || root, $: (id) => inst.el(id), scope, h, dead: false };
   const { ui, fn } = ctx;
