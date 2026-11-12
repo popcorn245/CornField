@@ -5,7 +5,7 @@
  * preset. A failed load is an error state on the page, with a retry, never a blank canvas.
  */
 
-import { state, touchScene } from './state.js';
+import { state, touchScene, pageInstance } from './state.js';
 import { computeDegreeCentrality, layoutOrbit, computeLaneLayout } from './layout.js';
 import { buildDataFlow } from './flows.js';
 import { render, fitGraphToViewport, fitPadding, ensureFlowLoop } from './render.js';
@@ -16,6 +16,7 @@ import { measureParams } from './bench.js';
 import { mergeLive, placeLiveNodes } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
 import { syncHint } from './hint.js';
+import { ensurePagePieces } from './page-pieces.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -162,9 +163,7 @@ export function syncViewUi() {
   if (map) map.setAttribute('aria-pressed', String(state.view !== 'dataflow' && state.view !== 'house'));
   const btn = $('preset-dataflow-btn');
   if (btn) btn.setAttribute('aria-pressed', String(preset));
-  const layersBtn = $('legend-toggle-btn');
-  if (layersBtn) layersBtn.classList.toggle('hx-layers-chip--dim', preset);
-  const note = $('layers-preset-note');
-  if (note) note.hidden = !preset;
+  ensurePagePieces(); // the Layers menu, if the page has its place
+  pageInstance().emit('view', state.view); // the Layers chip dims while the data-flow view is on (pieces/layers.js)
   syncHint(); // the hint's words for this view and pointer, and whether it shows (hint.js)
 }

@@ -636,16 +636,18 @@ describe('on a phone: bottom sheets', () => {
     document.addEventListener('click', seen);
     await selectNode(state.nodes.find((n     ) => n.id === 'app-a'));
     click(document.querySelector('#spec-drawer [data-action="close-drawer"]') );
+    expect(reached).toEqual(['close-drawer']);
+    // The node panel's Close is its own button now (pieces/node-panel.js): the click that got through closed the panel, where the page's click handler (main.js) did before
+    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
+    expect(sheetState('drawer')).toBe('peek');
+    await selectNode(state.nodes.find((n     ) => n.id === 'app-a'));
+    expect($('spec-drawer').dataset.sheetState).toBe('peek'); // the next node opens as a peek again
     click(document.querySelector('#spec-drawer [data-action="copy-spec"]') ); // anything else on a peek only expands it
     document.removeEventListener('click', seen);
     expect(reached).toEqual(['close-drawer']);
     expect($('spec-drawer').dataset.sheetState).toBe('expanded');
-    closeDrawer(); // what the Close button does (main.js)
-    expect($('spec-drawer').classList.contains('drawer-open')).toBe(false);
-    expect(sheetState('drawer')).toBe('peek');
-    await selectNode(state.nodes.find((n     ) => n.id === 'app-a'));
-    expect($('spec-drawer').dataset.sheetState).toBe('peek');
   });
+
 
   it('expands the panel on a tap on its peek title rather than closing it: only Close closes', async () => {
     await mountSheets();

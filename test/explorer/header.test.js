@@ -13,14 +13,16 @@ import { renderLayerToggles, LAYER_DEFS } from '../../explorer/layers.js';
 // @ts-expect-error plain JS modules, no declarations
 import { syncViewUi } from '../../explorer/view.js';
 // @ts-expect-error plain JS modules, no declarations
+import { ensurePagePieces } from '../../explorer/page-pieces.js';
+// @ts-expect-error plain JS modules, no declarations
 import { applyBranding } from '../../explorer/plugins.js';
 
-const html = explorerPage();
+const html = explorerPage(); // with the pieces' places: each test mounts them as page.js does
 const body = /<body>([\s\S]*)<\/body>/.exec(html)[1].replace(/<script[\s\S]*?<\/script>/g, '');
 const $ = (id) => document.getElementById(id);
 const header = () => document.querySelector('[data-corn="header"]');
 
-beforeEach(() => { document.body.innerHTML = body; Object.assign(state, { nodes: [], edges: [], activeLayers: {}, theme: 'dark', view: 'orbit', runsMap: null }); });
+beforeEach(() => { document.body.innerHTML = body; ensurePagePieces(); Object.assign(state, { nodes: [], edges: [], activeLayers: {}, theme: 'dark', view: 'orbit', runsMap: null }); });
 
 describe('the header, left to right', () => {
   it('has the brand, the View switch, the Layers chip, search, Work and the account menu, in that order', () => {
