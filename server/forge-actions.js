@@ -14,32 +14,35 @@
  * plan's `digest`: the server plans again and refuses (409) a plan that is not the one confirmed. They are idempotent: a
  * second ask answers 200 with what the first made (`created: false`) instead of making it again.
  *
- * In this order, each step refusing in words and the refusal written down:
+ * In this order, each step refusing in words:
  *
  *   1. POST only (405 otherwise); a signed-in maintainer only (the guard in front answers 401 and 403; without
  *      sign-in there is nobody to act as, 403)
- *   2. same origin only (`sameOrigin`, as the sign-out and the review PUT), with a JSON body: a form on another site
- *      can send neither
- *   3. not twice: one attempt at a time for the same action on the same target, a few seconds before it is asked
- *      again, and a ceiling per person per minute (429 with Retry-After). Before any of this, and before a row is
- *      written, a ceiling on attempts of any kind per person per minute (`ATTEMPTS_PER_MINUTE`): a page on a sibling
- *      subdomain is same-site, so the cookie rides along, and refused attempts must not grow the audit table without end
- *   4. the permission asked of the forge now, with their own token, never the session's kept copy: someone who has
+ *   2. same origin only (`sameOrigin`, as the sign-out and the review PUT; with a public URL, its scheme too): a form
+ *      on another site cannot send it. A page on a sibling subdomain is same-site, so the maintainer's cookie rides
+ *      along: its refusal (403) is not counted toward their ceiling below, and is written down at most once a minute
+ *      per person (server/throttle.js `noteRefusedOrigin`), so it can neither use up their budget nor grow the audit table
+ *   3. a ceiling on attempts of any kind per person per minute (`ATTEMPTS_PER_MINUTE`, 429 with Retry-After), before
+ *      a row is written: refused attempts must not grow the audit table without end. From here every refusal is a row
+ *   4. a JSON body (here up to 4 KB, the rest not read)
+ *   5. not twice: one attempt at a time for the same action on the same target, a few seconds before it is asked
+ *      again, and a ceiling of actions per person per minute (429 with Retry-After)
+ *   6. the permission asked of the forge now, with their own token, never the session's kept copy: someone who has
  *      stopped being a maintainer a minute ago is refused (403)
- *   5. the forge's own state, read now: the pull request is open and not a draft, every check on its head is green,
+ *   7. the forge's own state, read now: the pull request is open and not a draft, every check on its head is green,
  *      and `sha` is that head (409 otherwise: a push since they looked means they look again). `forge.merge` is the
  *      only way in, with `onlyIfGreen` and the sha: there is no force and no admin override to ask for. A re-run
  *      only takes a check the forge just listed as failed on that head, where `canRerun`. A pipeline step plans
  *      again from the forge (the issue is open; the review that approves is a maintainer's and was not edited) and
  *      only adds: a branch, a file, a pull request, an issue, never changes or removes one
  *
- * Every attempt under that ceiling, the ones refused and the ones the forge failed, is a row in `actions`
+ * Every attempt from cornfield's own page under that ceiling, the ones refused and the ones the forge failed, is a row in `actions`
  * (server/db.js), begun before anything is asked of the forge and finished with the answer after (`auth.begin`,
  * `auth.finish`). Without an audit to write to nothing is done.
  *
  * One more write is not about a pull request: **a new idea** (docs/threads.md), `POST /api/forge/threads { title, body }`, which opens an issue
  * with the threads label as the signed-in maintainer (`serveIdea`, below). It goes through the same doors, in the same order:
- * POST, signed in, the flood ceiling, an audit row begun, same origin, JSON (here up to 32 KB), not twice, the permission asked of
+ * POST, signed in, same origin, the flood ceiling, an audit row begun, JSON (here up to 96 KB), not twice, the permission asked of
  * the forge now. The row keeps the title and the text's length, never the text. It only adds: an issue, and on Forgejo the
  * threads label first when the repo lacks it (the answer, and so the row, says `labelsMade`).
  *

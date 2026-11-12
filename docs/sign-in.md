@@ -28,6 +28,8 @@ Listening on loopback is not enough on its own: a web page on another site can p
 
 Names are compared in any case and the port is ignored: DNS rebinding changes the name, not the port, and a proxy may or may not keep `:443`. A request with no `Host` (HTTP/1.0), with two, or whose request line names another host (`GET http://other/…`) does not pass, and `X-Forwarded-Host` is never read.
 
+**Writes come from cornfield's own page only.** Every change made with the session cookie (an action, a review, a token, sign-out) must also carry an `Origin` equal to the request's own `Host` (a `:443` or `:80` the proxy kept is allowed for), or a `Sec-Fetch-Site: same-origin` (the review and the Undo of a landing also take an origin listed in [`embed.origins`](embedding.md)); a page on another site, or on a sibling subdomain (same-site, so the cookie rides along), is refused with 403. With a public URL, a request under its host must also carry its scheme: `Origin: http://cornfield.example.org` is refused for `https://cornfield.example.org`. Behind a TLS-terminating proxy that passes the `Host` on, this is what the browser sends anyway. On a loopback name the scheme is not known, so only the host is compared. A refused write is not counted toward the flood ceiling of 60 attempts a minute ([issues and pull requests](issues-and-prs.md#what-the-server-checks-again)); on the actions, ideas, tokens and agent runs it is written down in the audit at most once a minute per person.
+
 ## What to set
 
 Sign-in is configured by env only, never by the config file:

@@ -10,6 +10,8 @@
  *                  anything is written down, so refused attempts cannot grow the audit table without end
  *   throttle       not twice: one at a time for the same key, `COOLDOWN_MS` before it is asked again, and a ceiling of
  *                  `PER_MINUTE` actions per person per minute
+ *   noteRefusedOrigin  a write refused for not coming from cornfield's own page, checked before `countAttempt` and never
+ *                  counted by it: written down at most once a minute per person, under a count of its own
  *
  * A refusal is a `Refused`: a status (429, or the action's own), words, a code and the headers to answer with.
  */

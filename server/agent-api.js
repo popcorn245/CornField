@@ -29,7 +29,8 @@
  * theirs and is never taken from the body. A body that carries a credential, by key or by value, is 400 and nothing is posted.
  *
  * The `/api/agent-runs` routes are the signed-in maintainer's, behind the sign-in guard like every other action. The POSTs take a request
- * from cornfield's own page only (`sameOrigin`) with a JSON body and count toward the flood ceiling (server/throttle.js); a token is no way
+ * from cornfield's own page only (`sameOrigin`, checked first and never counted) with a JSON body and count toward the flood ceiling
+ * (server/throttle.js); a token is no way
  * to them (the guard reads cookies, never `Authorization`). They post with the session's own forge token (`auth.forgeFor`).
  */
 
