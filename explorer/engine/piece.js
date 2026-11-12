@@ -8,10 +8,13 @@
  *   place(inst, root, html, slots, slot)   makes the piece's elements from `html` and puts them where the host says: before the node `slots[slot]` if
  *                             it is given (cornfield's page leaves a marker comment where each goes), else at the end of `root`; returns the
  *                             elements, which the piece removes on `destroy`. A stand-in the host's markup keeps before the marker for the
- *                             first paint (`<!--corn-placeholder:NAME/SLOT-->` and the piece's markup without ids) goes when the piece comes
+ *                             first paint (`<!--corn-placeholder:NAME/SLOT-->` and the piece's markup without ids) goes when the piece comes.
+ *                             The markup speaks in the instance's words (`inst.strings`) from the start
  *   withParts(html)           every hook of the markup also gets a `part` of the same name, so a host's stylesheet can reach it
  *                             from outside a shadow root (`::part(row)`)
  */
+
+import { applyStrings } from './strings.js';
 
 const HOOK = new RegExp('\\sdata-corn=\\"([^\\"]+)\\"');
 /** An element's data-corn hook is also its part, of the same name (and an element that has a part already keeps it) */
@@ -96,6 +99,7 @@ export function scopeOf(inst) {
 export function place(inst, root, html, slots, slot) {
   const template = inst.doc.createElement('template');
   template.innerHTML = withParts(html);
+  applyStrings(inst, template.content); // the instance's own words, where its host overrides one (`data-corn-string`): a host need not apply them after
   const made = [...template.content.children];
   const marker = slots && slot ? slots[slot] : null;
   if (marker && marker.parentNode) {

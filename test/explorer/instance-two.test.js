@@ -485,6 +485,23 @@ describe('two instances, each with its own node panel, Layers menu and search', 
     expect(q(b, '#drawer-file-btn').textContent).toBe('Open file ↗');
   });
 
+  it('make their markup in the instance\'s words from the start: a host need not apply them after mounting', () => {
+    const box = document.createElement('div');
+    a.root.append(box);
+    a.inst.strings.searchPlaceholder = 'Find a part';
+    a.inst.strings.copySpec = 'Copy as JSON';
+    const layers = layersPiece.mount(box, a.inst, { storageKey: null });
+    const search = searchPiece.mount(box, a.inst);
+    const panel = nodePanel.mount(box, a.inst);
+    expect(box.querySelector('[data-corn="layers-button"]').firstElementChild.textContent).toBe('Strata');
+    expect(box.querySelector('[data-corn="search-input"]').getAttribute('placeholder')).toBe('Find a part');
+    expect(box.querySelector('[data-action="copy-spec"]').textContent).toBe('Copy as JSON');
+    panel.destroy(); search.destroy(); layers.destroy();
+    delete a.inst.strings.searchPlaceholder;
+    delete a.inst.strings.copySpec;
+    box.remove();
+  });
+
   it('ending one piece takes its markup and its listeners and leaves the other instance as it was', () => {
     const snapshot = b.root.innerHTML;
     a.panel.destroy();
