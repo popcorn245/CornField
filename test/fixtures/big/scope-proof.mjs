@@ -86,6 +86,8 @@ function hostPage(host) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Polls `fn` (it may be async) until it is true, for at most `ms` */
+async function until(fn, ms = 30_000) { const end = Date.now() + ms; while (!(await fn())) { if (Date.now() > end) throw new Error(`timed out waiting for ${fn}`); await sleep(100); } }
 const checks = [];
 const check = (name, ok, detail = '') => { checks.push({ name, ok: !!ok, detail }); console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? `  (${detail})` : ''}`); };
 
@@ -140,7 +142,7 @@ async function main() {
       for (const [w, h, tag] of [[1440, 900, 'desktop'], [390, 844, 'phone']]) {
         await page.setViewportSize({ width: w, height: h });
         await sleep(500);
-        await page.screenshot({ path: path.join(SHOTS, `${name}-${tag}.png`) });
+        await page.screenshot({ path: path.join(SHOTS, `${name}-${tag}.png`), timeout: 180_000 });
       }
       await page.setViewportSize({ width: 1440, height: 900 });
     };
@@ -161,15 +163,16 @@ async function main() {
     {
       const a = await open(context, LISTED, null);
       await a.page.evaluate((src) => { document.querySelector('#stage').innerHTML = `<corn-map class="map" src="${src}" renderer="canvas2d"></corn-map>`; }, MAP);
-      await waitFor(a.page, () => window.__event && document.querySelector('corn-map')?.shadowRoot?.querySelector('canvas'), null);
-      await sleep(2500);
+      await until(() => a.events.some((e) => e.type === 'cornReady'));
+      await sleep(1500);
       const d = await drawn(a.page);
       check('a. signed in: <corn-map src> draws the server\'s map', d.w > 0 && !d.hasCard && a.events.some((e) => e.type === 'cornReady'), JSON.stringify(d));
       const before = await hostLook(a.page); // with the one default-tokens sheet the first corn-* element adds (zero specificity): the theme adds nothing more
       await shot(a.page, 'a1-signed-in-default');
       // with the server's theme
       await a.page.evaluate(() => { document.querySelector('corn-map').useTheme = true; });
-      await sleep(2500);
+      await until(async () => (await a.page.evaluate(() => getComputedStyle(document.querySelector('corn-map')).getPropertyValue('--corn-accent').trim())) === '#c8102e');
+      await sleep(1000);
       const themed = await a.page.evaluate(() => {
         const el = document.querySelector('corn-map');
         const sheets = el.shadowRoot.adoptedStyleSheets;
@@ -189,8 +192,8 @@ async function main() {
     // ---- a'. a scope around a map -------------------------------------------------------------------------------------------------------------
     {
       const s = await open(context, LISTED, `<corn-scope src="${MAP}" use-theme><corn-map class="map" id="m1" renderer="canvas2d"></corn-map></corn-scope>`);
-      await waitFor(s.page, () => document.querySelector('#m1')?.shadowRoot?.querySelector('canvas'), null);
-      await sleep(2500);
+      await until(() => s.events.some((e) => e.type === 'cornReady'));
+      await sleep(1500);
       const d = await drawn(s.page);
       check('scope. <corn-scope src> around a <corn-map> draws the server\'s map, and says cornReady', d.w > 0 && !d.hasCard && s.events.some((e) => e.type === 'cornReady'), JSON.stringify(s.events.map((e) => e.type)));
       // a second map in the scope is refused, and says why
@@ -236,12 +239,47 @@ async function main() {
       check('b. the sign-in went to the rig and came back to the host page', back, trail);
       // the host page is fresh again (a new document): put the tag in and the map is drawn with the new session
       await b.page.evaluate((src) => { document.querySelector('#stage').innerHTML = `<corn-map class="map" src="${src}" renderer="canvas2d"></corn-map>`; }, MAP);
-      await sleep(3500);
+      await until(() => b.page.evaluate(() => !!document.querySelector('corn-map')?.shadowRoot?.querySelector('canvas') && !document.querySelector('corn-map').shadowRoot.querySelector('[data-corn="source-status"]:not([hidden])')));
+      await sleep(1500);
       const d = await drawn(b.page);
       check('b. after signing in the map is drawn', d.w > 0 && !d.hasCard, JSON.stringify(d));
       await shot(b.page, 'b2-after-sign-in');
       results.requests.push(...b.log.all().map((r) => ({ case: 'b', ...r })));
       await b.page.close();
+    }
+
+    // ---- loading (the config held back for a while), the version notice (a host that fetched for itself), a dark sign-in ----------------------------------------
+    {
+      const l = await open(context, LISTED, null);
+      await l.page.route(`${MAP}/cornfield/config.json`, async (route) => { await sleep(5000); await route.continue(); });
+      await l.page.evaluate((src) => { document.querySelector('#stage').innerHTML = `<corn-map class="map" src="${src}" renderer="canvas2d"></corn-map>`; }, MAP);
+      await waitFor(l.page, () => document.querySelector('corn-map')?.shadowRoot?.querySelector('[data-corn="source-title"]'), null);
+      const text = await cardText(l.page);
+      check('loading: a quiet "Loading the map …"', /Loading the map/.test(text || ''), text);
+      await shot(l.page, 'f-loading');
+      await l.page.close();
+
+      const v = await open(context, LISTED, `<corn-scope id="s"><corn-map class="map" renderer="canvas2d"></corn-map></corn-scope>`);
+      await v.page.evaluate(async (src) => {
+        const topology = await (await fetch(`${src}/topology.json`, { credentials: 'include' })).json();
+        const config = await (await fetch(`${src}/cornfield/config.json`, { credentials: 'include' })).json();
+        const scope = document.querySelector('#s');
+        scope.config = { ...config, version: '99.1.0' };
+        scope.topology = topology;
+      }, MAP);
+      await until(() => v.page.evaluate(() => !!document.querySelector('corn-map')?.shadowRoot?.querySelector('[data-corn="source-notice"]:not([hidden])')));
+      await sleep(1000);
+      const notice = await v.page.evaluate(() => { const n = document.querySelector('corn-map').shadowRoot.querySelector('[data-corn="source-notice"]:not([hidden])'); return n ? n.textContent : null; });
+      check('version: a different minor or major shows the notice and the map keeps working; the host fetched for itself (no request of the scope\'s own)', /different versions/.test(notice || '') && v.events.some((e) => e.type === 'cornError' && e.detail.kind === 'version') && (await drawn(v.page)).w > 0, notice);
+      await shot(v.page, 'g-version-notice');
+      results.requests.push(...v.log.all().map((r) => ({ case: 'version', ...r })));
+      await v.page.close();
+
+      const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' }); // another visitor with no session
+      const dk = await open(fresh, LISTED, `<corn-map class="map" theme="dark" src="${MAP}" renderer="canvas2d"></corn-map>`);
+      await waitFor(dk.page, () => document.querySelector('corn-map')?.shadowRoot?.querySelector('[data-corn="source-sign-in"]'), null);
+      await shot(dk.page, 'b3-sign-in-dark');
+      await dk.page.close();
     }
 
     // ---- the server is down, a bad address, handed in ----------------------------------------------------------------------------------------
