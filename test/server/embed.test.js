@@ -575,9 +575,12 @@ describe('a listed sibling origin', () => {
       }
     });
 
-    it('with no origin listed, a listed-looking returnTo is not followed either', async () => {
+    it('with no origin listed, `returnTo` is not read at all: the sign-in ends where it did before the key', async () => {
       expect(await endsAt(plain, to('https://tasks.example.com/p'))).toBe('/');
-      expect(await endsAt(plain, to(`${PUBLIC}/p`))).toBe(`${PUBLIC}/p`);
+      // not even this server's own URL, or a path: before `embed.origins` the parameter did not exist
+      expect(await endsAt(plain, to(`${PUBLIC}/p`))).toBe('/');
+      expect(await endsAt(plain, to('/p'))).toBe('/');
+      expect(await endsAt(plain, `${to(`${PUBLIC}/p`)}&return=${encodeURIComponent('/?proposal=c')}`)).toBe(`${PUBLIC}/?proposal=c`);
     });
 
     it('keeps the way back through "try again" after a failed sign-in, and checks it again there', async () => {

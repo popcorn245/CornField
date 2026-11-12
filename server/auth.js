@@ -452,13 +452,15 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   /**
    * Where a sign-in may end, as it is kept and followed: a same-origin path (safeReturn: its rules are unchanged), or an absolute URL, which is
    * honoured only when its origin is this server's own (it is cut down to its path and query, then checked as a path) or exactly a listed one
-   * (kept as the URL parser reads it). Anything else is null, and the sign-in ends where it always has: on `/`.
+   * (kept as the URL parser reads it). Anything else is null, and the sign-in ends where it always has: on `/`. With no origin listed an
+   * absolute URL is never one (the sign-in is what it was before `embed.origins`).
    * @param {unknown} raw
    * @returns {string | null}
    */
   const wayBack = (raw) => {
     const path = safeReturn(raw);
     if (path) return path;
+    if (!embedOrigins.length) return null;
     const u = absoluteUrl(raw);
     if (!u) return null;
     return u.origin === publicUrl.origin ? safeReturn(`${u.pathname}${u.search}`) : listedReturn(raw, embedOrigins);
@@ -603,8 +605,8 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     const verifier = random();
     const expires = now() + STATE_MS;
     // The way back is signed with the state: a 5th part, base64url (no dots), empty for none. `returnTo` is an absolute URL (own or a listed
-    // origin); when it is none of those the sign-in goes on as if it had not been sent, with `return` (a path) as before
-    const back = wayBack(url.searchParams.get('returnTo')) ?? safeReturn(url.searchParams.get('return'));
+    // origin); when it is none of those, or no origin is listed, the sign-in goes on as if it had not been sent, with `return` (a path) as before
+    const back = (embedOrigins.length ? wayBack(url.searchParams.get('returnTo')) : null) ?? safeReturn(url.searchParams.get('return'));
     const payload = `${state}.${verifier}.${expires}.${back ? b64url(Buffer.from(back)) : ''}`;
     const q = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', state, code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256' });
     if (endpoints.scope) q.set('scope', endpoints.scope);
