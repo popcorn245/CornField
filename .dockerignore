@@ -1,4 +1,4 @@
-node_modules
+**/node_modules
 .git
 .github
 .claude
@@ -8,4 +8,7 @@ coverage
 *.log
 .env
 .env.*
-components
+# The components are built in the image's builder stage: it needs their sources, not a build or the tests and demo of a checkout
+components/dist
+components/test
+components/demo

@@ -36,7 +36,7 @@ const SLUG = '[^/]+';
 
 /**
  * The routes a listed origin may reach, and nothing else. `session`: behind the sign-in guard, so the credentialed form of CORS; `open`:
- * answered before it (the look of the sign-in pages: theme.css, a named theme, and the images and fonts a theme names).
+ * answered before it (the look of the sign-in pages: theme.css, a named theme, and the images and fonts a theme names; and the web components, which a browser loads without the cookie).
  * `methods` are what a preflight may ask for; `headers` are the request headers it may list (lowercase).
  * @type {readonly Route[]}
  */
@@ -58,6 +58,8 @@ export const ROUTES = Object.freeze([
   { test: '/cornfield/theme.css', kind: 'open', methods: READ, headers: [] },
   { test: /^\/cornfield\/theme\/[^/]+\.css$/, kind: 'open', methods: READ, headers: [] },
   { test: /^\/cornfield\/theme\/assets\/.+$/, kind: 'open', methods: READ, headers: [] },
+  // The web components (server/components.js): a host loads them as module scripts, which a browser fetches with CORS and without the cookie
+  { test: /^\/cornfield\/components\/.+$/, kind: 'open', methods: READ, headers: [] },
 ]);
 
 /**

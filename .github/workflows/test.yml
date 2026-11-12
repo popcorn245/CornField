@@ -52,8 +52,10 @@ jobs:
         run: npm run typecheck
       - name: Build (ES modules, tokens.css, type declarations)
         run: npm run build
-      - name: Tests in happy-dom, the generated tokens and types, the files of dist
+      - name: Tests in happy-dom, the generated tokens and types, the files of dist and the package, and a host page loading the build from a cornfield server (cross-origin, in headless Chrome)
         run: npm test
+      - name: The package holds exactly the files it should (a test holds the list; this prints it, what `npm publish` would send)
+        run: npm pack --dry-run
       - name: Tests in headless Chrome (drawing, selection, tokens, hostile CSS, axe, the demo page)
         run: npm run test:browser
       - name: Size budget (gzipped runtime and corn-map with its engine, at most 5% over)
@@ -71,6 +73,32 @@ jobs:
           docker run --rm -d --name cf --network host -v "$PWD:/repo:ro" -e CORNFIELD_PORT=3399 cornfield:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3399/cornfield/config.json >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3399/topology.json | node -e "const t = JSON.parse(require('fs').readFileSync(0, 'utf8')); if (!t.nodes.length) process.exit(1); console.log(t.nodes.length, 'nodes')"
+          docker stop cf
+      - name: The image serves the web components it built, and has none of the tools that built them
+        run: |
+          set -eu
+          docker run --rm -d --name cf --network host -v "$PWD:/repo:ro" -e CORNFIELD_PORT=3396 cornfield:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3396/healthz >/dev/null && break; sleep 1; done
+          fail() { echo "$1" >&2; docker stop cf >/dev/null; exit 1; }
+          # version.json says this checkout's version (the release sets it in package.json from the tag before it builds the image)
+          want="$(node -p "require('./package.json').version")"
+          got="$(curl -fsS http://127.0.0.1:3396/cornfield/components/version.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).cornfield")"
+          [ "$got" = "$want" ] || fail "version.json says $got, package.json says $want"
+          # corn-map.js is JavaScript, with nosniff, and a shared chunk it imports is served too
+          headers="$(curl -fsS -D - -o /dev/null http://127.0.0.1:3396/cornfield/components/corn-map.js)"
+          echo "$headers" | grep -iq '^content-type: application/javascript' || fail "corn-map.js is not JavaScript: $headers"
+          echo "$headers" | grep -iq '^x-content-type-options: nosniff' || fail 'corn-map.js has no nosniff'
+          chunk="$(curl -fsS http://127.0.0.1:3396/cornfield/components/corn-map.js | grep -o 'chunks/[A-Za-z0-9_-]*[.]js' | head -n 1)"
+          [ -n "$chunk" ] || fail 'corn-map.js imports no chunk'
+          curl -fsS -o /dev/null "http://127.0.0.1:3396/cornfield/components/$chunk"
+          # Nothing outside the build: a traversal, the manifest, a folder
+          for p in '../../package.json' '..%2f..%2fpackage.json' '%2e%2e/%2e%2e/etc/passwd' manifest.json chunks/ .env; do
+            code="$(curl -s --path-as-is -o /dev/null -w '%{http_code}' "http://127.0.0.1:3396/cornfield/components/$p")"
+            [ "$code" = 404 ] || fail "/cornfield/components/$p answered $code"
+          done
+          # No Vite, no StencilRS, no node_modules from components/ in the final image
+          docker exec cf sh -c 'test -f /opt/cornfield/components/dist/manifest.json && test ! -e /opt/cornfield/components/node_modules && test ! -e /opt/cornfield/components/src && test ! -e /opt/cornfield/node_modules/vite && test ! -e /opt/cornfield/node_modules/@stencil' || fail 'the image holds more of components/ than dist/'
+          docker exec cf du -sk /opt/cornfield/components
           docker stop cf
       - name: Beyond loopback it refuses, for the right reason, unless sign-in is configured with an https URL
         env:
@@ -101,6 +129,10 @@ jobs:
             [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker stop cf; exit 1; }
           done
           curl -s http://127.0.0.1:3397/ | grep -q 'Sign in with GitHub'
+          # …except the web components, which a browser fetches without the cookie (they are the published package); with no embed.origins there is no CORS header
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3397/cornfield/components/version.json)
+          [ "$code" = 200 ] || { echo "the components answered $code without a session" >&2; docker stop cf; exit 1; }
+          if curl -sI -H 'Origin: null' http://127.0.0.1:3397/cornfield/components/corn-map.js | grep -qi '^access-control-'; then echo 'a CORS header with no origin listed' >&2; docker stop cf; exit 1; fi
           # Behind a proxy that passes Host through, the public name reaches the guard too
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: cornfield-ci' http://127.0.0.1:3397/topology.json)
           [ "$code" = 401 ] || { echo "the public Host answered $code" >&2; docker stop cf; exit 1; }

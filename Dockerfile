@@ -1,4 +1,7 @@
-# cornfield: the always-on dashboard, as one small image. No build step: the modules run as written.
+# cornfield: the always-on dashboard, as one small image. No build step for cornfield itself: its modules run as written.
+# The one thing built is the web components (components/, spec 0011 D11), in a builder stage that is thrown away: the final image takes
+# only its dist/ (the ES modules, tokens.css, types, version.json, manifest.json), which the server serves at /cornfield/components/.
+# It has no Vite, no StencilRS and no node_modules from components/. A checkout that runs `node cli/cornfield.js` builds nothing.
 #
 #   docker build -t cornfield .
 #   docker run --rm --network host -v "$PWD:/repo:ro" -v cornfield-data:/data cornfield
@@ -9,6 +12,23 @@
 # forge sign-in and an https CORNFIELD_PUBLIC_URL (the server refuses anything else at startup), give it the
 # secrets through the environment when it starts (never in the image), and put a reverse proxy in front.
 # See compose.example.yml and docs/deploy.md.
+
+# --- the builder: the components, built with the version in package.json (the release sets it from the tag first) ---
+# On glibc (Debian), not Alpine: StencilRS's native binary is published for linux-x64-gnu and linux-arm64-gnu only, and does not load on musl.
+# On the build machine's own platform ($BUILDPLATFORM), never emulated: what it makes is plain JS, CSS and JSON, the same for every target platform,
+# so a multi-platform build needs a StencilRS binary for the builder's platform only. The final image below stays Alpine.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS components
+WORKDIR /src
+# What the build reads besides components/: the version (package.json) and the engine the components wrap (explorer/, core/)
+COPY package.json ./
+COPY core ./core
+COPY explorer ./explorer
+COPY components/package.json components/package-lock.json ./components/
+RUN cd components && npm ci --ignore-scripts --no-audit --no-fund
+COPY components ./components
+RUN cd components && npm run build
+
+# --- the image ---
 FROM node:22-alpine
 
 ENV NODE_ENV=production \
@@ -26,6 +46,8 @@ COPY explorer ./explorer
 COPY plugins ./plugins
 COPY server ./server
 COPY LICENSE README.md CHANGELOG.md ./
+# The built components, from the builder, and nothing else of it (server/components.js: the folder is components/dist beside the server)
+COPY --from=components /src/components/dist ./components/dist
 
 # /data is the volume's first content, so a new named volume is created owned by node (cornfield keeps the folder 0700 and cornfield.db 0600)
 RUN mkdir -p /data /repo && chown node:node /data && chmod 700 /data
