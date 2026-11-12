@@ -42,6 +42,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, ran
 import { createForge as defaultCreateForge, isMaintainer, ForgeError } from './forge.js';
 import { githubApiUrl } from './forge-github.js';
 import { sameOrigin } from './proposals.js';
+import { absoluteUrl, listedReturn } from './embed.js';
 import { revokeOwnerTokens } from './review-tokens.js';
 import { appNameOf, brandImages } from '../core/brand.js';
 import { brandHead, escapeHtml, themeHead, themeHtmlTag } from './page-head.js';
@@ -326,10 +327,14 @@ export function safeReturn(raw) {
   return back;
 }
 
-/** The sign-in start, with the way back (checked by safeReturn) when there is one */
+/**
+ * The sign-in start, with the way back when there is one: a path (checked by safeReturn) as `return`, or an absolute URL the caller has
+ * already had checked (it comes from a signed state cookie) as `returnTo`, which /auth/start checks again against the listed origins
+ */
 const startHref = (returnTo) => {
   const back = safeReturn(returnTo);
-  return `/auth/start${back && back !== '/' ? `?return=${encodeURIComponent(back)}` : ''}`;
+  if (back) return `/auth/start${back !== '/' ? `?return=${encodeURIComponent(back)}` : ''}`;
+  return typeof returnTo === 'string' && absoluteUrl(returnTo) ? `/auth/start?returnTo=${encodeURIComponent(returnTo)}` : '/auth/start';
 };
 
 /** A proposal slug, as `?proposal=` names one (core/proposal.js: kebab case); at most 100 characters */
@@ -442,6 +447,22 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   const SESSION_COOKIE = secure ? '__Host-cornfield' : 'cornfield';
   const STATE_COOKIE = secure ? '__Host-cornfield-oauth' : 'cornfield-oauth';
   const publicHost = publicUrl.hostname;
+  // The sibling origins a sign-in may end on (config `embed.origins`, server/embed.js)
+  const embedOrigins = config.embed?.origins ?? [];
+  /**
+   * Where a sign-in may end, as it is kept and followed: a same-origin path (safeReturn: its rules are unchanged), or an absolute URL, which is
+   * honoured only when its origin is this server's own (it is cut down to its path and query, then checked as a path) or exactly a listed one
+   * (kept as the URL parser reads it). Anything else is null, and the sign-in ends where it always has: on `/`.
+   * @param {unknown} raw
+   * @returns {string | null}
+   */
+  const wayBack = (raw) => {
+    const path = safeReturn(raw);
+    if (path) return path;
+    const u = absoluteUrl(raw);
+    if (!u) return null;
+    return u.origin === publicUrl.origin ? safeReturn(`${u.pathname}${u.search}`) : listedReturn(raw, embedOrigins);
+  };
   /** @type {import('node:sqlite').DatabaseSync | null} */
   let db = null;
   /** @type {Promise<import('node:sqlite').DatabaseSync> | null} */
@@ -476,10 +497,11 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
   };
   /** Where a sign-in ends: the checked way back as an absolute URL on the public origin, or `/` */
   const landAt = (back) => {
-    const path = safeReturn(back);
+    const path = wayBack(back);
     if (!path) return '/';
     const to = new URL(path, publicUrl);
-    return to.origin === publicUrl.origin ? to.href : '/';
+    // A listed origin's URL is absolute and stays as checked; a path is made absolute on the public origin
+    return to.origin === publicUrl.origin || embedOrigins.includes(to.origin) ? to.href : '/';
   };
   const clearSession = cookie(SESSION_COOKIE, '', { maxAge: 0, secure });
   const clearState = cookie(STATE_COOKIE, '', { maxAge: 0, secure });
@@ -580,8 +602,9 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     const state = random();
     const verifier = random();
     const expires = now() + STATE_MS;
-    // The way back is signed with the state: a 5th part, base64url (no dots), empty for none
-    const back = safeReturn(url.searchParams.get('return'));
+    // The way back is signed with the state: a 5th part, base64url (no dots), empty for none. `returnTo` is an absolute URL (own or a listed
+    // origin); when it is none of those the sign-in goes on as if it had not been sent, with `return` (a path) as before
+    const back = wayBack(url.searchParams.get('returnTo')) ?? safeReturn(url.searchParams.get('return'));
     const payload = `${state}.${verifier}.${expires}.${back ? b64url(Buffer.from(back)) : ''}`;
     const q = new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: 'code', state, code_challenge: b64url(createHash('sha256').update(verifier).digest()), code_challenge_method: 'S256' });
     if (endpoints.scope) q.set('scope', endpoints.scope);
@@ -599,7 +622,7 @@ export function createAuth(config, { env = process.env, now = Date.now, fetch: d
     if (!sameText(mac, macOf(keys.mac, `state:${state}.${verifier}.${expires}.${back}`))) return { error: 'The sign-in was started in another browser, or too long ago.' };
     if (!(Number(expires) > now())) return { error: 'The sign-in took too long.' };
     if (!sameText(state, url.searchParams.get('state') || '')) return { error: 'The sign-in came back with an answer to another request.' };
-    return { verifier, returnTo: safeReturn(back ? Buffer.from(back, 'base64url').toString('utf8') : '') };
+    return { verifier, returnTo: wayBack(back ? Buffer.from(back, 'base64url').toString('utf8') : '') };
   }
 
   /**

@@ -30,6 +30,7 @@
  *     brand: {},                              // { logo, wordmark, favicon, appName, color, background }: a repo's own logo and name, images from the repo (docs/config.md#brand)
  *     layers: {},                             // { add: [{ key, label, desc?, match }], off: [keys], order: [keys] }: a repo's own layers in the Layers menu, as data (docs/config.md#layers)
  *     strings: {},                            // { approve: 'Ship it', … }: a repo's own words for the visible labels, plain text (core/strings.js, docs/theming.md#words)
+ *     embed: { origins: [] },                 // exact origins of sibling apps that may read, and decide a review, as the signed-in maintainer (docs/embedding.md)
  *     proxy: {},                              // { '/api/': 'http://127.0.0.1:3245' }: same-origin paths for a live source
  *     importMap: {},                          // bare imports a repo-local browser module needs: { name: '/repo/path.js' }
  *     dataDir: null,                          // where cornfield keeps its own state (reviews; the SQLite file in v1)
@@ -176,6 +177,7 @@ export const DEFAULTS = Object.freeze({
   brand: { logo: null, wordmark: null, favicon: null, appName: null, color: null, background: null },
   strings: {},
   layers: { add: [], off: [], order: [] },
+  embed: { origins: [] },
   proxy: {},
   importMap: {},
   dataDir: null,
@@ -207,6 +209,58 @@ const isForgeOrigin = (url) => {
     return m[1].startsWith('[') || u.hostname === m[1].toLowerCase();
   } catch { return false; }
 };
+
+/** The names a plain `http` origin may have: this machine's own (`localhost`, any `*.localhost`, `127.0.0.1`, `[::1]`) */
+const isLoopbackName = (host) => host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '[::1]';
+const EMBED_ORIGIN = /^(https?):\/\/([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]+\])(?::(\d{1,5}))?$/i;
+/** The most origins `embed.origins` may list: each one is trusted with the maintainer's session, so the list is short on purpose */
+export const MAX_EMBED_ORIGINS = 20;
+
+/**
+ * An `embed.origins` entry as one canonical origin (`https://tasks.example.com`, `http://localhost:5173`), or what is wrong with it, in words.
+ * Exact only: a scheme, a host and an optional port; no path (not even a trailing slash), query, fragment or user name, and no wildcard.
+ * `https` only, except `http` for this machine's own names. The scheme and host are lowercased and a default port is dropped, so the same origin
+ * written two ways is one entry. A host the URL parser would rewrite (`https://2130706433`, `https://0x7f.1`) is refused.
+ * @param {unknown} value
+ * @returns {{ origin: string } | { problem: string }}
+ */
+export function embedOrigin(value) {
+  if (typeof value !== 'string' || value === '') return { problem: 'is an origin like https://tasks.example.com, as text.' };
+  if (value.includes('*')) return { problem: `"${value}" has a wildcard: list each origin exactly, like https://tasks.example.com.` };
+  if (/\s/.test(value) || value.length > 300) return { problem: `"${value.slice(0, 80)}" is not an origin: no spaces, and at most 300 characters.` };
+  if (value.includes('\\')) return { problem: `"${value}" has a backslash: write the origin with forward slashes, like https://tasks.example.com.` };
+  if (value.includes('@')) return { problem: `"${value}" has a user name: an origin is a scheme, a host and a port, like https://tasks.example.com.` };
+  if (!/^https?:\/\//i.test(value)) return { problem: `"${value}" has no https:// in front: write the whole origin, like https://tasks.example.com.` };
+  if (/^https?:\/\/[^/?#]*[/?#]/i.test(value)) return { problem: `"${value}" has a path, query or fragment (a trailing slash counts): list the origin only, like https://tasks.example.com.` };
+  const m = EMBED_ORIGIN.exec(value);
+  if (!m) return { problem: `"${value}" is not an origin: a scheme, a host name (or a bracketed IPv6 address) and an optional port, like https://tasks.example.com.` };
+  const [, scheme, host, port] = m;
+  if (port !== undefined && (String(Number(port)) !== port || Number(port) < 1 || Number(port) > 65535)) return { problem: `"${value}" has a port that is not a number from 1 to 65535.` };
+  let u;
+  try { u = new URL(value.toLowerCase()); } catch { return { problem: `"${value}" is not a URL the browser would read as written.` }; }
+  if (u.hostname !== host.toLowerCase()) return { problem: `"${value}" would be read as ${u.hostname}: write the host the way a browser shows it.` };
+  if (scheme.toLowerCase() === 'http' && !isLoopbackName(u.hostname)) return { problem: `"${value}" is plain http: only https, or http for localhost, a *.localhost name, 127.0.0.1 or [::1], because the maintainer's session would otherwise be offered to a page that travels in the clear.` };
+  return { origin: u.origin };
+}
+
+/** What is wrong with `embed`, in words: only `origins`, a short list of exact origins, none twice */
+function embedProblems(e) {
+  const out = [];
+  if (e === undefined || e === null) return out;
+  if (!isObject(e)) return ['"embed" is { origins: ["https://tasks.example.com"] }.'];
+  for (const k of Object.keys(e)) if (k !== 'origins') out.push(`embed.${k}: the only key is origins.`);
+  if (e.origins === undefined) return out;
+  if (!Array.isArray(e.origins)) return [...out, 'embed.origins is a list of origins, like ["https://tasks.example.com"].'];
+  if (e.origins.length > MAX_EMBED_ORIGINS) out.push(`embed.origins lists ${e.origins.length} origins; at most ${MAX_EMBED_ORIGINS}: each one is trusted with the maintainer's session.`);
+  const seen = new Set();
+  e.origins.forEach((o, i) => {
+    const r = embedOrigin(o);
+    if ('problem' in r) out.push(`embed.origins[${i}] ${r.problem}`);
+    else if (seen.has(r.origin)) out.push(`embed.origins[${i}] "${o}" is listed twice.`);
+    else seen.add(r.origin);
+  });
+  return out;
+}
 
 /**
  * What is wrong with a config object (as the file exports it, before defaults).
@@ -369,6 +423,7 @@ export function configProblems(c) {
   out.push(...brandProblems(c.brand));
   out.push(...stringsProblems(c.strings));
   out.push(...layersProblems(c.layers));
+  out.push(...embedProblems(c.embed));
   if (c.proxy !== undefined) {
     if (!isObject(c.proxy)) out.push('"proxy" is { "/path/": "http://upstream" }.');
     else for (const [p, t] of Object.entries(c.proxy)) {
@@ -559,6 +614,8 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
   config.brand = { ...DEFAULTS.brand, ...(raw.brand || {}) };
   config.strings = { ...(raw.strings || {}) };
   config.layers = clientLayers(raw.layers); // checked above: only the known keys, as plain data
+  // The origins that may embed this server, as canonical origins (checked above): [] unless the file lists some
+  config.embed = { origins: (Array.isArray(raw.embed?.origins) ? raw.embed.origins : []).map((o) => /** @type {{ origin: string }} */ (embedOrigin(o)).origin) };
   // `threads: false` stays false; an object is read over the default
   config.threads = raw.threads === false ? false : { ...DEFAULTS.threads, ...(raw.threads || {}) };
   // `hookPoll: false` is `{ specs: false }`; an object is read over the default

@@ -44,8 +44,9 @@
  * no session is the sign-in page or a 401, a non-maintainer the "ask a maintainer" page or a 403. Without it, `listen`
  * only binds to loopback (server/bind.js); with it and an https public URL, it may bind to any address.
  *
- * No CORS headers: the explorer and its sources are all same-origin, so no other site's page has any
- * business reading what cornfield serves.
+ * No CORS headers, unless the config's `embed.origins` lists a sibling app's origin: then that exact origin may read the routes
+ * server/embed.js names, and make two writes, as the signed-in maintainer (docs/embedding.md). The explorer and its sources are
+ * all same-origin, so no other site's page has any business reading what cornfield serves.
  */
 
 import fs from 'node:fs';
@@ -73,6 +74,7 @@ import { assertBind, hostAllowed } from './bind.js';
 import { createAuth, signInSettings } from './auth.js';
 import { createHooks, hooksSettings } from './hooks.js';
 import { createLander } from './lander.js';
+import { createEmbed } from './embed.js';
 import { createSpecPoll } from './spec-poll.js';
 import { createRunnerWatch, runnerPresence } from './runner-presence.js';
 import { createTriggers } from './triggers.js';
@@ -308,7 +310,9 @@ export function createCornfieldServer(config, opts = {}) {
   const brandFile = brandFilesOf(config);
   const repoModules = repoModuleDirs(config);
   const publicHost = config.publicUrl ? new URL(config.publicUrl).hostname : null;
-  const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost };
+  // The sibling origins that may read and decide a review as the signed-in maintainer (server/embed.js): none unless `embed.origins` lists some
+  const embed = createEmbed(config.embed?.origins ?? []);
+  const where = { root, proposals: config.proposals, worktrees: config.worktrees, worktreeMaxAgeDays: config.worktreeMaxAgeDays, topology: config.topology, dataDir: config.dataDir, publicHost, embedOrigins: embed.origins };
   const fixtureCache = new Map();
   // What the line above Approve says an approval does besides posting (spec 0007 D1, server/decision.js): landing, and the run a trigger asks for
   const approvalRun = triggersOf(config).find(([event]) => event === 'spec.approved');
@@ -434,6 +438,16 @@ export function createCornfieldServer(config, opts = {}) {
       return res.end('400 Bad Request');
     }
 
+    // A listed sibling origin (config `embed.origins`) reads the routes server/embed.js names: its headers go on the answer whatever the answer is, and its
+    // preflight is answered here, before the guard (a preflight carries no cookie). With no origin listed both are nothing
+    const preflight = embed.preflight(req, reqPath);
+    if (preflight) {
+      req.resume();
+      res.writeHead(preflight.status, preflight.headers);
+      return res.end();
+    }
+    for (const [name, value] of Object.entries(embed.headers(req, reqPath))) res.setHeader(name, value);
+
     // A runner token is good for the runner routes only: on any other route it is refused here, before anything else is looked at
     if (presentedScope(req) === 'runner' && !takesTokens(reqPath, { reviews: REVIEWS_PATH })) return serveStrayRunner(req, res, reqPath, { config, auth, now: opts.now });
 
@@ -464,7 +478,7 @@ export function createCornfieldServer(config, opts = {}) {
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
     if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost })) return;
     if (await serveRunRoutes(req, res, reqPath, { config, auth, runs, session: gate.session, now: opts.now, publicHost })) return;
-    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost, embedOrigins: embed.origins })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
