@@ -30,6 +30,8 @@ node test/fixtures/big/scope-proof.mjs     # `<corn-map src>` and `<corn-scope>`
 node test/fixtures/big/review-proof.mjs [--shots <dir>] [--only open,decide,signedout,unlisted,keys,axe]
 # (g) the requests of a decision in `<corn-review>` against cornfield's own page's for the same steps, byte for byte (ports 3930-3939, forge 4030, 4032)
 node test/fixtures/big/review-requests.mjs [--only approve,sendback,stale,refusals,signedout]
+# (h) the map's first fit against a stage that is sized after the page began to load (issue #253); `--url` reads a rig that is already up (0.50.1 fails it), `--components` adds a `<corn-map>` (needs the built package)
+node test/fixtures/big/first-fit-proof.mjs [--url http://127.0.0.1:3981/] [--components]      # ports 3940-3941
 ```
 
 Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.

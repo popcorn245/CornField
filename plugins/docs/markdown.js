@@ -24,7 +24,7 @@ const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
  * An href or src the page may keep: http(s), mailto, or a relative or anchor link. Checked also as a browser reads
  * it, which drops every tab and newline and any control or space at the start, so `java\tscript:` is `javascript:`.
  */
-const safeUrl = (u) => {
+export const safeUrl = (u) => {
   if (typeof u !== 'string') return null;
   const read = u.replace(/[\t\n\r]/g, '').replace(/^[\u0000- ]+/, '');
   return (WEB_URL.test(u) || !SCHEME.test(u.trim())) && (WEB_URL.test(read) || !SCHEME.test(read)) ? u : null;
