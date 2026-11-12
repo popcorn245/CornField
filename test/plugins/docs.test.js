@@ -484,3 +484,224 @@ describe('Markdown in linear time', () => {
     }
   });
 });
+
+describe('block Markdown', () => {
+  const html = (md) => renderMarkdown(md).html;
+
+  // What main rendered for each of these before the block reader was made linear (nothing here may change)
+  it('reads headings as it always has', () => {
+    const cases = [
+      ["#",
+        "<h1 id=\"\"><a class=\"anchor\" href=\"#\" aria-hidden=\"true\">#</a></h1>"],
+      ["# ",
+        "<h1 id=\"\"><a class=\"anchor\" href=\"#\" aria-hidden=\"true\">#</a></h1>"],
+      ["#\ta",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a</h1>"],
+      ["  # a  ",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a</h1>"],
+      ["   ### a ###  ",
+        "<h3 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a</h3>"],
+      ["# a #",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a</h1>"],
+      ["# a #b",
+        "<h1 id=\"a-b\"><a class=\"anchor\" href=\"#a-b\" aria-hidden=\"true\">#</a>a #b</h1>"],
+      ["# a\\#",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a#</h1>"],
+      ["# ###",
+        "<h1 id=\"\"><a class=\"anchor\" href=\"#\" aria-hidden=\"true\">#</a>###</h1>"],
+      ["#  x  ###\t",
+        "<h1 id=\"x\"><a class=\"anchor\" href=\"#x\" aria-hidden=\"true\">#</a>x</h1>"],
+      ["####### a",
+        "<p>####### a</p>"],
+      ["#a",
+        "<p>#a</p>"],
+      ["    # a",
+        "<p># a</p>"],
+      ["## a ## ##",
+        "<h2 id=\"a-\"><a class=\"anchor\" href=\"#a-\" aria-hidden=\"true\">#</a>a ##</h2>"],
+      ["# a b",
+        "<p># a b</p>"],
+      ["# a",
+        "<p># a</p>"],
+      ["# a \t# \t",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a</h1>"],
+      ["# a#",
+        "<h1 id=\"a\"><a class=\"anchor\" href=\"#a\" aria-hidden=\"true\">#</a>a#</h1>"],
+      ["# # #",
+        "<h1 id=\"\"><a class=\"anchor\" href=\"#\" aria-hidden=\"true\">#</a>#</h1>"],
+      ["###### six *em*",
+        "<h6 id=\"six-em\"><a class=\"anchor\" href=\"#six-em\" aria-hidden=\"true\">#</a>six <em>em</em></h6>"],
+      ["x\n# y\nz",
+        "<p>x</p>\n<h1 id=\"y\"><a class=\"anchor\" href=\"#y\" aria-hidden=\"true\">#</a>y</h1>\n<p>z</p>"],
+    ];
+    for (const [md, expected] of cases) expect(html(md), JSON.stringify(md)).toBe(expected);
+  });
+
+  it('reads tables, ragged rows and separators as it always has', () => {
+    const cases = [
+      ["a|b|c\n:-|:-:|-:\n1\n1|2|3|4",
+        "<div class=\"table\"><table>\n<thead><tr><th style=\"text-align:left\">a</th><th style=\"text-align:center\">b</th><th style=\"text-align:right\">c</th></tr></thead>\n<tbody>\n\n</tbody>\n</table></div>\n<p>1\n1|2|3|4</p>"],
+      [" | a | b |\n|---|---|\n| x \\| y | `a|b` |",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>x | y</td><td><code>a|b</code></td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n| - | - |\n1|2",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>1</td><td>2</td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n ---- | ---- \n1|2",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>1</td><td>2</td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n    |-|-|\n1|2",
+        "<p>a|b\n|-|-|\n1|2</p>"],
+      ["a|b\n    -|-\n1|2",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>1</td><td>2</td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n\t-|-",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n\n</tbody>\n</table></div>"],
+      ["a|b\n- |-\n1|2",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n<tr><td>1</td><td>2</td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n:--:|:-\n|",
+        "<div class=\"table\"><table>\n<thead><tr><th style=\"text-align:center\">a</th><th style=\"text-align:left\">b</th></tr></thead>\n<tbody>\n<tr><td style=\"text-align:center\"></td><td style=\"text-align:left\"></td></tr>\n</tbody>\n</table></div>"],
+      ["a|b\n-|-|\n\n|c|\n",
+        "<div class=\"table\"><table>\n<thead><tr><th>a</th><th>b</th></tr></thead>\n<tbody>\n\n</tbody>\n</table></div>\n<p>|c|</p>"],
+      ["1|2|3|4|5|6|7|8|9|10|11|12\n-|-|-|-|-|-|-|-|-|-|-|-\nx\ny|z\n|",
+        "<div class=\"table\"><table>\n<thead><tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th></tr></thead>\n<tbody>\n\n</tbody>\n</table></div>\n<p>x\ny|z\n|</p>"],
+      ["a|b\n--|-x",
+        "<p>a|b\n--|-x</p>"],
+    ];
+    for (const [md, expected] of cases) expect(html(md), JSON.stringify(md)).toBe(expected);
+  });
+
+  it('reads lists as it always has', () => {
+    const cases = [
+      ["- a\n- b",
+        "<ul>\n<li>a</li>\n<li>b</li>\n</ul>"],
+      ["1. a\n2. b\n\n   c",
+        "<ol>\n<li><p>a</p></li>\n<li><p>b</p>\n<p>c</p></li>\n</ol>"],
+      ["-",
+        "<ul>\n<li></li>\n</ul>"],
+      ["- ",
+        "<ul>\n<li></li>\n</ul>"],
+      ["1.",
+        "<ol>\n<li></li>\n</ol>"],
+      ["1)",
+        "<ol>\n<li></li>\n</ol>"],
+      ["10. a",
+        "<ol start=\"10\">\n<li>a</li>\n</ol>"],
+      ["1234567890. a",
+        "<p>1234567890. a</p>"],
+      ["-\ta\n\tb",
+        "<ul>\n<li>a\nb</li>\n</ul>"],
+      ["- a b",
+        "<p>- a b</p>"],
+      ["- a\n  - b\n    - c\n  d",
+        "<ul>\n<li>a\n<ul>\n<li>b\n<ul>\n<li>c\nd</li>\n</ul></li>\n</ul></li>\n</ul>"],
+      ["- a\nlazy\n- b",
+        "<ul>\n<li>a\nlazy</li>\n<li>b</li>\n</ul>"],
+      ["- a\n\n  b\n- c",
+        "<ul>\n<li><p>a</p>\n<p>b</p></li>\n<li><p>c</p></li>\n</ul>"],
+      ["- \n  a",
+        "<ul>\n<li>a</li>\n</ul>"],
+      ["*   a\n    b",
+        "<ul>\n<li>a\nb</li>\n</ul>"],
+      ["-    a",
+        "<ul>\n<li>a</li>\n</ul>"],
+      ["+ a\n- b",
+        "<ul>\n<li>a</li>\n</ul>\n<ul>\n<li>b</li>\n</ul>"],
+      ["- a\n\n\n  b\n\n- c",
+        "<ul>\n<li><p>a</p>\n<p>b</p></li>\n<li><p>c</p></li>\n</ul>"],
+      ["- a\n\n  - b\n\n  c",
+        "<ul>\n<li><p>a</p>\n<ul>\n<li>b</li>\n</ul>\n<p>c</p></li>\n</ul>"],
+      ["3. a\n4. b\n- c",
+        "<ol start=\"3\">\n<li>a</li>\n<li>b</li>\n</ol>\n<ul>\n<li>c</li>\n</ul>"],
+      ["- # h\n  text",
+        "<ul>\n<li><h1 id=\"h\"><a class=\"anchor\" href=\"#h\" aria-hidden=\"true\">#</a>h</h1>\ntext</li>\n</ul>"],
+      ["> - a\n>   b",
+        "<blockquote>\n<ul>\n<li>a\nb</li>\n</ul>\n</blockquote>"],
+      ["-a",
+        "<p>-a</p>"],
+      ["--",
+        "<p>--</p>"],
+      ["- a\n  ```\n  x\n  ```\n  y",
+        "<ul>\n<li>a\n<pre><code>x\n</code></pre>\ny</li>\n</ul>"],
+      ["- a\n\t- b",
+        "<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul></li>\n</ul>"],
+    ];
+    for (const [md, expected] of cases) expect(html(md), JSON.stringify(md)).toBe(expected);
+  });
+
+  // A header of 100 cells and rows of one pipe: the table takes a row while its cells (100 for each line) are no more than
+  // the characters of its own lines plus 256. The header and the separator are 200 characters each with their line break,
+  // each row adds 2, so 100 * (rows + 1) <= 400 + 2 * rows + 256 holds for five rows and fails for the sixth
+  const wide = (rows, row = '|') => ['a|'.repeat(99) + 'a', '-|'.repeat(99) + '-', ...Array(rows).fill(row)].join('\n');
+  const count = (s, re) => (s.match(re) || []).length;
+
+  it('pads a table to its header up to as many cells as the characters of its lines plus 256, and reads the rest as text', () => {
+    const five = html(wide(5));
+    expect(count(five, /<tr>/g)).toBe(6);
+    expect(five).not.toContain('<p>');
+    const six = html(wide(6));
+    expect(count(six, /<tr>/g)).toBe(6);
+    expect(six.endsWith('</tbody>\n</table></div>\n<p>|</p>')).toBe(true);
+    const seven = html(wide(7));
+    expect(count(seven, /<tr>/g)).toBe(6);
+    expect(seven.endsWith('</table></div>\n<p>|\n|</p>')).toBe(true);
+    // The rows that are text go through the inline reader and the escaping as any text does
+    expect(html(wide(6) + '\n| <b>x</b> |')).toContain('<p>|\n| &lt;b&gt;x&lt;/b&gt; |</p>');
+    // Rows with as many characters as the header have cells to fill, any number of them
+    expect(count(html(wide(500, '|x'.repeat(100))), /<tr>/g)).toBe(501);
+  });
+
+  it('keeps output in proportion to the input for a wide header and many short rows', () => {
+    for (const size of [40000, 400000]) {
+      const plain = '|a'.repeat(size / 2) + '\n|-|\n' + '|\n'.repeat(size / 2);
+      expect(html(plain).length, `${size} bytes`).toBeLessThan(plain.length * 15);
+      const aligned = '|a'.repeat(size / 4) + '\n' + '|:-:'.repeat(size / 4) + '\n' + '|\n'.repeat(size / 2);
+      expect(html(aligned).length, `${size} bytes aligned`).toBeLessThan(aligned.length * 60);
+    }
+  });
+});
+
+describe('block Markdown in linear time', () => {
+  // Each shape at 256 KB. Linear, each takes a few hundred milliseconds at most (measured 30 to 330); a quadratic reader
+  // takes half a minute to several minutes (as main did, 17 to 70 s). The limit is 5 s: fifteen times the slowest
+  const SIZE = 256 * 1024;
+  const LIMIT = 5000;
+  const spaces = ' '.repeat(SIZE);
+  const SHAPES = {
+    'a heading and a long run of spaces': '# a' + spaces + 'x',
+    'a heading with a line separator after a run of spaces': '#' + spaces + 'a\u2028',
+    'a heading and closing marks set off by spaces': '# a' + ' #'.repeat(SIZE / 2) + spaces + 'x',
+    'a table separator and a long run of spaces': 'a|b\n|-' + spaces + 'x',
+    'a table separator and a long run of no-break spaces': 'a|b\n-' + '\u00a0'.repeat(SIZE) + 'x',
+    'a list item with a long run of spaces and a line separator': '- ' + spaces + '\u2028',
+    'a list item with blank lines and continuation lines': '- a\n' + '\n  b\n'.repeat(SIZE / 5),
+    'a list of items with blank lines between': '- a\n\n'.repeat(SIZE / 5),
+    'a list with lazy continuation lines': '- a\n' + 'b\n'.repeat(SIZE / 2),
+    'a wide header and short rows': '|a'.repeat(SIZE / 8) + '\n|-|\n' + '|\n'.repeat(SIZE / 8),
+    'a rule line and a long run of spaces': '---' + spaces + 'x',
+    'a fence with a long run of spaces after it': '```' + spaces + 'x',
+    'many headings': '# a\n'.repeat(SIZE / 4),
+    'many tables': 'a|b\n-|-\n1|2\n\n'.repeat(SIZE / 14),
+    'quotes of lists of quotes': '> - '.repeat(SIZE / 4) + 'a',
+  };
+  for (const [what, md] of Object.entries(SHAPES)) {
+    it(`reads ${what} in linear time`, () => {
+      const t = performance.now();
+      renderMarkdown(md);
+      expect(performance.now() - t, what).toBeLessThan(LIMIT);
+    }, 120000);
+  }
+
+  it('does not run out of memory or time on a table of 20000 header cells and 20000 rows', () => {
+    const md = '|a'.repeat(20000) + '\n|-|\n' + '|\n'.repeat(20000);
+    const t = performance.now();
+    const out = renderMarkdown(md).html;
+    expect(performance.now() - t).toBeLessThan(LIMIT);
+    expect(out.length).toBeLessThan(md.length * 15);
+  });
+
+  it('takes four times as long for four times the text, not sixteen', () => {
+    const shapes = [(n) => '# a' + ' '.repeat(n) + 'x', (n) => 'a|b\n|-' + ' '.repeat(n) + 'x', (n) => '- a\n' + '\n  b\n'.repeat(n / 5), (n) => '- ' + ' '.repeat(n) + '\u2028'];
+    for (const shape of shapes) {
+      const small = best(() => renderMarkdown(shape(40000)));
+      const large = best(() => renderMarkdown(shape(160000)), 2);
+      expect(large, shape(10).slice(0, 12)).toBeLessThan(small * 9 + 150);
+    }
+  });
+});
