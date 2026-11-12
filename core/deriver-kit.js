@@ -77,7 +77,8 @@ export { DERIVER_CONTRACT, deriverProblems };
  * @property {(rel: string) => boolean} exists
  * @property {(rel: string) => boolean} isDir
  * @property {(rel: string) => string[]} list a folder's entries, sorted
- * @property {(rel: string, test?: (file: string) => boolean) => string[]} walk every file under a folder that `test` accepts, skipping node_modules, .git and the like
+ * @property {(rel: string, test?: (file: string) => boolean, onSkip?: (rel: string, reason: 'outside' | 'walked') => void) => string[]} walk every file under a folder that `test` accepts, skipping node_modules, .git and the like; a symlink is followed only while it stays in the repo, and a real folder is walked once (`onSkip` hears of each one left out)
+ * @property {(rel: string) => boolean} inside whether a path is in the repo once its symlinks are followed
  */
 
 /**

@@ -24,13 +24,33 @@ export function repoReader(root) {
     try { return fs.statSync(abs(rel)).isDirectory(); } catch { return false; }
   };
   const list = (rel) => (isDir(rel) ? fs.readdirSync(abs(rel)).sort() : []);
-  /** Every file under `rel` that `test` accepts, skipping SKIP_DIRS */
-  const walk = (rel, test = () => true) => list(rel).flatMap((name) => {
-    if (SKIP_DIRS.has(name)) return [];
-    const child = rel && rel !== '.' ? `${rel}/${name}` : name;
-    return isDir(child) ? walk(child, test) : test(child) ? [child] : [];
-  });
-  return { root, read, exists, isDir, list, walk };
+  const realRoot = (() => { try { return fs.realpathSync(root); } catch { return path.resolve(root); } })();
+  const within = (real) => { const r = path.relative(realRoot, real); return r === '' || (r !== '..' && !r.startsWith(`..${path.sep}`) && !path.isAbsolute(r)); };
+  /**
+   * Whether `rel` lies in the repo once every symlink on its way is followed (a path that is not there is judged as
+   * written, a `..` included: nothing can be read from it).
+   */
+  const inside = (rel) => {
+    try { return within(fs.realpathSync(abs(rel))); } catch (err) { return err.code === 'ENOENT' ? within(path.resolve(abs(rel))) : false; }
+  };
+  /**
+   * Every file under `rel` that `test` accepts, skipping SKIP_DIRS. A symlink is followed only while it stays in the
+   * repo, and a real folder is walked once; `onSkip(path, reason)` hears of each one left out ('outside' or 'walked').
+   */
+  const walk = (rel, test = () => true, onSkip = () => {}, visited = new Set()) => {
+    try { visited.add(fs.realpathSync(abs(rel))); } catch { /* not there: list() is empty */ }
+    return list(rel).flatMap((name) => {
+      if (SKIP_DIRS.has(name)) return [];
+      const child = rel && rel !== '.' ? `${rel}/${name}` : name;
+      let target = null;
+      try { target = fs.realpathSync(abs(child)); } catch { /* a link to nothing: left to the caller, as before */ }
+      if (target && !within(target)) { if (isDir(child) || test(child)) onSkip(child, 'outside'); return []; }
+      if (!isDir(child)) return test(child) ? [child] : [];
+      if (target && visited.has(target)) { onSkip(child, 'walked'); return []; }
+      return walk(child, test, onSkip, visited);
+    });
+  };
+  return { root, read, exists, isDir, list, walk, inside };
 }
 
 /**
