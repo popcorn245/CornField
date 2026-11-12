@@ -84,12 +84,22 @@ export function compareVersions(a, b) {
 
 /**
  * The server's sign-in, which ends on the page it was asked from: `<base>/auth/start?returnTo=<page URL>` (docs/sign-in.md). The server follows
- * `returnTo` only for an origin its `embed.origins` lists. A page that is not http(s) (a file, about:blank) has nothing to return to.
+ * `returnTo` only for an origin its `embed.origins` lists. A page that is not http(s) (a file, about:blank) has nothing to return to. A user name
+ * or password in the page's address (`https://user:pass@tasks.example.com/`) is never sent to the server: it is taken out (the server would refuse
+ * such a `returnTo` anyway).
  * @param {string} base
  * @param {string} pageUrl
  */
 export function signInUrl(base, pageUrl) {
-  const back = typeof pageUrl === 'string' && /^https?:\/\//i.test(pageUrl) ? `?returnTo=${encodeURIComponent(pageUrl)}` : '';
+  let back = '';
+  if (typeof pageUrl === 'string' && /^https?:\/\//i.test(pageUrl)) {
+    try {
+      const u = new URL(pageUrl);
+      u.username = '';
+      u.password = '';
+      back = `?returnTo=${encodeURIComponent(u.href)}`;
+    } catch { back = ''; }
+  }
   return `${base}${SIGN_IN_PATH}${back}`;
 }
 

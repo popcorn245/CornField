@@ -74,6 +74,16 @@ describe('the way back from sign-in', () => {
     expect(href).toBe(`${BASE}/auth/start?returnTo=${encodeURIComponent('https://tasks.example.com/reviews/7?x=1#top')}`);
     expect(new URL(href).searchParams.get('returnTo')).toBe('https://tasks.example.com/reviews/7?x=1#top');
   });
+  it('never sends a user name or password of the page\'s address, and keeps odd characters, queries and fragments whole', () => {
+    const href = signInUrl(BASE, 'https://user:s3cret@tasks.example.com/a?b=%22<x>%22&returnTo=https://evil.test#frag/<b>?x=1');
+    expect(href).not.toMatch(/s3cret|user/);
+    const back = new URL(href).searchParams.get('returnTo');
+    expect(back).toBe('https://tasks.example.com/a?b=%22%3Cx%3E%22&returnTo=https://evil.test#frag/%3Cb%3E?x=1');
+    expect(new URL(href).origin).toBe(BASE);
+    expect(new URL(href).pathname).toBe('/auth/start');
+    expect([...new URL(href).searchParams.keys()]).toEqual(['returnTo']);
+    expect(signInUrl(BASE, 'https://[bad')).toBe(`${BASE}/auth/start`);
+  });
   it('keeps a path on the server, and has no way back for a page that is not http(s)', () => {
     expect(signInUrl('https://example.com/cornfield', 'https://t.example.com/')).toMatch(/^https:\/\/example\.com\/cornfield\/auth\/start\?returnTo=/);
     expect(signInUrl(BASE, 'file:///tmp/x.html')).toBe(`${BASE}/auth/start`);
