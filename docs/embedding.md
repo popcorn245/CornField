@@ -130,7 +130,13 @@ What is there (the files of the build, and only those; `manifest.json` lists the
 
 **Caching.** Each answer has a strong `ETag` and the file's type with `nosniff`, and is compressed when the browser accepts it. `chunks/…-<hash>.js` are named by their content, so they are cached for a year (`public, max-age=31536000, immutable`). `corn-map.js`, `index.js`, `tokens.css`, `version.json` and the types are `no-cache`: the browser asks every time and gets a `304` when nothing changed, so a host always gets the version of the server it talks to, the moment that server is updated.
 
-**It is open.** The route answers before the sign-in guard, like the theme's stylesheets, because a module script is fetched without the cookie. It holds no secret: it is the published package. A visitor who is not signed in can fetch the components' code and `version.json`, which says which cornfield this is (a signed-out visitor could not learn that before: `/cornfield/config.json`, which also carries it, is behind the sign-in). They cannot fetch anything of the map, the proposals or the repo.
+**It is open.** The route answers before the sign-in guard, like the theme's stylesheets, because a module script is fetched without the cookie. It holds no secret: it is the published package, the same files as on GitHub and npm. What anyone who can reach the server learns from it, signed in or not:
+
+- the components' code, their type declarations and `tokens.css`;
+- **which cornfield this is**: the release number is in `version.json` and in `index.js` (`export const version`); `manifest.json` carries it too but is never served. A signed-out visitor could not learn it before: `/cornfield/config.json`, which also carries it, is behind the sign-in. It is kept open on purpose: a host needs it to tell a mismatch, and the code of every version is public anyway. Keep the server updated, as with any version you publish;
+- whether this server was built with the components (an image) or runs from a checkout (the `404` says so).
+
+Nothing of the map, the proposals, the repo, the config or the session is reachable this way. `Host` is checked before this route answers (`421` for a name the server does not answer to), and only `GET` and `HEAD` are answered here: any other method on these paths goes to the sign-in guard as before.
 
 **A checkout has no build.** cornfield has no build step, so a server started from a plain checkout has no components and answers `/cornfield/components/…` with a plain `404` that says so and how to build them (`cd components && npm ci && npm run build`: the server then serves `components/dist`, the one place it looks, beside its own `server/`). The image builds them while it is built and keeps only the result.
 
