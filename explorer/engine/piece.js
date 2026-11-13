@@ -29,10 +29,22 @@ export function withParts(html) {
 export function applyStyles(el) {
   const own = el.hasAttribute && el.hasAttribute('data-style') ? [el] : [];
   for (const x of [...own, ...el.querySelectorAll('[data-style]')]) {
-    x.style.cssText = x.getAttribute('data-style');
+    const text = x.getAttribute('data-style') || '';
     x.removeAttribute('data-style');
+    // Only the properties a swatch is drawn with, each set on its own: a value can never add a declaration, and never fetches anything
+    for (const decl of text.split(';')) {
+      const at = decl.indexOf(':');
+      if (at < 0) continue;
+      const prop = decl.slice(0, at).trim().toLowerCase();
+      const value = decl.slice(at + 1).trim();
+      if (STYLE_PROPS.has(prop) && value && !UNSAFE_VALUE.test(value)) x.style.setProperty(prop, value);
+    }
   }
 }
+/** What `data-style` may set (the Layers dots and the flow swatches) */
+export const STYLE_PROPS = new Set(['background', 'background-color', 'box-shadow', '--hx-dot-ring']);
+/** A value that could fetch or escape its declaration: refused */
+const UNSAFE_VALUE = /url\(|image|src\(|\\|[<>{}"'@!]/i;
 
 /** Gives every element under `el` that has a hook and no part the part of the same name; applies the styles the markup asks for (`applyStyles`) */
 export function addParts(el) {

@@ -17,8 +17,9 @@
  *   - the root joins the instance (`joinRoot`, engine/roots.js): its keys and its focus are the instance's, so `/` pressed on the map reaches the search and a click in the
  *     host's page outside the Layers menu closes it;
  *   - the server's theme is adopted into the root (`use-theme` on the scope), after the tag's own styles;
- *   - the piece mounts when the instance has a map (`map:ready`) and ends when it has none (`map:gone`): the pieces read the map's camera, scene and
- *     visibility, so with none they say what they need in its place. Tags can come in any order in the host's page;
+ *   - the piece mounts when the instance has a map with nodes (`map:ready`, then the `scene` its data brings) and ends when it has none (`map:gone`): the
+ *     pieces read the map's camera, scene and visibility, so with none they say what they need in its place (`needsMap`), and while the map waits on its
+ *     server (loading, signed out, offline: the map's own card says which) that they wait for it (`waitingForMap`). Tags can come in any order;
  *   - it has a live region of its own, said in only when no map has one (`announce:fallback`): a panel or a search beside no map still speaks.
  * Nothing here reads the page: no `document`, no id of a neighbour. It never throws for a missing scope or map.
  */
@@ -67,13 +68,19 @@ export function mountAround(piece, root, inst, options = {}) {
   let ended = false;
 
   const dropNote = () => { for (const el of note) el.remove(); note = []; };
-  const showNote = () => {
-    if (note.length || ended) return;
-    const words = !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : t(inst, 'needsMap');
+  /** The map is there and has nodes: a map still loading, refused by its server (signed out, not a maintainer) or offline has none, and a search or a
+   * Layers menu over nothing would say "No match" or count layers of a map nobody can see. The map's own card says what is wrong, once */
+  const hasMap = () => !!inst.map && inst.state.nodes.length > 0;
+  const showNote = (gone = false) => {
+    if (ended) return;
+    const words = !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : inst.map && !gone ? t(inst, 'waitingForMap') : t(inst, 'needsMap');
+    if (note.length && note[0].textContent === words) return;
+    dropNote();
     note = place(inst, root, `<p class="hx-needs" data-corn="empty">${escapeHtml(words)}</p>`, null, 'needs');
   };
   const mountReal = () => {
-    if (real || ended || !inst.map) return;
+    if (real || ended) return;
+    if (!hasMap()) { showNote(); return; }
     dropNote();
     real = piece.mount(root, inst, { ...(options.piece || {}), inline: true, phone: false });
     if (Object.keys(pending).length) { real.update(pending); pending = {}; }
@@ -81,9 +88,10 @@ export function mountAround(piece, root, inst, options = {}) {
   const unmountReal = () => { if (real) { real.destroy(); real = null; } };
 
   scope.on('map:ready', mountReal);
-  scope.on('map:gone', () => { unmountReal(); showNote(); });
+  scope.on('scene', () => { if (!real) mountReal(); }); // the map's data came (its server answered, or the host handed it in)
+  scope.on('map:gone', () => { unmountReal(); showNote(true); }); // (said while the map ends: the instance may still hold it)
   if (options.onSearch) scope.on('search', (d) => options.onSearch(d));
-  if (inst.map) mountReal(); else showNote();
+  mountReal();
 
   return {
     inst,

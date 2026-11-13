@@ -178,9 +178,20 @@ describe('a style the markup asks for', () => {
     expect(dot.style.backgroundColor).toBe('rgb(1, 2, 3)');
     expect(dot.getAttribute('part')).toBe('swatch');
     const lone = document.createElement('i');
-    lone.setAttribute('data-style', 'color: red');
+    lone.setAttribute('data-style', 'background: red');
     applyStyles(lone);
-    expect(lone.style.color).toBe('red');
+    expect(lone.style.background).toBe('red');
+  });
+
+  it('sets only a swatch\'s own properties, one by one: a value never adds a declaration or fetches anything', () => {
+    const el = document.createElement('i');
+    el.setAttribute('data-style', 'background-color: rgb(1, 2, 3); position: fixed; color: red; background: url(https://elsewhere.example/x.png); box-shadow: 0 0 8px red; --hx-dot-ring: red; --other: 1; background-image: image-set("x.png" 1x)');
+    applyStyles(el);
+    expect(el.style.backgroundColor).toBe('rgb(1, 2, 3)');
+    expect(el.style.boxShadow).toBe('0 0 8px red');
+    expect(el.style.getPropertyValue('--hx-dot-ring')).toBe('red');
+    for (const p of ['position', 'color', 'background-image', '--other']) expect(el.style.getPropertyValue(p), p).toBe('');
+    expect(el.style.cssText).not.toMatch(/url|image|fixed|elsewhere/);
   });
 });
 
@@ -216,8 +227,12 @@ describe('the pieces around the map in a root of their own (pieces/around.js)', 
     expect(root.querySelector('[data-corn="empty"]').textContent).toBe('Select a node on the map to see its details');
     around.update({ query: 'ab' });
     expect(piece.calls).toEqual([]);
+    // a map with no nodes yet (loading, signed out, offline): the piece waits; its data in the scene brings it up
     inst.map = {};
     inst.emit('map:ready');
+    expect(piece.calls).toEqual([]);
+    inst.state.nodes = [{ id: 'a' }];
+    inst.touchScene();
     expect(piece.calls.map((c) => c[0])).toEqual(['mount', 'update']);
     expect(piece.calls[0][1]).toMatchObject({ inline: true, phone: false });
     expect(piece.calls[1][1]).toEqual({ query: 'ab' });
@@ -230,6 +245,22 @@ describe('the pieces around the map in a root of their own (pieces/around.js)', 
     inst.emit('map:ready');
     expect(piece.calls.filter((c) => c[0] === 'mount')).toHaveLength(2);
     around.destroy();
+    // a search or a Layers menu: "needs a map" while there is none, "waiting for the map" while it has no data, then the piece
+    inst.map = null;
+    inst.state.nodes = [];
+    const words = shadowOf('waiting');
+    const other = stub();
+    const waiting = mountAround(other, words, inst, {});
+    expect(words.querySelector('[data-corn="empty"]').textContent).toBe('This needs a corn-map in the same corn-scope');
+    inst.map = {};
+    inst.emit('map:ready');
+    expect(words.querySelector('[data-corn="empty"]').textContent).toBe('Waiting for the map');
+    expect(other.calls).toEqual([]);
+    inst.state.nodes = [{ id: 'a' }];
+    inst.touchScene();
+    expect(other.calls.map((c) => c[0])).toEqual(['mount']);
+    expect(words.querySelector('[data-corn="empty"]')).toBe(null);
+    waiting.destroy();
     expect(piece.calls.at(-1)).toEqual(['destroy']);
     // it joined the instance's roots and gave them back
     expect(inst.extraRoots.size).toBe(0);

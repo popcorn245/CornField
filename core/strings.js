@@ -122,6 +122,7 @@ export const STRINGS = Object.freeze({
   nodePanelEmpty: 'Select a node on the map to see its details',
   needsScope: 'This needs a corn-scope around it, with a corn-map in it',
   needsMap: 'This needs a corn-map in the same corn-scope',
+  waitingForMap: 'Waiting for the map',
 });
 
 /** The longest a value may be, in characters */
