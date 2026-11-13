@@ -74,7 +74,7 @@ const isDraft = (p) => p.draft === true || /^\s*(\[WIP\]|WIP:|Draft:)/i.test(p.t
 const toPull = (p) => ({
   number: p.number, title: p.title, body: p.body ?? '', state: p.merged || p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: isDraft(p),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
-  url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
+  url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null, mergeSha: p.merged_at || p.merged ? p.merge_commit_sha ?? null : null, closedAt: p.closed_at ?? null,
 });
 
 const FILE_STATUS = { added: 'added', copied: 'added', deleted: 'removed', removed: 'removed', renamed: 'renamed', modified: 'modified', changed: 'modified', unchanged: 'modified' };
@@ -172,9 +172,10 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return LEVELS[body.permission] || 'none';
     },
 
-    async issues({ state, labels, limit }) {
+    async issues({ state, labels, limit, since }) {
       const q = new URLSearchParams({ state, type: 'issues', limit: String(PER_PAGE) });
       if (labels.length) q.set('labels', labels.join(','));
+      if (since) q.set('since', since);
       const all = await client.list(`repos/${repo}/issues?${q}`, { what: `the issues of ${forge.repo}`, limit, items: (b) => (Array.isArray(b) ? b.filter((i) => !i.pull_request) : b) });
       return all.map(toIssue);
     },
@@ -186,8 +187,9 @@ export function createForgejoForge(forge, { token = null, fetch, apiUrl, timeout
       return (Array.isArray(body) ? body : []).filter((i) => !i.pull_request).map(toIssue);
     },
 
-    async pulls({ state, limit }) {
-      const q = new URLSearchParams({ state, limit: String(PER_PAGE) });
+    async pulls({ state, limit, sort }) {
+      // Without `sort` the forge's own order, newest first; `recentupdate` is the most recently updated first
+      const q = new URLSearchParams({ state, ...(sort === 'updated' ? { sort: 'recentupdate' } : {}), limit: String(PER_PAGE) });
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);
     },
 

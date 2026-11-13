@@ -206,7 +206,7 @@ describe('a listed sibling origin', () => {
       const off = [
         '/', '/index.html', '/healthz', '/auth/me', '/explorer/main.js', '/core/schema.js', '/manifest.webmanifest', '/topology-fixture.json?nodes=50',
         '/api/review-tokens', '/api/agent-tokens', '/api/agent-runs', '/api/agent-requests', '/api/forge/pulls', '/api/forge/issues', '/api/forge/pulls/40/landing', '/api/forge/pulls/40/build',
-        '/api/forge/threads', '/api/forge/work', '/api/forge/pulls/40/merge', '/api/forge/pulls/040', '/api/forge/pulls/40/', `/proposals/${SLUG}/mockups/1?${SRC}`, `/proposals/${SLUG}/mockups/`,
+        '/api/forge/threads', '/api/forge/work', '/api/forge/work-graph', '/api/forge/pulls/40/merge', '/api/forge/pulls/040', '/api/forge/pulls/40/', `/proposals/${SLUG}/mockups/1?${SRC}`, `/proposals/${SLUG}/mockups/`,
         '/proposals/', `/proposals/${SLUG}`, `/proposals/${SLUG}.json/x`, '/cornfield/house.json', '/cornfield/brand/logo.svg', '/cornfield/theme', '/cornfield/theme/', '/repo/package.json',
       ];
       for (const target of off) {

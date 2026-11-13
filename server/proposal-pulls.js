@@ -41,15 +41,23 @@ export const CACHE_MAX = 500;
 /** @type {WeakMap<object, Map<string, unknown>>} */
 const caches = new WeakMap();
 
-/** What was read at `key` (a head sha is in every key), or `read()`'s answer, kept for next time */
+/**
+ * What was read at `key` (a head sha is in every key), or `read()`'s answer, kept for next time. The promise is what is kept, so
+ * listings asked side by side (the Specs list and the work graph as a page opens) ask the forge once; a read that fails is forgotten.
+ */
 async function atSha(where, key, read) {
   let cache = caches.get(where);
   if (!cache) caches.set(where, (cache = new Map()));
   if (cache.has(key)) return cache.get(key);
-  const value = await read();
+  const value = Promise.resolve().then(read);
   cache.set(key, value);
   if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
-  return value;
+  try {
+    return await value;
+  } catch (err) {
+    if (cache.get(key) === value) cache.delete(key);
+    throw err;
+  }
 }
 
 /** The files of a pull request at its head, from the cache when that head was read before */

@@ -490,7 +490,7 @@ export function createCornfieldServer(config, opts = {}) {
     // Before the proxies: a repo's `/api/` proxy must not swallow the panel's own routes
     if (await serveTokenRoutes(req, res, reqPath, { config, where, auth, session: gate.session, now: opts.now, publicHost, publicOrigin })) return;
     if (await serveRunRoutes(req, res, reqPath, { config, auth, runs, session: gate.session, now: opts.now, publicHost, publicOrigin })) return;
-    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, lander, now: opts.now, publicHost, publicOrigin, embedOrigins: embed.origins })) return;
+    if (await serveForge(req, res, reqPath, url, { config, where, session: gate.session, auth, hooks, runs, lander, now: opts.now, publicHost, publicOrigin, embedOrigins: embed.origins })) return;
     for (const [prefix, target] of proxies) if (reqPath.startsWith(prefix)) return proxyTo(req, res, target);
     const session = gate.session;
     const forgeFor = session ? () => auth.forgeFor(session) : null;
