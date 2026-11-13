@@ -57,7 +57,11 @@
  * @typedef {{ id: string, login: string, name: string | null, url: string | null, avatarUrl: string | null }} User
  * @typedef {{ login: string, url: string | null, bot?: true }} Author
  * @typedef {{ number: number, title: string, state: 'open' | 'closed', author: Author | null, labels: string[], body: string, comments: number, url: string, createdAt: string, updatedAt: string, closedAt: string | null }} Issue
+<<<<<<< HEAD
  * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null, mergeSha: string | null }} Pull
+=======
+ * @typedef {{ number: number, title: string, body: string, state: 'open' | 'closed' | 'merged', draft: boolean, author: Author | null, labels: string[], head: { ref: string, sha: string }, base: { ref: string }, url: string, createdAt: string, updatedAt: string, mergedAt: string | null, mergeSha: string | null, closedAt: string | null }} Pull
+>>>>>>> origin/main
  * @typedef {{ path: string, status: 'added' | 'modified' | 'removed' | 'renamed', previousPath: string | null, additions: number, deletions: number }} PullFile
  * @typedef {{ id: string, author: Author | null, body: string, url: string, createdAt: string, updatedAt: string }} Comment
  * @typedef {{ sha: string, message: string, date: string | null }} PullCommit `date`: when it was committed (the committer's date, else the author's), or null when the forge gave none
@@ -71,8 +75,8 @@
  * @typedef {{ name: string, sha: string, date: string }} TagInfo
  * @typedef {{ tag: string, name: string, body: string }} ReleaseDraftInput
  * @typedef {{ id: string, url: string, draft: true }} ReleaseDraft
- * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number }} IssueQuery
- * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number }} PullQuery
+ * @typedef {{ state?: 'open' | 'closed' | 'all', labels?: string[], limit?: number, since?: string }} IssueQuery `since`: only the issues updated at or after it
+ * @typedef {{ state?: 'open' | 'closed' | 'all', limit?: number, sort?: 'created' | 'updated' }} PullQuery `sort`: newest first by when it was opened (the default) or last updated
  * @typedef {{ limit?: number }} RunQuery
  * @typedef {{ since: string, limit?: number }} ChangedQuery
  * @typedef {{ number: number, pull: boolean, labels: string[], updatedAt: string }} Changed
@@ -240,15 +244,20 @@ function inRepo(ref, path) {
   if (path.startsWith('/') || path.split('/').some((p) => p === '..' || p === '.' || p === '')) throw invalid(`${JSON.stringify(path)} is not a path inside the repo.`);
 }
 
-/** A listing's query with the defaults: open, at most `DEFAULT_LIMIT`, any label */
+/** A listing's query with the defaults: open, at most `DEFAULT_LIMIT`, any label; an issue listing's `since` and a pull request listing's `sort` only when asked */
 function query(q, withLabels) {
   if (q !== undefined && (q === null || typeof q !== 'object' || Array.isArray(q))) throw invalid('A query is an object.');
-  const { state = 'open', limit = DEFAULT_LIMIT, labels = [] } = q || {};
+  const { state = 'open', limit = DEFAULT_LIMIT, labels = [], since, sort } = q || {};
   if (!STATES.includes(state)) throw invalid(`The state is one of ${STATES.join(', ')}.`);
   if (!Number.isSafeInteger(limit) || limit < 1) throw invalid('The limit is a whole number above 0.');
-  if (!withLabels) return { state, limit };
+  if (!withLabels) {
+    if (sort !== undefined && sort !== 'created' && sort !== 'updated') throw invalid('The sort is created or updated.');
+    return sort === 'updated' ? { state, limit, sort } : { state, limit };
+  }
   if (!Array.isArray(labels) || labels.some((l) => typeof l !== 'string' || l === '' || l.includes(','))) throw invalid('The labels are a list of names.');
-  return { state, limit, labels };
+  if (since === undefined) return { state, limit, labels };
+  if (typeof since !== 'string' || !ISO_TIME.test(since) || Number.isNaN(Date.parse(since))) throw invalid('since is a time like 2026-11-05T09:00:00Z.');
+  return { state, limit, labels, since: new Date(since).toISOString() };
 }
 
 /**

@@ -56,8 +56,20 @@ function routesOf(state) {
       return state.override[served] ? state.override[served](req) : answer;
     };
   }
+<<<<<<< HEAD
   return out;
 }
+=======
+  // The closed issues are asked for since the window's start, which moves with the clock: any such ask is the recorded one, unless overridden
+  const since = Object.entries(recordings('github')).find(([k]) => k.startsWith('GET /repos/owner/name/issues?state=closed&') && k.includes('&since='))[1];
+  return new Proxy(out, {
+    get: (routes, key) => (typeof key === 'string' && !(key in routes) && key.startsWith(`GET ${GH}/issues?state=closed&sort=created&direction=desc&per_page=100&since=`)
+      ? () => (state.override[CLOSED_ISSUES] ? state.override[CLOSED_ISSUES]() : since)
+      : routes[key]),
+  });
+}
+const CLOSED_ISSUES = 'closed issues, since the window\'s start';
+>>>>>>> origin/main
 
 describe('GET /api/forge/work-graph', () => {
   let fake;
@@ -135,7 +147,11 @@ describe('GET /api/forge/work-graph', () => {
 
   it('answers the nodes, the edges and the problems, as the signed-in maintainer, reading only', async () => {
     const cookie = await signIn();
+<<<<<<< HEAD
     state.override[`GET ${GH}/issues?state=closed&sort=created&direction=desc&per_page=100`] = () => ({ body: [] });
+=======
+    state.override[CLOSED_ISSUES] = () => ({ body: [] });
+>>>>>>> origin/main
     fake.requests.length = 0;
     const res = await raw(srv.port, 'GET', '/api/forge/work-graph', { cookie });
     expect(res.status, res.text).toBe(200);
@@ -177,7 +193,12 @@ describe('GET /api/forge/work-graph', () => {
     expect(partial.json.problems.map((p) => p.source)).toContain('issues');
     expect(partial.json.nodes.some((n) => n.kind === 'pull')).toBe(true);
     const limited = () => ({ status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 600) }, body: { message: 'API rate limit exceeded' } });
+<<<<<<< HEAD
     for (const k of ['pulls?state=open&sort=created&direction=desc&per_page=100', 'pulls?state=closed&sort=created&direction=desc&per_page=100', 'issues?state=open&sort=created&direction=desc&per_page=100', 'issues?state=closed&sort=created&direction=desc&per_page=100', 'actions/runs?per_page=100']) state.override[`GET ${GH}/${k}`] = limited;
+=======
+    for (const k of ['pulls?state=open&sort=created&direction=desc&per_page=100', 'pulls?state=closed&sort=updated&direction=desc&per_page=100', 'issues?state=open&sort=created&direction=desc&per_page=100', 'actions/runs?per_page=100']) state.override[`GET ${GH}/${k}`] = limited;
+    state.override[CLOSED_ISSUES] = limited;
+>>>>>>> origin/main
     const gone = await raw(srv.port, 'GET', '/api/forge/work-graph', { cookie, 'cache-control': 'no-cache' });
     expect(gone.status).toBe(200); // the answer kept before is served, and says why it is old
     expect(gone.json.stale).toEqual(expect.any(String));

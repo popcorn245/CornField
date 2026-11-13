@@ -79,7 +79,11 @@ A host uses `<corn-map view="work">` beside a `<corn-node-panel>` in a `<corn-sc
 
 ## Where it stands
 
+<<<<<<< HEAD
 Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Step 2 built: the Work view in cornfield's page (`explorer/work-view.js`, `explorer/work-model.js`): the view switch's Work button with its badge, six kinds of node with their shapes and `--corn-work-<kind>` tokens, the lanes and the code they touch, the Waiting on you toggle, the Layers menu's own rows, the node panel's work detail with "Open in Work" (to today's panel, for the actions), search finding work, and `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=`. The checks of a pull request are not in the graph: the node panel reads them from the pull request's own route when it opens. The header's Work button and the side panel stay until step 3. Steps 3 and 4 are not built.
+=======
+Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Steps 2 to 4 are not.
+>>>>>>> origin/main
 
 ## What gets built, in order
 

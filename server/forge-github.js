@@ -63,7 +63,11 @@ const toIssue = (i) => ({
 const toPull = (p) => ({
   number: p.number, title: p.title, body: p.body ?? '', state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
+<<<<<<< HEAD
   url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null, mergeSha: p.merged_at || p.merged ? p.merge_commit_sha ?? null : null,
+=======
+  url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null, mergeSha: p.merged_at || p.merged ? p.merge_commit_sha ?? null : null, closedAt: p.closed_at ?? null,
+>>>>>>> origin/main
 });
 
 /** @returns {import('./forge.js').PullCommit} */
@@ -171,8 +175,9 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return LEGACY[body.permission] || 'none';
     },
 
-    async issues({ state, labels, limit }) {
+    async issues({ state, labels, limit, since }) {
       const q = new URLSearchParams({ state, sort: 'created', direction: 'desc', per_page: String(PER_PAGE) });
+      if (since) q.set('since', since);
       if (labels.length) q.set('labels', labels.join(','));
       const all = await client.list(`repos/${repo}/issues?${q}`, { what: `the issues of ${forge.repo}`, limit, items: (b) => (Array.isArray(b) ? b.filter((i) => !i.pull_request) : b) });
       return all.map(toIssue);
@@ -185,8 +190,8 @@ export function createGitHubForge(forge, { token = null, fetch, apiUrl, timeoutM
       return (Array.isArray(body?.items) ? body.items : []).filter((i) => !i.pull_request).map(toIssue);
     },
 
-    async pulls({ state, limit }) {
-      const q = new URLSearchParams({ state, sort: 'created', direction: 'desc', per_page: String(PER_PAGE) });
+    async pulls({ state, limit, sort = 'created' }) {
+      const q = new URLSearchParams({ state, sort, direction: 'desc', per_page: String(PER_PAGE) });
       return (await client.list(`repos/${repo}/pulls?${q}`, { what: `the pull requests of ${forge.repo}`, limit })).map(toPull);
     },
 
