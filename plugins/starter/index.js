@@ -35,7 +35,7 @@
  */
 
 import { LANGUAGES, TEST_FILES, docSummary, expandMembers, goImports, goManifest, goWorkDirs, manifestLanguage, pyName, pythonImports, pythonManifest, rustManifest, rustName, rustUses } from './languages.js';
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { eachPlaceOnce, leavesRepo, outsideProblem } from '../../core/repo.js';
 
 const DEFAULT_EXTENSIONS = LANGUAGES.js.extensions;
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', '__fixtures__', 'fixtures']);
@@ -97,7 +97,7 @@ function expandPatterns(patterns, io) {
       for (const name of io.list(base)) if (!name.startsWith('.') && io.isDir(`${base}/${name}`)) dirs.push(`${base}/${name}`);
     } else if (io.isDir(p)) dirs.push(p);
   }
-  return [...new Set(dirs)].sort();
+  return eachPlaceOnce(dirs).sort(); // one place once, however it is spelled (`''` and `.` are the repo itself)
 }
 
 const readJson = (io, rel) => {

@@ -25,7 +25,8 @@
  * hand-written page under that app is removed. YAML needs the optional dependency js-yaml.
  */
 
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { fileOptionProblem } from '../../core/repo.js';
+import { quote } from '../../core/text.js';
 
 const SPEC_FILE = /(?:^|\/)(?:openapi|swagger|[\w.-]+\.openapi|opencollection)\.(?:json|ya?ml)$/i;
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE'];
@@ -130,9 +131,13 @@ export function specKind(doc) {
 
 /** The specs to read: `[{ file, app, prefix }]` */
 function specsOf(ctx, options, warnings, problems) {
-  const inRepo = (s) => !(leavesRepo(ctx, s.file) && problems.push(outsideProblem('openapi', s.file)));
-  if (Array.isArray(options.specs)) return options.specs.map((s) => ({ app: DEFAULT_APP, ...s })).filter(inRepo);
-  if (typeof options.file === 'string') return [{ file: options.file, app: options.app || DEFAULT_APP, prefix: options.prefix }].filter(inRepo);
+  const inRepo = (option) => (s) => {
+    const bad = fileOptionProblem(ctx, 'openapi', option, s.file);
+    if (bad) problems.push(bad);
+    return !bad;
+  };
+  if (Array.isArray(options.specs)) return options.specs.map((s) => ({ app: DEFAULT_APP, ...s })).filter(inRepo('specs[].file'));
+  if (typeof options.file === 'string') return [{ file: options.file, app: options.app || DEFAULT_APP, prefix: options.prefix }].filter(inRepo('file'));
   const found = ctx.walk('', (f) => SPEC_FILE.test(f));
   if (found.length > 1) {
     warnings.push(`openapi: ${found.length} API description files (${found.join(', ')}); name the ones to draw: { use: 'openapi', options: { specs: [{ file, app }] } }.`);
@@ -157,7 +162,7 @@ const openapi = {
     const mapNodes = (ctx.map && ctx.map.nodes) || [];
     let yaml;
     for (const spec of specs) {
-      if (!spec.file || !ctx.exists(spec.file)) throw new Error(`API description ${spec.file} does not exist.`);
+      if (!spec.file || !ctx.exists(spec.file)) throw new Error(`API description ${quote(spec.file)} does not exist.`);
       const text = ctx.read(spec.file);
       let doc;
       if (/\.json$/i.test(spec.file)) {

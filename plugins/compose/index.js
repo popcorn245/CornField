@@ -35,7 +35,8 @@
  */
 
 import { caddyRoutes, labelsOf, traefikRoutes } from './routes.js';
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { eachPlaceOnce, fileOptionProblem } from '../../core/repo.js';
+import { quote } from '../../core/text.js';
 
 export const COMPOSE_NAMES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
 const CADDYFILE = /(?:^|\/)(?:Caddyfile|[\w.-]+\.caddyfile)$/i;
@@ -89,8 +90,12 @@ const targetPort = (p) => {
 /** The compose files: the config's, else the first compose name in each folder */
 function composeFiles(ctx, options, problems) {
   if (Array.isArray(options.files)) {
-    const named = options.files.filter((f) => !(leavesRepo(ctx, f) && problems.push(outsideProblem('compose', f))));
-    for (const f of named) if (!ctx.exists(f)) throw new Error(`compose file ${f} does not exist.`);
+    const named = eachPlaceOnce(options.files).filter((f) => {
+      const bad = fileOptionProblem(ctx, 'compose', 'files', f);
+      if (bad) problems.push(bad);
+      return !bad;
+    });
+    for (const f of named) if (!ctx.exists(f)) throw new Error(`compose file ${quote(f)} does not exist.`);
     return named;
   }
   const found = ctx.walk('', (f) => COMPOSE_NAMES.includes(f.slice(f.lastIndexOf('/') + 1)));
@@ -170,11 +175,12 @@ const compose = {
         for (const r of traefikRoutes(svc.name, svc.labels, svc.firstPort)) routes.push({ ...r, stack: s, from: s.file });
       }
     }
-    const caddyfiles = Array.isArray(options.caddyfiles) ? options.caddyfiles : ctx.walk('', (f) => CADDYFILE.test(f));
+    const caddyfiles = Array.isArray(options.caddyfiles) ? eachPlaceOnce(options.caddyfiles) : ctx.walk('', (f) => CADDYFILE.test(f));
     const outside = new Set();
     for (const file of caddyfiles) {
-      if (leavesRepo(ctx, file)) { problems.push(outsideProblem('compose', file)); continue; }
-      if (!ctx.exists(file)) { warnings.push(`compose: caddyfile ${file} does not exist.`); continue; }
+      const bad = fileOptionProblem(ctx, 'compose', 'caddyfiles', file);
+      if (bad) { problems.push(bad); continue; }
+      if (!ctx.exists(file)) { warnings.push(`compose: caddyfile ${quote(file)} does not exist.`); continue; }
       const here = dirOf(file);
       for (const r of caddyRoutes(ctx.read(file))) {
         const serving = stacks.filter((s) => s.services.some((x) => x.name === r.service || x.containerName === r.service));

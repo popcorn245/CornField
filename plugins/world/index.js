@@ -33,7 +33,7 @@
  */
 
 import { slug } from '../compose/index.js';
-import { leavesRepo, outsideProblem } from '../../core/repo.js';
+import { fileOptionProblem } from '../../core/repo.js';
 
 export const WORLD_FILE = 'stacks/world.json';
 const FILE_KEYS = ['version', 'hosts', 'runs'];
@@ -64,7 +64,8 @@ const world = {
     const options = ctx.options || {};
     const file = options.file || WORLD_FILE;
     const parent = options.parent || 'root';
-    if (leavesRepo(ctx, file)) return { nodes: [], edges: [], warnings: [], problems: [outsideProblem('world', file)], info: { machines: [] } };
+    const refused = fileOptionProblem(ctx, 'world', 'file', file);
+    if (refused) return { nodes: [], edges: [], warnings: [], problems: [refused], info: { machines: [] } };
     if (!ctx.exists(file)) return { nodes: [], edges: [], warnings: [], problems: [], info: { machines: [] } };
 
     let doc;

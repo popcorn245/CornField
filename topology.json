@@ -10459,7 +10459,55 @@
       "from": "page-doc-docs-config",
       "to": "page-doc-docs-deploy",
       "dashed": true
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-config",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-map-tokens",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-core-repo",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-cloud-index",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-compose-index",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-plugins-openapi-index",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-cli-cornfield",
+      "to": "core-core-repo",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-12T23:32:04.793Z"
+  "updatedAt": "2026-11-13T00:08:35.741Z"
 }

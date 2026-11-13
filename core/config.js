@@ -45,6 +45,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { repoReader } from './repo.js';
 import { themeProblems } from './theme.js';
 import { brandProblems } from './brand.js';
 import { stringsProblems } from './strings.js';
@@ -643,7 +644,7 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
 
 function readPackageName(root) {
   try {
-    return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name || null;
+    return JSON.parse(repoReader(root).read('package.json')).name || null; // a package.json that links out of the repo is not read
   } catch {
     return null;
   }

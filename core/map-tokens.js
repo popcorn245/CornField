@@ -9,6 +9,7 @@
 import { declaredProps, expand, projectGroupOf, resolveProps, themesToCheck } from './contrast.js';
 import { iconKeyShape, parseKindToken } from './layers.js';
 import { readColor } from './color.js';
+import { quote } from './text.js';
 import { MAX_NODE_COLOR_CHARS } from '../explorer/css-color.js';
 import { EDGE_WIDTH_TOKEN, FONT_TOKEN, GLOW_TOKEN, GREY_ALPHA_TOKEN, LABEL_MIN_TOKEN, MAX_EDGE_WIDTH, MAX_GLOW, MAX_LABEL_MIN, readMapTokens } from '../explorer/map-style.js';
 
@@ -94,9 +95,6 @@ export function layerTokenWarnings(config, map) {
 export const MAX_NODE_COLOR_WARNINGS = 10;
 const SHOWN_CHARS = 40;
 
-/** What JSON leaves as it is but a terminal must not get raw: DEL and the C1 controls, and the invisible and bidirectional marks */
-const UNSEEN = new RegExp('[\\u007f-\\u009f\\u00ad\\u061c\\u200b-\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2060-\\u206f\\ufeff\\ufff9-\\ufffb]', 'g');
-
 /**
  * Project text as a terminal may print it: JSON-quoted (so a line break, an escape character and every other C0 control is `\n`, `\u001b`,
  * ...), cut to `max` characters, and with the controls JSON leaves alone made visible too (DEL, the C1 controls such as U+009B, which some
@@ -110,7 +108,7 @@ export function quoted(v, max = SHOWN_CHARS) {
   try { t = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v); } catch { t = String(v); }
   const chars = Array.from(t);
   if (chars.length > max) t = `${chars.slice(0, max).join('')}...`;
-  return JSON.stringify(t).replace(UNSEEN, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+  return quote(t);
 }
 
 /** Colour functions a current browser reads that core/color.js does not work out (it reads rgb() and hsl() only in their plainer forms) */

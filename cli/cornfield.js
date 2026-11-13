@@ -27,6 +27,8 @@ import { deriveTopology } from '../core/derive.js';
 import { planSync, placeholderCounts } from '../core/sync.js';
 import { validateRepo, readTopology } from '../core/validate.js';
 import { proposalProblems, proposalStatus, summarize, personaWarnings } from '../core/proposal.js';
+import { repoReader } from '../core/repo.js';
+import { quote } from '../core/text.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
@@ -84,6 +86,11 @@ async function setup(flags) {
 
 function saveTopology(config, data) {
   const file = path.join(config.root, config.topology);
+  // The write follows a symlink, so the map is written only where it really lies in the repo: never through a link out, or a link to nothing (which would make a file wherever it points)
+  const io = repoReader(config.root);
+  let link = false;
+  try { link = fs.lstatSync(file).isSymbolicLink(); } catch { /* not there yet */ }
+  if (!io.inside(config.topology) || (link && !io.exists(config.topology))) throw new Error(`${quote(config.topology)} leads outside the repo or to nothing; the map is not written.`);
   fs.writeFileSync(file, `${JSON.stringify({ version: data.version || '1.0.0', ...data, updatedAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
 }
 

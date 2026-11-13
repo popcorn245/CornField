@@ -19,7 +19,7 @@ import { deriveTopology } from '../../core/derive.js';
 import { readTopology } from '../../core/validate.js';
 import { renderMarkdown, safeUrl } from './markdown.js';
 import docsDeriver, { resolveLink, SITE_OUTPUTS } from './index.js';
-import { repoReader } from '../../core/repo.js';
+import { outsideError, repoReader } from '../../core/repo.js';
 
 /** The file a built site holds, so a rebuild knows the folder is its own */
 export const SITE_MARKER = SITE_OUTPUTS[2];
@@ -223,7 +223,7 @@ export async function buildSite({ config, derivers, out, sourceUrl = sourceUrlOf
   // What the site reads is the repo's: a path that leads out of it, by `..` or a symlink, is as if it were not there
   const io = repoReader(root);
   const read = (rel) => {
-    if (!io.inside(rel)) throw new Error(`${rel} is outside the repo.`);
+    if (!io.inside(rel)) throw outsideError(rel);
     return fs.readFileSync(path.join(root, rel), 'utf8');
   };
   const exists = (rel) => io.inside(rel) && io.exists(rel);
