@@ -320,11 +320,14 @@ describe('the keyboard, the page and the machine', () => {
     await until(() => visible(t.foot, '[data-review="approved"]'));
     const more = q(t.bar, '[data-action="toggle-proposal-more"]')!;
     const menuOpen = () => visible(t.bar, '[data-corn="proposal-menu"]');
-    for (const outside of [() => t.host.click(), () => canvasOf(t.map).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true })), () => q(t.list, '[data-corn="row"]')!.click()]) {
-      more.click();
+    const page = document.createElement('p');
+    page.textContent = 'The host\'s own words';
+    t.host.before(page);
+    for (const outside of [page, canvasOf(t.map), q(t.list, '[data-corn="row"]')!]) {
+      await userEvent.click(more);
       expect(menuOpen()).toBe(true);
-      outside();
-      expect(menuOpen()).toBe(false);
+      await userEvent.click(outside);
+      expect(menuOpen(), outside.localName).toBe(false);
     }
   });
 

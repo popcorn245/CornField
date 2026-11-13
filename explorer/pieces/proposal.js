@@ -36,7 +36,6 @@ import { announce } from '../engine/keyboard.js';
 import { t } from '../engine/strings.js';
 import { credentialed } from '../engine/connection.js';
 import { scopeOf, place, addParts } from '../engine/piece.js';
-import { onPageClick } from '../engine/roots.js';
 import {
   openProposal, showProposal, closeProposal, setProposalView, drawBar, loadProposalList, proposalListing, setMessage, messageOf, bindEdgePicking, pinnedSource,
 } from '../engine/proposal.js';
@@ -423,13 +422,9 @@ export function mount(root, inst, options = {}) {
     if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
   });
   // In a box of its own the root hears only the bar's clicks: a click anywhere else in the page (the map, the host's own page, another section) closes the ⋯ menu
-  // too, as it does on cornfield's page. Whether it came through this root is marked on its way in, and decided once it has passed (in a host's closed shadow
-  // root the document's path stops at that root's host: the Layers menu does the same)
-  if (inline) {
-    const inside = new WeakSet();
-    scope.listen(hear, 'click', (e) => { inside.add(e); }, true);
-    scope.own(onPageClick(inst, (e) => { if (moreOpen() && !inside.has(e)) closeMore(); }, { capture: false }));
-  }
+  // too, as it does on cornfield's page. The open menu holds the focus (on an item), and such a click takes it out of the bar: the menu closes when the focus
+  // leaves the bar (to nothing, or to anything outside it), which holds in a host's closed shadow root too and needs no listener on the page
+  if (inline) scope.listen(bar, 'focusout', (e) => { if (moreOpen() && !(e.relatedTarget && bar.contains(e.relatedTarget))) closeMore(); });
   // Answer, on the bar's line (a run waits on this proposal): the Work panel opens on that run with its reply field focused (work:answer)
   scope.listen(bar, 'click', (e) => {
     const go = e.target.closest && e.target.closest('[data-waiting-answer]');
