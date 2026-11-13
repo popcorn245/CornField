@@ -1,7 +1,7 @@
 {
   "name": "@popcorn245/cornfield-components",
   "version": "0.1.0",
-  "description": "cornfield's interface as web components (spec 0011): <corn-map> and what follows, thin StencilRS shells over the engine in cornfield. The same files are served by every cornfield server at /cornfield/components/.",
+  "description": "cornfield's interface as web components (spec 0011): <corn-map>, <corn-review>, <corn-scope> and the pieces around the map (<corn-node-panel>, <corn-layers>, <corn-search>), thin StencilRS shells over the engine in cornfield. The same files are served by every cornfield server at /cornfield/components/.",
   "license": "MIT",
   "author": "popcorn245 (https://github.com/popcorn245)",
   "homepage": "https://github.com/popcorn245/CornField/blob/main/docs/embedding.md",
@@ -34,6 +34,14 @@
       "types": "./dist/types/corn-map.d.ts",
       "default": "./dist/corn-map.js"
     },
+    "./corn-layers": {
+      "types": "./dist/types/corn-layers.d.ts",
+      "default": "./dist/corn-layers.js"
+    },
+    "./corn-node-panel": {
+      "types": "./dist/types/corn-node-panel.d.ts",
+      "default": "./dist/corn-node-panel.js"
+    },
     "./corn-review": {
       "types": "./dist/types/corn-review.d.ts",
       "default": "./dist/corn-review.js"
@@ -41,6 +49,10 @@
     "./corn-scope": {
       "types": "./dist/types/corn-scope.d.ts",
       "default": "./dist/corn-scope.js"
+    },
+    "./corn-search": {
+      "types": "./dist/types/corn-search.d.ts",
+      "default": "./dist/corn-search.js"
     },
     "./tokens.css": "./dist/tokens.css",
     "./version.json": "./dist/version.json"

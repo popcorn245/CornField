@@ -1,0 +1,9 @@
+/* The Layers menu in a box of its own (explorer/pieces/layers.js; explorer/css/layers.css is loaded before this). A block as wide as the place its host page
+   gives it, whose chip sits at its start; the host page's rules on it win. The menu hangs under the chip in a wide box and in a narrow one alike. */
+:host { display: block; position: relative; min-width: 0; container: corn-box / inline-size; color: var(--corn-text); font-family: var(--corn-font); }
+:host([hidden]) { display: none !important; }
+/* A phone's menu spans the window from its edges: here it is placed against the chip, and as wide as a menu is (a narrow box does not narrow it) */
+.hx-layers .hx-menu { position: absolute; top: 100%; left: 0; right: auto; width: 18rem; max-width: max(calc(100cqw - 24px), 16rem); max-height: calc(100cqh - 80px); }
+/* Over whatever the host page has under it (a panel, a table): the ground itself, not a surface, which is see-through. The search's list does the same */
+.hx-layers .hx-menu { background: var(--corn-ground); }
+.hx-needs { margin: 0; color: var(--corn-text-3); font-size: var(--corn-text-sm); }

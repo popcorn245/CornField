@@ -112,6 +112,21 @@ describe('the type declarations (D11)', () => {
     expect(map.methods.map((m: { name: string }) => m.name).sort()).toEqual(['fit', 'focusNode', 'refresh']);
   });
 
+  it('lists exactly what the three pieces around the map declare: the node panel and the Layers menu nothing of their own, the search a query, an event and a method', () => {
+    const names = (list: Array<{ name: string }>) => list.map((x) => x.name).sort();
+    const by = (tag: string) => analyzeComponents().find((c: { tagName: string }) => c.tagName === tag);
+    for (const tag of ['corn-node-panel', 'corn-layers']) {
+      const c = by(tag);
+      expect([names(c.properties), names(c.events), names(c.methods)], tag).toEqual([[], [], []]);
+    }
+    const search = by('corn-search');
+    expect(names(search.properties)).toEqual(['query']);
+    expect(names(search.events)).toEqual(['cornSearch']);
+    expect(names(search.methods)).toEqual(['focusField']);
+    const text = typesFor(analyzeComponents())['components.d.ts'];
+    for (const word of ["'corn-node-panel': HTMLCornNodePanelElement", "'corn-layers': HTMLCornLayersElement", "'corn-search': HTMLCornSearchElement", 'export interface CornSearchDetail', "'onCornSearch'?:", "'focusField':"]) expect(text, word).toContain(word);
+  });
+
   it('lists exactly what corn-review declares: its properties, its events and its methods, and the types of their details', () => {
     const [review] = analyzeComponents().filter((c: { tagName: string }) => c.tagName === 'corn-review');
     const names = (list: Array<{ name: string }>) => list.map((x) => x.name).sort();
@@ -200,7 +215,7 @@ describe('the type declarations (D11)', () => {
     for (const tag of componentTags()) expect(pkg.exports[`./${tag}`], tag).toEqual({ types: `./dist/types/${tag}.d.ts`, default: `./dist/${tag}.js` });
   });
 
-  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-review, ./corn-scope, tokens.css and version.json', () => {
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-review, ./corn-scope, ./corn-node-panel, ./corn-layers, ./corn-search, tokens.css and version.json', () => {
     if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
     const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
     fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
@@ -213,6 +228,10 @@ describe('the type declarations (D11)', () => {
       import type { CornAuthDetail, CornErrorDetail } from '@popcorn245/cornfield-components';
       import '@popcorn245/cornfield-components/corn-map';
       import '@popcorn245/cornfield-components/corn-review';
+      import '@popcorn245/cornfield-components/corn-node-panel';
+      import '@popcorn245/cornfield-components/corn-layers';
+      import { CornSearch } from '@popcorn245/cornfield-components/corn-search';
+      import type { CornSearchDetail } from '@popcorn245/cornfield-components';
       import type { CornDecisionDetail, CornNavigateDetail, CornReviewAuthDetail } from '@popcorn245/cornfield-components';
       import { CornReview } from '@popcorn245/cornfield-components/corn-review';
       const review: HTMLCornReviewElement = document.createElement('corn-review');
@@ -221,7 +240,14 @@ describe('the type declarations (D11)', () => {
       review.addEventListener('cornDecision', (e) => { const d: CornDecisionDetail = e.detail; void d; });
       review.addEventListener('cornNavigate', (e) => { const d: CornNavigateDetail = e.detail; void d; });
       review.addEventListener('cornAuth', (e) => { const d: CornReviewAuthDetail = e.detail; void d; });
-      void CornReview;
+      void CornReview; void CornSearch;
+      const search: HTMLCornSearchElement = document.createElement('corn-search');
+      search.query = 'mailer';
+      search.addEventListener('cornSearch', (e) => { const d: CornSearchDetail = e.detail; const q: string = d.query; const c: string | null = d.current; void q; void c; });
+      void search.focusField();
+      const panel: HTMLCornNodePanelElement = document.createElement('corn-node-panel');
+      const layers: HTMLCornLayersElement = document.createElement('corn-layers');
+      void panel; void layers;
       const v: string = version;
       const el = document.querySelector('corn-map')!;
       el.addEventListener('cornSelect', (e) => { const d: CornSelectDetail = e.detail; void d; });
@@ -380,13 +406,13 @@ describe('what a build leaves in dist/ (D11)', () => {
   });
 
   it('ships the declarations next to the modules', () => {
-    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-review.d.ts', 'corn-scope.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
+    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-review.d.ts', 'corn-scope.d.ts', 'corn-node-panel.d.ts', 'corn-layers.d.ts', 'corn-search.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
   it('is inside the size budget: the runtime chunk, corn-map and corn-review with their engine, each with what a src brings, and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-map', 'corn-map-src', 'corn-review', 'corn-review-src', 'corn-scope', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-layers', 'corn-layers-added', 'corn-map', 'corn-map-src', 'corn-node-panel', 'corn-node-panel-added', 'corn-review', 'corn-review-src', 'corn-scope', 'corn-search', 'corn-search-added', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

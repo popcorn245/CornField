@@ -75,9 +75,9 @@ Today the explorer is one program per document. It becomes something a page can 
 |---|---|---|---|
 | `corn-scope` | Where the data comes from, and what the pieces inside it share. Shows nothing itself | no | 3 |
 | `corn-map` | The map: pan, zoom, select, a proposal drawn on it | yes | 2 |
-| `corn-node-panel` | What is selected | yes | 4 |
-| `corn-layers` | The Layers menu | yes | 4 |
-| `corn-search` | Search, its count and its list | yes | 4 |
+| `corn-node-panel` | What is selected | yes | 4 *(built: the pieces in 4, the tags after step 5)* |
+| `corn-layers` | The Layers menu | yes | 4 *(built)* |
+| `corn-search` | Search, its count and its list | yes | 4 *(built)* |
 | `corn-proposal` | The proposal's bar: title, Before, Diff, After, Whole map | yes | 5 |
 | `corn-changes` | The change list, personas and scenarios, and the player | yes | 5 |
 | `corn-decision` | Approve and Send back, and what each will do | yes | 5 |
@@ -242,7 +242,7 @@ How the code is shared:
 
 Each step is its own release, and cornfield's page looks and behaves the same after each.
 
-Where it stands (the PM, 2026-11-12): steps 1 to 5 are built, and the JavaScript half of step 6 (the Work panel split into pieces on the instance, PR #249). What is left of steps 3 and 6, the routes a listed origin may read and write beyond the review's (the Work panel's, `corn-work`), waits on a second embed key, which is the maintainer's decision.
+Where it stands (the PM, 2026-11-12; the pieces around the map added 2026-11-13): steps 1 to 5 are built, and with them the three tags around the map, `corn-node-panel`, `corn-layers` and `corn-search` (step 4's pieces became tags once the instance could have a root for each piece: `engine/roots.js`, and the cross-piece lookups by id became events and asks), and the JavaScript half of step 6 (the Work panel split into pieces on the instance, PR #249). What is left of steps 3 and 6, the routes a listed origin may read and write beyond the review's (the Work panel's, `corn-work`), waits on a second embed key, which is the maintainer's decision.
 
 1. **The instance** (D2) *(built)*: `createInstance`, the map's modules moved onto it (render, scene, labels, layout, map-style, camera, input, frame), the page shell, the tripwire tests, the two-instances test.
 2. **`components/` and `corn-map`** *(built)* (D1, D3, D6, D11, D12): the package, its build and tests in CI, the first piece and its shell, properties in and events out, the size budget.

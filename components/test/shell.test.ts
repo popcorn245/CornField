@@ -474,3 +474,71 @@ describe('<corn-review>', () => {
     expect(sheets + styles).toBe(1);
   });
 });
+
+describe('the pieces around the map: <corn-node-panel>, <corn-layers>, <corn-search>', () => {
+  type Piece = HTMLElement & { componentOnReady(): Promise<Piece>; query?: string; focusField(): Promise<void> };
+  const TAGS = ['corn-node-panel', 'corn-layers', 'corn-search'];
+  const empty = (el: Element) => el.shadowRoot!.querySelector('[data-corn="empty"]') as HTMLElement | null;
+
+  it('register, each with a shadow root, and the document gets the default tokens once', async () => {
+    document.body.innerHTML = TAGS.map((t) => `<${t}></${t}>`).join('');
+    const els = [...document.body.children] as Piece[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    for (const t of TAGS) expect(customElements.get(t), t).toBeTruthy();
+    for (const el of els) expect(el.shadowRoot, el.localName).toBeTruthy();
+    expect((document.adoptedStyleSheets?.length ?? 0) + document.head.querySelectorAll('style[data-corn-default-tokens]').length).toBe(1);
+  });
+
+  it('with no scope around them they say what they need, make nothing else and throw nothing', async () => {
+    const errors: string[] = [];
+    const onError = (e: ErrorEvent) => errors.push(e.message);
+    window.addEventListener('error', onError);
+    document.body.innerHTML = TAGS.map((t) => `<${t}></${t}>`).join('');
+    const els = [...document.body.children] as Piece[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    await frames(3);
+    for (const el of els) {
+      expect(empty(el)!.textContent, el.localName).toBe('This needs a corn-scope around it, with a corn-map in it');
+      expect(el.shadowRoot!.querySelector('input, button'), el.localName).toBe(null);
+    }
+    expect(await els[2].focusField()).toBeUndefined(); // nothing mounted: nothing happens
+    els[2].query = 'x';
+    await frames(2);
+    for (const el of els) el.remove();
+    await frames(2);
+    window.removeEventListener('error', onError);
+    expect(errors).toEqual([]);
+  });
+
+  it('inside a scope with no map the node panel says what it is for and the others what they need; no event, no request', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const seen: string[] = [];
+    document.addEventListener('cornError', (e) => seen.push((e as CustomEvent).detail.kind));
+    document.body.innerHTML = `<corn-scope>${TAGS.map((t) => `<${t}></${t}>`).join('')}</corn-scope>`;
+    const els = [...document.body.firstElementChild!.children] as Piece[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    await frames(3);
+    expect(empty(els[0])!.textContent).toBe('Select a node on the map to see its details');
+    expect(empty(els[1])!.textContent).toBe('This needs a corn-map in the same corn-scope');
+    expect(empty(els[2])!.textContent).toBe('This needs a corn-map in the same corn-scope');
+    expect(seen).toEqual([]);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+
+  it('ends what it made when it leaves the page: nothing of its own is left in the shadow root but the note and the live region', async () => {
+    document.body.innerHTML = '<corn-search></corn-search>';
+    const el = document.body.firstElementChild as Piece;
+    await el.componentOnReady();
+    await frames(2);
+    const before = el.shadowRoot!.children.length;
+    el.remove();
+    await frames(2);
+    expect(el.shadowRoot!.children.length).toBeLessThanOrEqual(before);
+    document.body.append(el); // and back: made again, not doubled
+    await el.componentOnReady();
+    await frames(2);
+    expect(el.shadowRoot!.querySelectorAll('[data-corn="empty"]')).toHaveLength(1);
+    expect(el.shadowRoot!.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+});

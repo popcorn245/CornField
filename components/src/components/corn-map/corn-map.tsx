@@ -126,6 +126,9 @@ export class CornMap {
       },
       onReady: () => this.cornReady.emit(),
     });
+    // A map that joins a scope whose instance already has a selection shows it, and `node` says so (not an event: nothing changed for the host's listeners)
+    const held = this.node ? null : this.piece.selection();
+    if (held && held.kind === 'node') { this.node = held.id; delete this.changes.node; }
   }
 
   componentDidRender() {

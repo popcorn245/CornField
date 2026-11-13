@@ -1,0 +1,14 @@
+/* Search in a box of its own (explorer/pieces/search.js with no phone bar; explorer/css/search.css is loaded before this). A block as wide as the place its
+   host page gives it; the host page's rules on it win. The field is always shown, whatever the width: there is no header here for the phone's icon and bar. */
+:host { display: block; position: relative; min-width: 0; container: corn-box / inline-size; color: var(--corn-text); font-family: var(--corn-font); }
+:host([hidden]) { display: none !important; }
+.hx-search { display: flex; width: 100%; min-width: 0; flex: 1 1 auto; }
+/* A narrow box wraps the count and the step buttons (44px targets) to a row of their own under the field */
+@container corn-box (max-width: 767px) {
+  .hx-search { flex-wrap: wrap; height: auto; min-height: var(--hx-control-h); padding-block: var(--corn-space-1); }
+  .hx-search .hx-search-input { flex: 1 1 6rem; min-height: var(--hx-control-h); }
+  .hx-search .hx-search-steps { flex: 1 0 100%; justify-content: flex-end; }
+}
+/* The list hangs under the field and is at least as wide as it */
+.hx-search-results { left: 0; right: auto; width: max(100%, min(26rem, 92cqw)); }
+.hx-needs { margin: 0; color: var(--corn-text-3); font-size: var(--corn-text-sm); }
