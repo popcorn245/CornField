@@ -65,6 +65,8 @@ export const GREY_ALPHA_TOKEN = '--corn-map-grey-alpha';
 export const MIN_GREY_ALPHA = 0.1;
 /** The ink of a node's glyph and of a finer kind's letters (spec 0008 D8); `auto` is the white or the dark that reads on the node's fill (glyphs.js) */
 export const GLYPH_TOKEN = '--corn-map-glyph';
+/** The page's ground under the map (tokens.css; a theme sets its own): what a translucent node's fill is seen over, so what its glyph's ink is chosen against (glyphs.js) */
+export const GROUND_TOKEN = '--corn-ground';
 /** The largest label minimum a theme may ask for: bigger text would leave no room for another label */
 export const MAX_LABEL_MIN = 24;
 /** The width an ordinary line has with no theme (scene.js `flowEdge`): the `--corn-map-edge-width` scales every line by its ratio to this */
@@ -179,8 +181,9 @@ function greyAlphaOf(value) {
  * The tokens as the page computes them.
  * @param {(name: string) => string} read the value of a custom property
  * @param {string[]} [extra] more colour tokens to read: those of the finer kinds and project layers on the map (`setMapSubjects`)
- * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null, labelMin: number | null, greyAlpha: number | null}}
- *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth`, `glow`, `labelMin` and `greyAlpha` are null at `auto` or when the value is not one
+ * @returns {{values: Record<string, string>, strokeWidth: number, font: string | null, edgeWidth: number | null, glow: number | null, labelMin: number | null, greyAlpha: number | null, ground: string | null}}
+ *   `values` holds only the tokens that are a colour (not `auto`); `font`, `edgeWidth`, `glow`, `labelMin` and `greyAlpha` are null at `auto` or when the value is not one;
+ *   `ground` is the page's ground (`--corn-ground`) as a colour, or null when it is not one
  */
 export function readMapTokens(read, extra = []) {
   const values = {};
@@ -197,6 +200,7 @@ export function readMapTokens(read, extra = []) {
     glow: factorOf(read(GLOW_TOKEN)),
     labelMin: labelMinOf(read(LABEL_MIN_TOKEN)),
     greyAlpha: greyAlphaOf(read(GREY_ALPHA_TOKEN)),
+    ground: cssColor(read(GROUND_TOKEN)),
   };
 }
 
@@ -261,14 +265,16 @@ export function createIconStore(urls, { load = loadImage, onChange = () => {}, w
  * @property {number | null} glow   the glow factor (`--corn-map-glow`), null at `auto`
  * @property {number | null} labelMin  the smallest label size in px (`--corn-map-label-min`), null at `auto` or under 9px
  * @property {number | null} greyAlpha  how much of a greyed node is left (`--corn-map-grey-alpha`), null at `auto` or when it is not a number from 0.1 to 1
+ * @property {string | null} ground  the page's ground (`--corn-ground`), null when it is not a colour: a translucent node is seen over it (glyphs.js). It sets nothing
+ *   in the picture, so it does not make a style less plain
  * @property {ReturnType<typeof createIconStore> | null} icons
  * @property {boolean} pixelated   sample icons without smoothing
  * @property {boolean} plain       nothing to apply: no colour set, no icon loaded (the scene is drawn as it is)
  */
 
-const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null };
+const NO_TOKENS = { values: {}, strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null, ground: null };
 /** The style with nothing set: what a renderer or a label layer made without an instance draws with (the scene as it is) */
-export const PLAIN_STYLE = Object.freeze({ version: 0, values: Object.freeze({}), strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null, icons: null, pixelated: false, plain: true });
+export const PLAIN_STYLE = Object.freeze({ version: 0, values: Object.freeze({}), strokeWidth: DEFAULT_STROKE_WIDTH, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null, ground: null, icons: null, pixelated: false, plain: true });
 const MAX_SUBJECT_TOKENS = 500;
 
 /**
@@ -287,7 +293,7 @@ export function createMapStyle(inst) {
 
   const compose = () => {
     const plain = !Object.keys(tokens.values).length && !(icons && icons.anyReady()) && tokens.font === null && tokens.edgeWidth === null && tokens.glow === null && tokens.labelMin === null && tokens.greyAlpha === null;
-    return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, labelMin: tokens.labelMin, greyAlpha: tokens.greyAlpha, icons, pixelated, plain });
+    return Object.freeze({ version, values: tokens.values, strokeWidth: tokens.strokeWidth, font: tokens.font, edgeWidth: tokens.edgeWidth, glow: tokens.glow, labelMin: tokens.labelMin, greyAlpha: tokens.greyAlpha, ground: tokens.ground, icons, pixelated, plain });
   };
   let current = compose();
 
@@ -330,7 +336,7 @@ export function createMapStyle(inst) {
     refresh(read = inst.tokenReader()) {
       if (!read) return false;
       const next = readMapTokens(read, subjectTokens);
-      const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow && next.labelMin === tokens.labelMin
+      const same = next.strokeWidth === tokens.strokeWidth && next.font === tokens.font && next.edgeWidth === tokens.edgeWidth && next.glow === tokens.glow && next.labelMin === tokens.labelMin && next.ground === tokens.ground
         && Object.keys(next.values).length === Object.keys(tokens.values).length
         && Object.entries(next.values).every(([k, v]) => tokens.values[k] === v);
       if (same) return false;

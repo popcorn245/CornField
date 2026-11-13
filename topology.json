@@ -10653,6 +10653,12 @@
       "label": "imports"
     },
     {
+      "from": "core-explorer-glyphs",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
       "from": "pkg-explorer",
       "to": "core-explorer-pieces-scope-proposal"
     },
@@ -10699,5 +10705,5 @@
       "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T07:52:31.820Z"
+  "updatedAt": "2026-11-13T08:56:46.760Z"
 }

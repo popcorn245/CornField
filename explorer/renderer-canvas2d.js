@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint } from './scene.js';
+import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_REACH, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
 import { GLYPH_TOKEN, ICON_RATIO, PLAIN_STYLE, looksWith, styledScene } from './engine/map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 import { GLYPH_RATIO, glyphImage, glyphInk, showsGlyph } from './glyphs.js';
@@ -18,6 +18,17 @@ const TAU = Math.PI * 2;
 const GLOW_MIN_PX = 1.5;
 /** A scene with this many edges or fewer is drawn directly each frame; more, and its lines go into the layer while packets move */
 export const LAYER_MIN_EDGES = 600;
+const alphas = new Map();
+/** The alpha of a node's colour (0..1; 1 for what is not read), remembered: it is asked for every glowing node of every frame */
+function alphaOf(color) {
+  let a = alphas.get(color);
+  if (a === undefined) {
+    if (alphas.size > 512) alphas.clear();
+    a = parseColor(color)[3];
+    alphas.set(color, a);
+  }
+  return a;
+}
 const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
 
 /**
@@ -25,29 +36,30 @@ const circle = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
  * a rounded square for data, a hexagon for what is outside, a square for where things run, a diamond for people. The WebGL node shader draws the same shapes
  * with the same sizes (scene.js `SHAPE_SIZES`, shaders.js `sdShape`).
  */
-export function silhouette(ctx, shape, x, y, r) {
+export function silhouette(ctx, shape, x, y, r, add = false) {
+  const begin = () => { if (!add) ctx.beginPath(); }; // `add`: another piece of the path being built (a clip with a hole), not a new path
   if (shape === 'rounded-square' || shape === 'square') {
     const h = r * (shape === 'square' ? SHAPE_SIZES.squareHalf : SHAPE_SIZES.roundedHalf);
     const c = r * (shape === 'square' ? SHAPE_SIZES.squareCorner : SHAPE_SIZES.roundedCorner);
-    ctx.beginPath();
+    begin();
     if (ctx.roundRect) ctx.roundRect(x - h, y - h, h * 2, h * 2, c); else ctx.rect(x - h, y - h, h * 2, h * 2);
     return;
   }
   if (shape === 'hexagon') {
     const R = (r * SHAPE_SIZES.hexInradius) / Math.cos(Math.PI / 6); // flat top and bottom: the inradius is what the SDF takes
-    ctx.beginPath();
+    begin();
     for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + (i * Math.PI) / 3; const px = x + R * Math.cos(a), py = y + R * Math.sin(a); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
     ctx.closePath();
     return;
   }
   if (shape === 'diamond') {
     const h = r * SHAPE_SIZES.diamondHalf;
-    ctx.beginPath();
+    begin();
     ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y);
     ctx.closePath();
     return;
   }
-  circle(ctx, x, y, r);
+  if (add) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU); } else circle(ctx, x, y, r);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +288,7 @@ function edgesInView(scene, camera, width, height) {
 // ---------------------------------------------------------------------------
 //  Nodes
 // ---------------------------------------------------------------------------
-function drawNode(ctx, node, zoom, looks, style) {
+function drawNode(ctx, node, zoom, looks, style, theme) {
   ctx.save();
   ctx.globalAlpha = node.alpha;
 
@@ -319,9 +331,31 @@ function drawNode(ctx, node, zoom, looks, style) {
     // A soft disc behind the node, not `shadowBlur` (see drawEdge): one cheap fill instead of a blur pass
     ctx.save();
     ctx.globalAlpha = node.alpha * 0.28;
-    circle(ctx, node.x, node.y, node.r + node.glow * 0.7);
+    const reach = node.r + node.glow * 0.7;
     ctx.fillStyle = node.color;
-    ctx.fill();
+    if (alphaOf(node.color) < 1) {
+      // Under a translucent fill the glow is left out, so the fill alone sets what shows through it; WebGL's node shader does the same.
+      // The shape inside the glow's disc (the usual case): the disc with the shape as a hole, filled even-odd. A square's corners or a diamond's
+      // points can reach past a small glow's disc (a theme's --corn-map-glow), and that fill would put them over the glow: then the disc is
+      // clipped to everything but the shape (a square round both, the shape cut out even-odd)
+      if (node.r * (SHAPE_REACH[node.shape] || 1) < reach) {
+        circle(ctx, node.x, node.y, reach);
+        silhouette(ctx, node.shape, node.x, node.y, node.r, true);
+        ctx.fill('evenodd');
+      } else {
+        const side = reach + node.r;
+        ctx.beginPath();
+        ctx.rect(node.x - side, node.y - side, side * 2, side * 2);
+        silhouette(ctx, node.shape, node.x, node.y, node.r, true);
+        ctx.clip('evenodd');
+        circle(ctx, node.x, node.y, reach);
+        ctx.fill();
+      }
+    } else {
+      // An opaque fill hides the glow under it: drawn as it always was
+      circle(ctx, node.x, node.y, reach);
+      ctx.fill();
+    }
     ctx.restore();
     silhouette(ctx, node.shape, node.x, node.y, node.r);
   }
@@ -331,7 +365,7 @@ function drawNode(ctx, node, zoom, looks, style) {
   // The glyph takes the core dot's place: drawn over it, the dot would fill the glyph's own shapes and blur it at the sizes nodes have
   const image = node.icon && style.icons ? style.icons.get(node.icon) : null;
   const letters = !image && showsLetters(node, zoom);
-  const glyph = !image && !letters && showsGlyph(node, zoom) ? glyphImage(node.glyph, glyphInk(node, style)) : null;
+  const glyph = !image && !letters && showsGlyph(node, zoom) ? glyphImage(node.glyph, glyphInk(node, style, theme)) : null;
   if (!glyph) {
     circle(ctx, node.x, node.y, node.r * CORE_RATIO);
     ctx.fillStyle = looks.core;
@@ -460,7 +494,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
         ctx.translate(camera.x, camera.y);
         ctx.scale(camera.zoom, camera.zoom);
         inView.forEach((edge) => { if (edge.packet) drawPacket(ctx, edge, timeMs, camera.zoom); });
-        scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
+        scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style, scene.theme));
         ctx.restore();
         return;
       }
@@ -475,7 +509,7 @@ export function createCanvas2dRenderer(canvas, opts = {}) {
       if (decor.rings.length) drawRings(ctx, decor.rings);
 
       inView.forEach((edge) => drawEdge(ctx, edge, timeMs, camera.zoom));
-      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style));
+      scene.nodes.forEach((node) => drawNode(ctx, node, camera.zoom, looks, style, scene.theme));
       // No text here: every label (and the strike through a removed one) is drawn by the label layer (labels.js) over this canvas
 
       ctx.restore();
