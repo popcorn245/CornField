@@ -661,7 +661,7 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 | `corn-search` | `cornSearch` | the query, or the chosen match, changed, whoever changed it (typing, `query`, Enter, a row), once per change. Its fields: `query`, `current`. `query` is what is searched for now, trimmed, or an empty string once cleared; `current` is the id of the chosen match, or null |
 | `corn-scope` | `cornReady` | none: the scope has its data (read from the server, or handed in), once per server |
 | `corn-scope` | `cornAuth` | the server answered a read or a press with 401 or 403, once for each refusal. Its fields: `status`, `signIn`, `during`. `signIn` is the server's sign-in, which returns to this page; `during` is `load`, `proposal`, `facts`, `review`, `send` or `landing` |
-| `corn-scope` | `cornError` | something the pieces could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme`, `second-map`, `second-piece` (a second `corn-proposal`, `corn-changes` or `corn-decision` in the scope) or `proposal` (the proposal did not open) |
+| `corn-scope` | `cornError` | something the pieces could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme`, `second-map`, `second-section` (a second `corn-proposal`, `corn-changes` or `corn-decision` in the scope) or `proposal` (the proposal did not open) |
 | `corn-scope` | `cornNavigate` | the open proposal or its view changed: what cornfield's own page would put in its address bar, for the host to answer or not. Sent by the scope, once for each change, whoever made it: a property, a button on `corn-proposal`, a way on from a bad link. Its fields: `proposal`, `source`, `view`, `change`. `proposal` is the name, or null once closed; `source` is the copy only when it was asked for by name; `view` is `before`, `diff`, `after`, or null once closed; `change` is `opened`, `view` or `closed` |
 | `corn-scope` | `cornDecision` | the server took a decision, once per decision, after it answered, whichever `corn-decision` was pressed. Its fields: `outcome`, `proposal`, `source`, `open`, `review`. `outcome` is `approved` or `notes` (a send back); `open` is false when another proposal was opened, or this one closed, while it was sent; `review` is what the server answered |
 
@@ -814,7 +814,7 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `needsScope` | This needs a corn-scope around it, with a corn-map in it |
 | `needsMap` | This needs a corn-map in the same corn-scope |
 | `waitingForMap` | Waiting for the map |
-| `secondPiece` | This scope already has one of these |
+| `secondSection` | This scope already has one of these |
 <!-- strings:end -->
 
 The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openFile` ("Open file") is the primary action when the node has a file and the config names a forge; `openRoute` ("Open route") is primary when there is no such file and the quiet second action when there is; `startRun` ("Start a run") is new.

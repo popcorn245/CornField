@@ -403,7 +403,7 @@ async function main() {
       const second = await page.evaluate(() => ['#pr2', '#ch2', '#de2'].map((i) => { const e = document.querySelector(i).shadowRoot.querySelector('[data-corn="empty"]'); return e ? e.textContent.trim() : null; }));
       check('doubled: each second section says "This scope already has one of these" and draws nothing else', second.every((t) => t === 'This scope already has one of these') && !(await T.has(page, '#de2', '[data-review="approved"]')) && !(await T.has(page, '#ch2', '[data-corn="row"]')), second.join(' | '));
       const errs = a.ev('cornError').slice(errors0);
-      check('doubled: the host hears cornError {kind: second-piece} once for each (three), from the scope', errs.length === 3 && errs.every((e) => e.target === 's' && e.detail.kind === 'second-piece'), JSON.stringify(errs.map((e) => e.detail.message)));
+      check('doubled: the host hears cornError {kind: second-section} once for each (three), from the scope', errs.length === 3 && errs.every((e) => e.target === 's' && e.detail.kind === 'second-section'), JSON.stringify(errs.map((e) => e.detail.message)));
       const narrated = (await T.said(page)).filter((t) => /Approve|Send back/.test(t));
       check('doubled: the decision is on screen once: one Approve button in the page, and nothing is said twice', (await page.evaluate(() => [...document.querySelectorAll('corn-decision')].reduce((n, e) => n + e.shadowRoot.querySelectorAll('[data-review="approved"]').length, 0))) === 1 && narrated.length <= 1);
       await page.evaluate(() => document.querySelector('#de').remove());

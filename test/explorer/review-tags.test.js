@@ -306,7 +306,7 @@ describe('the sections in roots of their own', () => {
 });
 
 describe('one of each section in a scope', () => {
-  it('a second says so in its own place, tells the scope once (cornError second-piece), draws nothing else, and takes over when the first leaves', async () => {
+  it('a second says so in its own place, tells the scope once (cornError second-section), draws nothing else, and takes over when the first leaves', async () => {
     const t = await setup({ proposal: '0002-checkout', source: 'pull/31' });
     await flush(200);
     const first = section('decision', t.inst, 'one');
@@ -315,7 +315,7 @@ describe('one of each section in a scope', () => {
     expect(first.root.querySelector('[data-review="approved"]')).toBeTruthy();
     expect(says(second.root)).toBe('This scope already has one of these');
     expect(second.root.querySelector('[data-review="approved"]')).toBe(null);
-    expect(t.heard.error.filter((e) => e.kind === 'second-piece')).toHaveLength(1);
+    expect(t.heard.error.filter((e) => e.kind === 'second-section')).toHaveLength(1);
     // the decision's requests are made by the first, and only once
     const reads = t.calls.filter((c) => /\/review/.test(c.url)).length;
     expect(reads).toBeLessThanOrEqual(1);

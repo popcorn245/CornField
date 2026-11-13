@@ -24,8 +24,8 @@
  *     server (loading, signed out, offline: the map's own card says which) that they wait for it (`waitingForMap`). Tags can come in any order;
  *   - it has a live region of its own, said in only when no map has one (`announce:fallback`): a panel or a search beside no map still speaks;
  *   - an `exclusive` piece (the proposal's bar, the change list with its player, the decision) is one per scope: each has a state of its own (a hold, a
- *     note, a playing scenario, a line that is said once), which two could not share. The first to join holds the name; a second says `secondPiece` in its own
- *     place, tells the scope (`piece:refused`, which is `cornError` `second-piece`), and takes over when the first leaves.
+ *     note, a playing scenario, a line that is said once), which two could not share. The first to join holds the name; a second says `secondSection` in its own
+ *     place, tells the scope (`piece:refused`, which is `cornError` `second-section`), and takes over when the first leaves.
  * Nothing here reads the page: no `document`, no id of a neighbour. It never throws for a missing scope or map.
  */
 
@@ -85,7 +85,7 @@ export function mountAround(piece, root, inst, options = {}) {
   const hasMap = () => !!inst.map && inst.state.nodes.length > 0;
   const showNote = (gone = false) => {
     if (ended) return;
-    const words = second() ? t(inst, 'secondPiece') : !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : inst.map && !gone ? t(inst, 'waitingForMap') : t(inst, 'needsMap');
+    const words = second() ? t(inst, 'secondSection') : !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : inst.map && !gone ? t(inst, 'waitingForMap') : t(inst, 'needsMap');
     if (note.length && note[0].textContent === words) return;
     dropNote();
     note = place(inst, root, `<p class="hx-needs" data-corn="empty">${escapeHtml(words)}</p>`, null, 'needs');
@@ -94,7 +94,7 @@ export function mountAround(piece, root, inst, options = {}) {
     if (real || ended) return;
     if (!takeName()) {
       showNote();
-      if (!told) { told = true; inst.emit('piece:refused', { piece: exclusive, reason: 'second-piece', message: `A scope holds one ${exclusive}.` }); }
+      if (!told) { told = true; inst.emit('piece:refused', { piece: exclusive, reason: 'second-section', message: `A scope holds one ${exclusive}.` }); }
       return;
     }
     if (!hasMap()) { showNote(); return; }

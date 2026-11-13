@@ -189,7 +189,7 @@ describe('each section alone, with no scope, with no map and doubled', () => {
     expect(list.map.getAttribute('node')).toBeTruthy();
   });
 
-  it('a second of a section says so, tells the host once (cornError second-piece, from the scope), and takes over when the first leaves', async () => {
+  it('a second of a section says so, tells the host once (cornError second-section, from the scope), and takes over when the first leaves', async () => {
     const t = await compose();
     await until(() => visible(t.foot, '[data-review="approved"]'));
     const second = document.createElement('corn-decision');
@@ -197,7 +197,7 @@ describe('each section alone, with no scope, with no map and doubled', () => {
     await (second as El).componentOnReady();
     await until(() => said(second) === 'This scope already has one of these');
     expect(q(second, '[data-review="approved"]')).toBe(null);
-    expect(seen('cornError').filter((e) => e.detail.kind === 'second-piece')).toHaveLength(1);
+    expect(seen('cornError').filter((e) => e.detail.kind === 'second-section')).toHaveLength(1);
     expect(seen('cornError')[0].target).toBe('corn-scope');
     t.foot.remove();
     await until(() => visible(second, '[data-review="approved"]'));

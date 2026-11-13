@@ -138,7 +138,7 @@ describe('the type declarations (D11)', () => {
     expect(names(scope.properties)).toEqual(['config', 'proposal', 'source', 'src', 'strings', 'theme', 'topology', 'useTheme', 'view']);
     expect(names(scope.events)).toEqual(['cornAuth', 'cornDecision', 'cornError', 'cornNavigate', 'cornReady']);
     const text = typesFor(analyzeComponents())['components.d.ts'];
-    for (const word of ["'corn-proposal': HTMLCornProposalElement", "'corn-changes': HTMLCornChangesElement", "'corn-decision': HTMLCornDecisionElement", 'export interface CornScopeAuthDetail', "during: 'load' | 'proposal' | 'facts' | 'review' | 'send' | 'landing'", "'second-piece'"]) expect(text, word).toContain(word);
+    for (const word of ["'corn-proposal': HTMLCornProposalElement", "'corn-changes': HTMLCornChangesElement", "'corn-decision': HTMLCornDecisionElement", 'export interface CornScopeAuthDetail', "during: 'load' | 'proposal' | 'facts' | 'review' | 'send' | 'landing'", "'second-section'"]) expect(text, word).toContain(word);
     // the detail of cornNavigate and cornDecision is the review's, written once for the two
     expect(text.match(/export interface CornNavigateDetail/g)).toHaveLength(1);
     expect(text.match(/export interface CornDecisionDetail/g)).toHaveLength(1);

@@ -14,8 +14,8 @@ export interface CornScopeAuthDetail {
 
 /** What `cornError` says: something the pieces could not do, by `kind` */
 export interface CornScopeErrorDetail {
-  /** `not-listed` (the server gave this page no CORS answer: its origin is not in `embed.origins`), `offline`, `server` (it answered with something that is not a config or a map), `address` (`src` is not an http(s) address), `version` (the package and the server differ by a minor or more; it keeps working), `theme` (the server's theme could not be had), `second-map` (a scope holds one map), `second-piece` (a scope holds one `corn-proposal`, one `corn-changes` and one `corn-decision`) or `proposal` (the proposal did not open: no such proposal, or the server refused) */
-  kind: 'not-listed' | 'offline' | 'server' | 'address' | 'version' | 'theme' | 'second-map' | 'second-piece' | 'proposal';
+  /** `not-listed` (the server gave this page no CORS answer: its origin is not in `embed.origins`), `offline`, `server` (it answered with something that is not a config or a map), `address` (`src` is not an http(s) address), `version` (the package and the server differ by a minor or more; it keeps working), `theme` (the server's theme could not be had), `second-map` (a scope holds one map), `second-section` (a scope holds one `corn-proposal`, one `corn-changes` and one `corn-decision`) or `proposal` (the proposal did not open: no such proposal, or the server refused) */
+  kind: 'not-listed' | 'offline' | 'server' | 'address' | 'version' | 'theme' | 'second-map' | 'second-section' | 'proposal';
   /** A few words more, plain text: the origin to list, the problem with the address, the two versions, what the proposal's bar says */
   message?: string;
 }

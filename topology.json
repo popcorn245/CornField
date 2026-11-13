@@ -10682,12 +10682,6 @@
     },
     {
       "from": "core-explorer-pieces-scope-proposal",
-      "to": "core-explorer-engine-topology",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-pieces-scope-proposal",
       "to": "core-explorer-proposal-model",
       "dashed": true,
       "label": "imports"
@@ -10703,7 +10697,13 @@
       "to": "core-explorer-pieces-scope-proposal",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-proposal",
+      "to": "core-explorer-engine-roots",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T08:56:46.760Z"
+  "updatedAt": "2026-11-13T09:38:19.328Z"
 }
