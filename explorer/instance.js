@@ -197,7 +197,11 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
   /** The focused element of one tree: a Document's or a shadow root's `activeElement`; for an element, the tree it sits in, when the focus is inside it */
   const activeIn = (r) => {
     if (r.nodeType === 11) {
-      // A shadow root's own focus, found from the document down: a root asked while the focus is in another root of the instance says none (a browser does; the walk never asks one that does not hold it)
+      // A shadow root's own focus: asked of the root itself, which also answers inside a host's closed shadow root, where a walk from the document cannot
+      // look in. Where asking throws (happy-dom, while the focus is in another shadow root), it is found from the document down through the open roots
+      let own;
+      try { own = r.activeElement; } catch { own = undefined; }
+      if (own !== undefined) return own && own.getRootNode && own.getRootNode() === r ? own : null;
       let el = doc.activeElement;
       while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
       return el && el.getRootNode && el.getRootNode() === r ? el : null;

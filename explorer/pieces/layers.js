@@ -283,14 +283,17 @@ export function mount(root, inst, options = {}) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   });
-  // Any click outside the menu closes it; a click on one of its rows does not. Asked of the whole page, in the capture phase, before the action: a row's
-  // action draws the rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside. The path
-  // is the composed one, so a click inside this piece's own shadow root is inside, and one anywhere else in the host's page is outside
+  // Any click outside the menu closes it; a click on one of its rows does not. Whether it was inside is known before the action (a row's action draws the
+  // rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside): the menu's own element hears
+  // the click on its way in, and the page decides once the click has passed. The page's own path is not enough: in a host's closed shadow root the
+  // document's `composedPath()` stops at that root's host, so a click on a row would look like one outside
+  const inside = new WeakSet();
+  scope.listen(wrap, 'click', (e) => { inside.add(e); }, true);
   scope.own(onPageClick(inst, (e) => {
-    if (menu.hidden) return;
+    if (menu.hidden || inside.has(e)) return;
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
     if (!path.includes(wrap)) closeMenu();
-  }));
+  }, { capture: false }));
   // Escape with the menu open closes it, and its chip has the focus again (a key in any root of the instance: the map's too)
   scope.own(listenRoots(inst, 'keydown', (e) => {
     if (e.key !== 'Escape' || menu.hidden) return;

@@ -10,8 +10,9 @@
  *                                           (cornfield's document, the review's one root) is not added again
  *   listenRoots(inst, type, fn, opts)       a listener on every root of the instance, those that join later too; an event that reaches two of them (a root
  *                                           inside another) is handled once. Removed by `destroy()`
- *   onPageClick(inst, fn)                   a click anywhere in the page, outside every root too, heard first (capture): what closes a menu a click
- *                                           beside it in the host's page lands on. The event's `composedPath()` says what was in the way
+ *   onPageClick(inst, fn, { capture })      a click anywhere in the page, outside every root too, heard first (capture, the default) or last: what closes a
+ *                                           menu a click beside it in the host's page lands on. The event's `composedPath()` says what was in the way, but
+ *                                           not inside a host's closed shadow root: a piece asks its own element too (pieces/layers.js)
  *
  * A piece owns its own elements and never looks for a neighbour's by id: it reaches it by an event or an `ask` on the instance (instance.js lists them).
  * This module is the sister of instance.js: it is where the instance meets the page's own roots, so it is exempt from the same tripwire rules.
@@ -59,7 +60,12 @@ export function listenRoots(inst, type, fn, opts) {
   return off;
 }
 
-/** @param {ReturnType<typeof import('../instance.js').createInstance>} inst @param {(e: MouseEvent) => void} fn @returns {() => void} */
-export function onPageClick(inst, fn) {
-  return inst.doc ? inst.listen(inst.doc, 'click', (e) => fn(e), true) : () => {};
+/**
+ * @param {ReturnType<typeof import('../instance.js').createInstance>} inst
+ * @param {(e: MouseEvent) => void} fn
+ * @param {{ capture?: boolean }} [opts] heard first (the default), or last, once the click has reached everything in its way
+ * @returns {() => void}
+ */
+export function onPageClick(inst, fn, { capture = true } = {}) {
+  return inst.doc ? inst.listen(inst.doc, 'click', (e) => fn(e), capture) : () => {};
 }
