@@ -142,6 +142,16 @@ describe('the type declarations (D11)', () => {
     // the detail of cornNavigate and cornDecision is the review's, written once for the two
     expect(text.match(/export interface CornNavigateDetail/g)).toHaveLength(1);
     expect(text.match(/export interface CornDecisionDetail/g)).toHaveLength(1);
+    // written once in the types, so the two sources must say the same: one changed alone would be dropped from the types unseen
+    const body = (tag: string, name: string) => {
+      const src = fs.readFileSync(path.join(PACKAGE, 'src', 'components', tag, `${tag}.tsx`), 'utf8');
+      const m = new RegExp(`export interface ${name} \\{[\\s\\S]*?\\n\\}`).exec(src);
+      return m ? m[0].replace(/^\s*\/\*\*.*\*\/\s*$/gm, '').replace(/\s+/g, ' ') : null;
+    };
+    for (const name of ['CornNavigateDetail', 'CornDecisionDetail', 'CornReviewRecord']) {
+      expect(body('corn-scope', name), name).toBeTruthy();
+      expect(body('corn-scope', name), name).toBe(body('corn-review', name));
+    }
   });
 
   it('lists exactly what corn-review declares: its properties, its events and its methods, and the types of their details', () => {

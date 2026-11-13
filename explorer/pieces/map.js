@@ -45,7 +45,7 @@
 import { createInstance } from '../instance.js';
 import { createMap } from '../engine/render.js';
 import { mapStyleOf } from '../engine/map-style.js';
-import { layoutMap, setTopology as installTopology } from '../engine/topology.js';
+import { layoutMap, setMap, setTopology as installTopology } from '../engine/topology.js';
 import { initKeyboard, resetKeyboard, speaker } from '../engine/keyboard.js';
 import { selectNode, clearSelection } from '../engine/selection.js';
 import { stopFlight } from '../engine/fly.js';
@@ -181,6 +181,9 @@ function mountOn(root, inst, options, privateScope) {
   const scope = scopeOf(inst);
   scope.own(releaseRoot);
   if (privateScope) scope.own(() => privateScope.destroy());
+  // In a scope, a proposal the scope holds (pieces/scope-proposal.js) is laid out on this map's own layout: nodes that were there keep their place (the review
+  // and cornfield's page answer for their own maps)
+  if (info) scope.on('map:set', ({ nodes, edges }) => { setMap(inst, nodes, edges); return true; });
   const rendererOf = (v) => (v === 'canvas2d' ? 'canvas2d' : 'auto');
   const themeOf = (v) => (v === 'light' || v === 'dark' ? v : 'auto');
   const current = { renderer: rendererOf(options.renderer), theme: themeOf(options.theme), topology: undefined };

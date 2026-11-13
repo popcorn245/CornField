@@ -23,14 +23,12 @@
  *   onAuth     ({ status, signIn, during })  a read or a press was refused for want of a sign-in (`during`: 'proposal', 'facts', 'review', 'send', 'landing')
  *   onError    ({ kind: 'proposal', message })  the proposal asked for did not open
  *
- * What it does for the pieces besides opening: it answers `map:set` (a proposal's nodes are laid out beside the map's, engine/topology.js `setMap`) and
- * `proposal:specs-list` (there is no list of specs to open in another app's page), and it hears a click on an edge of the map (engine/proposal.js
+ * What it does for the pieces besides opening: it answers `proposal:specs-list` (there is no list of specs to open in another app's page), and it hears a click on an edge of the map (engine/proposal.js
  * `bindEdgePicking`, on the map's canvas) so that a marked edge opens in the node panel whether or not a `<corn-proposal>` is there. It reads no address and
  * writes none.
  */
 
 import { openProposal, showProposal, closeProposal, setProposalView, rebuildProposalMap, bindEdgePicking, setMessage } from '../engine/proposal.js';
-import { setMap } from '../engine/topology.js';
 import { scopeOf } from '../engine/piece.js';
 import { signInUrl } from '../engine/source-address.js';
 import { PROPOSAL_VIEWS, isProposalName, notANameWords } from '../proposal-model.js';
@@ -94,8 +92,7 @@ export function holdProposal(inst, options = {}) {
   }
 
   // -- what the pieces need of whoever holds the proposal -------------------------------------------------------------------------------
-  // The review lays the map out from what the engine hands over (a proposal's nodes and edges are the base with marks): nodes that were there keep their place
-  scope.on('map:set', ({ nodes, edges }) => { setMap(inst, nodes, edges); return true; });
+  // (`map:set`, laying the proposal's nodes out beside the map's, is the scope's map's own answer: pieces/map.js)
   scope.on('proposal:specs-list', () => false);
 
   // -- the map comes, changes its data, or is put back ------------------------------------------------------------------------------------

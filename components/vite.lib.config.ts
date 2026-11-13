@@ -69,6 +69,14 @@ function groupOf(ctx: ChunkingContext, name: string, allowed: string[], needs: s
   return group;
 }
 const reviewFamily = (ctx: ChunkingContext) => groupOf(ctx, 'review-pieces', ['corn-review', ...SECTIONS], SECTIONS);
+/** The components that load a module, statically (the scope's proposal, a chunk it imports when it is given one, comes on top of a map and sections that load these already) */
+const usersOf = (ctx: ChunkingContext, id: string) => COMPONENTS.filter((tag) => reach(ctx, tag).has(id));
+/**
+ * What the node panel and a section load, and nothing but the review besides (the camera's framing, the cloud panel's words, the proposal model): one chunk. A bundler
+ * cut it in three, by which of them import each module, though each of the five loads all three (the sections through their own chunk), each compressed on its own:
+ * about 0.8 kB more for each of the five
+ */
+const panelAndReview = (ctx: ChunkingContext, id: string) => !isComponent(id) && !sharedEngine(ctx, id) && !reviewFamily(ctx).has(id) && (() => { const users = usersOf(ctx, id); return users.includes('corn-node-panel') && users.some((tag) => SECTIONS.includes(tag)) && users.every((tag) => ['corn-node-panel', 'corn-review', ...SECTIONS].includes(tag)); })();
 for (const name of COMPONENTS) entries[name] = `src/components/${name}/${name}.tsx`;
 void componentTags; // (the tag list of tokens.css comes from the same folder)
 
@@ -94,6 +102,7 @@ export default defineConfig({
             { name: 'runtime', test: /node_modules[\\/]@stencil[\\/]core/, priority: 2 },
             { name: (id: string, ctx: ChunkingContext) => (sharedEngine(ctx, id) ? 'engine' : null), priority: 1 },
             { name: (id: string, ctx: ChunkingContext) => (reviewFamily(ctx).has(id) ? 'review-pieces' : null), includeDependenciesRecursively: false, priority: 0 },
+            { name: (id: string, ctx: ChunkingContext) => (panelAndReview(ctx, id) ? 'panel-review' : null), includeDependenciesRecursively: false, priority: 0 },
           ],
         },
       },

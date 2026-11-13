@@ -101,7 +101,7 @@
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
  *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)
  *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the Work panel opens on Runs at that run, its reply field focused
- *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
+ *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page (or the review, or a scope's map: pieces/map.js) laid the map out from these
  *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
  *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
  *
