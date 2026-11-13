@@ -5,7 +5,7 @@
 import axe from 'axe-core';
 import { userEvent } from 'vitest/browser';
 import { afterEach, describe, expect, it } from 'vitest';
-import { canvasOf, frames, sleep, smallTopology } from './support';
+import { canvasOf, frames, pixelsOf, sleep, smallTopology } from './support';
 
 type El = HTMLElement & { componentOnReady(): Promise<El>; topology?: unknown; config?: unknown; node?: string | null; query?: string; focusNode(id: string): Promise<void>; focusField(): Promise<void> };
 
@@ -179,6 +179,23 @@ describe('the pieces around the map in one scope', () => {
     expect(empty(layers)!.textContent).toBe('This needs a corn-map in the same corn-scope');
   });
 
+  it('while the map has no data (its server cannot be reached, or refuses) the search and the Layers menu wait, and say so: no "No match" over nothing', async () => {
+    const host = document.createElement('main');
+    host.innerHTML = '<corn-scope src="http://127.0.0.1:9"><corn-search></corn-search><corn-layers></corn-layers><corn-map renderer="canvas2d" style="height: 300px"></corn-map><corn-node-panel></corn-node-panel></corn-scope>';
+    document.body.append(host);
+    await Promise.all([...host.querySelectorAll('*')].map((el) => (el as El).componentOnReady?.()));
+    const [map, search, layers, panel] = ['corn-map', 'corn-search', 'corn-layers', 'corn-node-panel'].map((t) => host.querySelector(t) as El);
+    await until(() => !!map.shadowRoot!.querySelector('[data-corn="source-retry"]'), 15000); // the map's card: the one place that says what is wrong
+    await frames(2);
+    expect(empty(search)!.textContent).toBe('Waiting for the map');
+    expect(empty(layers)!.textContent).toBe('Waiting for the map');
+    expect(search.shadowRoot!.querySelector('input')).toBe(null);
+    expect(layers.shadowRoot!.querySelector('[data-corn="layers-button"]')).toBe(null);
+    expect(empty(panel)!.textContent).toBe('Select a node on the map to see its details');
+    expect(host.querySelectorAll('corn-scope *').length).toBe(4);
+    for (const el of [search, layers, panel]) expect(el.shadowRoot!.querySelector('[data-corn="source-status"]')).toBe(null); // one card for the scope, not four
+  });
+
   it('two scopes on one page do not touch each other', async () => {
     const a = await compose();
     const host2 = document.createElement('main');
@@ -207,6 +224,107 @@ describe('the pieces around the map in one scope', () => {
     expect(Math.round(d.width)).toBe(360);
     expect(getComputedStyle(drawer(panel)).position).toBe('relative');
     expect(panel.shadowRoot!.querySelector('[data-corn="backdrop"], [data-corn="sheet-handle"]')).toBe(null);
+  });
+
+  it('inside a host element\'s closed shadow root: a click on a row of the Layers menu keeps it open, the arrows walk the search\'s list, the wheel zooms the focused map', async () => {
+    const outer = document.createElement('div');
+    document.body.append(outer);
+    const closed = outer.attachShadow({ mode: 'closed' });
+    closed.innerHTML = `<main style="display: grid; grid-template-columns: 1fr 360px; width: 900px"><corn-scope style="display: contents">${LAYOUT.mapFirst}</corn-scope></main>`;
+    const q = (t: string) => closed.querySelector(t) as El;
+    await Promise.all(['corn-scope', 'corn-map', 'corn-node-panel', 'corn-layers', 'corn-search'].map((t) => q(t).componentOnReady()));
+    q('corn-scope').topology = await smallTopology(30);
+    q('corn-scope').config = {};
+    const [map, layers, search] = [q('corn-map'), q('corn-layers'), q('corn-search')];
+    await until(() => !!canvasOf(map) && !!layers.shadowRoot!.querySelector('[data-corn="layers-button"]') && !!search.shadowRoot!.querySelector('input'));
+    await frames(3);
+    // the Layers menu: the document's view of the click stops at the closed root's host, and the menu still knows the click was its own
+    // (a test cannot point the mouse into a closed root: the elements are clicked, which the page hears the same way, its path cut at the host)
+    (layers.shadowRoot!.querySelector('[data-corn="layers-button"]') as HTMLElement).click();
+    const menu = layers.shadowRoot!.querySelector('[data-corn="layers-menu"]') as HTMLElement;
+    (layers.shadowRoot!.querySelector('[data-corn="row"][aria-pressed="true"]') as HTMLElement).click();
+    expect(menu.hidden).toBe(false);
+    document.body.insertAdjacentHTML('beforeend', '<p id="away" style="margin: 0; height: 40px">host text</p>');
+    (document.querySelector('#away') as HTMLElement).click();
+    expect(menu.hidden).toBe(true);
+    // the search's list, walked by the arrows (the piece asks the instance where the focus is: a closed root's own focus)
+    const input = search.shadowRoot!.querySelector('input') as HTMLInputElement;
+    input.focus();
+    await userEvent.keyboard('a');
+    await until(() => !!search.shadowRoot!.querySelector('[data-corn="search-result"][data-search-id]'));
+    await userEvent.keyboard('{ArrowDown}');
+    const first = search.shadowRoot!.activeElement;
+    await userEvent.keyboard('{ArrowDown}');
+    expect(search.shadowRoot!.activeElement).not.toBe(first);
+    expect(search.shadowRoot!.activeElement?.getAttribute('data-corn')).toBe('search-result');
+    await userEvent.keyboard('{Escape}');
+    // the wheel: outside cornfield's page it is the map's only while the map has the focus, and the map knows it has it
+    const canvas = canvasOf(map);
+    canvas.focus();
+    await frames(2);
+    const before = pixelsOf(canvas);
+    const r = canvas.getBoundingClientRect();
+    canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true, cancelable: true, composed: true }));
+    await sleep(400);
+    await frames(3);
+    expect(pixelsOf(canvas)).not.toEqual(before);
+    outer.remove();
+    document.querySelector('#away')!.remove();
+  });
+
+  it('two panels, two searches and two Layers menus in one scope are one selection and one search: one region speaks, the other field shows the query, Enter goes into the first panel', async () => {
+    const twice = '<corn-map renderer="canvas2d" style="height: 360px"></corn-map><div><corn-search id="sa"></corn-search><corn-layers id="la"></corn-layers><corn-node-panel id="pa" style="height: 200px"></corn-node-panel></div><div><corn-search id="sb"></corn-search><corn-layers id="lb"></corn-layers><corn-node-panel id="pb" style="height: 200px"></corn-node-panel></div>';
+    const host = document.createElement('main');
+    host.style.cssText = 'display: grid; grid-template-columns: 1fr 300px 300px; width: 1000px';
+    host.innerHTML = `<corn-scope style="display: contents">${twice}</corn-scope>`;
+    document.body.append(host);
+    const q = (s: string) => host.querySelector(s) as El;
+    await Promise.all([...host.querySelectorAll('*')].map((el) => (el as El).componentOnReady?.()));
+    q('corn-scope').topology = await smallTopology(30);
+    q('corn-scope').config = {};
+    await until(() => ['#sa', '#sb'].every((s) => !!q(s).shadowRoot!.querySelector('input')) && ['#pa', '#pb'].every((s) => !!drawer(q(s))));
+    await frames(3);
+    const status = (s: string) => (q(s).shadowRoot!.querySelector('[data-corn="search-status"]') as HTMLElement).textContent;
+    await userEvent.click(q('#sb').shadowRoot!.querySelector('input')!);
+    await userEvent.keyboard('a');
+    await until(() => status('#sb') !== '');
+    expect(status('#sa')).toBe(''); // said once, by the one in use
+    expect((q('#sa').shadowRoot!.querySelector('input') as HTMLInputElement).value).toBe('a'); // the same search
+    expect(q('#sa').shadowRoot!.querySelector('[data-corn="search-count"]')!.textContent).toBe(q('#sb').shadowRoot!.querySelector('[data-corn="search-count"]')!.textContent);
+    // Enter from the map: into the first panel, and the second does not take the focus from it
+    const map = q('corn-map');
+    canvasOf(map).focus();
+    await userEvent.keyboard('{Escape}n');
+    await frames(2);
+    await userEvent.keyboard('{Enter}');
+    expect(q('#pa').shadowRoot!.activeElement).toBe(title(q('#pa')));
+    expect(drawer(q('#pb')).classList.contains('drawer-open')).toBe(true); // both show the scope's one selection
+    // the first of each removed: the second carries on, and speaks
+    for (const s of ['#sa', '#la', '#pa']) q(s).remove();
+    await userEvent.click(q('#sb').shadowRoot!.querySelector('input')!);
+    await userEvent.keyboard('{Control>}a{/Control}b');
+    await until(() => status('#sb') !== '' && status('#sb') !== null);
+  });
+
+  it('a value with no space in it (a long host name or file) wraps inside a narrow panel and never runs past its edge', async () => {
+    const { host, scope, map, panel } = await compose();
+    host.style.gridTemplateColumns = '1fr 220px';
+    const topology = await smallTopology(30);
+    const long = 'service.example.test'.replace(/\./g, 'x').repeat(4);
+    Object.assign(topology.nodes[0], { file: `apps/${long}/index.js`, label: long, description: `A ${long} that ${long}` });
+    // a flow line to it, so a "Gets from" line names a long node
+    Object.assign(topology.nodes[1], { label: `${long}.example.test` });
+    (topology.edges as Array<Record<string, string>>).push({ from: topology.nodes[1].id, to: topology.nodes[0].id, kind: 'flow', label: 'reads it', status: 'live' });
+    scope.topology = topology;
+    await frames(3);
+    await map.focusNode(topology.nodes[0].id);
+    await frames(3);
+    const d = drawer(panel);
+    expect(d.classList.contains('drawer-open')).toBe(true);
+    for (const el of d.querySelectorAll('*')) {
+      const r = (el as HTMLElement).getBoundingClientRect();
+      if (r.width) expect(Math.round(r.right), `${(el as HTMLElement).className}: ${(el.textContent || '').slice(0, 30)}`).toBeLessThanOrEqual(Math.round(d.getBoundingClientRect().right) + 1);
+    }
   });
 
   it('every control of the three has a hook and a part, and the composed page has no axe violation', async () => {
