@@ -124,7 +124,7 @@ Chromium resolves `*.localhost` to this machine, so two names are two origins th
 
 ## The components
 
-cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there are three: [`<corn-review>`](#corn-review-the-one-tag-review), a proposal on the map with Approve and Send back, in one tag; [`<corn-map>`](#properties-events-and-methods); and [`<corn-scope>`](#corn-scope-and-src-reading-a-cornfield-server), which reads a cornfield server for the pieces inside it (`<corn-scope>` and a map's `src` come with the release after 0.48.0, `<corn-review>` with the one after that).
+cornfield's interface is also a set of web components, built with [StencilRS](https://github.com/popcorn245/StencilRS), that another app puts on its own page. Each is a thin shell over the same engine cornfield's own page runs (`explorer/pieces/`), so a map in your app is the map you see in cornfield: the same drawing, the same keys, the same way a tap selects. So far there are six: [`<corn-review>`](#corn-review-the-one-tag-review), a proposal on the map with Approve and Send back, in one tag; [`<corn-map>`](#properties-events-and-methods); [`<corn-scope>`](#corn-scope-and-src-reading-a-cornfield-server), which reads a cornfield server for the pieces inside it (`<corn-scope>` and a map's `src` come with the release after 0.48.0, `<corn-review>` with the one after that); and the three pieces that go around the map in a scope, [`<corn-node-panel>`, `<corn-layers>` and `<corn-search>`](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search).
 
 ### Getting the components
 
@@ -154,11 +154,14 @@ What is there (the files of the build, and only those; `manifest.json` lists the
 | `corn-review.js` | registers `<corn-review>`: load this one for the review ([below](#corn-review-the-one-tag-review)) |
 | `corn-map.js` | registers `<corn-map>`: load this one for the map |
 | `corn-scope.js` | registers `<corn-scope>` ([below](#corn-scope-and-src-reading-a-cornfield-server)) |
+| `corn-node-panel.js`, `corn-layers.js`, `corn-search.js` | register the pieces around the map ([below](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search)) |
 | `index.js` | registers every component, and exports `version` |
 | `chunks/runtime-<hash>.js` | the Stencil runtime, shared by every entry |
-| `chunks/engine-<hash>.js` | the engine every component shares, with the default tokens |
+| `chunks/engine-<hash>.js` | the engine every component shares, with the default tokens: what a map and a scope both load, one chunk |
 | `chunks/map-<hash>.js` | the map piece and what it draws with: what a map and a review share, and a scope does not need |
-| `chunks/corn-review-<hash>.js` | the review: the proposal's bar, the change list and the scenario player, the node panel and the decision, and the engine's modules only they use (the review loads it, and nothing else does) |
+| `chunks/corn-review-<hash>.js` | the review: the proposal's bar, the change list and the scenario player and the decision, and the engine's modules only they use (the review loads it, and nothing else does) |
+| `chunks/node-panel-<hash>.js`, `chunks/layers-<hash>.js`, `chunks/sheets-<hash>.js` | the node panel, the layers' engine and the phone's sheets: what the review shares with the pieces around the map |
+| `chunks/around-<hash>.js`, `chunks/corn-node-panel-<hash>.js`, `chunks/corn-layers-<hash>.js`, `chunks/corn-search-<hash>.js` | how a piece around the map joins its scope, and each of the three with its stylesheet (the search and the Layers menu hold their pieces) |
 | `chunks/scope-<hash>.js` | a scope: `corn-scope.js` loads it at once, `corn-map.js` only when a map has a `src` |
 | `chunks/status-<hash>.js`, `chunks/source-address-<hash>.js` | reading a server, its states and the server's theme (and the address checks): what a map with a `src`, a scope and a review with a `src` share |
 | `chunks/review-source-<hash>.js` | what a review's `src` brings: loaded by `corn-review.js` only when a review has one |
@@ -167,7 +170,7 @@ What is there (the files of the build, and only those; `manifest.json` lists the
 | `version.json` | `{ "name": "@popcorn245/cornfield-components", "cornfield": "0.48.0" }` |
 | `types/*.d.ts` | the declarations, as text |
 
-**Caching.** Each answer has a strong `ETag` and the file's type with `nosniff`, and is compressed when the browser accepts it. `chunks/…-<hash>.js` are named by their content, so they are cached for a year (`public, max-age=31536000, immutable`). `corn-map.js`, `corn-scope.js`, `index.js`, `tokens.css`, `version.json` and the types are `no-cache`: the browser asks every time and gets a `304` when nothing changed, so a host always gets the version of the server it talks to, the moment that server is updated.
+**Caching.** Each answer has a strong `ETag` and the file's type with `nosniff`, and is compressed when the browser accepts it. `chunks/…-<hash>.js` are named by their content, so they are cached for a year (`public, max-age=31536000, immutable`). The entries (`corn-map.js`, `corn-scope.js`, `index.js` and the rest), `tokens.css`, `version.json` and the types are `no-cache`: the browser asks every time and gets a `304` when nothing changed, so a host always gets the version of the server it talks to, the moment that server is updated.
 
 **It is open.** The route answers before the sign-in guard, like the theme's stylesheets, because a module script is fetched without the cookie. It holds no secret: it is the published package, the same files as on GitHub and npm. What anyone who can reach the server learns from it, signed in or not:
 
@@ -435,6 +438,90 @@ What a constructable stylesheet does not do, and so a theme that relied on it:
 - **Light and dark** follow the scope's `theme`, else your `<html data-theme>`, else the system's setting, and the tokens change when they do. A rule that asks what `<html>` says cannot work inside a shadow root: make the difference through tokens.
 - **A theme that fails** (not found, not CSS) leaves the default look and says `cornError` `{ kind: 'theme' }`.
 
+### The pieces around the map: `<corn-node-panel>`, `<corn-layers>`, `<corn-search>`
+
+Three tags that go beside a `<corn-map>` inside one `<corn-scope>`, wherever your layout puts them. Each has a shadow root of its own, each is a thin shell over the piece cornfield's own page runs (`explorer/pieces/node-panel.js`, `layers.js`, `search.js`), and they **share the scope's one instance**: one selection, one camera, one set of layers, one search.
+
+```html
+<script type="module" src="https://map.example.com/cornfield/components/index.js"></script>
+
+<corn-scope src="https://map.example.com">
+  <div class="my-grid">
+    <corn-map></corn-map>
+    <aside>
+      <corn-search></corn-search>
+      <corn-layers></corn-layers>
+      <corn-node-panel></corn-node-panel>
+    </aside>
+  </div>
+</corn-scope>
+```
+
+- **`<corn-node-panel>`** is what is selected: the node's kind and name, what it is, the lines it lights ("Frame them"), its facts, flows, data, mockups, threads and, with a proposal open, how the proposal changes it. A click or a key on the map fills it; its links select the node they name; its Close clears the selection. Opened it fills its box and scrolls inside; while nothing is selected it says "Select a node on the map to see its details" (the `empty` part).
+- **`<corn-layers>`** is the Layers menu: a chip, "Layers · 14 of 22", that opens a menu of switches, one per kind of node with its count, All and None, and the key to the lines. Switching a layer redraws the map. The menu hangs under the chip; a click anywhere else in your page, or Escape, shuts it.
+- **`<corn-search>`** is a field with a count, a list of what it found by kind ("Frame all 281", up to 50 rows, matches in a layer that is off last) and stepping through them (Enter, Shift+Enter, the arrows, the buttons). Choosing a match selects it on the map, flies the map to it and fills the panel.
+
+**What each does alone.**
+
+| Where it is | What it does |
+|---|---|
+| inside a scope, beside a map | all of the above |
+| inside a scope with **no map** (yet, or any more) | it says what it needs and does nothing else: the panel "Select a node on the map to see its details", the other two "This needs a corn-map in the same corn-scope" (the `empty` part, words `nodePanelEmpty` and `needsMap`). A map added later brings it up; a map removed takes it down again, and the tag stays |
+| beside a map that has **no data yet**: loading, signed out, not a maintainer, the server offline | the panel says what it is for, the search and the Layers menu "Waiting for the map" (`waitingForMap`): no field that would answer "No match" and no menu counting layers of a map nobody can see. The **map's card is the one place** that says what is wrong ("You are not signed in to cornfield" and its sign-in link, Retry), and the scope says `cornAuth` or `cornError` once: one card and one event for the scope, not one per tag. Signed in and back on the page, all four come up |
+| a page the server **does not list**, loading the components from the server | nothing: the browser refuses the module (no CORS for that origin) and every tag stays an unknown, empty element. Installed from npm, the scope says "This page is not listed by that cornfield" on the map, with `cornError` `{ kind: 'not-listed' }` |
+| **no scope** around it | it says "This needs a corn-scope around it, with a corn-map in it" (`needsScope`) and does nothing else. It makes a private instance with no map, so it reads nothing and requests nothing. A scope put around it later (a tag defined after the page, a wrapper added) is asked again, and it comes up. No `cornError` is sent: nothing here is an error until the page is done being built, and the words are on the screen |
+| the tags in **any order**, a tag removed and put back | the same: a piece mounts when the instance has a map, and a panel put back is handed the selection the instance holds |
+| **two scopes** on a page | two instances: nothing in one reaches the other |
+| **two** panels, searches or Layers menus in one scope (a wide layout and a narrow one, one of them hidden) | one selection and one search for the scope (D5): both panels show the selected node and Enter on the map goes into the first that can take the focus; both search fields show the query and its count, and only the one last used speaks in its live region (so it is said once), but each `<corn-search>` sends `cornSearch`; both Layers menus switch the same layers |
+| inside your own element's shadow root, **open or closed** | the same: the focus, the keys, the wheel and a click inside the Layers menu are known there too |
+| the scripts loaded in any order (a tag defined before `corn-scope.js` or `corn-map.js`) | it says what it needs until they come, then comes up |
+
+A second `<corn-map>` in a scope is refused, as before.
+
+| Property | Attribute | What it is |
+|---|---|---|
+| `query` | `query` | what is searched for. Set it to search; it follows what the person types (not reflected: it changes with every key). `<corn-search>` only. The node panel and the Layers menu have no properties: the selection and the layers are the scope's (`node` on the map, `layers` in the config) |
+
+| Event | `detail` |
+|---|---|
+| `cornSearch` | the query, or the chosen match, changed, whoever changed it (typing, `query`, Enter, a row), once per change and per `<corn-search>` in the scope. Its fields: `query`, `current`. `query` is what is searched for now, trimmed, or an empty string once cleared; `current` is the id of the chosen match, or null while none is |
+
+The events and the method are `<corn-search>`'s (the node panel and the Layers menu have none). A tag that waits (for a scope, a map or the map's data) sends no event of its own: it is not an error while your page is being built, and the scope already says `cornAuth` or `cornError` for its server. To tell it in script, look for its `empty` part: `el.shadowRoot.querySelector('[part="empty"]')` is there exactly while it waits. `cornSelect` is **the map's alone**: it says every change of the scope's selection, whoever made it (`source` is `search` for a match chosen in `<corn-search>`, `link` for a node chosen in the panel, `tap` for the panel's Close), so one listener on the map hears it once and the panel, Layers and search never repeat it. With no map in the scope nothing is selected, so nothing is said.
+
+| Method | What it does |
+|---|---|
+| `focusField()` | puts the focus in the field, its text selected: for a shortcut of your own (`/` already does it while the focus is on the map or in the search) |
+
+**Theming.** Tokens inherit from the scope, and `theme` on the `<corn-scope>` (`light`, `dark`, `auto`) is what makes everything inside light or dark, the map's ground included; `use-theme` on the scope puts the server's theme in each tag's shadow root. These three tags have no `theme` property of their own: a `theme="dark"` attribute on one only re-declares that mode's tokens on it (the package's sheet covers every tag), so a forced-dark search field beside a light map is possible, but nothing else reads it.
+
+**Parts.** Every `data-corn` hook of a piece is also a part of the same name: `corn-node-panel::part(node-title)`, `corn-layers::part(layers-button)`, `corn-search::part(search-input)`. The lists are in [theming.md](theming.md#parts).
+
+**Sizing.** Each tag is `display: block` and fills the place your layout gives it; your rules on the element win (nothing of its own is `!important` but `[hidden]`). Each is a **query container on its own width** (`container: corn-box / inline-size`), so what a phone does in cornfield's page happens when *its box* is under 768px, whatever the window: controls of at least 44px, and for the search the count and the step buttons on a row of their own under the field. Nothing is sized from the window. A container takes no width from what is inside it: in a block or a grid cell that changes nothing, but **in a flex row give each tag a width or let it grow** (`corn-search { flex: 1 }`, `corn-layers { flex: none; width: 11rem }`), or it shrinks to nothing and the chip spills out of its box.
+
+- **`<corn-node-panel>` is never a phone's bottom sheet.** On cornfield's page a narrow window turns the panel into a sheet docked at the bottom of the map, over the map, which only makes sense where the panel and the map share one screen and one dock. Here you place the panel: in a 360px box it is the same panel at 360px, in flow, as tall as the box you give it (give it a height to make it scroll inside; with none it grows with its content), with no dim layer and no handle. Make it a sheet, a drawer or a column with your own layout. It does not slide in from the right either, and it covers nothing of the map: the map frames a node into the whole of its own box. If your layout lays the panel over the map, the map does not know it.
+- **`<corn-layers>` hangs its menu under the chip**, from the chip's start, or from its end where the start would run past the window (a chip at the right of your toolbar), in a narrow box too (cornfield's page spans it across the phone's window, from the window's edges; a host's tag does not use the window). The menu has the page's ground, not the see-through surface, because it hangs over whatever your page has there. A narrow host slot does not narrow the menu below 16rem.
+- **`<corn-search>`'s field is always shown.** The phone's icon and search bar are cornfield's header's; here the field is the tag, at the width of its box, and its list hangs under it, at least as wide as the field.
+
+**Keyboard, focus and screen readers (D12) across the shadow roots.** All of it holds when the three sit in roots of their own, in the order you place them:
+
+- On the map **Enter** moves the focus into the open panel (its title), **Escape** in the panel closes it, puts the focus back on the map and announces "Panel closed". N and P, the arrows and the other keys of the map are the map's, and act only while the focus is on it.
+- **`/`** goes to the search field from the map, from the panel and from the search's own list (not while typing in a field). The keys act while the focus is inside any root of the scope's instance, never outside it.
+- The **count is announced** in the search's own polite live region once typing pauses ("309 matches", or "No match for “xyz”"); a match chosen, "Framed 7 matches", a layer switched ("Apps off. 802 nodes shown.") and "Panel closed" are said by the map's live region. With **no map** the tags speak in a live region of their own instead, so a panel or a search beside no map still says them.
+- The Layers chip is a button with `aria-expanded` and `aria-controls` for a menu of buttons with `aria-pressed`; the search is a combobox over a listbox; the panel is a named region (`aria-label="Node details"`), `inert` while it is closed.
+
+**Under a strict Content-Security-Policy** (`style-src 'self'`, no `'unsafe-inline'`; loaded from the server, the policy is [the components' policy](#the-hosts-content-security-policy-for-the-components), nothing more): the pieces' stylesheets are constructable sheets, the dots of the Layers menu and the data-flow key get their colour through the CSS object model (not an inline `style="…"` that came in as a string: only a swatch's background, shadow and outline, one property at a time, never a `url()`), and nothing here uses `eval`, a worker, or a `blob:` or `data:` script. [`test/fixtures/big/around-proof.mjs`](../test/fixtures/big/around-proof.mjs) holds it in a browser.
+
+**What it does not do yet.**
+
+- **No phone sheet for the panel** (above): that is the host's layout.
+- **A panel laid over the map by your layout is not known to the map**: it frames a node into its whole box. The page's own panel tells the map how much it covers (`panel:covers` on the instance); a tag in a box of its own covers nothing.
+- **The proposal's bar, change list, decision and the Work panel** are still in `<corn-review>` and cornfield's page; their tags are the next step.
+- **No `corn-explorer`** and no way to pass the node panel a node of your own: the selection is the map's.
+
+#### How the pieces find each other (for a shell of your own)
+
+A scope's instance has one primary root, the map's, which `inst.el(id)` searches. A piece in another shadow root **joins** the instance (`engine/roots.js` `joinRoot`), so that the instance's focus (`inst.active()`) and keys (`listenRoots`) are its own there too, and it reaches a neighbour only by an event or an `ask` on the instance, never by an id: the map answers `announce:write`, the node panel `panel:present` and `panel:covers`, the Layers menu `layers:present`, the search tells its live region `search:status`. The map says `map:ready` and `map:gone`; `explorer/pieces/around.js` mounts a piece when there is a map and ends it when there is none. The full list is in the header of `explorer/instance.js`.
+
 ### With a Content-Security-Policy
 
 `<corn-map>` works under a strict policy such as `default-src 'self'; style-src 'self'`, with no `'unsafe-inline'` and no `'unsafe-eval'`, as long as you serve the files from your own origin (or load them from a cornfield server: [the exact policy](#the-hosts-content-security-policy-for-the-components)):
@@ -536,12 +623,12 @@ A screen reader finds an application named "Topology map", described by the map'
 
 ### What it does not do yet
 
-- **Only the map reads a server through a scope so far.** A scope shares its instance with one map; the node panel, Layers and search come as pieces of their own. (A `<corn-review>` reads a server on its own: it is not inside a scope yet.)
+- **Only the map reads a server through a scope.** A scope shares its instance with one map and, around it, the node panel, Layers and search ([above](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search)). (A `<corn-review>` reads a server on its own: it is not inside a scope yet.)
 - **No proposal on a map alone.** A proposal drawn on the map, with its Before, Diff and After, is the review's: [`<corn-review>`](#corn-review-the-one-tag-review).
-- **No panels.** Selecting a node says so through `cornSelect`; what to show for it is your app's. The node panel, Layers and search are later components (the review has the node panel inside it).
+- **No panels on a map alone.** Selecting a node says so through `cornSelect`; what to show for it is your app's, or `<corn-node-panel>`'s when the map is in a scope (the review has the node panel inside it).
 - **No freeform positions.** Dragging a node and saving where it was put are cornfield's own page's; a map in your page stores nothing in your page's storage.
 - **Reduced motion** is read when the map is made: under it the flow packets stand still and the camera jumps where it would glide, as on the page.
 
 ### The size it adds
 
-The build records the gzipped size of the shared runtime, of `corn-map` and of `corn-review` with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 72.8 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11.4 kB more, once, when it first has one; **`corn-review` 142.4 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **151.5 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 54.6 kB. The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once, and a map alone loads none of the review: what only a review uses (the sheets, the bar's, the list's and the panel's words, the checks, the decision) is in modules a map does not import, as a test of the build holds.
+The build records the gzipped size of the shared runtime, of `corn-map`, `corn-review` and each piece around the map with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 74.2 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11.9 kB more, once, when it first has one; **`corn-review` 146.2 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **155.4 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 56.1 kB. **The pieces around the map**, each as what it adds to a page that already has the map (alone, without a map, none of them does anything): `corn-node-panel` **+29.6 kB** (it holds the renderers of every section of a node: the data, the cloud plan, the mockups, the diff); `corn-layers` **+12.4 kB**; `corn-search` **+16.5 kB**; all three together add **50.5 kB** to a page with the map, and 24.4 kB to one that has the review (which holds the node panel already). The map and the review grew when these tags came, by 1.1 kB and 3.4 kB against the 73.1 kB and 142.8 kB they were before: the map now owns its live region, says `map:ready` and `map:gone`, hands a late shell the selection, and the instance knows more than one root (about 1.1 kB, all code the map runs); the review also carries the node panel's box-of-its-own option, and the node panel, the layers' engine and the sheets are chunks it shares with the new tags now, where they were inside its own chunk (about 2.3 kB more, the price of sharing them rather than shipping them twice). The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once, and a map alone loads none of the review: what only a review uses (the sheets, the bar's, the list's and the panel's words, the checks, the decision) is in modules a map does not import, as a test of the build holds.

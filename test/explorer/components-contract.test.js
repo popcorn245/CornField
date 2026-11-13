@@ -74,7 +74,7 @@ describe('the documented components', () => {
       expect(methods.filter((r) => ticked(r[0])[0] === t.tag).map((r) => ticked(r[1])[0].replace(/\(.*$/, '')).sort(), `${t.tag} methods`).toEqual([...t.methods].sort());
       for (const e of t.events) expect(e, e).toMatch(/^corn[A-Z]/); // events are prefixed `corn` (spec 0011 question 6)
     }
-    expect(section).toMatch(/All three answer with a promise/);
+    expect(section).toMatch(/All of them answer with a promise/);
   });
 
   it('lists every field of an event\'s detail, and no other, here and in docs/embedding.md', () => {
@@ -129,6 +129,24 @@ describe('the documented components', () => {
     expect(ticked(parts[1]).sort()).toEqual([...made].sort());
     // it is the one the review's own state of the box names, and the three the host puts its hand on first
     for (const part of ['review', 'stage', 'dock', 'decision', 'review-bar', 'proposal-bar', 'proposal-title', 'review-column', 'node-panel', 'scenario-player', 'source-status', 'source-sign-in', 'empty']) expect(made.has(part), part).toBe(true);
+  });
+
+  it('lists every part of corn-node-panel, corn-layers and corn-search: the hooks of the piece and the modules that make its markup (each is a part of the same name)', () => {
+    // what each piece makes in a box of its own (`inline`, no phone bar): the node panel has no dim layer, the search no phone bar, and the legend of the data-flow lines is the Layers menu's
+    const PIECES = {
+      'corn-node-panel': { files: ['pieces/node-panel.js', 'engine/flow-ui.js', 'proposal-model.js', 'mockups-model.js', 'cloud-panel.js', 'capped.js', 'selection-words.js', 'selection-view.js', 'pieces/around.js'], not: ['backdrop', 'menu-section', 'menu-title'] },
+      'corn-layers': { files: ['pieces/layers.js', 'engine/flow-legend.js', 'edge-key.js', 'pieces/around.js'], not: [] },
+      'corn-search': { files: ['pieces/search.js', 'pieces/around.js'], not: ['dialog-scrim', 'mobile-search', 'mobile-search-button'] },
+    };
+    for (const [tag, { files, not }] of Object.entries(PIECES)) {
+      const made = new Set(files.flatMap((f) => [...fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bdata-corn=\\?"([a-z0-9-]+)\\?"/g)].map((m) => m[1])));
+      for (const hook of not) made.delete(hook);
+      const parts = rows(sub('Parts')).find((r) => ticked(r[0])[0] === tag);
+      expect(ticked(parts[1]).sort(), tag).toEqual([...made].sort());
+      // the piece never reaches the page, and the tag's own file has no markup (it is a shell)
+      const shell = fs.readFileSync(path.join(dir, tag, `${tag}.tsx`), 'utf8');
+      expect(shell).toContain("explorer/pieces/around.js");
+    }
   });
 
   it('documents the theme attribute\'s values, and the component says them the same', () => {

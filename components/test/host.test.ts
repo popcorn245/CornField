@@ -107,15 +107,33 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
     const answers: Array<{ url: string; status: number; headers: Record<string, string>; requestHeaders: Record<string, string> }> = [];
     const failed: string[] = [];
     const logged: string[] = [];
-    page.on('response', async (r: Response) => { if (r.url().startsWith(MAP)) answers.push({ url: r.url(), status: r.status(), headers: r.headers(), requestHeaders: await r.request().allHeaders() }); });
+    // A response is recorded once its request's headers are read, which is a step later: `settled()` waits for every one heard so far
+    const reading = new Set<Promise<void>>();
+    page.on('response', (r: Response) => {
+      if (!r.url().startsWith(MAP)) return;
+      const read = r.request().allHeaders().then((requestHeaders) => { answers.push({ url: r.url(), status: r.status(), headers: r.headers(), requestHeaders }); });
+      reading.add(read);
+      void read.finally(() => reading.delete(read));
+    });
+    const settled = async () => { while (reading.size) await Promise.allSettled([...reading]); };
     page.on('requestfailed', (r) => { if (r.url().startsWith(MAP)) failed.push(`${r.url()} ${r.failure()?.errorText}`); });
     page.on('console', (m) => logged.push(m.text()));
     await page.addInitScript(() => {
       (window as any).__violations = [];
+      // What the components tell the host, heard from before the page's scripts run (as a host that listens before its tags load): with whether the
+      // sign-in card was already on screen when each was sent
+      (window as any).__events = [];
+      for (const type of ['cornAuth', 'cornError', 'cornReady']) {
+        document.addEventListener(type, (e) => {
+          const card = document.querySelector('corn-map, corn-review');
+          const shown = !!(card && card.shadowRoot && card.shadowRoot.querySelector('a[data-corn="source-sign-in"]'));
+          (window as any).__events.push({ type, target: (e.target as Element).localName, detail: (e as CustomEvent).detail, cardShown: shown });
+        });
+      }
       document.addEventListener('securitypolicyviolation', (e) => (window as any).__violations.push(`${e.violatedDirective} ${e.blockedURI}`));
     });
     await page.goto(`${origin}${path}`);
-    return { page, context, answers, failed, logged };
+    return { page, context, answers, failed, logged, settled };
   }
 
   const draw = (page: Page) => page.evaluate(async (topology) => {
@@ -135,8 +153,9 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
   }, TOPOLOGY);
 
   it('a listed host: one script line, the module loads across origins with CORS and no cookie, the runtime chunk loads, the element draws a map', async () => {
-    const { page, context, answers, failed, logged } = await open(LISTED);
+    const { page, context, answers, failed, logged, settled } = await open(LISTED);
     const drawn = await draw(page);
+    await settled();
     expect(drawn.defined).toBe(true);
     expect(drawn.upgraded).toBe(true);
     expect(drawn.width).toBeGreaterThan(0);
@@ -191,7 +210,7 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
 
   for (const [what, path] of [['a one-tag corn-map with src', '/?src'], ['corn-scope.js and corn-map.js, a scope around a map', '/?scope']]) {
     it(`a listed host, ${what}: the scope's chunk comes from the server with CORS and no cookie, the reads carry the session to the server alone, and a signed-out visitor is shown the server's sign-in`, async () => {
-      const { page, context, answers, failed } = await open(LISTED, path);
+      const { page, context, answers, failed, settled } = await open(LISTED, path);
       const link = await page.evaluate(async () => {
         await customElements.whenDefined('corn-map');
         const el = document.querySelector('corn-map') as any;
@@ -204,6 +223,7 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
       });
       // the cookie in the jar is not a session: the server says 401, and the map says sign in, with the way back to this page
       expect(link).toEqual({ href: `${MAP}/auth/start?returnTo=${encodeURIComponent(`${LISTED}${path}`)}`, title: 'You are not signed in to cornfield' });
+      await settled();
       expect(failed).toEqual([]);
       const scope = answers.filter((a) => /\/cornfield\/components\/chunks\/scope-[\w-]+\.js$/.test(a.url));
       expect(scope).toHaveLength(1);
@@ -214,14 +234,16 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
       expect(config.requestHeaders.cookie).toBe('cornfield=not-a-real-session'); // the session goes to the server's gated read
       expect(config.headers['access-control-allow-credentials']).toBe('true');
       for (const a of answers) if (!/\/cornfield\/config\.json$|\/topology\.json/.test(new URL(a.url).pathname)) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
+      // cornAuth is sent once, by the element that has the `src` (the map, or the scope), before the card is on screen, and no cornError with it
+      const events = await page.evaluate(() => (window as any).__events);
+      expect(events.filter((e: { type: string }) => e.type !== 'cornReady')).toEqual([{ type: 'cornAuth', target: path === '/?scope' ? 'corn-scope' : 'corn-map', detail: { status: 401, signIn: link!.href }, cardShown: false }]);
       expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
       await context.close();
     }, 60_000);
   }
 
   it('a listed host, a one-tag corn-review with src: the loader comes from the server with CORS and no cookie, the reads carry the session to the server alone, and a signed-out visitor is shown the server\'s sign-in, with cornAuth', async () => {
-    const { page, context, answers, failed } = await open(LISTED, '/?review');
-    await page.evaluate(() => { (window as any).__events = []; for (const t of ['cornAuth', 'cornError', 'cornReady']) document.addEventListener(t, (e) => (window as any).__events.push({ type: t, detail: (e as CustomEvent).detail })); });
+    const { page, context, answers, failed, settled } = await open(LISTED, '/?review');
     const link = await page.evaluate(async () => {
       await customElements.whenDefined('corn-review');
       const el = document.querySelector('corn-review') as any;
@@ -234,6 +256,7 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
       return null;
     });
     expect(link).toEqual({ href: `${MAP}/auth/start?returnTo=${encodeURIComponent(`${LISTED}/?review`)}`, title: 'You are not signed in to cornfield', region: 'region' });
+    await settled();
     expect(failed).toEqual([]);
     const entry = answers.find((a) => a.url === `${MAP}/cornfield/components/corn-review.js`)!;
     expect(entry.status).toBe(200);
@@ -250,7 +273,9 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
     expect(answers.some((a) => /\/proposals/.test(a.url))).toBe(false);
     for (const a of answers) if (!/\/cornfield\/config\.json$|\/topology\.json/.test(new URL(a.url).pathname)) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
     const events = await page.evaluate(() => (window as any).__events);
-    expect(events.filter((e: { type: string }) => e.type === 'cornAuth')).toEqual([{ type: 'cornAuth', detail: { status: 401, signIn: link!.href, during: 'load' } }]);
+    // Sent once, by the review, before its card was on screen: a host that reacts to the card already has the event
+    expect(events.filter((e: { type: string }) => e.type === 'cornAuth')).toEqual([{ type: 'cornAuth', target: 'corn-review', detail: { status: 401, signIn: link!.href, during: 'load' }, cardShown: false }]);
+    expect(events.filter((e: { type: string }) => e.type === 'cornError')).toEqual([]);
     expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
     await context.close();
   }, 60_000);

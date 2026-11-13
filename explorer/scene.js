@@ -178,7 +178,7 @@ import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
 import { lightColor, lightenScene, parseColor } from './theme-model.js';
-import { matchIds } from './search-model.js';
+import { matchIds } from './search-match.js';
 import { nodeColor } from './css-color.js';
 import { activeSubgraph, kindEdgeWord } from './selection-model.js';
 import { DIFF_MARK_COLORS, DIFF_LABEL_ALPHA, GREY_ALPHA, GREY_LABEL_ALPHA, EDGE_MIN_ALPHA, MARK_SHAPES, REMOVED_ALPHA } from './diff-marks.js';

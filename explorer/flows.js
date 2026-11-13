@@ -16,6 +16,7 @@
 import { pageInstance } from './state.js';
 import { FLOW_STYLES } from './flow-style.js';
 import * as F from './engine/flow-ui.js';
+import { renderFlowLegend as drawFlowLegend } from './engine/flow-legend.js';
 
 export { FLOW_STYLES, flowStyleOf } from './flow-style.js';
 
@@ -30,5 +31,5 @@ export { buildDataFlow } from './flow-build.js';
 // ---------------------------------------------------------------------------
 //  Legend and the panel's "Data flows" block (engine/flow-ui.js, on an instance)
 // ---------------------------------------------------------------------------
-export const renderFlowLegend = () => F.renderFlowLegend(pageInstance());
+export const renderFlowLegend = () => drawFlowLegend(pageInstance(), pageInstance().el('flow-legend'));
 export const flowSummary = (node) => F.flowSummary(pageInstance(), node);

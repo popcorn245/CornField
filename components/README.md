@@ -1,6 +1,6 @@
 # @popcorn245/cornfield-components
 
-[cornfield](https://github.com/popcorn245/CornField)'s interface as web components: `<corn-review>` (a proposal on the map, with Approve and Send back, in one tag), `<corn-map>` and `<corn-scope>` today, more to follow. Built with StencilRS, as ES modules, with type declarations and a `tokens.css`.
+[cornfield](https://github.com/popcorn245/CornField)'s interface as web components: `<corn-review>` (a proposal on the map, with Approve and Send back, in one tag), `<corn-map>`, `<corn-scope>` and the three pieces that go around the map in a scope, `<corn-node-panel>`, `<corn-layers>` and `<corn-search>`, today, more to follow. Built with StencilRS, as ES modules, with type declarations and a `tokens.css`.
 
 ```sh
 npm install @popcorn245/cornfield-components

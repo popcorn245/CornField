@@ -17,7 +17,10 @@
  *
  * @param {ParentNode} root where the panel goes when `options.slots` names no place
  * @param {ReturnType<typeof import('../instance.js').createInstance>} inst the instance; its map must be made (engine/render.js)
- * @param {{ slots?: { drawer?: Node, backdrop?: Node } }} [options]
+ * `options.inline` is the panel in a box of its own (`<corn-node-panel>`): it fills the box its host gives it instead of sliding over the map, never becomes a phone's
+ * bottom sheet (no dock, no dim layer: the host's layout decides where it is), says what it needs while nothing is selected (`empty`), and covers nothing of the map.
+ *
+ * @param {{ slots?: { drawer?: Node, backdrop?: Node }, inline?: boolean }} [options]
  * @returns {{ update: (props?: { node?: object | null }) => void, destroy: () => void, show: Function, close: Function, repaintThreads: Function, copySpec: Function, startRun: Function, keepSelectedInView: Function, elements: Element[] }}
  *   `update({ node })` shows that node (or closes the panel for `null`) without selecting it; `update()` paints the open panel again from the
  *   instance's state (after the host changed the topology or the words).
@@ -290,9 +293,10 @@ export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
   const sections = sectionsOf(inst);
+  const inline = options.inline === true;
   const made = [
     ...place(inst, root, markup().drawer, options.slots, 'drawer'),
-    ...place(inst, root, markup().backdrop, options.slots, 'backdrop'),
+    ...(inline ? place(inst, root, `<p class="hx-panel-empty" data-corn="empty">${escHtml(t(inst, 'nodePanelEmpty'))}</p>`, null, 'empty') : place(inst, root, markup().backdrop, options.slots, 'backdrop')),
   ];
   /** An element of this piece by id (the piece's own, whatever else the root holds) */
   const own = (id) => {
@@ -305,7 +309,9 @@ export function mount(root, inst, options = {}) {
   };
   scope.keepParts(...made);
   const drawer = own('spec-drawer');
-  const backdrop = own('drawer-backdrop');
+  const backdrop = inline ? { hidden: true } : own('drawer-backdrop'); // (a box of its own has no dim layer)
+  const empty = inline ? made.find((el) => el.matches('[data-corn="empty"]')) : null;
+  const setEmpty = (shown) => { if (empty) empty.hidden = !shown; };
   let gone = false;
 
   const litNow = () => activeSubgraph(state.selectedNode, inst.viewEdges(), { throughChildren: state.throughChildren, kind: state.selectedKind });
@@ -434,8 +440,9 @@ export function mount(root, inst, options = {}) {
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
     backdrop.hidden = false;
-    showSheet(inst, 'drawer'); // on a phone it takes Work's place (the node sheet and Work take turns), and comes back from away when its node is tapped again
-    if (!frame) keepSelectedInView(); // with `frame`, the selection flies the camera to the node once this returns (engine/selection.js)
+    setEmpty(false);
+    if (!inline) showSheet(inst, 'drawer'); // on a phone it takes Work's place (the node sheet and Work take turns), and comes back from away when its node is tapped again
+    if (!frame && !inline) keepSelectedInView(); // with `frame`, the selection flies the camera to the node once this returns (engine/selection.js)
     inst.emit('node:painted', { node });
   }
 
@@ -469,6 +476,7 @@ export function mount(root, inst, options = {}) {
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, the panel is inert (MAP-02): open for an edge, its links and its Close are reached as a node's are
     backdrop.hidden = false;
+    setEmpty(false);
   }
 
   /**
@@ -489,7 +497,8 @@ export function mount(root, inst, options = {}) {
     drawer.classList.remove('drawer-open');
     drawer.inert = true;
     backdrop.hidden = true;
-    collapseSheet(inst, 'drawer'); // the next node opens as a peek on a phone
+    setEmpty(true);
+    if (!inline) collapseSheet(inst, 'drawer'); // the next node opens as a peek on a phone
   }
 
   /** Start a run: the Start dialog of the Work panel, on the proposal that is open */
@@ -525,10 +534,12 @@ export function mount(root, inst, options = {}) {
   // The threads that mention nodes changed (the list was read, or the map changed): the section is drawn again
   scope.on('threads:changed', () => repaintThreads());
   // The dim layer behind the panel: on a phone a tap there folds the panel to its peek; elsewhere it closes it
-  scope.listen(backdrop, 'click', (e) => {
-    if (isPhone(inst)) { onBackdrop(inst, e); return; }
-    clearSelection(inst, { source: 'tap' });
-  }, true);
+  if (!inline) {
+    scope.listen(backdrop, 'click', (e) => {
+      if (isPhone(inst)) { onBackdrop(inst, e); return; }
+      clearSelection(inst, { source: 'tap' });
+    }, true);
+  }
   // Escape anywhere in the panel closes it, and the map has the focus again
   scope.listen(drawer, 'keydown', (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -539,6 +550,9 @@ export function mount(root, inst, options = {}) {
     announce(inst, 'Panel closed');
   });
 
+  scope.on('panel:present', () => true); // the map says "Panel closed", not "Selection cleared"
+  // A slide-over covers the right of the map by its width; a panel in a box of its own (`inline`) covers nothing
+  scope.on('panel:covers', () => (!inline && !gone && !drawer.hidden && drawer.classList.contains('drawer-open') ? { right: drawer.offsetWidth } : undefined));
   scope.on('node:show', ({ node, frame }) => show(node, { frame }));
   scope.on('node:close', close);
   scope.on('node:show-edge', ({ edge }) => showEdge(edge));
@@ -546,14 +560,18 @@ export function mount(root, inst, options = {}) {
   scope.on('node:focus', () => {
     const title = own('drawer-title');
     if (!title) return;
+    // A second panel in one scope (two tags, one maybe hidden by the host's layout) leaves the focus where the first that could take it put it
+    const now = inst.active();
+    if (inline && now && now !== title && typeof now.matches === 'function' && now.matches('[data-corn="node-title"]')) return;
     title.setAttribute('tabindex', '-1');
     title.focus();
   });
-  scope.own(onCoveredChange(inst, () => keepSelectedInView()));
-
-  initSheets(inst);
-  registerSheet(inst, 'drawer', drawer, { stub: () => ({ title: (own('drawer-title') && own('drawer-title').textContent) || 'Node' }) });
-  scope.own(() => unregisterSheet(inst, 'drawer'));
+  if (!inline) {
+    scope.own(onCoveredChange(inst, () => keepSelectedInView()));
+    initSheets(inst);
+    registerSheet(inst, 'drawer', drawer, { stub: () => ({ title: (own('drawer-title') && own('drawer-title').textContent) || 'Node' }) });
+    scope.own(() => unregisterSheet(inst, 'drawer'));
+  }
 
   // A node was selected before the panel came: it shows it
   if (state.selectedNode) show(state.selectedNode, { frame: false });

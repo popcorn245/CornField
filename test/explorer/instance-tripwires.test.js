@@ -41,6 +41,8 @@ export const CONVERTED = [
   'pieces/layers.js',
   'pieces/search.js',
   'engine/piece.js',
+  'engine/roots.js',
+  'pieces/around.js',
   'engine/selection.js',
   'engine/layers.js',
   'engine/sheets.js',
@@ -159,7 +161,10 @@ export const RULES = {
 /** The rule only the converted modules are held to: the modules they import may make an offscreen canvas from `document` (glyphs.js) */
 const OWN_RULES = ['reaches the document or window itself'];
 /** Where a converted module may break a rule, and why */
-const EXEMPT = { 'instance.js': ['reaches the document or window itself', 'listens on document or window'] }; // the instance's own window and document: onShown, fetch
+const EXEMPT = {
+  'instance.js': ['reaches the document or window itself', 'listens on document or window'], // the instance's own window and document: onShown, fetch
+  'engine/roots.js': ['listens on document or window'], // its sister: the click anywhere in the page that closes a menu (`onPageClick`)
+};
 /** Where a module a converted one imports may, and why. Each is code no converted module calls, in a file it imports for something else (none now: capped.js moved onto the list with the node panel) */
 const CHAIN_EXEMPT = {};
 

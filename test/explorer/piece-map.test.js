@@ -302,9 +302,7 @@ describe('selection: onSelect comes from the real change of selection', () => {
     key(canvas, 'Escape');
     expect(said.at(-1)).toBe('Selection cleared');
     const withPanel = make({ topology: topology() }, { page: true });
-    const drawer = document.createElement('aside');
-    drawer.id = 'spec-drawer';
-    withPanel.host.append(drawer);
+    withPanel.piece.inst.on('panel:present', () => true); // a node panel is part of the instance (pieces/node-panel.js answers it)
     const heard = [];
     withPanel.piece.inst.on('announce', (text) => heard.push(text));
     key(withPanel.canvas, 'n');
@@ -436,6 +434,23 @@ describe('its end', () => {
     expect(snapshot()).toEqual(before);
     expect(live.contexts).toBe(30);
     expect(live.lost).toBe(30);
+  });
+
+  it('on an instance that outlives it (a scope\'s, whose map is removed and put back), mounted and destroyed 10 times leaves no listener on that instance', () => {
+    const shared = createInstance({ root: document.createElement('div') });
+    const once = make({ topology: topology() }, { inst: shared });
+    frames();
+    once.piece.destroy();
+    once.host.remove();
+    const before = snapshot();
+    for (let i = 0; i < 10; i++) {
+      const { piece, host } = make({ topology: topology() }, { inst: shared });
+      frames();
+      piece.destroy();
+      host.remove();
+    }
+    expect(snapshot().listeners).toBe(before.listeners);
+    shared.destroy();
   });
 
   it('is what does it: 30 pieces never destroyed leave it all behind', () => {

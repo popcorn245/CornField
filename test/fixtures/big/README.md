@@ -32,6 +32,8 @@ node test/fixtures/big/review-proof.mjs [--shots <dir>] [--only open,decide,sign
 node test/fixtures/big/review-requests.mjs [--only approve,sendback,stale,refusals,signedout]
 # (h) the map's first fit against a stage that is sized after the page began to load (issue #253); `--url` reads a rig that is already up (0.50.1 fails it), `--components` adds a `<corn-map>` (needs the built package)
 node test/fixtures/big/first-fit-proof.mjs [--url http://127.0.0.1:3981/] [--components]      # ports 3940-3941
+# (i) the node panel, Layers and search in a scope beside the map, on a listed sibling origin, under a strict CSP: mouse, keyboard, search, layers, tags removed and put back, two scopes, the server's theme (ports 3830-3832); needs the built package
+node test/fixtures/big/around-proof.mjs [--shots <dir>] [--json <file>]
 ```
 
 Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.

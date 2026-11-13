@@ -1,33 +1,14 @@
 /**
  * @module explorer/engine/flow-ui
  *
- * Data flow in the Layers menu and the node panel, on an instance: the legend of the flow lines and the "Sends to / Gets from" block of a node's
- * panel. How a flow edge is styled is flow-style.js; the data-flow preset is flows.js `buildDataFlow` (a pure function of nodes and edges).
+ * Data flow in the node panel, on an instance: the "Sends to / Gets from" block of a node's panel (the Layers menu's legend of the flow lines is
+ * flow-legend.js). How a flow edge is styled is flow-style.js; the data-flow preset is flows.js `buildDataFlow` (a pure function of nodes and edges).
  */
 
 import { escapeHtml as escHtml } from '../../core/text.js';
-import { themed } from '../theme-model.js';
 import { capped } from '../capped.js';
-import { layersOf } from '../layer-model.js';
-import { FLOW_STYLES } from '../flow-style.js';
 
-export function renderFlowLegend(inst) {
-  const el = inst.el('flow-legend');
-  if (!el) return;
-  const { state } = inst;
-  const activeLayers = layersOf(state);
-  if (activeLayers.flow === false && activeLayers.table === false) { el.innerHTML = ''; el.hidden = true; return; }
-  el.hidden = false;
-  const row = (swatch, text) => `<div class="hx-legend-row"><span class="hx-legend-swatch">${swatch}</span><span>${text}</span></div>`;
-  el.innerHTML = `
-    <div class="hx-menu-section" data-corn="menu-section" part="menu-section">
-      <div class="hx-menu-title" data-corn="menu-title" part="menu-title">
-        <span>Data Flow</span>
-      </div>
-      ${Object.values(FLOW_STYLES).map((s) => row(`<span data-corn="swatch" part="swatch" class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
-    </div>`;
-}
-
+/** The "Sends to" and "Gets from" block of a node's panel */
 export function flowSummary(inst, node) {
   const { state } = inst;
   const nameOf = (id) => (state.nodes.find((n) => n.id === id) || { label: id }).label;

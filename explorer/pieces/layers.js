@@ -31,10 +31,11 @@ import { STROKE_TOKEN, kindToken, mapStyleOf } from '../engine/map-style.js';
 import { over, parseColor, contrast } from '../../core/color.js';
 import { DARK_GROUND, LIGHT_GROUND } from '../theme-model.js';
 import { t } from '../engine/strings.js';
-import { renderFlowLegend } from '../engine/flow-ui.js';
+import { renderFlowLegend } from '../engine/flow-legend.js';
 import { isOn, keepLayersIn, layerRows, redrawing, setProjectLayers, swatch, toggleAllLayers, toggleLayer } from '../engine/layers.js';
 import { layerOn } from '../layer-model.js';
 import { scopeOf, place, addParts } from '../engine/piece.js';
+import { listenRoots, onPageClick } from '../engine/roots.js';
 
 /** The markup of the piece: the chip and its menu (its one place is `menu`) */
 export const markup = () => ({
@@ -102,6 +103,15 @@ export function mount(root, inst, options = {}) {
   function setMenu(open) {
     menu.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
+    if (open && options.inline) alignMenu();
+  }
+  /** In a box of its own (`<corn-layers>`) the menu hangs from the chip's start; where that runs past the window's end (a chip at the right of a host's
+   * toolbar) and there is room the other way, it hangs from the chip's end instead (`hx-menu--end`) */
+  function alignMenu() {
+    menu.classList.remove('hx-menu--end');
+    const room = inst.win ? inst.win.innerWidth : 0;
+    const r = menu.getBoundingClientRect();
+    if (room && r.width && r.right > room && wrap.getBoundingClientRect().right - r.width >= 0) menu.classList.add('hx-menu--end');
   }
   const toggleMenu = (open) => setMenu(open === undefined ? menu.hidden : !!open);
   const closeMenu = () => setMenu(false);
@@ -129,7 +139,7 @@ export function mount(root, inst, options = {}) {
     const ring = ringOf(color, surface);
     const glow = on && state.theme !== 'light' ? (/^#[0-9a-f]{6}$/i.test(color) ? `0 0 8px ${color}90` : `0 0 8px color-mix(in srgb, ${color} 56%, transparent)`) : 'none';
     const css = `background-color: ${color}; box-shadow: ${glow}${ring && ring.stroke ? `; --hx-dot-ring: ${ring.stroke}` : ''}`;
-    return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} style="${escHtml(css)}"></span>`;
+    return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} data-style="${escHtml(css)}"></span>`;
   }
 
   // -- the kinds of a row ---------------------------------------------------------------------------------------------------------
@@ -230,7 +240,7 @@ export function mount(root, inst, options = {}) {
       const again = [...container.querySelectorAll('[data-action]')].find((el) => el.getAttribute('data-action') === was.action && el.getAttribute('data-layer') === was.layer);
       if (again && typeof again.focus === 'function') again.focus({ preventScroll: true });
     }
-    renderFlowLegend(inst);
+    renderFlowLegend(inst, own('flow-legend'));
     renderEdgeKey();
     renderCloudLegend();
     addParts(own('flow-legend'));
@@ -282,22 +292,26 @@ export function mount(root, inst, options = {}) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   });
-  // Any click outside the menu closes it; a click on one of its rows does not. Whether it was inside is read BEFORE the action, in the capture
-  // phase: a row's action draws the rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside
-  let inside = false;
-  scope.listen(inst.root, 'click', (e) => {
-    const target = e.target;
-    inside = !!target && wrap.contains(target);
-  }, true);
-  scope.listen(inst.root, 'click', () => { if (!menu.hidden && !inside) closeMenu(); });
-  // Escape with the menu open closes it, and its chip has the focus again
-  scope.listen(inst.root, 'keydown', (e) => {
+  // Any click outside the menu closes it; a click on one of its rows does not. Whether it was inside is known before the action (a row's action draws the
+  // rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside): the menu's own element hears
+  // the click on its way in, and the page decides once the click has passed. The page's own path is not enough: in a host's closed shadow root the
+  // document's `composedPath()` stops at that root's host, so a click on a row would look like one outside
+  const inside = new WeakSet();
+  scope.listen(wrap, 'click', (e) => { inside.add(e); }, true);
+  scope.own(onPageClick(inst, (e) => {
+    if (menu.hidden || inside.has(e)) return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+    if (!path.includes(wrap)) closeMenu();
+  }, { capture: false }));
+  // Escape with the menu open closes it, and its chip has the focus again (a key in any root of the instance: the map's too)
+  scope.own(listenRoots(inst, 'keydown', (e) => {
     if (e.key !== 'Escape' || menu.hidden) return;
     closeMenu();
     btn.focus();
-  });
+  }));
 
   // -- following the instance ------------------------------------------------------------------------------------------------------
+  scope.on('layers:present', () => true); // the map's keys know there is a menu to turn a layer on in
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);

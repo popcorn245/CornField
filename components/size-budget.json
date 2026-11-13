@@ -2,11 +2,17 @@
   "unit": "bytes, gzip level 9",
   "tolerance": 0.05,
   "budget": {
-    "runtime": 28058,
-    "corn-map": 72786,
-    "corn-map-src": 84336,
-    "corn-review": 142473,
-    "corn-review-src": 151605,
-    "corn-scope": 54724
+    "runtime": 28079,
+    "corn-map": 74213,
+    "corn-map-src": 86117,
+    "corn-review": 146194,
+    "corn-review-src": 155356,
+    "corn-scope": 56101,
+    "corn-node-panel": 73049,
+    "corn-node-panel-added": 29609,
+    "corn-layers": 55790,
+    "corn-layers-added": 12350,
+    "corn-search": 59925,
+    "corn-search-added": 16485
   }
 }

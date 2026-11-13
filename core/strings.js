@@ -118,6 +118,11 @@ export const STRINGS = Object.freeze({
   sourceBadAddress: 'That is not the address of a cornfield server',
   sourceVersion: 'This map and its server are different versions',
   sourceSecondMap: 'This scope already has a map',
+  // The pieces around the map (corn-node-panel, corn-layers, corn-search) when they have nothing to work with
+  nodePanelEmpty: 'Select a node on the map to see its details',
+  needsScope: 'This needs a corn-scope around it, with a corn-map in it',
+  needsMap: 'This needs a corn-map in the same corn-scope',
+  waitingForMap: 'Waiting for the map',
 });
 
 /** The longest a value may be, in characters */

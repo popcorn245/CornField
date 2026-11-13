@@ -601,6 +601,9 @@ The explorer's pieces are also web components, for putting in another app's page
 |---|---|---|
 | `corn-scope` | no | Where the data comes from and what the pieces inside it share: one instance (one selection, one camera, one topology); `src` is the address of a cornfield server it reads; it shows nothing of its own |
 | `corn-map` | yes | The map: pan, zoom, select, from a topology the host hands in, or from a server (`src`, or the scope's) |
+| `corn-node-panel` | yes | What is selected on the map in the same `corn-scope`: the node's facts, flows, data, threads and (with a proposal) its diff, in a panel that fills its box. It has no properties, events or methods of its own |
+| `corn-layers` | yes | The Layers menu for the map in the same `corn-scope`: a switch per kind of node and the key to the lines. It has no properties, events or methods of its own |
+| `corn-search` | yes | Search for the map in the same `corn-scope`: a field, the count, the matches by kind, and stepping through them; choosing a match selects it on the map |
 | `corn-review` | yes | The one-tag review: a proposal on the map, what it changes, its scenarios and Approve and Send back, from a server (`src`) or from objects the host hands in. It makes its own instance: not yet a member of a `corn-scope` |
 
 ### Properties
@@ -625,6 +628,7 @@ The explorer's pieces are also web components, for putting in another app's page
 | `corn-review` | `config` | none | the object `/cornfield/config.json` holds, for a host that fetches for itself |
 | `corn-review` | `strings` | none | the host's own words (`strings` keys to text); when set they are the words spoken, the server's are not mixed in |
 | `corn-review` | `checker` | none | the permission checker for the scenarios, a module the host imported itself: `{ check(items, { signal }) }`; never loaded from a config |
+| `corn-search` | `query` | `query` | what is searched for; it follows what the person types; not reflected |
 | `corn-scope` | `src` | `src` | the address of a cornfield server: an `http(s)` origin and an optional path; another value is refused and said |
 | `corn-scope` | `theme` | `theme` (reflected) | `light`, `dark` or `auto` |
 | `corn-scope` | `useTheme` | `use-theme` | wear the server's theme |
@@ -648,6 +652,7 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 | `corn-review` | `cornDecision` | the server took a decision, once per decision, after it answered, from the decision's own detail and never from what is open now. Its fields: `outcome`, `proposal`, `source`, `open`, `review`. `outcome` is `approved` or `notes` (a send back); `open` is false when another proposal was opened, or this one closed, while it was sent; `review` is what the server answered |
 | `corn-review` | `cornAuth` | the server answered a read or the press with 401 or 403: the review shows the sign-in card, and the host may show its own. Its fields: `status`, `signIn`, `during`. `signIn` is the server's sign-in, which returns to this page; `during` is `load`, `proposal`, `facts`, `review`, `send` or `landing` |
 | `corn-review` | `cornError` | something the review could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` or `proposal` (the proposal did not open) |
+| `corn-search` | `cornSearch` | the query, or the chosen match, changed, whoever changed it (typing, `query`, Enter, a row), once per change. Its fields: `query`, `current`. `query` is what is searched for now, trimmed, or an empty string once cleared; `current` is the id of the chosen match, or null |
 | `corn-scope` | `cornReady` | none: the scope has its data (read from the server, or handed in), once per server |
 | `corn-scope` | `cornAuth` | the server answered a gated read with 401 or 403. Its fields: `status`, `signIn`. `signIn` is the server's sign-in, which returns to this page |
 | `corn-scope` | `cornError` | something the pieces could not do. Its fields: `kind`, `message`. `kind` is `not-listed`, `offline`, `server`, `address`, `version`, `theme` or `second-map` |
@@ -662,15 +667,19 @@ All events bubble and cross the shadow root (`composed`), so a listener on any a
 | `corn-review` | `fit()` | puts the whole map in view |
 | `corn-review` | `focusNode(id)` | selects the node and brings it into view |
 | `corn-review` | `refresh()` | reads the tokens again and draws, as the map's does |
+| `corn-search` | `focusField()` | puts the focus in the field, its text selected, for a shortcut of the host's own |
 
-All three answer with a promise.
+All of them answer with a promise.
 
 ### Parts
 
 | Tag | Parts |
 |---|---|
 | `corn-map` | `map-stage`, `map-canvas`, `label-canvas`, `map-overlay`, and with a source `source-status`, `source-title`, `source-text`, `source-origin`, `source-sign-in`, `source-retry`, `source-notice`, `source-announcer` |
-| `corn-review` | `backdrop`, `badge`, `compare`, `compare-option`, `control`, `count`, `decision`, `dialog-scrim`, `diff-block`, `diff-pill`, `dock`, `empty`, `field-change`, `frame-button`, `hint`, `hint-icon`, `label-canvas`, `lines-by-kind`, `lines-kind`, `lines-switch`, `map-canvas`, `map-overlay`, `map-stage`, `mark-dot`, `menu-section`, `menu-title`, `message`, `more`, `node-foot`, `node-host`, `node-link`, `node-panel`, `node-title`, `notice`, `open-link`, `persona-group`, `proposal-bar`, `proposal-changes`, `proposal-counts`, `proposal-errors`, `proposal-head`, `proposal-menu`, `proposal-mode`, `proposal-source`, `proposal-title`, `proposal-ways`, `proposals-button`, `proposals-menu`, `result`, `review`, `review-bar`, `review-column`, `review-label`, `review-note`, `review-state`, `row`, `scenario-fill`, `scenario-list`, `scenario-player`, `scenario-track`, `section`, `sent-edits`, `sheet-grip`, `source-announcer`, `source-notice`, `source-origin`, `source-retry`, `source-sign-in`, `source-status`, `source-text`, `source-title`, `stage`, `state-icon`, `state-pill`, `step`, `step-list`, `summary`, `swatch`, `tab`, `tabs`, `text-link`, `whole-map` |
+| `corn-node-panel` | `badge`, `count`, `diff-block`, `diff-pill`, `empty`, `field-change`, `frame-button`, `lines-by-kind`, `lines-kind`, `lines-switch`, `mark-dot`, `message`, `more`, `node-foot`, `node-host`, `node-link`, `node-panel`, `node-title`, `open-link`, `result`, `review-state`, `row`, `section`, `state-pill`, `text-link`; the empty part is the line it shows while nothing is selected |
+| `corn-layers` | `count`, `empty`, `kind-key`, `layer-kinds`, `layer-note`, `layers-all`, `layers-button`, `layers-menu`, `layers-none`, `legend-key`, `live-tag`, `mark-dot`, `menu-section`, `menu-title`, `notice`, `overlays`, `row`, `swatch`; the empty part is the line it shows while there is no map |
+| `corn-search` | `empty`, `search`, `search-count`, `search-empty`, `search-group`, `search-input`, `search-key`, `search-result`, `search-results`, `search-status`, `search-steps`; the empty part is the line it shows while there is no map |
+| `corn-review` | `backdrop`, `badge`, `compare`, `compare-option`, `control`, `count`, `decision`, `dialog-scrim`, `diff-block`, `diff-pill`, `dock`, `empty`, `field-change`, `frame-button`, `hint`, `hint-icon`, `label-canvas`, `lines-by-kind`, `lines-kind`, `lines-switch`, `map-canvas`, `map-overlay`, `map-stage`, `mark-dot`, `menu-title`, `message`, `more`, `node-foot`, `node-host`, `node-link`, `node-panel`, `node-title`, `notice`, `open-link`, `persona-group`, `proposal-bar`, `proposal-changes`, `proposal-counts`, `proposal-errors`, `proposal-head`, `proposal-menu`, `proposal-mode`, `proposal-source`, `proposal-title`, `proposal-ways`, `proposals-button`, `proposals-menu`, `result`, `review`, `review-bar`, `review-column`, `review-label`, `review-note`, `review-state`, `row`, `scenario-fill`, `scenario-list`, `scenario-player`, `scenario-track`, `section`, `sent-edits`, `sheet-grip`, `source-announcer`, `source-notice`, `source-origin`, `source-retry`, `source-sign-in`, `source-status`, `source-text`, `source-title`, `stage`, `state-icon`, `state-pill`, `step`, `step-list`, `summary`, `tab`, `tabs`, `text-link`, `whole-map` |
 | `corn-scope` | none: it has no shadow root and shows nothing of its own |
 
 ## Words
@@ -790,6 +799,10 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `sourceBadAddress` | That is not the address of a cornfield server |
 | `sourceVersion` | This map and its server are different versions |
 | `sourceSecondMap` | This scope already has a map |
+| `nodePanelEmpty` | Select a node on the map to see its details |
+| `needsScope` | This needs a corn-scope around it, with a corn-map in it |
+| `needsMap` | This needs a corn-map in the same corn-scope |
+| `waitingForMap` | Waiting for the map |
 <!-- strings:end -->
 
 The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openFile` ("Open file") is the primary action when the node has a file and the config names a forge; `openRoute` ("Open route") is primary when there is no such file and the quiet second action when there is; `startRun` ("Start a run") is new.

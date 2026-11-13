@@ -18,7 +18,9 @@
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
  *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs;
  *                   inst.onPageFocus(fn(event)): a focus anywhere in the page, outside the root too (a modal dialog's trap in a host's page)
- *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host)
+ *   inst.active()   the element that has the focus inside the root's tree (a shadow root's own, not the host), or inside any root that joined
+ *   inst.extraRoots  the other roots that belong to the instance (a leaf piece's own shadow root, in a scope), joined by engine/roots.js `joinRoot`: `active` looks in them too.
+ *                   `inst.el` still looks in the primary root only: a piece owns its elements, and a neighbour reaches it by an event or an `ask`
  *   inst.el         an element of the instance by id, found inside its root and never by document id
  *   inst.listen     a listener that `destroy()` removes; inst.own: any other clean-up `destroy()` runs; inst.release(fn): takes one back that its owner ran itself
  *   inst.slot       what a module keeps for this instance (its map style), made on first use
@@ -60,7 +62,10 @@
  *   work:available  { on }  the Work panel started (a forge in the config and somebody signed in), or ended: the account menu's Proposals entry is only for a cornfield without it
  *   runs:map        { active }  runs are on the map, or none is (pieces/work.js, runs-map.js): the Layers menu shows its legend while there are
  *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work panel opens the thread, or its New idea form)
- *   announce        text  what a screen reader is told (engine/keyboard.js `announce`, which also writes it in the root's `#map-announcer`, if it has one)
+ *   announce        text  what a screen reader is told (engine/keyboard.js `announce`; the piece that owns a live region writes it: `announce:write`)
+ *   root:changed    (none)  the primary root moved (`attach`) or a root joined or left (engine/roots.js): what listens on every root puts itself right
+ *   map:ready       (none)  the map piece is mounted and has its topology (pieces/map.js); map:gone: it ended. The pieces around it (pieces/around.js) mount and unmount with it
+ *   search:status   text  what the search's own live region says (engine/search-status.js; pieces/search.js writes it)
  *
  *   What a piece is asked to do (`emit`ted to it):
  *   node:show-edge  { edge }  show this edge in the panel (engine/proposal.js `showEdge`)
@@ -73,6 +78,9 @@
  *   view            view    the view changed ('orbit', 'dataflow', 'house'): the Layers chip dims while the data-flow view is on (view.js on the page)
  *
  *   What a piece asks of a neighbour that may not be there (`ask`: the first answer that is not `undefined`; nobody answering is a no):
+ *   announce:write  text  -> true when a live region of a piece took it (the map's `#map-announcer`); announce:fallback text -> true: a piece that stands without a map has one
+ *   panel:present   (none)  -> true: a node panel is part of this instance (the map says "Panel closed" and not "Selection cleared"); panel:covers (none) -> { right: px } the part of the map
+ *                   an open slide-over panel covers, else nothing; layers:present (none) -> true: a Layers menu is part of the instance
  *   search:active   (none)  is a search with matches on? -> boolean (the map's N and P step through its matches then)
  *   search:step     by      step to the next (+1) or previous (-1) match -> boolean, whether there was one
  *   live:section    node    the live layer's block for the node panel -> HTML, put in the panel as it is: whoever answers escapes what it shows
@@ -120,6 +128,7 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
   const fetchImpl = fetchOpt;
   const initialRoot = root;
   let attached = null;
+  const joined = new Set();
 
   const on = (name, fn) => {
     let set = events.get(name);
@@ -185,6 +194,24 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
   Object.defineProperty(theState, 'selectedNode', { enumerable: true, configurable: true, get: () => selNode, set: (v) => { commit(v, selEdge, 'state', false); } });
   Object.defineProperty(theState, 'selectedEdge', { enumerable: true, configurable: true, get: () => selEdge, set: (v) => { commit(selNode, v, 'state', false); } });
 
+  /** The focused element of one tree: a Document's or a shadow root's `activeElement`; for an element, the tree it sits in, when the focus is inside it */
+  const activeIn = (r) => {
+    if (r.nodeType === 11) {
+      // A shadow root's own focus: asked of the root itself, which also answers inside a host's closed shadow root, where a walk from the document cannot
+      // look in. Where asking throws (happy-dom, while the focus is in another shadow root), it is found from the document down through the open roots
+      let own;
+      try { own = r.activeElement; } catch { own = undefined; }
+      if (own !== undefined) return own && own.getRootNode && own.getRootNode() === r ? own : null;
+      let el = doc.activeElement;
+      while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+      return el && el.getRootNode && el.getRootNode() === r ? el : null;
+    }
+    if (r.nodeType !== 1) return r.activeElement || null;
+    const tree = typeof r.getRootNode === 'function' ? r.getRootNode() : doc;
+    const focused = tree && tree.activeElement !== undefined ? tree.activeElement : doc.activeElement;
+    return focused && r.contains(focused) ? focused : null;
+  };
+
   const inst = {
     root,
     doc,
@@ -244,27 +271,29 @@ export function createInstance({ root: rootOpt = null, base = '', fetch: fetchOp
       attached = next;
       root = next;
       inst.root = next;
+      inst.emit('root:changed');
       const release = () => {
         if (attached !== next) return;
         attached = null;
         root = initialRoot;
         inst.root = initialRoot;
+        inst.emit('root:changed');
         inst.release(release);
         if (!destroyed) inst.emit('attach:released'); // a piece that was refused (a second map in a scope) may have it now
       };
       cleanups.push(release);
       return release;
     },
-    /** The element with the focus in the root's own tree: a Document's or a shadow root's `activeElement`, or the document's when it is inside the root; else null */
+    /** The element with the focus in the root's own tree, or in a root that joined: a Document's or a shadow root's `activeElement`, or the document's when it is inside the root; else null */
     active: () => {
-      if (!root || !doc) return null;
-      if (root.nodeType !== 1) return root.activeElement || null; // a Document or a shadow root
-      // An element: the focus is asked of the tree it sits in, so an element inside a shadow root (the review piece's box in a shell's shadow root)
-      // finds its own focused element, where the document's would be the shadow root's host
-      const tree = typeof root.getRootNode === 'function' ? root.getRootNode() : doc;
-      const focused = tree && tree.activeElement !== undefined ? tree.activeElement : doc.activeElement;
-      return focused && root.contains(focused) ? focused : null;
+      if (!doc) return null;
+      for (const r of [root, ...joined]) {
+        const found = r && activeIn(r);
+        if (found) return found;
+      }
+      return null;
     },
+    extraRoots: joined,
 
     // -- what the viewer prefers --------------------------------------------------------------------------------------------------
     /** A reader of the computed custom properties at the root (`(name) => value`), or null where there is no page */

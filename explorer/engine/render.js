@@ -300,21 +300,24 @@ export function createMap(inst, opts = {}) {
 
   // Any pointer, wheel, touch or key event counts as the visitor being there: after 30 s without one the
   // packets stop, and the next one starts them again. Passive listeners on the root (captured, so no handler hides one), so no handler is slowed.
+  // They are this map's: an instance that outlives it (a scope's, whose map is removed and put back) is not left holding them (destroy)
+  const listening = [];
   if (inst.root) {
     const onInput = () => scheduler.noteInput();
-    for (const type of ACTIVITY) inst.listen(inst.root, type, onInput, { passive: true, capture: true });
+    for (const type of ACTIVITY) listening.push(inst.listen(inst.root, type, onInput, { passive: true, capture: true }));
   }
-  inst.onShown(() => scheduler.shown());
+  listening.push(inst.onShown(() => scheduler.shown()));
   // A page that loaded hidden (a background tab, a pane not yet shown) has had no frames, and a ResizeObserver reports nothing while it is hidden:
   // the box is read again when it is shown (resize() fits the map again if nobody has moved the camera)
-  inst.onShown(() => {
+  listening.push(inst.onShown(() => {
     const box = state.canvas && state.canvas.parentElement;
     if (!ended && box && box.clientWidth && box.clientHeight && (box.clientWidth !== state.width || box.clientHeight !== state.height)) resize();
-  });
+  }));
 
   /** Ends the map: no frame is waiting, the renderer's GPU context and the label layer are released, nothing is called again */
   function destroy() {
     ended = true;
+    for (const off of listening.splice(0)) off();
     if (inst.map === map) inst.map = null; // an instance that outlives its map (a scope's) can be given another
     scheduler.cancel();
     // the end of this map: the renderer gives its WebGL context back too (`release`); a swap (setRenderer) only destroys, so the next renderer on the canvas has a live one

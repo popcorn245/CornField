@@ -39,6 +39,7 @@ import { layerOn, projectLayerKey } from '../layer-model.js';
 import { showSearchStatus, updateSearchStatus } from '../engine/search-status.js';
 import { countText, moreLine, noMatchLine, searchNodes, stepIndex } from '../search-model.js';
 import { scopeOf, place } from '../engine/piece.js';
+import { listenRoots } from '../engine/roots.js';
 
 /** The two fields: the desktop's and the phone's bar. Each has its input, count, list and the live region it shares with the other */
 const FIELDS = [
@@ -52,12 +53,12 @@ export const MATCH_ZOOM = 1;
 const FRAME_STOP = Symbol('frame all');
 
 /** The markup of the piece: the field with the button that opens the phone's bar (`field`), and the phone's bar (`bar`) */
-export const markup = () => ({
-  field: `<button type="button" id="mobile-search-toggle" class="hx-hdr-icon hx-only-mobile" data-corn="mobile-search-button" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">
+export const markup = ({ phone = true } = {}) => ({
+  field: `${phone ? `<button type="button" id="mobile-search-toggle" class="hx-hdr-icon hx-only-mobile" data-corn="mobile-search-button" data-action="toggle-mobile-search" aria-label="Open Search" title="Search nodes" data-corn-kind="icon">
   <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
 </button>
 
-<div class="hx-search" role="search" data-corn="search">
+` : ''}<div class="hx-search" role="search" data-corn="search">
   <svg class="hx-search-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>
   <input type="text" id="node-search" class="hx-search-input" placeholder="Search..." data-corn-string-placeholder="searchPlaceholder" aria-label="Search nodes" aria-keyshortcuts="/" data-corn="search-input" />
   <kbd class="hx-kbd" data-corn="search-key" aria-hidden="true">/</kbd>
@@ -70,7 +71,7 @@ export const markup = () => ({
   <div id="search-status" class="hx-search-status" role="status" aria-live="polite" data-corn="search-status"></div>
   <div id="search-results" class="hx-search-results" data-corn="search-results" hidden></div>
 </div>`,
-  bar: `<div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden data-corn="mobile-search">
+  bar: !phone ? '' : `<div id="mobile-search-bar" class="hx-mobile-search glass-header" role="search" hidden data-corn="mobile-search">
   <input type="text" id="mobile-node-search" class="hx-input hx-input--wide" placeholder="Search nodes, apps, components..." aria-label="Search nodes" data-corn="search-input" />
   <button type="button" class="hx-textbtn" data-action="close-mobile-search" data-corn-kind="quiet">Cancel</button>
   <span id="mobile-search-steps" class="hx-search-steps" data-corn="search-steps" hidden>
@@ -120,8 +121,8 @@ export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
   const made = [
-    ...place(inst, root, markup().field, options.slots, 'field'),
-    ...place(inst, root, markup().bar, options.slots, 'bar'),
+    ...place(inst, root, markup({ phone: options.phone !== false }).field, options.slots, 'field'),
+    ...place(inst, root, markup({ phone: options.phone !== false }).bar, options.slots, 'bar'),
   ];
   /** An element of this piece by id */
   const own = (id) => {
@@ -133,6 +134,8 @@ export function mount(root, inst, options = {}) {
     return null;
   };
   scope.keepParts(...made);
+  /** The fields this mount has: both on cornfield's page; the field alone in a box of its own (`options.phone: false`, `<corn-search>`) */
+  const fields = FIELDS.filter((f) => own(f.input));
   let memo = null; // { key, nodes, result }
   let chosen = 0;
 
@@ -163,7 +166,7 @@ export function mount(root, inst, options = {}) {
   function paintSearch({ keepOpen = true } = {}) {
     const result = currentResult();
     const text = countText(result, state.searchCurrent);
-    for (const field of FIELDS) {
+    for (const field of fields) {
       const count = own(field.count);
       if (count) { count.textContent = text; count.dataset.empty = result.query && !result.total ? 'true' : 'false'; }
       const steps = own(field.steps);
@@ -220,7 +223,7 @@ export function mount(root, inst, options = {}) {
     state.searchQuery = query;
     if (changed) state.searchCurrent = null; // a new question has no current answer yet
     inst.touchScene();
-    for (const field of FIELDS) {
+    for (const field of fields) {
       const input = own(field.input);
       if (input && input.value !== value) input.value = value || '';
       const list = listOf(field);
@@ -340,7 +343,7 @@ export function mount(root, inst, options = {}) {
     if (!match) return;
     chooseMatch(match);
     // On a phone the list would cover the match: it shuts, and the focus goes to the next-match button, which stays
-    const field = FIELDS.find((f) => listOf(f) === e.currentTarget);
+    const field = fields.find((f) => listOf(f) === e.currentTarget);
     if (field && field.input === 'mobile-node-search' && isPhone(inst)) {
       closeList(field);
       const next = own(field.steps) && own(field.steps).querySelector('[data-action="search-next"]');
@@ -370,7 +373,7 @@ export function mount(root, inst, options = {}) {
   }
 
   // Both fields, their list, and the step and clear buttons
-  for (const field of FIELDS) {
+  for (const field of fields) {
     const input = own(field.input);
     // A combobox whose popup is a listbox: its options (Frame all, then the rows) in labelled groups, reached with the down arrow and
     // walked with the arrows (the focus moves from option to option), so a screen reader hears each row and its group
@@ -420,11 +423,37 @@ export function mount(root, inst, options = {}) {
     const open = own('mobile-search-toggle');
     if (open) open.click();
   }
-  scope.listen(inst.root, 'keydown', (e) => {
-    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target) && !inst.root.querySelector('[data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog')) {
+  // On every root of the instance: with the map in another shadow root, `/` there reaches the field here
+  const tree = typeof root.getRootNode === 'function' ? root.getRootNode() : root;
+  scope.own(listenRoots(inst, 'keydown', (e) => {
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target) && !(tree.querySelector && tree.querySelector('[data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog'))) {
       e.preventDefault();
+      // two search tags in one scope: the first that took the focus keeps it
+      const now = inst.active();
+      if (now && typeof now.matches === 'function' && now.matches('[data-corn="search-input"]') && !made.some((el) => el.contains(now))) return;
       goToSearch();
     }
+  }));
+  // What the live regions beside the fields say (engine/search-status.js tells the instance; the regions are this piece's own). A scope may hold two search
+  // tags: they are one search (one query, one current match), and only one of them speaks, the one last used (else the first), so it is said once
+  const voice = inst.slot('search-voice', () => ({ current: null, all: new Set() }));
+  const me = {};
+  voice.all.add(me);
+  if (!voice.current) voice.current = me;
+  for (const field of fields) scope.listen(own(field.input), 'focus', () => { voice.current = me; });
+  scope.own(() => { voice.all.delete(me); if (voice.current === me) voice.current = null; });
+  scope.on('search:status', (text) => {
+    if (!voice.current) voice.current = me;
+    for (const id of ['search-status', 'mobile-search-status']) { const el = own(id); if (el) el.textContent = voice.current === me ? text : ''; }
+  });
+  // ... and the other one shows what this one typed or chose (cornfield's page has one search: nothing here runs there)
+  scope.on('search', () => {
+    if (voice.all.size < 2 || made.some((el) => el.contains(inst.active()))) return;
+    for (const field of fields) {
+      const input = own(field.input);
+      if (input && input.value.trim() !== state.searchQuery) input.value = state.searchQuery;
+    }
+    paintSearch({ keepOpen: false });
   });
 
   // What the neighbours ask of the search, and a layer going on or off moving matches between the list and "In layers that are off"
@@ -443,6 +472,8 @@ export function mount(root, inst, options = {}) {
     searchActive,
     paintSearch,
     toggleMobileSearch,
+    /** The focus goes to the field, its text selected (what `/` does) */
+    focusField() { const input = own('node-search'); if (input) { input.focus(); input.select(); } },
     /** For tests: forget what was found */
     reset() { memo = null; chosen++; state.searchQuery = ''; state.searchCurrent = null; },
     update(props) {

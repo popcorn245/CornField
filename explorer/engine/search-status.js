@@ -9,9 +9,6 @@
 
 import { t } from './strings.js';
 
-/** The two fields' status lines: the desktop box and the phone's bar */
-const IDS = ['search-status', 'mobile-search-status'];
-
 /** How long the typing must pause before what a search found is said: a live region that changed on every key would be read out on every key */
 export const NO_MATCH_DELAY_MS = 400;
 
@@ -24,12 +21,9 @@ const pendingOf = (inst) => inst.slot('search-status', () => {
   return m;
 });
 
-/** Writes `text` into the region(s) at once; '' clears them */
+/** Says `text` in the region(s) at once, '' clears them: the search piece owns them and hears `search:status` (they may be in a root of their own) */
 function write(inst, text) {
-  for (const id of IDS) {
-    const el = inst.el(id);
-    if (el) el.textContent = text;
-  }
+  inst.emit('search:status', text);
 }
 
 /** Shows `text` by the search field(s) at once, ending any wait for what the typing found; '' clears it */
