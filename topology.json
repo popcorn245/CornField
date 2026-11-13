@@ -10641,7 +10641,13 @@
       "to": "core-explorer-search-match",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-glyphs",
+      "to": "core-core-color",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T03:35:11.552Z"
+  "updatedAt": "2026-11-13T07:28:57.002Z"
 }
