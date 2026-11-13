@@ -8,11 +8,18 @@
     "corn-review": 146194,
     "corn-review-src": 155356,
     "corn-scope": 56101,
+    "corn-scope-proposal": 109112,
     "corn-node-panel": 73049,
-    "corn-node-panel-added": 29609,
+    "corn-node-panel-added": 31685,
     "corn-layers": 55790,
     "corn-layers-added": 12350,
     "corn-search": 59925,
-    "corn-search-added": 16485
+    "corn-search-added": 16485,
+    "corn-proposal": 101961,
+    "corn-proposal-added": 58552,
+    "corn-changes": 101674,
+    "corn-changes-added": 58265,
+    "corn-decision": 100882,
+    "corn-decision-added": 57473
   }
 }

@@ -11,7 +11,9 @@
  *   root      the shadow root of the tag
  *   inst      the scope's instance, or null: no scope around the tag, so a private instance with no map, which this says (`needsScope`)
  *   options   tokens (the default `--corn-*` CSS text), piece (the options the piece is mounted with), initial (its first `update`), noMap (the `strings` key said
- *             while there is no map: `needsMap`, or the panel's own empty state), onSearch ({ query, current }, the instance's `search` event)
+ *             while there is no map: `needsMap`, or the panel's own empty state), onSearch ({ query, current }, the instance's `search` event),
+ *             exclusive (a name: the piece holds state of its own, so a scope holds one of it; see below), signIn ({ during: string[], clear: string }: the instance's
+ *             `auth` events whose `during` is listed put the scope's sign-in card in this tag's own root, and the event `clear` takes it away)
  *
  * What it does so that three roots can share one instance:
  *   - the root joins the instance (`joinRoot`, engine/roots.js): its keys and its focus are the instance's, so `/` pressed on the map reaches the search and a click in the
@@ -20,7 +22,10 @@
  *   - the piece mounts when the instance has a map with nodes (`map:ready`, then the `scene` its data brings) and ends when it has none (`map:gone`): the
  *     pieces read the map's camera, scene and visibility, so with none they say what they need in its place (`needsMap`), and while the map waits on its
  *     server (loading, signed out, offline: the map's own card says which) that they wait for it (`waitingForMap`). Tags can come in any order;
- *   - it has a live region of its own, said in only when no map has one (`announce:fallback`): a panel or a search beside no map still speaks.
+ *   - it has a live region of its own, said in only when no map has one (`announce:fallback`): a panel or a search beside no map still speaks;
+ *   - an `exclusive` piece (the proposal's bar, the change list with its player, the decision) is one per scope: each has a state of its own (a hold, a
+ *     note, a playing scenario, a line that is said once), which two could not share. The first to join holds the name; a second says `secondPiece` in its own
+ *     place, tells the scope (`piece:refused`, which is `cornError` `second-piece`), and takes over when the first leaves.
  * Nothing here reads the page: no `document`, no id of a neighbour. It never throws for a missing scope or map.
  */
 
@@ -46,11 +51,12 @@ function adoptTokens(root, css) {
  * @param {{ mount: Function }} piece
  * @param {ShadowRoot|Element} root
  * @param {ReturnType<typeof createInstance>|null} inst
- * @param {{ tokens?: string, piece?: object, initial?: object, noMap?: string, onSearch?: (d: { query: string, current: string | null }) => void }} [options]
+ * @param {{ tokens?: string, piece?: object, initial?: object, noMap?: string, onSearch?: (d: { query: string, current: string | null }) => void, exclusive?: string, signIn?: { during: string[], clear: string } }} [options]
  */
 export function mountAround(piece, root, inst, options = {}) {
   const ownsInstance = !inst;
   if (ownsInstance) inst = createInstance({ root });
+  const exclusive = typeof options.exclusive === 'string' ? options.exclusive : '';
   const info = scopeInfo(inst);
   const scope = scopeOf(inst);
   adoptTokens(root, options.tokens);
@@ -62,8 +68,14 @@ export function mountAround(piece, root, inst, options = {}) {
   scope.on('announce:fallback', (text) => { say(text); return true; });
   scope.own(() => region.remove());
 
+  /** Who holds each exclusive name in this instance (this call is the token) */
+  const holders = exclusive ? inst.slot('exclusive', () => new Map()) : null;
+  const token = {};
+  const second = () => !!holders && holders.has(exclusive) && holders.get(exclusive) !== token;
+  const takeName = () => { if (!holders) return true; if (second()) return false; holders.set(exclusive, token); return true; };
   let real = null;
   let note = [];
+  let told = false;
   let pending = { ...(options.initial || {}) };
   let ended = false;
 
@@ -73,13 +85,18 @@ export function mountAround(piece, root, inst, options = {}) {
   const hasMap = () => !!inst.map && inst.state.nodes.length > 0;
   const showNote = (gone = false) => {
     if (ended) return;
-    const words = !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : inst.map && !gone ? t(inst, 'waitingForMap') : t(inst, 'needsMap');
+    const words = second() ? t(inst, 'secondPiece') : !info ? t(inst, 'needsScope') : options.noMap === 'nodePanelEmpty' ? t(inst, 'nodePanelEmpty') : inst.map && !gone ? t(inst, 'waitingForMap') : t(inst, 'needsMap');
     if (note.length && note[0].textContent === words) return;
     dropNote();
     note = place(inst, root, `<p class="hx-needs" data-corn="empty">${escapeHtml(words)}</p>`, null, 'needs');
   };
   const mountReal = () => {
     if (real || ended) return;
+    if (!takeName()) {
+      showNote();
+      if (!told) { told = true; inst.emit('piece:refused', { piece: exclusive, reason: 'second-piece', message: `A scope holds one ${exclusive}.` }); }
+      return;
+    }
     if (!hasMap()) { showNote(); return; }
     dropNote();
     real = piece.mount(root, inst, { ...(options.piece || {}), inline: true, phone: false });
@@ -88,9 +105,18 @@ export function mountAround(piece, root, inst, options = {}) {
   const unmountReal = () => { if (real) { real.destroy(); real = null; } };
 
   scope.on('map:ready', mountReal);
+  scope.on('exclusive:released', (d) => { if (d && d.name === exclusive) mountReal(); }); // the one that held the name left: this one may have it
   scope.on('scene', () => { if (!real) mountReal(); }); // the map's data came (its server answered, or the host handed it in)
   scope.on('map:gone', () => { unmountReal(); showNote(true); }); // (said while the map ends: the instance may still hold it)
   if (options.onSearch) scope.on('search', (d) => options.onSearch(d));
+  // A refusal for want of a sign-in, said where the person is working (the scope says it once to the host: `cornAuth`)
+  if (options.signIn && info && info.mountStatus) {
+    const [slot] = place(inst, root, '<div class="hx-signin-slot"></div>', null, 'signin');
+    const card = info.mountStatus(slot, inst, { follow: false });
+    scope.on('auth', ({ status, during }) => { if (options.signIn.during.includes(during)) card.show({ state: 'sign-in', status, signIn: info.signIn() }); });
+    scope.on(options.signIn.clear, () => card.clear());
+    scope.own(() => { card.destroy(); slot.remove(); });
+  }
   mountReal();
 
   return {
@@ -107,7 +133,10 @@ export function mountAround(piece, root, inst, options = {}) {
       ended = true;
       unmountReal();
       dropNote();
+      const held = holders && holders.get(exclusive) === token;
+      if (held) holders.delete(exclusive);
       scope.destroy();
+      if (held && !inst.ended) inst.emit('exclusive:released', { name: exclusive });
       if (ownsInstance) inst.destroy();
     },
   };

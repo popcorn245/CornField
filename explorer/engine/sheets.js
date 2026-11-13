@@ -360,6 +360,14 @@ export function initSheets(inst) {
   }
   if (!S.documentWired) {
     S.documentWired = true;
+    // The scenario player's bar is a sheet in the dock, above the node panel's drawer (the dock's own children): the dock's owner seats it
+    inst.on('player:seat', (bar) => {
+      const dock = S.dock;
+      if (!dock || !dock.isConnected) return undefined;
+      const drawer = [...dock.children].find((child) => child.classList.contains('hx-drawer'));
+      if (drawer) dock.insertBefore(bar, drawer); else dock.appendChild(bar);
+      return true;
+    });
     for (const type of ['pointerdown', 'touchstart', 'mousedown']) inst.listen(inst.root, type, (e) => onMapDown(inst, e), { passive: true, capture: true });
     inst.listen(inst.root, 'keydown', (e) => onEscape(inst, e), true);
     onPhoneChange(inst, () => { collapseAllSheets(inst); measureCovered(inst); });

@@ -38,7 +38,7 @@ A maintainer opens a spec in your app (a task board, say, at `https://tasks.exam
 
 5. **Listen to what it says**, if your app wants to know: `cornDecision` (the server took Approve or Send back: `outcome`, `proposal`, `source`), `cornAuth` (the maintainer has to sign in: the review shows the link, `signIn`, and comes back to your page), `cornNavigate` (the proposal or its view changed: keep it in your own address so the way back from sign-in reopens it), `cornError` (something it could not do), `cornReady` (it is drawn).
 
-What it does not do yet: it is not part of a `<corn-scope>`, it has no what-if editor, no mockups (they open on cornfield itself), no Work panel and no list of proposals to choose from ([the limits](#what-it-does-not-do-yet)). The rest of this page is the detail: [the server's half](#the-key) and [the components](#the-components), with [`<corn-review>`](#corn-review-the-one-tag-review) first.
+To lay the review out in your own grid instead, take it **section by section** inside a `<corn-scope>` that holds the proposal: [`<corn-proposal>`, `<corn-changes>` and `<corn-decision>`](#the-reviews-sections-corn-proposal-corn-changes-corn-decision) beside a `<corn-map>`. What `<corn-review>` does not do yet: it is not part of a `<corn-scope>`, it has no what-if editor, no mockups (they open on cornfield itself), no Work panel and no list of proposals to choose from ([the limits](#what-it-does-not-do-yet)). The rest of this page is the detail: [the server's half](#the-key) and [the components](#the-components), with [`<corn-review>`](#corn-review-the-one-tag-review) first.
 
 ## The key
 
@@ -364,10 +364,11 @@ The server must list your page's origin in its [`embed.origins`](#the-key) and t
 | `theme` | `light`, `dark` or `auto` (the default): for every piece inside, as on `corn-map`. A map's own `light` or `dark` wins |
 | `use-theme` | wear the server's theme: see [below](#the-servers-theme-use-theme). Off by default |
 | `topology`, `config`, `strings` | for a host that fetches for itself: the objects `topology.json` and `/cornfield/config.json` hold, and your own words (`strings` win over the server's). With a `topology` **and** a `config` no request is made, and a scope with no `src` is handed everything this way |
+| `proposal`, `source`, `view` | the proposal the scope holds for every piece in it, and which copy and view: see [the review's sections](#the-reviews-sections-corn-proposal-corn-changes-corn-decision) |
 
 **`src` is an address your page trusts, like a script's.** Put a server you run there, never an address built from a URL parameter, a form or anything else a stranger chooses: the server `src` names is asked as the visitor, with the visitor's cookies for that server's own site; its words, its map and its sign-in link are what your page shows; and its answers (or their absence) tell whoever chose it whether an address answers from your visitor's network.
 
-**What the pieces inside share:** one instance of the engine: one selection, one camera, one topology, one set of words. A selection made in the map is the scope's. `cornReady` (the scope has its data), `cornAuth`, `cornError` bubble out of the scope (they cross shadow roots), and so do the pieces' own events (`cornSelect`).
+**What the pieces inside share:** one instance of the engine: one selection, one camera, one topology, one set of words. A selection made in the map is the scope's. `cornReady` (the scope has its data), `cornAuth`, `cornError` bubble out of the scope (they cross shadow roots), and so do the pieces' own events (`cornSelect`), and with a `proposal` `cornNavigate` and `cornDecision`.
 
 **One map per scope.** The engine holds one canvas, one camera and one selection per instance, so it cannot draw two maps from one: a second `corn-map` in a scope draws nothing, says "This scope already has a map" in its own box, and the scope emits `cornError` `{ kind: 'second-map' }`. Two scopes on a page are two instances and do not touch each other (two servers, two selections). When the map that has the scope leaves, the first map that was refused and is still in the page takes the scope by itself and draws.
 
@@ -515,12 +516,103 @@ The events and the method are `<corn-search>`'s (the node panel and the Layers m
 
 - **No phone sheet for the panel** (above): that is the host's layout.
 - **A panel laid over the map by your layout is not known to the map**: it frames a node into its whole box. The page's own panel tells the map how much it covers (`panel:covers` on the instance); a tag in a box of its own covers nothing.
-- **The proposal's bar, change list, decision and the Work panel** are still in `<corn-review>` and cornfield's page; their tags are the next step.
+- **The Work panel** is still cornfield's page's. The proposal's bar, the change list and the decision are tags now: [`<corn-proposal>`, `<corn-changes>` and `<corn-decision>`](#the-reviews-sections-corn-proposal-corn-changes-corn-decision).
 - **No `corn-explorer`** and no way to pass the node panel a node of your own: the selection is the map's.
 
 #### How the pieces find each other (for a shell of your own)
 
 A scope's instance has one primary root, the map's, which `inst.el(id)` searches. A piece in another shadow root **joins** the instance (`engine/roots.js` `joinRoot`), so that the instance's focus (`inst.active()`) and keys (`listenRoots`) are its own there too, and it reaches a neighbour only by an event or an `ask` on the instance, never by an id: the map answers `announce:write`, the node panel `panel:present` and `panel:covers`, the Layers menu `layers:present`, the search tells its live region `search:status`. The map says `map:ready` and `map:gone`; `explorer/pieces/around.js` mounts a piece when there is a map and ends it when there is none. The full list is in the header of `explorer/instance.js`.
+
+### The review's sections: `<corn-proposal>`, `<corn-changes>`, `<corn-decision>`
+
+[`<corn-review>`](#corn-review-the-one-tag-review) is the whole review in one box. These three are the same review **cut into its sections**, to lay out in your own grid beside a `<corn-map>` inside one `<corn-scope>`: the proposal's bar, what it changes with the scenarios, and Approve and Send back. Each has a shadow root of its own, each is a thin shell over the piece cornfield's own page runs (`explorer/pieces/proposal.js`, `changes.js`, `decision.js`), and they share the scope's one instance with the map and the [pieces around it](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search). The smallest page for the sketch in [the spec](specs/0011-cornfield-in-another-app.md#sketches), with a node panel to show what a change selected:
+
+```html
+<script type="module" src="https://map.example.com/cornfield/components/index.js"></script>
+
+<corn-scope src="https://map.example.com" proposal="0042-retire-the-old-export" source="pull/31" theme="auto">
+  <main class="my-grid">
+    <corn-map></corn-map>
+    <aside>
+      <corn-proposal></corn-proposal>
+      <corn-changes></corn-changes>
+      <corn-decision></corn-decision>
+      <corn-node-panel></corn-node-panel>
+    </aside>
+  </main>
+</corn-scope>
+```
+
+```css
+.my-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 8px; height: 100vh; }
+.my-grid aside { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+corn-changes { flex: 1 1 0; min-height: 0; }   /* the list scrolls inside the box you give it */
+corn-node-panel { height: 220px; }
+```
+
+with the policy of [the short version](#the-short-version-a-review-in-your-app) (`script-src`, `connect-src` and `img-src` for the server, `style-src 'self'`) and your origin in the server's [`embed.origins`](#the-key). Nothing else is needed: no wiring between the tags, no ids.
+
+#### What the scope gained: the proposal
+
+The sketch puts the proposal on the scope, because it is **one** proposal for every piece in it: the map narrows to it, the bar shows it, the list and the player walk through it, the decision decides it. The scope reads it the way `<corn-review>` does (the same requests, [below](#what-the-sections-ask-and-with-what)) and holds it for the pieces; a scope with none loads none of this.
+
+| Property | Attribute | What it is |
+|---|---|---|
+| `proposal` | `proposal` | the proposal's name (the scope reads it from the server), or, as a property only, the proposal object, shown for reading (a decision needs the name). **Held until the scope has a map with nodes** to lay it over: a map that comes later, or is put back, brings it up. It follows the reviewer: `null` once they close it in the bar, the name of a copy they open from it. A value that is not a proposal's name (`..`, a path, a URL) is refused, said in the bar, and never put in a request |
+| `source` | `source` | which copy: `checkout`, `pull/31` or a worktree's name; with none the server answers with the first it lists |
+| `view` | `view` (reflected) | `before`, `diff` or `after`. Set it to choose; it follows the reviewer's own buttons on `<corn-proposal>` |
+
+| Event | `detail` |
+|---|---|
+| `cornNavigate` | the open proposal or its view changed: what cornfield's own page would put in its address bar, for you to answer or not; the scope never touches your address. Its fields: `proposal`, `source`, `view`, `change` (the same as on `<corn-review>`) |
+| `cornDecision` | the server took Approve or Send back, once per decision, after it answered. Its fields: `outcome`, `proposal`, `source`, `open`, `review` (the same as on `<corn-review>`) |
+| `cornAuth` | a read or a press was refused with 401 or 403, once for each refusal. Its fields: `status`, `signIn`, `during` (`load` for the config and the map, as before; `proposal`, `facts`, `review`, `send` or `landing` for what a section asked) |
+| `cornError` | gains two kinds: `proposal` (it did not open: no such proposal, or the server refused) and `second-piece` (a second `<corn-proposal>`, `<corn-changes>` or `<corn-decision>`) |
+
+**Why the scope sends them, and not a section.** `cornSelect` is the map's alone and `cornAuth` and `cornError` were the scope's already: each is said by whoever owns the thing that changed. The proposal, its view and its decision are the scope's, so the scope says them once, whatever number of sections (none, one, or a second the scope refuses) are in it: a host listens on the scope (or any ancestor, they bubble) and never has to ask which tag was pressed. A section has **no properties, events or methods of its own**.
+
+#### What each does
+
+- **`<corn-proposal>`** is the bar: the proposal's title and the copy under review (a link to its PR, with the checks), what it adds, changes and removes (a count opens the matching list in `<corn-changes>`), **Before, Diff and After** (the map changes at once, and the scope's `view` follows), **Whole map** (puts the plain map back; off at every opening) and a ⋯ menu with **Close** (the sections empty, the map is whole again, and the focus goes to the map). A proposal that cannot be opened is one line in the bar with its ways on (Retry, Close, the same name under another source), as on cornfield's page; there is no list of specs to open in another app, so a bad link's way on is not offered.
+- **`<corn-changes>`** is the list: a row for each node and edge the proposal adds, changes or removes (a click or Enter selects it on the map, frames it, and fills a `<corn-node-panel>` in the scope), then the personas and their scenarios, each a disclosure of its steps with the verdict of its checks ("Not checked" with no checker; hand one in with a [`checker`](#corn-review-the-one-tag-review) on `<corn-review>`; sections have none yet). Choosing a step opens the **scenario player** as the last part of the list's own box (not a bar over your map): Previous, Pause or Play, Next, the speed, Close, the counter and the step's words; the map flies from step to step. **Space, the arrow keys and Escape act while the focus is in the list or the player**; Escape closes the player and the focus goes back to the step it was on.
+- **`<corn-decision>`** is Approve and Send back, with the line above Approve that says what Approve does in this exact state (the PR, its checks, landing, a run), the note that opens on Send back, **the hold** (five seconds with Undo, the focus on it, before anything leaves the page), the status of the last decision, and a landing that waits (Cancel landing). It decides the scope's proposal as the signed-in maintainer. It is the foot of the review, as a box of its own: with no proposal open it is empty.
+
+**One of each per scope.** Each of the three holds state of its own (the hold, the note, a playing scenario, a line said once), which two could not share: a **second** `<corn-proposal>`, `<corn-changes>` or `<corn-decision>` in one scope says "This scope already has one of these" (`secondPiece`, the `empty` part) in its own place, draws nothing else, makes no request, and the scope says `cornError` `{ kind: 'second-piece' }` once. It takes over when the first leaves the page (a wide layout and a narrow one, one of them removed). A node panel, a Layers menu and a search may be doubled: they are views.
+
+**What each does alone, signed out, offline and narrow.**
+
+| Where it is | What it does |
+|---|---|
+| alone beside a map (any one of the three, or any two) | it does its part: the bar changes the map, the list selects on it and plays, the decision decides |
+| inside a scope with **no `proposal`** | the three are empty (no bar, no list, no buttons) and nothing is asked for them |
+| inside a scope with **no map** (yet, or any more) | each says "This needs a corn-map in the same corn-scope" (`needsMap`, the `empty` part) and asks nothing: **the proposal is not even read** until there is a map to lay it over. A map added later brings the proposal up; a map removed takes the sections down again (a hold in progress ends with nothing sent), and the scope keeps the proposal |
+| beside a map with **no data yet**: loading, signed out, not a maintainer, the server offline, **a page the server does not list** | "Waiting for the map" (`waitingForMap`). The **map's card is the one place** that says what is wrong and offers the sign-in link, and the scope says `cornAuth` or `cornError` once. Signed in and back on the page, the sections come up |
+| a session that **ends while the page is open** | a read or the press the server refuses puts the scope's card, "You are not signed in to cornfield" with the link "Sign in to cornfield", **inside the section where the person is** (`<corn-decision>` for the line above Approve and the press, `<corn-proposal>` for a proposal that would not open), and the scope says `cornAuth` once with `during` (`facts` is read again every half minute and said once). What was typed is kept. A decision taken, or the proposal opened, takes the card away |
+| **offline** | Approve and Send back say "You are offline. Your approval was not sent; what you typed is kept." in the foot and start no hold: nothing was sent, and what was typed is kept. A hold that is running ends with nothing sent when the network goes |
+| **no scope** around it | "This needs a corn-scope around it, with a corn-map in it" (`needsScope`); no request, no event |
+| a box **narrower than 768px** | the box's own width, not the window's, is what the layout asks: the bar takes the phone's layout (the counts, then a mode button that opens Before, Diff and After), the buttons are full width and at least 44px, and **nothing else of a phone**: no bottom sheet, no tabs on the list (both lists, one under the other, scroll inside the box), no handle. Nothing runs past the box: a long name wraps |
+| two **scopes** on a page | two instances, two proposals, two decisions: nothing in one reaches the other |
+
+#### What the sections ask, and with what
+
+The same requests, in the same order, with the same headers and bodies as `<corn-review>` and cornfield's own page, because it is the same code (`explorer/engine/proposal.js`, `pieces/decision.js`), asked through the one credential rule: the session goes **to `src`'s own origin and no other**, no request follows a redirect, and the writes are only the two a listed origin may make ([`PUT /proposals/<name>/review` and the landing's Cancel](#what-a-listed-origin-may-write)), from your origin with `Sec-Fetch-Site: same-site`. The table of [`<corn-review>`](#what-it-asks-and-with-what) is the table: the scope makes the reads of the proposal and the PR, `<corn-decision>` the reads of the last review and of what Approve would do and the two writes. `node test/fixtures/big/review-tags-requests.mjs` records the requests of the sections and of cornfield's own page for the same steps and compares them.
+
+#### Keyboard, focus and screen readers
+
+- **Tab** goes through the tags in **your** order (the shadow roots are in the tab order where you put them); **Shift+Tab** comes back. The bar's ⋯ menu, the note and the player take **Escape** while the focus is inside them, and give it back to the control that opened them: a menu to its button, the note to Send back, the player to the step it was on. The map's keys are the map's. Close in the bar puts the focus on the map.
+- **One announcement, not two.** Before, Diff, After, "Opened X: 6 changes, 3 scenarios for 2 personas", Whole map, a step of the player, the hold and the status of a decision are each said once: by the map's polite live region where there is a map, by a live region of the tag's own where there is none, and the hold and the player in the tag's own. A refused read is said by the card's polite region and the line in the foot (a role `alert`, as on cornfield's page).
+- The bar is a named section ("Open proposal"), the list a named `aside` ("Review"), the decision a named group ("Decision"); every control is a native button, link or field. The headings start at `h2` (the proposal's title) and `h3` (the list's two parts), as in the review's, so they nest under a page's own `h1`.
+
+**Under a strict Content-Security-Policy:** as [the pieces around the map](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search): the sheets are constructable, no inline `style="…"` or `<style>` is made from a string, nothing uses `eval`, a worker or a `blob:` script, and **a config never becomes script** (D10: the sections load no plugin; a permission checker is a module you import yourself). [`test/fixtures/big/review-tags-proof.mjs`](../test/fixtures/big/review-tags-proof.mjs) runs the sketch on a listed sibling origin under `default-src 'self'; script-src 'self'; style-src 'self'` and holds it in a browser.
+
+**Theming and sizing.** As the other tags: tokens inherit from the scope, `theme` on the scope is what makes everything inside light or dark, every hook is a part (`corn-decision::part(review-note)`; [the lists](theming.md#parts)), the server's theme is yours to ask for with `use-theme`. Each is `display: block`, fills the place your layout gives it and is a query container on its own width (`container: corn-box / inline-size`); in a flex row give each a width or let it grow. The bar and the foot have a ground of their own (the page's translucent surface laid over `--corn-ground`), so their words keep their contrast on whatever your page has behind them; `<corn-changes>` wants a height (it scrolls inside it).
+
+**What it does not do yet.**
+
+- **No what-if editor, no mockups, no Work panel, no list of proposals to choose from.** `<corn-proposal>` has no My edits and Edit buttons and no Proposals menu; a proposal's mockups open on cornfield itself. They arrive with the Work panel's tag.
+- **No permission checker** for the scenarios (a section has none to hand in yet: a checked step reads "Not checked").
+- **Not in `<corn-review>`:** the one-tag review keeps its one shadow root and its own instance; it does not share a scope.
+- **Nothing covers the map.** The page's bar, column and player lie over the map and tell it how much (`proposal:covers`, `changes:covers`, `player:covers`); sections in boxes beside the map cover nothing, so the map frames a change into the whole of its own box.
 
 ### With a Content-Security-Policy
 
@@ -623,12 +715,14 @@ A screen reader finds an application named "Topology map", described by the map'
 
 ### What it does not do yet
 
-- **Only the map reads a server through a scope.** A scope shares its instance with one map and, around it, the node panel, Layers and search ([above](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search)). (A `<corn-review>` reads a server on its own: it is not inside a scope yet.)
-- **No proposal on a map alone.** A proposal drawn on the map, with its Before, Diff and After, is the review's: [`<corn-review>`](#corn-review-the-one-tag-review).
+- **Only the map reads a server through a scope.** A scope shares its instance with one map and, around it, the node panel, Layers and search ([above](#the-pieces-around-the-map-corn-node-panel-corn-layers-corn-search)). (A `<corn-review>` reads a server on its own: it is not inside a scope; the review's sections are, [below](#the-reviews-sections-corn-proposal-corn-changes-corn-decision).)
+- **No proposal on a map alone.** A proposal drawn on the map, with its Before, Diff and After, is the review's: [`<corn-review>`](#corn-review-the-one-tag-review), or the scope's `proposal` with [the sections](#the-reviews-sections-corn-proposal-corn-changes-corn-decision).
 - **No panels on a map alone.** Selecting a node says so through `cornSelect`; what to show for it is your app's, or `<corn-node-panel>`'s when the map is in a scope (the review has the node panel inside it).
 - **No freeform positions.** Dragging a node and saving where it was put are cornfield's own page's; a map in your page stores nothing in your page's storage.
 - **Reduced motion** is read when the map is made: under it the flow packets stand still and the camera jumps where it would glide, as on the page.
 
 ### The size it adds
 
-The build records the gzipped size of the shared runtime, of `corn-map`, `corn-review` and each piece around the map with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 74.2 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11.9 kB more, once, when it first has one; **`corn-review` 146.2 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **155.4 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 56.1 kB. **The pieces around the map**, each as what it adds to a page that already has the map (alone, without a map, none of them does anything): `corn-node-panel` **+29.6 kB** (it holds the renderers of every section of a node: the data, the cloud plan, the mockups, the diff); `corn-layers` **+12.4 kB**; `corn-search` **+16.5 kB**; all three together add **50.5 kB** to a page with the map, and 24.4 kB to one that has the review (which holds the node panel already). The map and the review grew when these tags came, by 1.1 kB and 3.4 kB against the 73.1 kB and 142.8 kB they were before: the map now owns its live region, says `map:ready` and `map:gone`, hands a late shell the selection, and the instance knows more than one root (about 1.1 kB, all code the map runs); the review also carries the node panel's box-of-its-own option, and the node panel, the layers' engine and the sheets are chunks it shares with the new tags now, where they were inside its own chunk (about 2.3 kB more, the price of sharing them rather than shipping them twice). The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once, and a map alone loads none of the review: what only a review uses (the sheets, the bar's, the list's and the panel's words, the checks, the decision) is in modules a map does not import, as a test of the build holds.
+The build records the gzipped size of the shared runtime, of `corn-map`, `corn-review` and each piece around the map and each section of the review with their engine, of each with what a `src` brings, and of `corn-scope` with what it loads, in `components/size-budget.json`, and CI fails when any grows by more than 5%: `npm run size:record` writes the new numbers when a growth is on purpose. Today (gzip, level 9, besides the shared runtime, which is 28.1 kB): **`corn-map` with its engine 74.2 kB**, which is all a map you hand its data loads; a `corn-map` with a `src` loads 11.9 kB more, once, when it first has one; **`corn-review` 146.2 kB** (the map, the proposal's bar, the change list and player, the node panel and the decision), and **155.4 kB** with a `src` (9 kB for the load, the card and the server's theme, in `chunks/review-source-<hash>.js`, loaded only for a `src`); `corn-scope` with what it loads 56.1 kB. **The pieces around the map**, each as what it adds to a page that already has the map (alone, without a map, none of them does anything): `corn-node-panel` **+29.6 kB** (it holds the renderers of every section of a node: the data, the cloud plan, the mockups, the diff); `corn-layers` **+12.4 kB**; `corn-search` **+16.5 kB**; all three together add **50.5 kB** to a page with the map, and 24.4 kB to one that has the review (which holds the node panel already). The map and the review grew when these tags came, by 1.1 kB and 3.4 kB against the 73.1 kB and 142.8 kB they were before: the map now owns its live region, says `map:ready` and `map:gone`, hands a late shell the selection, and the instance knows more than one root (about 1.1 kB, all code the map runs); the review also carries the node panel's box-of-its-own option, and the node panel, the layers' engine and the sheets are chunks it shares with the new tags now, where they were inside its own chunk (about 2.3 kB more, the price of sharing them rather than shipping them twice). The components share the engine's chunks and make no second copy of it, so a page with a review and a map loads the engine once, and a map alone loads none of the review: what only a review uses (the sheets, the bar's, the list's and the panel's words, the checks, the decision) is in modules a map does not import, as a test of the build holds.
+
+**The review's sections** share one chunk of the engine, `chunks/review-pieces-<hash>.js` (33.0 kB: the bar, the list, the player, the checks, the decision and what only they use, the same code the review holds), and each adds, to a page that already has the map, **+58.6 kB** (`corn-proposal`), **+58.3 kB** (`corn-changes`) and **+57.5 kB** (`corn-decision`) alone, and **67.0 kB** all three together, 15.1 kB to a page that has the review; a scope that is given a `proposal` loads `chunks/scope-proposal-<hash>.js` (4.0 kB) the first time, a `corn-map` with a `src` never does (`corn-scope-proposal` in `size-budget.json`). **What they cost the others:** `corn-map` grew by 0.2 kB (74.2 to 74.4 kB: two events it says when its data or its canvas changes, so a proposal held by the scope can follow); `corn-scope` by 0.7 kB (the proposal's properties and events); `corn-review` by 3.3 kB (146.2 to 149.5 kB), of which about 0.6 kB is code (a piece that can be a box of its own: no sheet, the asks that replace the lookups by id) and about 2.7 kB is the price of sharing: the camera's framing, the cloud panel's words, the proposal model, the topology and the connection are chunks of their own now, shared with the node panel and the sections where they were inside the review's one chunk (a bundler's cut, each compressed on its own), and `corn-node-panel` added 2.1 kB for the same reason (29.6 to 31.7 kB), `corn-layers` and `corn-search` 0.3 and 0.4 kB (their totals). Where the cut falls is `vite.lib.config.ts`: the group of the review and its sections, and nothing another component loads.

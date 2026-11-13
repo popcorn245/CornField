@@ -312,6 +312,7 @@ export function mount(root, inst, options = {}) {
 
   // -- following the instance ------------------------------------------------------------------------------------------------------
   scope.on('layers:present', () => true); // the map's keys know there is a menu to turn a layer on in
+  scope.on('popup:open', () => (!menu.hidden ? true : undefined)); // the scenario player's Escape leaves a menu that has its own
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);

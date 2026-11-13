@@ -329,6 +329,7 @@ function mountOn(root, inst, options, privateScope) {
     if (asked) selectNode(inst, asked, { source: 'api' });
     map.render();
     map.ensureFlowLoop();
+    inst.emit('map:topology'); // a proposal held over the map (pieces/scope-proposal.js) is laid over the new base
   }
 
   function setView(view) {
@@ -355,6 +356,7 @@ function mountOn(root, inst, options, privateScope) {
     installRenderer();
     map.resize();
     if (hadFocus) next.focus();
+    inst.emit('map:canvas'); // a click on an edge is heard on the new canvas (pieces/scope-proposal.js)
   }
 
   /**

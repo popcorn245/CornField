@@ -1,7 +1,7 @@
 {
   "name": "@popcorn245/cornfield-components",
   "version": "0.1.0",
-  "description": "cornfield's interface as web components (spec 0011): <corn-map>, <corn-review>, <corn-scope> and the pieces around the map (<corn-node-panel>, <corn-layers>, <corn-search>), thin StencilRS shells over the engine in cornfield. The same files are served by every cornfield server at /cornfield/components/.",
+  "description": "cornfield's interface as web components (spec 0011): <corn-map>, <corn-review>, <corn-scope>, the pieces around the map (<corn-node-panel>, <corn-layers>, <corn-search>) and the review's sections (<corn-proposal>, <corn-changes>, <corn-decision>), thin StencilRS shells over the engine in cornfield. The same files are served by every cornfield server at /cornfield/components/.",
   "license": "MIT",
   "author": "popcorn245 (https://github.com/popcorn245)",
   "homepage": "https://github.com/popcorn245/CornField/blob/main/docs/embedding.md",
@@ -30,17 +30,29 @@
       "types": "./dist/types/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./corn-map": {
-      "types": "./dist/types/corn-map.d.ts",
-      "default": "./dist/corn-map.js"
+    "./corn-changes": {
+      "types": "./dist/types/corn-changes.d.ts",
+      "default": "./dist/corn-changes.js"
+    },
+    "./corn-decision": {
+      "types": "./dist/types/corn-decision.d.ts",
+      "default": "./dist/corn-decision.js"
     },
     "./corn-layers": {
       "types": "./dist/types/corn-layers.d.ts",
       "default": "./dist/corn-layers.js"
     },
+    "./corn-map": {
+      "types": "./dist/types/corn-map.d.ts",
+      "default": "./dist/corn-map.js"
+    },
     "./corn-node-panel": {
       "types": "./dist/types/corn-node-panel.d.ts",
       "default": "./dist/corn-node-panel.js"
+    },
+    "./corn-proposal": {
+      "types": "./dist/types/corn-proposal.d.ts",
+      "default": "./dist/corn-proposal.js"
     },
     "./corn-review": {
       "types": "./dist/types/corn-review.d.ts",

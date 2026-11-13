@@ -131,15 +131,20 @@ describe('the documented components', () => {
     for (const part of ['review', 'stage', 'dock', 'decision', 'review-bar', 'proposal-bar', 'proposal-title', 'review-column', 'node-panel', 'scenario-player', 'source-status', 'source-sign-in', 'empty']) expect(made.has(part), part).toBe(true);
   });
 
-  it('lists every part of corn-node-panel, corn-layers and corn-search: the hooks of the piece and the modules that make its markup (each is a part of the same name)', () => {
-    // what each piece makes in a box of its own (`inline`, no phone bar): the node panel has no dim layer, the search no phone bar, and the legend of the data-flow lines is the Layers menu's
+  it('lists every part of corn-node-panel, corn-layers, corn-search, corn-proposal, corn-changes and corn-decision: the hooks of the piece and the modules that make its markup (each is a part of the same name)', () => {
+    // what each piece makes in a box of its own (`inline`, no phone bar): the node panel has no dim layer, the search no phone bar, and the legend of the data-flow lines is the Layers menu's.
+    // The review's sections: the bar has no Proposals menu (the account menu's), and the card of a refused read is only the sign-in's (the map's card says the load's other states);
+    // the list has no dialog (the player's `dialog-scrim` is a test of whether one is open); the hooks a piece makes with `dataset.corn` (the player's bar) are named in `extra`
     const PIECES = {
       'corn-node-panel': { files: ['pieces/node-panel.js', 'engine/flow-ui.js', 'proposal-model.js', 'mockups-model.js', 'cloud-panel.js', 'capped.js', 'selection-words.js', 'selection-view.js', 'pieces/around.js'], not: ['backdrop', 'menu-section', 'menu-title'] },
       'corn-layers': { files: ['pieces/layers.js', 'engine/flow-legend.js', 'edge-key.js', 'pieces/around.js'], not: [] },
       'corn-search': { files: ['pieces/search.js', 'pieces/around.js'], not: ['dialog-scrim', 'mobile-search', 'mobile-search-button'] },
+      'corn-proposal': { files: ['pieces/proposal.js', 'pieces/status.js', 'pieces/around.js'], not: ['proposals-button', 'proposals-menu', 'menu-title', 'row', 'source-origin', 'source-retry'] },
+      'corn-changes': { files: ['pieces/changes.js', 'engine/player.js', 'engine/checks.js', 'pieces/around.js'], not: ['dialog-scrim'], extra: ['scenario-player'] },
+      'corn-decision': { files: ['pieces/decision.js', 'pieces/status.js', 'pieces/around.js'], not: ['source-origin', 'source-retry'] },
     };
-    for (const [tag, { files, not }] of Object.entries(PIECES)) {
-      const made = new Set(files.flatMap((f) => [...fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bdata-corn=\\?"([a-z0-9-]+)\\?"/g)].map((m) => m[1])));
+    for (const [tag, { files, not, extra = [] }] of Object.entries(PIECES)) {
+      const made = new Set([...files.flatMap((f) => [...fs.readFileSync(path.join(EXPLORER, f), 'utf8').matchAll(/\bdata-corn=\\?"([a-z0-9-]+)\\?"/g)].map((m) => m[1])), ...extra]);
       for (const hook of not) made.delete(hook);
       const parts = rows(sub('Parts')).find((r) => ticked(r[0])[0] === tag);
       expect(ticked(parts[1]).sort(), tag).toEqual([...made].sort());

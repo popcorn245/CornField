@@ -97,8 +97,11 @@ export function demoScenario(nodes, edges) {
  * @param {ReturnType<import('../instance.js').createInstance>} inst
  * @param {ReturnType<typeof import('./piece.js').scopeOf>} scope the piece's own end: every listener, observer and the frame client go with it
  * @param {ReturnType<typeof import('./checks.js').createChecks>} checks
+ * @param {{ seat?: Element, hear?: EventTarget }} [where] where the piece that owns the player has put it, when that is not the page's or the review's layout (`<corn-changes>`):
+ *   `seat` is the element the bar goes in (it is a part of that piece, not a sheet or a bar over the map), `hear` the root whose keys are the player's (Space, the arrows, Escape).
+ *   Without it the bar lies over the map's bottom, or is a sheet in the dock (the dock's owner seats it: `player:seat`), and the instance's root hears
  */
-export function createScenarioPlayer(inst, scope, checks) {
+export function createScenarioPlayer(inst, scope, checks, where = {}) {
   const { state } = inst;
   let player = null;
   let bar = null;
@@ -121,7 +124,8 @@ export function createScenarioPlayer(inst, scope, checks) {
   let barOffs = [];
   const notify = (snap) => { for (const fn of [...listeners]) fn(snap); inst.emit('scenario:player', snap); };
 
-  const stage = () => (state.canvas ? state.canvas.parentElement : null);
+  const stage = () => (where.seat || (state.canvas ? state.canvas.parentElement : null));
+  const hear = where.hear || inst.root;
   const render = () => inst.map.render();
 
   // ---------------------------------------------------------------------------
@@ -353,12 +357,13 @@ export function createScenarioPlayer(inst, scope, checks) {
     menu.addEventListener('change', onSpeed);
     barOffs.push(() => { here.removeEventListener('click', onBarClick); menu.removeEventListener('change', onSpeed); });
     // On a phone the bar is a sheet in the dock, above the node panel; it opens as a peek (one row) and the others fold, so the map shows
-    const dock = inst.el('sheet-dock');
-    const drawer = inst.el('spec-drawer');
-    if (dock && drawer && drawer.parentElement === dock) dock.insertBefore(bar, drawer);
-    else (dock || area).appendChild(bar);
-    registerSheet(inst, 'player', bar);
-    collapseAllSheets(inst);
+    if (where.seat) area.appendChild(bar); // a part of the piece's own box: no sheet, nothing over the map
+    else {
+      // On a phone the bar is a sheet in the dock, above the node panel; the dock's owner seats it (engine/sheets.js), else it lies over the map's bottom
+      if (inst.ask('player:seat', bar) !== true) area.appendChild(bar);
+      registerSheet(inst, 'player', bar);
+      collapseAllSheets(inst);
+    }
     // The bar grows once it has more to say (a step's check, its As row): the step it framed would now be under it, so it is followed again
     const RO = inst.win && inst.win.ResizeObserver;
     if (typeof RO === 'function') {
@@ -439,10 +444,11 @@ export function createScenarioPlayer(inst, scope, checks) {
   // ---------------------------------------------------------------------------
   /** A menu or dialog that has its own Escape: the layers menu, the toolbar's ⋯ menu, a dialog */
   function otherPopupOpen() {
-    return !!inst.root.querySelector('#legend-dropdown:not([hidden]), #proposal-more-menu:not([hidden]), [data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog');
+    if (inst.ask('popup:open') === true) return true; // the Layers menu, the bar's ⋯ menu: whoever owns one says so
+    return !!inst.root.querySelector('[data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog');
   }
 
-  scope.listen(inst.root, 'keydown', (e) => {
+  scope.listen(hear, 'keydown', (e) => {
     if (e.key === 'Escape' && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (player && !typingIn(e.target) && !otherPopupOpen()) { e.preventDefault(); stop(); return; } // Escape closes the scenario; focus goes back to Play
     }
@@ -454,7 +460,7 @@ export function createScenarioPlayer(inst, scope, checks) {
     act(action);
   });
   // Some browsers press a focused button on the key's release, so a space the player took must not reach it
-  scope.listen(inst.root, 'keyup', (e) => {
+  scope.listen(hear, 'keyup', (e) => {
     if (player && (e.key === ' ' || e.code === 'Space') && !typingIn(e.target)) e.preventDefault();
   });
   // A sheet that opened or closed changes what the map shows: keep the step in view

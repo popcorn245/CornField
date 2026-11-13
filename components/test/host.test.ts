@@ -236,7 +236,7 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
       for (const a of answers) if (!/\/cornfield\/config\.json$|\/topology\.json/.test(new URL(a.url).pathname)) expect(a.requestHeaders.cookie, a.url).toBeUndefined();
       // cornAuth is sent once, by the element that has the `src` (the map, or the scope), before the card is on screen, and no cornError with it
       const events = await page.evaluate(() => (window as any).__events);
-      expect(events.filter((e: { type: string }) => e.type !== 'cornReady')).toEqual([{ type: 'cornAuth', target: path === '/?scope' ? 'corn-scope' : 'corn-map', detail: { status: 401, signIn: link!.href }, cardShown: false }]);
+      expect(events.filter((e: { type: string }) => e.type !== 'cornReady')).toEqual([{ type: 'cornAuth', target: path === '/?scope' ? 'corn-scope' : 'corn-map', detail: path === '/?scope' ? { status: 401, signIn: link!.href, during: 'load' } : { status: 401, signIn: link!.href }, cardShown: false }]); // (the scope says what was refused; a map alone has only the load to refuse)
       expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
       await context.close();
     }, 60_000);
@@ -284,7 +284,7 @@ ${scripts.map((f) => `<script type="module" src="${MAP}/cornfield/components/${f
     const { page, context, answers } = await open(LISTED, '/?review&plain');
     await page.evaluate(async () => { await customElements.whenDefined('corn-review'); await (document.querySelector('corn-review') as any).componentOnReady(); });
     await page.waitForTimeout(800);
-    expect(answers.filter((a) => /review-source|config\.json|topology/.test(a.url))).toEqual([]);
+    expect(answers.filter((a) => /review-source|config\.json|topology\.json/.test(a.url))).toEqual([]);
     expect(await page.evaluate(() => (window as any).__violations)).toEqual([]);
     await context.close();
   }, 60_000);

@@ -542,3 +542,75 @@ describe('the pieces around the map: <corn-node-panel>, <corn-layers>, <corn-sea
     expect(el.shadowRoot!.querySelectorAll('[role="status"]')).toHaveLength(1);
   });
 });
+
+describe('the review\'s sections: <corn-proposal>, <corn-changes>, <corn-decision>', () => {
+  type Section = HTMLElement & { componentOnReady(): Promise<Section> };
+  const TAGS = ['corn-proposal', 'corn-changes', 'corn-decision'];
+  const empty = (el: Element) => el.shadowRoot!.querySelector('[data-corn="empty"]') as HTMLElement | null;
+
+  it('register, each with a shadow root', async () => {
+    document.body.innerHTML = TAGS.map((t) => `<${t}></${t}>`).join('');
+    const els = [...document.body.children] as Section[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    for (const t of TAGS) expect(customElements.get(t), t).toBeTruthy();
+    for (const el of els) expect(el.shadowRoot, el.localName).toBeTruthy();
+    // (test/package.test.ts holds that their declarations list no property, event or method)
+  });
+
+  it('with no scope around them they say what they need, make nothing else, ask nobody for anything and throw nothing', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const errors: string[] = [];
+    const onError = (e: ErrorEvent) => errors.push(e.message);
+    window.addEventListener('error', onError);
+    document.body.innerHTML = TAGS.map((t) => `<${t}></${t}>`).join('');
+    const els = [...document.body.children] as Section[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    await frames(3);
+    for (const el of els) {
+      expect(empty(el)!.textContent, el.localName).toBe('This needs a corn-scope around it, with a corn-map in it');
+      expect(el.shadowRoot!.querySelector('button, input, textarea'), el.localName).toBe(null);
+    }
+    for (const el of els) el.remove();
+    await frames(2);
+    window.removeEventListener('error', onError);
+    expect(errors).toEqual([]);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+
+  it('inside a scope with no map they say what they need, make no request and send no event', async () => {
+    const fetched = vi.spyOn(globalThis, 'fetch');
+    const seen: string[] = [];
+    for (const type of ['cornError', 'cornNavigate', 'cornDecision', 'cornAuth']) document.addEventListener(type, (e) => seen.push(`${type}:${(e as CustomEvent).detail && (e as CustomEvent).detail.kind}`));
+    document.body.innerHTML = `<corn-scope>${TAGS.map((t) => `<${t}></${t}>`).join('')}</corn-scope>`;
+    const els = [...document.body.firstElementChild!.children] as Section[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    await frames(3);
+    for (const el of els) expect(empty(el)!.textContent, el.localName).toBe('This needs a corn-map in the same corn-scope');
+    expect(seen).toEqual([]);
+    expect(fetched).not.toHaveBeenCalled();
+    fetched.mockRestore();
+  });
+
+  it('a second one of the same tag in a scope says so; the three are held apart; the first leaving gives the second its place', async () => {
+    document.body.innerHTML = '<corn-scope><corn-proposal id="a"></corn-proposal><corn-changes id="b"></corn-changes><corn-decision id="c"></corn-decision><corn-proposal id="d"></corn-proposal></corn-scope>';
+    const els = [...document.body.firstElementChild!.children] as Section[];
+    await Promise.all(els.map((e) => e.componentOnReady()));
+    await frames(3);
+    expect(empty(els[0])!.textContent).toBe('This needs a corn-map in the same corn-scope');
+    expect(empty(els[3])!.textContent).toBe('This scope already has one of these');
+    els[0].remove();
+    await frames(3);
+    expect(empty(els[3])!.textContent).toBe('This needs a corn-map in the same corn-scope');
+  });
+
+  it('is the scope\'s that has the proposal: `proposal`, `source` and `view` are on corn-scope, and `view` is reflected', async () => {
+    document.body.innerHTML = '<corn-scope proposal="0042-retire-the-old-export" source="pull/3" view="after"></corn-scope>';
+    const scope = document.body.firstElementChild as HTMLElement & { componentOnReady(): Promise<HTMLElement>; proposal: unknown; source: unknown; view: unknown };
+    await scope.componentOnReady();
+    expect([scope.proposal, scope.source, scope.view]).toEqual(['0042-retire-the-old-export', 'pull/3', 'after']);
+    scope.view = 'before';
+    await frames(2);
+    expect(scope.getAttribute('view')).toBe('before');
+  });
+});

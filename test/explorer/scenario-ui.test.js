@@ -635,7 +635,7 @@ describe('on a phone: the bar is a bottom sheet', () => {
   };
   const markup = '<div class="hx-stage"><canvas id="graph-canvas"></canvas><div id="sheet-dock">'
     + '<section id="proposal-bar"><div id="proposal-body"><div class="hx-proposal-head"><strong id="proposal-title">P</strong><button type="button" id="proposal-chip" data-action="toggle-proposal-changes">3 added</button></div></div></section>'
-    + '<aside id="spec-drawer"></aside></div></div>';
+    + '<aside id="spec-drawer" class="hx-drawer"></aside></div></div>';
   const handle = (el         ) => el.querySelector('.hx-sheet-handle')               ;
   const fire = (el         , type        , init         = {}) => el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }));
 

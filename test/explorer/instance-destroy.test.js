@@ -396,6 +396,34 @@ describe('the review pieces: proposal bar, change list with the player, decision
     inst.destroy();
   });
 
+  /** The same three, as the tags of a scope mount them: each in a root of its own (`inline`), the player a part of the list's box, the keys those roots' */
+  function mountSections(inst) {
+    Object.assign(inst.state, { baseNodes: inst.state.nodes.map((n) => ({ ...n })), baseEdges: inst.state.edges.map((e) => ({ ...e })) });
+    const hosts = [0, 1, 2].map(() => { const h = document.createElement('div'); document.body.append(h); return h; });
+    const roots = hosts.map((h) => h.attachShadow({ mode: 'open' }));
+    const pieces = [proposalPiece.mount(roots[0], inst, { inline: true, edit: false }), changesPiece.mount(roots[1], inst, { inline: true }), decisionPiece.mount(roots[2], inst, { inline: true })];
+    showProposal(inst, structuredClone(PROPOSAL), { slug: '0001-add-a-page', source: 'pull/21', sha256: 'b'.repeat(64) });
+    return Object.assign(pieces, { roots, end: () => { pieces.slice().reverse().forEach((piece) => piece.destroy()); hosts.forEach((h) => h.remove()); } });
+  }
+
+  it('as the tags of a scope mount them (each in a root of its own), mounted, played, held and destroyed 50 times on one instance, add nothing', async () => {
+    const { inst } = make();
+    const first = mountSections(inst);
+    first.end();
+    await vi.advanceTimersByTimeAsync(0);
+    const once = snapshot();
+    for (let i = 0; i < 50; i++) {
+      const pieces = mountSections(inst);
+      await vi.advanceTimersByTimeAsync(0); // the facts are read
+      pieces[1].playScenario(inst.state.proposal.scenarios[0], { autoplay: true }); // a scenario plays: a bar in the list's own box, a frame client
+      expect(pieces.roots[1].querySelector('.hx-player-seat > [data-corn="scenario-player"]')).toBeTruthy();
+      pieces.roots[2].querySelector('[data-review="approved"]').click(); // a hold counts down
+      pieces.end();
+    }
+    expect(snapshot()).toEqual(once);
+    inst.destroy();
+  });
+
   it('are what does it: ten sets mounted and not destroyed leave listeners behind', () => {
     const { inst, root } = make();
     const base = snapshot().listeners;

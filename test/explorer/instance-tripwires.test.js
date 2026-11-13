@@ -85,6 +85,8 @@ export const CONVERTED = [
   // The one-tag review: the composed piece and the engine function that gives an instance its map (spec 0011 D3, D4)
   'pieces/review.js',
   'engine/topology.js',
+  // The review's sections as tags (spec 0011 D4, D5): what a scope holds of the proposal
+  'pieces/scope-proposal.js',
   // Step 6 (spec 0011 D2 and D3): the Work panel (its shell, a part per tab and the two dialogs) and what it stands on
   'pieces/work.js',
   'pieces/work-markup.js',
@@ -292,4 +294,24 @@ describe('the converted modules', () => {
   it('the bridges are what the unconverted modules import, and are not converted', () => {
     for (const b of BRIDGES) expect(CONVERTED).not.toContain(b);
   });
+});
+
+describe('a piece reaches a neighbour by an event or an ask, never by an id in a root that is not its own (spec 0011 D4, D5)', () => {
+  /** The elements that belong to another piece: the proposal bar and its body, the review column, the node panel's drawer, the Layers menu, the bar's ⋯ menu, the dock the sheets are in */
+  const NEIGHBOURS = ['sheet-dock', 'proposal-bar', 'proposal-body', 'review-column', 'spec-drawer', 'legend-dropdown', 'proposal-more-menu', 'legend-toggle-btn'];
+  const lookup = new RegExp(String.raw`\binst\s*(?:\?\.|\.)\s*el\s*\(\s*['"\x60](?:${NEIGHBOURS.join('|')})['"\x60]|\binst\s*(?:\?\.|\.)\s*root\s*(?:\?\.|\.)\s*querySelector(?:All)?\(\s*['"\x60][^'"\x60]*(?:#(?:${NEIGHBOURS.join('|')})(?![\w-])|\.hx-player(?![\w-]))`);
+  /** What was found by an id and is an ask now: the files that had them. engine/sheets.js is the one that owns the dock (`initSheets` finds the dock's own markup in the instance's root) */
+  const CONVERTED_HERE = ['pieces/changes.js', 'engine/player.js', 'engine/map-rect.js', 'pieces/proposal.js', 'pieces/decision.js', 'pieces/scope-proposal.js', 'pieces/around.js'];
+
+  it('the check is not blind', () => {
+    for (const bad of ["inst.el('sheet-dock')", 'inst.el("proposal-bar")', "inst.root.querySelector('.hx-player')", "inst.root.querySelector('#legend-dropdown:not([hidden])')", "inst?.el(`spec-drawer`)"]) expect(lookup.test(bad), bad).toBe(true);
+    for (const fine of ["inst.el('forge-panel')", "own('proposal-bar')", "inst.ask('proposal:covers')", "bar.querySelector('#proposal-more-menu [role=\"menuitem\"]')", "inst.root.querySelector('[data-corn=\"dialog-scrim\"]')", "col.querySelector('.hx-player-seat')"]) expect(lookup.test(fine), fine).toBe(false);
+  });
+
+  for (const rel of CONVERTED_HERE) {
+    it(`${rel} asks the neighbour, and finds none of the elements that are another piece's`, () => {
+      const code = codeOf(fs.readFileSync(path.join(EXPLORER, rel), 'utf8'));
+      expect(lookup.test(code), rel).toBe(false);
+    });
+  }
 });
