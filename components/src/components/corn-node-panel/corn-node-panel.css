@@ -7,6 +7,8 @@
    Opened it fills the box and scrolls inside (its body); closed there is the `empty` line instead. */
 .hx-drawer { position: relative; inset: auto; width: 100%; height: 100%; max-height: none; transform: none; z-index: auto; border-radius: var(--corn-radius); box-shadow: none; }
 .hx-drawer:not(.drawer-open) { display: none; }
+/* The words said to a screen reader only (positioned, 1px) are placed in the body, which scrolls them: placed in the panel, a long body's would reach past the box and make the host's page scroll to nothing */
+.hx-drawer-body { position: relative; }
 .hx-panel-empty { margin: 0; padding: var(--corn-panel-pad); color: var(--corn-text-3); font-size: var(--corn-text-sm); line-height: 1.5; }
 /* A line of the panel that holds code (a route and the service behind it) wraps in a narrow box, where the page's 480px panel never needed to */
 .hx-drawer .hx-line { flex-wrap: wrap; }

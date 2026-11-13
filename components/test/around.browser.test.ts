@@ -365,6 +365,11 @@ describe('the pieces around the map in one scope', () => {
       bottom = r.bottom;
     }
     expect(Math.round(title(panel).getBoundingClientRect().bottom)).toBeLessThanOrEqual(Math.round(head.getBoundingClientRect().bottom) + 1);
+    // the words for a screen reader alone are placed in the body that scrolls them, never past the box (the host's page would scroll to nothing)
+    const word = document.createElement('span');
+    word.className = 'hx-sr-only';
+    body.append(word); // as the panel's "to", "from" and "became" are
+    expect(word.offsetParent).toBe(body);
   });
 
   it('every control of the three has a hook and a part, and the composed page has no axe violation', async () => {
