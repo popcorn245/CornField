@@ -113,6 +113,7 @@ The routes, for the curious (all behind the sign-in guard):
 | `GET /api/forge/pulls/<n>/build?slug=<proposal>` | the plan of step 2: the issue it would open, or the one it opened already (never kept) |
 | `POST /api/forge/pulls/<n>/build` `{ "slug", "sha", "digest" }` | opens the build issue, if the plan is still that one |
 | `/api/forge/work` | what the Runs tab groups: pull requests and issues of any state, branches, open spec PRs and the `agents` rules ([agents](agents.md)) |
+| `/api/forge/work-graph` | the map of work ([below](#the-work-graph)): `nodes`, `edges` and `problems`; for the page only, never to an embedding origin |
 | `/api/forge/threads?state=open\|closed\|all&limit=100` | the threads: ideas and spec conversations, newest activity first, each with the `[[mentions]]` its text holds as written, never the text; 404 when `threads: false` ([threads](threads.md)) |
 | `/api/forge/threads/<n>` | one thread's messages, as written (the opening text first), to read; 404 for a number that is no thread |
 | `POST /api/forge/threads` `{ title, body }` | opens an idea: an issue with the label, as you; guarded and audited as above, JSON up to 96 KB, never cached |
@@ -121,6 +122,26 @@ The routes, for the curious (all behind the sign-in guard):
 | `POST /api/forge/release-drafts` `{ tag, since?, name? }` | keeps the notes as a draft release for `tag` (never cached; guarded as above) |
 
 At most 300 items a list. These paths are cornfield's own: a `proxy` entry for `/api/` in the config does not shadow them.
+
+## The work graph
+
+`GET /api/forge/work-graph` is the Work view's one request ([spec 0012](specs/0012-work-as-a-view.md)): the pieces of work as nodes, how they link to each other and to the map's code as edges, worked out on the server by [server/work-graph.js](../server/work-graph.js). It has the gate of every forge route (a signed-in maintainer of the configured repo: 401 signed out, 403 otherwise and without sign-in), is kept like the others (a minute per user, an `ETag`, `Cache-Control: no-cache` asks the forge again), and is not open to an embedding origin: it waits on the second embed key ([embedding](embedding.md)).
+
+```json
+{ "ok": true, "forge": "github", "repo": "owner/name", "at": "…", "rate": null,
+  "nodes": [
+    { "id": "pull:27", "kind": "pull", "stage": "build", "title": "Add the CSV export", "state": "open", "open": true, "waiting": false, "number": 27, "url": "…", "updated": "2026-11-12T09:00:00Z", "draft": false, "author": "agent-four" },
+    { "id": "proposal:0100-retire", "kind": "proposal", "stage": "decide", "title": "Retire the export", "state": "to-decide", "open": true, "waiting": true, "slug": "0100-retire", "number": 41, "url": "…", "updated": "…" },
+    { "id": "new-thing", "kind": "code", "planned": true, "label": "New thing", "type": "service" } ],
+  "edges": [ { "from": "pull:27", "to": "issue:14", "rel": "closes" }, { "from": "proposal:0100-retire", "to": "new-thing", "rel": "adds" } ],
+  "problems": [ { "source": "runs", "text": "The agent runs could not be read: …" } ] }
+```
+
+- **Nodes**, one per piece of work, with `id` (`thread:<n>`, `issue:<n>`, `proposal:<slug>`, `run:<runId>`, `pull:<n>`, `deploy:<id>`), `kind`, `stage` (`talk`: threads and issues; `decide`: proposals; `build`: runs and pull requests; `ship`: deploys), `title`, `state`, `open`, `waiting` (spec 0010's rule: a spec to decide, a run waiting on an answer), `url`, `updated`, and its `number`, `slug`, `runId` or `deployId`. A spec PR is a `proposal` node (its pull request's number is `number`), not a `pull` node; an idea (an issue with the threads label) is a `thread`, not an `issue`. A node the map does not hold yet that a proposal adds is `{ id, kind: "code", planned: true, label, type }`; code that exists is on the map the page has, and is only named by edges.
+- **Edges** `{ from, to, rel }`, never to an id that is neither a node of the answer, nor a node of the map, nor a planned one: `became` (idea to the proposal the spec PR names it in), `discusses` (a spec PR's conversation, or an idea's `cornfield-thread` block, to the proposal), `agent-on` (issue, thread or proposal to a run), `opened` (run to the pull request or spec PR it opened), `closes` (`Closes #n`), `implements` (a pull request to the proposal whose build issue it closes, or that a code run on it opened), `shipped` (a merged pull request to the deploy at its merge commit), `changes` (a pull request's files, a proposal's changed nodes, a run's nodes), `adds` (a proposal's new nodes), `mentions` (an issue's or thread's `[[node]]`) and `restarts` (a deploy's restarts).
+- **Which work**: open, and closed, merged or finished in the last 14 days.
+- **What it costs**: a pull request's files are read once for a head commit and kept, as is a proposal's file; a refresh asks only for the lists (open and recently closed pull requests, issues, runs), a thread's comments when its last activity moved, and a spec PR's review state as the Specs list does. At most 50 open pull requests (and 50 recently closed), 300 files each, 100 threads and 100 local drafts are drawn; the rest is named in `problems`.
+- **A source that cannot be read** (threads off, no runs store, a forge call refused or rate-limited) is a line in `problems` (`{ source, text }`); the rest of the graph is answered. Only when the forge cannot be asked at all and nothing was read is it the error, or the last answer with `stale`, as the other routes.
 
 ## Release notes
 

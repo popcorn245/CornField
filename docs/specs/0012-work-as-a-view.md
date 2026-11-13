@@ -1,6 +1,6 @@
 # Spec 0012: Work as a view (issues, PRs and proposals as nodes on a map of their own)
 
-Status: **approved** (maintainer, in chat, 2026-11-13, on the mock: "That's fine, I think we can still have a listing component that shows the different work lists kinda like we had before"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). The four questions put with the mock are answered as recommended; the list stays, as a component. Not yet built. Its proposal is [proposals/0012-work-as-a-view.json](proposals/0012-work-as-a-view.json).
+Status: **approved** (maintainer, in chat, 2026-11-13, on the mock: "That's fine, I think we can still have a listing component that shows the different work lists kinda like we had before"), so it skips the map review gate ([ADR 0010](../adr/0010-cornfield-uses-its-own-gate.md)). The four questions put with the mock are answered as recommended; the list stays, as a component. Its proposal is [proposals/0012-work-as-a-view.json](proposals/0012-work-as-a-view.json).
 
 ## What the maintainer asked for
 
@@ -76,6 +76,10 @@ Status: **approved** (maintainer, in chat, 2026-11-13, on the mock: "That's fine
 ## What a host app gets
 
 A host uses `<corn-map view="work">` beside a `<corn-node-panel>` in a `<corn-scope>`: no separate `<corn-work>` tag is needed for the map of work. A `<corn-work-list>` tag, and the actions from another origin, wait on the second embed key (spec 0011 D9), which is the maintainer's decision.
+
+## Where it stands
+
+Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Steps 2 to 4 are not.
 
 ## What gets built, in order
 

@@ -25,6 +25,8 @@
  *   GET /api/forge/threads/<n>                                         one thread's messages, as written, to read; replying is on the forge
  *   POST /api/forge/threads                                            { title, body }: a new idea, an issue with the label, as the maintainer (server/forge-actions.js `serveIdea`)
  *   GET /api/forge/work                                                what the agents view groups: pull requests and issues (any state), branches, open spec PRs, and the config's `agents` rules
+ *   GET /api/forge/work-graph                                          the map of work (spec 0012): issues, PRs, proposals, threads, runs and deploys as nodes, their links to each other
+ *                                                                      and to the map's code as edges, and `problems` for what could not be read (server/work-graph.js; not open to an embedding origin)
  *   GET /api/forge/deploys?limit=100                                   the latest workflow runs that are deploys, each with what the
  *                                                                      config says it restarted (server/deploys.js, docs/deploys.md)
  *   GET /api/forge/release-notes?since=<tag>                           the merged pull requests since a tag (the latest version tag unless
@@ -60,6 +62,7 @@ import { deploysOf } from './deploys.js';
 import { readBody, sameOrigin } from './proposals.js';
 import { releaseNotes } from './release-notes.js';
 import { inside, readMap, readPlain } from './files.js';
+import { workGraph } from './work-graph.js';
 
 /** How long a kept answer is served without asking the forge again */
 export const FRESH_MS = 60_000;
@@ -122,7 +125,7 @@ function notesInput(config, since) {
  * The reads: the request's route, the forge call that answers it, and the key it is kept under.
  * @returns {{ key: string, load: (forge: import('./forge.js').Forge) => Promise<object> } | null}
  */
-function routeOf(reqPath, url, config, where, hooks = null) {
+function routeOf(reqPath, url, config, where, hooks = null, extra = {}) {
   if (reqPath === '/api/forge/release-notes') {
     const since = sinceOf(url.searchParams.get('since'));
     return { key: `release-notes?since=${since ?? ''}&label=${config.releaseNotes?.breakingLabel ?? ''}`, load: (forge) => releaseNotes(forge, notesInput(config, since)) };
@@ -163,6 +166,18 @@ function routeOf(reqPath, url, config, where, hooks = null) {
     }
     const n = Number(reqPath.split('/').pop());
     return { key: `threads/${n}&label=${label}`, load: async (forge) => ({ thread: await readThread(forge, config, where || config, n) }) };
+  }
+  if (reqPath === '/api/forge/work-graph') {
+    // The config is in the key (what is a deploy, whether threads are on), so an answer kept before it changed is never served for the new one
+    const mapping = createHash('sha256').update(JSON.stringify([config.deploys || null, config.threads ?? null])).digest('hex').slice(0, 12);
+    return {
+      key: `work-graph?config=${mapping}`,
+      load: async (forge) => {
+        let map = null;
+        try { map = readMap(config); } catch { map = null; }
+        return workGraph(forge, config, map, { where: where || config, runs: extra.runs ?? null, now: extra.now });
+      },
+    };
   }
   if (reqPath === '/api/forge/work') {
     return {
@@ -258,7 +273,7 @@ async function servePlan(req, res, act, url, ctx) {
  * @param {import('node:http').ServerResponse} res
  * @param {string} reqPath the decoded path
  * @param {URL} url
- * @param {{ config: object, where?: { proposals: string }, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, session: { userId: string, login: string } | null, publicHost?: string | null, publicOrigin?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
+ * @param {{ config: object, where?: { proposals: string }, runs?: import('./agent-runs.js').Runs | null, hooks?: import('./hooks.js').Hooks | null, lander?: import('./lander.js').Lander | null, session: { userId: string, login: string } | null, publicHost?: string | null, publicOrigin?: string | null, auth: { store: null | (() => Promise<import('node:sqlite').DatabaseSync>), forgeFor: Function }, now?: () => number }} ctx
  *   `session` is the signed-in maintainer's (null without sign-in)
  * @returns {Promise<boolean>}
  */
@@ -319,7 +334,7 @@ export async function serveForge(req, res, reqPath, url, ctx) {
     return true;
   }
   try {
-    const route = routeOf(reqPath, url, config, ctx.where, ctx.hooks);
+    const route = routeOf(reqPath, url, config, ctx.where, ctx.hooks, { runs: ctx.runs, now });
     if (!route) {
       send(req, res, 404, { ok: false, error: `${reqPath} is not a forge route.`, code: 'not-found' });
       return true;

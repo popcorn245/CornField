@@ -3157,6 +3157,16 @@
       "r": 18,
       "color": "#38bdf8",
       "desc": "Spec 0012: Work as a view (issues, PRs and proposals as nodes on a map of their own) (docs/specs/0012-work-as-a-view.md)."
+    },
+    {
+      "id": "core-server-work-graph",
+      "label": "work-graph.js",
+      "type": "core",
+      "file": "server/work-graph.js",
+      "summary": "The map of work in one answer (spec 0012 D2, D3 and D7): the pieces of work of six kinds as nodes, how they link to each other and to the code they touch as edges, and a line for everything that co…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The map of work in one answer (spec 0012 D2, D3 and D7): the pieces of work of six kinds as nodes, how they link to each other and to the code they touch as edges, and a line for everything that co… (server/work-graph.js)"
     }
   ],
   "edges": [
@@ -10716,7 +10726,97 @@
       "from": "page-doc-docs-specs-0012-work-as-a-view",
       "to": "page-doc-docs-adr-0010-cornfield-uses-its-own-gate",
       "dashed": true
+    },
+    {
+      "from": "pkg-server",
+      "to": "core-server-work-graph"
+    },
+    {
+      "from": "pkg-server",
+      "to": "pkg-explorer",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-forge-routes",
+      "to": "core-server-work-graph",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-core-config",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-core-mentions",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-explorer-forge-panel-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-explorer-runs-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-explorer-waiting-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-server-deploys",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-server-files",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-server-forge",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-server-work-graph",
+      "to": "core-server-proposal-pulls",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-specs-0012-work-as-a-view",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "core-server-work-graph",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-issues-and-prs",
+      "to": "page-doc-docs-embedding",
+      "dashed": true
+    },
+    {
+      "from": "page-doc-docs-specs-0012-work-as-a-view",
+      "to": "page-doc-docs-issues-and-prs",
+      "dashed": true
     }
   ],
-  "updatedAt": "2026-11-13T22:32:18.400Z"
+  "updatedAt": "2026-11-13T22:44:35.797Z"
 }
