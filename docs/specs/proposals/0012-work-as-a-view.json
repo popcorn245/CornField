@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "spec": "0012",
+  "title": "Work as a view",
+  "summary": "Issues, pull requests, proposals, runs, threads and deploys become nodes on a map of their own, the Work view beside Map and Flow, with edges to each other and to the code they touch. The server works the graph out in one request. The side panel goes; its lists stay as the Work list, a piece of their own.",
+  "nodes": {
+    "add": [
+      { "id": "core-server-work-graph", "label": "work-graph.js", "type": "core", "parent": "pkg-server", "file": "server/work-graph.js", "desc": "The map of work in one answer: issues, PRs, proposals, runs, threads and deploys as nodes, their links to each other and to the code they touch. A PR's files are read once per head and kept." },
+      { "id": "core-explorer-work-view", "label": "work-view.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/work-view.js", "desc": "The Work view: lanes by stage (talk, decide, build, ship) and the code the work touches, laid out as the House view is." },
+      { "id": "core-explorer-pieces-work-list", "label": "work-list.js", "type": "core", "parent": "pkg-explorer", "file": "explorer/pieces/work-list.js", "desc": "The Work list: the lists the Work panel's tabs held, as a piece of their own. A row selects its node in the Work view." }
+    ],
+    "change": [
+      { "id": "core-explorer-view", "set": { "desc": "Switches between the map, the data flow, the House and the Work view; the camera refits and the switch follows." }, "why": "work becomes a view beside Map and Flow" },
+      { "id": "core-explorer-pieces-work", "set": { "desc": "Retired: its lists are the Work list, its detail and actions the node panel's for a work node." }, "why": "the side panel gives way to the Work view" },
+      { "id": "core-explorer-pieces-node-panel", "set": { "desc": "What is selected: a node of the map, or a piece of work with what it is connected to and its actions." }, "why": "a work node's detail and actions move here from the Work panel" },
+      { "id": "core-explorer-pieces-layers", "set": { "desc": "The Layers menu: the map's layers, and in the Work view one layer per kind of work with its count." }, "why": "the Work panel's tabs become layers" },
+      { "id": "core-server-forge-routes", "set": { "desc": "The forge's lists, details and actions for the page, and the work graph." }, "why": "one request answers the map of work" }
+    ]
+  },
+  "edges": {
+    "add": [
+      { "from": "core-server-forge-routes", "to": "core-server-work-graph", "dashed": true, "label": "imports" },
+      { "from": "core-explorer-view", "to": "core-explorer-work-view", "dashed": true, "label": "imports" },
+      { "from": "core-explorer-work-view", "to": "core-server-work-graph", "label": "reads" },
+      { "from": "core-explorer-pieces-work-list", "to": "core-explorer-pieces-node-panel", "label": "selects" }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "what-waits-on-me-as-a-map",
+      "title": "The maintainer sees what waits on them, and what it touches",
+      "actor": "maintainer",
+      "steps": [
+        { "node": "core-explorer-view", "text": "Work 3, in the view switch: the maintainer opens the Work view." },
+        { "node": "core-server-work-graph", "text": "One request answers the work and its links, the PR files kept from before." },
+        { "node": "core-explorer-work-view", "text": "Talk, Decide, Build and Ship, and the code the work touches; Waiting on you dims the rest." },
+        { "node": "core-explorer-pieces-node-panel", "text": "A proposal selected: what it adds and changes, and Approve." }
+      ]
+    },
+    {
+      "id": "an-issue-to-a-deploy",
+      "title": "An issue followed from the agent to the deploy",
+      "actor": "maintainer",
+      "steps": [
+        { "node": "core-explorer-work-view", "text": "Issue #14, an agent on it, the PR it opened, the deploy that shipped it: one line of edges." },
+        { "node": "core-explorer-pieces-node-panel", "text": "The PR selected: its checks, the code it changes, Merge when green." },
+        { "node": "core-explorer-pieces-work-list", "text": "The List: every open PR, a row selecting its node." }
+      ]
+    }
+  ]
+}
