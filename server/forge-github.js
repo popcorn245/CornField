@@ -63,7 +63,7 @@ const toIssue = (i) => ({
 const toPull = (p) => ({
   number: p.number, title: p.title, body: p.body ?? '', state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : 'open', draft: Boolean(p.draft),
   author: author(p.user), labels: labelNames(p.labels), head: { ref: p.head?.ref ?? '', sha: p.head?.sha ?? '' }, base: { ref: p.base?.ref ?? '' },
-  url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null,
+  url: p.html_url, createdAt: p.created_at, updatedAt: p.updated_at, mergedAt: p.merged_at ?? null, mergeSha: p.merged_at || p.merged ? p.merge_commit_sha ?? null : null,
 });
 
 /** @returns {import('./forge.js').PullCommit} */
