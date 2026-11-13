@@ -112,7 +112,7 @@ export function syncViewUi() {
   const preset = state.view === 'dataflow';
   // The View switch: the Map button is on for the map itself; Flow and House say theirs (house.js) in aria-pressed too
   const map = $('preset-map-btn');
-  if (map) map.setAttribute('aria-pressed', String(state.view !== 'dataflow' && state.view !== 'house'));
+  if (map) map.setAttribute('aria-pressed', String(state.view !== 'dataflow' && state.view !== 'house' && state.view !== 'work'));
   const btn = $('preset-dataflow-btn');
   if (btn) btn.setAttribute('aria-pressed', String(preset));
   ensurePagePieces(); // the Layers menu, if the page has its place

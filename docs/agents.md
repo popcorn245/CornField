@@ -300,8 +300,8 @@ A link posted in chat lands in the right place on one tap. The address carries w
 
 | Link | What it opens |
 |---|---|
-| `/?run=<runId>` | The Runs tab with that run lit on the map and scrolled into view (the run's row has the focus) |
-| `/?issue=<n>` | The Issues tab with that issue's **Start an agent** button focused, ready to press. The dialog is not opened for you |
+| `/?run=<runId>` | The Work view with that run selected; its node panel has **Open in Work**, which opens the Runs tab at it (the run lit on the map, its row focused) |
+| `/?issue=<n>` | The Work view with that issue selected; **Open in Work** opens the Issues tab with its **Start an agent** button focused. The dialog is not opened for you |
 | `/?proposal=<slug>&start=1` | The proposal opened over the map, and the **Start an agent** dialog on it |
 
 - **On a phone** (under 768px) the sheet it opens is expanded, not collapsed: the panel for a run or an issue, the proposal bar for a proposal.

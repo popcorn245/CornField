@@ -33,7 +33,7 @@ import { WORK_KINDS, WORK_THEMES } from '../core/schema.js';
 import { workButtonName } from './waiting-model.js';
 import { cornState } from './corn-state.js';
 import { checksWords, pullUrl } from './forge-panel-model.js';
-import { RUNS_POLL_MS } from './pieces/work-common.js';
+import { RUNS_POLL_MS, safeUrl } from './pieces/work-common.js';
 import { openWorkAt } from './forge-panel.js';
 import {
   CODE_LAYER, KIND_WORDS, applyFilters, applyWorkLayout, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress,
@@ -68,6 +68,8 @@ export function initWorkView(opts = {}) {
     document.addEventListener('click', onClick);
     i.on('view', syncWork);
     i.on('layers', refilter);
+    i.on('work:open', ({ id }) => openWork({ select: id }));
+    i.on('search:more', () => (work().status === 'ok' && !on() ? work().nodes.filter((n) => n.work) : null));
     i.on('work:waiting', ({ total }) => paintBadge(total));
     i.on('work:panel', (node) => panelFor(node));
     mapStyleOf(i).onChange(() => { if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); } });
@@ -131,6 +133,7 @@ function syncWork() {
   if (stage) stage.classList.toggle('is-work', open);
   paintBar();
   if (open !== wasOn) {
+    if (open) paintBadge(work().counts.waiting);
     wasOn = open;
     clearTimeout(timer);
     if (open) timer = setTimeout(poll, RUNS_POLL_MS);
@@ -180,7 +183,7 @@ async function load({ select = null, ask = null, again = false, quiet = false } 
   if (!again && w.status !== 'ok') { w.status = 'loading'; card.show({ state: 'loading' }); }
   let res;
   try {
-    res = await credentialed(i)(GRAPH_URL, { headers: { accept: 'application/json' } });
+    res = await credentialed(i)(GRAPH_URL, { headers: { accept: 'application/json', ...(again && !quiet ? { 'cache-control': 'no-cache' } : {}) } }); // Refresh asks the forge again
   } catch {
     if (mine !== seq) return false;
     return refuse(i.offline() ? { state: 'offline' } : { state: 'server', message: 'cornfield could not be reached.' }, quiet);
@@ -229,7 +232,7 @@ function arrive(body, { select, ask, quiet }) {
     applyWorkLayout(state, { phone: isPhone() });
     i.touchScene();
     i.emit('layers:redraw');
-    if (first || !quiet) fitGraphToViewport(fitPadding());
+    if (first || !quiet) fitGraphToViewport(fitPadding() + 60); // the labels at the first lane's edge are on screen too
     render();
     if (before && !state.selectedNode) i.emit('node:close');
   }
@@ -285,7 +288,9 @@ function setWaiting(on_) {
 //  The node panel's words for a node
 // ---------------------------------------------------------------------------
 const pill = (p) => `<span class="hx-forge-state${p.state ? ` hx-forge-state--${esc(p.state)}` : ''}" data-corn="state-pill"${cornState(p.state) ? ` data-corn-state="${esc(cornState(p.state))}"` : ''}>${esc(p.text)}</span>`;
-const dot = (kind) => `<span class="hx-work-dot" data-corn="swatch" data-work-kind="${esc(kind || 'code')}" aria-hidden="true"></span>`;
+/** The kind's colour as the map draws it: the theme's token, else the default (the style goes on through `data-style`, which a host's CSP allows) */
+const colorOf = (kind) => { const v = mapStyleOf(inst()).get().values[workToken(kind)]; return /^#[0-9a-f]{3,8}$/i.test(v || '') ? v : WORK_THEMES[kind] ? WORK_THEMES[kind].color : ''; };
+const dot = (kind) => `<span class="hx-work-dot" data-corn="swatch" data-work-kind="${esc(kind || 'code')}" aria-hidden="true"${colorOf(kind) ? ` data-style="background-color: ${esc(colorOf(kind))}"` : ''}></span>`;
 const linkButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${esc(l.id)}">${esc(l.label)}</button>`;
 
 /** What the node panel shows for a node while the Work view is open (`work:panel`): a piece of work, replaced; a node of code, with the work that touches it first */
@@ -298,7 +303,7 @@ function panelFor(node) {
       ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dot(l.work)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
       : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
     const checks = node.item.kind === 'pull' ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Checks</div><div class="hx-fact-v" id="work-checks" data-corn="work-checks">${esc(checksLine(node))}</div></div>` : '';
-    const open = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><button type="button" class="hx-btn hx-btn--primary hx-foot-btn" data-corn-kind="primary" data-work-action="open-in-work" data-id="${esc(node.id)}">Open in Work</button>${p.url && /^https?:\/\//i.test(p.url) ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(p.url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : ''}</div>`;
+    const open = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><button type="button" class="hx-btn hx-btn--primary hx-foot-btn" data-corn-kind="primary" data-work-action="open-in-work" data-id="${esc(node.id)}">Open in Work</button>${safeUrl(p.url) ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : ''}</div>`;
     if (node.item.kind === 'pull') loadChecks(node);
     return { replace: true, badge: p.kind, title: p.title, html: `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p>${p.meta ? `<p class="hx-faint">${esc(p.tag)} · ${esc(p.meta)}</p>` : `<p class="hx-faint">${esc(p.tag)}</p>`}</div>${links}${checks}${open}` };
   }

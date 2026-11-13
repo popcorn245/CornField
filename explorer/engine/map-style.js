@@ -35,7 +35,8 @@
  * simply has no icon. `pixelated` (`theme.pixelated`) is the renderers' cue to sample without smoothing.
  */
 
-import { NODE_THEMES, WORK_KINDS } from '../../core/schema.js';
+import { NODE_THEMES } from '../../core/schema.js';
+import { WORK_KINDS } from '../../core/schema.js';
 import { parseColor } from '../theme-model.js';
 import { cssColor, rgbaText } from '../css-color.js';
 export { cssColor };

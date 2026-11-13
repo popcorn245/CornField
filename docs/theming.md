@@ -353,6 +353,13 @@ There are 69 map tokens: 21 node kinds and 18 groups (a fill each), 11 edge kind
 | `--corn-map-edge-runs-on` | code running on a stack or a machine |
 | `--corn-map-edge-uses` | a use of a design token |
 | `--corn-map-edge-extends` | a token group extending another |
+| **Work view** (spec 0012) | |
+| `--corn-work-thread` | the fill of a thread in the Work view (a circle; default `#a78bfa`) |
+| `--corn-work-issue` | an issue (a circle with a `!`; `#fbbf24`) |
+| `--corn-work-proposal` | a proposal (a diamond; `#2dd4bf`) |
+| `--corn-work-run` | an agent run (a hexagon; `#818cf8`) |
+| `--corn-work-pull` | a pull request (a rounded square; `#60a5fa`) |
+| `--corn-work-deploy` | a deploy (a square; `#4ade80`) |
 | **Node fill by kind** | |
 | `--corn-map-node-root` | the fill of a `root` node |
 | `--corn-map-node-app` | the fill of an `app` node |
@@ -463,7 +470,7 @@ A mockup that is not reviewed yet, or has changed since, is `waiting`: a `state-
 | `links`, `link`, `sign-out` | the account menu's links (the config's, the forge, Docs), one link, the Sign out form |
 | `layers-button`, `layers-menu` | the Layers chip ("Layers · 13 of 20") and its dropdown (layer rows and legends) |
 | `layers-all`, `layers-none` | All and None in the Layers menu's title: they switch every layer on or off, never an overlay |
-| `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `fit-button` | the View switch (Map, Flow, House, then Fit), and its four buttons; the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
+| `view-switch`, `preset-map`, `preset-dataflow`, `preset-house`, `preset-work`, `fit-button` | the View switch (Map, Flow, House, Work, then Fit), and its buttons (Work carries the `waiting-badge`, the number waiting on you); the one that is on has `aria-pressed="true"`. Fit is also `data-corn-kind="icon"` |
 | `proposals-button`, `proposals-menu` | the Proposals entry of the account menu and its list, there only without the Work panel (no forge, or no sign-in); with it, the panel's Specs tab lists the proposals and the entry is hidden |
 | `forge-button`, `tokens-button` | the Work toggle (its lit tag, "#21", is a `count`), the Review tokens entry of the account menu |
 | `account-button`, `avatar`, `account-menu` | the account button, the initial of who is signed in inside it, and the menu |

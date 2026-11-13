@@ -14,7 +14,8 @@
  *   - `workAddress(search)`          what `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=` ask for
  */
 
-import { NODE_THEMES, WORK_KINDS, WORK_THEMES, workType } from '../core/schema.js';
+import { NODE_THEMES } from '../core/schema.js';
+import { WORK_KINDS, WORK_THEMES, workType } from '../core/schema.js';
 import { relativeTime } from './review-model.js';
 import { SPEC_STATE_WORDS } from './waiting-model.js';
 
@@ -127,7 +128,7 @@ export function workScene(graph, mapNodes) {
     const theme = WORK_THEMES[item.kind];
     const title = text(item.title) || tagOf(item);
     nodes.push({
-      id: item.id, type: workType(item.kind), work: item.kind, label: item.kind === 'deploy' ? `Deploy · ${clip(title, LABEL_CHARS)}` : `${tagOf(item)} · ${clip(title, LABEL_CHARS)}`,
+      id: item.id, type: workType(item.kind), work: item.kind, shape: theme.shape, label: item.kind === 'deploy' ? `Deploy · ${clip(title, LABEL_CHARS)}` : `${tagOf(item)} · ${clip(title, LABEL_CHARS)}`,
       title, item, r: theme.r, color: theme.color, letters: theme.letters, terms: termsOf(item), groupName: LAYER_WORDS[item.kind],
       waiting: item.waiting === true, updated: text(item.updated), stage: text(item.stage), x: 0, y: 0,
     });
@@ -157,7 +158,7 @@ export const byLane = (a, b) => (a.waiting === b.waiting ? 0 : a.waiting ? -1 : 
 /** Most touched first, then by name: the order of the code */
 export const byTouch = (a, b) => (b.touches || 0) - (a.touches || 0) || String(a.label).localeCompare(String(b.label)) || (a.id < b.id ? -1 : 1);
 
-const DESK = { colGap: 230, rowGap: 78, codeRow: 34, codeRows: 18, codeColGap: 250, top: 0 };
+const DESK = { colGap: 230, rowGap: 64, codeRow: 30, codeRows: 24, codeColGap: 250, laneRows: 20 };
 const PHONE = { perRow: 3, colGap: 110, rowGap: 74, bandGap: 74, codeRow: 34, codeRows: 18, codeColGap: 150 };
 const LANE_FILL = 'rgba(66, 153, 225, 0.05)';
 const LANE_STROKE = 'rgba(66, 153, 225, 0.18)';
@@ -179,6 +180,7 @@ const noteOf = (n) => `${n} ${n === 1 ? 'item' : 'items'}`;
  * @returns {{ lanes: object[], bounds: { x: number, y: number, w: number, h: number } }}
  */
 export function layoutWork(nodes, { phone = false } = {}) {
+  nodes.forEach((n) => { if (n.work) n.labels = !phone; }); // on a phone a label per node would run into the next: the selection's and a match's are drawn
   const by = (key) => nodes.filter((n) => n.work && n.stage === key).sort(byLane);
   const stages = LANES.map((l) => ({ ...l, nodes: by(l.key) }));
   // A kind of work the server gave no stage still has a lane: the kind's own
@@ -191,26 +193,30 @@ export function layoutWork(nodes, { phone = false } = {}) {
 }
 
 function layoutDesk(stages, code) {
-  const { colGap, rowGap, codeRow, codeRows, codeColGap } = DESK;
-  const rows = Math.max(1, ...stages.map((s) => s.nodes.length));
-  const codeCols = Math.max(1, Math.ceil(code.length / codeRows));
+  const { colGap, rowGap, codeRow, codeRows, codeColGap, laneRows } = DESK;
+  const rowsOf = (s) => Math.min(Math.max(s.nodes.length, 1), laneRows);
+  const rows = Math.max(1, ...stages.map(rowsOf));
   const heightWork = (rows - 1) * rowGap;
   const heightCode = (Math.min(code.length, codeRows) - 1) * codeRow;
   const innerH = Math.max(heightWork, heightCode, 0);
   const top = -64; // the band starts above the first node: its title and note
   const bandH = innerH + 64 + 56;
   const lanes = [];
-  stages.forEach((s, i) => {
-    const cx = i * colGap;
-    s.nodes.forEach((n, j) => { n.x = cx; n.y = j * rowGap; });
-    lanes.push(lane(s.title, noteOf(s.nodes.length), cx - colGap / 2 + 14, top, colGap - 28, bandH));
+  let left = 0; // a lane with more than `laneRows` pieces of work goes on in another column of its own
+  stages.forEach((s) => {
+    const cols = Math.max(1, Math.ceil(s.nodes.length / laneRows));
+    const w = cols * colGap;
+    s.nodes.forEach((n, j) => { n.x = left + (Math.floor(j / laneRows) + 0.5) * colGap; n.y = (j % laneRows) * rowGap; });
+    lanes.push(lane(s.title, noteOf(s.nodes.length), left + 14, top, w - 28, bandH));
+    left += w;
   });
-  const x0 = stages.length * colGap - colGap / 2 + 14;
-  const codeW = codeCols * codeColGap - 28 + 28;
-  code.forEach((n, k) => { const col = Math.floor(k / codeRows); n.x = x0 + 24 + col * codeColGap; n.y = (k % codeRows) * codeRow; });
+  const x0 = left + 14;
+  const codeCols = Math.max(1, Math.ceil(code.length / codeRows));
+  const codeW = codeCols * codeColGap;
+  code.forEach((n, k) => { n.x = x0 + 24 + Math.floor(k / codeRows) * codeColGap; n.y = (k % codeRows) * codeRow; });
   if (code.length) lanes.push(lane(CODE_LANE_TITLE, noteOf(code.length), x0, top, codeW, bandH));
-  const right = code.length ? x0 + codeW : x0 - 14;
-  return { lanes, bounds: { x: -colGap / 2, y: top, w: right + colGap / 2, h: bandH } };
+  const right = code.length ? x0 + codeW : left;
+  return { lanes, bounds: { x: 0, y: top, w: right, h: bandH } };
 }
 
 function layoutPhone(stages, code) {
@@ -391,6 +397,7 @@ export function workAddress(search) {
 export function nodeForAddress(ask, nodes) {
   if (!ask || !ask.kind) return null;
   const mine = nodes.filter((n) => n.work === ask.kind);
+  if (ask.kind === 'pull' && !mine.some((n) => String(n.item.number) === ask.key)) { const spec = nodes.find((n) => n.work === 'proposal' && String(n.item.number) === ask.key); if (spec) return spec.id; } // a spec's pull request is its proposal
   const hit = ask.kind === 'proposal'
     ? mine.find((n) => n.item.slug === ask.key) || mine.find((n) => specNumber(text(n.item.slug)) === ask.key)
     : ask.kind === 'run' ? mine.find((n) => n.item.runId === ask.key) : mine.find((n) => String(n.item.number) === ask.key);

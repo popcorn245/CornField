@@ -50,6 +50,7 @@ import { initMockups } from './mockups.js';
 import { benchMeta, measureParams, readoutLines, resultLine, runBench, showReadout } from './bench.js';
 import { initLive } from './live.js';
 import { initHouse } from './house.js';
+import { initWorkView, followWorkAddress, asksForWork } from './work-view.js';
 import { houseOffered } from './house-model.js';
 import { initKeyboard } from './keyboard.js';
 import { initForgePanel } from './forge-panel.js';
@@ -207,10 +208,11 @@ export function startPage() {
     initLive({ source: liveSource, onSelectionGone: closeDrawer });
     // The House view (house.js): a source's floor renderer draws the plan under the map (plain room boxes without one); /?view=house opens it
     initHouse({ floor: floorRenderer, offered: houseOffered(houseSource, state.nodes) }); // no house source and no house in the map: no House button
+    initWorkView({ offered: !!config.forge }); // the Work view (work-view.js): offered when the config names a forge
     mergePagePieceOptions('changes', { checker }); // scenarios ask the source's checker, when there is one (pieces/changes.js)
     if (new URLSearchParams(window.location.search).get("view") === "dataflow") setView("dataflow");
     // /?run=, /?issue= and /?proposal=…&start=1 land on a run, an issue's Start button and a proposal's Start dialog (deep-link.js)
-    followDeepLink({ proposalOpened, forgeOn }).catch((err) => console.error('Following the link failed', err));
+    (asksForWork(window.location.search) ? followWorkAddress() : followDeepLink({ proposalOpened, forgeOn })).catch((err) => console.error('Following the link failed', err));
     // /?scenario-demo=1 plays a small scenario over real nodes, to look at the player
     maybeStartDemo();
     // /?bench=1 runs the stopwatch (bench.js) once the map is up

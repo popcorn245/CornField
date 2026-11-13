@@ -1,0 +1,17 @@
+/* The Work view (explorer/work-view.js, spec 0012): the toggle at the top left of the stage, the line of what could not be read, and the node panel's work detail. */
+.hx-work-bar { position: absolute; z-index: 4; left: var(--corn-space-4); top: var(--corn-space-4); display: flex; gap: var(--corn-space-2); }
+.hx-work-bar[hidden] { display: none; }
+.hx-work-chip { box-sizing: border-box; min-height: 2rem; padding: 0 var(--corn-space-4); border: var(--corn-border) solid var(--corn-line); border-radius: var(--corn-radius-pill); background: var(--corn-surface-1); color: var(--corn-text-2); font-family: inherit; font-size: var(--corn-text-xs); font-weight: 600; cursor: pointer; }
+.hx-work-chip[aria-pressed="true"] { background: var(--corn-accent); border-color: var(--corn-accent); color: var(--corn-text-on-accent); }
+.hx-work-chip:focus-visible { outline: var(--corn-focus-width) solid var(--corn-focus); outline-offset: var(--corn-focus-offset); }
+.hx-work-note { position: absolute; z-index: 3; left: var(--corn-space-4); bottom: var(--corn-space-4); max-width: min(32rem, calc(100% - var(--corn-space-8))); margin: 0; padding: var(--corn-space-2) var(--corn-space-3); border-radius: var(--corn-radius); background: var(--corn-surface-1); color: var(--corn-text-2); font-size: var(--corn-text-xs); }
+.hx-work-note[hidden] { display: none; }
+.hx-view-badge { margin-left: var(--corn-space-2); }
+.hx-work-links { list-style: none; margin: 0; padding: 0; }
+.hx-work-links li { display: flex; align-items: center; gap: var(--corn-space-2); min-height: 2.25rem; border-bottom: var(--corn-border) solid var(--corn-line); }
+.hx-work-rel { flex: none; width: 6.5rem; color: var(--corn-text-3); font-size: var(--corn-text-xs); }
+.hx-work-dot { flex: none; width: 0.6rem; height: 0.6rem; border-radius: var(--corn-radius-sm); background: var(--corn-text-3); }
+.hx-work-head, .hx-work-actions { display: flex; flex-direction: column; gap: var(--corn-space-2); margin: var(--corn-space-3) 0; }
+.hx-work-pills { display: flex; flex-wrap: wrap; gap: var(--corn-space-2); margin: 0; }
+.hx-work-actions .hx-foot-btn { align-self: flex-start; }
+@media (max-width: 767px) { .hx-work-bar { top: calc(var(--corn-space-4) + 2.5rem); } }

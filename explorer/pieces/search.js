@@ -149,9 +149,10 @@ export function mount(root, inst, options = {}) {
 
   /** What the current query finds (kept until the query, the nodes or the scene change) */
   function currentResult() {
-    const key = `${state.searchQuery}|${state.sceneVersion}|${state.nodes.length}`;
+    const more = state.view === 'work' ? null : inst.ask('search:more'); // the work the page knows, found from the map too (the Work view, spec 0012)
+    const key = `${state.searchQuery}|${state.sceneVersion}|${state.nodes.length}|${more ? more.length : 0}`;
     if (memo && memo.key === key && memo.nodes === state.nodes) return memo.result;
-    const result = searchNodes(state.nodes, state.searchQuery, { visible: (n) => inst.map.isNodeVisible(n), parentLabel: parentLabeller() });
+    const result = searchNodes(more && more.length ? state.nodes.concat(more) : state.nodes, state.searchQuery, { visible: (n) => inst.map.isNodeVisible(n), parentLabel: parentLabeller() });
     memo = { key, nodes: state.nodes, result };
     return result;
   }
@@ -255,6 +256,7 @@ export function mount(root, inst, options = {}) {
   /** Selects a match and flies the camera to it (zoom 1 or closer): what Enter, a row and N do */
   async function chooseMatch(match, { say = true } = {}) {
     const node = match.node;
+    if (node.work && state.view !== 'work') { inst.emit('work:open', { id: node.id }); return; } // a piece of work: the Work view opens on it
     const mine = ++chosen;
     if (!inst.map.isNodeVisible(node)) showLayerOf(node);
     state.searchCurrent = node.id;

@@ -173,7 +173,8 @@ import { decorateHouseScene, houseEdgeStyle, houseShowsNode, houseViewEdges } fr
 import { paintVerdict } from './verdict-paint.js';
 import { externalLayer, whenTicks } from './cloud-model.js';
 import { greying, lettersOf, projectLayerKey, shownByProposal, layersOf } from './layer-model.js';
-import { NODE_THEMES, WORK_THEMES, shapeOf } from '../core/schema.js';
+import { NODE_THEMES, shapeOf } from '../core/schema.js';
+import { WORK_KINDS } from '../core/schema.js';
 import { hasGlyph } from './glyphs.js';
 import { outageFor, paintOutage } from './outage-model.js';
 import { paintForge } from './forge-panel-model.js';
@@ -471,7 +472,7 @@ function workEdge(edge, source, target, subgraph) {
   return {
     key: edgeKeyOf(edge), from: edge.from, to: edge.to, kind: edge.kind,
     x1: source.x, y1: source.y, x2: target.x, y2: target.y, r1: source.r, r2: target.r,
-    color, width: lit ? 2.4 : 1.4, alpha: faded ? 0.12 : subgraph ? (connected ? 1 : 0.08) : 0.6,
+    color, width: lit ? 2.4 : 1.4, alpha: faded ? 0.12 : subgraph ? (connected ? 1 : 0.08) : 0.35,
     dash: edge.kind === 'adds' ? PROPOSED_DASH : edge.kind === 'mentions' ? USAGE_DASH : null,
     ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null,
     label: lit ? { text: typeof edge.word === 'string' && edge.word ? edge.word : edge.kind, x: (source.x + target.x) / 2, y: (source.y + target.y) / 2, color, italic: false } : null,
@@ -615,8 +616,9 @@ function buildNodes(state, subgraph) {
     if (look) alpha *= gone ? MARK.removed.alpha : look.alpha;
     const big = shown.type === 'root' || shown.type === 'app';
     // A finer kind (spec 0009): its letters, drawn in the node's core by the renderers (kind-letters.js), and the project layer that takes the node
-    const work = shown.work && Object.hasOwn(WORK_THEMES, shown.work) ? shown.work : '';
-    const letters = work ? WORK_THEMES[work].letters : lettersOf(state, shown);
+    const work = WORK_KINDS.includes(shown.work) ? shown.work : ''; // a kind of work carries its own shape and letters (work-model.js)
+    const shape = work && Object.hasOwn(SHAPE_REACH, shown.shape) ? shown.shape : shapeOf(shown.type);
+    const letters = work ? String(shown.letters || '') : lettersOf(state, shown);
     const layer = projectLayerKey(state, shown);
 
     out.push({
@@ -624,8 +626,8 @@ function buildNodes(state, subgraph) {
       ...(typeof shown.kind === 'string' && shown.kind ? { kind: shown.kind } : {}),
       ...(letters ? { letters } : {}),
       ...(work ? { work } : {}), // a kind of work (the Work view): its colour is its own token (map-style.js)
-      shape: shapeOf(shown.type), // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
-      hitR: shown.r * SHAPE_REACH[shapeOf(shown.type)], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
+      shape, // the silhouette of the node's family (spec 0008 D8): circle, rounded-square, hexagon, square, diamond
+      hitR: shown.r * SHAPE_REACH[shape], // the disc a click or tap hits: as far as the silhouette reaches (spatial.js)
       ...(hasGlyph(shown.type) ? { glyph: shown.type } : {}), // its built-in glyph, drawn where the core dot is once the node is wide enough (glyphs.js)
       ...(layer ? { layer } : {}),
       x: node.x, y: node.y, r: shown.r, color: fillOfNode(shown),
@@ -642,7 +644,7 @@ function buildNodes(state, subgraph) {
       labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground
         : focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
-      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || !!work || selected || match || mark !== 'none' || !!(subgraph && connected),
+      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || (!!work && shown.labels !== false) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
       live: !!node.live,
       box: node.box || null,
