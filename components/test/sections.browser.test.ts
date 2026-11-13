@@ -315,6 +315,19 @@ describe('the keyboard, the page and the machine', () => {
     expect(order.indexOf('corn-decision')).toBeGreaterThan(order.indexOf('corn-changes'));
   });
 
+  it('the ⋯ menu closes on a click anywhere else in the page (the map, the host\'s own page, another section), as on cornfield\'s page', async () => {
+    const t = await compose();
+    await until(() => visible(t.foot, '[data-review="approved"]'));
+    const more = q(t.bar, '[data-action="toggle-proposal-more"]')!;
+    const menuOpen = () => visible(t.bar, '[data-corn="proposal-menu"]');
+    for (const outside of [() => t.host.click(), () => canvasOf(t.map).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true })), () => q(t.list, '[data-corn="row"]')!.click()]) {
+      more.click();
+      expect(menuOpen()).toBe(true);
+      outside();
+      expect(menuOpen()).toBe(false);
+    }
+  });
+
   it('keeps its styles in its own roots: nothing added to the host\'s head but the default tokens, and no `<style>` in a section', async () => {
     const before = document.head.querySelectorAll('style').length;
     const t = await compose();
