@@ -8,7 +8,8 @@
  *   Kind      Id                    Stage    Comes from
  *   thread    thread:<n>            talk     an idea (an issue with the threads label) or a spec PR's conversation (server/threads.js's rules)
  *   issue     issue:<n>             talk     an issue that is not an idea
- *   proposal  proposal:<slug>       decide   a proposal of an open or recent spec PR (`pullNumber` says which), else one in the checkout or a worktree
+ *   proposal  proposal:<slug>       decide   a proposal of an open or recent spec PR (`number` says which), else one in the checkout or a worktree;
+ *                                           another spec PR holding the same slug is `proposal:<slug>@<n>` (each counts, as the Specs list's rows do)
  *   run       run:<runId>           build    an agent run (server/agent-runs.js)
  *   pull      pull:<n>              build    a pull request that is not a spec PR
  *   deploy    deploy:<id>           ship     a workflow run the config says is a deploy (server/deploys.js)
@@ -24,29 +25,33 @@
  *   discusses   thread -> proposal                  a spec PR's conversation, by its slug; an idea's `cornfield-thread` block that names a slug
  *   agent-on    issue or thread or proposal -> run  the run's refs (`issue`, `thread`, `proposal`)
  *   opened      run -> pull or proposal             the pull request the run opened (`run.pull`); a spec PR is its proposals
- *   closes      pull or proposal -> issue or thread `Closes #n` in the text (core/mentions.js `closesOf`)
+ *   closes      pull or proposal -> issue or thread `Closes #n` in the text (core/mentions.js `closesOf`); never a spec PR's conversation (a forge closes only issues)
  *   implements  pull -> proposal                    the pull request closes the build issue of the proposal (the marker pipeline.js `buildMarker` writes), or a code run on the proposal opened it
- *   shipped     pull or proposal -> deploy          the deploy ran at the pull request's merge commit
+ *   shipped     pull or proposal -> deploy          the deploy ran at the pull request's merge commit (its head, when the forge gave none)
  *   changes     pull, proposal, run -> code         a PR's files (explorer/forge-panel-model.js `litFor`, renames included), a proposal's changed and removed nodes, a run's nodes (`litOfRun`)
  *   adds        proposal -> code                    the nodes a proposal adds: planned ones, until the map holds them
  *   mentions    thread, issue -> code               the `[[mentions]]` of its text (explorer/forge-panel-model.js `mentionsOf`, `messageNodes`; core/mentions.js)
  *   restarts    deploy -> code                      what the config says the deploy restarted (explorer/forge-panel-model.js `litForDeploy`)
  *
- * Never an edge to an id that is neither a node of the answer, nor a node of the map, nor a planned one.
+ * Never an edge to an id that is neither a node of the answer, nor a node of the map, nor a planned one. A map node whose id looks like a work
+ * node's (`pull:3`) is left out, and said in `problems`, so an id names one thing.
  *
- * **Which work.** Open, and closed, merged or finished within `WINDOW_DAYS` (`inWindow`).
+ * **Which work.** Open, and closed, merged or finished within `WINDOW_DAYS` (`inWindow`). The closed lists are asked for what moved in the window
+ * (pull requests most recently updated first, issues updated since its start), so an old issue closed today is in it; a list that comes back
+ * full, or deploys older than the workflow runs read, are said in `problems`.
  *
  * **What it costs.** A pull request's files are read once for a head commit and kept for good (server/proposal-pulls.js `filesAt`, which the
  * spec listing keeps by too), and so is a proposal's file at that head; a warm answer asks the forge for the lists only (open pull requests, recent
  * closed ones, issues, runs), a thread's comments again only when its last activity moved, and a spec PR's review state as the listing does (kept
- * five minutes per head). At most `MAX_OPEN_PULLS` open pull requests are drawn, and `MAX_PULL_FILES` files of each; what is left out is named in
- * `problems`, as is every source that could not be read: the rest of the graph is still answered.
+ * five minutes per head). Every open pull request's files are read (kept per head and shared with the Specs list, which reads the same ones), so
+ * every open spec PR is drawn and counted; at most `MAX_OPEN_PULLS` other open pull requests are drawn, and `MAX_PULL_FILES` files of each; what
+ * is left out is named in `problems`, as is every source that could not be read: the rest of the graph is still answered.
  *
  * @typedef {{ source: string, text: string }} Problem
  */
 
 import fs from 'node:fs';
-import { ForgeError } from './forge.js';
+import { DEFAULT_LIMIT, ForgeError } from './forge.js';
 import { filesAt, forgeWords, pullProposals, readPullProposal, reviewStates } from './proposal-pulls.js';
 import { listProposalFiles } from './files.js';
 import { deploysOf } from './deploys.js';
@@ -58,12 +63,12 @@ import { specStateOf } from '../explorer/waiting-model.js';
 
 /** Work older than this is not drawn once it is over (spec 0012 D2); the Work list reaches further back */
 export const WINDOW_DAYS = 14;
-/** The most open pull requests drawn, and the most recently closed ones; the rest is named in `problems` */
+/** The most open pull requests drawn (spec PRs are proposals, and all drawn), and the most recently closed ones; the rest is named in `problems` */
 export const MAX_OPEN_PULLS = 50;
 export const MAX_RECENT_PULLS = 50;
 /** The most files of one pull request drawn as edges */
 export const MAX_PULL_FILES = 300;
-/** What each source is asked for */
+/** What each source is asked for (the open pull requests: all of them, as the Specs list asks) */
 export const LIST_PULLS = 100;
 export const LIST_ISSUES = 200;
 export const LIST_RECENT_ISSUES = 100;
@@ -147,6 +152,12 @@ async function each(items, fn) {
   return out;
 }
 
+/** An id of the work graph's own: a map node with one would be two things */
+const WORK_ID = /^(?:thread|issue|proposal|run|pull|deploy):/;
+/** A link the page may open: http(s) only; anything else (a runner's report saying `javascript:`) is no link */
+const webUrl = (u) => (typeof u === 'string' && /^https?:\/\/[^\s]+$/i.test(u) ? u : null);
+const DATE = (iso) => String(iso).slice(0, 10);
+
 const numbers = (ns) => `${ns.slice(0, NAMED).map((n) => `#${n}`).join(', ')}${ns.length > NAMED ? ` and ${ns.length - NAMED} more` : ''}`;
 
 /** What a thread's comments said, kept by the time of the thread's last activity: `${number}` -> `{ stamp, refs, proposal }` */
@@ -173,18 +184,23 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
   /** @type {Problem[]} */
   const problems = [];
   const say = (source, words) => problems.push({ source, text: words });
-  const mapNodes = map && Array.isArray(map.nodes) ? map.nodes : [];
+  const allMapNodes = map && Array.isArray(map.nodes) ? map.nodes : [];
   if (!map) say('map', 'The map could not be read, so no work is drawn on the code it touches (run cornfield sync).');
+  const workLike = allMapNodes.filter((n) => typeof n.id === 'string' && WORK_ID.test(n.id)).map((n) => n.id);
+  if (workLike.length) say('map', `${workLike.length === 1 ? 'A map node has' : `${workLike.length} map nodes have`} an id the work graph uses for work (${workLike.slice(0, NAMED).join(', ')}), so no work is drawn on ${workLike.length === 1 ? 'it' : 'them'}: rename ${workLike.length === 1 ? 'it' : 'them'} in the map.`);
+  const mapNodes = workLike.length ? allMapNodes.filter((n) => !workLike.includes(n.id)) : allMapNodes;
   const mapIds = new Set(mapNodes.map((n) => n.id));
   const label = ideaLabel(config);
   const attempt = async (fn) => { try { return { value: await fn() }; } catch (err) { return { err }; } };
 
   // What each source gives, read at once; a source that fails says so and the rest goes on
+  const windowStart = new Date(nowMs - WINDOW_DAYS * DAY_MS).toISOString();
   const [openPulls, closedPulls, openIssues, closedIssues, deployRuns, runList, localFiles] = await Promise.all([
-    attempt(() => forge.pulls({ state: 'open', limit: LIST_PULLS })),
-    attempt(() => forge.pulls({ state: 'closed', limit: LIST_PULLS })),
+    // every open one, as the Specs list asks (it reads the same files, kept by head), so every open spec PR is here
+    attempt(() => forge.pulls({ state: 'open' })),
+    attempt(() => forge.pulls({ state: 'closed', limit: LIST_PULLS, sort: 'updated' })),
     attempt(() => forge.issues({ state: 'open', labels: [], limit: LIST_ISSUES })),
-    attempt(() => forge.issues({ state: 'closed', labels: [], limit: LIST_RECENT_ISSUES })),
+    attempt(() => forge.issues({ state: 'closed', labels: [], limit: LIST_RECENT_ISSUES, since: windowStart })),
     attempt(() => forge.runs({ limit: LIST_RUNS })),
     attempt(async () => {
       if (!runs) throw new Error('no store');
@@ -212,44 +228,66 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
   /** @type {Map<string, { id: string, label: string, type: string | null }>} */
   const planned = new Map();
   const put = (node) => { nodes.set(node.id, { stage: stageOf(node.kind), waiting: false, ...node }); return node; };
+  /** A proposal's `adds`: to the map's node, or a planned one; never one with a work node's id */
+  const addsOf = (id, adds) => {
+    for (const a of adds) {
+      if (WORK_ID.test(a.id)) continue;
+      if (!mapIds.has(a.id) && !planned.has(a.id)) planned.set(a.id, a);
+      edge(id, a.id, 'adds');
+    }
+  };
 
   // ---- pull requests (and the spec PRs among them) ----
-  const openAll = (openPulls.value ?? []).slice().sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : b.number - a.number));
-  const openShown = openAll.slice(0, MAX_OPEN_PULLS);
-  if (openAll.length > openShown.length) {
-    say('pulls', `${openAll.length >= LIST_PULLS ? `${LIST_PULLS} or more` : openAll.length} pull requests are open: the ${MAX_OPEN_PULLS} most recently updated are drawn, ${numbers(openAll.slice(MAX_OPEN_PULLS).map((p) => p.number))} are left out.`);
-  }
-  const recentAll = (closedPulls.value ?? []).filter((p) => isDrawn(false, p.mergedAt || p.updatedAt, nowMs)).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  const byUpdate = (a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : b.number - a.number);
+  const openAll = (openPulls.value ?? []).slice().sort(byUpdate);
+  const isOpen = new Set(openAll.map((p) => p.number));
+  // A pull request closed between the two lists is in both: it is the open one here
+  const closedAll = (closedPulls.value ?? []).filter((p) => !isOpen.has(p.number));
+  const recentAll = closedAll.filter((p) => isDrawn(false, p.mergedAt || p.closedAt || p.updatedAt, nowMs)).sort(byUpdate);
   const recentShown = recentAll.slice(0, MAX_RECENT_PULLS);
   if (recentAll.length > recentShown.length) say('pulls', `${recentAll.length} pull requests were closed in the last ${WINDOW_DAYS} days: the ${MAX_RECENT_PULLS} newest are drawn, ${numbers(recentAll.slice(MAX_RECENT_PULLS).map((p) => p.number))} are left out.`);
-  const pulls = [...openShown, ...recentShown];
+  const lastClosed = (closedPulls.value ?? []).at(-1);
+  if ((closedPulls.value ?? []).length >= LIST_PULLS && lastClosed && inWindow(lastClosed.updatedAt, nowMs)) {
+    say('pulls', `Only the ${LIST_PULLS} most recently updated closed pull requests were read (back to ${DATE(lastClosed.updatedAt)}); one closed before that in the last ${WINDOW_DAYS} days is not drawn.`);
+  }
+  const listed = [...openAll, ...recentShown];
 
   // A pull request's files, once for a head commit (kept), and the proposals its files add or change
-  const gotFiles = await each(pulls, (pull) => attempt(() => filesAt(forge, where, pull)));
+  const gotFiles = await each(listed, (pull) => attempt(() => filesAt(forge, where, pull)));
   const unread = [];
   const cut = [];
   const filesOf = new Map();
-  pulls.forEach((pull, i) => {
-    if (gotFiles[i].err) { unread.push(pull.number); return; }
-    const files = gotFiles[i].value;
-    if (files.length > MAX_PULL_FILES) cut.push(`#${pull.number} changes ${files.length}`);
-    filesOf.set(pull.number, files.slice(0, MAX_PULL_FILES));
-  });
-  if (unread.length) {
-    const first = gotFiles.find((r) => r.err);
-    say('pulls', `The files of ${unread.length === 1 ? 'pull request' : 'pull requests'} ${numbers(unread)} could not be read, so what ${unread.length === 1 ? 'it changes' : 'they change'} is not drawn: ${forgeWords(first.err)}`);
-  }
-  if (cut.length) say('pulls', `Only the first ${MAX_PULL_FILES} files of a pull request are drawn: ${cut.slice(0, NAMED).join(', ')}${cut.length > NAMED ? ` and ${cut.length - NAMED} more` : ''} files.`);
-
-  // The proposals of the spec PRs: their entries, their files at the head (kept by it), and the review state of the open ones
+  /** @type {Map<number, any[]>} number -> the proposal entries of a spec PR */
   const specEntries = new Map();
-  for (const pull of pulls) {
-    if (!filesOf.has(pull.number)) continue;
+  for (const [i, pull] of listed.entries()) {
+    if (gotFiles[i].err) { unread.push(pull.number); continue; }
+    const files = gotFiles[i].value;
+    filesOf.set(pull.number, files.slice(0, MAX_PULL_FILES));
     try {
       const found = await pullProposals(forge, where, pull);
       if (found.length) specEntries.set(pull.number, found);
     } catch (err) { say('proposals', `The proposals of pull request #${pull.number} could not be found: ${forgeWords(err)}`); }
+    if (files.length > MAX_PULL_FILES && !specEntries.has(pull.number)) cut.push(pull);
   }
+  // The open pull requests drawn as pull requests: every spec PR is a proposal and drawn; of the rest, the most recently updated
+  const openPlain = openAll.filter((p) => !specEntries.has(p.number));
+  const openShown = openPlain.slice(0, MAX_OPEN_PULLS);
+  if (openPlain.length > openShown.length) {
+    const many = openAll.length >= DEFAULT_LIMIT ? `${DEFAULT_LIMIT} or more` : String(openPlain.length);
+    say('pulls', `${many} pull requests are open: the ${MAX_OPEN_PULLS} most recently updated are drawn, ${numbers(openPlain.slice(MAX_OPEN_PULLS).map((p) => p.number))} are left out.`);
+  }
+  const shownSet = new Set([...openShown, ...openAll.filter((p) => specEntries.has(p.number)), ...recentShown].map((p) => p.number));
+  const pulls = listed.filter((p) => shownSet.has(p.number));
+  for (const n of [...specEntries.keys()]) if (!shownSet.has(n)) specEntries.delete(n);
+  const unreadShown = unread.filter((n) => shownSet.has(n));
+  if (unreadShown.length) {
+    const first = gotFiles.find((r) => r.err);
+    say('pulls', `The files of ${unreadShown.length === 1 ? 'pull request' : 'pull requests'} ${numbers(unreadShown)} could not be read, so what ${unreadShown.length === 1 ? 'it changes' : 'they change'} is not drawn: ${forgeWords(first.err)}`);
+  }
+  const cutShown = cut.filter((p) => shownSet.has(p.number)).map((p) => `#${p.number} changes ${gotFiles[listed.indexOf(p)].value.length}`);
+  if (cutShown.length) say('pulls', `Only the first ${MAX_PULL_FILES} files of a pull request are drawn: ${cutShown.slice(0, NAMED).join(', ')}${cutShown.length > NAMED ? ` and ${cutShown.length - NAMED} more` : ''} files.`);
+
+  // The proposals of the spec PRs: their files at the head (kept by it), and the review state of the open ones
   const allEntries = [...specEntries.values()].flat();
   const parsed = new Map();
   let unreadFile = 0;
@@ -269,13 +307,16 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
 
   /** the proposals of each pull request: number -> ids; and the node ids of a number, for `opened` and `shipped` */
   const byPull = new Map();
+  /** a spec PR's proposal by `${number} ${slug}` -> its id: the first spec PR to hold a slug (open ones first, the most recently updated first) is `proposal:<slug>` */
+  const proposalAt = new Map();
   /** the nodes each proposal changes, drawn once every planned node is known: a proposal may change what another adds */
   const changed = [];
   for (const [n, entries] of specEntries) {
     const pull = pullOf.get(n);
     for (const entry of entries) {
       const proposal = parsed.get(entry);
-      const id = `proposal:${entry.slug}`;
+      const id = nodes.has(`proposal:${entry.slug}`) ? `proposal:${entry.slug}@${n}` : `proposal:${entry.slug}`;
+      proposalAt.set(`${n} ${entry.slug}`, id);
       let state;
       let waiting = false;
       if (pull.state === 'open') {
@@ -285,25 +326,22 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
         waiting = read.counted;
       } else state = pull.state;
       put({
-        id, kind: 'proposal', title: text(proposal && proposal.title) || entry.slug, state, open: pull.state === 'open', waiting, slug: entry.slug, number: n, url: pull.url, updated: pull.updatedAt, draft: pull.draft,
+        id, kind: 'proposal', title: text(proposal && proposal.title) || entry.slug, state, open: pull.state === 'open', waiting, slug: entry.slug, number: n, url: webUrl(pull.url), updated: pull.updatedAt, draft: pull.draft,
         author: pull.author ? pull.author.login : null,
       });
       byPull.set(n, [...(byPull.get(n) || []), id]);
       if (proposal) {
         const t = touchesOf(proposal);
-        for (const a of t.adds) {
-          if (!mapIds.has(a.id) && !planned.has(a.id)) planned.set(a.id, a);
-          edge(id, a.id, 'adds');
-        }
+        addsOf(id, t.adds);
+        changed.push([id, t.changes]);
       }
     }
   }
-  for (const entries of specEntries.values()) for (const entry of entries) if (parsed.has(entry)) changed.push([`proposal:${entry.slug}`, touchesOf(parsed.get(entry)).changes]);
 
   for (const pull of pulls) {
     if (specEntries.has(pull.number)) continue;
     const id = `pull:${pull.number}`;
-    put({ id, kind: 'pull', title: pull.title, state: pull.state, open: pull.state === 'open', number: pull.number, url: pull.url, updated: pull.updatedAt, draft: pull.draft, author: pull.author ? pull.author.login : null });
+    put({ id, kind: 'pull', title: pull.title, state: pull.state, open: pull.state === 'open', number: pull.number, url: webUrl(pull.url), updated: pull.updatedAt, draft: pull.draft, author: pull.author ? pull.author.login : null });
     byPull.set(pull.number, [id]);
     if (filesOf.has(pull.number)) for (const to of nodesOfFiles(filesOf.get(pull.number), mapNodes)) edge(id, to, 'changes');
   }
@@ -322,23 +360,23 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     const id = `proposal:${f.slug}`;
     put({ id, kind: 'proposal', title: text(proposal && proposal.title) || f.slug, state: 'local', open: true, waiting: false, slug: f.slug, number: null, url: null, updated: at, draft: true, source: f.source });
     const t = touchesOf(proposal);
-    for (const a of t.adds) {
-      if (!mapIds.has(a.id) && !planned.has(a.id)) planned.set(a.id, a);
-      edge(id, a.id, 'adds');
-    }
+    addsOf(id, t.adds);
     changed.push([id, t.changes]);
   }
   for (const [from, ids] of changed) for (const to of ids) if (mapIds.has(to) || planned.has(to)) edge(from, to, 'changes');
 
   // ---- issues, and the ideas among them as threads ----
   const isIdea = (issue) => label !== null && issue.labels.some((l) => l.toLowerCase() === label.toLowerCase());
-  const issues = [...(openIssues.value ?? []), ...(closedIssues.value ?? []).filter((i) => isDrawn(false, i.closedAt || i.updatedAt, nowMs))];
+  if ((openIssues.value ?? []).length >= LIST_ISSUES) say('issues', `${LIST_ISSUES} or more issues are open: the ${LIST_ISSUES} newest are drawn, the older ones are not.`);
+  if ((closedIssues.value ?? []).length >= LIST_RECENT_ISSUES) say('issues', `${LIST_RECENT_ISSUES} or more closed issues moved in the last ${WINDOW_DAYS} days: the ${LIST_RECENT_ISSUES} newest are read, the rest are not drawn.`);
+  const openNumbers = new Set((openIssues.value ?? []).map((i) => i.number));
+  const issues = [...(openIssues.value ?? []), ...(closedIssues.value ?? []).filter((i) => !openNumbers.has(i.number) && isDrawn(false, i.closedAt || i.updatedAt, nowMs))];
   const ideas = [];
   for (const issue of issues) {
     if (isIdea(issue)) { ideas.push(issue); continue; }
     const open = issue.state === 'open';
     const id = `issue:${issue.number}`;
-    put({ id, kind: 'issue', title: issue.title, state: issue.state, open, number: issue.number, url: issue.url, updated: issue.updatedAt, author: issue.author ? issue.author.login : null });
+    put({ id, kind: 'issue', title: issue.title, state: issue.state, open, number: issue.number, url: webUrl(issue.url), updated: issue.updatedAt, author: issue.author ? issue.author.login : null });
     for (const to of messageNodes(text(issue.body).slice(0, BODY_READ), mapNodes).nodes.map((n) => n.id)) edge(id, to, 'mentions');
   }
 
@@ -376,7 +414,7 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
       const links = read[i];
       const { item } = t;
       const id = `thread:${item.number}`;
-      put({ id, kind: 'thread', title: item.title, state: item.state, open: item.state === 'open', number: item.number, url: item.url, updated: item.updatedAt, threadKind: t.kind, author: item.author ? item.author.login : null });
+      put({ id, kind: 'thread', title: item.title, state: item.state, open: item.state === 'open', number: item.number, url: webUrl(item.url), updated: item.updatedAt, threadKind: t.kind, author: item.author ? item.author.login : null });
       if (t.kind === 'proposal') for (const to of byPull.get(item.number) || []) edge(id, to, 'discusses');
       if (!links) return;
       for (const to of mentionsOf(links.refs, mapNodes).ids) edge(id, to, 'mentions');
@@ -384,26 +422,32 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     });
   }
 
-  /** The node of an issue's or an idea's number, whichever it is here */
-  const talkNode = (n) => (nodes.has(`issue:${n}`) ? `issue:${n}` : nodes.has(`thread:${n}`) ? `thread:${n}` : null);
+  /** The node of an issue's or an idea's number, whichever it is here; with `issueOnly`, never a spec PR's conversation (a pull request, which no keyword closes) */
+  const talkNode = (n, issueOnly = false) => {
+    if (nodes.has(`issue:${n}`)) return `issue:${n}`;
+    const thread = nodes.get(`thread:${n}`);
+    return thread && !(issueOnly && thread.threadKind === 'proposal') ? thread.id : null;
+  };
 
   // ---- what a pull request or a spec PR says it closes, and what it implements ----
   const buildOf = new Map();
-  for (const issue of issues) { const marker = buildMarkerOf(issue.body); if (marker) buildOf.set(issue.number, marker.slug); }
+  for (const issue of issues) { const marker = buildMarkerOf(issue.body); if (marker) buildOf.set(issue.number, marker); }
   for (const pull of pulls) {
     const froms = byPull.get(pull.number) || [];
     if (!froms.length) continue;
     const spec = specEntries.has(pull.number);
-    const named = [...closesOf(text(pull.body).slice(0, BODY_READ))];
+    const named = [...closesOf(text(pull.body).slice(0, BODY_READ), forge.repo)];
     const threadN = spec ? threadOfPull(text(pull.body).slice(0, BODY_READ)) : null;
     if (threadN !== null && !named.includes(threadN)) named.push(threadN);
     for (const n of named) {
-      const to = talkNode(n);
+      const to = talkNode(n, true);
       if (!to) continue;
       if (spec && to.startsWith('thread:')) { for (const from of froms) edge(to, from, 'became'); continue; }
       for (const from of froms) edge(from, to, 'closes');
-      const slug = buildOf.get(n);
-      if (!spec && slug && nodes.has(`proposal:${slug}`)) edge(froms[0], `proposal:${slug}`, 'implements');
+      // The build issue names its spec PR and slug: that proposal, else the slug's own node
+      const marker = buildOf.get(n);
+      const built = marker && (proposalAt.get(`${marker.pull} ${marker.slug}`) || (nodes.has(`proposal:${marker.slug}`) ? `proposal:${marker.slug}` : null));
+      if (!spec && built) edge(froms[0], built, 'implements');
     }
   }
 
@@ -413,7 +457,7 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
     if (!isDrawn(run.open === true, ended, nowMs)) continue;
     const id = `run:${run.runId}`;
     put({
-      id, kind: 'run', title: runName(run), state: run.status, open: run.open === true, waiting: canAnswer(run), runId: run.runId, number: null, url: (run.report && run.report.url) || (run.comment && run.comment.url) || (run.pull && run.pull.url) || null,
+      id, kind: 'run', title: runName(run), state: run.status, open: run.open === true, waiting: canAnswer(run), runId: run.runId, number: null, url: webUrl(run.report && run.report.url) || webUrl(run.comment && run.comment.url) || webUrl(run.pull && run.pull.url),
       updated: ended, requestedBy: run.requestedBy ?? null,
     });
     const about = [run.refs && run.refs.issue, run.refs && run.refs.thread].filter((n) => n != null).map(talkNode).filter(Boolean);
@@ -430,12 +474,19 @@ export async function workGraph(forge, config, map, { where = config, runs = nul
   }
 
   // ---- deploys ----
+  const lastRun = (deployRuns.value ?? []).at(-1);
+  if ((deployRuns.value ?? []).length >= LIST_RUNS && lastRun && inWindow(lastRun.createdAt, nowMs)) {
+    say('deploys', `Only the ${LIST_RUNS} newest workflow runs were read (back to ${DATE(lastRun.createdAt)}); a deploy before that in the last ${WINDOW_DAYS} days is not drawn.`);
+  }
   const deploys = deploysOf(deployRuns.value ?? [], config.deploys).filter((d) => isDrawn(d.state === 'queued' || d.state === 'running', d.updatedAt || d.createdAt, nowMs));
   const shippedAt = new Map();
-  for (const pull of pulls) if (pull.state === 'merged') for (const sha of [pull.mergeSha, pull.head && pull.head.sha]) if (sha) shippedAt.set(sha, [...(shippedAt.get(sha) || []), pull.number]);
+  for (const pull of pulls) {
+    const sha = pull.state === 'merged' ? pull.mergeSha || (pull.head && pull.head.sha) : null;
+    if (sha) shippedAt.set(sha, [...(shippedAt.get(sha) || []), pull.number]);
+  }
   for (const d of deploys) {
     const id = `deploy:${d.id}`;
-    put({ id, kind: 'deploy', title: d.title || d.name, state: d.state, open: d.state === 'queued' || d.state === 'running', deployId: d.id, number: null, url: d.url, updated: d.updatedAt || d.createdAt, name: d.name, branch: d.branch, sha: d.sha, author: d.actor ? d.actor.login : null });
+    put({ id, kind: 'deploy', title: d.title || d.name, state: d.state, open: d.state === 'queued' || d.state === 'running', deployId: d.id, number: null, url: webUrl(d.url), updated: d.updatedAt || d.createdAt, name: d.name, branch: d.branch, sha: d.sha, author: d.actor ? d.actor.login : null });
     for (const n of shippedAt.get(d.sha) || []) for (const from of byPull.get(n) || []) edge(from, id, 'shipped');
     for (const to of litForDeploy(d, mapNodes).nodes.map((x) => x.id)) edge(id, to, 'restarts');
   }

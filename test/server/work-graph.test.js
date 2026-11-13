@@ -14,6 +14,14 @@ import { workGraph, stageOf, inWindow, isDrawn, buildMarkerOf, touchesOf, nodesO
 import { ForgeError } from '../../server/forge.js';
 // @ts-expect-error plain JS module, no declarations
 import { closesOf } from '../../core/mentions.js';
+// @ts-expect-error plain JS module, no declarations
+import { listPullProposals, reviewStates } from '../../server/proposal-pulls.js';
+// @ts-expect-error plain JS module, no declarations
+import { reviewComment, proposalHash } from '../../server/reviews.js';
+// @ts-expect-error plain JS module, no declarations
+import { waiting } from '../../explorer/waiting-model.js';
+// @ts-expect-error plain JS module, no declarations
+import { mergeSpecs } from '../../explorer/proposal-model.js';
 
 const NOW = Date.parse('2026-11-13T12:00:00Z');
 const ago = (days) => new Date(NOW - days * 86_400_000).toISOString();
@@ -44,9 +52,9 @@ function makeForge(data = {}) {
     repo: 'owner/name',
     calls,
     data: d,
-    pulls: async ({ state }) => { note('pulls', state); return state === 'open' ? d.open : d.closed; },
-    issues: async ({ state }) => { note('issues', state); return state === 'open' ? d.openIssues : d.closedIssues; },
-    pullFiles: async (n) => { note('pullFiles', n); return d.files[n] ?? []; },
+    pulls: async (q = {}) => { note('pulls', q.state ?? 'open', q); return q.state === 'closed' ? d.closed : d.open; },
+    issues: async (q = {}) => { note('issues', q.state ?? 'open', q); return q.state === 'closed' ? d.closedIssues : d.openIssues; },
+    pullFiles: async (n) => { note('pullFiles', n); if (d.slow) await new Promise((r) => setTimeout(r, d.slow)); return d.files[n] ?? []; },
     pullCommits: async (n) => { note('pullCommits', n); return [{ sha: 'c', message: 'm', date: ago(1) }]; },
     comments: async (n) => { note('comments', n); return d.comments[n] ?? []; },
     file: async (sha, p) => { note('file', sha, p); return d.texts[`${sha}:${p}`] ?? null; },
@@ -141,6 +149,13 @@ describe('the pure functions', () => {
   it('reads every Closes #n outside code, and not another repo\'s', () => {
     expect(closesOf('Closes #14 and fixes #99, resolved: #7. Also closes owner/name#5')).toEqual([14, 99, 7]);
     expect(closesOf('```\nCloses #3\n```\nCloses `#4`\n')).toEqual([]);
+    // every keyword both forges honour, in any case; not inside a word
+    expect(closesOf('CLOSE #1, closed #2, Fix #3, fixed: #4, RESOLVE #5, resolved #6 (fixes #7) unfixes #8 prefix-closes #9')).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // a template's HTML comment is not read by either forge; a quote is still the text
+    expect(closesOf('<!-- e.g. Fixes #123 -->\nCloses #4\n<!-- Closes #5\nnever closed')).toEqual([4]);
+    expect(closesOf('> Closes #8')).toEqual([8]);
+    // this repo written out in full is this repo; another is not, in any case
+    expect(closesOf('Closes Owner/Name#5 and fixes other/repo#6', 'owner/name')).toEqual([5]);
     expect(closesOf('Closes #14\nCloses #14')).toEqual([14]);
     expect(closesOf(undefined)).toEqual([]);
   });
@@ -369,5 +384,154 @@ describe('when a source fails, the rest is answered and a line says why', () => 
     const forge = makeForge();
     forge.pulls = forge.issues = forge.runs = async () => { throw new ForgeError('API rate limit exceeded.', { code: 'rate-limited' }); };
     await expect(workGraph(forge, { forge: {} }, MAP, { where: whereOf(), now: () => NOW })).rejects.toMatchObject({ code: 'rate-limited' });
+  });
+});
+
+describe('what an attack on the rels found', () => {
+  it('closes only an issue or an idea: never a spec PR\'s conversation, which is a pull request', async () => {
+    const s = story();
+    s.forge.data.open[0] = pull(27, { body: 'Closes #41, fixes #14 and closes #40.', updatedAt: ago(0.2) });
+    const g = await graphOf(s);
+    expect(rels(g, 'pull:27').filter((l) => l.includes(' closes '))).toEqual(['pull:27 closes issue:14', 'pull:27 closes thread:40']);
+    // a spec PR that names another spec PR's number has not become it either
+    const t = story();
+    t.forge.data.open[1] = pull(41, { title: 'Spec: retire the export', body: 'Thread: #41\nCloses #40', updatedAt: ago(0.4) });
+    expect(rels(await graphOf(t), undefined, 'proposal:0100-retire').filter((l) => l.includes(' became '))).toEqual(['thread:40 became proposal:0100-retire']);
+  });
+
+  it('ships by the merge commit: a squash-merged pull request\'s head is not what a deploy at it shipped', async () => {
+    const s = story();
+    s.forge.data.closed[0] = pull(20, { state: 'merged', mergedAt: ago(3), updatedAt: ago(3), mergeSha: 'squash20', head: { ref: 'b20', sha: 'm20' }, body: 'Closes #14' });
+    expect(rels(await graphOf(s)).filter((l) => l.includes(' shipped '))).toEqual([]);
+    s.forge.data.closed[0] = pull(20, { state: 'merged', mergedAt: ago(3), updatedAt: ago(3), mergeSha: null, head: { ref: 'b20', sha: 'm20' } });
+    expect(rels(await graphOf(s)).filter((l) => l.includes(' shipped '))).toEqual(['pull:20 shipped deploy:9001']); // no merge commit said: its head
+  });
+
+  it('a pull request closed between the two lists is one node; a closed one is in the window by when it closed, not by a later comment', async () => {
+    const s = story();
+    s.forge.data.closed.push(pull(27, { state: 'closed', updatedAt: ago(0.1) }), pull(18, { state: 'closed', closedAt: ago(20), updatedAt: ago(1) }));
+    const g = await graphOf(s);
+    expect(g.nodes.filter((n) => n.id === 'pull:27')).toEqual([expect.objectContaining({ state: 'open' })]);
+    expect(g.nodes.map((n) => n.id)).not.toContain('pull:18');
+    expect(s.forge.calls.filter((c) => c[0] === 'pullFiles' && c[1] === 27)).toHaveLength(1);
+  });
+
+  it('asks for the closed work that moved in the window, so an old issue closed today is drawn, and says when a list came back full', async () => {
+    const s = story();
+    s.forge.data.closedIssues.push(issue(3, { state: 'closed', createdAt: ago(400), updatedAt: ago(0.1), closedAt: ago(0.1) }));
+    const g = await graphOf(s);
+    expect(g.nodes.map((n) => n.id)).toContain('issue:3');
+    const asked = s.forge.calls.filter((c) => c[0] === 'pulls' || c[0] === 'issues').map((c) => [c[0], c[2]]);
+    expect(asked).toContainEqual(['pulls', expect.objectContaining({ state: 'closed', sort: 'updated' })]);
+    expect(asked).toContainEqual(['issues', expect.objectContaining({ state: 'closed', since: ago(WINDOW_DAYS) })]);
+    expect(asked).toContainEqual(['pulls', { state: 'open' }]); // every open one, as the Specs list asks
+    expect(g.problems).toEqual([]);
+    // full lists: 200 open issues, 100 closed pull requests all in the window, 100 workflow runs reaching into it
+    const full = story();
+    full.forge.data.openIssues = Array.from({ length: 200 }, (_, i) => issue(1000 + i));
+    full.forge.data.closed = Array.from({ length: 100 }, (_, i) => pull(500 - i, { state: 'merged', mergedAt: ago(1 + i / 10), updatedAt: ago(1 + i / 10) }));
+    full.forge.data.closedIssues = Array.from({ length: 100 }, (_, i) => issue(3000 + i, { state: 'closed', closedAt: ago(1), updatedAt: ago(1) }));
+    full.forge.data.runs = Array.from({ length: 100 }, (_, i) => ({ id: String(8000 + i), workflow: 'ci.yml', name: 'CI', title: 't', event: 'push', branch: 'main', sha: 's', state: 'success', actor: null, url: null, createdAt: ago(i / 20), updatedAt: ago(i / 20) }));
+    const said = (await graphOf(full)).problems.map((p) => `${p.source}: ${p.text}`);
+    expect(said).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^issues: 200 or more issues are open/),
+      expect.stringMatching(/^issues: 100 or more closed issues moved in the last 14 days/),
+      expect.stringMatching(/^pulls: Only the 100 most recently updated closed pull requests were read/),
+      expect.stringMatching(/^pulls: 100 pull requests were closed in the last 14 days: the 50 newest are drawn/),
+      expect.stringMatching(/^deploys: Only the 100 newest workflow runs were read/),
+    ]));
+  });
+
+  it('a map node whose id looks like work is left out, and said: an id names one thing', async () => {
+    const map = { nodes: [...MAP.nodes, { id: 'pull:27', file: 'web/new.js' }, { id: 'issue:14', label: 'x' }] };
+    const s = story();
+    s.forge.data.texts[`h41:${FOLDER}/0100-retire.json`] = proposalText({ nodes: { add: [{ id: 'run:fake', label: 'r' }, { id: 'new-thing' }], change: [{ id: 'auth' }] } });
+    const g = await workGraph(s.forge, s.config, map, { where: whereOf(), runs: s.runs, now: () => NOW });
+    expect(g.problems).toEqual([{ source: 'map', text: expect.stringContaining('pull:27, issue:14') }]);
+    expect(g.nodes.filter((n) => n.id === 'pull:27' || n.id === 'issue:14').map((n) => n.kind)).toEqual(['issue', 'pull']);
+    expect(g.nodes.some((n) => n.id === 'run:fake')).toBe(false);
+    expect(rels(g, 'proposal:0100-retire').filter((l) => l.includes(' adds '))).toEqual(['proposal:0100-retire adds new-thing']);
+    const ids = g.nodes.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('a deleted file changes its node, a file off the map changes none; a run with no nodes, a deploy with no commit and a block naming no proposal draw nothing', async () => {
+    const s = story();
+    s.forge.data.files[27] = [file('server/auth.js', { status: 'removed' }), file('docs/not-on-the-map.md', { status: 'added' })];
+    s.forge.data.comments[40] = [{ id: '1', author: { login: 'maintainer-one' }, body: '```cornfield-thread\n{"proposal":"9999-no-such","nodes":[]}\n```', url: 'u', createdAt: ago(1), updatedAt: ago(1) }];
+    s.forge.data.runs.push({ id: '9004', workflow: 'deploy.yml', name: 'Deploy web', title: 'No commit', event: 'workflow_dispatch', branch: '', sha: '', state: 'success', actor: null, url: null, createdAt: ago(1), updatedAt: ago(1) });
+    s.forge.data.closed.push(pull(21, { state: 'merged', mergedAt: ago(1), updatedAt: ago(1), mergeSha: null, head: { ref: 'b21', sha: '' } }));
+    s.runs.list = async () => ({ runs: [run({ runId: 'run-01EMPTY000000000000000000A', nodes: [], pull: null, refs: {} })] });
+    const g = await graphOf(s);
+    expect(rels(g, 'pull:27').filter((l) => l.includes(' changes '))).toEqual(['pull:27 changes auth']);
+    expect(rels(g, 'thread:40').filter((l) => l.includes(' discusses '))).toEqual([]);
+    expect(rels(g, 'deploy:9004')).toEqual(['deploy:9004 restarts stack-web']);
+    expect(rels(g, 'run:run-01EMPTY000000000000000000A')).toEqual([]);
+    expect(rels(g, 'pull:21')).toEqual([]);
+  });
+
+  it('a link is http(s) or none: a runner\'s report that says javascript: is no link', async () => {
+    const s = story();
+    s.runs.list = async () => ({ runs: [run({ report: { url: 'javascript:alert(1)', at: ago(0.1) }, comment: { url: 'https://forge.test/c/1' } })] });
+    s.forge.data.open[0] = pull(27, { url: 'data:text/html,x', body: 'Closes #14' });
+    const g = await graphOf(s);
+    expect(g.nodes.find((n) => n.kind === 'run').url).toBe('https://forge.test/c/1');
+    expect(g.nodes.find((n) => n.id === 'pull:27').url).toBe(null);
+  });
+
+  it('the files of a head are asked once even when two answers are worked out side by side (the Specs list and the graph as a page opens)', async () => {
+    const s = story();
+    s.where = whereOf();
+    s.forge.data.slow = 20;
+    await Promise.all([graphOf(s), graphOf(s), listPullProposals(s.forge, s.where)]);
+    expect(count(s.forge, 'pullFiles')).toBe(4);
+  });
+});
+
+describe('waiting is the page\'s number, both ways', () => {
+  /** The page's number from the same forge: the Specs list's entries (server/proposals.js `listWithPulls`), merged as the page merges them, and the runs */
+  async function pageNumber(forge, where, runList) {
+    const { entries } = await listPullProposals(forge, where);
+    const states = await reviewStates(forge, where, entries, { now: () => NOW });
+    const specs = mergeSpecs(entries.map((e, i) => ({ slug: e.slug, source: e.source, pull: { ...e.pull, pushedAt: states[i].pushedAt }, review: states[i].review })));
+    return waiting({ specs, runs: runList }).total;
+  }
+  const review = (slug, verdict, at, text) => ({ id: `r-${slug}-${at}`, author: { login: 'maintainer-one' }, body: reviewComment(slug, { verdict, note: verdict === 'notes' ? 'Not yet.' : '', edits: [], ...(verdict === 'approved' ? { proposal: proposalHash(text) } : {}) }, { login: 'maintainer-one' }), url: 'u', createdAt: at, updatedAt: at });
+
+  it('to decide, sent back, a draft, approved, approved and changed since, the same slug in two spec PRs, one past the 50 open pull requests drawn, a run asked to stop', async () => {
+    const text = (slug) => proposalText({ title: slug });
+    const specs = [
+      { n: 61, slug: '0201-decide', updated: ago(0.9) },                     // never reviewed: to decide (the most recently updated holder of its slug)
+      { n: 62, slug: '0202-sent-back', review: 'notes' },                    // sent back, nothing pushed since: with the agent
+      { n: 63, slug: '0203-draft', draft: true },                            // a draft PR
+      { n: 64, slug: '0204-approved', review: 'approved' },                  // approved at this file
+      { n: 65, slug: '0205-changed', review: 'approved', changed: true },    // approved, then the file changed: to decide
+      { n: 66, slug: '0201-decide' },                                        // the same slug in a second spec PR: a row of its own
+      { n: 67, slug: '0207-old', updated: ago(9) },                          // to decide, and the least recently updated open pull request
+    ];
+    const plain = Array.from({ length: 55 }, (_, i) => pull(200 + i, { updatedAt: ago(0.5 + i / 100) }));
+    const open = [...plain, ...specs.map((x) => pull(x.n, { title: `Spec ${x.slug}`, draft: !!x.draft, updatedAt: x.updated ?? ago(1), head: { ref: `s${x.n}`, sha: `h${x.n}` } }))];
+    const files = Object.fromEntries(specs.map((x) => [x.n, [file(`${FOLDER}/${x.slug}.json`, { status: 'added' })]]));
+    const texts = Object.fromEntries(specs.map((x) => [`h${x.n}:${FOLDER}/${x.slug}.json`, text(x.slug)]));
+    const comments = Object.fromEntries(specs.filter((x) => x.review).map((x) => [x.n, [review(x.slug, x.review, ago(0.5), x.changed ? 'an older file' : text(x.slug))]]));
+    const forge = makeForge({ open, files, texts, comments });
+    forge.pullCommits = async () => [{ sha: 'c', message: 'm', date: ago(2) }];
+    const runList = [
+      run({ runId: 'run-01WAIT0000000000000000000A', status: 'waiting' }),
+      run({ runId: 'run-01STOP0000000000000000000A', status: 'waiting', stopRequested: { at: ago(0.1), by: 'maintainer-one' } }),
+      run({ runId: 'run-01WORK0000000000000000000A', status: 'working' }),
+    ];
+    const where = whereOf();
+    const g = await workGraph(forge, { forge: {}, threads: false }, MAP, { where, runs: { list: async () => ({ runs: runList }) }, now: () => NOW });
+    const byId = Object.fromEntries(g.nodes.map((n) => [n.id, n]));
+    expect(Object.fromEntries(Object.values(byId).filter((n) => n.kind === 'proposal').map((n) => [n.id, [n.number, n.state, n.waiting]]))).toEqual({
+      'proposal:0201-decide': [61, 'to-decide', true], 'proposal:0201-decide@66': [66, 'to-decide', true], 'proposal:0202-sent-back': [62, 'sent-back', false],
+      'proposal:0203-draft': [63, 'draft-pr', false], 'proposal:0204-approved': [64, 'approved', false], 'proposal:0205-changed': [65, 'changed', true],
+      'proposal:0207-old': [67, 'to-decide', true],
+    });
+    expect(g.nodes.filter((n) => n.kind === 'pull')).toHaveLength(MAX_OPEN_PULLS);
+    const graphCount = g.nodes.filter((n) => n.waiting).length;
+    expect(graphCount).toBe(5); // four specs (one of them twice) and the run that waits; not the one asked to stop
+    expect(await pageNumber(forge, where, runList)).toBe(graphCount);
   });
 });
