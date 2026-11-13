@@ -133,6 +133,9 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect(open[1]).toMatchObject({ title: 'Meals page', state: 'open', draft: false, author: { login: 'agent-four' }, head: { ref: 'feature/meals', sha: SHA_GREEN }, base: { ref: 'main' }, mergedAt: null });
       expect(open[0].labels).toEqual(['agent']);
       expect((await forge.pulls({ state: 'closed' })).map((p) => [p.number, p.state])).toEqual([[9, 'merged'], [8, 'closed']]);
+      // The commit a merge made, which a deploy at it says it shipped (the work graph); none for a pull request that was not merged
+      expect((await forge.pulls({ state: 'closed' })).map((p) => [p.number, p.mergeSha])).toEqual([[9, '9990000000000000000000000000000000000009'], [8, null]]);
+      expect(open.every((p) => p.mergeSha === null)).toBe(true);
       expect((await forge.pulls({ limit: 1 })).map((p) => p.number)).toEqual([13]);
     });
 

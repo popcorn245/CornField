@@ -237,3 +237,20 @@ export function threadOfPull(body) {
   const m = /(?:^|[\s(])(?:thread\s*:|(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:)?)\s+#([1-9]\d{0,8})\b/i.exec(prose);
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * Every issue a pull request's text says it closes: `Closes #n` (also Fixes and Resolves, and their other tenses), outside code, each
+ * number once, in the order written. An issue in another repo (`owner/name#n`) is not this repo's. (`threadOfPull` is the first of
+ * these, or a `Thread: #n`; the work graph draws every one, server/work-graph.js.)
+ * @param {string} body
+ * @returns {number[]}
+ */
+export function closesOf(body) {
+  const { prose } = scan(String(body ?? ''));
+  const out = [];
+  for (const m of prose.matchAll(/(?:^|[\s(])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:)?\s+#([1-9]\d{0,8})\b/gi)) {
+    const n = Number(m[1]);
+    if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
