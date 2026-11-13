@@ -16,6 +16,9 @@ import { clearScenario } from './scenario-ui.js';
 import { measureParams } from './bench.js';
 import { mergeLive, placeLiveNodes } from './live-model.js';
 import { applyHouseLayout } from './house-model.js';
+import { applyWorkLayout, enterWork, leaveWork } from './work-model.js';
+import { isPhone } from './sheets.js';
+import { clearSelection } from './engine/selection.js';
 import { syncHint } from './hint.js';
 import { ensurePagePieces } from './page-pieces.js';
 import { TOPOLOGY_PATH, fetchTopology } from './engine/source.js';
@@ -84,13 +87,17 @@ export function setMap(nodes, edges) {
 /** Where the nodes sit: the House view's plan here (house-model.js, PHY-11), every other view the engine's one layout (engine/topology.js `layoutMap`) */
 function applyLayout() {
   if (state.view === 'house') { computeDegreeCentrality(); applyHouseLayout(state); return; }
+  if (state.view === 'work') { applyWorkLayout(state, { phone: isPhone() }); return; } // the Work view's lanes (work-model.js)
   layoutMap(pageInstance(), { placeLive: placeLiveNodes }); // the live layer is the page's (live-model.js): the engine places it with this
 }
 
 /** Switches between 'orbit' and 'dataflow'; the camera refits and the preset button follows */
 export function setView(view) {
   if (state.view === view) return;
+  if ((state.view === 'work' || view === 'work') && state.selectedNode) clearSelection(pageInstance(), { source: 'api' }); // a selection belongs to the view it was made in
+  if (state.view === 'work') leaveWork(state); // the map's nodes come back before the next view is laid out
   state.view = view;
+  if (view === 'work') enterWork(state); // the Work view's nodes (work-view.js loads them)
   clearScenario();
   touchScene();
   if (state.nodes.length) {

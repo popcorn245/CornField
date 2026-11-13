@@ -223,7 +223,7 @@ export function mount(root, inst, options = {}) {
           ${hid ? `<span class="hx-toggle-text">${name}${hid}</span>` : name}${layer.live ? '<span class="hx-live-tag" data-corn="live-tag">live</span>' : ''}
         </span>
         <span class="hx-toggle-meta">${shown}
-          <span class="hx-count" data-corn="count">${(UNIT[layer.key] || String)(counts[layer.key] || 0)}</span>
+          <span class="hx-count" data-corn="count">${layer.countText || (UNIT[layer.key] || String)(counts[layer.key] || 0)}</span>
           <span class="hx-tick">${on ? '✓' : '—'}</span>
         </span>
       </button>${kindsHtml(layer, kinds.get(layer.key), surface)}`;
@@ -276,6 +276,7 @@ export function mount(root, inst, options = {}) {
     const preset = state.view === 'dataflow';
     btn.classList.toggle('hx-layers-chip--dim', preset);
     own('layers-preset-note').hidden = !preset;
+    own('edge-key').hidden = state.view === 'work'; // the map's kinds of line: the Work view has its own words on its lines
   }
 
   // -- the piece's own buttons, and the clicks and keys around the menu ------------------------------------------------------------

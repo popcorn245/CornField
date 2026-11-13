@@ -124,6 +124,7 @@ const layersMemo = new WeakMap();
  * state for what is drawn goes through this, so the review's hiding is decided in one place.
  */
 export function layersOf(state) {
+  if (state.view === 'work' && state.workLayers) return state.workLayers; // the Work view has its own layers, and leaves the map's as they were (work-model.js)
   const review = state.review;
   if (!review || !state.proposal) return state.activeLayers;
   const hit = layersMemo.get(review);
