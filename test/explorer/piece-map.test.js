@@ -436,6 +436,23 @@ describe('its end', () => {
     expect(live.lost).toBe(30);
   });
 
+  it('on an instance that outlives it (a scope\'s, whose map is removed and put back), mounted and destroyed 10 times leaves no listener on that instance', () => {
+    const shared = createInstance({ root: document.createElement('div') });
+    const once = make({ topology: topology() }, { inst: shared });
+    frames();
+    once.piece.destroy();
+    once.host.remove();
+    const before = snapshot();
+    for (let i = 0; i < 10; i++) {
+      const { piece, host } = make({ topology: topology() }, { inst: shared });
+      frames();
+      piece.destroy();
+      host.remove();
+    }
+    expect(snapshot().listeners).toBe(before.listeners);
+    shared.destroy();
+  });
+
   it('is what does it: 30 pieces never destroyed leave it all behind', () => {
     useGl = true;
     for (let i = 0; i < 30; i++) make({ topology: topology(), renderer: 'auto' });
