@@ -135,7 +135,7 @@ describe('the documented components', () => {
     // what each piece makes in a box of its own (`inline`, no phone bar): the node panel has no dim layer, the search no phone bar, and the legend of the data-flow lines is the Layers menu's
     const PIECES = {
       'corn-node-panel': { files: ['pieces/node-panel.js', 'engine/flow-ui.js', 'proposal-model.js', 'mockups-model.js', 'cloud-panel.js', 'capped.js', 'selection-words.js', 'selection-view.js', 'pieces/around.js'], not: ['backdrop', 'menu-section', 'menu-title'] },
-      'corn-layers': { files: ['pieces/layers.js', 'engine/flow-ui.js', 'edge-key.js', 'pieces/around.js'], not: [] },
+      'corn-layers': { files: ['pieces/layers.js', 'engine/flow-legend.js', 'edge-key.js', 'pieces/around.js'], not: [] },
       'corn-search': { files: ['pieces/search.js', 'pieces/around.js'], not: ['dialog-scrim', 'mobile-search', 'mobile-search-button'] },
     };
     for (const [tag, { files, not }] of Object.entries(PIECES)) {

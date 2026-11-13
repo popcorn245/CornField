@@ -31,7 +31,7 @@ import { STROKE_TOKEN, kindToken, mapStyleOf } from '../engine/map-style.js';
 import { over, parseColor, contrast } from '../../core/color.js';
 import { DARK_GROUND, LIGHT_GROUND } from '../theme-model.js';
 import { t } from '../engine/strings.js';
-import { renderFlowLegend } from '../engine/flow-ui.js';
+import { renderFlowLegend } from '../engine/flow-legend.js';
 import { isOn, keepLayersIn, layerRows, redrawing, setProjectLayers, swatch, toggleAllLayers, toggleLayer } from '../engine/layers.js';
 import { layerOn } from '../layer-model.js';
 import { scopeOf, place, addParts } from '../engine/piece.js';

@@ -3,16 +3,16 @@
   "tolerance": 0.05,
   "budget": {
     "runtime": 28079,
-    "corn-map": 75226,
-    "corn-map-src": 87140,
-    "corn-review": 148222,
-    "corn-review-src": 157389,
-    "corn-scope": 57138,
-    "corn-node-panel": 59181,
-    "corn-node-panel-added": 30030,
-    "corn-layers": 57586,
-    "corn-layers-added": 13119,
-    "corn-search": 60027,
-    "corn-search-added": 15560
+    "corn-map": 74213,
+    "corn-map-src": 86117,
+    "corn-review": 146194,
+    "corn-review-src": 155356,
+    "corn-scope": 56101,
+    "corn-node-panel": 73049,
+    "corn-node-panel-added": 29609,
+    "corn-layers": 55790,
+    "corn-layers-added": 12350,
+    "corn-search": 59925,
+    "corn-search-added": 16485
   }
 }

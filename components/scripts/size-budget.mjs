@@ -55,10 +55,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log('recorded', now);
   } else {
     const { budget, tolerance = TOLERANCE } = JSON.parse(readFileSync(budgetFile, 'utf8'));
-    let failed = false;
+    let failed = tolerance > TOLERANCE; // the file cannot loosen the check
+    if (failed) console.log(`tolerance ${tolerance} is over ${TOLERANCE}`);
+    // Every measure has a budget, and every budget a measure: an entry added or renamed without one is not left unchecked
+    for (const name of Object.keys(now)) if (!(name in budget)) { console.log(`${name}: ${now[name]} B gzip, and no budget  OVER`); failed = true; }
     for (const [name, limit] of Object.entries(budget)) {
       const size = now[name];
-      const over = size > limit * (1 + tolerance);
+      const over = !(size <= limit * (1 + tolerance));
       console.log(`${name}: ${size} B gzip (budget ${limit}, limit ${Math.floor(limit * (1 + tolerance))})${over ? '  OVER' : ''}`);
       if (over) failed = true;
     }
