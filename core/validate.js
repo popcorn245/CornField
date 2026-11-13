@@ -26,7 +26,6 @@ import { leavesRepo, outsideError, outsideProblem, reachable, repoPaths, repoRea
 import { checkThemeContrast } from './contrast.js';
 import { layerTokenWarnings, mapTokenWarnings, nodeColorNotes, nodeColorWarnings, quoted } from './map-tokens.js';
 import { layersMapWarnings } from './layers.js';
-import { quote } from './text.js';
 import { BRAND_IMAGE_KEYS, brandAssetFile } from './brand.js';
 import { MAX_THEME_BYTES, cssProblems, cssUrls, themeAssetFile, themeFileUrl, themeFiles, themeIconFileProblems, themeUrlTarget } from './theme.js';
 
@@ -49,7 +48,7 @@ export function validateThemeFiles(config) {
   let base;
   try { base = fs.realpathSync(config.root); } catch { return errors; }
   for (const { key, rel } of themeFiles(config.theme)) {
-    const where = `theme.${key} (${quote(rel, { bare: true })})`;
+    const where = `theme.${key} (${rel})`;
     const file = path.resolve(config.root, rel);
     let real;
     try { real = fs.realpathSync(file); } catch { errors.push(`${where} does not exist.`); continue; }
@@ -65,7 +64,7 @@ export function validateThemeFiles(config) {
       if (target.problem) { errors.push(`${where} ${target.problem}`); continue; }
       if (target.asset) {
         const found = themeAssetFile(config.root, config.theme, target.asset);
-        if ('problem' in found) errors.push(`${where} url(${quote(ref.slice(0, 80), { bare: true })}): ${found.problem}`);
+        if ('problem' in found) errors.push(`${where} url(${ref.slice(0, 80)}): ${found.problem}`);
       }
     }
   }
@@ -85,7 +84,7 @@ export function validateBrandFiles(config) {
     const rel = config.brand && config.brand[key];
     if (typeof rel !== 'string') continue;
     const found = brandAssetFile(config.root, rel);
-    if ('problem' in found) errors.push(`brand.${key} (${quote(rel, { bare: true })}) ${found.problem}`);
+    if ('problem' in found) errors.push(`brand.${key} (${rel}) ${found.problem}`);
   }
   return errors;
 }
@@ -207,8 +206,8 @@ export function validateProposalFiles(topology, dir, root = path.dirname(dir)) {
     // A mockup the proposal lists must be a file beside it, so a typo fails here and not only in the explorer
     for (const m of mockupsOf(proposal)) {
       let ok = false;
-      try { const at = path.posix.join(dirRel, ...m.path.split('/')); ok = io.exists(at) && !io.isDir(at); } catch { ok = false; }
-      if (!ok) problems.push(`${where}: mockups[${m.index}].path: ${quote(m.path)} is not a file in ${dirRel}.`);
+      try { const at = path.posix.join(dirRel, ...m.path.split('/')); ok = io.exists(at) && fs.statSync(path.join(root, ...at.split('/'))).isFile(); } catch { ok = false; }
+      if (!ok) problems.push(`${where}: mockups[${m.index}].path: "${m.path}" is not a file in ${dirRel}.`);
     }
   }
   return problems;

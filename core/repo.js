@@ -75,7 +75,15 @@ export function repoReader(root) {
       const m = look(rel);
       if (m && !m.ok) throw outsideError(rel);
     }
-    return fs.readFileSync(abs(rel), 'utf8').replace(/\r\n/g, '\n');
+    // Opened without waiting, and read only if it is a file (a folder still fails as EISDIR): a FIFO or a device in the repo would block a read forever
+    const fd = fs.openSync(abs(rel), fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+    try {
+      const st = fs.fstatSync(fd);
+      if (!st.isFile() && !st.isDirectory()) throw Object.assign(new Error(`${quote(String(rel))} is not a file.`), { code: 'ENOTFILE' });
+      return fs.readFileSync(fd, 'utf8').replace(/\r\n/g, '\n');
+    } finally {
+      fs.closeSync(fd);
+    }
   };
   const exists = (rel) => { const m = look(rel); return !!m && m.ok && (!m.link || fs.existsSync(abs(rel))); };
   const rawIsDir = (rel) => {

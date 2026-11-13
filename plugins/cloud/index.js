@@ -129,7 +129,7 @@ export default {
     // A workflow file that is a link out of the repo, or to nothing, is not read (core/repo.js): said, and left out
     const workflowFiles = WORKFLOW_DIRS.flatMap((dir) => ctx.list(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => `${dir}/${f}`)).filter((file) => {
       if (ctx.exists(file)) return true;
-      warnings.push(`cloud: ${quote(file, { bare: true })} ${ctx.inside(file) ? 'is a link to nothing' : 'is a link to somewhere outside the repo'}; it is not read.`);
+      warnings.push(`cloud: ${file} ${ctx.inside(file) ? 'is a link to nothing' : 'is a link to somewhere outside the repo'}; it is not read.`);
       return false;
     });
     if (workflowFiles.length) {

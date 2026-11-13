@@ -11,7 +11,6 @@
  */
 
 import { NODE_THEMES } from './schema.js';
-import { quote } from './text.js';
 
 /** Per type, the fields the code decides; the rest (desc, render notes…) are hand-written */
 export const DERIVED_FIELDS = {
@@ -86,12 +85,12 @@ export function missingPaths(topology, paths, reach = () => false) {
   const check = (where, text) => {
     for (const m of String(text || '').matchAll(CITED_PATH)) {
       const p = m[1].replace(/\/+$/, '');
-      if (!exists(p)) found.push(`${where} cites ${quote(p, { bare: true })}, which is not in the repo`);
+      if (!exists(p)) found.push(`${where} cites ${p}, which is not in the repo`);
     }
   };
   for (const n of topology.nodes) {
     for (const f of String(n.file || '').split(/,\s*/).filter(Boolean)) {
-      if (!paths.has(f) && !reach(f)) found.push(`Node ${quote(n.id)} has file ${quote(f)}, which is not in the repo`);
+      if (!paths.has(f) && !reach(f)) found.push(`Node "${n.id}" has file "${f}", which is not in the repo`);
     }
     check(`Node "${n.id}" description`, n.desc);
     check(`Node "${n.id}" summary`, n.summary);

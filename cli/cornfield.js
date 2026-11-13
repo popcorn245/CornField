@@ -27,10 +27,8 @@ import { deriveTopology } from '../core/derive.js';
 import { planSync, placeholderCounts } from '../core/sync.js';
 import { validateRepo, readTopology } from '../core/validate.js';
 import { proposalProblems, proposalStatus, summarize, personaWarnings } from '../core/proposal.js';
+import { repoReader } from '../core/repo.js';
 import { quote } from '../core/text.js';
-
-/** A line of a list the repo's own words went into (a problem, a warning, a change): any control character in it, a line break above all, is written as an escape, so it cannot forge a line of its own */
-const safe = (text) => quote(text, { bare: true });
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
@@ -88,6 +86,11 @@ async function setup(flags) {
 
 function saveTopology(config, data) {
   const file = path.join(config.root, config.topology);
+  // The write follows a symlink, so the map is written only where it really lies in the repo: never through a link out, or a link to nothing (which would make a file wherever it points)
+  const io = repoReader(config.root);
+  let link = false;
+  try { link = fs.lstatSync(file).isSymbolicLink(); } catch { /* not there yet */ }
+  if (!io.inside(config.topology) || (link && !io.exists(config.topology))) throw new Error(`${quote(config.topology)} leads outside the repo or to nothing; the map is not written.`);
   fs.writeFileSync(file, `${JSON.stringify({ version: data.version || '1.0.0', ...data, updatedAt: new Date().toISOString() }, null, 2)}\n`, 'utf8');
 }
 
@@ -95,14 +98,14 @@ async function sync(flags) {
   const { config, derivers } = await setup(flags);
   const current = readTopology(config) || { version: '1.0.0', nodes: [], edges: [] };
   const derived = await deriveTopology({ root: config.root, config, derivers, map: current });
-  derived.warnings.forEach((w) => console.warn(`  warning: ${safe(w)}`));
+  derived.warnings.forEach((w) => console.warn(`  warning: ${w}`));
   const { next, changes } = planSync(current, derived);
   if (!changes.length) {
     console.log(`\n${config.topology} already matches the code.\n`);
     return 0;
   }
   saveTopology(config, next);
-  changes.slice(0, 200).forEach((c) => console.log(`  ${safe(c)}`));
+  changes.slice(0, 200).forEach((c) => console.log(`  ${c}`));
   if (changes.length > 200) console.log(`  … and ${changes.length - 200} more`);
   console.log(`\nSynced ${plural(changes.length, 'change')} from the code into ${config.topology}.\n`);
   return 0;
@@ -111,15 +114,15 @@ async function sync(flags) {
 async function validate(flags) {
   const { config, derivers } = await setup(flags);
   const { errors, warnings, notes } = await validateRepo({ config, derivers });
-  warnings.forEach((w) => console.warn(`  warning: ${safe(w)}`));
+  warnings.forEach((w) => console.warn(`  warning: ${w}`));
   if (errors.length) {
     console.error(`\nValidation failed with ${plural(errors.length, 'error')}:`);
-    errors.forEach((e) => console.error(`  - ${safe(e)}`));
+    errors.forEach((e) => console.error(`  - ${e}`));
     console.error('');
     return 1;
   }
   console.log(`\nValid: the schema holds, ${config.topology} matches the code, and every proposal checks out.`);
-  (notes || []).forEach((n) => console.log(safe(n)));
+  (notes || []).forEach((n) => console.log(n));
   console.log('');
   return 0;
 }
@@ -131,9 +134,9 @@ async function status(flags) {
     console.log(`\n${config.topology} is not there yet: run cornfield sync.\n`);
     return 1;
   }
-  console.log(`\n${safe(config.title)}: ${plural(data.nodes.length, 'node')}, ${plural(data.edges.length, 'edge')}`);
+  console.log(`\n${config.title}: ${plural(data.nodes.length, 'node')}, ${plural(data.edges.length, 'edge')}`);
   const byType = Object.entries(Object.groupBy(data.nodes, (n) => n.type)).sort((a, b) => b[1].length - a[1].length);
-  for (const [type, nodes] of byType) console.log(`  ${type.padEnd(10)} ${String(nodes.length).padStart(5)}  ${nodes.slice(0, 6).map((n) => safe(n.label)).join(', ')}${nodes.length > 6 ? ', …' : ''}`);
+  for (const [type, nodes] of byType) console.log(`  ${type.padEnd(10)} ${String(nodes.length).padStart(5)}  ${nodes.slice(0, 6).map((n) => n.label).join(', ')}${nodes.length > 6 ? ', …' : ''}`);
   const cloud = data.nodes.filter((n) => n.type === 'external' && n.kind === 'cloud');
   if (cloud.length) {
     const tiers = Object.entries(Object.groupBy(cloud, (n) => n.plan?.tier || 'unknown')).map(([t, ns]) => `${ns.length} ${t}`).join(', ');
@@ -147,11 +150,11 @@ async function status(flags) {
   const { errors, warnings } = await validateRepo({ config, derivers, topology: data });
   if (warnings.length) {
     console.log(`\n${plural(warnings.length, 'warning')} from the code:`);
-    warnings.forEach((w) => console.log(`  - ${safe(w)}`));
+    warnings.forEach((w) => console.log(`  - ${w}`));
   }
   if (errors.length) {
     console.log(`\n${plural(errors.length, 'validation error')}:`);
-    errors.forEach((e) => console.log(`  - ${safe(e)}`));
+    errors.forEach((e) => console.log(`  - ${e}`));
   } else console.log('\nValid: the schema holds and the map matches the code.');
   console.log(`\nMap: cornfield serve, then http://127.0.0.1:${config.port}\n`);
   return errors.length ? 1 : 0;
@@ -167,27 +170,27 @@ async function proposal(flags, file) {
   try {
     p = JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
   } catch (err) {
-    console.error(`\n${quote(file, { bare: true })}: ${err.code === 'ENOENT' ? 'no such file' : `not valid JSON (${quote(err.message, { bare: true })})`}\n`);
+    console.error(`\n${file}: ${err.code === 'ENOENT' ? 'no such file' : `not valid JSON (${err.message})`}\n`);
     return 1;
   }
   const topology = readTopology(config) || { nodes: [], edges: [] };
   const { errors, building } = proposalProblems(topology, p);
   const s = summarize(p);
-  console.log(`\n${safe(p?.title || path.basename(file))}${p?.spec ? ` (spec ${safe(p.spec)})` : ''}`);
-  if (p?.summary) console.log(`  ${safe(p.summary)}`);
+  console.log(`\n${p?.title || path.basename(file)}${p?.spec ? ` (spec ${p.spec})` : ''}`);
+  if (p?.summary) console.log(`  ${p.summary}`);
   console.log(`  ${s.added} added · ${s.changed} changed · ${s.removed} removed · ${plural(s.scenarios, 'scenario')}`);
   if (errors.length) {
     console.log(`\n${plural(errors.length, 'error')}:`);
-    errors.forEach((e) => console.log(`  - ${safe(`${e.path || '(file)'}: ${e.message}`)}`));
+    errors.forEach((e) => console.log(`  - ${e.path || '(file)'}: ${e.message}`));
     console.log('');
     return 1;
   }
   const { items, summary } = proposalStatus(topology, p);
   console.log(`\n  Against ${config.topology}: ${summary.landed} landed · ${summary.pending} pending · ${summary.diverged} diverged${summary.live ? ` · ${summary.live} live` : ''}${building ? ' (the build has begun)' : ''}`);
-  for (const i of items) console.log(`  ${i.status.padEnd(8)} ${i.op.padEnd(6)} ${i.kind.padEnd(4)} ${safe(i.key)}`);
+  for (const i of items) console.log(`  ${i.status.padEnd(8)} ${i.op.padEnd(6)} ${i.kind.padEnd(4)} ${i.key}`);
   const warnings = personaWarnings(topology, p);
   if (warnings.length) console.log('');
-  for (const w of warnings) console.log(safe(w));
+  for (const w of warnings) console.log(w);
   console.log('\nThe proposal is valid.\n');
   return 0;
 }
@@ -290,8 +293,8 @@ async function docs(flags) {
   const { buildSite } = await import('../plugins/docs/site.js');
   const out = path.resolve(config.root, flags.out || '_site');
   const { pages, files, warnings, problems } = await buildSite({ config, derivers, out });
-  warnings.forEach((w) => console.warn(`  warning: ${safe(w)}`));
-  problems.forEach((p) => console.warn(`  problem: ${safe(p)}`));
+  warnings.forEach((w) => console.warn(`  warning: ${w}`));
+  problems.forEach((p) => console.warn(`  problem: ${p}`));
   console.log(`\nBuilt ${plural(pages, 'page')} (${plural(files.length, 'file')}) into ${path.relative(process.cwd(), out) || out}.\n`);
   return 0;
 }

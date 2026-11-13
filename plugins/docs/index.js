@@ -19,7 +19,6 @@
 import path from 'node:path';
 import { markdownLinks, renderMarkdown } from './markdown.js';
 import { leavesRepo, outsideProblem } from '../../core/repo.js';
-import { quote } from '../../core/text.js';
 
 export const DEFAULT_PATHS = ['README.md', 'docs'];
 
@@ -48,7 +47,7 @@ export function docFiles(io, paths, refuse = () => {}) {
     const rel = path.posix.normalize(p.replace(/^\.\/+/, '').replace(/\/+$/, '') || '.');
     if (leavesRepo({ inside }, p)) { refuse(outsideProblem('docs', p), 'problem'); continue; }
     if (io.isDir(rel)) {
-      io.walk(rel, isMarkdown, (f, why) => { const m = `docs: ${quote(f || '.', { bare: true })} ${SKIPPED[why]}.`; if (!told.has(m)) { told.add(m); refuse(m, 'warning'); } }, seen).forEach((f) => out.add(f));
+      io.walk(rel, isMarkdown, (f, why) => { const m = `docs: ${f || '.'} ${SKIPPED[why]}.`; if (!told.has(m)) { told.add(m); refuse(m, 'warning'); } }, seen).forEach((f) => out.add(f));
     } else if (isMarkdown(rel) && io.exists(rel)) out.add(rel);
   }
   return [...out].sort();
@@ -129,12 +128,12 @@ export default {
     const refuse = (message, severity) => (severity === 'problem' ? problems : warnings).push(message);
     const files = docFiles(ctx, paths, refuse);
     const empty = { nodes: [], edges: [], info: { pages: [] } };
-    if (!files.length) return { ...empty, warnings: [...warnings, ...(ctx.options?.paths ? [`docs: no Markdown in ${paths.map((p) => quote(p, { bare: true })).join(', ')}.`] : [])], problems };
+    if (!files.length) return { ...empty, warnings: [...warnings, ...(ctx.options?.paths ? [`docs: no Markdown in ${paths.join(', ')}.`] : [])], problems };
 
     // Two docs that would be one page id are a problem (below); only the first is placed, and only its name can clash
     const ids = new Set();
     const { outputs, renamed } = docOutputs(files.filter((f) => !ids.has(docPageId(f)) && ids.add(docPageId(f))));
-    for (const [file, output, other] of renamed) warnings.push(`docs: ${quote(file, { bare: true })} would be page ${quote(docOutput(file), { bare: true })}, ${other ? `which ${quote(other, { bare: true })} has` : 'which the site writes itself'}; it is written to ${quote(output, { bare: true })}.`);
+    for (const [file, output, other] of renamed) warnings.push(`docs: ${file} would be page ${docOutput(file)}, ${other ? `which ${other} has` : 'which the site writes itself'}; it is written to ${output}.`);
     const nodes = [{ id: appId, type: 'app', label, file: paths.map((p) => p.replace(/^\.\/+/, '').replace(/\/+$/, '')).find((p) => ctx.exists(p) && ctx.inside(p)) }];
     const edges = [];
     if (ctx.nodes.some((n) => n.id === parent)) edges.push({ from: parent, to: appId });
@@ -144,7 +143,7 @@ export default {
     for (const file of files) {
       const id = docPageId(file);
       const clash = pages.find((p) => p.id === id);
-      if (clash) { problems.push(`docs: ${quote(file, { bare: true })} and ${quote(clash.file, { bare: true })} would both be page ${quote(id)}; rename one.`); continue; }
+      if (clash) { problems.push(`docs: ${file} and ${clash.file} would both be page "${id}"; rename one.`); continue; }
       const text = ctx.read(file);
       const { title, headings } = renderMarkdown(text);
       const page = { id, file, route: docRoute(file), output: outputs.get(file), title: title || path.posix.basename(file, '.md'), anchors: headings.map((h) => h.id), text };
@@ -169,14 +168,14 @@ export default {
       for (const { href } of markdownLinks(page.text)) {
         const t = resolveLink(page.file, href);
         if (t.external) continue;
-        if (t.outside) { warnings.push(`docs: ${quote(page.file, { bare: true })} links to ${quote(href)}, outside the repo.`); continue; }
+        if (t.outside) { warnings.push(`docs: ${page.file} links to "${href}", outside the repo.`); continue; }
         const target = t.path === '' ? page.file : t.path;
-        if (!ctx.inside(target)) { warnings.push(`docs: ${quote(page.file, { bare: true })} links to ${quote(href)}, which leads outside the repo.`); continue; }
-        if (!ctx.exists(target)) { problems.push(`docs: ${quote(page.file, { bare: true })} links to ${quote(href)}, but ${quote(target, { bare: true })} is not in the repo.`); continue; }
+        if (!ctx.inside(target)) { warnings.push(`docs: ${page.file} links to "${href}", which leads outside the repo.`); continue; }
+        if (!ctx.exists(target)) { problems.push(`docs: ${page.file} links to "${href}", but ${target} is not in the repo.`); continue; }
         const readme = ctx.isDir(target) ? files.find((f) => path.posix.dirname(f) === target && isReadme(f)) : null;
         const doc = byFile.get(readme || target);
         if (doc) {
-          if (t.hash && !doc.anchors.includes(t.hash)) warnings.push(`docs: ${quote(page.file, { bare: true })} links to ${quote(href)}, but ${quote(doc.file, { bare: true })} has no heading ${quote(`#${t.hash}`)}.`);
+          if (t.hash && !doc.anchors.includes(t.hash)) warnings.push(`docs: ${page.file} links to "${href}", but ${doc.file} has no heading "#${t.hash}".`);
           link(page.id, doc.id);
         } else if (byPath.has(target)) link(page.id, byPath.get(target));
       }

@@ -10,8 +10,6 @@
  * Pure: text in, evidence out. The YAML parser is handed in (js-yaml, an optional dependency).
  */
 
-import { quote } from '../../core/text.js';
-
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -241,7 +239,7 @@ export function workflowSources(text, { labels = null, file, ownHost: own = () =
   try {
     doc = yaml.load(text);
   } catch (err) {
-    throw new Error(`${quote(file, { bare: true })} is not valid YAML: ${quote(err.message, { bare: true })}`);
+    throw new Error(`${file} is not valid YAML: ${err.message}`);
   }
   const base = String(file).split("/").pop();
   const out = [];
@@ -259,7 +257,7 @@ export function workflowSources(text, { labels = null, file, ownHost: own = () =
     if (!isObject(job)) continue;
     for (const label of [job['runs-on']].flat().filter((l) => typeof l === 'string' && !l.includes('${{'))) {
       if (!labels) continue; // a hosted runner: its labels name no image we pull
-      if (!labels.has(label)) throw new Error(`${quote(file, { bare: true })}: job ${quote(name)} runs on ${quote(label)}, which the runner does not register (its --labels: ${[...labels.keys()].map((l) => quote(l, { bare: true })).join(', ') || 'none'})`);
+      if (!labels.has(label)) throw new Error(`${file}: job "${name}" runs on "${label}", which the runner does not register (its --labels: ${[...labels.keys()].join(', ') || 'none'})`);
       if (labels.get(label)) image(labels.get(label), (n) => `CI jobs run in ${n}`);
     }
     const container = typeof job.container === 'string' ? job.container : job.container?.image;

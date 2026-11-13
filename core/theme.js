@@ -23,7 +23,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NODE_THEMES } from './schema.js';
 import { iconKeyShape } from './layers.js';
-import { quote } from './text.js';
 
 export const THEME_KEYS = Object.freeze(['css', 'fonts', 'fontHosts', 'names', 'default', 'icons', 'pixelated', 'contrast']);
 /** The node kinds an icon may be set for: every node type of the map */
@@ -107,16 +106,16 @@ export function themeProblems(t) {
   if (t.contrast !== undefined && t.contrast !== 'error' && t.contrast !== 'warn') out.push('theme.contrast is "error" (a pair below WCAG AA fails validate; the default) or "warn" (it is a warning).');
   if (t.default !== undefined && t.default !== null) {
     if (!isText(t.default)) out.push('theme.default is the name of one of theme.names.');
-    else if (!names.includes(t.default)) out.push(`theme.default ${quote(t.default)} is not one of theme.names (${names.join(', ') || 'none are listed'}).`);
+    else if (!names.includes(t.default)) out.push(`theme.default "${t.default}" is not one of theme.names (${names.join(', ') || 'none are listed'}).`);
   }
   if (t.pixelated !== undefined && typeof t.pixelated !== 'boolean') out.push('theme.pixelated is true or false.');
   if (t.icons !== undefined) {
     if (!isObject(t.icons)) out.push('theme.icons is { "<node type>": "./path.svg" } (or "<type>:<kind>", or "layer:<key>").');
     else {
       for (const [kind, rel] of Object.entries(t.icons)) {
-        if (!iconKeyShape(kind)) out.push(`theme.icons ${quote(kind.slice(0, 60))}: not a node type (${ICON_KINDS.join(', ')}), a finer kind like "service:timer", or a project layer like "layer:timers".`);
+        if (!iconKeyShape(kind)) out.push(`theme.icons "${kind.slice(0, 60)}": not a node type (${ICON_KINDS.join(', ')}), a finer kind like "service:timer", or a project layer like "layer:timers".`);
         const found = themeIconAsset(t, rel);
-        if ('problem' in found) out.push(`theme.icons.${quote(kind, { bare: true })} ${found.problem}`);
+        if ('problem' in found) out.push(`theme.icons.${kind} ${found.problem}`);
       }
     }
   }
@@ -133,13 +132,13 @@ export function themeProblems(t) {
  */
 export function themeIconAsset(theme, rel) {
   if (!isText(rel) || path.isAbsolute(rel) || /^[a-z]:/i.test(rel) || rel.includes('\0') || rel.includes('\\') || rel.split('/').includes('..')) return { problem: 'is an .svg or .png file inside the repo, written relative to it, like "./tools/cornfield/icons/app.svg".' };
-  if (!ICON_EXTENSIONS.includes(path.posix.extname(rel).toLowerCase())) return { problem: `(${quote(rel, { bare: true })}) is not an .svg or .png file.` };
+  if (!ICON_EXTENSIONS.includes(path.posix.extname(rel).toLowerCase())) return { problem: `(${rel}) is not an .svg or .png file.` };
   const dir = themeAssetDir(theme);
-  if (!dir) return { problem: `(${quote(rel, { bare: true })}) cannot be served: icons are served beside the theme files, so the theme needs a stylesheet (theme.css or theme.names) in a folder, not at the top of the repo.` };
+  if (!dir) return { problem: `(${rel}) cannot be served: icons are served beside the theme files, so the theme needs a stylesheet (theme.css or theme.names) in a folder, not at the top of the repo.` };
   const norm = path.posix.normalize(rel);
-  if (!norm.startsWith(`${dir}/`)) return { problem: `(${quote(rel, { bare: true })}) is outside the theme folder ${quote(dir, { bare: true })}, the only folder whose images are served; put the icon under it.` };
+  if (!norm.startsWith(`${dir}/`)) return { problem: `(${rel}) is outside the theme folder ${dir}, the only folder whose images are served; put the icon under it.` };
   const asset = themeAssetPath(norm.slice(dir.length + 1));
-  return asset ? { asset } : { problem: `(${quote(rel, { bare: true })}) has a name that cannot be served (letters, digits, ".", "_" and "-" only, no segment starting with a dot).` };
+  return asset ? { asset } : { problem: `(${rel}) has a name that cannot be served (letters, digits, ".", "_" and "-" only, no segment starting with a dot).` };
 }
 
 /** The icons the browser is told: `{ kind: '/cornfield/theme/assets/<path>' }`, those the config names validly */
@@ -382,13 +381,13 @@ export function themeAssetFile(root, theme, rel) {
   try {
     const top = fs.realpathSync(root);
     base = fs.realpathSync(path.join(root, ...dir.split('/')));
-    if (!base.startsWith(top + path.sep)) return { problem: `the theme folder ${quote(dir, { bare: true })} leaves the repo.` };
-  } catch { return { problem: `the theme folder ${quote(dir, { bare: true })} does not exist.` }; }
-  try { real = fs.realpathSync(path.join(base, ...rel.split('/'))); } catch { return { problem: `${quote(`${dir}/${rel}`, { bare: true })} does not exist.` }; }
-  if (!real.startsWith(base + path.sep)) return { problem: `${quote(`${dir}/${rel}`, { bare: true })} leads out of the theme folder (a link).` };
+    if (!base.startsWith(top + path.sep)) return { problem: `the theme folder ${dir} leaves the repo.` };
+  } catch { return { problem: `the theme folder ${dir} does not exist.` }; }
+  try { real = fs.realpathSync(path.join(base, ...rel.split('/'))); } catch { return { problem: `${dir}/${rel} does not exist.` }; }
+  if (!real.startsWith(base + path.sep)) return { problem: `${dir}/${rel} leads out of the theme folder (a link).` };
   const stats = fs.statSync(real);
-  if (!stats.isFile()) return { problem: `${quote(`${dir}/${rel}`, { bare: true })} is not a file.` };
-  if (stats.size > MAX_THEME_ASSET_BYTES) return { problem: `${quote(`${dir}/${rel}`, { bare: true })} is ${Math.ceil(stats.size / 1024)} KB; an asset beside a theme is at most ${MAX_THEME_ASSET_BYTES / 1024 / 1024} MB.` };
+  if (!stats.isFile()) return { problem: `${dir}/${rel} is not a file.` };
+  if (stats.size > MAX_THEME_ASSET_BYTES) return { problem: `${dir}/${rel} is ${Math.ceil(stats.size / 1024)} KB; an asset beside a theme is at most ${MAX_THEME_ASSET_BYTES / 1024 / 1024} MB.` };
   return { file: real, size: stats.size, type };
 }
 
@@ -403,7 +402,7 @@ export function themeIconFileProblems(config) {
   const out = [];
   const icons = config.theme && isObject(config.theme.icons) ? config.theme.icons : {};
   for (const [kind, rel] of Object.entries(icons)) {
-    const where = `theme.icons.${quote(kind, { bare: true })} (${quote(rel, { bare: true })})`;
+    const where = `theme.icons.${kind} (${rel})`;
     const target = themeIconAsset(config.theme, rel);
     if ('problem' in target) { out.push(`${where} ${target.problem}`); continue; }
     const found = themeAssetFile(config.root, config.theme, target.asset);

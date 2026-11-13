@@ -36,7 +36,6 @@
 
 import { LANGUAGES, TEST_FILES, docSummary, expandMembers, goImports, goManifest, goWorkDirs, manifestLanguage, pyName, pythonImports, pythonManifest, rustManifest, rustName, rustUses } from './languages.js';
 import { eachPlaceOnce, leavesRepo, outsideProblem } from '../../core/repo.js';
-import { quote } from '../../core/text.js';
 
 const DEFAULT_EXTENSIONS = LANGUAGES.js.extensions;
 const TEST_DIRS = new Set(['test', 'tests', '__tests__', '__fixtures__', 'fixtures']);
@@ -103,7 +102,7 @@ function expandPatterns(patterns, io) {
 
 const readJson = (io, rel) => {
   if (!io.exists(rel)) return null;
-  try { return JSON.parse(io.read(rel)); } catch (err) { throw new Error(`${quote(rel, { bare: true })} is not valid JSON: ${quote(err.message, { bare: true })}`); }
+  try { return JSON.parse(io.read(rel)); } catch (err) { throw new Error(`${rel} is not valid JSON: ${err.message}`); }
 };
 const join = (dir, name) => (dir ? `${dir}/${name}` : name);
 

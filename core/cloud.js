@@ -33,7 +33,6 @@
  *  - `cloudNodeProblems(nodes, file)`: a cloud node on the map with no entry, and an entry with no node.
  */
 import { CALL_WHEN, CLOUD_ROLES, PLAN_TIERS } from './schema.js';
-import { quote } from './text.js';
 
 export const CLOUD_FILE = 'topology.cloud.json';
 export const CLOUD_STORE_ID = 'store-cloud';
@@ -340,14 +339,14 @@ export function validateCloud(file, { evidence, nodeIds, kinds = Object.keys(EVI
 export function deriveCloud({ read, exists, evidence = [], nodeIds = [], kinds, parent = DEFAULT_PARENT }) {
   const none = { nodes: [], edges: [], warnings: [], ownedIds: [], unknown: [] };
   if (!exists(CLOUD_FILE)) {
-    if (evidence.length) throw new Error(`cloud: the code reaches ${evidence.length} outside service(s) (first ${said(evidence[0])} in ${quote(whereOf(evidence[0]), { bare: true })}), but there is no ${CLOUD_FILE} to describe them`);
+    if (evidence.length) throw new Error(`cloud: the code reaches ${evidence.length} outside service(s) (first ${said(evidence[0])} in ${whereOf(evidence[0])}), but there is no ${CLOUD_FILE} to describe them`);
     return none;
   }
   let file;
   try {
     file = JSON.parse(read(CLOUD_FILE));
   } catch (err) {
-    throw new Error(`cloud: ${CLOUD_FILE} is not valid JSON: ${quote(err.message, { bare: true })}`);
+    throw new Error(`cloud: ${CLOUD_FILE} is not valid JSON: ${err.message}`);
   }
   const { errors, warnings, unknown } = validateCloud(file, { evidence, nodeIds: new Set(nodeIds), kinds });
   if (errors.length) throw new Error(`cloud: ${CLOUD_FILE} is invalid:\n  ${errors.join('\n  ')}`);

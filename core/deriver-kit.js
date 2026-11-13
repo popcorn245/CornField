@@ -27,7 +27,6 @@ import { DERIVER_CONTRACT, deriveTopology, deriverProblems } from './derive.js';
 import { planSync, missingPaths } from './sync.js';
 import { validateTopology } from './validate.js';
 import { reachable, repoReader, repoPaths } from './repo.js';
-import { quote } from './text.js';
 import { BUILTIN_DERIVERS, CORNFIELD_DIR, DEFAULTS } from './config.js';
 
 export { DERIVER_CONTRACT, deriverProblems };
@@ -181,7 +180,7 @@ export function defineDeriver(deriver) {
 /** Refuses a path that leaves the fixture */
 function inside(root, rel) {
   const abs = path.resolve(root, rel);
-  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error(`${quote(rel)} leaves the fixture repo.`);
+  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error(`"${rel}" leaves the fixture repo.`);
   return abs;
 }
 

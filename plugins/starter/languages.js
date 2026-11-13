@@ -14,7 +14,6 @@
  */
 
 import { parseToml } from './toml.js';
-import { quote } from '../../core/text.js';
 
 export const LANGUAGES = {
   js: { extensions: ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx'], prune: [] },
@@ -32,7 +31,7 @@ export const TEST_FILES = {
 };
 
 const readToml = (io, rel) => {
-  try { return parseToml(io.read(rel)); } catch (err) { throw new Error(`${quote(rel, { bare: true })} is not TOML the starter can read: ${quote(err.message, { bare: true })}`); }
+  try { return parseToml(io.read(rel)); } catch (err) { throw new Error(`${rel} is not TOML the starter can read: ${err.message}`); }
 };
 const join = (dir, name) => (dir ? `${dir}/${name}` : name);
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);

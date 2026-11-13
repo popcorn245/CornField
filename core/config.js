@@ -45,7 +45,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { quote } from './text.js';
 import { repoReader } from './repo.js';
 import { themeProblems } from './theme.js';
 import { brandProblems } from './brand.js';
@@ -228,20 +227,20 @@ export const MAX_EMBED_ORIGINS = 20;
  */
 export function embedOrigin(value) {
   if (typeof value !== 'string' || value === '') return { problem: 'is an origin like https://tasks.example.com, as text.' };
-  if (value.includes('*')) return { problem: `${quote(value)} has a wildcard: list each origin exactly, like https://tasks.example.com.` };
-  if (/\s/.test(value) || value.length > 300) return { problem: `${quote(value.slice(0, 80))} is not an origin: no spaces, and at most 300 characters.` };
-  if (value.includes('\\')) return { problem: `${quote(value)} has a backslash: write the origin with forward slashes, like https://tasks.example.com.` };
-  if (value.includes('@')) return { problem: `${quote(value)} has a user name: an origin is a scheme, a host and a port, like https://tasks.example.com.` };
-  if (!/^https?:\/\//i.test(value)) return { problem: `${quote(value)} has no https:// in front: write the whole origin, like https://tasks.example.com.` };
-  if (/^https?:\/\/[^/?#]*[/?#]/i.test(value)) return { problem: `${quote(value)} has a path, query or fragment (a trailing slash counts): list the origin only, like https://tasks.example.com.` };
+  if (value.includes('*')) return { problem: `"${value}" has a wildcard: list each origin exactly, like https://tasks.example.com.` };
+  if (/\s/.test(value) || value.length > 300) return { problem: `"${value.slice(0, 80)}" is not an origin: no spaces, and at most 300 characters.` };
+  if (value.includes('\\')) return { problem: `"${value}" has a backslash: write the origin with forward slashes, like https://tasks.example.com.` };
+  if (value.includes('@')) return { problem: `"${value}" has a user name: an origin is a scheme, a host and a port, like https://tasks.example.com.` };
+  if (!/^https?:\/\//i.test(value)) return { problem: `"${value}" has no https:// in front: write the whole origin, like https://tasks.example.com.` };
+  if (/^https?:\/\/[^/?#]*[/?#]/i.test(value)) return { problem: `"${value}" has a path, query or fragment (a trailing slash counts): list the origin only, like https://tasks.example.com.` };
   const m = EMBED_ORIGIN.exec(value);
-  if (!m) return { problem: `${quote(value)} is not an origin: a scheme, a host name (or a bracketed IPv6 address) and an optional port, like https://tasks.example.com.` };
+  if (!m) return { problem: `"${value}" is not an origin: a scheme, a host name (or a bracketed IPv6 address) and an optional port, like https://tasks.example.com.` };
   const [, scheme, host, port] = m;
-  if (port !== undefined && (String(Number(port)) !== port || Number(port) < 1 || Number(port) > 65535)) return { problem: `${quote(value)} has a port that is not a number from 1 to 65535.` };
+  if (port !== undefined && (String(Number(port)) !== port || Number(port) < 1 || Number(port) > 65535)) return { problem: `"${value}" has a port that is not a number from 1 to 65535.` };
   let u;
-  try { u = new URL(value.toLowerCase()); } catch { return { problem: `${quote(value)} is not a URL the browser would read as written.` }; }
-  if (u.hostname !== host.toLowerCase()) return { problem: `${quote(value)} would be read as ${u.hostname}: write the host the way a browser shows it.` };
-  if (scheme.toLowerCase() === 'http' && !isLoopbackName(u.hostname)) return { problem: `${quote(value)} is plain http: only https, or http for localhost, a *.localhost name, 127.0.0.1 or [::1], because the maintainer's session would otherwise be offered to a page that travels in the clear.` };
+  try { u = new URL(value.toLowerCase()); } catch { return { problem: `"${value}" is not a URL the browser would read as written.` }; }
+  if (u.hostname !== host.toLowerCase()) return { problem: `"${value}" would be read as ${u.hostname}: write the host the way a browser shows it.` };
+  if (scheme.toLowerCase() === 'http' && !isLoopbackName(u.hostname)) return { problem: `"${value}" is plain http: only https, or http for localhost, a *.localhost name, 127.0.0.1 or [::1], because the maintainer's session would otherwise be offered to a page that travels in the clear.` };
   return { origin: u.origin };
 }
 
@@ -258,7 +257,7 @@ function embedProblems(e) {
   e.origins.forEach((o, i) => {
     const r = embedOrigin(o);
     if ('problem' in r) out.push(`embed.origins[${i}] ${r.problem}`);
-    else if (seen.has(r.origin)) out.push(`embed.origins[${i}] ${quote(o)} is listed twice.`);
+    else if (seen.has(r.origin)) out.push(`embed.origins[${i}] "${o}" is listed twice.`);
     else seen.add(r.origin);
   });
   return out;
@@ -272,7 +271,7 @@ function embedProblems(e) {
 export function configProblems(c) {
   const out = [];
   if (!isObject(c)) return [`${CONFIG_FILE} must export an object (export default { … }).`];
-  for (const k of Object.keys(c)) if (!KEYS.includes(k)) out.push(`unknown key ${quote(k)}. Known: ${KEYS.join(', ')}.`);
+  for (const k of Object.keys(c)) if (!KEYS.includes(k)) out.push(`unknown key "${k}". Known: ${KEYS.join(', ')}.`);
   if (c.title !== undefined && c.title !== null && !isText(c.title)) out.push('"title" is text.');
   if (c.port !== undefined && !(Number.isInteger(c.port) && c.port > 0 && c.port < 65536)) out.push('"port" is a whole number from 1 to 65535.');
   if (c.host !== undefined && !isText(c.host)) out.push('"host" is text.');
@@ -281,8 +280,8 @@ export function configProblems(c) {
     else c.derivers.forEach((d, i) => {
       const use = typeof d === 'string' ? d : isObject(d) ? d.use : null;
       if (!isText(use)) out.push(`derivers[${i}] is a name ("starter"), a path ("./tools/deriver.js") or { use, options }.`);
-      else if (!BUILTIN_DERIVERS[use] && !use.startsWith('./')) out.push(`derivers[${i}] ${quote(use)} is not a built-in deriver (${Object.keys(BUILTIN_DERIVERS).join(', ')}) or a path starting with "./".`);
-      else if (use.startsWith('./') && !inRepo(use)) out.push(`derivers[${i}] ${quote(use)} leaves the repo.`);
+      else if (!BUILTIN_DERIVERS[use] && !use.startsWith('./')) out.push(`derivers[${i}] "${use}" is not a built-in deriver (${Object.keys(BUILTIN_DERIVERS).join(', ')}) or a path starting with "./".`);
+      else if (use.startsWith('./') && !inRepo(use)) out.push(`derivers[${i}] "${use}" leaves the repo.`);
       if (isObject(d) && d.options !== undefined && !isObject(d.options)) out.push(`derivers[${i}].options is an object.`);
     });
   }
@@ -293,8 +292,8 @@ export function configProblems(c) {
       if (s === null) continue;
       const use = typeof s === 'string' ? s : isObject(s) ? s.use : null;
       if (!isText(use)) out.push(`sources.${slot} is null, a name ("house"), a path ("./tools/live.js") or { use, options }.`);
-      else if (!BUILTIN_SOURCES[use] && !use.startsWith('./')) out.push(`sources.${slot} ${quote(use)} is not a built-in source (${Object.keys(BUILTIN_SOURCES).join(', ')}) or a path starting with "./".`);
-      else if (use.startsWith('./') && !inRepo(use)) out.push(`sources.${slot} ${quote(use)} leaves the repo.`);
+      else if (!BUILTIN_SOURCES[use] && !use.startsWith('./')) out.push(`sources.${slot} "${use}" is not a built-in source (${Object.keys(BUILTIN_SOURCES).join(', ')}) or a path starting with "./".`);
+      else if (use.startsWith('./') && !inRepo(use)) out.push(`sources.${slot} "${use}" leaves the repo.`);
       if (isObject(s) && s.options !== undefined) {
         if (!isObject(s.options)) out.push(`sources.${slot}.options is an object.`);
         else {
@@ -346,7 +345,7 @@ export function configProblems(c) {
       if (c.deploys.workflows !== undefined && !list(c.deploys.workflows)) out.push('deploys.workflows is a list of workflow names or patterns, like ["*deploy*"].');
       if (c.deploys.restarts !== undefined) {
         if (!isObject(c.deploys.restarts)) out.push('deploys.restarts is { "workflow name or pattern": ["node id or label"] }.');
-        else for (const [p, refs] of Object.entries(c.deploys.restarts)) if (!isText(p) || !list(refs)) out.push(`deploys.restarts[${quote(p)}] is a list of node ids or labels.`);
+        else for (const [p, refs] of Object.entries(c.deploys.restarts)) if (!isText(p) || !list(refs)) out.push(`deploys.restarts["${p}"] is a list of node ids or labels.`);
       }
     }
   }
@@ -362,7 +361,7 @@ export function configProblems(c) {
         if (h.events === '*') return;
         if (!Array.isArray(h.events) || h.events.length === 0) out.push(`hooks[${i}].events is "*" or a non-empty list of ${HOOK_EVENTS.join(', ')}.`);
         else {
-          for (const e of h.events) if (!HOOK_EVENTS.includes(e)) out.push(`hooks[${i}].events: ${quote(e)} is not an event; the events are ${HOOK_EVENTS.join(', ')}.`);
+          for (const e of h.events) if (!HOOK_EVENTS.includes(e)) out.push(`hooks[${i}].events: ${JSON.stringify(e)} is not an event; the events are ${HOOK_EVENTS.join(', ')}.`);
           if (new Set(h.events).size !== h.events.length) out.push(`hooks[${i}].events names an event twice.`);
         }
       });
@@ -380,8 +379,8 @@ export function configProblems(c) {
       if (v !== undefined && v !== false) {
         const ms = parseDuration(v);
         if (ms === null) out.push('hookPoll.specs is a duration like "90s", "5m" or "1h" (from 60s to 1h), or false.');
-        else if (ms < HOOK_POLL_MIN_MS) out.push(`hookPoll.specs ${quote(v)} is under the floor of 60s, so the forge is not hammered; use "60s" or more.`);
-        else if (ms > HOOK_POLL_MAX_MS) out.push(`hookPoll.specs ${quote(v)} is over the ceiling of 1h; use "1h" or less, or false to turn the poll off.`);
+        else if (ms < HOOK_POLL_MIN_MS) out.push(`hookPoll.specs ${JSON.stringify(v)} is under the floor of 60s, so the forge is not hammered; use "60s" or more.`);
+        else if (ms > HOOK_POLL_MAX_MS) out.push(`hookPoll.specs ${JSON.stringify(v)} is over the ceiling of 1h; use "1h" or less, or false to turn the poll off.`);
       }
     }
   }
@@ -429,9 +428,9 @@ export function configProblems(c) {
   if (c.proxy !== undefined) {
     if (!isObject(c.proxy)) out.push('"proxy" is { "/path/": "http://upstream" }.');
     else for (const [p, t] of Object.entries(c.proxy)) {
-      if (!/^\/[\w.-]+\/$/.test(p)) out.push(`proxy ${quote(p)}: a path like "/api/" (one segment, slashes at both ends).`);
-      if (!/^https?:\/\/[^/\s]+\/?$/.test(String(t))) out.push(`proxy ${quote(p)}: the target is an origin like http://127.0.0.1:3245.`);
-      if (['/cornfield/', '/proposals/', '/explorer/', '/core/', '/plugins/', '/repo/'].includes(p)) out.push(`proxy ${quote(p)} is cornfield's own path.`);
+      if (!/^\/[\w.-]+\/$/.test(p)) out.push(`proxy "${p}": a path like "/api/" (one segment, slashes at both ends).`);
+      if (!/^https?:\/\/[^/\s]+\/?$/.test(String(t))) out.push(`proxy "${p}": the target is an origin like http://127.0.0.1:3245.`);
+      if (['/cornfield/', '/proposals/', '/explorer/', '/core/', '/plugins/', '/repo/'].includes(p)) out.push(`proxy "${p}" is cornfield's own path.`);
     }
   }
   if (c.importMap !== undefined && (!isObject(c.importMap) || Object.values(c.importMap).some((v) => !/^\/repo\/[\w@./-]+\.js$/.test(String(v))))) {
@@ -453,12 +452,12 @@ function triggerProblems(a) {
   if (!isObject(on)) return [`agents.on is { ${TRIGGER_EVENTS.map((e) => `"${e}": { kind, profile? }`).join(', ')} }: which events request a run by themselves (none unless set).`];
   const profiles = Array.isArray(a.profiles) ? a.profiles : [];
   for (const [event, t] of Object.entries(on)) {
-    const at = `agents.on[${quote(event)}]`;
+    const at = `agents.on[${JSON.stringify(event)}]`;
     if (!TRIGGER_EVENTS.includes(event)) { out.push(`${at}: a trigger fires only on ${TRIGGER_EVENTS.join(', ')}: something a maintainer did, never a run's output.`); continue; }
     if (!isObject(t)) { out.push(`${at} is { kind, profile?, brief? }.`); continue; }
     for (const k of Object.keys(t)) if (!['kind', 'profile', 'brief'].includes(k)) out.push(`${at}.${k}: the keys are kind, profile, brief.`);
     if (!RUN_KINDS.includes(t.kind)) out.push(`${at}.kind is one of ${RUN_KINDS.join(', ')}.`);
-    if (t.profile !== undefined && !(typeof t.profile === 'string' && profiles.includes(t.profile))) out.push(`${at}.profile ${quote(t.profile)} is not one of agents.profiles (${profiles.join(', ') || 'none listed'}).`);
+    if (t.profile !== undefined && !(typeof t.profile === 'string' && profiles.includes(t.profile))) out.push(`${at}.profile ${JSON.stringify(t.profile)} is not one of agents.profiles (${profiles.join(', ') || 'none listed'}).`);
     if (t.brief !== undefined && !(typeof t.brief === 'string' && t.brief.length <= MAX_BRIEF_CHARS && !new RegExp(CREDENTIAL_VALUE_SOURCE).test(t.brief))) out.push(`${at}.brief is text of at most ${MAX_BRIEF_CHARS} characters, and holds nothing shaped like a credential.`);
   }
   return out;
@@ -491,7 +490,7 @@ function agentRunProblems(a) {
       out.push(`agents.profiles is a list of at most ${MAX_PROFILES} different names ("claude", "local-qwen"): letters, digits and . _ -, at most 64 characters each. The runner maps each to a model; cornfield only knows the name.`);
     }
     // agents.limits keys a profile's own limits by its name, so a profile may not be named like a limit
-    else for (const p of a.profiles) if (LIMIT_NAMES.includes(p)) out.push(`agents.profiles ${quote(p)} is the name of a limit (${LIMIT_NAMES.join(', ')}); name the profile something else.`);
+    else for (const p of a.profiles) if (LIMIT_NAMES.includes(p)) out.push(`agents.profiles ${JSON.stringify(p)} is the name of a limit (${LIMIT_NAMES.join(', ')}); name the profile something else.`);
   }
   if (a.runners !== undefined) {
     if (!Array.isArray(a.runners) || a.runners.length > MAX_RUNNERS || !a.runners.every((r) => isText(r) && r === r.trim() && !/[\s,]/.test(r))) {
@@ -501,14 +500,14 @@ function agentRunProblems(a) {
   if (a.quietAfter !== undefined) {
     const ms = parseDuration(a.quietAfter);
     if (ms === null) out.push('agents.quietAfter is a duration like "90m", "24h" or "72h".');
-    else if (ms < QUIET_MIN_MS) out.push(`agents.quietAfter ${quote(a.quietAfter)} is under the floor of 5m; use "5m" or more.`);
-    else if (ms > QUIET_MAX_MS) out.push(`agents.quietAfter ${quote(a.quietAfter)} is over the ceiling of 30 days; use "720h" or less.`);
+    else if (ms < QUIET_MIN_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is under the floor of 5m; use "5m" or more.`);
+    else if (ms > QUIET_MAX_MS) out.push(`agents.quietAfter ${JSON.stringify(a.quietAfter)} is over the ceiling of 30 days; use "720h" or less.`);
   }
   if (a.runnerQuietAfter !== undefined) {
     const ms = parseDuration(a.runnerQuietAfter);
     if (ms === null) out.push('agents.runnerQuietAfter is a duration like "3m" or "10m": how long a runner may go without polling before it counts as offline (3m unless set).');
-    else if (ms < RUNNER_QUIET_MIN_MS) out.push(`agents.runnerQuietAfter ${quote(a.runnerQuietAfter)} is under the floor of 1m; use "1m" or more.`);
-    else if (ms > RUNNER_QUIET_MAX_MS) out.push(`agents.runnerQuietAfter ${quote(a.runnerQuietAfter)} is over the ceiling of 1h; use "60m" or less.`);
+    else if (ms < RUNNER_QUIET_MIN_MS) out.push(`agents.runnerQuietAfter ${JSON.stringify(a.runnerQuietAfter)} is under the floor of 1m; use "1m" or more.`);
+    else if (ms > RUNNER_QUIET_MAX_MS) out.push(`agents.runnerQuietAfter ${JSON.stringify(a.runnerQuietAfter)} is over the ceiling of 1h; use "60m" or less.`);
   }
   if (a.on !== undefined) out.push(...triggerProblems(a));
   if (a.limits !== undefined) out.push(...limitProblems(a));
@@ -645,8 +644,7 @@ export async function loadConfig(root, { env = process.env, file } = {}) {
 
 function readPackageName(root) {
   try {
-    const io = repoReader(root); // through the repo's reader: a package.json that links out of the repo is not read
-    return JSON.parse(io.read('package.json')).name || null;
+    return JSON.parse(repoReader(root).read('package.json')).name || null; // a package.json that links out of the repo is not read
   } catch {
     return null;
   }
@@ -662,10 +660,10 @@ export async function loadDerivers(config) {
     const use = typeof entry === 'string' ? entry : entry.use;
     const options = (typeof entry === 'object' && entry.options) || {};
     const file = BUILTIN_DERIVERS[use] ? path.join(CORNFIELD_DIR, BUILTIN_DERIVERS[use]) : path.resolve(config.root, use);
-    if (!fs.existsSync(file)) throw new Error(`Deriver ${quote(use)}: ${quote(file, { bare: true })} does not exist.`);
+    if (!fs.existsSync(file)) throw new Error(`Deriver "${use}": ${file} does not exist.`);
     const mod = await import(pathToFileURL(file).href);
     const deriver = mod.default ?? mod.deriver;
-    if (!deriver) throw new Error(`Deriver ${quote(use)} (${quote(file, { bare: true })}) has no default export.`);
+    if (!deriver) throw new Error(`Deriver "${use}" (${file}) has no default export.`);
     out.push({ deriver, options });
   }
   return out;

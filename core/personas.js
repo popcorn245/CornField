@@ -30,7 +30,6 @@
  *    in the shape a deriver returns (plugins/personas is the deriver).
  */
 import { personaNodeId } from './schema.js';
-import { quote } from './text.js';
 
 export const PERSONAS_FILE = 'topology.personas.json';
 export const PERSONA_STORE_ID = 'store-personas';
@@ -188,7 +187,7 @@ export function derivePersonas({ read, exists, roles = null, parent = DEFAULT_PA
   try {
     file = JSON.parse(read(PERSONAS_FILE));
   } catch (err) {
-    throw new Error(`personas: ${PERSONAS_FILE} is not valid JSON: ${quote(err.message, { bare: true })}`);
+    throw new Error(`personas: ${PERSONAS_FILE} is not valid JSON: ${err.message}`);
   }
   const problems = validatePersonas(file, { roles });
   if (problems.length) throw new Error(`personas: ${PERSONAS_FILE} is invalid:\n  ${problems.join('\n  ')}`);

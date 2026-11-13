@@ -3,9 +3,10 @@
  *
  * What `validate` and `sync` read from the repo goes through the repo reader (core/repo.js): a proposal, a mockup, the
  * map or a package.json that is a link out of the repo is not read, and no message quotes from it. A config value that
- * names a folder where a file is wanted, or one place twice, is a problem (or read once), not a crash. A path or a value
- * a message prints is written so that a line break in it cannot forge a line. Real symlinks on disk, in a temporary
- * folder, skipped only where the machine cannot make one.
+ * names a folder where a file is wanted, or one place twice, is a problem (or read once), not a crash. `sync` writes the
+ * map only where it really lies in the repo, and a FIFO is not waited on. A config path a message prints is quoted, so a
+ * line break in it cannot forge a line. Real symlinks on disk, in a temporary folder, skipped only where the machine
+ * cannot make one.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
@@ -26,6 +27,8 @@ import { readTopology, validateProposalFiles } from '../../core/validate.js';
 
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'cli', 'cornfield.js');
 const MARKER = 'OUTSIDE-MARKER-7f3a1d';
+/** What of the marker would show: a JSON parse error quotes only the first characters of a token */
+const SEEN = MARKER.slice(0, 8);
 
 const canSymlink = (() => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cornfield-canlink-'));
@@ -63,8 +66,18 @@ describe('validate reads proposals through the repo reader', () => {
     link(outside('broken.json'), `${PROPOSALS}/a.json`);
     const problems = validateProposalFiles(map, path.join(repo, PROPOSALS), repo);
     expect(problems).toEqual([`${PROPOSALS}/a.json is not valid JSON: "${PROPOSALS}/a.json" is outside the repo.`]);
-    expect(problems.join()).not.toContain(MARKER);
+    expect(problems.join()).not.toContain(SEEN);
     expect(problems.join()).not.toContain(base);
+  });
+
+  linked('does not read one through a chain of links, a link to a folder, or a folder whose name only starts like the repo', () => {
+    put('broken.json', `{ "title": ${MARKER}`, path.join(base, 'repo-other'));
+    link(outside('broken.json'), 'l/hop');
+    link('../../../l/hop', `${PROPOSALS}/a.json`);
+    link(outside(), `${PROPOSALS}/b.json`);
+    link(path.join(base, 'repo-other', 'broken.json'), `${PROPOSALS}/c.json`);
+    const problems = validateProposalFiles(map, path.join(repo, PROPOSALS), repo);
+    expect(problems).toEqual(['a', 'b', 'c'].map((n) => `${PROPOSALS}/${n}.json is not valid JSON: "${PROPOSALS}/${n}.json" is outside the repo.`));
   });
 
   linked('does not take a mockup that is a link out for a file beside the proposal', () => {
@@ -90,7 +103,7 @@ describe('validate reads proposals through the repo reader', () => {
     const run = cli('validate');
     expect(run.status).toBe(1);
     expect(said(run)).toContain(`${PROPOSALS}/a.json is not valid JSON`);
-    expect(said(run)).not.toContain(MARKER);
+    expect(said(run)).not.toContain(SEEN);
     expect(said(run)).not.toContain(base);
   });
 
@@ -112,11 +125,11 @@ describe('the map and the config are read through the repo reader', () => {
     let error;
     try { readTopology({ root: repo, topology: 'topology.json' }); } catch (err) { error = err; }
     expect(error.message).toBe('"topology.json" is outside the repo.');
-    expect(error.message).not.toContain(MARKER);
+    expect(error.message).not.toContain(SEEN);
     const before = fs.readFileSync(outside('topology.json'), 'utf8');
     const sync = cli('sync');
     expect(sync.status).toBe(1);
-    expect(said(sync)).not.toContain(MARKER);
+    expect(said(sync)).not.toContain(SEEN);
     expect(said(sync)).not.toContain(base);
     expect(fs.readFileSync(outside('topology.json'), 'utf8')).toBe(before);
   });
@@ -133,11 +146,58 @@ describe('the map and the config are read through the repo reader', () => {
     link(outside('package.json'), 'package.json');
     const config = await loadConfig(repo, { env: {} });
     expect(config.title).toBe(path.basename(repo));
-    expect(config.title).not.toContain(MARKER);
+    expect(config.title).not.toContain(SEEN);
     put('src/a.js', 'export const a = 1;\n');
     const sync = cli('sync');
-    expect(said(sync)).not.toContain(MARKER);
-    expect(fs.readFileSync(path.join(repo, 'topology.json'), 'utf8')).not.toContain(MARKER);
+    expect(said(sync)).not.toContain(SEEN);
+    expect(fs.readFileSync(path.join(repo, 'topology.json'), 'utf8')).not.toContain(SEEN);
+  });
+});
+
+describe('sync writes the map only where it really lies in the repo', () => {
+  const code = () => { put('package.json', '{"name":"t","type":"module"}'); put('src/a.js', 'export const a = 1;\n'); };
+
+  linked('does not make a file through a map that is a link to nothing outside the repo', () => {
+    code();
+    link(outside('new.json'), 'topology.json');
+    const sync = cli('sync');
+    expect(sync.status).toBe(1);
+    expect(sync.stderr).toContain('"topology.json" leads outside the repo or to nothing; the map is not written.');
+    expect(said(sync)).not.toContain(base);
+    expect(fs.existsSync(outside('new.json'))).toBe(false);
+  });
+
+  linked('writes through a map that is a link inside the repo, as before', () => {
+    code();
+    put('maps/topology.json', JSON.stringify(map));
+    link('maps/topology.json', 'topology.json');
+    expect(cli('sync').status).toBe(0);
+    expect(fs.lstatSync(path.join(repo, 'topology.json')).isSymbolicLink()).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(repo, 'maps/topology.json'), 'utf8')).nodes.map((n) => n.id)).toContain('pkg-src');
+    expect(cli('validate').status).toBe(0);
+  });
+
+  linked('works on a repo reached through a symlink, as before', () => {
+    code();
+    fs.symlinkSync(repo, path.join(base, 'alias'));
+    const alias = path.join(base, 'alias');
+    expect(cli('sync', alias).status).toBe(0);
+    expect(cli('validate', alias).status).toBe(0);
+    expect(cli('status', alias).status).toBe(0);
+  });
+});
+
+describe('a FIFO where a file is wanted is not waited on', () => {
+  const fifo = (rel) => { fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true }); return spawnSync('mkfifo', [path.join(repo, rel)]).status === 0; };
+
+  it('is not read as a proposal or as the map', () => {
+    if (!fifo(`${PROPOSALS}/a.json`)) return; // a machine without mkfifo has no FIFO to wait on
+    expect(validateProposalFiles(map, path.join(repo, PROPOSALS), repo)).toEqual([`${PROPOSALS}/a.json is not valid JSON: "${PROPOSALS}/a.json" is not a file.`]);
+    fifo('topology.json');
+    expect(() => readTopology({ root: repo, topology: 'topology.json' })).toThrow('"topology.json" is not a file.');
+    const run = spawnSync(process.execPath, [CLI, 'sync', '--repo', repo], { encoding: 'utf8', timeout: 20000 });
+    expect(run.signal).toBeNull();
+    expect(run.status).toBe(1);
   });
 });
 
@@ -202,48 +262,34 @@ describe('one place named twice', () => {
   });
 });
 
-describe('a path or a value a message prints', () => {
-  const ODD = 'x\n  - forged: a line of its own\u001b[31m\u009b';
+describe('a path a message prints', () => {
+  const ODD = 'x\n  - forged: a line of its own\u001b[31m\u009b\u202e';
+  const SAID = '"x\\n  - forged: a line of its own\\u001b[31m\\u009b\\u202e"';
 
   it('is one helper: JSON, with the controls JSON leaves alone written too', () => {
     expect(quote('a/b')).toBe('"a/b"');
-    expect(quote(ODD)).toBe('"x\\n  - forged: a line of its own\\u001b[31m\\u009b"');
+    expect(quote(ODD)).toBe(SAID);
     expect(quote(2)).toBe('2');
-    expect(quote('a\nb c', { bare: true })).toBe('a\\nb\\u2028c');
-    expect(quote('plain "text" \\ here', { bare: true })).toBe('plain "text" \\ here');
     expect(outsideError('a\nb').message).toBe('"a\\nb" is outside the repo.');
   });
 
-  it('keeps a compose file, an API description and a world file from forging a line', async () => {
+  it('leaves the letters of any script, emoji and a non-breaking space as they are', () => {
+    for (const name of ['docs/\u0645\u0644\u0641.md', 'docs/\u05e7\u05d5\u05d1\u05e5.md', 'docs/caf\u00e9/na\u00efve.md', 'docs/e\u0301te\u0301.md', 'docs/\u65e5\u672c\u8a9e.md', 'docs/\u{1f33d}.md', 'docs/a\u00a0b.md']) expect(quote(name)).toBe(`"${name}"`);
+    expect(quote('a\u2067b\u2069')).toBe('"a\\u2067b\\u2069"'); // a bidirectional isolate is not a letter
+  });
+
+  it('keeps a compose file or an API description from forging a line', async () => {
     put('compose.yml', 'services:\n  web:\n    image: nginx\n');
-    await expect(derive([{ deriver: compose, options: { files: [ODD] } }])).rejects.toThrow(`compose file ${quote(ODD)} does not exist.`);
-    const failures = [];
-    for (const d of [{ deriver: compose, options: { files: [ODD] } }, { deriver: openapi, options: { file: ODD } }, { deriver: world, options: { file: ODD } }]) {
-      try { const run = await derive([d]); failures.push(...run.warnings, ...run.problems); } catch (err) { failures.push(err.message); }
-    }
-    expect(failures.length).toBeGreaterThan(0);
-    for (const m of failures) { expect(m).not.toMatch(/[\n\r\u001b\u009b]/); }
+    await expect(derive([{ deriver: compose, options: { files: [ODD] } }])).rejects.toThrow(`compose file ${SAID} does not exist.`);
+    await expect(derive([{ deriver: openapi, options: { file: ODD } }])).rejects.toThrow(`API description ${SAID} does not exist.`);
+    const run = await derive([{ deriver: compose, options: { caddyfiles: [ODD] } }]);
+    expect(run.warnings).toContain(`compose: caddyfile ${SAID} does not exist.`);
+    for (const m of run.warnings) expect(m).not.toMatch(/[\n\u001b\u009b\u202e]/);
   });
 
-  it('keeps a broken YAML or JSON file from carrying its own lines into the message', async () => {
+  it('keeps a parse error that spans lines on its lines: the snippet and its caret are the tool\'s own', async () => {
     put('compose.yml', 'services:\n  web:\n  - [broken\n  image: x\n');
-    await expect(derive([{ deriver: compose, options: {} }])).rejects.toThrow(/is not valid YAML/);
-    try { await derive([{ deriver: compose, options: {} }]); } catch (err) { expect(err.message).not.toContain('\n'); }
-    put('stacks/world.json', '{\n  "version": 1,\n  oops\n}');
-    try { await derive([{ deriver: world, options: {} }]); } catch (err) { expect(err.message).not.toContain('\n'); }
-  });
-
-  it('keeps a file named with a line break from forging a line of validate', () => {
-    const name = `${PROPOSALS}/p.json\n  - forged: this is not a problem validate found.json`;
-    try { put(name, '{ not json'); } catch { return; } // a machine that cannot name such a file has nothing to forge
-    put('package.json', '{"name":"t","type":"module"}');
-    put('src/a.js', 'export const a = 1;\n');
-    expect(cli('sync').status).toBe(0);
-    const run = cli('validate');
-    const lines = run.stderr.split('\n');
-    const entries = lines.filter((l) => l.startsWith('  - '));
-    expect(entries.length).toBe(Number(/failed with (\d+) error/.exec(run.stderr)[1]));
-    expect(lines.some((l) => l.startsWith('  - forged'))).toBe(false);
-    expect(run.stderr).toContain('\\n  - forged');
+    const error = await derive([{ deriver: compose, options: {} }]).catch((err) => err);
+    expect(error.message).toMatch(/compose.yml is not valid YAML: .*\n\n 1 \| services:\n/);
   });
 });

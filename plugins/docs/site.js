@@ -14,7 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { escapeHtml as esc, quote } from '../../core/text.js';
+import { escapeHtml as esc } from '../../core/text.js';
 import { deriveTopology } from '../../core/derive.js';
 import { readTopology } from '../../core/validate.js';
 import { renderMarkdown, safeUrl } from './markdown.js';
@@ -103,7 +103,7 @@ ${body}
 `;
 
   for (const page of pages) {
-    if (SITE_OUTPUTS.includes(page.output) || pages.some((q) => q !== page && q.output === page.output)) throw new Error(`${quote(page.file, { bare: true })} would be written to ${quote(page.output, { bare: true })}, which another page or the site itself writes.`);
+    if (SITE_OUTPUTS.includes(page.output) || pages.some((q) => q !== page && q.output === page.output)) throw new Error(`${page.file} would be written to ${page.output}, which another page or the site itself writes.`);
     const { html } = renderMarkdown(read(page.file), {
       link: (href, { image }) => {
         const t = resolveLink(page.file, href);
@@ -215,7 +215,7 @@ ${rows.join('\n')}
  */
 export async function buildSite({ config, derivers, out, sourceUrl = sourceUrlOf(config) }) {
   const root = config.root;
-  if (path.resolve(out) === path.resolve(root) || path.relative(out, root).split(path.sep)[0] !== '..') throw new Error(`The site's folder (${quote(out, { bare: true })}) must not hold the repo.`);
+  if (path.resolve(out) === path.resolve(root) || path.relative(out, root).split(path.sep)[0] !== '..') throw new Error(`The site's folder (${out}) must not hold the repo.`);
   const list = derivers.some((d) => d.deriver.name === docsDeriver.name) ? derivers : [...derivers, { deriver: docsDeriver, options: {} }];
   const derived = await deriveTopology({ root, config, derivers: list, map: readTopology(config) });
   const pages = derived.info.docs?.pages || [];
@@ -230,7 +230,7 @@ export async function buildSite({ config, derivers, out, sourceUrl = sourceUrlOf
   const isDir = (rel) => io.inside(rel) && io.isDir(rel);
   const files = siteFiles({ title: config.title || 'Docs', pages, nodes: derived.nodes, edges: derived.edges, read, exists, isDir, sourceUrl });
   // Only a folder this builds (it leaves a marker) or an empty one is emptied: never a folder of the repo's own files
-  if (fs.existsSync(out) && fs.readdirSync(out).length && !fs.existsSync(path.join(out, SITE_MARKER))) throw new Error(`${quote(out, { bare: true })} is not empty and is not a site cornfield built: pick another folder, or empty it first.`);
+  if (fs.existsSync(out) && fs.readdirSync(out).length && !fs.existsSync(path.join(out, SITE_MARKER))) throw new Error(`${out} is not empty and is not a site cornfield built: pick another folder, or empty it first.`);
   fs.rmSync(out, { recursive: true, force: true });
   files[SITE_MARKER] = 'Built by cornfield docs. This folder is emptied on every build.\n';
   const problems = [...derived.problems];
@@ -238,8 +238,8 @@ export async function buildSite({ config, derivers, out, sourceUrl = sourceUrlOf
   for (const [rel, content] of Object.entries(files)) {
     const dest = path.join(out, rel);
     // What is written lies in `out`, whatever a doc is called
-    if (path.relative(out, dest).split(path.sep)[0] === '..' || path.isAbsolute(path.relative(out, dest))) { problems.push(`docs: ${quote(rel, { bare: true })} would be written outside ${quote(path.basename(out), { bare: true })}; it is not.`); continue; }
-    if (typeof content !== 'string' && !io.inside(content.copy)) { problems.push(`docs: ${quote(content.copy, { bare: true })} leads outside the repo; it is not copied.`); continue; }
+    if (path.relative(out, dest).split(path.sep)[0] === '..' || path.isAbsolute(path.relative(out, dest))) { problems.push(`docs: ${rel} would be written outside ${path.basename(out)}; it is not.`); continue; }
+    if (typeof content !== 'string' && !io.inside(content.copy)) { problems.push(`docs: ${content.copy} leads outside the repo; it is not copied.`); continue; }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     if (typeof content === 'string') fs.writeFileSync(dest, content, 'utf8');
     else fs.copyFileSync(path.join(root, content.copy), dest);

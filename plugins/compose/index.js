@@ -127,15 +127,15 @@ const compose = {
     const stacks = [];
     for (const file of files) {
       let doc;
-      try { doc = yaml.load(ctx.read(file)); } catch (err) { throw new Error(`${quote(file, { bare: true })} is not valid YAML: ${quote(err.message, { bare: true })}`); }
+      try { doc = yaml.load(ctx.read(file)); } catch (err) { throw new Error(`${file} is not valid YAML: ${err.message}`); }
       if (!doc || typeof doc !== 'object' || !doc.services || typeof doc.services !== 'object' || Array.isArray(doc.services)) {
-        warnings.push(`compose: ${quote(file, { bare: true })} has no services; it is left out.`);
+        warnings.push(`compose: ${file} has no services; it is left out.`);
         continue;
       }
       const dir = dirOf(file);
       const name = typeof doc.name === 'string' && doc.name ? doc.name : dir ? dir.slice(dir.lastIndexOf('/') + 1) : slug(ctx.config?.title || 'stack');
       const id = `stack-${slug(name)}`;
-      if (stacks.some((s) => s.id === id)) throw new Error(`${quote(file, { bare: true })} and ${quote(stacks.find((s) => s.id === id).file, { bare: true })} are both stack ${quote(name)}: give one a top-level name.`);
+      if (stacks.some((s) => s.id === id)) throw new Error(`${file} and ${stacks.find((s) => s.id === id).file} are both stack "${name}": give one a top-level name.`);
       const services = Object.entries(doc.services).map(([svc, def]) => {
         const d = def && typeof def === 'object' ? def : {};
         const labels = { ...labelsOf(d.labels), ...labelsOf(d.deploy && d.deploy.labels) };
@@ -186,7 +186,7 @@ const compose = {
         const serving = stacks.filter((s) => s.services.some((x) => x.name === r.service || x.containerName === r.service));
         const stack = serving.find((s) => s.dir === here) || (serving.length === 1 ? serving[0] : null);
         if (!stack) {
-          if (serving.length > 1) warnings.push(`compose: ${quote(file, { bare: true })} sends ${quote(r.host, { bare: true })} to ${quote(r.service)}, a service of ${serving.map((s) => quote(s.name, { bare: true })).join(' and ')}; it is left out.`);
+          if (serving.length > 1) warnings.push(`compose: ${file} sends ${r.host} to "${r.service}", a service of ${serving.map((s) => s.name).join(' and ')}; it is left out.`);
           else outside.add(r.host);
           continue;
         }
@@ -194,7 +194,7 @@ const compose = {
         routes.push({ ...r, service: svc.name, stack, from: file });
       }
     }
-    if (outside.size) warnings.push(`compose: ${outside.size} routed host(s) go to something that is not a compose service, and are left out: ${[...outside].sort().map((h) => quote(h, { bare: true })).join(', ')}.`);
+    if (outside.size) warnings.push(`compose: ${outside.size} routed host(s) go to something that is not a compose service, and are left out: ${[...outside].sort().join(', ')}.`);
 
     // 3. An app per host, and its runs-on edge to each stack that serves it
     const committed = (ctx.map && ctx.map.nodes) || [];
@@ -214,7 +214,7 @@ const compose = {
       const made = appFor(host, ctx.nodes || []);
       const id = made ? made.id : appFor(host, committed)?.id || `app-${slug(host)}`;
       if (!made) {
-        if (taken.has(id)) throw new Error(`two routed hosts make app ${quote(id)}: ${quote(host, { bare: true })} is one of them.`);
+        if (taken.has(id)) throw new Error(`two routed hosts make app "${id}": ${host} is one of them.`);
         taken.add(id);
         nodes.push({ id, label: host, type: 'app', url: `${rs[0].scheme}://${host}`, upstreams: [...new Set(rs.map((r) => r.upstream))], stack: rs[0].stack.name, deployed: true });
         edges.push({ from: parentOf(id) || parent, to: id });

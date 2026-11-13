@@ -140,7 +140,7 @@ function specsOf(ctx, options, warnings, problems) {
   if (typeof options.file === 'string') return [{ file: options.file, app: options.app || DEFAULT_APP, prefix: options.prefix }].filter(inRepo('file'));
   const found = ctx.walk('', (f) => SPEC_FILE.test(f));
   if (found.length > 1) {
-    warnings.push(`openapi: ${found.length} API description files (${found.map((f) => quote(f, { bare: true })).join(', ')}); name the ones to draw: { use: 'openapi', options: { specs: [{ file, app }] } }.`);
+    warnings.push(`openapi: ${found.length} API description files (${found.join(', ')}); name the ones to draw: { use: 'openapi', options: { specs: [{ file, app }] } }.`);
     return [];
   }
   return found.map((file) => ({ file, app: options.app || DEFAULT_APP, prefix: options.prefix }));
@@ -166,14 +166,14 @@ const openapi = {
       const text = ctx.read(spec.file);
       let doc;
       if (/\.json$/i.test(spec.file)) {
-        try { doc = JSON.parse(text); } catch (err) { throw new Error(`${quote(spec.file, { bare: true })} is not valid JSON: ${quote(err.message, { bare: true })}`); }
+        try { doc = JSON.parse(text); } catch (err) { throw new Error(`${spec.file} is not valid JSON: ${err.message}`); }
       } else {
         yaml = yaml || (await loadYaml());
-        if (!yaml) throw new Error(`${quote(spec.file, { bare: true })} is YAML and there is no YAML reader: install the optional dependency js-yaml (npm install js-yaml).`);
-        try { doc = yaml.load(text); } catch (err) { throw new Error(`${quote(spec.file, { bare: true })} is not valid YAML: ${quote(err.message, { bare: true })}`); }
+        if (!yaml) throw new Error(`${spec.file} is YAML and there is no YAML reader: install the optional dependency js-yaml (npm install js-yaml).`);
+        try { doc = yaml.load(text); } catch (err) { throw new Error(`${spec.file} is not valid YAML: ${err.message}`); }
       }
       const kind = specKind(doc);
-      if (!kind) throw new Error(`${quote(spec.file, { bare: true })} is neither an OpenAPI document (openapi or swagger, and paths) nor a collection (items).`);
+      if (!kind) throw new Error(`${spec.file} is neither an OpenAPI document (openapi or swagger, and paths) nor a collection (items).`);
       const endpoints = kind === 'openapi' ? openApiEndpoints(doc, spec) : collectionEndpoints(doc, spec);
 
       // The app: another deriver's, the map's, or this deriver's own (an app whose file is the spec)
@@ -185,7 +185,7 @@ const openapi = {
         edges.push({ from: options.parent || 'root', to: app });
         ownedIds.push(app);
       }
-      if (pageOwners.includes(app)) throw new Error(`two API descriptions draw app ${quote(app)}: give each its own app.`);
+      if (pageOwners.includes(app)) throw new Error(`two API descriptions draw app "${app}": give each its own app.`);
       pageOwners.push(app);
 
       const short = app.replace(/^app-/, '');
@@ -198,7 +198,7 @@ const openapi = {
         nodes.push({ id, label: e.path, type: 'page', file: spec.file, methods: e.methods, desc: `${e.methods.join(' · ')} ${e.path}${e.summary ? `: ${e.summary}` : ''}` });
         edges.push({ from: app, to: id });
       }
-      if (!endpoints.length) warnings.push(`openapi: ${quote(spec.file, { bare: true })} describes no endpoints.`);
+      if (!endpoints.length) warnings.push(`openapi: ${spec.file} describes no endpoints.`);
     }
     return { nodes, edges, warnings, problems, ownedIds, pageOwners, info: { specs: specs.map((s) => ({ file: s.file, app: s.app })) } };
   },

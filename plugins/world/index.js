@@ -34,7 +34,6 @@
 
 import { slug } from '../compose/index.js';
 import { fileOptionProblem } from '../../core/repo.js';
-import { quote } from '../../core/text.js';
 
 export const WORLD_FILE = 'stacks/world.json';
 const FILE_KEYS = ['version', 'hosts', 'runs'];
@@ -46,7 +45,7 @@ const IPV4 = /^\d+(?:\.\d+){3}$/;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-const hostnameProblem = (name) => (!HOSTNAME.test(name) || IPV4.test(name) ? `${quote(name)} is not a hostname (letters, digits and dashes; never an address).` : null);
+const hostnameProblem = (name) => (!HOSTNAME.test(name) || IPV4.test(name) ? `${JSON.stringify(name)} is not a hostname (letters, digits and dashes; never an address).` : null);
 const machineId = (host) => `machine-${slug(host)}`;
 
 /** A repo folder as written in `runs`: no leading `./` or trailing slash, `` for the root (`.`); null when it leaves the repo */
@@ -70,13 +69,13 @@ const world = {
     if (!ctx.exists(file)) return { nodes: [], edges: [], warnings: [], problems: [], info: { machines: [] } };
 
     let doc;
-    try { doc = JSON.parse(ctx.read(file)); } catch (err) { throw new Error(`${quote(file, { bare: true })} is not valid JSON: ${quote(err.message, { bare: true })}`); }
-    if (!isObject(doc)) throw new Error(`${quote(file, { bare: true })} must be an object like { "version": 1, "hosts": {…}, "runs": {…} }.`);
+    try { doc = JSON.parse(ctx.read(file)); } catch (err) { throw new Error(`${file} is not valid JSON: ${err.message}`); }
+    if (!isObject(doc)) throw new Error(`${file} must be an object like { "version": 1, "hosts": {…}, "runs": {…} }.`);
 
     // 1. The file itself: anything that could carry an address, a folder or a secret fails with the key's name
     const bad = [];
-    if (doc.version !== 1) bad.push(`version must be 1 (got ${quote(doc.version)}).`);
-    for (const key of Object.keys(doc)) if (!FILE_KEYS.includes(key)) bad.push(`unknown key ${quote(key)}: the file has ${FILE_KEYS.join(', ')}.`);
+    if (doc.version !== 1) bad.push(`version must be 1 (got ${JSON.stringify(doc.version)}).`);
+    for (const key of Object.keys(doc)) if (!FILE_KEYS.includes(key)) bad.push(`unknown key ${JSON.stringify(key)}: the file has ${FILE_KEYS.join(', ')}.`);
     const hosts = isObject(doc.hosts) ? doc.hosts : {};
     const runs = isObject(doc.runs) ? doc.runs : {};
     if (!Object.keys(hosts).length) bad.push('"hosts" must list at least one machine, like { "server-1": {} }.');
@@ -86,27 +85,27 @@ const world = {
     for (const [name, def] of Object.entries(hosts)) {
       const problem = hostnameProblem(name);
       if (problem) { bad.push(`hosts: ${problem}`); continue; }
-      if (ids.has(machineId(name))) { bad.push(`hosts: ${quote(name)} and ${quote(ids.get(machineId(name)))} are the same machine (${machineId(name)}).`); continue; }
+      if (ids.has(machineId(name))) { bad.push(`hosts: ${JSON.stringify(name)} and ${JSON.stringify(ids.get(machineId(name)))} are the same machine (${machineId(name)}).`); continue; }
       ids.set(machineId(name), name);
-      if (!isObject(def)) { bad.push(`hosts ${quote(name)} must be an object (use {} for a plain machine).`); continue; }
-      for (const key of Object.keys(def)) if (!HOST_KEYS.includes(key)) bad.push(`hosts ${quote(name)} has a key ${quote(key)}: a host has only ${HOST_KEYS.join(', ')}, never an address or a folder.`);
-      for (const key of ['virtual', 'tailnet']) if (def[key] !== undefined && typeof def[key] !== 'boolean') bad.push(`hosts ${quote(name)}: ${quote(key)} is true or false.`);
-      if (def.virtual === true && typeof def.on !== 'string') bad.push(`hosts ${quote(name)} is virtual and needs "on": the host it runs on.`);
-      if (def.virtual !== true && def.on !== undefined) bad.push(`hosts ${quote(name)} has "on" and is not virtual.`);
-      if (typeof def.on === 'string' && !has(hosts, def.on)) bad.push(`hosts ${quote(name)} runs on ${quote(def.on)}, which is not in "hosts".`);
+      if (!isObject(def)) { bad.push(`hosts ${JSON.stringify(name)} must be an object (use {} for a plain machine).`); continue; }
+      for (const key of Object.keys(def)) if (!HOST_KEYS.includes(key)) bad.push(`hosts ${JSON.stringify(name)} has a key ${JSON.stringify(key)}: a host has only ${HOST_KEYS.join(', ')}, never an address or a folder.`);
+      for (const key of ['virtual', 'tailnet']) if (def[key] !== undefined && typeof def[key] !== 'boolean') bad.push(`hosts ${JSON.stringify(name)}: "${key}" is true or false.`);
+      if (def.virtual === true && typeof def.on !== 'string') bad.push(`hosts ${JSON.stringify(name)} is virtual and needs "on": the host it runs on.`);
+      if (def.virtual !== true && def.on !== undefined) bad.push(`hosts ${JSON.stringify(name)} has "on" and is not virtual.`);
+      if (typeof def.on === 'string' && !has(hosts, def.on)) bad.push(`hosts ${JSON.stringify(name)} runs on ${JSON.stringify(def.on)}, which is not in "hosts".`);
     }
     for (const name of Object.keys(hosts)) {
       const seen = new Set([name]);
       for (let at = isObject(hosts[name]) ? hosts[name].on : null; typeof at === 'string' && isObject(hosts[at]); at = hosts[at].on) {
-        if (seen.has(at)) { bad.push(`hosts ${quote(name)} runs on itself through ${quote(at)}.`); break; }
+        if (seen.has(at)) { bad.push(`hosts ${JSON.stringify(name)} runs on itself through ${JSON.stringify(at)}.`); break; }
         seen.add(at);
       }
     }
     for (const [dir, host] of Object.entries(runs)) {
-      if (folderOf(dir) === null) bad.push(`runs: ${quote(dir)} is not a folder of the repo.`);
-      if (typeof host !== 'string' || !has(hosts, host)) bad.push(`runs: ${quote(dir)} runs on a host that is not in "hosts".`);
+      if (folderOf(dir) === null) bad.push(`runs: ${JSON.stringify(dir)} is not a folder of the repo.`);
+      if (typeof host !== 'string' || !has(hosts, host)) bad.push(`runs: ${JSON.stringify(dir)} runs on a host that is not in "hosts".`);
     }
-    if (bad.length) throw new Error(`${quote(file, { bare: true })}: ${bad.join(' ')}`);
+    if (bad.length) throw new Error(`${file}: ${bad.join(' ')}`);
 
     // 2. What can run on a machine: the stacks compose found, the packages already on the map
     const targets = new Map();
@@ -118,7 +117,7 @@ const world = {
     const runsOn = [];
     for (const [key, host] of Object.entries(runs)) {
       const dir = folderOf(key);
-      if (!targets.has(dir)) { problems.push(`world: ${quote(file, { bare: true })} runs ${quote(key)} on ${quote(host, { bare: true })}, but no stack or package is in that folder (list compose and starter before world).`); continue; }
+      if (!targets.has(dir)) { problems.push(`world: ${file} runs "${key}" on ${host}, but no stack or package is in that folder (list compose and starter before world).`); continue; }
       code.get(host).push(dir || '.');
       runsOn.push({ from: targets.get(dir), to: machineId(host), kind: 'runs-on', label: `runs on ${host}` });
     }
