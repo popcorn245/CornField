@@ -83,8 +83,8 @@ export function visibleMapRect(inst) {
     const c = canvas.getBoundingClientRect();
     const bar = inst.el('proposal-bar');
     if (shown(bar)) covers.top = Math.max(0, bar.getBoundingClientRect().bottom - c.top) + 8;
-    const drawer = inst.el('spec-drawer');
-    if (shown(drawer) && drawer.classList.contains('drawer-open')) covers.right = drawer.offsetWidth; // its width, not its box: it slides in
+    const panel = inst.ask('panel:covers'); // the node panel, when it slides over the map: its width, not its box (it slides in)
+    if (panel && panel.right) covers.right = panel.right;
     const forge = inst.el('forge-panel');
     if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
     // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work panel's when both are open

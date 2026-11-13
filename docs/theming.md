@@ -790,6 +790,9 @@ Only labels a brand would want to voice are keys (about eighty). Sentences of he
 | `sourceBadAddress` | That is not the address of a cornfield server |
 | `sourceVersion` | This map and its server are different versions |
 | `sourceSecondMap` | This scope already has a map |
+| `nodePanelEmpty` | Select a node on the map to see its details |
+| `needsScope` | This needs a corn-scope around it, with a corn-map in it |
+| `needsMap` | This needs a corn-map in the same corn-scope |
 <!-- strings:end -->
 
 The node panel read two more words that are gone: `propsTitle` ("Properties & Attributes") and `detailsTitle` ("Details"). The panel has no such headings any more, so a config that still sets them is refused as an unknown key; remove them. `openFile` ("Open file") is the primary action when the node has a file and the config names a forge; `openRoute` ("Open route") is primary when there is no such file and the quiet second action when there is; `startRun` ("Start a run") is new.

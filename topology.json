@@ -3097,6 +3097,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The load from a cornfield server and its theme, on one instance (spec 0011 D6, D7): what a scope (pieces/scope.js) and a review with a `src` (pieces/review-source.js) both start, written once. (explorer/engine/server-load.js)"
+    },
+    {
+      "id": "core-explorer-engine-roots",
+      "label": "roots.js",
+      "type": "core",
+      "file": "explorer/engine/roots.js",
+      "summary": "More than one root for one instance (spec 0011 D2, D4, D5).",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "More than one root for one instance (spec 0011 D2, D4, D5). (explorer/engine/roots.js)"
+    },
+    {
+      "id": "core-explorer-pieces-around",
+      "label": "around.js",
+      "type": "core",
+      "file": "explorer/pieces/around.js",
+      "summary": "The pieces around the map (node panel, Layers menu, search) as a component mounts them (spec 0011 D4, D5, D7): each in a shadow root of its own, on the instance of the `<corn-scope>` it sits in, be…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pieces around the map (node panel, Layers menu, search) as a component mounts them (spec 0011 D4, D5, D7): each in a shadow root of its own, on the instance of the `<corn-scope>` it sits in, be… (explorer/pieces/around.js)"
     }
   ],
   "edges": [
@@ -10507,7 +10527,75 @@
       "to": "core-core-repo",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-engine-roots"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-around"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-engine-keyboard",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-engine-roots",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-engine-strings",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-instance",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-pieces-adopt-tokens",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-around",
+      "to": "core-explorer-pieces-scope-link",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-layers",
+      "to": "core-explorer-engine-roots",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-search",
+      "to": "core-explorer-engine-roots",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T00:08:35.741Z"
+  "updatedAt": "2026-11-13T02:14:55.528Z"
 }

@@ -11,8 +11,8 @@ import { capped } from '../capped.js';
 import { layersOf } from '../layer-model.js';
 import { FLOW_STYLES } from '../flow-style.js';
 
-export function renderFlowLegend(inst) {
-  const el = inst.el('flow-legend');
+/** Draws the data-flow legend into `el`, the Layers menu's own place for it (the piece that owns it says which) */
+export function renderFlowLegend(inst, el) {
   if (!el) return;
   const { state } = inst;
   const activeLayers = layersOf(state);
@@ -24,7 +24,7 @@ export function renderFlowLegend(inst) {
       <div class="hx-menu-title" data-corn="menu-title" part="menu-title">
         <span>Data Flow</span>
       </div>
-      ${Object.values(FLOW_STYLES).map((s) => row(`<span data-corn="swatch" part="swatch" class="hx-swatch-line" style="background:${themed(s.color, state.theme)}"></span>`, s.label)).join('')}
+      ${Object.values(FLOW_STYLES).map((s) => row(`<span data-corn="swatch" part="swatch" class="hx-swatch-line" data-style="background:${escHtml(themed(s.color, state.theme))}"></span>`, s.label)).join('')}
     </div>`;
 }
 

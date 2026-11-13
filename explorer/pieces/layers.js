@@ -35,6 +35,7 @@ import { renderFlowLegend } from '../engine/flow-ui.js';
 import { isOn, keepLayersIn, layerRows, redrawing, setProjectLayers, swatch, toggleAllLayers, toggleLayer } from '../engine/layers.js';
 import { layerOn } from '../layer-model.js';
 import { scopeOf, place, addParts } from '../engine/piece.js';
+import { listenRoots, onPageClick } from '../engine/roots.js';
 
 /** The markup of the piece: the chip and its menu (its one place is `menu`) */
 export const markup = () => ({
@@ -129,7 +130,7 @@ export function mount(root, inst, options = {}) {
     const ring = ringOf(color, surface);
     const glow = on && state.theme !== 'light' ? (/^#[0-9a-f]{6}$/i.test(color) ? `0 0 8px ${color}90` : `0 0 8px color-mix(in srgb, ${color} 56%, transparent)`) : 'none';
     const css = `background-color: ${color}; box-shadow: ${glow}${ring && ring.stroke ? `; --hx-dot-ring: ${ring.stroke}` : ''}`;
-    return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} style="${escHtml(css)}"></span>`;
+    return `<span class="hx-dot${extra ? ' hx-kind-swatch' : ''}${ring ? ' is-ringed' : ''}" data-corn="swatch"${extra} data-style="${escHtml(css)}"></span>`;
   }
 
   // -- the kinds of a row ---------------------------------------------------------------------------------------------------------
@@ -230,7 +231,7 @@ export function mount(root, inst, options = {}) {
       const again = [...container.querySelectorAll('[data-action]')].find((el) => el.getAttribute('data-action') === was.action && el.getAttribute('data-layer') === was.layer);
       if (again && typeof again.focus === 'function') again.focus({ preventScroll: true });
     }
-    renderFlowLegend(inst);
+    renderFlowLegend(inst, own('flow-legend'));
     renderEdgeKey();
     renderCloudLegend();
     addParts(own('flow-legend'));
@@ -282,22 +283,23 @@ export function mount(root, inst, options = {}) {
     const action = ACTIONS[target.dataset.action];
     if (action) action(target);
   });
-  // Any click outside the menu closes it; a click on one of its rows does not. Whether it was inside is read BEFORE the action, in the capture
-  // phase: a row's action draws the rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside
-  let inside = false;
-  scope.listen(inst.root, 'click', (e) => {
-    const target = e.target;
-    inside = !!target && wrap.contains(target);
-  }, true);
-  scope.listen(inst.root, 'click', () => { if (!menu.hidden && !inside) closeMenu(); });
-  // Escape with the menu open closes it, and its chip has the focus again
-  scope.listen(inst.root, 'keydown', (e) => {
+  // Any click outside the menu closes it; a click on one of its rows does not. Asked of the whole page, in the capture phase, before the action: a row's
+  // action draws the rows again, the clicked node is then out of the page, and asking afterwards would take a click on a row for one outside. The path
+  // is the composed one, so a click inside this piece's own shadow root is inside, and one anywhere else in the host's page is outside
+  scope.own(onPageClick(inst, (e) => {
+    if (menu.hidden) return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+    if (!path.includes(wrap)) closeMenu();
+  }));
+  // Escape with the menu open closes it, and its chip has the focus again (a key in any root of the instance: the map's too)
+  scope.own(listenRoots(inst, 'keydown', (e) => {
     if (e.key !== 'Escape' || menu.hidden) return;
     closeMenu();
     btn.focus();
-  });
+  }));
 
   // -- following the instance ------------------------------------------------------------------------------------------------------
+  scope.on('layers:present', () => true); // the map's keys know there is a menu to turn a layer on in
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);

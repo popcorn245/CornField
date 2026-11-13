@@ -22,9 +22,22 @@ export function withParts(html) {
   return String(html).replace(/<[a-zA-Z][^<>]*>/g, (tag) => (/\spart=/.test(tag) ? tag : tag.replace(HOOK, (_all, hook) => ` data-corn=\"${hook}\" part=\"${hook}\"`)));
 }
 
-/** Gives every element under `el` that has a hook and no part the part of the same name */
+/**
+ * A style the markup wants (a swatch's colour) is written as `data-style="…"` and set here through the CSS object model: an inline `style="…"` that
+ * came in as a string is blocked by a host's `style-src 'self'` (spec 0011 D10), and the CSS object model is not.
+ */
+export function applyStyles(el) {
+  const own = el.hasAttribute && el.hasAttribute('data-style') ? [el] : [];
+  for (const x of [...own, ...el.querySelectorAll('[data-style]')]) {
+    x.style.cssText = x.getAttribute('data-style');
+    x.removeAttribute('data-style');
+  }
+}
+
+/** Gives every element under `el` that has a hook and no part the part of the same name; applies the styles the markup asks for (`applyStyles`) */
 export function addParts(el) {
   for (const x of el.querySelectorAll('[data-corn]:not([part])')) x.setAttribute('part', x.getAttribute('data-corn'));
+  applyStyles(el);
 }
 
 /**
@@ -67,7 +80,7 @@ export function scopeOf(inst) {
           for (const n of m.addedNodes) {
             if (n.nodeType !== 1) continue;
             if (n.hasAttribute('data-corn') && !n.hasAttribute('part')) n.setAttribute('part', n.getAttribute('data-corn'));
-            addParts(n);
+            addParts(n); // (and the styles it asks for)
           }
         }
       });

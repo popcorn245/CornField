@@ -302,9 +302,7 @@ describe('selection: onSelect comes from the real change of selection', () => {
     key(canvas, 'Escape');
     expect(said.at(-1)).toBe('Selection cleared');
     const withPanel = make({ topology: topology() }, { page: true });
-    const drawer = document.createElement('aside');
-    drawer.id = 'spec-drawer';
-    withPanel.host.append(drawer);
+    withPanel.piece.inst.on('panel:present', () => true); // a node panel is part of the instance (pieces/node-panel.js answers it)
     const heard = [];
     withPanel.piece.inst.on('announce', (text) => heard.push(text));
     key(withPanel.canvas, 'n');

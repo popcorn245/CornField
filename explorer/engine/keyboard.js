@@ -8,7 +8,7 @@
  *     the middle, 0 fits, N and P (or ] and [) step through the visible nodes in reading order and select each, centred, Home and End the first
  *     and the last, Enter goes into the panel, Escape closes it, and in Freeform Alt+arrow moves the selected node. The keys are the canvas's:
  *     they act only while the canvas has the focus, so another instance on the page is not moved;
- *   - `#map-announcer` (a polite live region) says where the keyboard landed: the node, its type, its connections, its place; the zoom; a
+ *   - the map's announcer (a polite live region, `#map-announcer`) says where the keyboard landed: the node, its type, its connections, its place; the zoom; a
  *     search's hit. `announce(inst, text)` also tells the instance (`announce`), for a host that keeps its live region elsewhere;
  *   - with a search on, N and P step through its matches: the search piece answers `search:active` and `search:step` (pieces/search.js).
  *
@@ -22,20 +22,33 @@ import { saveFreeformPositions } from './layout.js';
 import * as K from '../keyboard-model.js';
 import { frameSelection, litNodes } from '../selection-view.js';
 
-/** Tells a screen reader `text` (politely: after what it is reading). The same words twice are said twice. */
+/**
+ * A writer for one live region (`el`): the text is cleared, then set a moment later, which is what makes a region speak the same words again.
+ * The piece that owns the region answers `announce:write` (or `announce:fallback`) with it.
+ */
+export function speaker(inst, el) {
+  let timer = null;
+  inst.own(() => clearTimeout(timer));
+  return (text) => {
+    el.textContent = '';
+    clearTimeout(timer);
+    timer = setTimeout(() => { el.textContent = text; }, 30);
+  };
+}
+
+/**
+ * Tells a screen reader `text` (politely: after what it is reading). The same words twice are said twice. It is told to the instance (`announce`),
+ * and written by the piece that owns a live region: the map's (`announce:write`), else one of a piece that stands without a map (`announce:fallback`).
+ */
 export function announce(inst, text) {
-  const mem = inst.slot('announce', () => {
-    const m = { timer: null };
-    inst.own(() => clearTimeout(m.timer));
-    return m;
-  });
   inst.emit('announce', text);
+  if (inst.ask('announce:write', text) === true || inst.ask('announce:fallback', text) === true) return;
+  // No piece answered: an instance whose own root holds the announcer (markup a host or a test built by hand, with no map piece mounted) is still told
   const el = inst.el('map-announcer');
   if (!el) return;
-  el.textContent = '';
-  clearTimeout(mem.timer);
-  // a fresh text node a moment later is what makes a live region speak again
-  mem.timer = setTimeout(() => { el.textContent = text; }, 30);
+  const mem = inst.slot('announce', () => ({ el: null, say: null }));
+  if (mem.el !== el) { mem.el = el; mem.say = speaker(inst, el); }
+  mem.say(text);
 }
 
 /** The visible nodes, in the order the keys step through them */
@@ -45,8 +58,8 @@ const stepOrder = (inst) => K.readingOrder(inst.state.nodes.filter((n) => inst.m
 export function centreTarget(inst, node, zoom = inst.state.camera.zoom) {
   const { width, height } = inst.state;
   const visibleHeight = Math.max(160, height - (inst.state.coveredBottom || 0));
-  const panel = inst.el('spec-drawer');
-  const visibleWidth = width >= 768 && panel && panel.classList.contains('drawer-open') ? Math.max(160, width - (panel.offsetWidth || 480)) : width;
+  const covers = inst.ask('panel:covers'); // an open slide-over node panel covers the right of the map (pieces/node-panel.js); one in a box of its own covers nothing
+  const visibleWidth = width >= 768 && covers ? Math.max(160, width - (covers.right || 480)) : width;
   // The issues and PRs panel slides in from the left (forge-panel.js)
   const forge = inst.el('forge-panel');
   const left = width >= 768 && forge && forge.classList.contains('forge-open') ? Math.min(forge.offsetWidth || 400, visibleWidth - 160) : 0;
@@ -60,7 +73,7 @@ export function centreOn(inst, node) {
 }
 
 function land(inst, node, order) {
-  if (!node) { announce(inst, inst.el('legend-dropdown') ? 'No nodes are shown. Turn a layer on in the Layers menu.' : 'No nodes are shown.'); return; } // the Layers menu, when the instance has one
+  if (!node) { announce(inst, inst.ask('layers:present') ? 'No nodes are shown. Turn a layer on in the Layers menu.' : 'No nodes are shown.'); return; } // the Layers menu, when the instance has one
   selectNode(inst, node, { frame: true, source: 'keyboard' }); // the keyboard's selection frames the node and what it lights (spec 0008 D6)
   announce(inst, K.describeNode(node, order.length, order.indexOf(node)));
 }
@@ -132,7 +145,7 @@ function onMapKey(inst, e) {
       break;
     case 'close':
       clearSelection(inst, { source: 'keyboard' });
-      announce(inst, inst.el('spec-drawer') ? 'Panel closed' : 'Selection cleared'); // a map with no node panel beside it (a component) has none to close
+      announce(inst, inst.ask('panel:present') ? 'Panel closed' : 'Selection cleared'); // a map with no node panel beside it (a component) has none to close
       break;
     case 'move':
       moveSelected(inst, action.dx, action.dy);

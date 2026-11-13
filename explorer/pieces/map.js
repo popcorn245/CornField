@@ -46,7 +46,7 @@ import { createInstance } from '../instance.js';
 import { createMap } from '../engine/render.js';
 import { mapStyleOf } from '../engine/map-style.js';
 import { layoutMap, setTopology as installTopology } from '../engine/topology.js';
-import { initKeyboard, resetKeyboard } from '../engine/keyboard.js';
+import { initKeyboard, resetKeyboard, speaker } from '../engine/keyboard.js';
 import { selectNode, clearSelection } from '../engine/selection.js';
 import { stopFlight } from '../engine/fly.js';
 import { scopeOf, place } from '../engine/piece.js';
@@ -90,6 +90,7 @@ function refused(root, inst, info) {
   return {
     inst,
     refused: true,
+    selection: () => null,
     update: none,
     fit: none,
     refresh: none,
@@ -139,6 +140,7 @@ function mountWithSource(root, options) {
   return {
     get inst() { return real ? real.inst : null; },
     get map() { return real ? real.map : null; },
+    selection() { return real ? real.selection() : null; },
     update(next = {}) { if (real) real.update(next); else Object.assign(pending, next); },
     fit() { if (real) real.fit(); },
     focusNode(id) { return real ? real.focusNode(id) : false; },
@@ -193,6 +195,9 @@ function mountOn(root, inst, options, privateScope) {
   const made = place(inst, root, slots ? html : `<div data-corn="map-stage">${html}</div>`, slots, 'stage');
   const find = (sel) => made.map((el) => (el.matches(sel) ? el : el.querySelector(sel))).find(Boolean);
   scope.own(() => { for (const el of [...made, state.canvas]) if (el) el.remove(); });
+  // The announcer is this piece's: what a screen reader is told (engine/keyboard.js `announce`) is written in it
+  const announcer = find('#map-announcer');
+  if (announcer) { const say = speaker(inst, announcer); scope.on('announce:write', (text) => { say(text); return true; }); }
   // What the person sees while the data loads and when it cannot be had (pieces/status.js): only a map that has a source
   const stage = made.find((el) => el.matches('[data-corn="map-stage"]')) || null;
   if (source && stage) {
@@ -400,10 +405,18 @@ function mountOn(root, inst, options, privateScope) {
   update(first);
   takeSource();
   refresh();
+  scope.own(() => inst.emit('map:gone')); // the pieces around the map (pieces/around.js) go back to waiting for one
+  inst.emit('map:ready'); // ... and the ones that waited for it mount
 
   return {
     inst,
     map,
+    /** What the instance has selected now, whoever chose it (a piece mounted late is handed it): `{ id, kind }`, or null */
+    selection() {
+      if (state.selectedNode) return { id: state.selectedNode.id, kind: 'node' };
+      if (state.selectedEdge) return { id: `${state.selectedEdge.from}->${state.selectedEdge.to}`, kind: 'edge' };
+      return null;
+    },
     update,
     destroy,
     /** The whole map in view */

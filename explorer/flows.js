@@ -30,5 +30,5 @@ export { buildDataFlow } from './flow-build.js';
 // ---------------------------------------------------------------------------
 //  Legend and the panel's "Data flows" block (engine/flow-ui.js, on an instance)
 // ---------------------------------------------------------------------------
-export const renderFlowLegend = () => F.renderFlowLegend(pageInstance());
+export const renderFlowLegend = () => F.renderFlowLegend(pageInstance(), pageInstance().el('flow-legend'));
 export const flowSummary = (node) => F.flowSummary(pageInstance(), node);
