@@ -139,6 +139,18 @@ export function forgeContract({ name, type, recordings, canRerun = true, maintai
       expect((await forge.pulls({ limit: 1 })).map((p) => p.number)).toEqual([13]);
     });
 
+    it('pulls() most recently updated first, with when each was closed; issues() updated since a time (the work graph\'s 14 days)', async () => {
+      const recent = await forge.pulls({ state: 'closed', sort: 'updated' });
+      expect(recent.map((p) => [p.number, p.state, p.closedAt])).toEqual([[9, 'merged', '2026-10-11T10:00:00Z'], [8, 'closed', '2026-10-12T10:00:00Z']]);
+      expect(fake.requests.at(-1).url).toMatch(type === 'github' ? /[?&]sort=updated&direction=desc/ : /[?&]sort=recentupdate/);
+      expect((await forge.pulls({ state: 'closed' })).every((p) => p.closedAt === null)).toBe(true); // the recording without the field
+      const since = await forge.issues({ state: 'closed', since: '2026-10-10T00:00:00Z' });
+      expect(since.map((i) => [i.number, i.closedAt])).toEqual([[2, '2026-10-15T09:00:00Z']]);
+      expect(fake.requests.at(-1).url).toContain('since=2026-10-10T00%3A00%3A00.000Z');
+      await forgeError(() => forge.pulls({ sort: 'comments' }), 'invalid');
+      await forgeError(() => forge.issues({ since: 'last week' }), 'invalid');
+    });
+
     it('changed(): the open issues and pull requests updated since a time, in one listing, the least recently updated first', async () => {
       expect(await forge.changed({ since: '2026-10-17T00:00:00Z' })).toEqual([
         { number: 5, pull: false, labels: ['idea'], updatedAt: '2026-10-17T09:00:00Z' },
