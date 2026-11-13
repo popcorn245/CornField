@@ -25,6 +25,10 @@ import * as decisionPiece from '../../explorer/pieces/decision.js';
 import { visibleMapRect } from '../../explorer/engine/map-rect.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setProposalView } from '../../explorer/engine/proposal.js';
+// The chunk a scope loads the first time it has a proposal (`import()` in pieces/scope.js), loaded here first: with the clock faked, a first load that takes long
+// on a busy machine would land after the steps that wait for it
+// @ts-expect-error plain JS modules, no declarations
+import '../../explorer/pieces/scope-proposal.js';
 
 const sample = loadSample();
 const checkout = JSON.parse(fs.readFileSync(`${SAMPLE}/docs/specs/proposals/0002-checkout.json`, 'utf8'));
