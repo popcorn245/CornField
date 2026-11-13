@@ -81,17 +81,19 @@ export function visibleMapRect(inst) {
   if (isPhone(inst)) covers.bottom = measureCovered(inst) + 8;
   else if (canvas && typeof canvas.getBoundingClientRect === 'function') {
     const c = canvas.getBoundingClientRect();
-    const bar = inst.el('proposal-bar');
-    if (shown(bar)) covers.top = Math.max(0, bar.getBoundingClientRect().bottom - c.top) + 8;
+    // What lies over the map in this instance's own layout (cornfield's page, a review) answers for itself: the proposal bar, the review column and the scenario
+    // player each say where their edge is, the node panel its width. In a scope the pieces sit beside the map, not over it, and none answers
+    const bar = inst.ask('proposal:covers');
+    if (bar) covers.top = Math.max(0, bar.bottom - c.top) + 8;
     const panel = inst.ask('panel:covers'); // the node panel, when it slides over the map: its width, not its box (it slides in)
     if (panel && panel.right) covers.right = panel.right;
     const forge = inst.el('forge-panel');
     if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
     // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work panel's when both are open
-    const column = inst.el('review-column');
-    if (shown(column)) covers.left = Math.max(covers.left, Math.max(0, column.getBoundingClientRect().right - c.left) + 8);
-    const player = inst.root ? inst.root.querySelector('.hx-player') : null;
-    if (shown(player)) covers.bottom = Math.max(0, c.bottom - player.getBoundingClientRect().top) + 8;
+    const column = inst.ask('changes:covers');
+    if (column) covers.left = Math.max(covers.left, Math.max(0, column.right - c.left) + 8);
+    const player = inst.ask('player:covers');
+    if (player) covers.bottom = Math.max(0, c.bottom - player.top) + 8;
   }
   return freeRect(state.width || 0, state.height || 0, covers);
 }

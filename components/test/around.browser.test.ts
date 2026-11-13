@@ -342,6 +342,36 @@ describe('the pieces around the map in one scope', () => {
     }
   });
 
+  it('in a short box the panel\'s head keeps its height: a title that wraps is never laid over the line under it (the body scrolls instead)', async () => {
+    const { scope, map, panel } = await compose();
+    panel.style.height = '200px';
+    const topology = await smallTopology(30);
+    Object.assign(topology.nodes[0], { label: 'A node whose name is long enough to wrap onto a second and a third line in this panel', description: 'The line under the title, which the title must not cover.' });
+    scope.topology = topology;
+    await frames(3);
+    await map.focusNode(topology.nodes[0].id);
+    await frames(3);
+    const body = drawer(panel).querySelector('.hx-drawer-body') as HTMLElement;
+    expect(body.scrollHeight).toBeGreaterThan(body.clientHeight); // the box is short: the body scrolls
+    const head = body.querySelector('.hx-drawer-head') as HTMLElement;
+    expect(title(panel).getBoundingClientRect().height).toBeGreaterThan(40); // the title wraps
+    // every part of the body is as tall as what it holds, and each starts under the one before
+    let bottom = -Infinity;
+    for (const el of [...body.children] as HTMLElement[]) {
+      if (el.hidden || !el.getBoundingClientRect().height) continue;
+      const r = el.getBoundingClientRect();
+      expect(Math.round(r.height), el.className).toBeGreaterThanOrEqual(el.scrollHeight - 1);
+      expect(Math.round(r.top), el.className).toBeGreaterThanOrEqual(Math.round(bottom) - 1);
+      bottom = r.bottom;
+    }
+    expect(Math.round(title(panel).getBoundingClientRect().bottom)).toBeLessThanOrEqual(Math.round(head.getBoundingClientRect().bottom) + 1);
+    // the words for a screen reader alone are placed in the body that scrolls them, never past the box (the host's page would scroll to nothing)
+    const word = document.createElement('span');
+    word.className = 'hx-sr-only';
+    body.append(word); // as the panel's "to", "from" and "became" are
+    expect(word.offsetParent).toBe(body);
+  });
+
   it('every control of the three has a hook and a part, and the composed page has no axe violation', async () => {
     const { host, map, panel, layers, search } = await compose();
     await map.focusNode((await smallTopology(30)).nodes[0].id);

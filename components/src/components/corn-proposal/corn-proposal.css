@@ -1,0 +1,22 @@
+/* The proposal's bar in a box of its own (explorer/pieces/proposal.js with `inline`; explorer/css/proposal.css is loaded before this, then the load's card, status.css).
+   A block as wide as the place its host page gives it; the host page's rules on it win (its size, its display, its margins). Only `hidden` is !important. The bar is a
+   query container on the width of this box (`corn-box`): a narrow box gets the phone's layout of the bar (the mode button, 44px targets) and nothing else of a phone. */
+:host { display: block; position: relative; min-width: 0; container: corn-box / inline-size; color: var(--corn-text); font-family: var(--corn-font); font-size: medium; font-weight: 400; font-style: normal; line-height: normal; }
+:host([hidden]) { display: none !important; }
+/* Never a panel over a map: the bar is the box, in the host's flow, at any width and whatever the node panel does (it slid the bar's width in the page) */
+.hx-proposal-bar { position: relative; inset: auto; top: auto; left: auto; width: 100%; box-sizing: border-box; z-index: auto; }
+.hx-proposal-bar[hidden] { display: none; }
+@container corn-box (min-width: 768px) {
+  .hx-proposal-bar { width: 100%; }
+}
+.hx-proposal-name { max-width: 100%; }
+/* A name or a link that has no space in it wraps inside a narrow box, never past it */
+.hx-proposal-bar { overflow-wrap: anywhere; }
+.hx-proposal-bar :is(h2, p) { text-indent: 0; }
+.hx-proposal-more-menu { z-index: 3; background: var(--corn-ground); }
+.hx-needs { margin: 0; padding: var(--corn-panel-pad); color: var(--corn-text-3); font-size: var(--corn-text-sm); line-height: 1.5; }
+/* The card of a refused read (pieces/status.js): in the flow of the box, not in the middle of a map */
+.hx-signin-slot [data-corn="source-status"] { position: static; transform: none; width: auto; margin: var(--corn-space-3) 0 0; }
+.hx-signin-slot [data-corn="source-notice"] { position: static; }
+/* Over whatever the host page has under it: the ground itself under the glass surface, so the words keep their contrast in light and in dark whatever the host's ground is */
+.glass { background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); backdrop-filter: none; -webkit-backdrop-filter: none; }

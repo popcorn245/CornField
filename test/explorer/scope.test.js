@@ -407,10 +407,17 @@ describe('config never becomes script (D10)', () => {
     evalSpy.mockRestore();
   });
 
-  it('the modules that load from a server hold no way to run what a config names: no import(), eval, Function, script element, worker, blob or import map', () => {
+  /** A dynamic import that is not a literal path of the package's own: `import(name)`, `import('https://…')`, `import(\`./${x}.js\`)` */
+  const DYNAMIC_IMPORT = /\bimport\s*\(\s*(?!['"]\.\/[\w.-]+\.js['"]\s*\))/;
+  it('the check for a dynamic import is not blind: a literal chunk of the package\'s own passes, a computed one or another origin\'s does not', () => {
+    expect(DYNAMIC_IMPORT.test("import('./scope-proposal.js')")).toBe(false);
+    for (const bad of ['import(name)', "import('https://elsewhere.example/x.js')", 'import(`./${x}.js`)', "import('../x.js')", "import ( config.plugin )"]) expect(DYNAMIC_IMPORT.test(bad), bad).toBe(true);
+  });
+
+  it('the modules that load from a server hold no way to run what a config names: no import() but of a literal chunk of the package\'s own (pieces/scope-proposal.js), eval, Function, script element, worker, blob or import map', () => {
     for (const file of ['engine/source.js', 'engine/theme-sheet.js', 'pieces/scope.js', 'pieces/status.js']) {
       const code = fs.readFileSync(path.join(EXPLORER, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/(^|\s)\/\/\s.*$/gm, '$1');
-      for (const [name, re] of [['import()', /\bimport\s*\(/], ['eval', /\beval\s*\(/], ['Function', /\bnew\s+Function\b|\bFunction\s*\(/], ['a script element', /createElement\(\s*['"`]script/i], ['a worker', /\bnew\s+(?:Shared)?Worker\b/], ['a blob', /\bURL\.createObjectURL\b|\bnew\s+Blob\b/], ['an import map', /importmap|importMap/i], ['document.write', /document\.write/], ['a timer given a string', /set(?:Timeout|Interval)\(\s*['"`]/]]) {
+      for (const [name, re] of [['import() of anything but a chunk of the package\'s own, named by a literal path', DYNAMIC_IMPORT], ['eval', /\beval\s*\(/], ['Function', /\bnew\s+Function\b|\bFunction\s*\(/], ['a script element', /createElement\(\s*['"`]script/i], ['a worker', /\bnew\s+(?:Shared)?Worker\b/], ['a blob', /\bURL\.createObjectURL\b|\bnew\s+Blob\b/], ['an import map', /importmap|importMap/i], ['document.write', /document\.write/], ['a timer given a string', /set(?:Timeout|Interval)\(\s*['"`]/]]) {
         expect(re.test(code), `${file} has ${name}`).toBe(false);
       }
     }

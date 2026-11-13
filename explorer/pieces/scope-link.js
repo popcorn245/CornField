@@ -7,14 +7,14 @@
  * `<corn-scope>`, or the first time a map has a `src` (pieces/map.js imports them then, as a chunk of the package's own).
  *
  *   const join = joinScope(el, onChange)    -> { inst, scope, leave }   (a piece's shell calls it for the scope around it, if any)
- *   scopeInfo(inst)                         -> { theme, serverTheme, host, source, mountStatus } for a scope's instance, else null
+ *   scopeInfo(inst)                         -> { theme, serverTheme, host, source, mountStatus, signIn } for a scope's instance, else null (`signIn()`: the server's sign-in, back to the page)
  */
 
 export const REQUEST = 'corn-scope-request';
 export const CHANGED = 'corn-scope-changed';
 
 /** What a piece may ask a scope for, per instance: set when a scope makes the instance */
-export const infoOf = (inst) => inst.slot('scope', () => ({ theme: 'auto', serverTheme: null, host: null, source: null, mountStatus: null }));
+export const infoOf = (inst) => inst.slot('scope', () => ({ theme: 'auto', serverTheme: null, host: null, source: null, mountStatus: null, signIn: () => '' }));
 /**
  * The scope's side of an instance, or null for a private one: its `theme`, its server theme (to adopt into a root), its element, its source (the
  * load: engine/source.js) and how a piece shows the load's states (pieces/status.js `mount`)

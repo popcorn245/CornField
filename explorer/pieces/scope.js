@@ -25,6 +25,12 @@
  * A second map in a scope is refused (the engine holds one map per instance); when the map that has the scope leaves, the first refused map that
  * is still in the page is told to ask again, and takes it.
  *
+ * THE PROPOSAL. A scope with a `proposal` (a name, or the object) holds it for every piece in it, with `source` and `view` (pieces/scope-proposal.js, a chunk of its own,
+ * loaded the first time a scope has one): the map narrows to it, `<corn-proposal>`, `<corn-changes>` and `<corn-decision>` show and decide it. What the reviewer
+ * does (the bar's Close and Before, Diff or After, a way on from a bad link) is the instance's, and it is told to the host once as `onNavigate`; a decision as
+ * `onDecision`; a refused read or press as `onAuth` with `during`. The scope, not one of the sections, says them: the proposal is the scope's, whatever number of
+ * sections (none, or two) are in it, and it is the one place `cornAuth` and `cornError` already come from.
+ *
  * It reads no `location`: the page's address is a function the shell passes in (`pageUrl`), used for the sign-in's way back and to name the
  * origin a "not listed" message asks the server to list. It never navigates the window.
  */
@@ -32,6 +38,7 @@
 import { createInstance } from '../instance.js';
 import { adoptDefaultTokens } from './adopt-tokens.js';
 import { parseSource } from '../engine/source.js';
+import { signInUrl } from '../engine/source-address.js';
 import { connectServer } from '../engine/server-load.js';
 import { keepLayersIn } from '../engine/layers.js';
 import { mount as mountStatus } from './status.js';
@@ -55,9 +62,15 @@ const THEMES = ['light', 'dark', 'auto'];
  * @param {(detail: { status: number, signIn: string }) => void} [options.onAuth] the server wants a sign-in
  * @param {(detail: { kind: 'not-listed' | 'offline' | 'server' | 'address' | 'version' | 'theme' | 'second-map', message?: string }) => void} [options.onError]
  * @param {() => void} [options.onReady] the scope has its data (loaded, or handed in)
+ * @param {string | object | null} [options.proposal] @param {string | null} [options.source] @param {'before'|'diff'|'after'|null} [options.view]  the proposal the scope holds
+ * @param {(detail: { proposal: string | null, source: string | null, view: 'before' | 'diff' | 'after' | null, change: 'opened' | 'view' | 'closed' }) => void} [options.onNavigate] the open proposal or its view changed
+ * @param {(detail: { outcome: 'approved' | 'notes', proposal: string | null, source: string | null, open: boolean, review: any }) => void} [options.onDecision] the server took a review
  */
 export function mountScope(host, options = {}) {
-  const props = { src: options.src, theme: options.theme, useTheme: !!options.useTheme, topology: options.topology, config: options.config, strings: options.strings };
+  const props = {
+    src: options.src, theme: options.theme, useTheme: !!options.useTheme, topology: options.topology, config: options.config, strings: options.strings,
+    proposal: options.proposal ?? null, source: options.source ?? null, view: options.view ?? null,
+  };
   const pageUrl = options.pageUrl || (() => '');
   /** The pieces that took this scope's answer, by their element: what is told when the instance changes */
   const handles = new Set();
@@ -68,6 +81,9 @@ export function mountScope(host, options = {}) {
   let serverLink = null;
   let readyFired = false;
   let ended = false;
+  /** The proposal the instance holds (pieces/scope-proposal.js), once there is one to hold; null before that, and for an instance that has none */
+  let held = null;
+  let holdLoading = false;
 
   // -- the answer to a piece ---------------------------------------------------------------------------------------------------------------
   const answer = (event) => {
@@ -123,6 +139,7 @@ export function mountScope(host, options = {}) {
     source = link.source;
     info.source = source;
     info.mountStatus = mountStatus;
+    info.signIn = () => (mine.base ? signInUrl(mine.base, pageUrl()) : ''); // the server's sign-in, back to this page: a section that is refused shows the card with it
     readyFired = false;
     // A second map waits: when the one that has the instance's root gives it back, the first that waits and is still in the page asks again
     // (after the leaving map has finished ending, so the two never hold the instance's state at once)
@@ -143,6 +160,48 @@ export function mountScope(host, options = {}) {
     if (parsed && !parsed.ok) source.say({ state: 'address', problem: parsed.problem });
     source.provide({ topology: props.topology || undefined, config: props.config || undefined, strings: props.strings || undefined });
     if (parsed && parsed.ok) source.load();
+    held = null;
+    holdLoading = false;
+    holdProposal();
+  }
+
+  /**
+   * The proposal's keys a host changed, handed over together once its script has run: a host sets `source` and then `proposal` (or `proposal` and then `view`)
+   * one after the other, and each alone would open the wrong thing first (the old proposal under the new source: a read of a copy that does not exist, a
+   * `cornError` for it, and a line in the bar)
+   */
+  let asking = null;
+  function askHeld(asked) {
+    if (asking) { Object.assign(asking, asked); return; }
+    asking = { ...asked };
+    queueMicrotask(() => {
+      const keys = asking;
+      asking = null;
+      if (ended) return;
+      if (held) held.update(keys); else holdProposal();
+    });
+  }
+
+  /** Makes the instance hold the proposal when the scope has one (the first time: the chunk is loaded); a scope with none loads nothing */
+  function holdProposal() {
+    if (ended || held || holdLoading || props.proposal === null || props.proposal === undefined || props.proposal === '') return;
+    holdLoading = true;
+    const mine = inst;
+    const blocked = props.src !== undefined && props.src !== null && props.src !== '' && !parseSource(props.src).ok;
+    import('./scope-proposal.js').then(({ holdProposal: hold }) => {
+      holdLoading = false;
+      if (ended || inst !== mine || held) return;
+      held = hold(mine, {
+        proposal: props.proposal, source: props.source, view: props.view, blocked, pageUrl,
+        onNavigate: (detail) => { if (options.onNavigate) options.onNavigate(detail); },
+        onDecision: (detail) => { if (options.onDecision) options.onDecision(detail); },
+        onAuth: (detail) => { if (options.onAuth) options.onAuth(detail); },
+        onError: (detail) => { if (options.onError) options.onError(detail); },
+      });
+    }, (err) => {
+      holdLoading = false;
+      if (!ended && options.onError) options.onError({ kind: 'offline', message: `the scope's proposal loader did not load: ${err && err.message ? err.message : err}` });
+    });
   }
 
   function release() {
@@ -181,6 +240,10 @@ export function mountScope(host, options = {}) {
       const hand = {};
       for (const key of ['topology', 'config', 'strings']) if (key in next && next[key] !== props[key]) { props[key] = next[key]; hand[key] = next[key] === undefined ? null : next[key]; }
       if (Object.keys(hand).length) source.provide(hand);
+      // The proposal: the keys that changed go to what holds it (loaded now, if this is the scope's first)
+      const asked = {};
+      for (const key of ['proposal', 'source', 'view']) if (key in next && (next[key] ?? null) !== props[key]) { props[key] = next[key] ?? null; asked[key] = props[key]; }
+      if (Object.keys(asked).length) askHeld(asked);
     },
     destroy() {
       if (ended) return;

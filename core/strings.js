@@ -123,6 +123,8 @@ export const STRINGS = Object.freeze({
   needsScope: 'This needs a corn-scope around it, with a corn-map in it',
   needsMap: 'This needs a corn-map in the same corn-scope',
   waitingForMap: 'Waiting for the map',
+  // The review's sections as tags (corn-proposal, corn-changes, corn-decision): a scope holds one of each
+  secondSection: 'This scope already has one of these',
 });
 
 /** The longest a value may be, in characters */

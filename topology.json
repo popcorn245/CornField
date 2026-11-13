@@ -3137,6 +3137,16 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "Whether a node matches a search, and how well (spec 0008 D3): the half of search-model.js the map itself needs, to halo what a query finds (scene.js `matchIds`). (explorer/search-match.js)"
+    },
+    {
+      "id": "core-explorer-pieces-scope-proposal",
+      "label": "scope-proposal.js",
+      "type": "core",
+      "file": "explorer/pieces/scope-proposal.js",
+      "summary": "The proposal a `<corn-scope>` holds for every piece in it (spec 0011 D4, D5, D6): the sketch puts `proposal` (and `source` and `view`) on the scope, so the review's sections (`<corn-proposal>`, `<c…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The proposal a `<corn-scope>` holds for every piece in it (spec 0011 D4, D5, D6): the sketch puts `proposal` (and `source` and `view`) on the scope, so the review's sections (`<corn-proposal>`, `<c… (explorer/pieces/scope-proposal.js)"
     }
   ],
   "edges": [
@@ -10647,7 +10657,47 @@
       "to": "core-core-color",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-pieces-scope-proposal"
+    },
+    {
+      "from": "core-explorer-pieces-scope-proposal",
+      "to": "core-explorer-engine-piece",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope-proposal",
+      "to": "core-explorer-engine-proposal",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope-proposal",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope-proposal",
+      "to": "core-explorer-proposal-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-engine-source-address",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-pieces-scope",
+      "to": "core-explorer-pieces-scope-proposal",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T07:28:57.002Z"
+  "updatedAt": "2026-11-13T09:40:56.861Z"
 }

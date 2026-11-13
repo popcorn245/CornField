@@ -1,0 +1,17 @@
+/* The decision in a box of its own (explorer/pieces/decision.js with `inline`; explorer/css/decision.css is loaded before this, then the load's card, status.css).
+   A block as wide as the place its host page gives it; the host page's rules on it win. The foot is a query container on the width of this box (`corn-box`): a narrow
+   box gets the buttons at full width and 44px high, as a phone's, and nothing else of a phone. */
+:host { display: block; position: relative; min-width: 0; container: corn-box / inline-size; color: var(--corn-text); font-family: var(--corn-font); font-size: medium; font-weight: 400; font-style: normal; line-height: normal; }
+:host([hidden]) { display: none !important; }
+/* The foot of a review column with the column's border on its top; here it is the box. In a narrow box the buttons fill it, as on a phone */
+.hx-rc-foot { padding: var(--corn-space-3) var(--corn-space-4); border-top: 0; }
+.hx-rc-foot[hidden] { display: none; }
+@container corn-box (max-width: 767px) {
+  .hx-rc-foot { padding: var(--corn-space-3) var(--corn-space-4); }
+}
+.hx-rc-foot :is(p) { text-indent: 0; }
+.hx-needs { margin: 0; padding: var(--corn-panel-pad); color: var(--corn-text-3); font-size: var(--corn-text-sm); line-height: 1.5; }
+.hx-signin-slot [data-corn="source-status"] { position: static; transform: none; width: auto; margin: var(--corn-space-3) var(--corn-space-4) 0; }
+.hx-signin-slot [data-corn="source-notice"] { position: static; }
+/* The foot is the box: it has its own ground (the page's has the review column's glass behind it), so the words keep their contrast in light and in dark whatever the host's ground is */
+:host { background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); }

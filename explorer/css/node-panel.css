@@ -185,4 +185,6 @@
 /* The title of a panel: the Work panel, the node panel, the proposal bar, a detail in the Work panel and a dialog are one style. A node's name is long and
    often a path, so it wraps (overflow-wrap) in this size rather than being set larger than the panel's own words. */
 .hx-drawer-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }
-.hx-drawer-head { min-height: var(--corn-panel-head-height); }
+/* The head never shrinks: the body is a flex column that scrolls, and a short box (a panel in a host's 200px place, a short window) would squash the head to its
+   min-height, laying a title that wraps, or a kicker that does ("Added by" a proposal), over the line under it */
+.hx-drawer-head { min-height: var(--corn-panel-head-height); flex-shrink: 0; }

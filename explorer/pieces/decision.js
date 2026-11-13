@@ -42,7 +42,9 @@
  *
  * @param {ParentNode} root where the foot goes when `options.slots` names no place
  * @param {ReturnType<typeof import('../instance.js').createInstance>} inst the instance
- * @param {{ slots?: { foot?: Node }, now?: () => number }} [options] `now`: the clock the times shown are read from (a test winds it)
+ * @param {{ slots?: { foot?: Node }, now?: () => number, unnamed?: string, inline?: boolean }} [options] `now`: the clock the times shown are read from (a test winds it).
+ *   `inline` is the piece in a box and a root of its own (`<corn-decision>`, pieces/around.js): no phone sheet to open for the note, and the Escape that takes a
+ *   question back or ends a hold is heard in this root, where the focus is
  * @returns {{ update: (props?: object) => void, destroy: () => void, sendReview: Function, loadFacts: Function, elements: Element[] }}
  *   `update()` reads the proposal that is open again (the host changed it); nothing else is taken
  */
@@ -50,7 +52,7 @@
 import { expandSheet, isPhone } from '../engine/sheets.js';
 import { reviewParts, sendBackProblem, reviewBody, editsHint, isReviewable } from '../review-model.js';
 import {
-  HOLD_MS, decide, askReasons, askWords, newReasons, sendBackLine, sendBackDecision, refusalWords, holdWords, holdStartWords, holdCancelledWords, editsSentWords,
+  HOLD_MS, NAMELESS_PROPOSAL, decide, askReasons, askWords, newReasons, sendBackLine, sendBackDecision, refusalWords, holdWords, holdStartWords, holdCancelledWords, editsSentWords,
 } from '../decision-model.js';
 import { pullNumberOf } from '../proposal-model.js';
 import { announce } from '../engine/keyboard.js';
@@ -101,8 +103,12 @@ export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
   const now = typeof options.now === 'function' ? options.now : () => Date.now();
+  const inline = !!options.inline;
+  const phone = () => !inline && isPhone(inst);
+  /** What hears the Escape and the held key's repeats: the instance's root, or the box's own root */
+  const hear = inline ? root : inst.root;
   /** What the foot says in place of its buttons for a proposal with no name, which nothing can be decided on (the review piece's, with no server); none: the page's */
-  const unnamed = typeof options.unnamed === 'string' && options.unnamed ? options.unnamed : '';
+  const unnamed = typeof options.unnamed === 'string' && options.unnamed ? options.unnamed : inline ? NAMELESS_PROPOSAL : '';
   const get = credentialed(inst);
   const made = place(inst, root, markup().foot, options.slots, 'foot');
   scope.keepParts(...made);
@@ -260,11 +266,11 @@ export function mount(root, inst, options = {}) {
     ui.noting = true;
     ui.message = '';
     paint();
-    if (isPhone(inst)) expandSheet(inst, 'proposal');
+    if (phone()) expandSheet(inst, 'proposal');
     q('#review-note').focus();
     // On a phone the keyboard is about to take half the screen: the note and the button that sends it stay in view above it
     const send = button('notes');
-    if (isPhone(inst) && send && typeof send.scrollIntoView === 'function') send.scrollIntoView({ block: 'nearest' });
+    if (phone() && send && typeof send.scrollIntoView === 'function') send.scrollIntoView({ block: 'nearest' });
   }
 
   /** Cancel: the field closes, what was typed goes, and focus goes back to Send back */
@@ -283,6 +289,7 @@ export function mount(root, inst, options = {}) {
   function onBar({ open }) {
     const key = open ? keyOf() : null;
     rootEl.hidden = !(key || (open && unnamed));
+    if (inline) foot.hidden = !open; // in a box of its own there is no column to hide with no proposal open: the foot is the box
     if (key === ui.key) { paint(); return; }
     if (ui.hold) stopHold(open ? 'other' : 'closed', { quiet: false });
     ui.key = key;
@@ -421,7 +428,7 @@ export function mount(root, inst, options = {}) {
         ui.message = problem;
         ui.noting = true; // the refusal is about the note: show it
         paint();
-        if (isPhone(inst)) expandSheet(inst, 'proposal');
+        if (phone()) expandSheet(inst, 'proposal');
         q('#review-note').focus();
         return;
       }
@@ -544,7 +551,7 @@ export function mount(root, inst, options = {}) {
         ui.message = problem;
         ui.noting = true; // the refusal is about the note: show it
         paint();
-        if (isPhone(inst)) expandSheet(inst, 'proposal');
+        if (phone()) expandSheet(inst, 'proposal');
         noteEl.focus();
         return false;
       }
@@ -624,7 +631,7 @@ export function mount(root, inst, options = {}) {
   });
   scope.listen(rootEl, 'keydown', (e) => { if (e.key === 'Escape' && ui.noting && !ui.asking && !ui.hold) { e.stopPropagation(); closeNote(); } });
   // Escape takes an open question back, or ends a hold, before anything else on the page hears it; a held key's repeats do nothing here
-  scope.listen(inst.root, 'keydown', (e) => {
+  scope.listen(hear, 'keydown', (e) => {
     // A key held down repeats: its repeats are not more decisions (Enter held on Approve would answer its own question, then undo the hold)
     if (e.repeat && (e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest && e.target.closest('#review-decision [data-review], #review-decision [data-review-undo]')) { e.preventDefault(); e.stopPropagation(); return; }
     if (e.key !== 'Escape' || !ui.key) return;

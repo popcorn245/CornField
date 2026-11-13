@@ -30,7 +30,10 @@
  *
  * @param {ParentNode} root where the column goes when `options.slots` names no place
  * @param {ReturnType<typeof import('../instance.js').createInstance>} inst the instance; its map must be made (engine/render.js)
- * @param {{ slots?: { column?: Node }, checker?: object | null }} [options] `checker`: a plugin's checker for the scenarios' permission checks (none: "Not checked")
+ * @param {{ slots?: { column?: Node }, checker?: object | null, inline?: boolean }} [options] `checker`: a plugin's checker for the scenarios' permission checks (none: "Not checked").
+ *   `inline` is the piece in a box and a root of its own (`<corn-changes>`, pieces/around.js): the column fills the box (no panel docked beside the map, no phone sheet and no
+ *   tabs: both lists, one under the other, scroll inside it), the player's bar is its last part, not a bar over the map's bottom, and its keys are this root's. What lies
+ *   over the map is none of its business: it answers no `*:covers`, and chooses a step without closing a node panel
  * @returns {{ update: (props?: { checker?: object | null }) => void, destroy: () => void, playScenario: Function, stopScenario: Function, getPlayer: Function, elements: Element[] }}
  *   `update({ checker })` hands over the checker; `update()` draws the lists again.
  */
@@ -55,13 +58,13 @@ const PLAYER_BESIDE_PANEL = 1360;
 const asList = (v) => (Array.isArray(v) ? v : []);
 
 /** The markup of the piece: the column. `column` is its one place; it keeps a place of its own for the decision's foot */
-export const markup = () => ({
+export const markup = ({ inline = false } = {}) => ({
   column: '<aside id="review-column" class="hx-review-column glass" aria-label="Review" data-corn="review-column" hidden>'
     + '<div class="hx-rc-scroll">'
     + '<p id="proposal-summary" class="hx-proposal-summary" hidden></p>'
     + '<div id="review-lists" class="hx-rc-lists"></div>'
     + '</div>'
-    + '<!--corn-piece:decision/foot-->'
+    + (inline ? '<div class="hx-player-seat"></div>' : '<!--corn-piece:decision/foot-->') // a box of its own has no foot: the decision is a tag of its own
     + '</aside>',
 });
 
@@ -77,7 +80,10 @@ function changeRowHtml(r) {
 export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
-  const made = place(inst, root, markup().column, options.slots, 'column');
+  const inline = !!options.inline;
+  /** Whether the layout is a phone's: the window's width on cornfield's page, the box's in a review. A box of its own never has the phone's sheets: its narrowness is the CSS's alone */
+  const phone = () => !inline && isPhone(inst);
+  const made = place(inst, root, markup({ inline }).column, options.slots, 'column');
   /** An element of this piece by id */
   const own = (id) => {
     for (const el of made) {
@@ -92,7 +98,7 @@ export function mount(root, inst, options = {}) {
   let gone = false;
 
   const checks = createChecks(inst, { checker: options.checker });
-  const player = createScenarioPlayer(inst, scope, checks);
+  const player = createScenarioPlayer(inst, scope, checks, inline ? { seat: col.querySelector('.hx-player-seat'), hear: root } : {});
   scope.own(() => checks.close());
 
   /** What the column shows apart from the proposal: the scenario whose steps are open, the phone's tab, the PR head the record is keyed by */
@@ -220,17 +226,17 @@ export function mount(root, inst, options = {}) {
     const rows = everyRow.filter((r) => r.mark !== 'edit');
     const mine = everyRow.filter((r) => r.mark === 'edit'); // "Your edits · 1": the first group, not the last row
     const list = model();
-    const phone = isPhone(inst);
+    const narrow = phone();
     // the phone's tab: the reviewer's last choice, or Scenarios when there are any; a proposal with none opens on its changes
     if (ui.tabFor !== proposalKey()) { ui.tabFor = proposalKey(); ui.tabNow = list.total ? (ui.tab || 'scenarios') : 'changes'; }
     const tab = ui.tabNow || 'changes';
     const personas = state.nodes.some((n) => n.type === 'persona');
 
-    const tabs = `<div class="hx-rc-tabs" role="tablist" aria-label="Review" data-corn="tabs"${phone ? '' : ' hidden'}>`
+    const tabs = `<div class="hx-rc-tabs" role="tablist" aria-label="Review" data-corn="tabs"${narrow ? '' : ' hidden'}>`
       + `<button type="button" role="tab" id="rc-tab-changes" class="hx-rc-tab" data-corn="tab" data-action="review-tab" data-tab="changes" aria-selected="${tab === 'changes'}" aria-controls="rc-changes" tabindex="${tab === 'changes' ? 0 : -1}">${escHtml(t(inst, 'changes'))} · ${rows.length}</button>`
       + `<button type="button" role="tab" id="rc-tab-scenarios" class="hx-rc-tab" data-corn="tab" data-action="review-tab" data-tab="scenarios" aria-selected="${tab === 'scenarios'}" aria-controls="rc-scenarios" tabindex="${tab === 'scenarios' ? 0 : -1}">${escHtml(t(inst, 'scenarios'))} · ${list.total}</button></div>`;
 
-    const changes = `<section id="rc-changes" class="hx-rc-section" data-corn="proposal-changes"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-changes"${tab === 'changes' ? '' : ' hidden'}` : ' aria-labelledby="rc-changes-h"'}>`
+    const changes = `<section id="rc-changes" class="hx-rc-section" data-corn="proposal-changes"${narrow ? ` role="tabpanel" aria-labelledby="rc-tab-changes"${tab === 'changes' ? '' : ' hidden'}` : ' aria-labelledby="rc-changes-h"'}>`
       + `<h3 id="rc-changes-h" class="hx-rc-h" tabindex="-1">${countHeading(t(inst, 'changes'), rows.length)}</h3>`
       + (mine.length ? `<h4 class="hx-rc-sub">${countHeading(t(inst, 'yourEdits'), mine.length)}</h4><ul class="hx-change-list">${mine.map(changeRowHtml).join('')}</ul>` : '')
       + (rows.length ? `<ul class="hx-change-list">${rows.map(changeRowHtml).join('')}</ul>` : '<p class="hx-faint hx-rc-empty">This proposal changes nothing on the map.</p>')
@@ -243,7 +249,7 @@ export function mount(root, inst, options = {}) {
       if (!personas) body += `<p class="hx-faint hx-rc-note">This map has no personas (topology.personas.json), so every scenario is listed under ${escHtml(t(inst, 'anyone'))}.</p>`;
       if (list.coverage) body += `<p class="hx-rc-coverage" data-corn="notice">${escHtml(t(inst, 'notInAnyScenario'))}: ${list.notInAny.map(escHtml).join(', ')}</p>`;
     }
-    const scenarios = `<section id="rc-scenarios" class="hx-rc-section" data-corn="scenario-list"${phone ? ` role="tabpanel" aria-labelledby="rc-tab-scenarios"${tab === 'scenarios' ? '' : ' hidden'}` : ' aria-labelledby="rc-scenarios-h"'}>`
+    const scenarios = `<section id="rc-scenarios" class="hx-rc-section" data-corn="scenario-list"${narrow ? ` role="tabpanel" aria-labelledby="rc-tab-scenarios"${tab === 'scenarios' ? '' : ' hidden'}` : ' aria-labelledby="rc-scenarios-h"'}>`
       + `<h3 id="rc-scenarios-h" class="hx-rc-h" tabindex="-1">${countHeading(t(inst, 'personasAndScenarios'), list.total)}</h3><div class="hx-rc-sbody">${body}</div></section>`;
     return `${tabs}${changes}${scenarios}`;
   }
@@ -253,20 +259,15 @@ export function mount(root, inst, options = {}) {
   // ---------------------------------------------------------------------------
   /** Where the column goes: after the proposal bar in the dock from 768px, at the end of the sheet's body on a phone */
   function mountColumn() {
-    const dock = inst.el('sheet-dock');
-    const body = inst.el('proposal-body');
-    if (isPhone(inst) && body) { if (col.parentElement !== body) body.appendChild(col); } else if (dock) {
-      const bar = inst.el('proposal-bar');
-      if (bar && col.parentElement !== dock) bar.after(col);
-    }
+    if (!inline) inst.ask('proposal:seat-column', { column: col, phone: phone() }); // the bar seats it (pieces/proposal.js): nobody answering leaves it where it is
     return col;
   }
 
   /** The column starts under the bar, whatever height the bar has (the counts wrap, the edit controls open): from 768px; a phone's has no place of its own */
   function placeColumn() {
-    const bar = inst.el('proposal-bar');
-    if (!bar || isPhone(inst) || bar.hidden) return;
-    col.style.setProperty('--hx-column-top', `${Math.round(bar.offsetTop + bar.offsetHeight + 8)}px`);
+    if (inline || phone()) return;
+    const bottom = inst.ask('proposal:bar-bottom');
+    if (typeof bottom === 'number') col.style.setProperty('--hx-column-top', `${bottom}px`);
   }
 
   /** Draws the column for the open proposal, or hides it when none is open */
@@ -288,7 +289,7 @@ export function mount(root, inst, options = {}) {
   function shareRoom() {
     const lists = own('review-lists');
     const sc = own('rc-scenarios');
-    if (!lists || !sc || col.hidden || isPhone(inst)) return;
+    if (!lists || !sc || col.hidden || phone()) return;
     const h = lists.clientHeight;
     if (!h) return;
     const gap = parseFloat(inst.win.getComputedStyle(lists).rowGap) || 0;
@@ -356,10 +357,9 @@ export function mount(root, inst, options = {}) {
   function chooseStep(sc, index) {
     ui.open = sc.id;
     // Under 1360px the column, the node panel and the player bar do not fit side by side: the node panel closes, the player takes its room
-    const drawer = inst.el('spec-drawer');
     const stage = state.canvas && state.canvas.parentElement;
-    if (!isPhone(inst) && drawer && drawer.classList.contains('drawer-open') && stage && stage.clientWidth < PLAYER_BESIDE_PANEL) clearSelection(inst, { source: 'api' });
-    player.play(sc, { autoplay: false, step: index, focus: isPhone(inst) });
+    if (!inline && !phone() && inst.ask('panel:covers') && stage && stage.clientWidth < PLAYER_BESIDE_PANEL) clearSelection(inst, { source: 'api' }); // a slide-over node panel is open (it answers `panel:covers`)
+    player.play(sc, { autoplay: false, step: index, focus: phone() });
     repaint();
   }
 
@@ -375,7 +375,7 @@ export function mount(root, inst, options = {}) {
   /** The counts' parts open their section: the switch moves to it on a phone; from 768px it scrolls into view and takes the focus */
   function showSection(which) {
     if (!state.proposal) return;
-    if (isPhone(inst)) { showTab(which); expandSheet(inst, 'proposal'); }
+    if (phone()) { showTab(which); expandSheet(inst, 'proposal'); }
     const section = own(which === 'scenarios' ? 'rc-scenarios' : 'rc-changes');
     const heading = own(which === 'scenarios' ? 'rc-scenarios-h' : 'rc-changes-h');
     if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'start' });
@@ -426,7 +426,7 @@ export function mount(root, inst, options = {}) {
   function stepToFocus() {
     const at = ui.lastStep;
     if (!at) return null;
-    if (isPhone(inst)) expandSheet(inst, 'proposal');
+    if (phone()) expandSheet(inst, 'proposal');
     const lists = own('review-lists');
     return lists ? lists.querySelector(`[data-action="scenario-step"][data-scenario-index="${at.index}"][data-step-index="${at.step}"]`) : null;
   }
@@ -451,9 +451,15 @@ export function mount(root, inst, options = {}) {
   scope.on('changes:show', (which) => showSection(which));
   const RO = inst.win && inst.win.ResizeObserver;
   const watch = (el, fn) => { if (el && typeof RO === 'function') { const ro = new RO(fn); ro.observe(el); scope.own(() => ro.disconnect()); } };
-  watch(inst.el('proposal-bar'), () => placeColumn());
+  scope.on('proposal:bar-resize', () => placeColumn()); // the bar's height changed (the counts wrap, a line comes): the column starts under it
   watch(col, () => shareRoom()); // the window's height changed
-  scope.own(onPhoneChange(inst, () => { if (state.proposal) renderColumn(); })); // the window's width, or the box's where the review has one (engine/sheets.js)
+  if (!inline) {
+    scope.own(onPhoneChange(inst, () => { if (state.proposal) renderColumn(); })); // the window's width, or the box's where the review has one (engine/sheets.js)
+    // What the column and the player cover of the map: the map frames a step into what is left (engine/map-rect.js)
+    const shown = (el) => !!el && !el.hidden && el.isConnected;
+    scope.on('changes:covers', () => (shown(col) ? { right: col.getBoundingClientRect().right } : undefined));
+    scope.on('player:covers', () => { const bar = player.bar(); return shown(bar) ? { top: bar.getBoundingClientRect().top } : undefined; });
+  }
 
   scope.own(() => {
     gone = true;

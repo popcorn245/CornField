@@ -1,0 +1,36 @@
+/* The change list and the scenario player in a box of their own (explorer/pieces/changes.js with `inline`; explorer/css/changes.css is loaded before this).
+   The host is a block that fills the place its host page gives it, and the host page's own rules on it win (its size, its display, its margins). Only `hidden` is
+   !important. The column is a query container on the width of this box (`corn-box`): a narrow box gets 44px targets, as a phone does, and nothing else of a phone:
+   never the sheet, and never the tabs. Both lists are one under the other and scroll inside the box; the player is the box's last part. */
+:host { display: block; position: relative; min-width: 0; height: 100%; container: corn-box / inline-size; color: var(--corn-text); font-family: var(--corn-font); font-size: medium; font-weight: 400; font-style: normal; line-height: normal; }
+:host([hidden]) { display: none !important; }
+/* The column fills the box, at every width: not docked beside a map, and not the body of a phone's sheet (those rules come first and are put back here) */
+.hx-review-column, .hx-review-column:not([hidden]) { position: relative; inset: auto; top: auto; left: auto; bottom: auto; width: 100%; height: 100%; max-height: none; z-index: auto; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden auto; border-radius: var(--corn-radius-lg); }
+.hx-review-column[hidden] { display: none; }
+@container corn-box (max-width: 767px) {
+  .hx-review-column { position: relative; overflow: hidden auto; border-radius: var(--corn-radius-lg); }
+  .hx-rc-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; padding: var(--corn-space-3) var(--corn-space-4); }
+  .hx-rc-lists { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; }
+  .hx-rc-section { display: flex; flex-direction: column; min-height: 0; overflow: visible; }
+  .hx-rc-section[hidden] { display: none; }
+  .hx-change-list, .hx-rc-sbody { display: flex; flex-direction: column; overflow: visible; max-height: none; }
+  .hx-rc-sbody { display: block; }
+  #rc-changes, #rc-scenarios { flex: none; max-height: none; }
+}
+/* The player is the last part of the box, under the lists: a bar in the flow, with the controls and the line of the step. (Over a map it is placed in the map's corner.) */
+/* A short box keeps its lists: the player takes at most half of it and scrolls inside that, and the lists keep a few rows */
+.hx-player-seat { flex: 0 1 auto; min-height: 0; max-height: 55%; overflow-y: auto; }
+/* A box too short for both (under about 13rem) never squashes either to nothing: the lists keep their few rows (below), the player its controls and the step's line,
+   and the column scrolls as a whole for the rest. (Hidden, the column cut the player to no height at all, with no way to it but the keys it no longer showed.) */
+.hx-player-seat:has(> .hx-player:not([hidden])) { min-height: 6rem; }
+.hx-review-column .hx-rc-scroll { min-height: 7rem; }
+/* The lists hold the words said to a screen reader only (positioned, 1px): they are placed in the lists, which scroll them, never in the column, which would scroll to them */
+.hx-rc-lists { position: relative; }
+.hx-player-seat .hx-player { position: relative; left: auto; right: auto; bottom: auto; max-height: none; border-radius: 0; box-shadow: none; border: 0; border-top: var(--corn-border) solid var(--corn-line); overflow: visible; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; padding-bottom: var(--corn-space-4); }
+.hx-player-seat .hx-player-track { bottom: auto; top: 0; }
+/* The words of a long node name, a step or a verdict wrap in a narrow box and never run past it */
+.hx-review-column :is(h3, h4, p) { text-indent: 0; font-variant: normal; }
+.hx-review-column, .hx-player { overflow-wrap: anywhere; }
+.hx-needs { margin: 0; padding: var(--corn-panel-pad); color: var(--corn-text-3); font-size: var(--corn-text-sm); line-height: 1.5; }
+/* Over whatever the host page has under it: the ground itself under the glass surface, so the words keep their contrast in light and in dark whatever the host's ground is */
+.glass { background: linear-gradient(var(--corn-surface-1), var(--corn-surface-1)), var(--corn-ground); backdrop-filter: none; -webkit-backdrop-filter: none; }

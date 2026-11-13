@@ -136,6 +136,8 @@ export const newReasons = (reasons, answered) => reasons.filter((r) => !answered
  * cornfield server to send a review to (pieces/review.js with no `base`). Cornfield's own page always names its proposal, so it never says this.
  */
 export const NOTHING_TO_DECIDE = 'Shown to read only: there is no cornfield server here to send an approval or a send back to.';
+/** What the foot says for a proposal with no name in a scope that has a server (`<corn-decision>`): it is shown, but nothing can be decided on it */
+export const NAMELESS_PROPOSAL = 'Shown to read only: this proposal has no name, so there is nothing to send an approval or a send back about.';
 
 /**
  * The line above Approve and what a press of it does, from the facts and the page's own state.

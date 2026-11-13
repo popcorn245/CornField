@@ -34,6 +34,10 @@ node test/fixtures/big/review-requests.mjs [--only approve,sendback,stale,refusa
 node test/fixtures/big/first-fit-proof.mjs [--url http://127.0.0.1:3981/] [--components]      # ports 3940-3941
 # (i) the node panel, Layers and search in a scope beside the map, on a listed sibling origin, under a strict CSP: mouse, keyboard, search, layers, tags removed and put back, two scopes, the server's theme (ports 3830-3832); needs the built package
 node test/fixtures/big/around-proof.mjs [--shots <dir>] [--json <file>]
+# (j) the review's sections, `<corn-proposal>`, `<corn-changes>` and `<corn-decision>`, in a host app's grid beside a map and a node panel in a scope that holds the proposal, on a listed sibling origin, under a strict CSP: open by the property, Before/Diff/After, the player, a change selected, Approve and Send back, Close, another proposal, the keyboard, doubled, alone, signed out, a session that ended, offline, an unlisted host, a 390px window, axe (ports 3840-3843); needs the built package
+node test/fixtures/big/review-tags-proof.mjs [--shots <dir>] [--json <file>] [--only open,views,player,select,decide,close,keys,doubled,alone,signedout,ended,offline,unlisted,narrow,axe]
+# (k) the requests of a decision in `<corn-decision>` against cornfield's own page's for the same steps, byte for byte (ports 3950-3959, forge 4050, 4052); needs the built package
+node test/fixtures/big/review-tags-requests.mjs [--only approve,sendback,stale,refusals,signedout]
 ```
 
 Add `--layers` to any generated map to put project layers in its config (spec 0009: "Background jobs" off by default, "Outside calls", "Data"; `EXAMPLE_LAYERS` in `make.js`). Without it the config has no `layers`, which is the big map's own tests' case.

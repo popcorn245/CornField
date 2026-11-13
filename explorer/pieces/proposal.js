@@ -13,8 +13,10 @@
  *
  * @param {ParentNode} root where the elements go when `options.slots` names no place
  * @param {ReturnType<typeof import('../instance.js').createInstance>} inst the instance; its map must be made (engine/render.js)
- * @param {{ slots?: { bar?: Node, menu?: Node }, edit?: boolean }} [options] `edit: false` leaves out the what-if editor's two buttons (My edits, Edit):
- *   a host without the editor has nothing to put behind them
+ * @param {{ slots?: { bar?: Node, menu?: Node }, edit?: boolean, inline?: boolean }} [options] `edit: false` leaves out the what-if editor's two buttons (My edits, Edit):
+ *   a host without the editor has nothing to put behind them. `inline` is the piece in a box of its own, in a root of its own (`<corn-proposal>`, pieces/around.js): the
+ *   bar is a block that fills the box, not a panel over the map: no phone sheet, no Proposals menu, no what-if buttons, its keys and clicks are its own root's, and the picking of an
+ *   edge on the map is the scope's (pieces/scope-proposal.js), whose proposal this is
  * @returns {{ update: (props?: { proposal?: string | object | null, source?: string | null, view?: string, slug?: string | null, sha256?: string | null }) => Promise<boolean> | void, destroy: () => void, elements: Element[], renderBar: Function, paintWaitingLine: Function, toggleMenu: Function, closeMenu: Function }}
  *   `update({ proposal })` opens a proposal: a slug (fetched through `inst.fetch`, with `source` to name the copy), or the proposal itself (nothing is fetched:
  *   `slug`, `source` and `sha256` name it); `null` closes it. `update({ view })` switches Before, Diff or After. `update()` draws the bar again.
@@ -122,11 +124,14 @@ export function proposalRowHtml(entry, current) {
 export function mount(root, inst, options = {}) {
   const { state } = inst;
   const scope = scopeOf(inst);
-  const html = markup({ edit: options.edit !== false });
+  const inline = !!options.inline;
+  const html = markup({ edit: options.edit !== false && !inline });
   const made = [
     ...place(inst, root, html.bar, options.slots, 'bar'),
-    ...place(inst, root, html.menu, options.slots, 'menu'),
+    ...(inline ? [] : place(inst, root, html.menu, options.slots, 'menu')),
   ];
+  /** What hears the clicks and keys of this piece: the instance's root, which holds the Work panel's Specs list too (cornfield's page), or the box's own root */
+  const hear = inline ? root : inst.root;
   /** An element of this piece by id (the piece's own, whatever else the root holds) */
   const own = (id) => {
     for (const el of made) {
@@ -203,7 +208,7 @@ export function mount(root, inst, options = {}) {
   // ---------------------------------------------------------------------------
   function renderBar({ open = !!state.proposal } = {}) {
     bar.hidden = !open;
-    if (!open) { closeMore(); toggleMode(false); collapseSheet(inst, 'proposal'); return; }
+    if (!open) { closeMore(); toggleMode(false); if (!inline) collapseSheet(inst, 'proposal'); return; }
 
     bar.classList.remove('is-error');
     own('proposal-message').hidden = true;
@@ -336,12 +341,15 @@ export function mount(root, inst, options = {}) {
   const menuOpen = () => { const menu = own('proposal-menu'); return !!menu && !menu.hidden; };
 
   function closeMenu() {
-    own('proposal-menu').hidden = true;
+    const menu = own('proposal-menu');
+    if (!menu) return; // a bar in a box of its own has no Proposals menu
+    menu.hidden = true;
     own('proposal-btn').setAttribute('aria-expanded', 'false');
   }
 
   async function toggleMenu() {
     const menu = own('proposal-menu');
+    if (!menu) return undefined;
     if (menuOpen()) return closeMenu();
     menu.hidden = false;
     own('proposal-btn').setAttribute('aria-expanded', 'true');
@@ -351,6 +359,7 @@ export function mount(root, inst, options = {}) {
 
   function renderMenu(loading = false) {
     const menu = own('proposal-menu');
+    if (!menu) return;
     const { entries: listing, problem: listingProblem, forgeProblem } = proposalListing(inst);
     const current = state.proposal ? { slug: state.proposalSlug, source: state.proposalSource } : null;
     let body;
@@ -391,7 +400,7 @@ export function mount(root, inst, options = {}) {
   const ACTIONS = {
     'toggle-proposals-menu': () => toggleMenu(),
     'open-proposal': (el) => openProposal(inst, el.dataset.slug, el.dataset.source || null),
-    'close-proposal': () => closeProposal(inst),
+    'close-proposal': () => { closeProposal(inst); if (inline && state.canvas) state.canvas.focus(); }, // the bar is gone with the proposal: the focus goes to the map, never to the page
     'proposal-whole': () => { setWholeMap(inst, !(state.review && state.review.whole)); drawBar(inst); }, // "Show the whole map": announced by engine/layers.js, the focus stays on the switch
     'proposal-view': (el) => { setProposalView(inst, el.dataset.view); toggleMode(false); },
     'toggle-proposal-mode': () => toggleMode(),
@@ -402,7 +411,7 @@ export function mount(root, inst, options = {}) {
   };
 
   // The root hears every control: the bar's, the menu's and a row of the Work panel's Specs list (`open-proposal`), as the document did
-  scope.listen(inst.root, 'click', (e) => {
+  scope.listen(hear, 'click', (e) => {
     const target = e.target.closest ? e.target.closest('[data-action]') : null;
     const action = target && Object.hasOwn(ACTIONS, target.dataset.action) && ACTIONS[target.dataset.action];
     if (action) action(target);
@@ -412,6 +421,10 @@ export function mount(root, inst, options = {}) {
     const wrap = own('proposal-wrap');
     if (menuOpen() && wrap && !wrap.contains(e.target) && !(target && target.dataset.action === 'proposal-way')) closeMenu(); // (a bad link's Specs list opens it from outside)
   });
+  // In a box of its own the root hears only the bar's clicks: a click anywhere else in the page (the map, the host's own page, another section) closes the ⋯ menu
+  // too, as it does on cornfield's page. The open menu holds the focus (on an item), and such a click takes it out of the bar: the menu closes when the focus
+  // leaves the bar (to nothing, or to anything outside it), which holds in a host's closed shadow root too and needs no listener on the page
+  if (inline) scope.listen(bar, 'focusout', (e) => { if (moreOpen() && !(e.relatedTarget && bar.contains(e.relatedTarget))) closeMore(); });
   // Answer, on the bar's line (a run waits on this proposal): the Work panel opens on that run with its reply field focused (work:answer)
   scope.listen(bar, 'click', (e) => {
     const go = e.target.closest && e.target.closest('[data-waiting-answer]');
@@ -421,7 +434,7 @@ export function mount(root, inst, options = {}) {
   const proposalsEntry = (workOn) => { const wrap = own('proposal-wrap'); if (wrap) wrap.hidden = !!workOn; };
   scope.on('work:available', ({ on }) => proposalsEntry(on));
   if (inst.ask('work:on')) proposalsEntry(true); // the Work panel started before this piece was mounted: it said so to nobody
-  scope.listen(inst.root, 'keydown', (e) => {
+  scope.listen(hear, 'keydown', (e) => {
     if (e.key === 'Escape' && menuOpen()) closeMenu();
     onMoreKey(e);
   });
@@ -450,11 +463,25 @@ export function mount(root, inst, options = {}) {
   scope.on('proposal:waiting', ({ run, key }) => paintWaitingLine(run, key));
   scope.on('proposal:waiting-reset', () => { waitingSaid = null; waitingEl = null; });
   scope.on('proposal', ({ change }) => { if (change === 'opened') closeMenu(); });
-  scope.own(bindEdgePicking(inst, (target, type, fn) => scope.listen(target, type, fn)));
-
-  initSheets(inst);
-  registerSheet(inst, 'proposal', bar, { stub: () => ({ title: (own('proposal-title') && own('proposal-title').textContent) || 'Proposal' }) });
-  scope.own(() => unregisterSheet(inst, 'proposal'));
+  if (!inline) {
+    scope.own(bindEdgePicking(inst, (target, type, fn) => scope.listen(target, type, fn)));
+    initSheets(inst);
+    registerSheet(inst, 'proposal', bar, { stub: () => ({ title: (own('proposal-title') && own('proposal-title').textContent) || 'Proposal' }) });
+    scope.own(() => unregisterSheet(inst, 'proposal'));
+    // What the bar answers its neighbours in a box of one root: the part of the map it covers (the map frames into what is left), where the review column
+    // goes (under it, or in its body on a phone), and how far down it reaches (the column starts there)
+    scope.on('proposal:covers', () => (bar.hidden || !bar.isConnected ? undefined : { bottom: bar.getBoundingClientRect().bottom }));
+    scope.on('proposal:bar-bottom', () => (bar.hidden ? undefined : Math.round(bar.offsetTop + bar.offsetHeight + 8)));
+    scope.on('proposal:seat-column', ({ column, phone }) => {
+      const body = own('proposal-body');
+      if (phone && body) { if (column.parentElement !== body) body.appendChild(column); return true; }
+      if (bar.parentElement && column.parentElement !== bar.parentElement) bar.after(column);
+      return true;
+    });
+    const RO = inst.win && inst.win.ResizeObserver;
+    if (typeof RO === 'function') { const ro = new RO(() => inst.emit('proposal:bar-resize')); ro.observe(bar); scope.own(() => ro.disconnect()); }
+  }
+  scope.on('popup:open', () => (moreOpen() ? true : undefined)); // the player's Escape leaves a menu that has its own
 
   scope.own(() => {
     gone = true;

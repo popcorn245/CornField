@@ -127,6 +127,33 @@ describe('the type declarations (D11)', () => {
     for (const word of ["'corn-node-panel': HTMLCornNodePanelElement", "'corn-layers': HTMLCornLayersElement", "'corn-search': HTMLCornSearchElement", 'export interface CornSearchDetail', "'onCornSearch'?:", "'focusField':"]) expect(text, word).toContain(word);
   });
 
+  it('lists exactly what the review\'s three sections declare (nothing of their own: the proposal, `view`, `cornNavigate`, `cornDecision` and `cornAuth` are the scope\'s), and what the scope gained', () => {
+    const names = (list: Array<{ name: string }>) => list.map((x) => x.name).sort();
+    const by = (tag: string) => analyzeComponents().find((c: { tagName: string }) => c.tagName === tag);
+    for (const tag of ['corn-proposal', 'corn-changes', 'corn-decision']) {
+      const c = by(tag);
+      expect([names(c.properties), names(c.events), names(c.methods)], tag).toEqual([[], [], []]);
+    }
+    const scope = by('corn-scope');
+    expect(names(scope.properties)).toEqual(['config', 'proposal', 'source', 'src', 'strings', 'theme', 'topology', 'useTheme', 'view']);
+    expect(names(scope.events)).toEqual(['cornAuth', 'cornDecision', 'cornError', 'cornNavigate', 'cornReady']);
+    const text = typesFor(analyzeComponents())['components.d.ts'];
+    for (const word of ["'corn-proposal': HTMLCornProposalElement", "'corn-changes': HTMLCornChangesElement", "'corn-decision': HTMLCornDecisionElement", 'export interface CornScopeAuthDetail', "during: 'load' | 'proposal' | 'facts' | 'review' | 'send' | 'landing'", "'second-section'"]) expect(text, word).toContain(word);
+    // the detail of cornNavigate and cornDecision is the review's, written once for the two
+    expect(text.match(/export interface CornNavigateDetail/g)).toHaveLength(1);
+    expect(text.match(/export interface CornDecisionDetail/g)).toHaveLength(1);
+    // written once in the types, so the two sources must say the same: one changed alone would be dropped from the types unseen
+    const body = (tag: string, name: string) => {
+      const src = fs.readFileSync(path.join(PACKAGE, 'src', 'components', tag, `${tag}.tsx`), 'utf8');
+      const m = new RegExp(`export interface ${name} \\{[\\s\\S]*?\\n\\}`).exec(src);
+      return m ? m[0].replace(/^\s*\/\*\*.*\*\/\s*$/gm, '').replace(/\s+/g, ' ') : null;
+    };
+    for (const name of ['CornNavigateDetail', 'CornDecisionDetail', 'CornReviewRecord']) {
+      expect(body('corn-scope', name), name).toBeTruthy();
+      expect(body('corn-scope', name), name).toBe(body('corn-review', name));
+    }
+  });
+
   it('lists exactly what corn-review declares: its properties, its events and its methods, and the types of their details', () => {
     const [review] = analyzeComponents().filter((c: { tagName: string }) => c.tagName === 'corn-review');
     const names = (list: Array<{ name: string }>) => list.map((x) => x.name).sort();
@@ -215,7 +242,7 @@ describe('the type declarations (D11)', () => {
     for (const tag of componentTags()) expect(pkg.exports[`./${tag}`], tag).toEqual({ types: `./dist/types/${tag}.d.ts`, default: `./dist/${tag}.js` });
   });
 
-  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-review, ./corn-scope, ./corn-node-panel, ./corn-layers, ./corn-search, tokens.css and version.json', () => {
+  it('resolves through the package\'s exports map, as a consumer that installed it would: the root, ./corn-map, ./corn-review, ./corn-scope, the pieces around the map, the review\'s sections, tokens.css and version.json', () => {
     if (!fs.existsSync(path.join(dist, 'types', 'index.d.ts'))) execFileSync(process.execPath, [path.join(PACKAGE, 'scripts', 'build.mjs')], { cwd: PACKAGE, stdio: 'pipe' });
     const app = fs.mkdtempSync(path.join(os.tmpdir(), 'corn-consumer-'));
     fs.mkdirSync(path.join(app, 'node_modules', '@popcorn245'), { recursive: true });
@@ -225,11 +252,14 @@ describe('the type declarations (D11)', () => {
       import { version, CornMap } from '@popcorn245/cornfield-components';
       import type { CornSelectDetail } from '@popcorn245/cornfield-components';
       import { CornScope } from '@popcorn245/cornfield-components/corn-scope';
-      import type { CornAuthDetail, CornErrorDetail } from '@popcorn245/cornfield-components';
+      import type { CornScopeAuthDetail, CornScopeErrorDetail } from '@popcorn245/cornfield-components';
       import '@popcorn245/cornfield-components/corn-map';
       import '@popcorn245/cornfield-components/corn-review';
       import '@popcorn245/cornfield-components/corn-node-panel';
       import '@popcorn245/cornfield-components/corn-layers';
+      import '@popcorn245/cornfield-components/corn-proposal';
+      import '@popcorn245/cornfield-components/corn-changes';
+      import { CornDecision } from '@popcorn245/cornfield-components/corn-decision';
       import { CornSearch } from '@popcorn245/cornfield-components/corn-search';
       import type { CornSearchDetail } from '@popcorn245/cornfield-components';
       import type { CornDecisionDetail, CornNavigateDetail, CornReviewAuthDetail } from '@popcorn245/cornfield-components';
@@ -261,8 +291,17 @@ describe('the type declarations (D11)', () => {
       scope.topology = { nodes: [{ id: 'a' }], edges: [] };
       scope.config = { version: '1.2.3' };
       scope.strings = { retry: 'Again' };
-      scope.addEventListener('cornAuth', (e) => { const d: CornAuthDetail = e.detail; void d; });
-      scope.addEventListener('cornError', (e) => { const d: CornErrorDetail = e.detail; if (d.kind === 'not-listed') void d.message; });
+      scope.proposal = '0042-retire-the-old-export';
+      scope.source = 'pull/31';
+      scope.view = 'after';
+      scope.addEventListener('cornNavigate', (e) => { const d: CornNavigateDetail = e.detail; const view: 'before' | 'diff' | 'after' | null = d.view; void view; });
+      scope.addEventListener('cornDecision', (e) => { const d: CornDecisionDetail = e.detail; const outcome: 'approved' | 'notes' = d.outcome; void outcome; });
+      scope.addEventListener('cornAuth', (e) => { const d: CornScopeAuthDetail = e.detail; const during: 'load' | 'proposal' | 'facts' | 'review' | 'send' | 'landing' = d.during; void during; });
+      scope.addEventListener('cornError', (e) => { const d: CornScopeErrorDetail = e.detail; if (d.kind === 'not-listed' || d.kind === 'proposal') void d.message; });
+      const decision: HTMLCornDecisionElement = document.createElement('corn-decision');
+      const proposalBar: HTMLCornProposalElement = document.createElement('corn-proposal');
+      const changes: HTMLCornChangesElement = document.createElement('corn-changes');
+      void decision; void proposalBar; void changes; void CornDecision;
       scope.addEventListener('cornReady', (e) => { const none: void = e.detail; void none; });
       void v; void CornMap; void CornScope;
     `);
@@ -352,10 +391,10 @@ describe('what a build leaves in dist/ (D11)', () => {
       return seen;
     };
     const probes = { 'engine/source.js': '/cornfield/config.json', 'engine/theme-sheet.js': 'constructable stylesheets are not available', 'pieces/status.js': 'source-announcer' };
-    const statics = [...reach('corn-review.js', false)].map((f) => read(f)).join('\n');
+    const statics = ['corn-review.js', ...reach('corn-review.js', false)].map((f) => read(f)).join('\n');
     for (const [module, probe] of Object.entries(probes)) expect(statics.includes(probe), module).toBe(false);
     expect(statics).toContain('The review has no server'); // what a src needs at once: the address, and nothing asked of the host's own origin in its place
-    const all = [...reach('corn-review.js', true)].map((f) => read(f)).join('\n');
+    const all = ['corn-review.js', ...reach('corn-review.js', true)].map((f) => read(f)).join('\n');
     for (const [module, probe] of Object.entries(probes)) expect(all.includes(probe), module).toBe(true);
     // the review shares the engine with the map: it makes no copy of it (the chunks are the map's and the scope's)
     const shared = [...reach('corn-review.js', false)].filter((f) => reach('corn-map.js', false).has(f));
@@ -406,13 +445,13 @@ describe('what a build leaves in dist/ (D11)', () => {
   });
 
   it('ships the declarations next to the modules', () => {
-    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-review.d.ts', 'corn-scope.d.ts', 'corn-node-panel.d.ts', 'corn-layers.d.ts', 'corn-search.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
+    for (const f of ['components.d.ts', 'index.d.ts', 'corn-map.d.ts', 'corn-review.d.ts', 'corn-scope.d.ts', 'corn-node-panel.d.ts', 'corn-layers.d.ts', 'corn-search.d.ts', 'corn-proposal.d.ts', 'corn-changes.d.ts', 'corn-decision.d.ts']) expect(fs.existsSync(path.join(dist, 'types', f)), f).toBe(true);
   });
 
   it('is inside the size budget: the runtime chunk, corn-map and corn-review with their engine, each with what a src brings, and corn-scope with what it loads, each at most 5% over what size-budget.json holds', () => {
     const { budget, tolerance } = JSON.parse(fs.readFileSync(path.join(PACKAGE, 'size-budget.json'), 'utf8'));
     expect(tolerance).toBe(0.05);
-    expect(Object.keys(budget).sort()).toEqual(['corn-layers', 'corn-layers-added', 'corn-map', 'corn-map-src', 'corn-node-panel', 'corn-node-panel-added', 'corn-review', 'corn-review-src', 'corn-scope', 'corn-search', 'corn-search-added', 'runtime']);
+    expect(Object.keys(budget).sort()).toEqual(['corn-changes', 'corn-changes-added', 'corn-decision', 'corn-decision-added', 'corn-layers', 'corn-layers-added', 'corn-map', 'corn-map-src', 'corn-node-panel', 'corn-node-panel-added', 'corn-proposal', 'corn-proposal-added', 'corn-review', 'corn-review-src', 'corn-scope', 'corn-scope-proposal', 'corn-search', 'corn-search-added', 'runtime']);
     const now = measure();
     for (const [name, limit] of Object.entries(budget) as Array<[string, number]>) expect(now[name], `${name}: ${now[name]} B gzip against a budget of ${limit}`).toBeLessThanOrEqual(limit * 1.05);
   });

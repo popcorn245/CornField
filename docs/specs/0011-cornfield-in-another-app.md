@@ -78,15 +78,15 @@ Today the explorer is one program per document. It becomes something a page can 
 | `corn-node-panel` | What is selected | yes | 4 *(built: the pieces in 4, the tags after step 5)* |
 | `corn-layers` | The Layers menu | yes | 4 *(built)* |
 | `corn-search` | Search, its count and its list | yes | 4 *(built)* |
-| `corn-proposal` | The proposal's bar: title, Before, Diff, After, Whole map | yes | 5 |
-| `corn-changes` | The change list, personas and scenarios, and the player | yes | 5 |
-| `corn-decision` | Approve and Send back, and what each will do | yes | 5 |
+| `corn-proposal` | The proposal's bar: title, Before, Diff, After, Whole map | yes | 5 *(built: the piece in `<corn-review>`, the tag after the pieces around the map)* |
+| `corn-changes` | The change list, personas and scenarios, and the player | yes | 5 *(built, as above; the player is the last part of its own box)* |
+| `corn-decision` | Approve and Send back, and what each will do | yes | 5 *(built, as above)* |
 | `corn-review` | **The one-tag review:** the six above, laid out | ~~no~~ yes (amended below) | 5 |
 | `corn-work` | The Work panel; its tabs follow as pieces of their own | yes | 6 |
 | `corn-explorer` | Everything cornfield's page shows | no | 7 |
 
 - The what-if editor, the House view, the review tokens dialog and the account menu come with step 7 or later. The sign-in pages stay the server's.
-- **`corn-review` has a shadow root after all, kept on purpose** (the PM, 2026-11-12, after the review piece's review, PR #248). Built without one, the review showed that a host's own rules reach in: a `button` reset, a border on every `canvas`, an indent on every paragraph restyled cornfield's controls, which is what D7 gives leaf pieces a shadow root against. So the tag mounts the whole review (`explorer/pieces/review.js`: the map, the bar, the change list and player, the node panel and the decision, on one instance) in **one** shadow root of its own, with every hook a part. It is not a layout of the leaf tags yet, and does not share a `corn-scope`'s instance (D5): `corn-proposal`, `corn-changes` and `corn-decision` as tags of their own are still to come.
+- **`corn-review` has a shadow root after all, kept on purpose** (the PM, 2026-11-12, after the review piece's review, PR #248). Built without one, the review showed that a host's own rules reach in: a `button` reset, a border on every `canvas`, an indent on every paragraph restyled cornfield's controls, which is what D7 gives leaf pieces a shadow root against. So the tag mounts the whole review (`explorer/pieces/review.js`: the map, the bar, the change list and player, the node panel and the decision, on one instance) in **one** shadow root of its own, with every hook a part. It is not a layout of the leaf tags, and does not share a `corn-scope`'s instance (D5): the same three sections are tags of their own too (`corn-proposal`, `corn-changes`, `corn-decision`, built after the pieces around the map), which a host lays out in its own grid inside a scope. **The scope holds the proposal for them** (D6: `proposal`, `source` and `view` are properties of the scope, which reads it with the same requests the review makes and tells the host `cornNavigate` and `cornDecision` once, whatever sections are in it), and a scope holds one of each section, since each has state of its own (a hold, a note, a playing scenario).
 - **Order:** the map, then the review, then the rest. The Work panel is last of the large pieces because it is the hardest to split, not because it matters least.
 
 ### D5. Pieces find each other through the nearest `corn-scope`
@@ -242,13 +242,13 @@ How the code is shared:
 
 Each step is its own release, and cornfield's page looks and behaves the same after each.
 
-Where it stands (the PM, 2026-11-12; the pieces around the map added 2026-11-13): steps 1 to 5 are built, and with them the three tags around the map, `corn-node-panel`, `corn-layers` and `corn-search` (step 4's pieces became tags once the instance could have a root for each piece: `engine/roots.js`, and the cross-piece lookups by id became events and asks), and the JavaScript half of step 6 (the Work panel split into pieces on the instance, PR #249). What is left of steps 3 and 6, the routes a listed origin may read and write beyond the review's (the Work panel's, `corn-work`), waits on a second embed key, which is the maintainer's decision.
+Where it stands (the PM, 2026-11-12; the pieces around the map added 2026-11-13; the review's sections as tags added 2026-11-13): steps 1 to 5 are built, and with them the three tags around the map, `corn-node-panel`, `corn-layers` and `corn-search` (step 4's pieces became tags once the instance could have a root for each piece: `engine/roots.js`, and the cross-piece lookups by id became events and asks), and, after them, the review's three sections as tags of their own, `corn-proposal`, `corn-changes` and `corn-decision`, laid out by the host beside a map inside a scope that holds the proposal (the cross-piece lookups that were left, the bar's and the column's and the player's and the map's covers, became asks), and the JavaScript half of step 6 (the Work panel split into pieces on the instance, PR #249). What is left of steps 3 and 6, the routes a listed origin may read and write beyond the review's (the Work panel's, `corn-work`), waits on a second embed key, which is the maintainer's decision.
 
 1. **The instance** (D2) *(built)*: `createInstance`, the map's modules moved onto it (render, scene, labels, layout, map-style, camera, input, frame), the page shell, the tripwire tests, the two-instances test.
 2. **`components/` and `corn-map`** *(built)* (D1, D3, D6, D11, D12): the package, its build and tests in CI, the first piece and its shell, properties in and events out, the size budget.
 3. **The server and `corn-scope`** (D5, D9) *(built; the routes beyond the review's wait on the second embed key)*: `embed.origins`, CORS, the write check, sign-in and return, theme images; the scope with `src`; a rig with two sibling names that proves the cookie travels.
 4. **The pieces around the map** (D3, D7, D8) *(built)*: node panel, layers, search; the stylesheet split, container queries, parts, the theme handed in.
-5. **The review** (D4, D6) *(built: `corn-review`, in one shadow root, D4)*: proposal bar, changes, player, decision, and `corn-review`. **The host app can review and decide here.**
+5. **The review** (D4, D6) *(built: `corn-review`, in one shadow root, D4, and the three sections as tags beside a map in a scope)*: proposal bar, changes, player, decision, and `corn-review`. **The host app can review and decide here.**
 6. **The Work panel** (D8) *(the JavaScript half built: the pieces on the instance; `corn-work` and the routes wait on the second embed key)*: `forge-panel.js` split into pieces, `corn-work`, the dialogs, and what a listed origin may do beyond the decision.
 7. **The rest:** `corn-explorer`, the what-if editor, the account pieces, and question 11.
 

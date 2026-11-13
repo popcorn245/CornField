@@ -65,6 +65,8 @@
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`; the piece that owns a live region writes it: `announce:write`)
  *   root:changed    (none)  the primary root moved (`attach`) or a root joined or left (engine/roots.js): what listens on every root puts itself right
  *   map:ready       (none)  the map piece is mounted and has its topology (pieces/map.js); map:gone: it ended. The pieces around it (pieces/around.js) mount and unmount with it
+ *   map:topology    (none)  the map piece installed a base map (a topology the host handed in, or the server's); map:canvas: its canvas was replaced (another renderer). What holds a
+ *                   proposal over the map (pieces/scope-proposal.js) lays it over the new base, and binds the new canvas
  *   search:status   text  what the search's own live region says (engine/search-status.js; pieces/search.js writes it)
  *
  *   What a piece is asked to do (`emit`ted to it):
@@ -89,11 +91,17 @@
  *   scenario:clear  (none)  (emit) a selection ends a playing scenario
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with its edits in); proposal:before-close -> false keeps it open
  *   proposal:specs-list (none) -> false  there is no list of specs to open here (the review in another app): a bad link's ways leave the button out
+ *   proposal:covers (none) -> { bottom }, changes:covers (none) -> { right }, player:covers (none) -> { top }  where the proposal bar, the review column and the scenario player lie over the map, in
+ *                   client px (engine/map-rect.js): the map frames into what is left. A piece in a box of its own lies over nothing and answers none. popup:open (none) -> true:
+ *                   a menu that has its own Escape is open (the Layers menu, the bar's ⋯ menu: the player's Escape leaves it alone)
+ *   proposal:seat-column { column, phone } -> true  the bar seats the review column: under it, or in its body on a phone (pieces/proposal.js); proposal:bar-bottom (none) -> px,
+ *                   how far down the bar reaches, and proposal:bar-resize (emit): the bar's height changed, so the column starts under it again
+ *   player:seat     bar -> true  the dock's owner (engine/sheets.js) seats the scenario player's bar as a sheet above the node panel's
  *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
  *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
  *   work:on         (none) -> boolean  whether the Work panel has started (a piece mounted after it asks rather than waits for `work:available`)
  *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the Work panel opens on Runs at that run, its reply field focused
- *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page laid the map out from these
+ *   work:open-specs (none) -> true  the Work panel's Specs tab opened for a bad link's way on; map:set { nodes, edges } -> true  the page (or the review, or a scope's map: pieces/map.js) laid the map out from these
  *   changes:opened-line title -> string, changes:played-line -> string  what the review column says of an opening, and how many scenarios were played
  *   whatif:edits -> edits[], whatif:form -> { name } | null, whatif:describe -> string[]  what the decision asks of the what-if editor
  *
