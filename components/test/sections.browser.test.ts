@@ -107,6 +107,31 @@ describe('the scope holds the proposal for the sections', () => {
     expect(seen('cornSelect').map((e) => e.target)).toEqual(['corn-map']);
   });
 
+  it('a box too short for the list and the player cuts neither: the player keeps its controls, the column scrolls to the rest, and only to what it holds', async () => {
+    const t = await compose();
+    await until(() => visible(t.list, '[data-action="scenario-open"]'));
+    q(t.list, '[data-action="scenario-open"]')!.click();
+    await until(() => visible(t.list, '[data-action="scenario-step"]'));
+    q(t.list, '[data-action="scenario-step"]')!.click();
+    await until(() => visible(t.list, '.hx-player-controls'));
+    const column = q(t.list, '[data-corn="review-column"]')!;
+    for (const height of [90, 160, 320, 600]) {
+      t.list.style.height = `${height}px`;
+      await frames(3);
+      const controls = q(t.list, '.hx-player-controls')!.getBoundingClientRect();
+      expect(controls.height, `${height}px`).toBeGreaterThan(30);
+      // what the column holds past its box is reachable: it scrolls to it (never to words for a screen reader alone, which the lists hold)
+      const content = q(t.list, '.hx-rc-scroll')!.offsetHeight + q(t.list, '.hx-player-seat')!.offsetHeight;
+      expect(column.scrollHeight, `${height}px`).toBeLessThanOrEqual(Math.max(column.clientHeight, content) + 1);
+      q(t.list, '.hx-player-controls')!.scrollIntoView({ block: 'nearest' }); // as the focus going to Play would
+      await frames(1);
+      const box = column.getBoundingClientRect();
+      expect(Math.round(q(t.list, '.hx-player-controls')!.getBoundingClientRect().bottom), `${height}px`).toBeLessThanOrEqual(Math.round(box.bottom) + 1);
+      expect(Math.round(q(t.list, '.hx-player-controls')!.getBoundingClientRect().top), `${height}px`).toBeGreaterThanOrEqual(Math.round(box.top) - 1);
+      column.scrollTop = 0;
+    }
+  });
+
   it('closes by the bar\'s Close, and by the property, and says closed once; the sections empty, the map plain, the same name asked for again opens it', async () => {
     const t = await compose();
     await until(() => opened(t));
