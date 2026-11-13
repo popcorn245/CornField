@@ -15,3 +15,5 @@
 .hx-work-pills { display: flex; flex-wrap: wrap; gap: var(--corn-space-2); margin: 0; }
 .hx-work-actions .hx-foot-btn { align-self: flex-start; }
 @media (max-width: 767px) { .hx-work-bar { top: calc(var(--corn-space-4) + 2.5rem); } }
+/* On a phone the header has no room for a second number beside the Work button's own (retro's wider type pushed the Layers chip and Fit out of the group): the badge is in the button's spoken name, and the Work button at the header's far end says it too, until step 3 of spec 0012 retires that one */
+@media (max-width: 767px) { .hx-view-badge { display: none; } }
