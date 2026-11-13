@@ -560,6 +560,9 @@ export function mount(root, inst, options = {}) {
   scope.on('node:focus', () => {
     const title = own('drawer-title');
     if (!title) return;
+    // A second panel in one scope (two tags, one maybe hidden by the host's layout) leaves the focus where the first that could take it put it
+    const now = inst.active();
+    if (inline && now && now !== title && typeof now.matches === 'function' && now.matches('[data-corn="node-title"]')) return;
     title.setAttribute('tabindex', '-1');
     title.focus();
   });

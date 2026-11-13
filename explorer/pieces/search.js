@@ -428,11 +428,33 @@ export function mount(root, inst, options = {}) {
   scope.own(listenRoots(inst, 'keydown', (e) => {
     if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target) && !(tree.querySelector && tree.querySelector('[data-corn="dialog-scrim"]:not([hidden]), .hx-mockup-dialog'))) {
       e.preventDefault();
+      // two search tags in one scope: the first that took the focus keeps it
+      const now = inst.active();
+      if (now && typeof now.matches === 'function' && now.matches('[data-corn="search-input"]') && !made.some((el) => el.contains(now))) return;
       goToSearch();
     }
   }));
-  // What the live regions beside the fields say (engine/search-status.js tells the instance; the regions are this piece's own)
-  scope.on('search:status', (text) => { for (const id of ['search-status', 'mobile-search-status']) { const el = own(id); if (el) el.textContent = text; } });
+  // What the live regions beside the fields say (engine/search-status.js tells the instance; the regions are this piece's own). A scope may hold two search
+  // tags: they are one search (one query, one current match), and only one of them speaks, the one last used (else the first), so it is said once
+  const voice = inst.slot('search-voice', () => ({ current: null, all: new Set() }));
+  const me = {};
+  voice.all.add(me);
+  if (!voice.current) voice.current = me;
+  for (const field of fields) scope.listen(own(field.input), 'focus', () => { voice.current = me; });
+  scope.own(() => { voice.all.delete(me); if (voice.current === me) voice.current = null; });
+  scope.on('search:status', (text) => {
+    if (!voice.current) voice.current = me;
+    for (const id of ['search-status', 'mobile-search-status']) { const el = own(id); if (el) el.textContent = voice.current === me ? text : ''; }
+  });
+  // ... and the other one shows what this one typed or chose (cornfield's page has one search: nothing here runs there)
+  scope.on('search', () => {
+    if (voice.all.size < 2 || made.some((el) => el.contains(inst.active()))) return;
+    for (const field of fields) {
+      const input = own(field.input);
+      if (input && input.value.trim() !== state.searchQuery) input.value = state.searchQuery;
+    }
+    paintSearch({ keepOpen: false });
+  });
 
   // What the neighbours ask of the search, and a layer going on or off moving matches between the list and "In layers that are off"
   scope.on('search:active', () => searchActive());
