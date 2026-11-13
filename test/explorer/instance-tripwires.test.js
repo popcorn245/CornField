@@ -308,10 +308,25 @@ describe('a piece reaches a neighbour by an event or an ask, never by an id in a
     for (const fine of ["inst.el('forge-panel')", "own('proposal-bar')", "inst.ask('proposal:covers')", "bar.querySelector('#proposal-more-menu [role=\"menuitem\"]')", "inst.root.querySelector('[data-corn=\"dialog-scrim\"]')", "col.querySelector('.hx-player-seat')"]) expect(lookup.test(fine), fine).toBe(false);
   });
 
+  /**
+   * The same on any receiver (a root kept in a variable, `state.root`, a document): a query by a neighbour's id, wherever it is asked. A file's own ids (its markup's
+   * `id="…"`) are its own to find; an element's `closest('#…')` asks about its own ancestors, not a neighbour, and is not a lookup
+   */
+  const anyLookup = (ids) => new RegExp(String.raw`\.(?:el|getElementById)\s*\(\s*['"\x60](?:${ids.join('|')})['"\x60]|\.querySelector(?:All)?\s*\(\s*['"\x60][^'"\x60]*#(?:${ids.join('|')})(?![\w-])`);
+  const ownIds = (code) => new Set([...code.matchAll(/\bid="([\w-]+)"/g)].map((m) => m[1]));
+
+  it('the check on any receiver is not blind either', () => {
+    const all = anyLookup(NEIGHBOURS);
+    for (const bad of ["const r = inst.root; r.querySelector('#spec-drawer')", "state.root.querySelector('#review-column .x')", "inst.doc.getElementById('sheet-dock')", "root.el('proposal-bar')"]) expect(all.test(bad), bad).toBe(true);
+    for (const fine of ["active.closest('#review-column')", "own('proposal-bar')", "inst.el('forge-panel')", "col.querySelector('.hx-player-seat')"]) expect(all.test(fine), fine).toBe(false);
+  });
+
   for (const rel of CONVERTED_HERE) {
     it(`${rel} asks the neighbour, and finds none of the elements that are another piece's`, () => {
       const code = codeOf(fs.readFileSync(path.join(EXPLORER, rel), 'utf8'));
       expect(lookup.test(code), rel).toBe(false);
+      const own = ownIds(code);
+      expect(anyLookup(NEIGHBOURS.filter((id) => !own.has(id))).test(code), rel).toBe(false);
     });
   }
 });
