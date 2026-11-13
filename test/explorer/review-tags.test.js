@@ -114,6 +114,23 @@ describe('the scope holds the proposal for every piece in it (pieces/scope-propo
     t.scope.destroy();
   });
 
+  it('takes a host\'s `source` and `proposal` (or `proposal` and `view`) set one after the other as one ask: the old proposal is never read under the new source', async () => {
+    const t = await setup({ proposal: '0002-checkout', source: 'pull/31' });
+    await flush(200);
+    // as <corn-scope>'s watchers hand them over: one key at a time, in the order the host's script set them
+    t.scope.update({ source: 'pull/32' });
+    t.scope.update({ proposal: '0003-other' });
+    t.scope.update({ view: 'before' });
+    await flush(300);
+    const reads = t.calls.filter((c) => /\/proposals\/[^/]+\.json/.test(c.url)).map((c) => c.url.replace(BASE, ''));
+    expect(reads).toEqual(['/proposals/0002-checkout.json?source=pull%2F31', '/proposals/0003-other.json?source=pull%2F32']);
+    expect(t.heard.error).toEqual([]);
+    // opened, then the view the host asked for (as <corn-review> says them: the proposal opens on Diff, and the view follows)
+    expect(t.heard.navigate.slice(1)).toEqual([{ proposal: '0003-other', source: 'pull/32', view: 'diff', change: 'opened' }, { proposal: '0003-other', source: 'pull/32', view: 'before', change: 'view' }]);
+    expect(t.inst.state.proposalView).toBe('before');
+    t.scope.destroy();
+  });
+
   it('waits for the map: a proposal asked for before the map has nodes is not fetched, and opens when the map comes', async () => {
     const t = await setup({ proposal: '0002-checkout', source: 'pull/31', withMap: false });
     await flush(200);

@@ -165,6 +165,23 @@ export function mountScope(host, options = {}) {
     holdProposal();
   }
 
+  /**
+   * The proposal's keys a host changed, handed over together once its script has run: a host sets `source` and then `proposal` (or `proposal` and then `view`)
+   * one after the other, and each alone would open the wrong thing first (the old proposal under the new source: a read of a copy that does not exist, a
+   * `cornError` for it, and a line in the bar)
+   */
+  let asking = null;
+  function askHeld(asked) {
+    if (asking) { Object.assign(asking, asked); return; }
+    asking = { ...asked };
+    queueMicrotask(() => {
+      const keys = asking;
+      asking = null;
+      if (ended) return;
+      if (held) held.update(keys); else holdProposal();
+    });
+  }
+
   /** Makes the instance hold the proposal when the scope has one (the first time: the chunk is loaded); a scope with none loads nothing */
   function holdProposal() {
     if (ended || held || holdLoading || props.proposal === null || props.proposal === undefined || props.proposal === '') return;
@@ -226,7 +243,7 @@ export function mountScope(host, options = {}) {
       // The proposal: the keys that changed go to what holds it (loaded now, if this is the scope's first)
       const asked = {};
       for (const key of ['proposal', 'source', 'view']) if (key in next && (next[key] ?? null) !== props[key]) { props[key] = next[key] ?? null; asked[key] = props[key]; }
-      if (Object.keys(asked).length) { if (held) held.update(asked); else holdProposal(); }
+      if (Object.keys(asked).length) askHeld(asked);
     },
     destroy() {
       if (ended) return;
