@@ -239,19 +239,6 @@ export function threadOfPull(body) {
 }
 
 /**
-<<<<<<< HEAD
- * Every issue a pull request's text says it closes: `Closes #n` (also Fixes and Resolves, and their other tenses), outside code, each
- * number once, in the order written. An issue in another repo (`owner/name#n`) is not this repo's. (`threadOfPull` is the first of
- * these, or a `Thread: #n`; the work graph draws every one, server/work-graph.js.)
- * @param {string} body
- * @returns {number[]}
- */
-export function closesOf(body) {
-  const { prose } = scan(String(body ?? ''));
-  const out = [];
-  for (const m of prose.matchAll(/(?:^|[\s(])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:)?\s+#([1-9]\d{0,8})\b/gi)) {
-    const n = Number(m[1]);
-=======
  * Every issue a pull request's text says it closes, as GitHub and Forgejo read it: `Closes #n`, and the other keywords both forges
  * honour (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved; any case; an optional colon), each number once, in
  * the order written. Not in code (a fenced block or an inline span) and not in an HTML comment (a pull request template's
@@ -269,7 +256,6 @@ export function closesOf(body, repo = null) {
   for (const m of prose.matchAll(/(?:^|[\s(])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?:\s*:)?\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)?#([1-9]\d{0,8})\b/gi)) {
     if (m[1] && m[1].toLowerCase() !== self) continue;
     const n = Number(m[2]);
->>>>>>> origin/main
     if (!out.includes(n)) out.push(n);
   }
   return out;
