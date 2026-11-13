@@ -226,7 +226,7 @@ export function packIcons(scene, has, style = null) {
     let kind = n.icon && has(n.icon) ? n.icon : null;
     let side = n.r * ICON_RATIO;
     if (!kind && !n.icon && n.letters && has(letterKey(n.letters))) { kind = letterKey(n.letters); side = n.r * LETTER_RATIO; }
-    if (!kind && !n.icon && !n.letters && n.glyph) { const key = glyphKey(n.glyph, glyphInk(n, style)); if (has(key)) { kind = key; side = n.r * GLYPH_RATIO; } } // the type's own glyph, last (glyphs.js)
+    if (!kind && !n.icon && !n.letters && n.glyph) { const key = glyphKey(n.glyph, glyphInk(n, style, scene.theme)); if (has(key)) { kind = key; side = n.r * GLYPH_RATIO; } } // the type's own glyph, last (glyphs.js)
     if (!kind) return;
     if (!byKind.has(kind)) byKind.set(kind, { rows: [], minR: Infinity, maxR: 0 });
     const group = byKind.get(kind);

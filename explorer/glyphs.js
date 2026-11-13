@@ -13,7 +13,8 @@
  */
 
 import { NODE_THEMES } from '../core/schema.js';
-import { parseColor } from './theme-model.js';
+import { DARK_GROUND, LIGHT_GROUND, parseColor } from './theme-model.js';
+import { over } from '../core/color.js';
 
 /** A node is at least this many px across (on screen) before its glyph is drawn: smaller, no glyph reads and the silhouette does the work */
 export const GLYPH_MIN_PX = 14;
@@ -48,14 +49,17 @@ const luminanceOf = ([r, g, b]) => {
 };
 const ratioOf = (a, b) => { const [hi, lo] = a > b ? [a, b] : [b, a]; return (hi + 0.05) / (lo + 0.05); };
 
-/** The ink that reads on a fill: white or dark, whichever has the higher contrast (the glyph is at least 3:1 on every fill of the default palette: a test holds it) */
-export function inkFor(fill) {
-  const lum = luminanceOf(parseColor(fill));
+/** The ink that reads on a fill (over the ground of `theme`, when the fill is translucent): white or dark, whichever has the higher contrast (the glyph is at least 3:1 on every fill of the default palette: a test holds it) */
+export function inkFor(fill, theme = 'dark') {
+  let rgba = parseColor(fill);
+  // A translucent fill is seen over the map's ground (a node is drawn translucent, renderer-canvas2d.js), so the ink is chosen against that
+  if (rgba[3] < 1) rgba = over(rgba, parseColor(theme === 'light' ? LIGHT_GROUND : DARK_GROUND));
+  const lum = luminanceOf(rgba);
   return ratioOf(1, lum) >= ratioOf(luminanceOf(parseColor(INK_DARK)), lum) ? INK_LIGHT : INK_DARK;
 }
 
 /** The ink a node's glyph is drawn in: the theme's (`--corn-map-glyph`, in the style's `values`), else the one that reads on its fill */
-export const glyphInk = (node, style) => (style && style.values && style.values['--corn-map-glyph']) || inkFor(node.color);
+export const glyphInk = (node, style, theme = 'dark') => (style && style.values && style.values['--corn-map-glyph']) || inkFor(node.color, theme);
 
 /** Whether a node's glyph is drawn at this zoom: it has one, no icon or letters replace it, and it is wide enough on screen */
 export const showsGlyph = (node, zoom) => !!node.glyph && !node.icon && !node.letters && node.r * 2 * zoom >= GLYPH_MIN_PX;

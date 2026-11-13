@@ -28,7 +28,7 @@ import { kindLetters } from '../../core/layers.js';
 import { reviewHides, rowKeyOf, shownByProposal } from '../layer-model.js';
 import { layerShows } from '../scene.js';
 import { STROKE_TOKEN, kindToken, mapStyleOf } from '../engine/map-style.js';
-import { over, parseColor, contrast } from '../../core/color.js';
+import { over, parseColor, contrast, toHex } from '../../core/color.js';
 import { DARK_GROUND, LIGHT_GROUND } from '../theme-model.js';
 import { t } from '../engine/strings.js';
 import { renderFlowLegend } from '../engine/flow-legend.js';
@@ -128,9 +128,9 @@ export function mount(root, inst, options = {}) {
     const [r, g, b] = over(surface, over(ground, [0, 0, 0, 1]));
     return `rgb(${r}, ${g}, ${b})`;
   }
-  /** The outline a dot or swatch gets when its fill is under 3:1 on the menu: the map's own outline colour when the theme sets one, else the CSS default (`.is-ringed`). The fill is never changed */
+  /** The outline a dot or swatch gets when its fill (as it shows over the menu) is under 3:1 on the menu: the map's own outline colour when the theme sets one, else the CSS default (`.is-ringed`). The fill is never changed */
   function ringOf(color, surface) {
-    if (contrast(color, surface) >= 3) return null;
+    if (contrast(toHex(over(parseColor(color), parseColor(surface))), surface) >= 3) return null; // a translucent fill is seen over the menu, as the node is over the ground
     const stroke = style().values[STROKE_TOKEN];
     return { stroke: stroke ? swatch(stroke) : '' };
   }

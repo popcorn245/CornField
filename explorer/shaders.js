@@ -289,15 +289,18 @@ void main() {
     over(acc, ring.rgb, ring.a * al * coverBand(abs(len - (rw + u_haloGeom[halo].y) * zoom), u_haloGeom[halo].z * zoom * 0.5, pix));
   }
 
-  // Glow: a blurred copy of the disc under it (see glowDisc)
-  float glow = v_color.w;
-  if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr));
-
-  // The silhouette, and its white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
   int shapeCode = int(v_kind.w + 0.5);
   bool glyph = shapeCode >= 8;
   if (glyph) shapeCode -= 8;
-  over(acc, v_color.rgb, v_kind.z * al * coverEdge(sdShape(v_local, R, shapeCode, len), pix));
+  float cover = coverEdge(sdShape(v_local, R, shapeCode, len), pix);
+
+  // Glow: a blurred copy of the disc under it (see glowDisc). Under a translucent fill it is left out, so the fill alone sets what is
+  // seen through it, as renderer-canvas2d.js drawNode does (a clip); an opaque fill hides it, so that case is drawn as it always was
+  float glow = v_color.w;
+  if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr) * (v_kind.z < 1.0 ? 1.0 - cover : 1.0));
+
+  // The silhouette, and its white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
+  over(acc, v_color.rgb, v_kind.z * al * cover);
   if (!glyph || 2.0 * R < u_glyphMin) over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
 
   // Mark: a ring with the look of its own mark (dashed when its dash is set: added), and for removed a
