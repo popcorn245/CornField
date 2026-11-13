@@ -103,6 +103,15 @@ export function mount(root, inst, options = {}) {
   function setMenu(open) {
     menu.hidden = !open;
     btn.setAttribute('aria-expanded', String(open));
+    if (open && options.inline) alignMenu();
+  }
+  /** In a box of its own (`<corn-layers>`) the menu hangs from the chip's start; where that runs past the window's end (a chip at the right of a host's
+   * toolbar) and there is room the other way, it hangs from the chip's end instead (`hx-menu--end`) */
+  function alignMenu() {
+    menu.classList.remove('hx-menu--end');
+    const room = inst.win ? inst.win.innerWidth : 0;
+    const r = menu.getBoundingClientRect();
+    if (room && r.width && r.right > room && wrap.getBoundingClientRect().right - r.width >= 0) menu.classList.add('hx-menu--end');
   }
   const toggleMenu = (open) => setMenu(open === undefined ? menu.hidden : !!open);
   const closeMenu = () => setMenu(false);

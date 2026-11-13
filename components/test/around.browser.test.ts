@@ -306,6 +306,21 @@ describe('the pieces around the map in one scope', () => {
     await until(() => status('#sb') !== '' && status('#sb') !== null);
   });
 
+  it('a Layers chip at the end of a host\'s toolbar opens its menu toward the room there is: the menu stays inside the window', async () => {
+    const { host, layers } = await compose();
+    const bar = document.createElement('nav');
+    bar.style.cssText = `display: flex; justify-content: flex-end; width: ${window.innerWidth}px; position: absolute; top: 0; left: 0`;
+    bar.append(layers);
+    layers.style.cssText = 'flex: none; width: 11rem';
+    host.querySelector('corn-scope')!.append(bar);
+    await until(() => !!layers.shadowRoot!.querySelector('[data-corn="layers-button"]'));
+    await userEvent.click(layers.shadowRoot!.querySelector('[data-corn="layers-button"]')!);
+    const menu = layers.shadowRoot!.querySelector('[data-corn="layers-menu"]') as HTMLElement;
+    expect(menu.hidden).toBe(false);
+    expect(Math.round(menu.getBoundingClientRect().right)).toBeLessThanOrEqual(window.innerWidth);
+    expect(menu.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+  });
+
   it('a value with no space in it (a long host name or file) wraps inside a narrow panel and never runs past its edge', async () => {
     const { host, scope, map, panel } = await compose();
     host.style.gridTemplateColumns = '1fr 220px';
