@@ -458,6 +458,7 @@ export function createWebglRenderer(canvas, opts = {}) {
   let packed = null;
   let packedScene = null;
   let packedVersion;
+  let packedGround = null; // the ground the icon rows were packed for: a translucent node's glyph ink depends on it (glyphs.js)
   let lastArgs = null;
 
   /** A pass only a theme asks for (EXTRA_PASSES), built the first time it is wanted */
@@ -527,6 +528,7 @@ export function createWebglRenderer(canvas, opts = {}) {
       gpu.glyphInk = ink;
       packedScene = null; // the icon rows are made again for the new ink
     }
+    if (packedGround !== style.ground) { packedGround = style.ground; packedScene = null; } // another ground: a translucent node's glyph may take the other ink
     if (scene !== packedScene || scene.version !== packedVersion) {
       packed = { ...packScene(scene), strokes: packStrokes(scene), icons: packIcons(scene, (kind) => (isLetterKey(kind) ? !!letterImage(lettersOfKey(kind), ink) : isGlyphKey(kind) ? !!glyphImage(glyphOfKey(kind).type, glyphOfKey(kind).ink) : !!(style.icons && style.icons.get(kind))), style) };
       packedScene = scene;

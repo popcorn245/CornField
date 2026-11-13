@@ -88,7 +88,7 @@ describe('the tokens', () => {
 
   it('reads only the colour tokens that are set, and the width as a length', () => {
     const got = M.readMapTokens(reader({ '--corn-map-node-app': '#112233', '--corn-map-node-page': 'auto', '--corn-map-edge-flow': 'oops', '--corn-map-stroke-width': '3px' }));
-    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null });
+    expect(got).toEqual({ values: { '--corn-map-node-app': '#112233' }, strokeWidth: 3, font: null, edgeWidth: null, glow: null, labelMin: null, greyAlpha: null, ground: null });
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': 'wide' })).strokeWidth).toBe(M.DEFAULT_STROKE_WIDTH);
     expect(M.readMapTokens(reader({ '--corn-map-stroke-width': '0' })).strokeWidth).toBe(0);
   });

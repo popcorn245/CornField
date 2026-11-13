@@ -292,15 +292,23 @@ void main() {
   int shapeCode = int(v_kind.w + 0.5);
   bool glyph = shapeCode >= 8;
   if (glyph) shapeCode -= 8;
-  float cover = coverEdge(sdShape(v_local, R, shapeCode, len), pix);
+  float shapeCover = coverEdge(sdShape(v_local, R, shapeCode, len), pix); // how much of this pixel the silhouette covers
 
-  // Glow: a blurred copy of the disc under it (see glowDisc). Under a translucent fill it is left out, so the fill alone sets what is
-  // seen through it, as renderer-canvas2d.js drawNode does (a clip); an opaque fill hides it, so that case is drawn as it always was
+  // Glow: a blurred copy of the disc under it (see glowDisc), then the silhouette. An opaque fill hides the glow under it: drawn as it always was.
+  // Under a translucent fill the glow is left out, so the fill alone sets what is seen through it, as renderer-canvas2d.js drawNode does (a clip).
+  // Glow and fill are the same colour, so that is ONE layer: the fill in the part of the pixel the silhouette covers, the glow in the rest. Two
+  // layers (the glow times 1 - cover, then the fill times cover) would let the ground through both at the edge: a dark line round a square or a
+  // diamond, whose sides lie inside the glow's disc
   float glow = v_color.w;
-  if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr) * (v_kind.z < 1.0 ? 1.0 - cover : 1.0));
+  if (v_kind.z < 1.0) {
+    float soft = glow > 0.0 ? glowDisc(len, R, glow * 0.5 / u_dpr) : 0.0;
+    over(acc, v_color.rgb, v_kind.z * al * mix(soft, 1.0, shapeCover));
+  } else {
+    if (glow > 0.0) over(acc, v_color.rgb, v_kind.z * al * glowDisc(len, R, glow * 0.5 / u_dpr));
+    over(acc, v_color.rgb, v_kind.z * al * shapeCover);
+  }
 
-  // The silhouette, and its white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
-  over(acc, v_color.rgb, v_kind.z * al * cover);
+  // The white core unless the type's glyph is drawn there (glyphs.js: the icon pass draws it once the node is wide enough)
   if (!glyph || 2.0 * R < u_glyphMin) over(acc, u_core.rgb, u_core.a * al * coverEdge(len - R * u_coreRatio, pix));
 
   // Mark: a ring with the look of its own mark (dashed when its dash is set: added), and for removed a

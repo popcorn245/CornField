@@ -8,7 +8,7 @@
  * labels are the label layer's (labels.js), one transparent canvas over the map for either renderer.
  */
 
-import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
+import { CORE_RATIO, ARROW, END_SHAPES, SHAPE_REACH, SHAPE_SIZES, EDGE_STRIKE, MARK_MIN_PX, edgePoint, looksFor, packetPoint, parseColor } from './scene.js';
 import { GLYPH_TOKEN, ICON_RATIO, PLAIN_STYLE, looksWith, styledScene } from './engine/map-style.js';
 import { LETTER_RATIO, letterImage, showsLetters } from './kind-letters.js';
 import { GLYPH_RATIO, glyphImage, glyphInk, showsGlyph } from './glyphs.js';
@@ -331,12 +331,31 @@ function drawNode(ctx, node, zoom, looks, style, theme) {
     // A soft disc behind the node, not `shadowBlur` (see drawEdge): one cheap fill instead of a blur pass
     ctx.save();
     ctx.globalAlpha = node.alpha * 0.28;
-    circle(ctx, node.x, node.y, node.r + node.glow * 0.7);
-    // Under a translucent fill the glow is left out (a hole in the disc the shape of the node), so the fill alone sets what shows through it;
-    // WebGL's node shader does the same. An opaque fill hides it, so that case is drawn as it always was
-    if (alphaOf(node.color) < 1) { silhouette(ctx, node.shape, node.x, node.y, node.r, true); ctx.clip('evenodd'); }
+    const reach = node.r + node.glow * 0.7;
     ctx.fillStyle = node.color;
-    ctx.fill();
+    if (alphaOf(node.color) < 1) {
+      // Under a translucent fill the glow is left out, so the fill alone sets what shows through it; WebGL's node shader does the same.
+      // The shape inside the glow's disc (the usual case): the disc with the shape as a hole, filled even-odd. A square's corners or a diamond's
+      // points can reach past a small glow's disc (a theme's --corn-map-glow), and that fill would put them over the glow: then the disc is
+      // clipped to everything but the shape (a square round both, the shape cut out even-odd)
+      if (node.r * (SHAPE_REACH[node.shape] || 1) < reach) {
+        circle(ctx, node.x, node.y, reach);
+        silhouette(ctx, node.shape, node.x, node.y, node.r, true);
+        ctx.fill('evenodd');
+      } else {
+        const side = reach + node.r;
+        ctx.beginPath();
+        ctx.rect(node.x - side, node.y - side, side * 2, side * 2);
+        silhouette(ctx, node.shape, node.x, node.y, node.r, true);
+        ctx.clip('evenodd');
+        circle(ctx, node.x, node.y, reach);
+        ctx.fill();
+      }
+    } else {
+      // An opaque fill hides the glow under it: drawn as it always was
+      circle(ctx, node.x, node.y, reach);
+      ctx.fill();
+    }
     ctx.restore();
     silhouette(ctx, node.shape, node.x, node.y, node.r);
   }

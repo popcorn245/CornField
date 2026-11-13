@@ -49,17 +49,21 @@ const luminanceOf = ([r, g, b]) => {
 };
 const ratioOf = (a, b) => { const [hi, lo] = a > b ? [a, b] : [b, a]; return (hi + 0.05) / (lo + 0.05); };
 
-/** The ink that reads on a fill (over the ground of `theme`, when the fill is translucent): white or dark, whichever has the higher contrast (the glyph is at least 3:1 on every fill of the default palette: a test holds it) */
-export function inkFor(fill, theme = 'dark') {
+/** The ink that reads on a fill (seen over `ground`, when the fill is translucent): white or dark, whichever has the higher contrast (the glyph is at least 3:1 on every fill of the default palette: a test holds it) */
+export function inkFor(fill, ground = DARK_GROUND) {
   let rgba = parseColor(fill);
-  // A translucent fill is seen over the map's ground (a node is drawn translucent, renderer-canvas2d.js), so the ink is chosen against that
-  if (rgba[3] < 1) rgba = over(rgba, parseColor(theme === 'light' ? LIGHT_GROUND : DARK_GROUND));
+  // A translucent fill is seen over the map's ground (a node is drawn translucent, renderer-canvas2d.js), so the ink is chosen against that.
+  // The ground is opaque: a translucent one is taken over black, as a canvas with nothing under it shows
+  if (rgba[3] < 1) rgba = over(rgba, over(parseColor(ground), [0, 0, 0, 1]));
   const lum = luminanceOf(rgba);
   return ratioOf(1, lum) >= ratioOf(luminanceOf(parseColor(INK_DARK)), lum) ? INK_LIGHT : INK_DARK;
 }
 
-/** The ink a node's glyph is drawn in: the theme's (`--corn-map-glyph`, in the style's `values`), else the one that reads on its fill */
-export const glyphInk = (node, style, theme = 'dark') => (style && style.values && style.values['--corn-map-glyph']) || inkFor(node.color, theme);
+/** The ground a node is seen over: the theme's (`--corn-ground`, the style's `ground`), else the light or the dark one */
+const groundOf = (style, theme) => (style && style.ground) || (theme === 'light' ? LIGHT_GROUND : DARK_GROUND);
+
+/** The ink a node's glyph is drawn in: the theme's (`--corn-map-glyph`, in the style's `values`), else the one that reads on its fill (over the ground, when it is translucent) */
+export const glyphInk = (node, style, theme = 'dark') => (style && style.values && style.values['--corn-map-glyph']) || inkFor(node.color, groundOf(style, theme));
 
 /** Whether a node's glyph is drawn at this zoom: it has one, no icon or letters replace it, and it is wide enough on screen */
 export const showsGlyph = (node, zoom) => !!node.glyph && !node.icon && !node.letters && node.r * 2 * zoom >= GLYPH_MIN_PX;
