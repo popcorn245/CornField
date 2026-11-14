@@ -350,6 +350,11 @@ describe('addresses (D8)', () => {
     expect(nodeForAddress(workAddress('?run=run-0123456789ABCDEFGHIJKLMNOP'), nodes)).toBe('run:run-0123456789ABCDEFGHIJKLMNOP');
     expect(nodeForAddress(workAddress('?issue=999'), nodes)).toBeNull();
   });
+  it('finds an idea by its issue number: on the forge it is an issue, on the map a thread', () => {
+    const { nodes } = workScene(graph, map);
+    expect(nodeForAddress(workAddress('?issue=14'), nodes)).toBe('issue:14');
+    expect(nodeForAddress(workAddress('?issue=31'), nodes)).toBe('thread:31');
+  });
 });
 
 describe('the panel keeps the forge\'s words as text and its links as web links (spec 0012, security)', () => {

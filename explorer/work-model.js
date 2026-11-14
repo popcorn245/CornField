@@ -585,6 +585,7 @@ export function nodeForAddress(ask, nodes) {
   if (!ask || !ask.kind) return null;
   const mine = nodes.filter((n) => n.work === ask.kind);
   if (ask.kind === 'pull' && !mine.some((n) => String(n.item.number) === ask.key)) { const spec = nodes.find((n) => n.work === 'proposal' && String(n.item.number) === ask.key); if (spec) return spec.id; } // a spec's pull request is its proposal
+  if (ask.kind === 'issue' && !mine.some((n) => String(n.item.number) === ask.key)) { const idea = nodes.find((n) => n.work === 'thread' && String(n.item.number) === ask.key); if (idea) return idea.id; } // an idea is an issue on the forge, drawn as a thread
   const hit = ask.kind === 'proposal'
     ? mine.find((n) => n.item.slug === ask.key) || mine.find((n) => specNumber(text(n.item.slug)) === ask.key)
     : ask.kind === 'run' ? mine.find((n) => n.item.runId === ask.key) : mine.find((n) => String(n.item.number) === ask.key);

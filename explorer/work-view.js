@@ -36,7 +36,7 @@ import { workButtonName } from './waiting-model.js';
 import { stepFrom } from './keyboard-model.js';
 import { checksWords, pullUrl } from './forge-panel-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
-import { openWorkAt } from './forge-panel.js';
+import { openWorkAt, openRunLink, openIssueLink } from './forge-panel.js';
 import {
   CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
@@ -351,12 +351,24 @@ function arrive(body, { select, ask, quiet }) {
   }
   paintBar();
   paintBadge(w.counts.waiting);
+  // One sentence: the live region says only the last thing it is given, so what the view opened on and the node an address asked for are said together
+  const opened = first || !quiet ? openedWords(w.counts) : '';
   const id = select || nodeForAddress(ask, w.nodes);
-  if (id) pick(id);
-  else if (ask && ask.kind) announce(i, `${ask.bad || `There is no ${KIND_WORDS[ask.kind].toLowerCase()} ${ask.key} in the work now.`}`);
-  if (first || !quiet) announce(i, openedWords(w.counts));
+  if (id && pick(id)) {
+    const shown = shownInOrder();
+    const node = state.selectedNode;
+    announce(i, `${opened} ${landingWords(node, shown.indexOf(node), shown.length)}`.trim());
+  } else if (ask && ask.kind) {
+    // A run or an issue older than the graph's window (a link posted in chat weeks ago) is still in the Work panel's lists: the panel opens at it, as these links did before
+    const older = !ask.bad && (ask.kind === 'run' || ask.kind === 'issue');
+    announce(i, `${ask.bad || `There is no ${KIND_WORDS[ask.kind].toLowerCase()} ${ask.key} in the work now${older ? ': the Work panel looks for it' : ''}.`} ${opened}`.trim());
+    if (older) (ask.kind === 'run' ? openRunLink(ask.key) : openIssueLink(Number(ask.key))).catch(() => {});
+  } else if (opened) announce(i, opened);
   return true;
 }
+
+/** The nodes N and P step through, in the lanes' order: what is shown */
+const shownInOrder = () => work().order.map((id) => state.nodes.find((n) => n.id === id)).filter((n) => n && !n.hidden);
 
 /** The row's dot is the colour the map draws the kind in, the theme's token when it sets one */
 function themed(row) {
@@ -444,8 +456,7 @@ async function loadChecks(node) {
 // ---------------------------------------------------------------------------
 function onKey(e) {
   if (!on() || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !state.canvas || e.target !== state.canvas) return;
-  const w = work();
-  const shown = w.order.map((id) => state.nodes.find((n) => n.id === id)).filter((n) => n && !n.hidden);
+  const shown = shownInOrder();
   if (!shown.length) return;
   const from = state.selectedNode;
   let to = null;
