@@ -90,7 +90,7 @@ export function install(ctx) {
       ui.actNote = null;
       ui.filters = defaultFilters('threads');
     }
-    fn.openForge();
+    fn.openForge({ tab: 'threads' }); // named, so a closed panel does not open on the tab with the oldest thing waiting instead
     fn.paintFilters();
     selectThread(n);
   }
@@ -139,7 +139,7 @@ export function install(ctx) {
       ui.actNote = null;
       ui.filters = defaultFilters('threads');
     }
-    fn.openForge();
+    fn.openForge({ tab: 'threads' });
     fn.paintFilters();
     ui.idea.open = true;
     ui.idea.message = '';

@@ -279,16 +279,16 @@ export function mount(root, inst, options = {}) {
     openIssueLink: (n) => fn.openIssueLink(n),
     openProposalStart: (slug, opener) => fn.openProposalStart(slug, opener),
     /** The panel at a piece of work from the Work view (spec 0012, step 2): its tab, and the item open in it. `item` is a node of the work graph */
-    openWorkAt: (item) => {
-      const tab = { pull: 'prs', issue: 'issues', thread: 'threads', run: 'runs', proposal: 'specs', deploy: 'deploys' }[item.kind];
-      if (!tab) return Promise.resolve(false);
+    openWorkAt: async (item) => {
       if (item.kind === 'run') return fn.openRunLink(item.runId);
       if (item.kind === 'issue') return fn.openIssueLink(item.number);
-      fn.openForge({ tab });
+      if (item.kind === 'thread') { fn.openThread(item.number); return true; }
+      const tab = { pull: 'pulls', proposal: 'specs', deploy: 'deploys' }[item.kind]; // the panel's own tab names (work-common.js TABS)
+      if (!tab) return false;
+      await fn.openTab(tab); // the list is in before a row of it is selected (a deploy is found in it)
       if (item.kind === 'pull') fn.selectPull(item.number);
-      else if (item.kind === 'thread') fn.openThread(item.number);
       else if (item.kind === 'deploy') fn.selectDeploy(item.deployId);
-      return Promise.resolve(true);
+      return true;
     },
     canStartAgent: () => fn.canStartAgent(),
     /** For tests: force reduced motion on or off for the runs' marks (null: follow the viewer's setting) */
