@@ -123,6 +123,18 @@ describe('which badges fit (the names\' own placing)', () => {
     expect(b.b).toBeLessThan(100 - 10); // over the disc (y - r)
     expect(b.r - b.l).toBeGreaterThan(wide('PR #1', 11)); // the pill's room is in it
   });
+  it('keeps the room a pill takes: a box as high as the pill (its line and its border), a gap over the disc, as wide as at its own size', () => {
+    const [low] = some([node('a', 100, 100)], [['a', items(1)]]);
+    const [tall] = placeBadges({ nodes: [node('a', 100, 100)] }, 1, new Map([['a', items(1)]]), { measure: wide, height: 20 });
+    expect(low.b - low.t).toBeCloseTo(1.3 * 11, 5); // the default: a name's box at 11px
+    expect(tall.b - tall.t).toBeCloseTo(20, 5);
+    expect(tall.b).toBeCloseTo(low.b, 5); // both end the gap above the disc
+    expect(tall.r - tall.l).toBeCloseTo(low.r - low.l, 5); // the width is the pill's at 11px, not at a taller size
+    // a taller pill touches a name a shorter one cleared: the name stays, the badge goes
+    const nodes = [node('a', 100, 100), node('blocker', 100, 40.7, { label: 'a long name in the way' })];
+    expect(placeBadges({ nodes }, 1, new Map([['a', items(1)]]), { measure: wide }).map((b) => b.id)).toEqual(['a']);
+    expect(placeBadges({ nodes }, 1, new Map([['a', items(1)]]), { measure: wide, height: 20 })).toEqual([]);
+  });
   it('is the same wherever the camera is: the box has no camera in it', () => {
     const a = some([node('a', 100, 100)], [['a', items(1)]], 2);
     const b = some([node('a', 100, 100)], [['a', items(1)]], 2);
@@ -155,5 +167,15 @@ describe('which badges fit (the names\' own placing)', () => {
     const ix = nodes.map((n) => [n.id, items(1)]);
     expect(placeBadges({ nodes }, 1, new Map(ix), { measure: wide, max: 4 })).toHaveLength(4);
     expect(placeBadges({ nodes }, 1, new Map(ix), { measure: wide })).toHaveLength(10);
+  });
+  // The placing runs again only when the zoom or the scene changes (a pan moves the pills: work-badges.js), so its budget is the names' own placing's (labels.test.js: 40 ms for 5,000)
+  it('places the badges of a 5,000-node map, a fifth of it touched by work, in under 40 ms at a zoom', () => {
+    const big = Array.from({ length: 5000 }, (_, i) => node(`node-${i}`, (i % 100) * 40 - 1000, Math.floor(i / 100) * 40 - 800, { r: 8 + (i % 9) }));
+    const ix = new Map(big.filter((_, i) => i % 5 === 0).map((n, i) => [n.id, items(i, i % 7 === 0)]));
+    for (const zoom of [0.3, 0.8, 1.5]) {
+      const times = [];
+      for (let i = 0; i < 9; i++) { const t0 = performance.now(); placeBadges({ nodes: big }, zoom, ix, { measure: wide, height: 18 }); times.push(performance.now() - t0); }
+      expect(times.sort((a, b) => a - b)[4], `zoom ${zoom}`).toBeLessThan(40);
+    }
   });
 });

@@ -24,6 +24,8 @@ export const MAX_BADGES = 60;
 /** A badge's text size on screen (px), and the room its pill takes beside the text, in ems of that size */
 export const BADGE_PX = 11;
 const PAD_EM = 1.2;
+/** The height of a label's box in `placeLabels`, in sizes (labels.js: an ascent of 1 and a descent of 0.3) */
+const BOX_EM = 1.3;
 /** What starts the label of a badge in the placing, so its width is the pill's (a character no name begins with) */
 const MARK = '\u0001';
 const MARK_CODE = 1;
@@ -77,22 +79,26 @@ export function badgeWords(items) {
  * @param {import('./scene.js').Scene} scene
  * @param {number} zoom
  * @param {Map<string, object[]>} index `badgeIndex`
- * @param {{ measure?: (text: string, size: number, bold: boolean) => number, measurePill?: (text: string, size: number, bold: boolean) => number, max?: number }} [opts]
- *   `measure`: the width of a name, in the label layer's font (as `placeLabels` takes it); `measurePill`: the width of a badge's text, in the page's font (default: `measure`)
+ * @param {{ measure?: (text: string, size: number, bold: boolean) => number, measurePill?: (text: string, size: number, bold: boolean) => number, height?: number, max?: number }} [opts]
+ *   `measure`: the width of a name, in the label layer's font (as `placeLabels` takes it); `measurePill`: the width of a badge's text, in the page's font (default: `measure`);
+ *   `height`: the pill's height on screen, its line and its border (px; default, and at least, the height of a name's box at the badge's size)
  * @returns {{ id: string, items: object[], text: string, l: number, t: number, r: number, b: number }[]} in priority order, boxes in zoom-scaled world coordinates (no camera)
  */
-export function placeBadges(scene, zoom, index, { measure = null, measurePill = measure, max = MAX_BADGES } = {}) {
+export function placeBadges(scene, zoom, index, { measure = null, measurePill = measure, height = 0, max = MAX_BADGES } = {}) {
   const min = labelMinOf(scene);
   const px = Math.max(BADGE_PX, min);
+  // placeLabels gives a label a box 1.3 sizes high; a pill is as high as its line and its border, so it is placed as a label of the size whose box is that high, and its width is scaled back
+  const box = Math.max(BOX_EM * px, height || 0);
+  const boxPx = box / BOX_EM;
   const gap = Math.max(3, 3 * zoom);
   const mine = [];
   for (const n of scene.nodes) {
     const items = index.get(n.id);
     if (!items || !items.length || !(n.alpha > 0.2)) continue;
     const text = badgeText(items);
-    // placeLabels puts a label under a disc: a box whose top is `gap` below `y + r` (its height 1.3 sizes). The badge goes above the disc instead, so the node it is placed for sits higher by the box, the gap before and the gap after
+    // placeLabels puts a label under a disc: a box whose top is `gap` below `y + r`. The badge goes above the disc instead, so the node it is placed for sits higher by the box, the gap before and the gap after
     mine.push({
-      id: n.id, type: 'work-badge', label: `${MARK}${text}`, labelAlpha: 1, labelSize: 0, labelBold: true, x: n.x, y: n.y - n.r - (2 * gap + 1.3 * px) / zoom, r: 0, degree: n.degree || 0,
+      id: n.id, type: 'work-badge', label: `${MARK}${text}`, labelAlpha: 1, labelSize: boxPx / zoom, labelBold: true, x: n.x, y: n.y - n.r - (2 * gap + box) / zoom, r: 0, degree: n.degree || 0,
       selected: false, current: n.selected === true || n.current === true, match: items[0].waiting, connected: true, mark: 'none', items, text,
     });
   }
@@ -100,7 +106,7 @@ export function placeBadges(scene, zoom, index, { measure = null, measurePill = 
   // The names, placed as the label layer places them, stand in the way as if they were selected: first of all, so a badge never takes one's room
   const names = placeLabels(scene, zoom, { measure }).map((p) => ({ ...p.node, selected: true }));
   // one measure for the placing: a badge's label starts with MARK, and is the pill's text in the page's font and its room; every other label is a name, in the label layer's font
-  const both = measure && measurePill ? (text, size, bold) => (text.charCodeAt(0) === MARK_CODE ? measurePill(text.slice(1), size, bold) + size * PAD_EM : measure(text, size, bold)) : null;
+  const both = measure && measurePill ? (text, size, bold) => (text.charCodeAt(0) === MARK_CODE ? ((measurePill(text.slice(1), size, bold) + size * PAD_EM) * px) / boxPx : measure(text, size, bold)) : null;
   const placed = placeLabels({ nodes: [...names, ...mine], labelMin: scene.labelMin }, zoom, { measure: both });
   const out = [];
   for (const p of placed) {

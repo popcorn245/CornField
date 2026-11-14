@@ -349,6 +349,7 @@ async function main() {
     check('and the Work view read the graph as it opened (its own opening), no second poll', asked.length === asksBefore + 1, `${asksBefore} -> ${asked.length}`);
     await sleep(500);
     await page.click('#preset-map-btn'); await sleep(900);
+    await near(1.6); // the map comes back fitted whole, where an 800-node map leaves a badge no room beside the names: near, as a reader would look
     check('Map brings the map back, with the layer still on and the badges drawn', (await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return state.view === 'orbit' && state.activeLayers['work-badges'] === true; })) && (await page.locator('.hx-work-badge').count()) > 0);
 
     // ---- the keyboard says it ----
@@ -399,6 +400,15 @@ async function main() {
     const rowCountBefore = (await p2.locator('[data-layer="work-badges"]').innerText()).replace(/\s+/g, ' ').trim();
     check('the Work view having read the graph, the row already knows its count', new RegExp(`^Work ${want.size} nodes`).test(rowCountBefore), rowCountBefore);
     await p2.click('[data-layer="work-badges"]'); await sleep(1500);
+    await p2.keyboard.press('Escape'); await sleep(200);
+    await p2.evaluate(async ({ centre, zoom }) => { // near the plan's nodes, as near() does: the whole map fitted leaves a badge no room beside the names
+      const { state } = await import('/explorer/state.js');
+      const { render } = await import('/explorer/render.js');
+      const w = state.canvas.getBoundingClientRect();
+      Object.assign(state.camera, { zoom, x: w.width / 2 - centre.x * zoom, y: w.height / 2 - centre.y * zoom });
+      render();
+    }, { centre: plan.centre, zoom: 1.6 });
+    await sleep(500);
     check('and turning the layer on asks for nothing more: it draws from the Work view\'s read', asked2.length === before2 && (await p2.locator('.hx-work-badge').count()) > 0, `${before2} -> ${asked2.length}; ${await p2.locator('.hx-work-badge').count()} badges`);
     await p2.keyboard.press('Escape');
     await p2.click('#legend-toggle-btn'); await sleep(200); await p2.click('[data-layer="work-badges"]'); await sleep(200); await p2.click('[data-layer="work-badges"]'); await sleep(800);

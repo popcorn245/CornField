@@ -47,6 +47,23 @@ export function createWorkBadges({ stage, state, style, colorOf, wanted, doc = d
     };
   }
 
+  let tall = { key: '', h: 0 };
+  /** How high a pill is on screen (its line and its border, the heavier one of a pill that waits): measured once for a size and a look, in the layer, so the placing keeps its room */
+  function pillHeight(px, key) {
+    if (tall.key === key) return tall.h;
+    const probe = doc.createElement('span');
+    probe.className = 'hx-work-badge is-waiting';
+    probe.style.fontSize = `${px}px`;
+    probe.style.visibility = 'hidden';
+    probe.textContent = 'Spec 0100';
+    const host = ensureLayer();
+    host.hidden = false; // (it is drawn into next)
+    host.append(probe);
+    tall = { key, h: probe.offsetHeight || 0 };
+    probe.remove();
+    return tall.h;
+  }
+
   const ensureLayer = () => {
     if (layer && layer.isConnected) return layer;
     layer = doc.createElement('div');
@@ -82,7 +99,9 @@ export function createWorkBadges({ stage, state, style, colorOf, wanted, doc = d
     if (!sameScene) {
       const styled = styledScene(scene, look);
       const family = (typeof getComputedStyle === 'function' && stage.isConnected ? getComputedStyle(stage).fontFamily : '') || 'sans-serif'; // the pill is set in the page's font
-      placed = { scene, index, list: placeBadges(styled, camera.zoom, index, { measure: measurer(styled.labelFont || FONT_NODE, 'bold'), measurePill: measurer(family, '600'), max: MAX_BADGES }) };
+      const px = Math.max(BADGE_PX, labelMinOf(scene));
+      const height = pillHeight(px, `${px}|${look.plain ? 0 : look.version}|${state.theme}`);
+      placed = { scene, index, list: placeBadges(styled, camera.zoom, index, { measure: measurer(styled.labelFont || FONT_NODE, 'bold'), measurePill: measurer(family, '600'), height, max: MAX_BADGES }) };
       placedKey = key;
       drawnKey = '';
     }
