@@ -75,7 +75,7 @@ export function centreOn(inst, node) {
 function land(inst, node, order) {
   if (!node) { announce(inst, inst.ask('layers:present') ? 'No nodes are shown. Turn a layer on in the Layers menu.' : 'No nodes are shown.'); return; } // the Layers menu, when the instance has one
   selectNode(inst, node, { frame: true, source: 'keyboard' }); // the keyboard's selection frames the node and what it lights (spec 0008 D6)
-  announce(inst, K.describeNode(node, order.length, order.indexOf(node)));
+  announce(inst, K.describeNode(node, order.length, order.indexOf(node)) + (inst.ask('node:words', node) || '')); // the Work layer adds the open work on a badged node
 }
 
 /** "Frame them" and the `F` key: the camera goes to the selected node and what it lights, and a screen reader is told how many that is */

@@ -25,7 +25,7 @@ export const typesOf = (l) => (l.match && l.match.type ? [].concat(l.match.type)
 const NOT_A_TYPE = { flow: '#fb923c', runs: '#5eead4' };
 const builtIn = (l) => { const type = typesOf(l)[0]; return type && NODE_THEMES[type] ? NODE_THEMES[type].color : NOT_A_TYPE[l.key]; };
 /** The starting layers that start off: the infra layer is its own view, and the physical world's are loaded when first turned on (spec 0029) */
-export const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona']);
+export const STARTS_OFF = new Set(['stack', 'machine', 'container', 'device', 'house', 'persona', 'work-badges']);
 
 /** The starting rows (core/layers.js STARTING_LAYERS) with the colour of their dot */
 export const LAYER_DEFS = STARTING_LAYERS.map((l) => ({ ...l, color: builtIn(l) }));
@@ -93,6 +93,7 @@ export function layerRows(inst) {
   const project = state.projectLayers.filter((l) => held.has(l.key)).map((l) => ({ key: l.key, label: l.label, desc: l.desc || '', project: true, ...projectDot(l) }));
   // A starting row a project layer has taken every node from goes (spec 0009 D7, example 3); with no project layer, every starting row stays, as it always was
   const starting = LAYER_DEFS.filter((l) => !l.overlay && (held.has(l.key) || !left.has(l.key))).map(dotted);
+  const badges = state.workRow && state.workRow(); // the Work layer's row, when the page has a forge and somebody is signed in (work-view.js): an overlay, off to start
   const known = new Set([...LAYER_DEFS.map((l) => l.key), ...state.projectLayers.map((l) => l.key)]);
   const extra = [];
   held.forEach((key) => {
@@ -100,7 +101,7 @@ export function layerRows(inst) {
     known.add(key);
     extra.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), color: rowColor(inst, { type: key, group: key }, NO_COLOR), desc: `Nodes of the type ${key}` });
   });
-  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: LAYER_DEFS.filter((l) => l.overlay).map(dotted) };
+  return { layers: [...orderRows(project, starting, state.layerOrder), ...extra], overlays: [...LAYER_DEFS.filter((l) => l.overlay).map(dotted), ...(badges ? [badges] : [])] };
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +140,7 @@ export function setProjectLayers(inst, raw) {
   const defaults = {};
   for (const l of LAYER_DEFS) defaults[l.key] = !STARTS_OFF.has(l.key);
   for (const l of cfg.add) defaults[l.key] = true;
+  defaults['work-badges'] = false;
   for (const k of cfg.off) defaults[k] = false;
   state.layerDefaults = defaults;
   const mem = memoryOf(inst);

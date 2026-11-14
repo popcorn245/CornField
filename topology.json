@@ -2084,7 +2084,7 @@
       "label": "focus-room.js",
       "type": "core",
       "file": "explorer/focus-room.js",
-      "summary": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54).",
+      "summary": "A control that is tabbed to inside a strip that scrolls sideways (the Work list's tabs) is brought fully into view, ring and all (CF review F54).",
       "r": 20,
       "color": "#14b8a6",
       "desc": "A control that is tabbed to inside a strip that scrolls sideways (the Work panel's tabs) is brought fully into view, ring and all (CF review F54). (explorer/focus-room.js)"
@@ -3187,6 +3187,26 @@
       "r": 20,
       "color": "#14b8a6",
       "desc": "The Work list (spec 0012 D6): opening and closing it (the List toggle of the Work view), what a click, a change, an input and a key in it do, and how a row selects its node. (explorer/pieces/work-list.js)"
+    },
+    {
+      "id": "core-explorer-work-badge-model",
+      "label": "work-badge-model.js",
+      "type": "core",
+      "file": "explorer/work-badge-model.js",
+      "summary": "The pure half of the Work layer on the Map view (spec 0012 D4): a small badge (`PR #27`, `Issue #14`) on each node that open work touches.",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The pure half of the Work layer on the Map view (spec 0012 D4): a small badge (`PR #27`, `Issue #14`) on each node that open work touches. (explorer/work-badge-model.js)"
+    },
+    {
+      "id": "core-explorer-work-badges",
+      "label": "work-badges.js",
+      "type": "core",
+      "file": "explorer/work-badges.js",
+      "summary": "The Work layer's badges on the Map view (spec 0012 D4), drawn: one small pill over each node open work touches (`PR #27`, `Issue #14 +1`), in screen space, so it reads at any zoom, in the colour of…",
+      "r": 20,
+      "color": "#14b8a6",
+      "desc": "The Work layer's badges on the Map view (spec 0012 D4), drawn: one small pill over each node open work touches (`PR #27`, `Issue #14 +1`), in screen space, so it reads at any zoom, in the colour of… (explorer/work-badges.js)"
     }
   ],
   "edges": [
@@ -11016,7 +11036,81 @@
       "from": "page-doc-docs-specs-0012-work-as-a-view",
       "to": "page-doc-docs-agents",
       "dashed": true
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-work-badge-model"
+    },
+    {
+      "from": "pkg-explorer",
+      "to": "core-explorer-work-badges"
+    },
+    {
+      "from": "core-explorer-work-badge-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badge-model",
+      "to": "core-explorer-labels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badge-model",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badge-model",
+      "to": "core-explorer-work-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badges",
+      "to": "core-explorer-engine-map-style",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badges",
+      "to": "core-explorer-labels",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badges",
+      "to": "core-explorer-work-badge-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-theme-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-work-badge-model",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-work-badges",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-badges",
+      "to": "core-explorer-scene",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-14T02:55:11.151Z"
+  "updatedAt": "2026-11-14T05:23:00.408Z"
 }

@@ -316,7 +316,7 @@ export function mount(root, inst, options = {}) {
   scope.on('layers:redraw', renderLayerToggles);
   scope.on('theme', renderLayerToggles); // the dots and the legends are drawn in the theme's colours
   scope.on('view', syncView);
-  scope.on('runs:map', ({ active }) => { const legend = own('runs-legend'); if (legend) legend.hidden = !active; }); // runs are on the map (the Work panel): the legend says what each mark is
+  scope.on('runs:map', ({ active }) => { const legend = own('runs-legend'); if (legend) legend.hidden = !active; }); // runs are on the map (the Work list): the legend says what each mark is
   // The marks legend is there while a proposal is open (the proposal's bar says so: engine/proposal.js)
   const showLegend = (open) => { const legend = own('proposal-legend'); if (legend) legend.hidden = !open; };
   scope.on('proposal:draw', ({ open }) => showLegend(open));

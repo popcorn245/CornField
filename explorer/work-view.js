@@ -18,6 +18,9 @@
  * the Work view (the Work piece draws the actions into it), the Work list's `work:pick` ask by selecting that row's node, and holds the keys of the view: N and P step through
  * the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
  * every word that comes from the forge is escaped or set as text, every link goes through `safeUrl` (work-model.js).
+ *
+ * The **Work layer** of the Map view (spec 0012 D4, work-badge-model.js and work-badges.js) shares this file's one read of the graph: turning the layer on asks for it only when the
+ * Work view has not read it, shows its loading state in the layer's row, and rides the same once-a-minute poll while it is on. Off (the default) nothing here asks for anything.
  */
 
 import { state, pageInstance } from './state.js';
@@ -27,6 +30,9 @@ import { announce } from './engine/keyboard.js';
 import { credentialed } from './engine/connection.js';
 import { selectNode } from './engine/selection.js';
 import { closeProposal, openProposal } from './engine/proposal.js';
+import { themed as onGround } from './theme-model.js';
+import { WORK_BADGE_LAYER, badgeIndex, badgeRowOf, badgeWords, openWorkHtml } from './work-badge-model.js';
+import { createWorkBadges } from './work-badges.js';
 import { signInUrl } from './engine/source.js';
 import { mapStyleOf, workToken, workEdgeToken } from './engine/map-style.js';
 import { t } from './engine/strings.js';
@@ -39,7 +45,7 @@ import { stepFrom } from './keyboard-model.js';
 import { RUNS_POLL_MS } from './pieces/work-common.js';
 import { showWorkRef, openForge, closeForge } from './forge-panel.js';
 import {
-  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
+  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, addressOf, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
 
 const GRAPH_URL = '/api/forge/work-graph';
@@ -51,6 +57,8 @@ let els = null; // { stage, bar, all, waiting, busy, note, lanes, loading }
 let laneEls = []; // the lanes' titles on the stage, in screen space: [{ el, name, count }]
 let laneKey = null; // the lanes they were made for
 let offPaint = null;
+let badges = null; // the Work layer's pills over the map (work-badges.js)
+let badgeWas = false; // whether the layer wanted the graph at the last look: it asks for it when it comes on
 let card = null; // the map's own card (pieces/status.js)
 let timer = 0;
 let seq = 0; // the answer that is waited for: an older one is dropped
@@ -74,16 +82,20 @@ export function initWorkView(opts = {}) {
     document.addEventListener('click', onClick);
     document.addEventListener('keydown', onKey, true); // before the map's own keys: in this view N and P step through the lanes, and an arrow goes to the nearest node that way
     i.on('view', syncWork);
-    i.on('layers', refilter);
+    i.on('layers', () => { refilter(); syncBadges(); });
+    i.on('node:words', (node) => { const items = on() ? null : badgesOf(node); return items ? `, ${badgeWords(items)}` : undefined; }); // the keyboard's landing on a badged node says its work
     i.on('work:open', ({ id }) => openWork({ select: id }));
     i.on('search:more', () => (work().status === 'ok' && !on() ? work().nodes.filter((n) => n.work) : null));
     i.on('work:waiting', ({ total }) => paintBadge(total));
-    i.on('work:available', ({ on: available }) => paintList(available));
+    i.on('work:available', ({ on: available }) => { paintList(available); i.emit('layers:redraw'); syncBadges(); });
     i.on('work:panel', (node) => panelFor(node));
     i.on('work:pick', (ref) => pickRef(ref));
     mapStyleOf(i).onChange(() => { paintEdgeColors(); if (on()) { state.workRows = layerRowsOf(work().nodes).map(themed); i.emit('layers:redraw'); i.touchScene(); render(); } });
   }
+  state.workRow = () => (offered && inst().ask('work:on') ? badgeRowOf(work(), badgeColor('pull')) : null); // the Layers menu's row under Overlays (engine/layers.js `layerRows`)
   syncWork();
+  inst().emit('layers:redraw'); // the Layers menu's Work row, if the piece that says it is signed in has started already
+  syncBadges();
 }
 
 /** The List toggle is shown while the Work piece is on (a forge in the config and somebody signed in); the piece says its own `aria-expanded` */
@@ -99,7 +111,7 @@ function paintEdgeColors() {
   state.workEdgeColors = colors;
 }
 
-/** The Work button's badge and its spoken name: "Work, 3 waiting on you" (the Work panel's own words: waiting-model.js) */
+/** The Work button's badge and its spoken name: "Work, 3 waiting on you" (the Work list's own words: waiting-model.js) */
 function paintBadge(total) {
   const btn = $('preset-work-btn');
   if (!btn) return;
@@ -147,7 +159,9 @@ function mount() {
   els = { stage, bar, all: bar.children[0], waiting: bar.children[1], list: bar.children[2], busy: bar.children[3], note, lanes, loading };
   paintList(!!inst().ask('work:on')); // the List toggle is there while the Work piece is on: a signed-in maintainer of a forge
   if (offPaint) offPaint();
-  offPaint = onPaint(paintLanes);
+  if (badges) badges.destroy();
+  badges = createWorkBadges({ stage, state, style: () => mapStyleOf(inst()).get(), colorOf: badgeColor, wanted: badgesDrawn });
+  offPaint = onPaint((scene, camera) => { paintLanes(scene, camera); badges.sync(scene, camera); });
   watchSize(stage);
   card = mountStatus(stage, inst(), { follow: false, onRetry: () => load({ again: true }), focusMap: () => { if (state.canvas) state.canvas.focus(); } });
 }
@@ -243,11 +257,11 @@ function syncWork() {
   if (stage) stage.classList.toggle('is-work', open);
   paintBar();
   if (open !== wasOn) {
-    if (open) { paintBadge(work().counts.waiting); inst().emit('layers:redraw'); } // the Layers menu lists the Work view's rows from the first moment, the answer here or not
+    if (open) paintBadge(work().counts.waiting);
+    inst().emit('layers:redraw'); // the Layers menu lists the Work view's rows from the first moment, the answer here or not, and the map's own again (with the Work layer's row) when the view is left
     wasOn = open;
-    clearTimeout(timer);
-    if (open) timer = setTimeout(poll, RUNS_POLL_MS);
-    else {
+    armPoll();
+    if (!open) {
       if (card) card.clear();
       closeForge({ restoreFocus: false }); // the list is the Work view's
       if (!state.selectedNode) inst().emit('node:close'); // a piece of work the node panel showed from the lists, with nothing selected
@@ -255,11 +269,41 @@ function syncWork() {
   }
 }
 
+/** The one poll: every minute while the Work view is open, or the Work layer is on (the same read, never a second one) */
+function armPoll() {
+  clearTimeout(timer);
+  if (on() || layerWanted()) timer = setTimeout(poll, RUNS_POLL_MS);
+}
+
 function poll() {
   clearTimeout(timer);
-  if (!on()) return;
+  if (!on() && !layerWanted()) return;
   if (document.visibilityState !== 'hidden') load({ again: true, quiet: true });
   timer = setTimeout(poll, RUNS_POLL_MS);
+}
+
+// ---------------------------------------------------------------------------
+//  The Work layer on the Map view (spec 0012 D4)
+// ---------------------------------------------------------------------------
+
+/** Whether the viewer has the Work layer on and there is a forge to read: it is what asks for the graph (not the layer's state in the Work view, which has its own layers) */
+const layerWanted = () => offered && state.activeLayers[WORK_BADGE_LAYER] === true && !!inst().ask('work:on');
+/** The index of what is drawn: only on the Map view, with no proposal under review (its marks are the review's), and once the answer is here; null otherwise */
+const badgesDrawn = () => (layerWanted() && state.view === 'orbit' && !state.proposal && work().status === 'ok' ? work().badges : null);
+/** The open work touching a node, when the layer is drawing it: the node panel and the keyboard's words read it */
+const badgesOf = (node) => { const index = badgesDrawn(); return index && node ? index.get(node.id) || null : null; };
+/** A kind's colour as the pill is drawn: the theme's token, deepened on a light ground as the map's own are */
+const badgeColor = (kind) => onGround(colorOf(kind), state.theme);
+
+/** The layer came on or went off (or the forge became reachable): the first time it is on, the graph is asked for unless the Work view has it */
+function syncBadges() {
+  const want = layerWanted();
+  if (want === badgeWas) return;
+  badgeWas = want;
+  armPoll();
+  const w = work();
+  if (want && w.status !== 'ok' && w.status !== 'loading') load({});
+  else render();
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +334,27 @@ export function closeWork() {
   setView('orbit');
 }
 
-async function load({ select = null, ask = null, again = false, quiet = false } = {}) {
+/** The read on its way, if there is one: what its answer is to be used for. The Work view and the Work layer share it: a second ask while it is on its way waits for it, never starts another */
+let reading = null;
+
+/**
+ * Reads the graph (spec 0012 D7): once at a time. Asked while a read is on its way (the Work layer's, or the view's), it waits for that one and adds what it wants done with the answer
+ * (a node to select); a refresh (`again`) or the minute's poll starts a read of its own.
+ */
+function load({ select = null, ask = null, again = false, quiet = false } = {}) {
+  if (reading && !again && !quiet) {
+    if (select) reading.select = select;
+    if (ask) reading.ask = ask;
+    reading.quiet = false;
+    return reading.done;
+  }
+  const mine = { select, ask, quiet, done: null };
+  mine.done = fetchGraph(mine, again).finally(() => { if (reading === mine) reading = null; });
+  reading = mine;
+  return mine.done;
+}
+
+async function fetchGraph(request, again) {
   const i = inst();
   const mine = ++seq;
   const w = work();
@@ -300,25 +364,26 @@ async function load({ select = null, ask = null, again = false, quiet = false } 
     w.status = 'loading';
     card.clear();
     paintBar();
+    if (!on()) i.emit('layers:redraw'); // the Work layer's row says "reading…"
     announce(i, 'Work: reading the work from the forge.');
-  } else if (!quiet) { w.updating = true; paintBar(); } // a refresh keeps the last answer on the map until the new one is here
+  } else if (!request.quiet) { w.updating = true; paintBar(); } // a refresh keeps the last answer on the map until the new one is here
   let res;
   try {
-    res = await credentialed(i)(GRAPH_URL, { headers: { accept: 'application/json', ...(again && !quiet ? { 'cache-control': 'no-cache' } : {}) } }); // Refresh asks the forge again
+    res = await credentialed(i)(GRAPH_URL, { headers: { accept: 'application/json', ...(again && !request.quiet ? { 'cache-control': 'no-cache' } : {}) } }); // Refresh asks the forge again
   } catch {
     if (mine !== seq) return false;
-    return refuse(i.offline() ? { state: 'offline' } : { state: 'server', message: 'cornfield could not be reached.' }, quiet);
+    return refuse(i.offline() ? { state: 'offline' } : { state: 'server', message: 'cornfield could not be reached.' }, request.quiet);
   }
   if (mine !== seq) return false;
-  if (res.status === 401 || res.status === 403) return refuse({ state: 'sign-in', status: res.status, signIn: signInUrl(location.origin, location.href) }, quiet);
+  if (res.status === 401 || res.status === 403) return refuse({ state: 'sign-in', status: res.status, signIn: signInUrl(location.origin, location.href) }, request.quiet);
   let body = null;
   try { body = await res.json(); } catch { body = null; }
   if (mine !== seq) return false;
   if (!res.ok || !body || body.ok === false || !Array.isArray(body.nodes)) {
     const words = res.status === 404 ? 'This server does not answer for the map of work yet: update cornfield.' : body && typeof body.error === 'string' ? body.error.slice(0, 200) : `The server answered ${res.status}.`;
-    return refuse({ state: 'server', message: words }, quiet);
+    return refuse({ state: 'server', message: words }, request.quiet);
   }
-  return arrive(body, { select, ask, quiet });
+  return arrive(body, request);
 }
 
 /**
@@ -342,8 +407,9 @@ function refuse(detail, quiet) {
   w.problems = [];
   w.stale = '';
   w.lastError = '';
-  if (on()) { showWork(state); applyWorkLayout(state, { phone: isPhone() }); inst().touchScene(); inst().emit('layers:redraw'); render(); }
-  card.show(detail);
+  w.badges = new Map();
+  if (on()) { showWork(state); applyWorkLayout(state, { phone: isPhone() }); inst().touchScene(); inst().emit('layers:redraw'); render(); } else { inst().emit('layers:redraw'); render(); } // off the Work view the layer's row says why: the map shows no card for it
+  if (on()) card.show(detail);
   paintBar();
   paintBadge(0);
   if (!again) announce(inst(), `Work: ${detail.state === 'sign-in' ? (detail.status === 403 ? 'this map is for the maintainers.' : 'sign in to see the work.') : detail.state === 'offline' ? 'you are offline.' : 'it could not be read.'}`);
@@ -356,7 +422,9 @@ function arrive(body, { select, ask, quiet }) {
   const first = w.status !== 'ok';
   const before = state.selectedNode ? state.selectedNode.id : null;
   const base = state.baseNodes && state.baseNodes.length ? state.baseNodes : (w.saved ? w.saved.nodes : state.nodes);
+  const had = w.badges ? w.badges.size : -1;
   setWorkGraph(state, body, base);
+  w.badges = badgeIndex(w.nodes, w.edges);
   w.status = 'ok';
   w.updating = false;
   w.lastError = '';
@@ -374,6 +442,12 @@ function arrive(body, { select, ask, quiet }) {
   }
   paintBar();
   paintBadge(w.counts.waiting);
+  if (!on()) { // the Map view: the Work layer's badges, from the same answer
+    if (first || !quiet || had !== w.badges.size) i.emit('layers:redraw'); // the row's count
+    render(); // the badges are drawn from this answer
+    if ((first || !quiet) && badgesDrawn()) announce(i, `Work layer: ${w.badges.size} ${w.badges.size === 1 ? 'node has' : 'nodes have'} open work.`);
+    return true;
+  }
   // One sentence: the live region says only the last thing it is given, so what the view opened on and the node an address asked for are said together
   const opened = first || !quiet ? openedWords(w.counts) : '';
   const id = select || nodeForAddress(ask, w.nodes);
@@ -459,7 +533,9 @@ function panelFor(node) {
     const p = node.old ? panelOf(node, [], []) : panelOf(node, w.nodes, w.edges);
     return { replace: true, badge: p.kind, title: p.title, html: workPanelHtml(p, node, { color: colorOf }) };
   }
-  return on() ? { replace: false, html: codePanelHtml(node, touchedBy(node, w.nodes, w.edges), { color: colorOf }) } : undefined;
+  if (on()) return { replace: false, html: codePanelHtml(node, touchedBy(node, w.nodes, w.edges), { color: colorOf }) };
+  const items = badgesOf(node); // the Map view with the Work layer on: the open work touching the node, each a link into the Work view
+  return items ? { replace: false, html: openWorkHtml(items, { color: colorOf, address: (id) => { const n = w.nodes.find((x) => x.id === id); return n ? addressOf(n) : null; } }) } : undefined;
 }
 
 /** A row of the Work list (or a link) names a piece of work: its node is selected on the map, with the camera on it, and the live region says where it is; false when the view does not draw it */
@@ -505,6 +581,12 @@ function onClick(e) {
   if (show && on()) { setWaiting(show.dataset.workShow === 'waiting'); return; }
   const act = t_.closest('[data-work-action]');
   if (!act) return;
+  if (act.dataset.workAction === 'open-item') { // a node panel's "Open work" link: the Work view opens on that piece of work (a new tab, by the link's own address, is left alone)
+    if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    openWork({ select: act.dataset.id });
+    return;
+  }
   if (act.dataset.workAction === 'review') { reviewSpec(act.dataset.slug, act.dataset.source); return; }
   const node = state.nodes.find((n) => n.id === act.dataset.id);
   if (node && act.dataset.workAction === 'show-on-map') showOnMap(node.id);
@@ -539,7 +621,7 @@ export async function followWorkAddress(search = location.search) {
   return openWork({ ask: ask.kind ? ask : null });
 }
 
-/** What an address that asks for work is, for the page to decide whether it is the Work view's (the old Work panel's links are `?run=` and `?issue=` too: step 3 of spec 0012 moves them) */
+/** What an address that asks for work is, for the page to decide whether it is the Work view's (the old Work list's links are `?run=` and `?issue=` too: step 3 of spec 0012 moves them) */
 export const asksForWork = (search) => workAddress(search) !== null;
 
 function spend() {
@@ -557,6 +639,10 @@ export function resetWorkViewForTests() {
   clearTimeout(timer);
   if (offPaint) offPaint();
   offPaint = null;
+  if (badges) badges.destroy();
+  badges = null;
+  badgeWas = false;
+  reading = null;
   laneEls = [];
   laneKey = null;
   wired = false;
