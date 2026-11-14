@@ -149,10 +149,27 @@ export function install(ctx) {
   }
 
   /** Says (on the panel's top, for the CSS) that the tabs run on past an edge: a fade shows on that side, so Deploys is not simply missing on a phone */
+  let tabsFor = null; // the tab the strip was last scrolled to show: the strip follows the tab that is on (and is left alone while the viewer scrolls it)
   function paintTabsMore() {
     const top = root.querySelector('#forge-panel .hx-forge-top');
     const tabs = top && top.querySelector('.hx-forge-tabs');
     if (!tabs) return;
+    // The tab that is on is brought into the strip (Deploys is the sixth: a list opened on it, or a tab pressed, must not leave it under the edge). A strip that is not laid out
+    // (the list shut, a phone's sheet in its peek) is asked again when it is
+    const active = tabs.clientWidth ? tabs.querySelector('[aria-pressed="true"]') : null;
+    if (!tabs.clientWidth) tabsFor = null;
+    else if (active && tabsFor !== ui.kind) {
+      tabsFor = ui.kind;
+      const box = tabs.getBoundingClientRect();
+      const at = active.getBoundingClientRect();
+      // Clear of the fade the strip puts on an edge it runs on past (css/work.css: one and a half `--corn-space-6`); the first and the last tab go to their end of the strip
+      const room = 1.5 * (parseFloat(inst.win.getComputedStyle(tabs).getPropertyValue('--corn-space-6')) || 24);
+      const shown = [...tabs.children].filter((c) => !c.hidden);
+      if (active === shown[0]) tabs.scrollLeft = 0;
+      else if (active === shown[shown.length - 1]) tabs.scrollLeft = tabs.scrollWidth;
+      else if (at.left < box.left + room) tabs.scrollLeft += at.left - box.left - room;
+      else if (at.right > box.right - room) tabs.scrollLeft += at.right - box.right + room;
+    }
     const more = [];
     if (tabs.scrollLeft > 1) more.push('start');
     if (tabs.scrollWidth - tabs.clientWidth - tabs.scrollLeft > 1) more.push('end');
