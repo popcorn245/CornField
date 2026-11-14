@@ -577,9 +577,15 @@ async function main() {
     await sleep(700);
     const sw = await pt2.evaluate(async () => { const { state } = await import('/explorer/state.js'); const t = document.querySelector('.hx-forge-tabs'); const tb = t.getBoundingClientRect(); const r = t.querySelector('[data-forge-kind="deploys"]').getBoundingClientRect(); return { left: Math.round(t.scrollLeft), whole: r.left >= tb.left - 1 && r.right <= tb.right + 1, cam: `${state.camera.x},${state.camera.y},${state.camera.zoom}` }; });
     check('on a phone, a finger swiping the strip brings Deploys whole into it, and moves neither the map nor anything else', sw.left > 0 && sw.whole && sw.cam === camA && Math.abs((await pt2.locator('.hx-forge-tabs').boundingBox()).y - sbox.y) < 1, JSON.stringify(sw));
-    await pt2.evaluate(() => { document.querySelector('.hx-forge-tabs').scrollLeft = 0; });
+    // the strip is put where Deploys is cut at its right edge (half of it shows): a finger can press only what shows
+    await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const d = t.querySelector('[data-forge-kind="deploys"]'); t.scrollLeft = 0; t.scrollLeft = Math.max(0, Math.round(d.getBoundingClientRect().left - t.getBoundingClientRect().left + d.offsetWidth / 2 - t.clientWidth)); });
     await sleep(300);
-    await pt2.evaluate(() => document.querySelector('[data-forge-kind="deploys"]').click());
+    // a real touch tap (as the swipe above: raw touch events), on the part of the tab that shows in the strip: `.click()` would press it without a finger, and Playwright's `tap` would scroll it into view first
+    const tabAt = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs').getBoundingClientRect(); const r = document.querySelector('[data-forge-kind="deploys"]').getBoundingClientRect(); const l = Math.max(r.left, t.left); const rr = Math.min(r.right, t.right); return { x: (l + rr) / 2, y: (Math.max(r.top, t.top) + Math.min(r.bottom, t.bottom)) / 2, shown: rr - l }; });
+    check('on a phone, Deploys shows at least in part in the strip before it is tapped', tabAt.shown > 4, JSON.stringify(tabAt));
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.round(tabAt.x), y: Math.round(tabAt.y) }] });
+    await sleep(60);
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await sleep(1400);
     const sp = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const d = t.querySelector('[data-forge-kind="deploys"]'); const tb = t.getBoundingClientRect(); const r = d.getBoundingClientRect(); return { cw: t.clientWidth, sw: t.scrollWidth, left: Math.round(t.scrollLeft), inside: r.left >= tb.left - 1 && r.right <= tb.right + 1, pressed: d.getAttribute('aria-pressed') }; });
     check('on a phone, with the list expanded, a tab pressed (Deploys) is whole in the strip', sp.cw > 0 && sp.sw > sp.cw && sp.inside && sp.pressed === 'true', JSON.stringify(sp));
