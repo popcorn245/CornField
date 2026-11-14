@@ -73,13 +73,13 @@ jobs:
           docker run --rm -d --name cf --network host -v "$PWD:/repo:ro" -e CORNFIELD_PORT=3399 cornfield:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3399/cornfield/config.json >/dev/null && break; sleep 1; done
           curl -fsS http://127.0.0.1:3399/topology.json | node -e "const t = JSON.parse(require('fs').readFileSync(0, 'utf8')); if (!t.nodes.length) process.exit(1); console.log(t.nodes.length, 'nodes')"
-          docker stop cf
+          docker rm -f cf
       - name: The image serves the web components it built, and has none of the tools that built them
         run: |
           set -eu
           docker run --rm -d --name cf --network host -v "$PWD:/repo:ro" -e CORNFIELD_PORT=3396 cornfield:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3396/healthz >/dev/null && break; sleep 1; done
-          fail() { echo "$1" >&2; docker stop cf >/dev/null; exit 1; }
+          fail() { echo "$1" >&2; docker rm -f cf >/dev/null; exit 1; }
           # version.json says this checkout's version (the release sets it in package.json from the tag before it builds the image)
           want="$(node -p "require('./package.json').version")"
           got="$(curl -fsS http://127.0.0.1:3396/cornfield/components/version.json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).cornfield")"
@@ -99,7 +99,7 @@ jobs:
           # No Vite, no StencilRS, no node_modules from components/ in the final image
           docker exec cf sh -c 'test -f /opt/cornfield/components/dist/manifest.json && test ! -e /opt/cornfield/components/node_modules && test ! -e /opt/cornfield/components/src && test ! -e /opt/cornfield/node_modules/vite && test ! -e /opt/cornfield/node_modules/@stencil' || fail 'the image holds more of components/ than dist/'
           docker exec cf du -sk /opt/cornfield/components
-          docker stop cf
+          docker rm -f cf
       - name: Beyond loopback it refuses, for the right reason, unless sign-in is configured with an https URL
         env:
           # Placeholders: no OAuth app has these, and nothing here signs in
@@ -126,27 +126,27 @@ jobs:
           curl -fsS http://127.0.0.1:3397/healthz
           for p in / /topology.json /cornfield/config.json /explorer/main.js /proposals; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3397$p")
-            [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker stop cf; exit 1; }
+            [ "$code" = 401 ] || { echo "$p answered $code without a session" >&2; docker rm -f cf; exit 1; }
           done
           curl -s http://127.0.0.1:3397/ | grep -q 'Sign in with GitHub'
           # …except the web components, which a browser fetches without the cookie (they are the published package); with no embed.origins there is no CORS header
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3397/cornfield/components/version.json)
-          [ "$code" = 200 ] || { echo "the components answered $code without a session" >&2; docker stop cf; exit 1; }
-          if curl -sI -H 'Origin: null' http://127.0.0.1:3397/cornfield/components/corn-map.js | grep -qi '^access-control-'; then echo 'a CORS header with no origin listed' >&2; docker stop cf; exit 1; fi
+          [ "$code" = 200 ] || { echo "the components answered $code without a session" >&2; docker rm -f cf; exit 1; }
+          if curl -sI -H 'Origin: null' http://127.0.0.1:3397/cornfield/components/corn-map.js | grep -qi '^access-control-'; then echo 'a CORS header with no origin listed' >&2; docker rm -f cf; exit 1; fi
           # Behind a proxy that passes Host through, the public name reaches the guard too
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: cornfield-ci' http://127.0.0.1:3397/topology.json)
-          [ "$code" = 401 ] || { echo "the public Host answered $code" >&2; docker stop cf; exit 1; }
+          [ "$code" = 401 ] || { echo "the public Host answered $code" >&2; docker rm -f cf; exit 1; }
           # cornfield.db is opened on the first request that looks up a session: ask with a cookie that names none
           code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: __Host-cornfield=no-such-session' http://127.0.0.1:3397/topology.json)
-          [ "$code" = 401 ] || { echo "an unknown session answered $code" >&2; docker stop cf; exit 1; }
+          [ "$code" = 401 ] || { echo "an unknown session answered $code" >&2; docker rm -f cf; exit 1; }
           # The image runs as a non-root user, and the data folder is that user's, 0700, with cornfield.db 0600 inside
-          [ "$(docker exec cf id -u)" != 0 ] || { echo 'the image runs as root' >&2; docker stop cf; exit 1; }
-          [ "$(docker exec cf stat -c '%U %a' /data)" = 'node 700' ] || { docker exec cf stat -c '%U %a' /data >&2; docker stop cf; exit 1; }
-          [ "$(docker exec cf stat -c '%U %a' /data/cornfield.db)" = 'node 600' ] || { docker exec cf stat -c '%U %a' /data/cornfield.db >&2; docker stop cf; exit 1; }
+          [ "$(docker exec cf id -u)" != 0 ] || { echo 'the image runs as root' >&2; docker rm -f cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data)" = 'node 700' ] || { docker exec cf stat -c '%U %a' /data >&2; docker rm -f cf; exit 1; }
+          [ "$(docker exec cf stat -c '%U %a' /data/cornfield.db)" = 'node 600' ] || { docker exec cf stat -c '%U %a' /data/cornfield.db >&2; docker rm -f cf; exit 1; }
           # The image's own health check (/healthz, which needs no session) turns healthy
           for i in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] && break; sleep 2; done
-          [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] || { docker inspect -f '{{json .State.Health}}' cf >&2; docker stop cf; exit 1; }
-          docker stop cf
+          [ "$(docker inspect -f '{{.State.Health.Status}}' cf)" = healthy ] || { docker inspect -f '{{json .State.Health}}' cf >&2; docker rm -f cf; exit 1; }
+          docker rm -f cf
       - name: The example compose file is valid, and stops without its secrets
         env:
           CORNFIELD_PUBLIC_URL: https://cornfield-ci
