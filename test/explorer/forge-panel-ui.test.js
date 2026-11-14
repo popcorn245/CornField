@@ -1223,11 +1223,14 @@ describe('a spec pull request waiting to land on its approval (proposals.approve
       const answer = init.method === 'POST' ? { ok: true, cancelled: true, number: 12 } : /landing$/.test(url) ? { ok: true, enabled: true, landing: null } : { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...DETAIL[12] };
       return { ok: true, status: 200, headers: new Headers(), json: async () => answer };
     });
+    q('[data-forge-landing-cancel="12"]').focus();
     click(q('[data-forge-landing-cancel="12"]'));
     await settle();
     const post = server.mock.mock.calls.find(([, init]) => init && init.method === 'POST');
     expect(post[0]).toBe('/api/forge/pulls/12/landing/cancel');
     expect(q('[data-forge-landing-cancel]')).toBeNull();
+    // the pressed Cancel is gone: the focus is on the actions' own place, never on the page
+    expect(document.activeElement).toBe(q('#forge-detail'));
     expect(q('.hx-forge-notice--ok').textContent).toBe('Pull request #12 will not land on its own. It stays open.');
   });
 
