@@ -304,6 +304,7 @@ function syncBadges() {
   const w = work();
   if (want && w.status !== 'ok' && w.status !== 'loading') load({});
   else render();
+  inst().emit('work:changed'); // a node panel open on a badged node shows its Open work, or no longer does
 }
 
 // ---------------------------------------------------------------------------
@@ -417,6 +418,7 @@ function refuse(detail, quiet) {
   if (on()) card.show(detail);
   paintBar();
   paintBadge(0);
+  inst().emit('work:changed');
   if (!again) announce(inst(), `Work: ${detail.state === 'sign-in' ? (detail.status === 403 ? 'this map is for the maintainers.' : 'sign in to see the work.') : detail.state === 'offline' ? 'you are offline.' : 'it could not be read.'}`);
   return false;
 }
@@ -447,6 +449,7 @@ function arrive(body, { select, ask, quiet }) {
   }
   paintBar();
   paintBadge(w.counts.waiting);
+  i.emit('work:changed'); // the node panel's section for the work touching its node is drawn again, if it says something else now
   if (!on()) { // the Map view: the Work layer's badges, from the same answer
     if (first || !quiet || had !== w.badges.size) i.emit('layers:redraw'); // the row's count
     render(); // the badges are drawn from this answer

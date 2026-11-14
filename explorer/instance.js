@@ -102,6 +102,8 @@
  *   work:list       { open }  the Work list opened or closed (pieces/work-list.js)
  *   work:pick       { kind, key } -> true  (ask, answered by the Work view: explorer/work-view.js) select the node of that piece of work (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal`, and its number, id or slug) on the map; no answer: the Work piece shows it in the node panel alone, as it shows work older than the graph's 14 days
  *   work:panel      node -> { replace, badge, title, html } | undefined  (ask, answered by the Work view) what the node panel shows for a piece of work or, in the Work view, a node of code; the html holds `forge-detail`, where the Work piece draws the actions
+ *   work:changed    (none)  (emit) the work changed (the Work layer came on or went off, or the graph was read again): the open node panel asks `work:panel` again for its node of code and draws that section again
+ *   node:words      node -> string | undefined  (ask, answered by the Work view) what the keyboard adds to its words on landing on a node: the Work layer's ", 2 open: PR #27, Issue #14"
  *   node:back       (none) -> (() => boolean) | undefined  (ask, answered by the Work list) the node panel is about to close: what gives the focus back to the row of the open list that chose what it shows (true when it did); else the map has it
  *   work:on         (none) -> boolean  whether the Work piece has started (a piece mounted after it asks rather than waits for `work:available`)
  *   work:answer     { run }  (emit) "Answer" on the proposal bar's line: the run is shown in the node panel, its reply field focused

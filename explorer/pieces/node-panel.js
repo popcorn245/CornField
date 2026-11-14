@@ -391,6 +391,27 @@ export function mount(root, inst, options = {}) {
     addParts(box);
   }
 
+  /** What the Work view put first in the panel for a node of code (the Work layer's "Open work", or the work touching it in the Work view): its elements and its markup */
+  let workShown = { node: null, html: '', els: [] };
+  function putWork(node, html) {
+    for (const el of workShown.els) el.remove();
+    const before = metaList.firstChild;
+    if (html) metaList.insertAdjacentHTML('afterbegin', html);
+    const els = [];
+    for (let el = metaList.firstChild; el && el !== before; el = el.nextSibling) els.push(el);
+    if (html) addParts(metaList);
+    workShown = { node, html, els };
+  }
+  /** The work changed (`work:changed`: the Work layer came on or went off, or a new answer): the open panel's section for it is drawn again, and nothing else in it moves */
+  function repaintWork() {
+    const node = state.selectedNode;
+    if (gone || !node || !workShown.node || node.id !== workShown.node.id || !drawer.classList.contains('drawer-open')) return;
+    const work = inst.ask('work:panel', node);
+    if (work && work.replace) return; // a piece of work is drawn whole when it is shown
+    const html = work ? work.html : '';
+    if (html !== workShown.html) putWork(node, html); // the same markup: left alone, with the focus in it
+  }
+
   /** Fills the panel for a node and opens it. The selection itself is the instance's (engine/selection.js); this is what is shown for it. */
   function show(node, { frame = false } = {}) {
     if (!node || gone) return;
@@ -439,6 +460,7 @@ export function mount(root, inst, options = {}) {
     // The Work view (spec 0012 D5): a piece of work is shown by the page's own answer (work-view.js); a node of code in it keeps its own sections, with the work touching it first
     const work = inst.ask('work:panel', node);
     own('drawer-copy-btn').hidden = !!(work && work.replace); // a piece of work is no spec to copy: its JSON is the forge's, not the map's
+    workShown = { node: null, html: '', els: [] }; // the markup above replaced what was there
     if (work && work.replace) {
       title.textContent = work.title;
       title.classList.remove('hx-mono');
@@ -451,10 +473,7 @@ export function mount(root, inst, options = {}) {
       fileBtn.hidden = true;
       openBtn.hidden = true;
       own('drawer-run-btn').hidden = true;
-    } else if (work) {
-      metaList.insertAdjacentHTML('afterbegin', work.html);
-      addParts(metaList);
-    }
+    } else putWork(node, work ? work.html : '');
 
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
@@ -554,6 +573,7 @@ export function mount(root, inst, options = {}) {
   });
   // The threads that mention nodes changed (the list was read, or the map changed): the section is drawn again
   scope.on('threads:changed', () => repaintThreads());
+  scope.on('work:changed', () => repaintWork());
   // The dim layer behind the panel: on a phone a tap there folds the panel to its peek; elsewhere it closes it
   if (!inline) {
     scope.listen(backdrop, 'click', (e) => {

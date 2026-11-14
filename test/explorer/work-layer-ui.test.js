@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * The Work layer on the Map view and the Work view share one read (spec 0012 D4), through the page's own markup with a fake server behind `fetch`:
- * a poll never asks a slow forge twice at once, a read that replaces another keeps the node it was to select, and a poll that fails is quiet on the map.
+ * a poll never asks a slow forge twice at once, a read that replaces another keeps the node it was to select, a poll that fails is quiet on the map,
+ * and the node panel open on a node shows its Open work when the layer comes on, without being chosen again.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // @ts-expect-error plain JS modules, no declarations
@@ -18,7 +19,7 @@ import { initKeyboard, resetKeyboardForTests } from '../../explorer/keyboard.js'
 // @ts-expect-error plain JS modules, no declarations
 import { initSheets } from '../../explorer/sheets.js';
 // @ts-expect-error plain JS modules, no declarations
-import { closeDrawer } from '../../explorer/panels.js';
+import { closeDrawer, selectNode } from '../../explorer/panels.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setLayer } from '../../explorer/engine/layers.js';
 // @ts-expect-error plain JS modules, no declarations
@@ -82,6 +83,7 @@ function mount() {
   initWorkView({ offered: true });
 }
 const layer = (on) => setLayer(pageInstance(), 'work-badges', on);
+const openWorkLinks = () => [...document.querySelectorAll('#spec-drawer [data-corn="work-links"] li')].map((li) => li.textContent.replace(/\s+/g, ' ').trim());
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }); localStorage.clear(); history.replaceState(null, '', '/'); });
 afterEach(() => { closeWork(); layer(false); closeForge({ restoreFocus: false }); if ($('spec-drawer')) closeDrawer(); resetConnectionForTests(); vi.unstubAllGlobals(); vi.useRealTimers(); document.body.innerHTML = ''; });
@@ -153,5 +155,25 @@ describe('one read and one poll (spec 0012 D4)', () => {
       expect(state.work.badges.size).toBe(2);
       expect($('map-announcer').textContent).toBe('');
     }
+  });
+});
+
+describe('the node panel follows the layer', () => {
+  it('shows Open work on the selected node when the layer comes on, and takes it away when it goes off, without the node chosen again', async () => {
+    fakeServer();
+    mount();
+    await selectNode(state.nodes.find((n) => n.id === 'billing'));
+    await settle();
+    expect(openWorkLinks()).toEqual([]);
+    const title = $('drawer-title').textContent;
+    layer(true);
+    await settle();
+    expect(openWorkLinks()).toEqual(['Pull requestPR #7 · Page the invoices Open ↗']);
+    expect($('drawer-title').textContent).toBe(title);
+    expect(document.querySelectorAll('#spec-drawer [data-corn="work-links"]')).toHaveLength(1);
+    layer(false);
+    await settle();
+    expect(openWorkLinks()).toEqual([]);
+    expect($('drawer-title').textContent).toBe(title);
   });
 });
