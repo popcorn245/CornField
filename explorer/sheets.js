@@ -3,7 +3,7 @@
  *
  * A bridge (spec 0011 D2, step 4): the phone's bottom sheets now live in engine/sheets.js, one set per instance (the node panel registers its
  * own, pieces/node-panel.js, and so does the proposal's bar, pieces/proposal.js). This file keeps the old names for the modules that are not yet on an
- * instance (the Work panel, deep links, the House), bound to the page's instance. It goes when the last of them is converted.
+ * instance (the Work list, deep links, the House), bound to the page's instance. It goes when the last of them is converted.
  */
 
 import { pageInstance } from './state.js';

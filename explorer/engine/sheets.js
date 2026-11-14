@@ -6,7 +6,7 @@
  * the map (`#sheet-dock`, which is `display: contents` from 768px up, so the desktop layout is untouched).
  * Each is a **peek** by default (a handle, a title and a line or two) and **expands** to at most half the
  * screen (60% for the node panel) with its own scroll. A tap or a swipe on the handle expands or collapses it; a tap
- * on the map collapses it. At most one is expanded at a time (sheet-model.js). Spec 0010 D7: the Work panel is a sheet too, with the review
+ * on the map collapses it. At most one is expanded at a time (sheet-model.js). Spec 0010 D7: the Work list is a sheet too, with the review
  * (the proposal bar or the scenario player) and one other sheet at most (opening Work displaces the node panel and the reverse); while one is
  * expanded the sheet of the other group folds to a **stub** (one 44px row: its title and its badge; a tap swaps them), and an expanded sheet is
  * capped so the map keeps 35% of the screen (`--hx-sheet-cap`, sheet-model.js `sheetCap`). Escape folds an expanded sheet, then closes.
@@ -88,7 +88,7 @@ function apply(inst) {
   S.listeners.forEach((fn) => fn());
 }
 
-/** Whether a sheet's element is open on the page (the proposal bar is shown, the Work panel and the node panel carry their open class) */
+/** Whether a sheet's element is open on the page (the proposal bar is shown, the Work list and the node panel carry their open class) */
 function isOpenOnPage(id, el) {
   if (id === 'forge') return el.classList.contains('forge-open');
   if (id === 'drawer') return el.classList.contains('drawer-open');
@@ -182,7 +182,7 @@ export function refreshStubs(inst) {
 
 /**
  * Opens a sheet's place in the dock without expanding it (Work opens as a peek, a node panel opens as a peek): the other sheet of its group is
- * displaced, and this one is no longer away. Called by what opens a sheet (the node panel's code); the Work panel's open class is seen too.
+ * displaced, and this one is no longer away. Called by what opens a sheet (the node panel's code); the Work list's open class is seen too.
  */
 export function showSheet(inst, id) {
   const S = sheetsOf(inst);

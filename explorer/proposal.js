@@ -48,7 +48,7 @@ for (const name of Object.keys(ADAPT)) {
   });
 }
 
-/** What the server listed last, for the Work panel's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
+/** What the server listed last, for the Work list's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
 export const proposalListing = () => E.proposalListing(pageInstance());
 /** Calls `fn` each time the list is read again; returns the way to stop */
 export const onProposalListing = (fn) => E.onProposalListing(pageInstance(), fn);

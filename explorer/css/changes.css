@@ -84,7 +84,7 @@
   .hx-review-column { width: 320px; }
 }
 @container corn-box (min-width: 1280px) {
-  /* The Work panel: from 1280px the column moves over to make room for it; narrower, the panel lies over the column while it is open (moving it would leave the map a sliver) */
+  /* The Work list: from 1280px the column moves over to make room for it; narrower, the panel lies over the column while it is open (moving it would leave the map a sliver) */
   .hx-stage:has(.forge-open) .hx-review-column { left: calc(var(--hx-forge-w) + 12px); }
 }
 @container corn-box (min-width: 768px) and (max-width: 1023px) {

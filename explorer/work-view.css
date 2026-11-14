@@ -48,3 +48,11 @@
 }
 /* The Layers menu in the Work view lists the Work view's rows; the map's keys (its kinds of line, the cloud's, the runs' and the proposal marks') are about the map */
 body:has(.hx-stage.is-work) .hx-layers :is([data-corn="legend-key"], [data-corn="menu-section"]) { display: none; }
+/* The Work layer on the Map view (explorer/work-badges.js, spec 0012 D4): a small pill over each node open work touches, in screen space so it reads at any zoom. The kind's colour is the border (`--hx-badge`, set from
+   `--corn-work-<kind>`), the words are the page's own text on its own surface, so the pill reads on any theme and the kind is said in words (`PR #27`), never by colour alone.
+   Its line is as high as the font's own box (a "p" or a "y" is not cut), and the placing keeps the room the pill takes (work-badges.js measures it). Decoration for the eye (aria-hidden):
+   the keyboard's words and the node panel's "Open work" say the rest. The runs' pulse (runs-map.js) is a layer of its own and is not changed. */
+.hx-work-badges { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
+.hx-work-badges[hidden] { display: none; }
+.hx-work-badge { position: absolute; box-sizing: border-box; display: inline-block; max-width: 14rem; padding: 0 var(--corn-space-1); border: var(--corn-border-strong) solid var(--hx-badge, var(--corn-line)); border-radius: var(--corn-radius-pill); background: color-mix(in srgb, var(--corn-surface-1) 92%, transparent); color: var(--corn-text); font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transform: translateX(-50%); }
+.hx-work-badge.is-waiting { border-width: calc(var(--corn-border-strong) + var(--corn-border)); }

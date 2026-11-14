@@ -29,7 +29,7 @@ export function initForgePanel(config, opts = {}) {
   if (!p) return false;
   p.update(opts.clock ? { clock: opts.clock, config } : { config });
   const on = p.isOn();
-  if (on) initConnection(); // the offline banner (explorer/connection.js) is the page's; it follows the Work panel, as it always has
+  if (on) initConnection(); // the offline banner (explorer/connection.js) is the page's; it follows the Work list, as it always has
   return on;
 }
 

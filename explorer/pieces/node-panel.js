@@ -252,9 +252,9 @@ function sectionsOf(inst) {
     return '';
   }
 
-  /** "Threads": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the Work panel */
+  /** "Threads": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the Work list */
   function threadsSection(node) {
-    // The Work panel answers (threads:index) when threads are on and a maintainer is signed in; nobody answering is no Threads section
+    // The Work list answers (threads:index) when threads are on and a maintainer is signed in; nobody answering is no Threads section
     const index = inst.ask('threads:index', node.id);
     if (!index) return '';
     const threads = index.threads;
@@ -391,6 +391,27 @@ export function mount(root, inst, options = {}) {
     addParts(box);
   }
 
+  /** What the Work view put first in the panel for a node of code (the Work layer's "Open work", or the work touching it in the Work view): its elements and its markup */
+  let workShown = { node: null, html: '', els: [] };
+  function putWork(node, html) {
+    for (const el of workShown.els) el.remove();
+    const before = metaList.firstChild;
+    if (html) metaList.insertAdjacentHTML('afterbegin', html);
+    const els = [];
+    for (let el = metaList.firstChild; el && el !== before; el = el.nextSibling) els.push(el);
+    if (html) addParts(metaList);
+    workShown = { node, html, els };
+  }
+  /** The work changed (`work:changed`: the Work layer came on or went off, or a new answer): the open panel's section for it is drawn again, and nothing else in it moves */
+  function repaintWork() {
+    const node = state.selectedNode;
+    if (gone || !node || !workShown.node || node.id !== workShown.node.id || !drawer.classList.contains('drawer-open')) return;
+    const work = inst.ask('work:panel', node);
+    if (work && work.replace) return; // a piece of work is drawn whole when it is shown
+    const html = work ? work.html : '';
+    if (html !== workShown.html) putWork(node, html); // the same markup: left alone, with the focus in it
+  }
+
   /** Fills the panel for a node and opens it. The selection itself is the instance's (engine/selection.js); this is what is shown for it. */
   function show(node, { frame = false } = {}) {
     if (!node || gone) return;
@@ -418,7 +439,7 @@ export function mount(root, inst, options = {}) {
     <div id="drawer-threads">${sections.threadsSection(node)}</div>
     ${sections.diffSection(node)}`;
     addParts(metaList);
-    inst.emit('threads:ensure'); // the Work panel reads the threads once, for "Mentioned in"
+    inst.emit('threads:ensure'); // the Work list reads the threads once, for "Mentioned in"
     inst.emit('live:hydrate', own('drawer-live'));
 
     // The actions: Open file (the node's file on the forge) is the primary one; with an address too, Open route is the quiet one.
@@ -439,6 +460,7 @@ export function mount(root, inst, options = {}) {
     // The Work view (spec 0012 D5): a piece of work is shown by the page's own answer (work-view.js); a node of code in it keeps its own sections, with the work touching it first
     const work = inst.ask('work:panel', node);
     own('drawer-copy-btn').hidden = !!(work && work.replace); // a piece of work is no spec to copy: its JSON is the forge's, not the map's
+    workShown = { node: null, html: '', els: [] }; // the markup above replaced what was there
     if (work && work.replace) {
       title.textContent = work.title;
       title.classList.remove('hx-mono');
@@ -451,10 +473,7 @@ export function mount(root, inst, options = {}) {
       fileBtn.hidden = true;
       openBtn.hidden = true;
       own('drawer-run-btn').hidden = true;
-    } else if (work) {
-      metaList.insertAdjacentHTML('afterbegin', work.html);
-      addParts(metaList);
-    }
+    } else putWork(node, work ? work.html : '');
 
     drawer.classList.add('drawer-open');
     drawer.inert = false; // closed, it waits off screen: inert, so Tab never reaches its buttons (MAP-02)
@@ -520,7 +539,7 @@ export function mount(root, inst, options = {}) {
     if (!inline) collapseSheet(inst, 'drawer'); // the next node opens as a peek on a phone
   }
 
-  /** Start a run: the Start dialog of the Work panel, on the proposal that is open */
+  /** Start a run: the Start dialog of the Work list, on the proposal that is open */
   function startRun() {
     if (state.proposalSlug) inst.emit('forge:start', { slug: state.proposalSlug, returnTo: '#drawer-run-btn' });
   }
@@ -545,7 +564,7 @@ export function mount(root, inst, options = {}) {
     // The panel's ✕: the focus would be left on a hidden button, so it goes back to that row, else to the map
     if (shut) scope.timeout(() => { if (!(back && back()) && state.canvas) state.canvas.focus(); }, 0);
   });
-  // A thread listed in the panel opens in the Work panel, and "Start a thread about this" opens its New idea form (the Work panel hears both)
+  // A thread listed in the panel opens in the Work list, and "Start a thread about this" opens its New idea form (the Work list hears both)
   scope.listen(drawer, 'click', (e) => {
     const open = e.target.closest && e.target.closest('[data-thread-open]');
     if (open) { inst.emit('thread:open', { number: Number(open.dataset.threadOpen) }); return; }
@@ -554,6 +573,7 @@ export function mount(root, inst, options = {}) {
   });
   // The threads that mention nodes changed (the list was read, or the map changed): the section is drawn again
   scope.on('threads:changed', () => repaintThreads());
+  scope.on('work:changed', () => repaintWork());
   // The dim layer behind the panel: on a phone a tap there folds the panel to its peek; elsewhere it closes it
   if (!inline) {
     scope.listen(backdrop, 'click', (e) => {

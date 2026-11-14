@@ -1,6 +1,6 @@
 /*
  * dialogs.css: dialogs
- * The review tokens dialog (review-tokens.js), the confirm dialog of the Work panel, and a proposal's mockup window (mockups.js). They
+ * The review tokens dialog (review-tokens.js), the confirm dialog of the Work list, and a proposal's mockup window (mockups.js). They
  * become native <dialog> elements in a later step (D8); until then three of them are `position: fixed` over the window, each marked below.
  * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
  * a width rule is a container query on `corn-box` (page.css), a height rule on `corn-page`. base.css loads first.

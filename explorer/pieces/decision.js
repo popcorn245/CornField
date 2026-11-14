@@ -248,7 +248,7 @@ export function mount(root, inst, options = {}) {
         list.replaceChildren(...ui.sent.lines.map((text) => { const li = inst.doc.createElement('li'); li.className = 'hx-whatif-edit'; li.textContent = text; return li; }));
       }
     }
-    // A landing that waits on this PR: Cancel landing, brought here from the Work panel (D3)
+    // A landing that waits on this PR: Cancel landing, brought here from the Work list (D3)
     const landing = q('[data-review-landing]');
     const landingNow = ui.reviewable && ui.facts && ui.facts.landing ? ui.facts.landing : null;
     landing.hidden = !landingNow;
@@ -513,7 +513,7 @@ export function mount(root, inst, options = {}) {
     await sendReview(hold.verdict, { body: hold.body });
   }
 
-  /** Cancel landing (D3): the Work panel's Cancel, here; a POST from this page, then the facts are read again */
+  /** Cancel landing (D3): the Work list's Cancel, here; a POST from this page, then the facts are read again */
   async function cancelLanding() {
     const n = pullNumberOf(state.proposalSource);
     if (!n) return;
@@ -597,7 +597,7 @@ export function mount(root, inst, options = {}) {
       return false;
     }
     ui.busy = false;
-    if (key !== ui.key) { inst.emit('decision', { outcome: verdict, review: saved, slug, source, open: false }); return true; } // another proposal opened while it was being saved: it is saved, the foot is not this one's any more (`open: false`: the page's Work panel does not read its list again then, as before)
+    if (key !== ui.key) { inst.emit('decision', { outcome: verdict, review: saved, slug, source, open: false }); return true; } // another proposal opened while it was being saved: it is saved, the foot is not this one's any more (`open: false`: the page's Work list does not read its list again then, as before)
     ui.review = { verdict: saved.verdict, at: saved.at, current: saved.verdict === 'approved' };
     ui.hint = verdict === 'approved' ? editsHint(verdict, body.edits.length) : '';
     // The same approval stood already (another tab, or a send that was retried): the server posted nothing, and the page says so

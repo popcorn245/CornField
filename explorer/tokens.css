@@ -115,8 +115,8 @@
   --corn-space-5: 16px;
   --corn-space-6: 24px;
 
-  /* Density (issue #200). The one height of a control in a bar (the header, the proposal bar, the decision foot, the player, the Work panel's top row):
-     32px at a desk, 44px on a phone (the media query after the light blocks). The padding of a panel's body, which the Work panel and the node panel share,
+  /* Density (issue #200). The one height of a control in a bar (the header, the proposal bar, the decision foot, the player, the Work list's top row):
+     32px at a desk, 44px on a phone (the media query after the light blocks). The padding of a panel's body, which the Work list and the node panel share,
      and the least height of a panel's head: a control and a step of padding */
   --corn-control-height: 32px;
   --corn-panel-pad: calc(var(--corn-space-5) + var(--corn-space-1));

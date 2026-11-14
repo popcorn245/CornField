@@ -657,7 +657,7 @@ export function openedWords({ work, code, waiting }) {
 // ---------------------------------------------------------------------------
 
 /** What the Work view keeps on the state (`state.work`): the answer, the scene made of it, the layers, the toggle, and the map it stands in for while it is open */
-export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null, order: [], updating: false, stale: '', lastError: '' });
+export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], badges: new Map(), layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null, order: [], updating: false, stale: '', lastError: '' });
 
 /** Makes the scene of an answer (`workScene`), keeps the node a selection named, and sets the filters; the layout is `applyWorkLayout`'s */
 export function setWorkGraph(state, graph, mapNodes) {

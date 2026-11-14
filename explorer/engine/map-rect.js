@@ -70,7 +70,7 @@ export function measureCovered(inst) {
 /**
  * The part of the map nothing covers, in the canvas's own CSS px: what the camera should frame a node into.
  * On a phone the dock's sheets cover the bottom; from 768px the proposal bar covers the top (and the change list it grows to hold),
- * the node panel the right, the Work panel and the review column the left and the scenario player the bottom. Without a layout (no page) it is the whole canvas.
+ * the node panel the right, the Work list and the review column the left and the scenario player the bottom. Without a layout (no page) it is the whole canvas.
  * @returns {{ x: number, y: number, width: number, height: number }}
  */
 export function visibleMapRect(inst) {
@@ -89,7 +89,7 @@ export function visibleMapRect(inst) {
     if (panel && panel.right) covers.right = panel.right;
     const forge = inst.el('forge-panel');
     if (shown(forge) && forge.classList.contains('forge-open')) covers.left = forge.offsetWidth;
-    // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work panel's when both are open
+    // the review column (review-column.js) is docked on the left under the bar: its right edge is what it covers, past the Work list's when both are open
     const column = inst.ask('changes:covers');
     if (column) covers.left = Math.max(covers.left, Math.max(0, column.right - c.left) + 8);
     const player = inst.ask('player:covers');

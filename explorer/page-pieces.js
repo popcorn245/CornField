@@ -41,7 +41,7 @@ function markersOf(doc, name) {
 }
 
 /**
- * The Work panel says what waits on the maintainer (`work:waiting`); the browser tab's title is the page's, so the page puts "(3) " before its own
+ * The Work list says what waits on the maintainer (`work:waiting`); the browser tab's title is the page's, so the page puts "(3) " before its own
  * title while something waits. A host app keeps its own title and does not listen.
  */
 let titleOff = null;

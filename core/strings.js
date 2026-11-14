@@ -62,7 +62,7 @@ export const STRINGS = Object.freeze({
   playAgain: 'Play again',
   nextScenario: 'Next scenario',
   notChecked: 'Not checked',
-  // The Work panel: its tabs run in the order of the loop
+  // The Work list: its tabs run in the order of the loop
   tabSpecs: 'Specs',
   tabPulls: 'PRs',
   tabIssues: 'Issues',

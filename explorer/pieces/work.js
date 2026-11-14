@@ -213,6 +213,16 @@ export function mount(root, inst, options = {}) {
     scope.listen(ctx.root, 'focusin', (e) => { revealInStrip(e.target); });
     const tabs = panel.querySelector('.hx-forge-tabs');
     if (tabs) scope.listen(tabs, 'scroll', fn.paintTabsMore, { passive: true });
+    // A mouse wheel turns the strip sideways (its tabs run on past the panel's edge, and a vertical wheel has nothing else to do over a one-line strip); at either end it is left to the list below
+    if (tabs) {
+      scope.listen(tabs, 'wheel', (e) => {
+        if (e.deltaX || !e.deltaY || e.ctrlKey || e.defaultPrevented) return;
+        const end = tabs.scrollWidth - tabs.clientWidth;
+        if (end <= 1 || (e.deltaY < 0 ? tabs.scrollLeft <= 0 : tabs.scrollLeft >= end - 1)) return;
+        tabs.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }, { passive: false });
+    }
     scope.own(inst.onResize(() => fn.paintTabsMore()));
     // The strip's fade and the top's height follow their own size too: a phone's sheet expanding shows the tabs (they were not laid out in the
     // peek), and a host's box resizes without the window doing so (F42)

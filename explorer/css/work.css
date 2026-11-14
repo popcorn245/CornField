@@ -1,6 +1,6 @@
 /*
- * work.css: the Work panel
- * The Work panel (forge-panel.js, runs-view.js) and its tabs (Specs, PRs, Issues, Threads, Runs, Deploys): the slide-over from the left from
+ * work.css: the Work list
+ * The Work list (forge-panel.js, runs-view.js) and its tabs (Specs, PRs, Issues, Threads, Runs, Deploys): the slide-over from the left from
  * 768px, a bottom sheet below; the Work toggle in the header; the states, results and skeletons. Read by corn-work (D4); its tabs follow as
  * pieces of their own.
  * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;
@@ -12,6 +12,8 @@
 .hx-forge { --hx-forge-status-w: 56px; }
 .hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
 .hx-forge * { touch-action: pan-y; }
+/* The tab strip scrolls sideways (its tabs run past the edge on a phone): a finger may pan it across, on the strip and on a tab */
+.hx-forge .hx-forge-tabs, .hx-forge .hx-forge-tabs * { touch-action: pan-x pan-y; }
 .hx-forge.forge-open { pointer-events: auto; }
 .hx-forge:not(.forge-open) { box-shadow: none; }
 @container corn-box (min-width: 768px) {
@@ -181,7 +183,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
   .hx-run .hx-link, .hx-forge-check .hx-link { display: inline-flex; align-items: center; min-height: 44px; }
 }
 /* ==========================================================================
-   The Work panel's states, results, disabled controls, loading and empty lists, and its fixed top (the 0.34 design review)
+   The Work list's states, results, disabled controls, loading and empty lists, and its fixed top (the 0.34 design review)
    ========================================================================== */
 /* A state is a word, an icon and a colour: the colour comes from a --corn-run-<state> token, the icon is a shape of its own (corn-state.js), and
    the waiting pill is solid, since a run that waits needs the maintainer and should stand out most. A pill is never a button: it has no hover. */
@@ -258,7 +260,7 @@ a.hx-forge-row:hover, button.hx-forge-row:hover { background: var(--corn-surface
   .hx-forge-unread .hx-btn { min-height: 44px; }
 }
 .hx-forge-detail-title, .hx-forge-notes-title { font-size: var(--corn-text-lg); font-weight: 700; line-height: 1.25; letter-spacing: normal; }
-/* The head of a panel: its title row. The Work panel and the node panel start at one edge (the padding is --corn-panel-pad) and the head is at least this tall */
+/* The head of a panel: its title row. The Work list and the node panel start at one edge (the padding is --corn-panel-pad) and the head is at least this tall */
 .hx-forge-head { min-height: var(--corn-panel-head-height); }
 /* The controls of a bar that had no height of their own */
 /* (the waiting line's Answer is in the proposal bar too, so it is the bar's height; it is a strip's action elsewhere, at its own size) */
