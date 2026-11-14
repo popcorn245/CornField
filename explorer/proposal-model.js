@@ -170,7 +170,7 @@ export function proposalPanelHtml(item) {
 }
 
 // ---------------------------------------------------------------------------
-//  A proposal as a row of the Work panel's Specs tab
+//  A proposal as a row of the Work list's Specs tab
 // ---------------------------------------------------------------------------
 
 /** Where a listing entry is, as a line of meta: "PR #11", or the checkout or worktree it is in; a proposal that is also somewhere else says so ("PR #11, and a copy in the checkout") */

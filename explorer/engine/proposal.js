@@ -12,7 +12,7 @@
  * What it tells its neighbours (`inst.on`):
  *   proposal         { change: 'opened' | 'view' | 'closed', slug, source, pinSource, view, proposal }  the open proposal changed
  *   proposal:draw    { open }  the bar and the review column draw again (pieces/proposal.js, pieces/changes.js), in that order
- *   proposal:bar     { open }  they have: the controls that sit on the bar draw again (the what-if editor, the decision, the mockups, the Work panel's line)
+ *   proposal:bar     { open }  they have: the controls that sit on the bar draw again (the what-if editor, the decision, the mockups, the Work list's line)
  *   proposal:mark    { applied, effective, proposal }  before the map is laid out: the what-if editor puts its `edit` mark on what the edits added or removed
  *   proposal:message { text, isError, ways }  one line in the bar in place of a proposal: while one opens, or why it did not
  *   proposal:pull-head  sha  the PR of the open proposal was read: the review column keys what was seen by its head
@@ -22,7 +22,7 @@
  * What it asks (`inst.ask`; nobody answering is a no):
  *   proposal:effective  proposal -> proposal  the proposal the map is drawn from (the what-if editor's, with the edits in); no answer: the proposal itself
  *   proposal:before-close  (none) -> false  keeps the proposal open (the what-if editor is asking whether to keep its edits)
- *   work:open-specs  (none) -> true  the Work panel's Specs tab is open for a bad link's way on; no answer: the bar opens its Proposals menu
+ *   work:open-specs  (none) -> true  the Work list's Specs tab is open for a bad link's way on; no answer: the bar opens its Proposals menu
  *   proposal:specs-list  (none) -> false  there is no list of specs to open here (the review in another app): a bad link's ways leave that button out; no answer: there is one
  *   map:set  { nodes, edges } -> true  the page lays the map out again from these (view.js setMap, not yet an instance's)
  * And emits to the node panel: node:show-edge { edge }.
@@ -58,7 +58,7 @@ const specsWay = (inst) => (inst.ask('proposal:specs-list') === false ? null : {
 //  The list the server gives
 // ---------------------------------------------------------------------------
 
-/** What the server listed last, for the Work panel's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
+/** What the server listed last, for the Work list's Specs tab: the entries (null before the first answer), why the list could not be read, why the spec PRs are missing, and when */
 export function proposalListing(inst) {
   const m = memory(inst);
   return { entries: m.listing, problem: m.listingProblem, forgeProblem: m.forgeProblem, at: m.listingAt };

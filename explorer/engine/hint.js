@@ -6,7 +6,7 @@
  *     main pointer is coarse (a finger). A repo that sets only `hintInspect` (or `hintDrag`) gets its words on both;
  *   - it goes once the person has selected a node, for the rest of the session (sessionStorage; the Flow view's own description stays,
  *     since it says what Flow is, not how to use the map);
- *   - it is never shown over an open proposal, a node panel, the Work panel or a sheet.
+ *   - it is never shown over an open proposal, a node panel, the Work list or a sheet.
  * The icon is `[data-corn="hint-icon"]`, so a theme can restyle or replace it. explorer/hint.js keeps the old names for the page's instance.
  */
 import { isOverridden, t } from './strings.js';
@@ -56,7 +56,7 @@ export function resetHint(inst) {
   try { const store = sessionOf(inst); if (store) store.removeItem(HINT_STORAGE_KEY); } catch { /* none */ }
 }
 
-/** What covers the map: an open proposal, the node panel, the Work panel, a sheet of the dock */
+/** What covers the map: an open proposal, the node panel, the Work list, a sheet of the dock */
 export function mapCovered(inst) {
   const open = (id) => inst.el(id);
   const bar = open('proposal-bar');

@@ -252,9 +252,9 @@ function sectionsOf(inst) {
     return '';
   }
 
-  /** "Threads": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the Work panel */
+  /** "Threads": the threads whose text names the node (an idea, or a spec PR's conversation); each opens in the Work list */
   function threadsSection(node) {
-    // The Work panel answers (threads:index) when threads are on and a maintainer is signed in; nobody answering is no Threads section
+    // The Work list answers (threads:index) when threads are on and a maintainer is signed in; nobody answering is no Threads section
     const index = inst.ask('threads:index', node.id);
     if (!index) return '';
     const threads = index.threads;
@@ -418,7 +418,7 @@ export function mount(root, inst, options = {}) {
     <div id="drawer-threads">${sections.threadsSection(node)}</div>
     ${sections.diffSection(node)}`;
     addParts(metaList);
-    inst.emit('threads:ensure'); // the Work panel reads the threads once, for "Mentioned in"
+    inst.emit('threads:ensure'); // the Work list reads the threads once, for "Mentioned in"
     inst.emit('live:hydrate', own('drawer-live'));
 
     // The actions: Open file (the node's file on the forge) is the primary one; with an address too, Open route is the quiet one.
@@ -520,7 +520,7 @@ export function mount(root, inst, options = {}) {
     if (!inline) collapseSheet(inst, 'drawer'); // the next node opens as a peek on a phone
   }
 
-  /** Start a run: the Start dialog of the Work panel, on the proposal that is open */
+  /** Start a run: the Start dialog of the Work list, on the proposal that is open */
   function startRun() {
     if (state.proposalSlug) inst.emit('forge:start', { slug: state.proposalSlug, returnTo: '#drawer-run-btn' });
   }
@@ -545,7 +545,7 @@ export function mount(root, inst, options = {}) {
     // The panel's ✕: the focus would be left on a hidden button, so it goes back to that row, else to the map
     if (shut) scope.timeout(() => { if (!(back && back()) && state.canvas) state.canvas.focus(); }, 0);
   });
-  // A thread listed in the panel opens in the Work panel, and "Start a thread about this" opens its New idea form (the Work panel hears both)
+  // A thread listed in the panel opens in the Work list, and "Start a thread about this" opens its New idea form (the Work list hears both)
   scope.listen(drawer, 'click', (e) => {
     const open = e.target.closest && e.target.closest('[data-thread-open]');
     if (open) { inst.emit('thread:open', { number: Number(open.dataset.threadOpen) }); return; }

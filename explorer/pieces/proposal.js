@@ -130,7 +130,7 @@ export function mount(root, inst, options = {}) {
     ...place(inst, root, html.bar, options.slots, 'bar'),
     ...(inline ? [] : place(inst, root, html.menu, options.slots, 'menu')),
   ];
-  /** What hears the clicks and keys of this piece: the instance's root, which holds the Work panel's Specs list too (cornfield's page), or the box's own root */
+  /** What hears the clicks and keys of this piece: the instance's root, which holds the Work list's Specs list too (cornfield's page), or the box's own root */
   const hear = inline ? root : inst.root;
   /** An element of this piece by id (the piece's own, whatever else the root holds) */
   const own = (id) => {
@@ -391,7 +391,7 @@ export function mount(root, inst, options = {}) {
     if (state.canvas) state.canvas.focus();
   }
 
-  /** A bad link's way on: the Work panel's Specs tab when there is one, else the header's Proposals menu */
+  /** A bad link's way on: the Work list's Specs tab when there is one, else the header's Proposals menu */
   function openSpecs() {
     if (inst.ask('work:open-specs') === true) return;
     if (!menuOpen()) toggleMenu();
@@ -410,7 +410,7 @@ export function mount(root, inst, options = {}) {
     'proposal-way': (el) => (el.dataset.way === 'open' ? openProposal(inst, el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'retry' ? retryOpen(el.dataset.slug, el.dataset.source || null) : el.dataset.way === 'close' ? closeAfterFailure() : openSpecs()),
   };
 
-  // The root hears every control: the bar's, the menu's and a row of the Work panel's Specs list (`open-proposal`), as the document did
+  // The root hears every control: the bar's, the menu's and a row of the Work list's Specs list (`open-proposal`), as the document did
   scope.listen(hear, 'click', (e) => {
     const target = e.target.closest ? e.target.closest('[data-action]') : null;
     const action = target && Object.hasOwn(ACTIONS, target.dataset.action) && ACTIONS[target.dataset.action];
@@ -425,15 +425,15 @@ export function mount(root, inst, options = {}) {
   // too, as it does on cornfield's page. The open menu holds the focus (on an item), and such a click takes it out of the bar: the menu closes when the focus
   // leaves the bar (to nothing, or to anything outside it), which holds in a host's closed shadow root too and needs no listener on the page
   if (inline) scope.listen(bar, 'focusout', (e) => { if (moreOpen() && !(e.relatedTarget && bar.contains(e.relatedTarget))) closeMore(); });
-  // Answer, on the bar's line (a run waits on this proposal): the Work panel opens on that run with its reply field focused (work:answer)
+  // Answer, on the bar's line (a run waits on this proposal): the Work list opens on that run with its reply field focused (work:answer)
   scope.listen(bar, 'click', (e) => {
     const go = e.target.closest && e.target.closest('[data-waiting-answer]');
     if (go) { e.preventDefault(); e.stopPropagation(); inst.emit('work:answer', { run: go.dataset.waitingAnswer }); }
   }, true);
-  // With the Work panel on, its Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without it (no forge, or no sign-in)
+  // With the Work list on, its Specs tab lists the proposals: the account menu's Proposals entry is only for a cornfield without it (no forge, or no sign-in)
   const proposalsEntry = (workOn) => { const wrap = own('proposal-wrap'); if (wrap) wrap.hidden = !!workOn; };
   scope.on('work:available', ({ on }) => proposalsEntry(on));
-  if (inst.ask('work:on')) proposalsEntry(true); // the Work panel started before this piece was mounted: it said so to nobody
+  if (inst.ask('work:on')) proposalsEntry(true); // the Work list started before this piece was mounted: it said so to nobody
   scope.listen(hear, 'keydown', (e) => {
     if (e.key === 'Escape' && menuOpen()) closeMenu();
     onMoreKey(e);

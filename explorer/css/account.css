@@ -33,7 +33,7 @@
 .hx-account-foot a { color: inherit; text-decoration: none; }
 .hx-account-foot a:hover { color: var(--corn-text-2); text-decoration: underline; }
 .hx-account-foot:empty { display: none; }
-/* The Proposals list opens inside the menu, under its entry, until the Specs tab of the Work panel takes it over */
+/* The Proposals list opens inside the menu, under its entry, until the Specs tab of the Work list takes it over */
 .hx-account-menu .hx-menu--proposals { position: static; width: auto; max-width: none; max-height: calc(40 * var(--hx-vh, 1cqh)); margin: var(--corn-space-1) 0; padding: var(--corn-space-2); border-radius: var(--corn-radius-sm); border: var(--corn-border) solid var(--corn-line); background: var(--corn-surface-2); box-shadow: none; }
 @container corn-box (max-width: 767px) {
   .hx-account-btn { width: var(--hx-control-h); height: var(--hx-control-h); justify-content: center; padding: 0; border: 0; background: none; }

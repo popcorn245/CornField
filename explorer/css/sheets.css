@@ -1,6 +1,6 @@
 /*
  * sheets.css: phone sheets
- * The phone's bottom sheets (sheets.js, TOPO-18; spec 0010 D7): the proposal bar, the scenario player, the node panel and the Work panel
+ * The phone's bottom sheets (sheets.js, TOPO-18; spec 0010 D7): the proposal bar, the scenario player, the node panel and the Work list
  * stack in #sheet-dock at the bottom of the map, a peek until a tap or swipe on the handle opens one. Cornfield's page shell only: no piece
  * sheets itself. The dock is a descendant of the stage; its height rules ask the screen's, which is the `corn-page` container (the body).
  * No rule here asks what the document says (`:root`, `html`, `body`, `[data-theme]`), sizes from the window (`vw`, `vh`) or is `position: fixed` unless it says why;

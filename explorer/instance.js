@@ -13,7 +13,7 @@
  *   inst.touchScene / onSceneTouch   a change the picture is built from, and who follows it
  *   inst.on / emit  what a piece tells its neighbours, per instance: `emit(name, detail)` calls every `on(name, fn)`, and `on` returns how to stop.
  *   inst.ask        what a piece asks of a neighbour that may or may not be there: the first answer other than `undefined` from the
- *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work panel is not part of every page)
+ *                   handlers of `on(name, ...)`, else `undefined`. A piece that finds no answer does without (the Work list is not part of every page)
  *   inst.setSelection(node, edge, { source, quiet })   the one way the converted pieces change what is selected (explorer/engine/selection.js);
  *                   returns the change, whose `announce()` says it when `quiet` held it back (the caller touches the scene first)
  *   inst.offline()  whether the browser has no network; inst.onNetwork(fn(offline)), inst.onWindowFocus(fn), inst.onPageHide(fn), inst.onPageShow(fn), inst.onResize(fn), inst.onHide(fn): the few window facts the review needs;
@@ -61,7 +61,7 @@
  *   work:waiting    { total }  what waits on the maintainer changed (specs to decide plus runs that need an answer; pieces/work.js): the page puts the number before its title
  *   work:available  { on }  the Work piece started (a forge in the config and somebody signed in), or ended: the Work view's List toggle shows, and the account menu's Proposals entry is only for a cornfield without it
  *   runs:map        { active }  runs are on the map, or none is (pieces/work.js, runs-map.js): the Layers menu shows its legend while there are
- *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work panel opens the thread, or its New idea form)
+ *   thread:open     { number }  a thread listed in the node panel was chosen; thread:start { node }: "Start a thread about this" (pieces/node-panel.js; the Work list opens the thread, or its New idea form)
  *   announce        text  what a screen reader is told (engine/keyboard.js `announce`; the piece that owns a live region writes it: `announce:write`)
  *   root:changed    (none)  the primary root moved (`attach`) or a root joined or left (engine/roots.js): what listens on every root puts itself right
  *   map:ready       (none)  the map piece is mounted and has its topology (pieces/map.js); map:gone: it ended. The pieces around it (pieces/around.js) mount and unmount with it
@@ -97,8 +97,8 @@
  *   proposal:seat-column { column, phone } -> true  the bar seats the review column: under it, or in its body on a phone (pieces/proposal.js); proposal:bar-bottom (none) -> px,
  *                   how far down the bar reaches, and proposal:bar-resize (emit): the bar's height changed, so the column starts under it again
  *   player:seat     bar -> true  the dock's owner (engine/sheets.js) seats the scenario player's bar as a sheet above the node panel's
- *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work panel's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
- *   threads:ensure  (none)  (emit) the node panel was filled: the Work panel reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
+ *   threads:index   nodeId -> { threads: thread[] | null, forge: string, start: true } | undefined  the Work list's list of the threads that mention a node, for the node panel's "Threads"; `threads` is null until the list was read; no answer: no Threads section
+ *   threads:ensure  (none)  (emit) the node panel was filled: the Work list reads the threads list once; threads:changed: it was read, or the map changed, so the node panel draws "Threads" again
  *   work:list       { open }  the Work list opened or closed (pieces/work-list.js)
  *   work:pick       { kind, key } -> true  (ask, answered by the Work view: explorer/work-view.js) select the node of that piece of work (`pull`, `issue`, `thread`, `run`, `deploy`, `proposal`, and its number, id or slug) on the map; no answer: the Work piece shows it in the node panel alone, as it shows work older than the graph's 14 days
  *   work:panel      node -> { replace, badge, title, html } | undefined  (ask, answered by the Work view) what the node panel shows for a piece of work or, in the Work view, a node of code; the html holds `forge-detail`, where the Work piece draws the actions

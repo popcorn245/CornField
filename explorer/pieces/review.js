@@ -5,7 +5,7 @@
  * review needs, and mounts the pieces of the explorer into it through their own `mount(root, inst, { slots })`: the map (pieces/map.js), the proposal's
  * bar (pieces/proposal.js, without the what-if editor's buttons: the editor is not converted), the change list with the scenario player
  * (pieces/changes.js), the decision's foot (pieces/decision.js, in the column's foot) and the node panel (pieces/node-panel.js). It is not cornfield's
- * page: no header, Work panel, search, Layers chip, account menu or hint, and cornfield's page does not use it (it keeps its own layout).
+ * page: no header, Work list, search, Layers chip, account menu or hint, and cornfield's page does not use it (it keeps its own layout).
  *
  *   const review = mount(root, inst, options)    -> { update, destroy, ... }
  *
@@ -53,7 +53,7 @@
  * Nothing leaves the box: no listener on `document` or `window`, nothing appended outside it, no id looked up outside it, keys act only with the focus
  * inside, no `location`, no `history`; the wheel is the page's until the map has the focus or Ctrl or Cmd is held (input.js).
  *
- * Not in it: the what-if editor, the mockups, the Work panel, search, the Layers menu, the Proposals menu (its markup is kept in a spare, hidden place: the
+ * Not in it: the what-if editor, the mockups, the Work list, search, the Layers menu, the Proposals menu (its markup is kept in a spare, hidden place: the
  * proposal piece makes it), signing in (the decision says `auth`).
  *
  * @param {Element|ShadowRoot} root
