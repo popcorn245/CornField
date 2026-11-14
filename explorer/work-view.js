@@ -9,10 +9,13 @@
  *                               panel makes), and selects a node of it when `select` names one; closeWork() goes back to the map
  *   followWorkAddress()         `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=` (work-model.js `workAddress`)
  *
- * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge (the number the Work button of the header says, in the same
- * words), the toggle at the top left of the stage ("All work" and "Waiting on you"), the map's own card while the answer is not there (signed out, not a
- * maintainer, offline: pieces/status.js), and a quiet line naming what the server could not read (`problems`). It answers the node panel's `work:panel`
- * ask with what a node says in the Work view. Every request goes through `credentialed`; every word that comes from the forge is escaped.
+ * What it puts on the page: the view switch's Work button, with "waiting on you" as its badge (the number the Work panel's button used to say, in the same
+ * words), the toggle at the top left of the stage ("All work" and "Waiting on you"), the lanes' titles in screen space (the map draws the lanes' panels), the words
+ * and the empty lanes shown at once while the first answer is on its way (the page stays usable: the views, the Layers menu, search), "Updating…" while a refresh
+ * is (the last answer stays on the map, and a refresh that fails keeps it and says so), the map's own card when the answer is refused (signed out, not a maintainer,
+ * offline: pieces/status.js), and a quiet line naming what the server could not read (`problems`). It answers the node panel's `work:panel` ask with what a node says in
+ * the Work view, and holds the keys of the view: N and P step through the lanes, an arrow goes to the nearest node that way. Every request goes through `credentialed`;
+ * every word that comes from the forge is escaped or set as text, every link goes through `safeUrl` (work-model.js).
  */
 
 import { state, pageInstance } from './state.js';

@@ -422,3 +422,21 @@ describe('the keyboard (N, P and the arrows)', () => {
     expect(landingWords(nodes.find((n) => n.id === 'api-billing'), 0, 5)).toMatch(/^api-billing, code, \d+ pieces? of work touch it, 1 of 5$/);
   });
 });
+
+describe('two spec pull requests with one slug (the server\'s second id form)', () => {
+  const two = { nodes: [
+    { id: 'proposal:0100-flow', kind: 'proposal', stage: 'decide', title: 'A new flow', state: 'to-decide', open: true, waiting: true, slug: '0100-flow', number: 21, updated: '2026-11-11T00:00:00Z' },
+    { id: 'proposal:0100-flow@23', kind: 'proposal', stage: 'decide', title: 'A new flow, again', state: 'draft-pr', open: true, waiting: false, slug: '0100-flow', number: 23, updated: '2026-11-10T00:00:00Z' },
+  ], edges: [] };
+  it('keeps both as nodes, each its own, found by its number and by the slug', () => {
+    const { nodes } = workScene(two, map);
+    expect(nodes.map((n) => n.id)).toEqual(['proposal:0100-flow', 'proposal:0100-flow@23']);
+    expect(nodeForAddress({ kind: 'pull', key: '23' }, nodes)).toBe('proposal:0100-flow@23');
+    expect(nodeForAddress({ kind: 'pull', key: '21' }, nodes)).toBe('proposal:0100-flow');
+    expect(nodeForAddress({ kind: 'proposal', key: '0100-flow' }, nodes)).toBe('proposal:0100-flow'); // the open one updated last
+    const laid = layoutWork(nodes, { width: 1440, height: 800 });
+    expect(new Set(laid.order).size).toBe(2);
+    const out = workPanelHtml(panelOf(nodes[1], nodes, []), nodes[1], {});
+    expect(out).toContain('data-id="proposal:0100-flow@23"');
+  });
+});
