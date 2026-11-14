@@ -75,7 +75,7 @@ const typeOfRow = (inst, l) => { const types = typesOf(l); return (types.length 
  */
 export function layerRows(inst) {
   const { state } = inst;
-  if (state.view === 'work' && state.workRows) return { layers: state.workRows, overlays: [] }; // the Work view: the six kinds of work and the code they touch (work-model.js)
+  if (state.workRows) return { layers: state.workRows, overlays: [] }; // the Work view: the six kinds of work and the code they touch (work-model.js)
   const dotted = (l) => { const type = typeOfRow(inst, l); return { ...l, color: rowColor(inst, { type, group: l.key }, NODE_THEMES[type] ? NODE_THEMES[type].color : l.color) }; };
   const held = new Set();
   const left = new Set(); // starting layers a project layer took nodes from
@@ -192,7 +192,7 @@ function changed(inst) {
 export function setLayer(inst, key, on, { viewer = false, scenario = false } = {}) {
   const { state } = inst;
   const review = state.review && state.proposal ? state.review : null;
-  if (state.view === 'work' && state.workLayers) {
+  if (state.workLayers) {
     state.workLayers[key] = on; // the Work view's own: never kept in the browser, and the map's are not touched
   } else if (review) {
     (scenario ? review.step : review.manual)[key] = on;
@@ -221,7 +221,7 @@ export function toggleAllLayers(inst, on, { viewer = false } = {}) {
   const { layers } = layerRows(inst);
   const keys = new Set([...LAYER_DEFS.filter((l) => !l.overlay).map((l) => l.key), ...state.projectLayers.map((l) => l.key), ...layers.map((l) => l.key)]);
   const review = state.review && state.proposal ? state.review : null;
-  if (state.view === 'work' && state.workLayers) { state.workRows.forEach((r) => { state.workLayers[r.key] = on; }); } else if (review) { keys.forEach((k) => { review.manual[k] = on; }); review.rev++; } else {
+  if (state.workLayers) { state.workRows.forEach((r) => { state.workLayers[r.key] = on; }); } else if (review) { keys.forEach((k) => { review.manual[k] = on; }); review.rev++; } else {
     keys.forEach((k) => { state.activeLayers[k] = on; if (viewer) keep(inst, k, on); });
     if (viewer) writeChanges(inst);
   }

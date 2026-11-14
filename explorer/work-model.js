@@ -645,7 +645,7 @@ export function showWork(state) {
   state.nodes = w.nodes;
   state.edges = w.edges;
   state.rings = { rings: [], clusters: [] };
-  state.workLayers = w.layers;
+  state.workLayers = w.layers; // set only while the view is open (leaveWork clears it): the layer code reads its presence as the Work view
   state.workRows = layerRowsOf(w.nodes);
   state.workLanes = w.lanes;
   state.selectedNode = state.selectedNode ? w.nodes.find((n) => n.id === state.selectedNode.id) || null : null; // the same id is the same selection
