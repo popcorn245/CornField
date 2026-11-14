@@ -10901,18 +10901,6 @@
     },
     {
       "from": "core-explorer-work-view",
-      "to": "core-core-text",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-work-view",
-      "to": "core-explorer-corn-state",
-      "dashed": true,
-      "label": "imports"
-    },
-    {
-      "from": "core-explorer-work-view",
       "to": "core-explorer-engine-connection",
       "dashed": true,
       "label": "imports"
@@ -11018,7 +11006,31 @@
       "to": "core-explorer-work-model",
       "dashed": true,
       "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-core-text",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-corn-state",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-model",
+      "to": "core-explorer-pieces-work-common",
+      "dashed": true,
+      "label": "imports"
+    },
+    {
+      "from": "core-explorer-work-view",
+      "to": "core-explorer-keyboard-model",
+      "dashed": true,
+      "label": "imports"
     }
   ],
-  "updatedAt": "2026-11-13T23:41:00.388Z"
+  "updatedAt": "2026-11-14T00:25:44.946Z"
 }

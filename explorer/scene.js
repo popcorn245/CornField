@@ -462,24 +462,6 @@ function linkEdge(edge, source, target, subgraph) {
   };
 }
 
-/** The lines of the Work view (spec 0012 D2, D3): a work-to-work link solid, `mentions` dotted, `adds` dashed; the words of the rel beside a lit one */
-const WORK_EDGE_COLORS = { work: '#818cf8', code: '#cbd5e1', adds: '#2dd4bf' };
-function workEdge(edge, source, target, subgraph) {
-  const connected = subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true;
-  const lit = !!subgraph && connected;
-  const color = WORK_EDGE_COLORS[edge.kind === 'adds' ? 'adds' : edge.tone === 'work' ? 'work' : 'code'];
-  const faded = source.dim === true && target.dim === true; // "Waiting on you" is on and neither end waits
-  return {
-    key: edgeKeyOf(edge), from: edge.from, to: edge.to, kind: edge.kind,
-    x1: source.x, y1: source.y, x2: target.x, y2: target.y, r1: source.r, r2: target.r,
-    color, width: lit ? 2.4 : 1.4, alpha: faded ? 0.12 : subgraph ? (connected ? 1 : 0.08) : 0.35,
-    dash: edge.kind === 'adds' ? PROPOSED_DASH : edge.kind === 'mentions' ? USAGE_DASH : null,
-    ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null,
-    label: lit ? { text: typeof edge.word === 'string' && edge.word ? edge.word : edge.kind, x: (source.x + target.x) / 2, y: (source.y + target.y) / 2, color, italic: false } : null,
-    packet: null, mark: 'none', live: false,
-  };
-}
-
 /** Edge kinds drawn as a curve with an arrowhead; the rest are straight ownership / usage links */
 const FLOW_LIKE = ['flow', 'reads', 'writes', 'runs-on', 'calls', 'triggers', 'delivers', 'uses', 'extends'];
 
@@ -518,7 +500,7 @@ function buildEdges(state, subgraph, reduceMotion) {
     const target = byId.get(edge.to);
     if (!source || !target || !isNodeVisible(state, source) || !isNodeVisible(state, target)) return;
 
-    if (state.view === 'work') { out.push(workEdge(edge, source, target, subgraph)); return; }
+    if (state.view === 'work') { out.push(state.workEdge(edge, source, target, subgraph ? subgraph.connectedEdgeKeys.has(focusKey(edge)) : true, !!subgraph, edgeKeyOf(edge), { PROPOSED_DASH, USAGE_DASH })); return; } // the Work view's lines are work-model.js's (the page installs `workEdge`)
     if (preset) return flow(edge, source, target);
     if (state.view === 'house') { const how = houseEdgeStyle(edge, source, target); if (how === 'flow') flow(edge, source, target); else if (how === 'link') out.push(linkEdge(edge, source, target, subgraph)); return; }
 

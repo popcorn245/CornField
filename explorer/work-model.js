@@ -165,6 +165,35 @@ export function workScene(graph, mapNodes) {
   const waiting = nodes.filter((n) => n.waiting).length;
   return { nodes, edges, counts: { work: work.size, code, waiting } };
 }
+/** The colours of the lines of the Work view: a work-to-work link, a link to code, and what a proposal adds */
+const WORK_EDGE_COLORS = { work: '#818cf8', code: '#cbd5e1', adds: '#2dd4bf' };
+
+/**
+ * One line of the Work view for the scene (spec 0012 D2, D3): a work-to-work link solid, `mentions` dotted, `adds` dashed; the word of its rel beside a lit one. The scene calls it
+ * for every line (`state.workEdge`, put there by `showWork`), so the map's own code carries no table of the Work view's lines.
+ * @param {object} edge the line, `{ from, to, kind, tone, word }`
+ * @param {object} source the node it starts at
+ * @param {object} target the node it ends at
+ * @param {boolean} connected whether it joins the selection's neighbourhood
+ * @param {boolean} focused whether a node is selected
+ * @param {string} key the line's key
+ * @param {{ PROPOSED_DASH: number[], USAGE_DASH: number[] }} dashes the map's two dash patterns
+ */
+export function workEdge(edge, source, target, connected, focused, key, dashes) {
+  const lit = focused && connected;
+  const color = WORK_EDGE_COLORS[edge.kind === 'adds' ? 'adds' : edge.tone === 'work' ? 'work' : 'code'];
+  const faded = source.dim === true && target.dim === true; // "Waiting on you" is on and neither end waits
+  return {
+    key, from: edge.from, to: edge.to, kind: edge.kind,
+    x1: source.x, y1: source.y, x2: target.x, y2: target.y, r1: source.r, r2: target.r,
+    color, width: lit ? 2.4 : 1.4, alpha: faded ? 0.12 : focused ? (connected ? 1 : 0.08) : 0.35,
+    dash: edge.kind === 'adds' ? dashes.PROPOSED_DASH : edge.kind === 'mentions' ? dashes.USAGE_DASH : null,
+    ticks: 0, curve: null, arrow: false, end: null, glow: 0, glowColor: null,
+    label: lit ? { text: typeof edge.word === 'string' && edge.word ? edge.word : edge.kind, x: (source.x + target.x) / 2, y: (source.y + target.y) / 2, color, italic: false } : null,
+    packet: null, mark: 'none', live: false,
+  };
+}
+
 /** The radius of a node of code in the Work view: small beside the work it is touched by */
 export const CODE_R = 9;
 
@@ -611,6 +640,7 @@ export function enterWork(state) {
 /** The Work view's nodes, edges, layers and lanes on the state (the answer changed, or the view opened) */
 export function showWork(state) {
   const w = state.work;
+  state.workEdge = workEdge; // the scene draws the Work view's lines with it (scene.js)
   state.nodes = w.nodes;
   state.edges = w.edges;
   state.rings = { rings: [], clusters: [] };
