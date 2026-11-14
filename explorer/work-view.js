@@ -278,7 +278,7 @@ function armPoll() {
 function poll() {
   clearTimeout(timer);
   if (!on() && !layerWanted()) return;
-  if (document.visibilityState !== 'hidden') load({ again: true, quiet: true });
+  if (document.visibilityState !== 'hidden' && !reading) load({ again: true, quiet: true }); // a read on its way is this minute's: a slow forge is never asked twice at once
   timer = setTimeout(poll, RUNS_POLL_MS);
 }
 
@@ -339,7 +339,7 @@ let reading = null;
 
 /**
  * Reads the graph (spec 0012 D7): once at a time. Asked while a read is on its way (the Work layer's, or the view's), it waits for that one and adds what it wants done with the answer
- * (a node to select); a refresh (`again`) or the minute's poll starts a read of its own.
+ * (a node to select); a refresh (`again`) or the minute's poll starts a read of its own, which takes over what the read it replaces was to do (its answer is dropped).
  */
 function load({ select = null, ask = null, again = false, quiet = false } = {}) {
   if (reading && !again && !quiet) {
@@ -347,6 +347,11 @@ function load({ select = null, ask = null, again = false, quiet = false } = {}) 
     if (ask) reading.ask = ask;
     reading.quiet = false;
     return reading.done;
+  }
+  if (reading) { // the read on its way is dropped for this one: the node it was to select, and its being said, are this one's now
+    select = select || reading.select;
+    ask = ask || reading.ask;
+    quiet = quiet && reading.quiet;
   }
   const mine = { select, ask, quiet, done: null };
   mine.done = fetchGraph(mine, again).finally(() => { if (reading === mine) reading = null; });
