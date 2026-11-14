@@ -340,6 +340,14 @@ async function main() {
       return { has: !!sec, links, outs, imgs: sec ? sec.querySelectorAll('img').length : -1, xss: window.__xss === undefined, first: sec ? sec.parentElement.firstElementChild === sec : false };
     });
     check('the node panel of a badged node has an Open work section, first, listing each piece of open work', panel.has && panel.links.length === 3 && panel.first, JSON.stringify(panel.links));
+    const long = await page.evaluate(() => {
+      const drawer = document.querySelector('#spec-drawer');
+      const a = drawer.querySelector('a[data-work-action="open-item"]');
+      a.textContent = `PR #13 · ${'x'.repeat(120)}`;
+      const r = a.getBoundingClientRect();
+      return { linkRight: r.right, panelRight: drawer.getBoundingClientRect().right, scroll: drawer.scrollWidth - drawer.clientWidth };
+    });
+    check('a 120-character title with no spaces stays inside the node panel (Open work)', long.linkRight <= long.panelRight + 0.5 && long.scroll <= 0, JSON.stringify(long));
     check('each is a link to the Work view with that piece selected (the address a new tab takes)', panel.links.some((l) => l.href === '?view=work&pr=13') && panel.links.some((l) => l.href === '?view=work&spec=0100-new-flow-across-apps') && panel.links.some((l) => l.href === '?view=work&issue=5'), JSON.stringify(panel.links.map((l) => l.href)));
     check('a title with markup is text, an address that is not http(s) is no link, an https one is', panel.imgs === 0 && panel.xss && panel.outs.length === 2 && panel.outs.every((u) => /^https:\/\//.test(u)), JSON.stringify({ imgs: panel.imgs, xss: panel.xss, outs: panel.outs }));
     await shot(FINAL, 'badged-node-selected-dark');

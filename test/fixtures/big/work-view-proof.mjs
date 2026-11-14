@@ -210,6 +210,16 @@ async function main() {
       await links.first().click(); await sleep(500);
       check('a connection is followed: its node is selected', (await snap()).selected === first, first);
     }
+    // a title with no spaces (120 characters) in a work link breaks inside the panel rather than run past its edge
+    const overflow = await page.evaluate(() => {
+      const drawer = document.querySelector('#spec-drawer');
+      const a = drawer.querySelector('[data-corn="work-link"] [data-action="select-node"]');
+      a.textContent = `Pull #9 · ${'x'.repeat(120)}`;
+      const box = drawer.getBoundingClientRect();
+      const r = a.getBoundingClientRect();
+      return { linkRight: r.right, panelRight: box.right, scroll: drawer.scrollWidth - drawer.clientWidth };
+    });
+    check('a 120-character title with no spaces stays inside the node panel (Work view)', overflow.linkRight <= overflow.panelRight + 0.5 && overflow.scroll <= 0, JSON.stringify(overflow));
     await pick('proposal:0100-new-flow-across-apps');
     const hrefs = await page.evaluate(() => [...document.querySelectorAll('[data-corn="work-actions"] a[href], [data-corn="work-links"] a[href]')].map((a) => a.getAttribute('href')));
     check('the node panel links to the forge by an http or https address only', hrefs.length > 0 && hrefs.every((h) => /^https?:\/\//.test(h)), hrefs.join(' | '));
