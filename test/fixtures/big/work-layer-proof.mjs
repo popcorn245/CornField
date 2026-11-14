@@ -20,7 +20,7 @@
  *  - the keyboard says it: landing on a badged node adds "4 open: Spec 0100 (waiting on you), PR #13 ..." to what is said
  *  - with no forge in the config, or nobody signed in (the Work piece is off: the page asks `work:on`), the row is absent and nothing is asked, even with the layer remembered on
  *  - axe: the Map view with the layer on, the menu open, and a badged node selected (dark, light, phone); a phone
- *  - the Work list's tab strip (spec 0012 step 3's lead): Deploys is reachable at 400 px by a vertical wheel, and the tab that is on is scrolled into the strip
+ *  - the Work list's tab strip (spec 0012 step 3's lead): Deploys is reachable at 400 px by a vertical wheel, on a phone by a finger's swipe, and the tab that is on is scrolled into the strip
  * Screenshots (synthetic fixture only) go in `--shots`; the finals of step 4 at a device scale factor of 2 go in `--final`.
  * Exit code 1 when a check fails.
  */
@@ -558,6 +558,19 @@ async function main() {
     const expanded = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); return t.clientWidth > 0; });
     if (!expanded) await pt2.evaluate(async () => { const { expandSheet } = await import('/explorer/sheets.js'); expandSheet('forge'); });
     await sleep(600);
+    // a finger swiping the strip leftwards (raw touch events: the browser's own panning, as a phone does it) brings Deploys in, and moves neither the map nor the sheet
+    const sbox = await pt2.locator('.hx-forge-tabs').boundingBox();
+    const camA = await pt2.evaluate(async () => { const { state } = await import('/explorer/state.js'); return `${state.camera.x},${state.camera.y},${state.camera.zoom}`; });
+    const cdp2 = await ctxT2.newCDPSession(pt2);
+    const fx = Math.round(sbox.x + sbox.width * 0.8); const fy = Math.round(sbox.y + sbox.height / 2);
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fx, y: fy }] });
+    for (let i = 1; i <= 12; i++) { await cdp2.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: fx - (260 * i) / 12, y: fy }] }); await sleep(16); }
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(700);
+    const sw = await pt2.evaluate(async () => { const { state } = await import('/explorer/state.js'); const t = document.querySelector('.hx-forge-tabs'); const tb = t.getBoundingClientRect(); const r = t.querySelector('[data-forge-kind="deploys"]').getBoundingClientRect(); return { left: Math.round(t.scrollLeft), whole: r.left >= tb.left - 1 && r.right <= tb.right + 1, cam: `${state.camera.x},${state.camera.y},${state.camera.zoom}` }; });
+    check('on a phone, a finger swiping the strip brings Deploys whole into it, and moves neither the map nor anything else', sw.left > 0 && sw.whole && sw.cam === camA && Math.abs((await pt2.locator('.hx-forge-tabs').boundingBox()).y - sbox.y) < 1, JSON.stringify(sw));
+    await pt2.evaluate(() => { document.querySelector('.hx-forge-tabs').scrollLeft = 0; });
+    await sleep(300);
     await pt2.evaluate(() => document.querySelector('[data-forge-kind="deploys"]').click());
     await sleep(1400);
     const sp = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const d = t.querySelector('[data-forge-kind="deploys"]'); const tb = t.getBoundingClientRect(); const r = d.getBoundingClientRect(); return { cw: t.clientWidth, sw: t.scrollWidth, left: Math.round(t.scrollLeft), inside: r.left >= tb.left - 1 && r.right <= tb.right + 1, pressed: d.getAttribute('aria-pressed') }; });

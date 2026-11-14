@@ -199,5 +199,5 @@ On, each node open work touches gets a small **badge** over it: `PR #27`, `Issue
 
 By keyboard and screen reader: the row is a button in the Layers menu, in the tab order, with `aria-pressed` and its count in its name; `N` and `P` landing on a badged node add its work to what is said ("@big/analytics, pkg, 21 connections, 761 of 824, 3 open: Spec 0100 (waiting on you), PR #13, Issue #5"); the badges themselves are decoration (`aria-hidden`).
 
-The Work list's **tab strip** scrolls sideways: a vertical mouse wheel over it moves it, the tab that is on is brought into view (the last, Deploys, to the end of the strip, clear of the fade), and Tab to a tab brings it whole into view.
+The Work list's **tab strip** scrolls sideways: a vertical mouse wheel over it moves it, a finger swipes it across on a phone (the strip lets a finger pan across, where the rest of the list pans only up and down), the tab that is on is brought into view (the last, Deploys, to the end of the strip, clear of the fade), and Tab to a tab brings it whole into view.
 

@@ -573,6 +573,13 @@ describe('the panel\'s top stays, and a phone shows the tabs run on (F42)', () =
     expect(css).toMatch(/\.hx-forge-top \{[^}]*background: linear-gradient\(var\(--corn-surface-1\), var\(--corn-surface-1\)\), var\(--corn-ground\)/); // opaque, so a list scrolls under it
   });
 
+  // The panel lets a finger pan up and down only (`.hx-forge * { touch-action: pan-y }`); the strip, and a tab under the finger, must let it pan across too, or a swipe never reaches Deploys on a phone
+  it('lets a finger pan the tab strip sideways, on the strip and on a tab, past the panel\'s up-and-down only', () => {
+    expect(css).toMatch(/\.hx-forge \* \{ touch-action: pan-y; \}/);
+    expect(css).toMatch(/\.hx-forge \.hx-forge-tabs, \.hx-forge \.hx-forge-tabs \* \{ touch-action: pan-x pan-y; \}/);
+    expect(css.indexOf('.hx-forge .hx-forge-tabs, .hx-forge .hx-forge-tabs *')).toBeGreaterThan(css.indexOf('.hx-forge * { touch-action: pan-y; }'));
+  });
+
   it('says on the top which edge the tabs run past, and not when they fit', async () => {
     fakeServer({ runs: [] });
     mount();

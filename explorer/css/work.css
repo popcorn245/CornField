@@ -12,6 +12,8 @@
 .hx-forge { --hx-forge-status-w: 56px; }
 .hx-forge { display: flex; flex-direction: column; z-index: 40; border-color: var(--corn-line); pointer-events: none; touch-action: pan-y; transition: transform 0.2s ease-out; }
 .hx-forge * { touch-action: pan-y; }
+/* The tab strip scrolls sideways (its tabs run past the edge on a phone): a finger may pan it across, on the strip and on a tab */
+.hx-forge .hx-forge-tabs, .hx-forge .hx-forge-tabs * { touch-action: pan-x pan-y; }
 .hx-forge.forge-open { pointer-events: auto; }
 .hx-forge:not(.forge-open) { box-shadow: none; }
 @container corn-box (min-width: 768px) {
