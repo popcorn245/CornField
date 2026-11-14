@@ -211,7 +211,7 @@ export const byTouch = (a, b) => (b.touches || 0) - (a.touches || 0) || String(a
  * the room on screen it needs: a cell is wide enough for a name, a row tall enough for a disc and a name under it, and lanes next to each other are staggered by half a row
  * so a name that runs past its lane lands between the next lane's. `margin` is what the first fit leaves on screen around the lanes, in px (the names at the edge, and the toggles at the top).
  */
-const DESK = { cell: 200, row: 70, codeCell: 190, codeRow: 44, gap: 14, pad: 6, margin: { x: 92, top: 56, bottom: 24 }, caps: [100, 64, 48, 40, 32, 28, 24, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5] };
+const DESK = { cell: 200, row: 70, codeCell: 190, codeRow: 44, gap: 14, pad: 6, margin: { x: 100, top: 56, bottom: 24 }, caps: [100, 64, 48, 40, 32, 28, 24, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5] };
 const PHONE = { cell: 104, row: 84, codeCell: 150, codeRow: 40, gap: 12, pad: 4, margin: { x: 36, top: 112, bottom: 16 } };
 /** A lane's title (screen px) the first node sits under, and a name under a node (its gap and its line, px) */
 const TITLE_PX = 40;
@@ -226,7 +226,7 @@ const lane = (key, title, count, x, y, w, h) => ({ key, name: title, count, x, y
 function nameNodes(nodes, phone) {
   for (const n of nodes) {
     if (n.work) { const tag = tagOf(n.item); n.labelText = phone ? tag : `${tag} · ${clipWords(n.title, Math.max(8, DRAWN_CHARS - tag.length - 3))}`; }
-    else n.labelText = clip(String(n.label), phone ? 14 : 32);
+    else n.labelText = clip(String(n.label), phone ? 12 : 32);
   }
 }
 
@@ -248,7 +248,7 @@ function fitBoxOf(w, h, z, m, p, v) {
  * @param {{ phone?: boolean, width?: number, height?: number, padding?: number }} [opts] the map's size in px, and the engine's padding around a fit
  * @returns {{ lanes: object[], order: string[], bounds: { x: number, y: number, w: number, h: number }, fit: { minX: number, maxX: number, minY: number, maxY: number, zoom: number } }}
  */
-export function layoutWork(nodes, { phone = false, width = 1200, height = 800, padding = phone ? 24 : 48 } = {}) {
+export function layoutWork(nodes, { phone = false, width = 1200, height = 800, padding = phone ? 44 : 96 } = {}) {
   nameNodes(nodes, phone);
   const shown = nodes.filter((n) => !n.hidden);
   const mine = (key) => shown.filter((n) => n.work && !n.draft && n.stage === key).sort(byLane);
@@ -670,7 +670,7 @@ export function leaveWork(state) {
 export function applyWorkLayout(state, { phone = false } = {}) {
   const w = state.work;
   if (!w) return;
-  const laid = layoutWork(w.nodes, { phone, width: state.width || (phone ? 390 : 1200), height: state.height || (phone ? 760 : 800), padding: (state.width || 1200) < 640 ? 24 : 48 }); // the engine's own padding around a fit (engine/render.js `fitPadding`)
+  const laid = layoutWork(w.nodes, { phone, width: state.width || (phone ? 390 : 1200), height: state.height || (phone ? 760 : 800), padding: (state.width || 1200) < 640 ? 44 : 96 }); // the engine's own padding around a fit in this view (engine/render.js `fitPadding`)
   w.lanes = laid.lanes;
   w.order = laid.order;
   w.bounds = laid.bounds;

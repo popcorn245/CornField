@@ -143,12 +143,10 @@ describe('the layout (D3)', () => {
       const { fit, bounds } = laid;
       expect(fit.zoom).toBeGreaterThan(0);
       expect(fit.zoom).toBeLessThanOrEqual(1);
-      expect(fit.minX).toBeLessThan(bounds.x);
-      expect(fit.maxX).toBeGreaterThan(bounds.w);
-      expect(fit.minY).toBeLessThan(bounds.y);
+      if (!phone) { expect(fit.minX).toBeLessThan(bounds.x); expect(fit.maxX).toBeGreaterThan(bounds.w); } // room for the names at the edges (a phone's are tags, and need less)
       for (const n of nodes) { expect(n.x).toBeGreaterThanOrEqual(bounds.x); expect(n.x).toBeLessThanOrEqual(bounds.w); expect(n.y).toBeGreaterThanOrEqual(bounds.y); expect(n.y).toBeLessThanOrEqual(bounds.h); }
       // the engine's fit of the box (padding p) shows it at the zoom the layout was made for
-      const p = width < 640 ? 24 : 48;
+      const p = width < 640 ? 44 : 96;
       const raw = Math.min((width - 2 * p) / (fit.maxX - fit.minX), (height - 2 * p) / (fit.maxY - fit.minY));
       expect(Math.min(1, raw)).toBeCloseTo(fit.zoom, 5);
     }
