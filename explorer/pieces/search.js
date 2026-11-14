@@ -147,12 +147,16 @@ export function mount(root, inst, options = {}) {
     return (node) => { const p = byId.get(parentOf.get(node.id)); return p ? String(p.label || '') : ''; };
   }
 
+  /** A match Frame all takes in: on the map, and not a piece of work found from another view (its node is the Work view's) */
+  const framed = (m) => m.on && !(m.node.work && state.view !== 'work');
+
   /** What the current query finds (kept until the query, the nodes or the scene change) */
   function currentResult() {
     const more = state.view === 'work' ? null : inst.ask('search:more'); // the work the page knows, found from the map too (the Work view, spec 0012)
     const key = `${state.searchQuery}|${state.sceneVersion}|${state.nodes.length}|${more ? more.length : 0}`;
     if (memo && memo.key === key && memo.nodes === state.nodes) return memo.result;
     const result = searchNodes(more && more.length ? state.nodes.concat(more) : state.nodes, state.searchQuery, { visible: (n) => inst.map.isNodeVisible(n), parentLabel: parentLabeller() });
+    if (more) result.onMap = result.matches.filter(framed).length; // the work found from another view is not on its map: Frame all counts what it frames
     memo = { key, nodes: state.nodes, result };
     return result;
   }
@@ -286,7 +290,7 @@ export function mount(root, inst, options = {}) {
   /** Fits the camera to every match on the map ("Frame all") */
   function frameAll() {
     const result = currentResult();
-    const ids = new Set(result.matches.filter((m) => m.on).map((m) => m.node.id));
+    const ids = new Set(result.matches.filter(framed).map((m) => m.node.id));
     if (!ids.size) return;
     inst.map.fitGraphToViewport(inst.map.fitPadding(), ids);
     showSearchStatus(inst, '');

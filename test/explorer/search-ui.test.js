@@ -8,7 +8,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain JS modules, no declarations
-import { state } from '../../explorer/state.js';
+import { state, pageInstance } from '../../explorer/state.js';
 // @ts-expect-error plain JS modules, no declarations
 import { setMap } from '../../explorer/view.js';
 import * as render from '../../explorer/render.js';
@@ -338,6 +338,19 @@ describe('Frame all', () => {
       expect(sx).toBeLessThanOrEqual(1000);
     }
     expect(frameAll).toBeTypeOf('function');
+  });
+  it('counts and frames only the map\'s own nodes when the search also finds work from the Work view (spec 0012)', () => {
+    mount();
+    const off = pageInstance().on('search:more', () => [{ id: 'pull:9', type: 'work-pull', work: 'pull', label: 'PR #9 · Sync faster', x: 99999, y: 99999, r: 20 }]);
+    try {
+      type('sync');
+      expect(currentResult().matches.some((m) => m.node.id === 'pull:9')).toBe(true); // found, and listed
+      expect(rows()[0].textContent).toBe('Frame all 6'); // the work is not on this map: it is not counted
+      state.camera = { x: -5000, y: 3000, zoom: 1 };
+      rows()[0].click();
+      expect(state.camera.zoom).toBeLessThan(10); // a frame of the map's matches, not of a node it does not hold
+      for (const m of currentResult().matches.filter((x) => x.on && !x.node.work)) expect(state.camera.x + m.node.x * state.camera.zoom).toBeGreaterThanOrEqual(0);
+    } finally { off(); }
   });
 });
 
