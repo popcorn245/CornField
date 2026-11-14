@@ -312,6 +312,7 @@ function refuse(detail, quiet) {
     return false;
   }
   if (quiet && w.status === 'ok') return false;
+  const again = quiet && w.status === detail.state; // the minute's poll found the same refusal: the card stays, and nothing is said again
   w.status = detail.state;
   w.nodes = [];
   w.edges = [];
@@ -323,7 +324,7 @@ function refuse(detail, quiet) {
   card.show(detail);
   paintBar();
   paintBadge(0);
-  announce(inst(), `Work: ${detail.state === 'sign-in' ? (detail.status === 403 ? 'this map is for the maintainers.' : 'sign in to see the work.') : detail.state === 'offline' ? 'you are offline.' : 'it could not be read.'}`);
+  if (!again) announce(inst(), `Work: ${detail.state === 'sign-in' ? (detail.status === 403 ? 'this map is for the maintainers.' : 'sign in to see the work.') : detail.state === 'offline' ? 'you are offline.' : 'it could not be read.'}`);
   return false;
 }
 
