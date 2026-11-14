@@ -276,7 +276,6 @@ export function mount(root, inst, options = {}) {
     const preset = state.view === 'dataflow';
     btn.classList.toggle('hx-layers-chip--dim', preset);
     own('layers-preset-note').hidden = !preset;
-    own('edge-key').hidden = state.view === 'work'; // the map's kinds of line: the Work view has its own words on its lines
   }
 
   // -- the piece's own buttons, and the clicks and keys around the menu ------------------------------------------------------------

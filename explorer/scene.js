@@ -638,13 +638,13 @@ function buildNodes(state, subgraph) {
       ...(greyed ? { greyed: true } : {}), // not involved in the change: its colour is taken away at draw time, glyph and letters stay (map-style.js)
       selected, match, current, connected,
       degree: node.degree || 0,
-      label: shown.label,
+      label: shown.labelText && !selected ? shown.labelText : shown.label, // a node of the Work view is drawn as the start of its name, whole when selected (work-model.js)
       labelSize: big && !greyed ? 12 : 11, // a greyed node's label recedes (issue #232): plain, at the least size, placed last (labels.js)
       labelBold: big && !greyed,
       labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground
         : focus && !focus.touched.has(node.id) && !(subgraph && !connected) ? Math.max(alpha, DIFF_LABEL_ALPHA) : alpha, // a label the diff dims stays 3:1
       labelColor: connected ? '#f8fafc' : 'rgba(255, 255, 255, 0.3)',
-      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || (!!work && shown.labels !== false) || selected || match || mark !== 'none' || !!(subgraph && connected),
+      labelKeep: (LANDMARK_TYPES.includes(shown.type) && !greyed) || (!!work && shown.waiting === true) || selected || match || mark !== 'none' || !!(subgraph && connected),
       labelStrike: !!look && (look.strike || gone),
       live: !!node.live,
       box: node.box || null,

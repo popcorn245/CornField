@@ -15,6 +15,7 @@
  *     test/fixtures/big/embed-proof.mjs uses it). It still listens on 127.0.0.1 only. `--forge-port` is the fake forge's port (default: the port + 100).
  *   node test/fixtures/big/serve.js --forge --port 3403 [--runner offline]   the same, with sign-in against a fake GitHub: sign in as a maintainer
  *     (open /auth/start), PRs, issues, threads, checks, a spec PR per rich proposal, and runs in every state (forge.js)
+ *   node test/fixtures/big/serve.js --forge --port 3403 --forge-delay 150   every answer of the fake forge waits 150 ms (a real repo's work graph takes seconds to read cold); GET <forge origin>/__rig/delay?ms=0 changes it
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -108,7 +109,7 @@ async function main() {
   let env = rigEnv();
   if (flags.forge) {
     const forgePort = flags['forge-port'] && flags['forge-port'] !== true ? Number(flags['forge-port']) : port + 100;
-    world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: forgePort, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data });
+    world = await startForgeWorld({ repoFiles: readRepoFiles(repo), slugs: made.proposals, port: forgePort, runner: ['offline', 'none'].includes(flags.runner) ? flags.runner : 'online', dataDir: data, delayMs: Number(flags['forge-delay']) > 0 ? Number(flags['forge-delay']) : 0 });
     serverConfig = { ...serverConfig, agents: { ...serverConfig.agents, maxOpen: 10, transport: 'pull', ...(flags.trigger ? { profiles: ['claude'], on: { 'spec.approved': { kind: 'code', profile: 'claude' } } } : {}) }, forge: { type: 'github', url: world.forge.url, repo: REPO }, ...(flags.lands ? { approveLands: true } : {}), publicUrl: publicUrlOf(flags.public, port) };
     env = { ...env, ...SIGN_IN_ENV };
   }

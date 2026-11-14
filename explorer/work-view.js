@@ -26,7 +26,7 @@ import { signInUrl } from './engine/source.js';
 import { mapStyleOf, workToken } from './engine/map-style.js';
 import { t } from './engine/strings.js';
 import { mount as mountStatus } from './pieces/status.js';
-import { fitGraphToViewport, fitPadding, render } from './render.js';
+import { fitGraphToViewport, fitPadding, onPaint, render } from './render.js';
 import { isPhone } from './sheets.js';
 import { escapeHtml as esc } from '../core/text.js';
 import { WORK_KINDS, WORK_THEMES } from '../core/schema.js';
@@ -36,7 +36,7 @@ import { checksWords, pullUrl } from './forge-panel-model.js';
 import { RUNS_POLL_MS, safeUrl } from './pieces/work-common.js';
 import { openWorkAt } from './forge-panel.js';
 import {
-  CODE_LAYER, KIND_WORDS, applyFilters, applyWorkLayout, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress,
+  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, applyWorkLayout, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress,
 } from './work-model.js';
 
 const GRAPH_URL = '/api/forge/work-graph';
@@ -44,7 +44,10 @@ const $ = (id) => document.getElementById(id);
 
 let wired = false;
 let offered = false;
-let els = null; // { stage, bar, all, waiting, note }
+let els = null; // { stage, bar, all, waiting, busy, note, lanes, loading }
+let laneEls = []; // the lanes' titles on the stage, in screen space: [{ el, name, count }]
+let laneKey = null; // the lanes they were made for
+let offPaint = null;
 let card = null; // the map's own card (pieces/status.js)
 let timer = 0;
 let seq = 0; // the answer that is waited for: an older one is dropped
@@ -101,15 +104,74 @@ function mount() {
   bar.setAttribute('aria-label', 'Show');
   bar.hidden = true;
   bar.innerHTML = '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="all" aria-pressed="true">All work</button>'
-    + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="waiting" aria-pressed="false">Waiting on you</button>';
+    + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="waiting" aria-pressed="false">Waiting on you</button>'
+    + '<span class="hx-work-busy" data-corn="work-busy" hidden>Updating…</span>';
   const note = document.createElement('p');
   note.className = 'hx-work-note';
   note.dataset.corn = 'work-note';
   note.hidden = true;
-  stage.append(bar, note);
-  els = { stage, bar, all: bar.firstElementChild, waiting: bar.lastElementChild, note };
+  // The lanes' titles: lines of the page over the map, in screen space, so they read at any zoom (the map draws the lanes' panels)
+  const lanes = document.createElement('div');
+  lanes.className = 'hx-work-lanes';
+  lanes.dataset.corn = 'work-lanes';
+  lanes.setAttribute('aria-hidden', 'true');
+  lanes.hidden = true;
+  // What the page shows while the first answer is on its way (a big repository takes seconds): the lanes, empty, and the words; the page stays usable under it
+  const loading = document.createElement('div');
+  loading.className = 'hx-work-loading';
+  loading.dataset.corn = 'work-loading';
+  loading.hidden = true;
+  loading.innerHTML = `<div class="hx-work-skeleton" aria-hidden="true">${['Talk', 'Decide', 'Build', 'Ship', 'Code it touches'].map((name) => `<div class="hx-work-skel-lane"><span class="hx-work-lane-title">${name}</span><i></i><i></i><i></i><i></i></div>`).join('')}</div>`
+    + '<p class="hx-work-loading-text" role="status" data-corn="work-loading-text">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
+  stage.append(lanes, loading, bar, note);
+  els = { stage, bar, all: bar.children[0], waiting: bar.children[1], busy: bar.children[2], note, lanes, loading };
+  if (offPaint) offPaint();
+  offPaint = onPaint(paintLanes);
   card = mountStatus(stage, inst(), { follow: false, onRetry: () => load({ again: true }), focusMap: () => { if (state.canvas) state.canvas.focus(); } });
 }
+
+/** The lanes' titles, over the map in screen space: centred over their lane and held under the toggles while the lane is in view (a phone's: at the lane's top left) */
+function paintLanes(scene, camera) {
+  if (!els) return;
+  const w = work();
+  const show = on() && w.status === 'ok' && w.lanes.length > 0;
+  els.lanes.hidden = !show;
+  if (!show) return;
+  if (laneKey !== w.lanes) {
+    laneKey = w.lanes;
+    els.lanes.textContent = '';
+    laneEls = w.lanes.map((l) => {
+      const el = document.createElement('div');
+      el.className = 'hx-work-lane-title';
+      el.dataset.corn = 'work-lane-title';
+      const name = document.createElement('span');
+      name.textContent = l.name;
+      const count = document.createElement('span');
+      count.className = 'hx-work-lane-count';
+      count.textContent = String(l.count);
+      el.append(name, count);
+      els.lanes.append(el);
+      return { el, lane: l };
+    });
+  }
+  const phone = isPhone();
+  const top = phone ? 0 : STICKY_TOP;
+  for (const { el, lane } of laneEls) {
+    const left = camera.x + lane.x * camera.zoom;
+    const right = left + lane.w * camera.zoom;
+    const topPx = camera.y + lane.y * camera.zoom;
+    const bottomPx = topPx + lane.h * camera.zoom;
+    const seen = right > 0 && left < els.stage.clientWidth && bottomPx > 40 && topPx < els.stage.clientHeight;
+    el.style.visibility = seen ? 'visible' : 'hidden';
+    if (!seen) continue;
+    const y = phone ? topPx + 8 : Math.min(Math.max(topPx + 10, top), bottomPx - 44);
+    el.style.maxWidth = `${Math.max(40, right - left - 12)}px`;
+    el.style.top = `${Math.round(y)}px`;
+    if (phone) { el.style.left = `${Math.round(Math.max(left, 0) + 10)}px`; el.style.transform = 'none'; } else { el.style.left = `${Math.round((left + right) / 2)}px`; el.style.transform = 'translateX(-50%)'; }
+  }
+}
+/** The line the lanes' titles hold under, in px from the top of the stage: below the toggles */
+const STICKY_TOP = 58;
 
 function paintBar() {
   if (!els) return;
@@ -119,9 +181,11 @@ function paintBar() {
   els.all.setAttribute('aria-pressed', String(!w.waiting));
   els.waiting.setAttribute('aria-pressed', String(w.waiting));
   els.waiting.textContent = `Waiting on you · ${n}`;
-  const problems = w.problems;
-  els.note.hidden = !on() || !problems.length;
-  els.note.textContent = problems.length ? problems.slice(0, 2).map((p) => p.text).join(' ') + (problems.length > 2 ? ` and ${problems.length - 2} more.` : '') : '';
+  els.busy.hidden = !(on() && w.status === 'ok' && w.updating);
+  els.loading.hidden = !(on() && w.status === 'loading');
+  const lines = [...(w.stale ? [w.stale] : []), ...(w.lastError ? [w.lastError] : []), ...w.problems.map((p) => p.text)];
+  els.note.hidden = !on() || !lines.length;
+  els.note.textContent = lines.length ? lines.slice(0, 2).join(' ') + (lines.length > 2 ? ` and ${lines.length - 2} more.` : '') : '';
 }
 
 /** The view opened or closed: the button, the bar, the stage; the map's own layers are back when it closed (work-model.js `leaveWork`) */
@@ -133,7 +197,7 @@ function syncWork() {
   if (stage) stage.classList.toggle('is-work', open);
   paintBar();
   if (open !== wasOn) {
-    if (open) paintBadge(work().counts.waiting);
+    if (open) { paintBadge(work().counts.waiting); inst().emit('layers:redraw'); } // the Layers menu lists the Work view's rows from the first moment, the answer here or not
     wasOn = open;
     clearTimeout(timer);
     if (open) timer = setTimeout(poll, RUNS_POLL_MS);
@@ -180,7 +244,14 @@ async function load({ select = null, ask = null, again = false, quiet = false } 
   const i = inst();
   const mine = ++seq;
   const w = work();
-  if (!again && w.status !== 'ok') { w.status = 'loading'; card.show({ state: 'loading' }); }
+  const have = w.status === 'ok';
+  if (!have) {
+    // The first answer: the page says so at once (the lanes, empty, and the words) and stays usable; the answer may take seconds on a big repository
+    w.status = 'loading';
+    card.clear();
+    paintBar();
+    announce(i, 'Work: reading the work from the forge.');
+  } else if (!quiet) { w.updating = true; paintBar(); } // a refresh keeps the last answer on the map until the new one is here
   let res;
   try {
     res = await credentialed(i)(GRAPH_URL, { headers: { accept: 'application/json', ...(again && !quiet ? { 'cache-control': 'no-cache' } : {}) } }); // Refresh asks the forge again
@@ -200,15 +271,26 @@ async function load({ select = null, ask = null, again = false, quiet = false } 
   return arrive(body, { select, ask, quiet });
 }
 
-/** The answer could not be had: said in the map's own card (a quiet refresh that fails leaves what is drawn as it is) */
+/**
+ * The answer could not be had. With nothing read yet, it is said in the map's own card. With an answer on the map, the map keeps it (a refresh that fails does not wipe
+ * what is drawn): the line under the toggles says what failed, except for a sign-in that ended, which the card says over the map.
+ */
 function refuse(detail, quiet) {
   const w = work();
+  w.updating = false;
+  if (w.status === 'ok' && detail.state !== 'sign-in') {
+    if (!quiet) { w.lastError = `Could not update the work: ${detail.state === 'offline' ? 'you are offline' : detail.message || 'it could not be read'}. This is what was read earlier.`; announce(inst(), 'Work: it could not be updated. Showing what was read earlier.'); }
+    paintBar();
+    return false;
+  }
   if (quiet && w.status === 'ok') return false;
   w.status = detail.state;
   w.nodes = [];
   w.edges = [];
   w.counts = { work: 0, code: 0, waiting: 0 };
   w.problems = [];
+  w.stale = '';
+  w.lastError = '';
   if (on()) { showWork(state); applyWorkLayout(state, { phone: isPhone() }); inst().touchScene(); inst().emit('layers:redraw'); render(); }
   card.show(detail);
   paintBar();
@@ -225,14 +307,17 @@ function arrive(body, { select, ask, quiet }) {
   const base = state.baseNodes && state.baseNodes.length ? state.baseNodes : (w.saved ? w.saved.nodes : state.nodes);
   setWorkGraph(state, body, base);
   w.status = 'ok';
+  w.updating = false;
+  w.lastError = '';
+  w.stale = typeof body.stale === 'string' ? body.stale.slice(0, 200) : '';
   card.clear();
-  state.workRows = layerRowsOf(w.nodes).map(themed);
   if (on()) {
     showWork(state);
     applyWorkLayout(state, { phone: isPhone() });
+    state.workRows = layerRowsOf(w.nodes).map(themed);
     i.touchScene();
     i.emit('layers:redraw');
-    if (first || !quiet) fitGraphToViewport(fitPadding() + 60); // the labels at the first lane's edge are on screen too
+    if (first || !quiet) fitGraphToViewport(fitPadding()); // the lanes under the toggles, the names at the edge on screen too (work-model.js `layoutWork`)
     render();
     if (before && !state.selectedNode) i.emit('node:close');
   }
@@ -252,14 +337,17 @@ function themed(row) {
   return kind && values[workToken(kind)] ? { ...row, color: values[workToken(kind)] } : row;
 }
 
-/** A layer went on or off: what is hidden is worked out again */
+/** A layer went on or off: what is hidden is worked out again, the lanes are laid out for what is shown, and the camera fits them */
 function refilter() {
   if (!on()) return;
   const w = work();
   applyFilters(w.nodes, w.edges, { layers: w.layers, waiting: w.waiting });
   const sel = state.selectedNode;
+  applyWorkLayout(state, { phone: isPhone() });
+  state.workRows = layerRowsOf(w.nodes).map(themed);
   inst().touchScene();
   if (sel && sel.hidden) inst().emit('node:close');
+  fitGraphToViewport(fitPadding());
   render();
 }
 
@@ -267,7 +355,7 @@ function refilter() {
 export function pick(id, { frame = true, source = 'link' } = {}) {
   const node = state.nodes.find((n) => n.id === id);
   if (!node) return false;
-  if (node.hidden) { work().layers[node.work ? `work-${node.work}` : CODE_LAYER] = true; refilter(); }
+  if (node.hidden) { work().layers[node.draft ? DRAFT_LAYER : node.work ? `work-${node.work}` : CODE_LAYER] = true; refilter(); }
   selectNode(inst(), node, { frame, source });
   return true;
 }
@@ -390,6 +478,10 @@ function spend() {
 /** For tests: forget the page this was wired to */
 export function resetWorkViewForTests() {
   clearTimeout(timer);
+  if (offPaint) offPaint();
+  offPaint = null;
+  laneEls = [];
+  laneKey = null;
   wired = false;
   offered = false;
   els = null;

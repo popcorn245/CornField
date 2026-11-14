@@ -133,11 +133,10 @@
 
       <!-- The Work toggle (explorer/pieces/work.js): opens the Work panel; shown only when the config names a forge. It is a piece: page.js mounts it here, and until then this stand-in keeps its place (the piece's markup without ids) -->
       <!--corn-placeholder:work/button-->
-      <button type="button" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-label="Work" data-corn-string-aria-label="issuesAndPrs" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button" part="forge-button">
-  <span data-corn-string="issuesAndPrs">Work</span>
+      <button type="button" class="hx-work" data-action="toggle-forge" aria-expanded="false" aria-label="Work panel" data-corn-string-aria-label="workPanel" title="Issues, pull requests and deploys: a pull request lights the nodes it changes, a deploy the nodes it restarted" hidden data-corn="forge-button" part="forge-button">
+  <span data-corn-string="workPanel">Work panel</span>
   <span class="hx-forge-lit" data-corn="count" part="count" hidden></span>
   <span class="hx-runner-dot" aria-hidden="true" title="No runner online" hidden></span>
-  <span class="hx-waiting-badge" data-corn="waiting-badge" part="waiting-badge" aria-hidden="true" hidden></span>
 </button>
       <!--corn-piece:work/button-->
 

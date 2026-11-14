@@ -24,9 +24,16 @@ export const KIND_WORDS = Object.freeze({ thread: 'Thread', issue: 'Issue', prop
 export const LAYER_WORDS = Object.freeze({ thread: 'Threads', issue: 'Issues', proposal: 'Proposals', run: 'Agent runs', pull: 'Pull requests', deploy: 'Deploys' });
 /** The key of the one layer that holds the code the work touches, and a kind's key (the node type it has in the Work view) */
 export const CODE_LAYER = 'work-code';
+/** The layer of the proposals that are only files in the checkout (`state: 'local'`): nobody has asked anyone to decide them, so it starts off (spec 0012 D4) */
+export const DRAFT_LAYER = 'work-drafts';
 export const layerKey = workType;
-export const LAYER_KEYS = Object.freeze([...WORK_KINDS.map(workType), CODE_LAYER]);
+/** The rows of the Layers menu, in order (the mock's: threads, issues, proposals, pull requests, agent runs, deploys; then the drafts and the code) */
+export const KIND_ORDER = Object.freeze(['thread', 'issue', 'proposal', 'pull', 'run', 'deploy']);
+export const LAYER_KEYS = Object.freeze([...KIND_ORDER.map(workType), DRAFT_LAYER, CODE_LAYER]);
 export const CODE_LAYER_WORDS = 'Code they touch';
+export const DRAFT_LAYER_WORDS = 'Drafts';
+/** A proposal that is only a file in the checkout: no pull request holds it, so nobody has been asked to decide it */
+export const isDraft = (item) => !!item && item.kind === 'proposal' && item.state === 'local';
 
 /** The lanes, in order: the stage each holds (server/work-graph.js STAGES) and its title */
 export const LANES = Object.freeze([
@@ -35,6 +42,8 @@ export const LANES = Object.freeze([
   { key: 'build', title: 'Build' },
   { key: 'ship', title: 'Ship' },
 ]);
+/** The local drafts, when their layer is on, have a lane of their own beside Decide (they are the Decide stage's, and not many people have been asked about them) */
+export const DRAFT_LANE_TITLE = 'Drafts';
 export const CODE_LANE_TITLE = 'Code it touches';
 
 /** The words beside a line: the rel as the line reads from its start, and as the node at its end reads it (a connection listed in the node panel) */
@@ -54,8 +63,10 @@ export const REL_WORDS = Object.freeze({
 /** The word on the map for a line (once, from its start): the same as `REL_WORDS[rel][0]` */
 export const relWord = (rel) => (Object.hasOwn(REL_WORDS, rel) ? REL_WORDS[rel][0] : String(rel));
 
-/** The most characters of a title on the map (the whole title is the node panel's) */
+/** The most characters of a title in a node's name (the whole title is the node panel's), and of the whole text drawn under a node on a desktop (its tag and the start of its title: a lane is not much wider
+ * than that on screen); on a phone a piece of work is drawn as its tag alone */
 export const LABEL_CHARS = 34;
+export const DRAWN_CHARS = 28;
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const text = (v) => (typeof v === 'string' ? v : '');
 const isWork = (kind) => typeof kind === 'string' && Object.hasOwn(WORK_THEMES, kind);
@@ -123,14 +134,17 @@ export function workScene(graph, mapNodes) {
   const touched = new Map();
   for (const e of edges) if (e.tone === 'code') touched.set(e.to, (touched.get(e.to) || new Set()).add(e.from));
 
+  const degree = new Map();
+  for (const e of edges) { degree.set(e.from, (degree.get(e.from) || 0) + 1); degree.set(e.to, (degree.get(e.to) || 0) + 1); }
   const nodes = [];
   for (const item of work.values()) {
     const theme = WORK_THEMES[item.kind];
     const title = text(item.title) || tagOf(item);
+    const draft = isDraft(item);
     nodes.push({
       id: item.id, type: workType(item.kind), work: item.kind, shape: theme.shape, label: item.kind === 'deploy' ? `Deploy · ${clip(title, LABEL_CHARS)}` : `${tagOf(item)} · ${clip(title, LABEL_CHARS)}`,
-      title, item, r: theme.r, color: theme.color, letters: theme.letters, terms: termsOf(item), groupName: LAYER_WORDS[item.kind],
-      waiting: item.waiting === true, updated: text(item.updated), stage: text(item.stage), x: 0, y: 0,
+      title, item, r: theme.r, color: theme.color, letters: theme.letters, terms: termsOf(item), groupName: draft ? DRAFT_LAYER_WORDS : LAYER_WORDS[item.kind],
+      draft, waiting: item.waiting === true, updated: text(item.updated), stage: text(item.stage), degree: degree.get(item.id) || 0, x: 0, y: 0,
     });
   }
   let code = 0;
@@ -140,8 +154,8 @@ export function workScene(graph, mapNodes) {
     if (!base && !plan) continue;
     code++;
     nodes.push(base
-      ? { ...base, x: 0, y: 0, r: CODE_R, touches: by.size, hidden: false, dim: false }
-      : { id, type: plannedType(plan.type), label: text(plan.label) || id, planned: true, r: CODE_R, touches: by.size, x: 0, y: 0, groupName: CODE_LAYER_WORDS });
+      ? { ...base, x: 0, y: 0, r: CODE_R, touches: by.size, degree: by.size, hidden: false, dim: false }
+      : { id, type: plannedType(plan.type), label: text(plan.label) || id, planned: true, r: CODE_R, touches: by.size, degree: by.size, x: 0, y: 0, groupName: CODE_LAYER_WORDS });
   }
   const waiting = nodes.filter((n) => n.waiting).length;
   return { nodes, edges, counts: { work: work.size, code, waiting } };
@@ -158,96 +172,169 @@ export const byLane = (a, b) => (a.waiting === b.waiting ? 0 : a.waiting ? -1 : 
 /** Most touched first, then by name: the order of the code */
 export const byTouch = (a, b) => (b.touches || 0) - (a.touches || 0) || String(a.label).localeCompare(String(b.label)) || (a.id < b.id ? -1 : 1);
 
-const DESK = { colGap: 230, rowGap: 64, codeRow: 30, codeRows: 24, codeColGap: 250, laneRows: 20 };
-const PHONE = { perRow: 3, colGap: 110, rowGap: 74, bandGap: 74, codeRow: 34, codeRows: 18, codeColGap: 150 };
+/**
+ * The sizes the layout works in. World units, laid out for the zoom the first fit will have, so a name under a node (11 px at least, whatever the zoom: labels.js) has
+ * the room on screen it needs: a cell is wide enough for a name, a row tall enough for a disc and a name under it, and lanes next to each other are staggered by half a row
+ * so a name that runs past its lane lands between the next lane's. `margin` is what the first fit leaves on screen around the lanes, in px (the names at the edge, and the toggles at the top).
+ */
+const DESK = { cell: 200, row: 70, codeCell: 190, codeRow: 44, gap: 14, pad: 6, margin: { x: 92, top: 56, bottom: 24 }, caps: [100, 64, 48, 40, 32, 28, 24, 20, 18, 16, 14, 12, 10, 9, 8, 7, 6, 5] };
+const PHONE = { cell: 104, row: 84, codeCell: 150, codeRow: 40, gap: 12, pad: 4, margin: { x: 36, top: 112, bottom: 16 } };
+/** A lane's title (screen px) the first node sits under, and a name under a node (its gap and its line, px) */
+const TITLE_PX = 40;
+const NAME_PX = 22;
 const LANE_FILL = 'rgba(66, 153, 225, 0.05)';
 const LANE_STROKE = 'rgba(66, 153, 225, 0.18)';
 
-const lane = (title, note, x, y, w, h) => ({
-  x, y, w, h, radius: 14, fill: LANE_FILL, stroke: LANE_STROKE, strokeWidth: 1,
-  title: { text: title, x: x + w / 2, y: y + 22, size: 15, bold: true, color: '#e2e8f0' },
-  note: { text: note, x: x + w / 2, y: y + 40, size: 11, bold: false, color: '#94a3b8' },
-  arrow: null,
-});
-const noteOf = (n) => `${n} ${n === 1 ? 'item' : 'items'}`;
+/** A lane behind the nodes (`SceneLane`: scene.js, with no text of its own: its title is a line of the page, in screen space, work-view.js), and what the title says */
+const lane = (key, title, count, x, y, w, h) => ({ key, name: title, count, x, y, w, h, radius: 14, fill: LANE_FILL, stroke: LANE_STROKE, strokeWidth: 1, title: null, note: null, arrow: null });
+
+/** The text drawn under a node: a piece of work's tag and the start of its title (a phone: the tag), the name of a node of code (a phone: the start of it) */
+function nameNodes(nodes, phone) {
+  for (const n of nodes) {
+    if (n.work) { const tag = tagOf(n.item); n.labelText = phone ? tag : `${tag} · ${clip(n.title, Math.max(8, DRAWN_CHARS - tag.length - 3))}`; }
+    else n.labelText = clip(String(n.label), phone ? 14 : 32);
+  }
+}
+
+/** The zoom that shows `w` by `h` world units with the margins left around them, on a screen `v.width` by `v.height`; at most 1 */
+const zoomFor = (w, h, v, m) => Math.min(1, Math.max(1, v.width - 2 * m.x) / Math.max(1, w), Math.max(1, v.height - m.top - m.bottom) / Math.max(1, h));
+
+/** The box the camera fits (engine/render.js `fitTarget`): the lanes, and around them the margins at the zoom that shows them; the engine's own padding `p` is taken out of it */
+function fitBoxOf(w, h, z, m, p, v) {
+  const minY = -(m.top - p) / z;
+  // as tall as the screen shows at that zoom, so the lanes stay under the toggles when they are shorter than the screen (the fit centres the box)
+  return { minX: -(m.x - p) / z, maxX: w + (m.x - p) / z, minY, maxY: Math.max(h + (m.bottom - p) / z, minY + (v.height - 2 * p) / z), zoom: z };
+}
 
 /**
- * Where the nodes sit: four lanes of work, then the code it touches (spec 0012 D3). On a desktop the lanes run left to right, on a phone top to bottom
- * (Build and Ship share one band), with the code in a column beside them. Writes `x`, `y` and `r` on the nodes and returns the lanes behind them, as the
- * scene draws a lane (`SceneLane`: scene.js).
+ * Where the nodes sit: four lanes of work, then the code it touches (spec 0012 D3), made for the screen it is on. A desktop's lanes run left to right, and a lane (the
+ * drafts' and the code's most of all) is cut into as many columns as show the most of it at once; a phone's run top to bottom (Talk, Decide, Build and Ship in one), with the code in
+ * columns beside them. Only what is not hidden is laid out. Writes `x`, `y` and `labelText` on the nodes and returns the lanes behind them and the box the first fit shows.
  * @param {object[]} nodes the nodes of `workScene`
- * @param {{ phone?: boolean }} [opts]
- * @returns {{ lanes: object[], bounds: { x: number, y: number, w: number, h: number } }}
+ * @param {{ phone?: boolean, width?: number, height?: number, padding?: number }} [opts] the map's size in px, and the engine's padding around a fit
+ * @returns {{ lanes: object[], bounds: { x: number, y: number, w: number, h: number }, fit: { minX: number, maxX: number, minY: number, maxY: number, zoom: number } }}
  */
-export function layoutWork(nodes, { phone = false } = {}) {
-  nodes.forEach((n) => { if (n.work) n.labels = !phone; }); // on a phone a label per node would run into the next: the selection's and a match's are drawn
-  const by = (key) => nodes.filter((n) => n.work && n.stage === key).sort(byLane);
-  const stages = LANES.map((l) => ({ ...l, nodes: by(l.key) }));
+export function layoutWork(nodes, { phone = false, width = 1200, height = 800, padding = phone ? 24 : 48 } = {}) {
+  nameNodes(nodes, phone);
+  const shown = nodes.filter((n) => !n.hidden);
+  const mine = (key) => shown.filter((n) => n.work && !n.draft && n.stage === key).sort(byLane);
+  const stages = LANES.map((l) => ({ ...l, nodes: mine(l.key) }));
   // A kind of work the server gave no stage still has a lane: the kind's own
   const known = new Set(stages.flatMap((s) => s.nodes.map((n) => n.id)));
-  const lost = nodes.filter((n) => n.work && !known.has(n.id));
-  for (const n of lost) { const home = { thread: 'talk', issue: 'talk', proposal: 'decide', run: 'build', pull: 'build', deploy: 'ship' }[n.work]; stages.find((s) => s.key === home).nodes.push(n); }
+  for (const n of shown.filter((x) => x.work && !x.draft && !known.has(x.id))) stages.find((s) => s.key === { thread: 'talk', issue: 'talk', proposal: 'decide', run: 'build', pull: 'build', deploy: 'ship' }[n.work]).nodes.push(n);
   stages.forEach((s) => s.nodes.sort(byLane));
-  const code = nodes.filter((n) => !n.work).sort(byTouch);
-  return phone ? layoutPhone(stages, code) : layoutDesk(stages, code);
+  const drafts = shown.filter((n) => n.draft).sort(byLane);
+  const code = shown.filter((n) => !n.work).sort(byTouch);
+  const v = { width: Math.max(160, width), height: Math.max(160, height) };
+  return phone ? layoutPhone(stages, drafts, code, v, padding) : layoutDesk(stages, drafts, code, v, padding);
 }
 
-function layoutDesk(stages, code) {
-  const { colGap, rowGap, codeRow, codeRows, codeColGap, laneRows } = DESK;
-  const rowsOf = (s) => Math.min(Math.max(s.nodes.length, 1), laneRows);
-  const rows = Math.max(1, ...stages.map(rowsOf));
-  const heightWork = (rows - 1) * rowGap;
-  const heightCode = (Math.min(code.length, codeRows) - 1) * codeRow;
-  const innerH = Math.max(heightWork, heightCode, 0);
-  const top = -64; // the band starts above the first node: its title and note
-  const bandH = innerH + 64 + 56;
-  const lanes = [];
-  let left = 0; // a lane with more than `laneRows` pieces of work goes on in another column of its own
-  stages.forEach((s) => {
-    const cols = Math.max(1, Math.ceil(s.nodes.length / laneRows));
-    const w = cols * colGap;
-    s.nodes.forEach((n, j) => { n.x = left + (Math.floor(j / laneRows) + 0.5) * colGap; n.y = (j % laneRows) * rowGap; });
-    lanes.push(lane(s.title, noteOf(s.nodes.length), left + 14, top, w - 28, bandH));
-    left += w;
-  });
-  const x0 = left + 14;
-  const codeCols = Math.max(1, Math.ceil(code.length / codeRows));
-  const codeW = codeCols * codeColGap;
-  code.forEach((n, k) => { n.x = x0 + 24 + Math.floor(k / codeRows) * codeColGap; n.y = (k % codeRows) * codeRow; });
-  if (code.length) lanes.push(lane(CODE_LANE_TITLE, noteOf(code.length), x0, top, codeW, bandH));
-  const right = code.length ? x0 + codeW : left;
-  return { lanes, bounds: { x: 0, y: top, w: right, h: bandH } };
-}
+/** How many columns a lane of `n` nodes has when a column holds at most `cap`, and how tall they are */
+const cut = (n, cap) => { const cols = Math.max(1, Math.ceil(n / cap)); return { cols, rows: Math.max(1, Math.ceil(n / cols)) }; };
 
-function layoutPhone(stages, code) {
-  const { perRow, colGap, rowGap, bandGap, codeRow, codeRows, codeColGap } = PHONE;
-  // Three bands: Talk, Decide, and Build with Ship after it in one
-  const bands = [stages[0], stages[1], { key: 'build-ship', title: 'Build · Ship', nodes: [...stages[2].nodes, ...stages[3].nodes] }];
-  const width = perRow * colGap;
-  const lanes = [];
-  let y = 0;
-  for (const b of bands) {
-    const rows = Math.max(1, Math.ceil(b.nodes.length / perRow));
-    b.nodes.forEach((n, k) => { n.x = (k % perRow) * colGap + colGap / 2; n.y = y + 56 + Math.floor(k / perRow) * rowGap; });
-    const h = 56 + (rows - 1) * rowGap + 52;
-    lanes.push(lane(b.title, noteOf(b.nodes.length), 0, y, width, h));
-    y += h + bandGap - 56 + 6;
+function layoutDesk(stages, drafts, code, v, p) {
+  const c = DESK;
+  // Left to right: Talk, Decide, the drafts (when they are shown), Build, Ship, then the code
+  const lanes = [stages[0], stages[1], ...(drafts.length ? [{ key: 'drafts', title: DRAFT_LANE_TITLE, nodes: drafts }] : []), stages[2], stages[3], ...(code.length ? [{ key: 'code', title: CODE_LANE_TITLE, nodes: code, code: true }] : [])];
+  const plan = (z, cap) => {
+    const room = TITLE_PX / z;
+    const below = NAME_PX / z;
+    let left = 0;
+    let tall = 0;
+    const parts = lanes.map((l, i) => {
+      const cell = l.code ? c.codeCell : c.cell;
+      const row = l.code ? c.codeRow : c.row;
+      const r = l.code ? CODE_R : 20;
+      const { cols, rows } = cut(l.nodes.length, cap);
+      const w = cols * cell + 2 * c.pad;
+      const stagger = cols > 1 || i % 2 ? 0.5 : 0;
+      const h = room + 2 * r + (rows - 1 + stagger) * row + below + 8;
+      tall = Math.max(tall, h);
+      const part = { l, i, cell, row, r, cols, rows, x: left, w, h };
+      left += w + c.gap;
+      return part;
+    });
+    return { parts, w: left - c.gap, h: tall, room };
+  };
+  let z = 0.6;
+  let best = null;
+  for (let pass = 0; pass < 3; pass++) {
+    best = null;
+    for (const cap of c.caps) {
+      const g = plan(z, cap);
+      const fit = zoomFor(g.w, g.h, v, c.margin);
+      if (!best || fit > best.fit * 1.01) best = { g, fit, cap };
+    }
+    z = best.fit;
   }
-  const bottom = y;
-  const codeCols = Math.max(1, Math.ceil(code.length / codeRows));
-  const x0 = width + 16;
-  code.forEach((n, k) => { n.x = x0 + 14 + Math.floor(k / codeRows) * codeColGap; n.y = 56 + (k % codeRows) * codeRow; });
-  const codeW = codeCols * codeColGap;
-  if (code.length) lanes.push(lane(CODE_LANE_TITLE, noteOf(code.length), x0, 0, codeW, Math.max(56 + (Math.min(code.length, codeRows) - 1) * codeRow + 52, 120)));
-  return { lanes, bounds: { x: 0, y: 0, w: x0 + (code.length ? codeW : 0), h: Math.max(bottom, 56 + Math.min(code.length, codeRows) * codeRow) } };
+  const { g } = best;
+  const out = [];
+  for (const part of g.parts) {
+    const { l, i, cell, row, r, cols, rows } = part;
+    l.nodes.forEach((n, j) => {
+      const col = Math.floor(j / rows);
+      n.x = part.x + c.pad + (col + 0.5) * cell;
+      n.y = g.room + r + (j % rows + ((i + col) % 2) * 0.5) * row;
+    });
+    out.push(lane(l.key, l.title, l.nodes.length, part.x, 0, part.w, g.h));
+  }
+  return { lanes: out, bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
+}
+
+function layoutPhone(stages, drafts, code, v, p) {
+  const c = PHONE;
+  const bands = [stages[0], stages[1], ...(drafts.length ? [{ key: 'drafts', title: DRAFT_LANE_TITLE, nodes: drafts }] : []), { key: 'build-ship', title: 'Build · Ship', nodes: [...stages[2].nodes, ...stages[3].nodes] }];
+  const plan = (z, perRow, codeCols) => {
+    const room = TITLE_PX / z;
+    const below = NAME_PX / z;
+    const wBand = perRow * c.cell + 2 * c.pad;
+    let y = 0;
+    const parts = bands.map((b) => {
+      const rows = Math.max(1, Math.ceil(b.nodes.length / perRow));
+      const h = room + 40 + (rows - 1 + (perRow > 1 ? 0.5 : 0)) * c.row + below + 8;
+      const part = { b, rows, y, h };
+      y += h + c.gap;
+      return part;
+    });
+    const hBands = y - c.gap;
+    const codeRows = Math.max(1, Math.ceil(code.length / codeCols));
+    const wCode = code.length ? codeCols * c.codeCell + 2 * c.pad : 0;
+    const hCode = code.length ? room + 2 * CODE_R + (codeRows - 1 + (codeCols > 1 ? 0.5 : 0)) * c.codeRow + below + 8 : 0;
+    return { parts, wBand, wCode, hBands, hCode, codeRows, room, w: wBand + (code.length ? c.gap + wCode : 0), h: Math.max(hBands, hCode) };
+  };
+  let z = 0.5;
+  let best = null;
+  for (let pass = 0; pass < 3; pass++) {
+    best = null;
+    for (const perRow of [2, 3, 4]) {
+      for (const codeCols of code.length ? [1, 2, 3] : [1]) {
+        const g = plan(z, perRow, codeCols);
+        const fit = zoomFor(g.w, g.h, v, c.margin);
+        if (!best || fit > best.fit * 1.01) best = { g, fit, perRow, codeCols };
+      }
+    }
+    z = best.fit;
+  }
+  const { g, perRow, codeCols } = best;
+  const out = [];
+  for (const part of g.parts) {
+    part.b.nodes.forEach((n, j) => { n.x = c.pad + (j % perRow + 0.5) * c.cell; n.y = part.y + g.room + 20 + (Math.floor(j / perRow) + ((j % perRow) % 2) * 0.5) * c.row; });
+    out.push(lane(part.b.key, part.b.title, part.b.nodes.length, 0, part.y, g.wBand, part.h));
+  }
+  if (code.length) {
+    const x0 = g.wBand + c.gap;
+    code.forEach((n, j) => { const col = Math.floor(j / g.codeRows); n.x = x0 + c.pad + (col + 0.5) * c.codeCell; n.y = g.room + CODE_R + (j % g.codeRows + (col % 2) * 0.5) * c.codeRow; });
+    out.push(lane('code', CODE_LANE_TITLE, code.length, x0, 0, g.wCode, g.hCode));
+  }
+  return { lanes: out, bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
 
 // ---------------------------------------------------------------------------
 //  Layers and "Waiting on you"
 // ---------------------------------------------------------------------------
 
-/** The layers as the Work view starts them: every one on */
-export const startLayers = () => Object.fromEntries(LAYER_KEYS.map((k) => [k, true]));
+/** The layers as the Work view starts them: every one on but the drafts (the local proposals nobody has been asked to decide) */
+export const startLayers = () => Object.fromEntries(LAYER_KEYS.map((k) => [k, k !== DRAFT_LAYER]));
 
 /**
  * Sets `hidden` and `dim` on the nodes. A piece of work is hidden when its layer is off; code when its layer is off or every piece of work that touches it is
@@ -256,7 +343,7 @@ export const startLayers = () => Object.fromEntries(LAYER_KEYS.map((k) => [k, tr
 export function applyFilters(nodes, edges, { layers = startLayers(), waiting = false } = {}) {
   const on = (key) => layers[key] !== false;
   const shown = new Set();
-  for (const n of nodes) { n.hidden = n.work ? !on(workType(n.work)) : false; if (n.work && !n.hidden) shown.add(n.id); }
+  for (const n of nodes) { n.hidden = n.draft ? !on(DRAFT_LAYER) : n.work ? !on(workType(n.work)) : false; if (n.work && !n.hidden) shown.add(n.id); }
   const reached = new Set();
   for (const e of edges) if (e.tone === 'code' && shown.has(e.from)) reached.add(e.to);
   for (const n of nodes) {
@@ -266,11 +353,11 @@ export function applyFilters(nodes, edges, { layers = startLayers(), waiting = f
   return nodes;
 }
 
-/** The Layers menu's rows in the Work view: `{ key, label, color, desc, countText }`, the six kinds and the code they touch */
+/** The Layers menu's rows in the Work view: `{ key, label, color, desc, countText }`, the six kinds, the local drafts and the code they touch */
 export function layerRowsOf(nodes) {
-  const of = (kind) => nodes.filter((n) => n.work === kind);
+  const of = (kind) => nodes.filter((n) => n.work === kind && !n.draft);
   const word = (n, w) => `${n} ${w}`;
-  const rows = WORK_KINDS.map((kind) => {
+  const rows = KIND_ORDER.map((kind) => {
     const list = of(kind);
     const open = list.filter((n) => n.item.open === true).length;
     const waiting = list.filter((n) => n.waiting).length;
@@ -280,6 +367,8 @@ export function layerRowsOf(nodes) {
       : String(list.length);
     return { key: workType(kind), label: LAYER_WORDS[kind], color: WORK_THEMES[kind].color, desc: `${KIND_WORDS[kind]} nodes: ${list.length}`, countText, count: list.length };
   });
+  const drafts = nodes.filter((n) => n.draft).length;
+  rows.push({ key: DRAFT_LAYER, label: DRAFT_LAYER_WORDS, color: WORK_THEMES.proposal.color, desc: 'Proposals that are only files in the checkout: no pull request holds them, nobody has been asked to decide them', countText: word(drafts, 'local'), count: drafts });
   const codeCount = nodes.filter((n) => !n.work).length;
   rows.push({ key: CODE_LAYER, label: CODE_LAYER_WORDS, color: NODE_THEMES.page.color, desc: 'The code the work touches', countText: String(codeCount), count: codeCount });
   return rows;
@@ -428,7 +517,7 @@ export function openedWords({ work, code, waiting }) {
 // ---------------------------------------------------------------------------
 
 /** What the Work view keeps on the state (`state.work`): the answer, the scene made of it, the layers, the toggle, and the map it stands in for while it is open */
-export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], layers: startLayers(), waiting: false, saved: null, bounds: null });
+export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null });
 
 /** Makes the scene of an answer (`workScene`), keeps the node a selection named, and sets the filters; the layout is `applyWorkLayout`'s */
 export function setWorkGraph(state, graph, mapNodes) {
@@ -478,13 +567,14 @@ export function leaveWork(state) {
   state.selectedEdge = null;
 }
 
-/** Lays the Work view out (writes on its nodes) and keeps its lanes for the scene */
+/** Lays the Work view out for the map's size (writes on its nodes), and keeps its lanes for the scene and the box the first fit shows (`state.work.fit`: engine/render.js) */
 export function applyWorkLayout(state, { phone = false } = {}) {
   const w = state.work;
   if (!w) return;
-  const laid = layoutWork(w.nodes, { phone });
+  const laid = layoutWork(w.nodes, { phone, width: state.width || (phone ? 390 : 1200), height: state.height || (phone ? 760 : 800), padding: (state.width || 1200) < 640 ? 24 : 48 }); // the engine's own padding around a fit (engine/render.js `fitPadding`)
   w.lanes = laid.lanes;
   w.bounds = laid.bounds;
+  w.fit = laid.fit;
   state.workLanes = w.lanes;
   state.workRows = layerRowsOf(w.nodes);
 }

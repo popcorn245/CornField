@@ -1,6 +1,6 @@
 // The Work view's pure half (spec 0012 D2 to D5, D8): the scene of an answer, the layout, the filters, the layers' rows, the panel's words, the addresses.
 import { describe, it, expect } from 'vitest';
-import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
+import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
 import { buildScene, isNodeVisible } from '../../explorer/scene.js';
 import { WORK_KINDS, WORK_THEMES } from '../../core/schema.js';
 import { createState } from '../../explorer/instance-state.js';
@@ -97,7 +97,9 @@ describe('the layout (D3)', () => {
     // the code: api-billing touches three pieces of work, so it is first
     const code = nodes.filter((n) => !n.work).sort((a, b) => a.y - b.y);
     expect(code[0].id).toBe('api-billing');
-    expect(laid.lanes.map((l) => l.title.text)).toEqual(['Talk', 'Decide', 'Build', 'Ship', 'Code it touches']);
+    expect(laid.lanes.map((l) => l.name)).toEqual(['Talk', 'Decide', 'Build', 'Ship', 'Code it touches']);
+    expect(laid.lanes.map((l) => l.count)).toEqual([2, 1, 2, 1, 4]); // each lane's title says how many it holds (the page draws it in screen space)
+    expect(laid.lanes.every((l) => l.title === null && l.note === null)).toBe(true);
     expect(byLane({ waiting: true, updated: 'a', id: 'a' }, { waiting: false, updated: 'z', id: 'b' })).toBeLessThan(0);
   });
   it('runs the lanes top to bottom on a phone, with the code beside them', () => {
@@ -106,16 +108,59 @@ describe('the layout (D3)', () => {
     const y = (id) => nodes.find((n) => n.id === id).y;
     expect(y('thread:31')).toBeLessThan(y('proposal:0100-flow'));
     expect(y('proposal:0100-flow')).toBeLessThan(y('pull:27'));
-    expect(laid.lanes.map((l) => l.title.text)).toEqual(['Talk', 'Decide', 'Build · Ship', 'Code it touches']);
+    expect(laid.lanes.map((l) => l.name)).toEqual(['Talk', 'Decide', 'Build · Ship', 'Code it touches']);
     const widest = Math.max(...nodes.filter((n) => n.work).map((n) => n.x));
     expect(Math.min(...nodes.filter((n) => !n.work).map((n) => n.x))).toBeGreaterThan(widest);
   });
-  it('starts a long lane again in another column', () => {
+  it('cuts a long lane into columns that fit the screen, in a staggered grid with room for a name under each node', () => {
     const many = { nodes: Array.from({ length: 45 }, (_, i) => ({ id: `proposal:p${i}`, kind: 'proposal', stage: 'decide', title: `s${i}`, state: 'approved', open: true, waiting: false, slug: `p${i}`, updated: `2026-11-01T00:${String(i).padStart(2, '0')}:00Z` })), edges: [] };
     const { nodes } = workScene(many, map);
-    layoutWork(nodes);
-    expect(new Set(nodes.map((n) => n.x)).size).toBe(3);
-    expect(Math.max(...nodes.map((n) => n.y))).toBeLessThan(21 * 64);
+    const laid = layoutWork(nodes, { width: 1440, height: 800 });
+    const columns = new Set(nodes.map((n) => n.x)).size;
+    expect(columns).toBeGreaterThan(1);
+    expect(columns).toBeLessThan(45);
+    // no two nodes closer than a disc and its name need, at the zoom the first fit shows
+    const z = laid.fit.zoom;
+    for (const a of nodes) for (const b of nodes) {
+      if (a === b) continue;
+      const dx = Math.abs(a.x - b.x) * z;
+      const dy = Math.abs(a.y - b.y) * z;
+      expect(dx >= 20 || dy >= 20).toBe(true);
+    }
+  });
+  it('shows only what its layers show: hidden nodes take no place, and the lanes shrink', () => {
+    const { nodes, edges } = workScene(graph, map);
+    applyFilters(nodes, edges, { layers: { ...startLayers(), 'work-deploy': false, 'work-run': false, 'work-pull': false } });
+    const laid = layoutWork(nodes, { width: 1440, height: 800 });
+    expect(laid.lanes.find((l) => l.name === 'Ship').count).toBe(0);
+    expect(laid.lanes.find((l) => l.name === 'Build').count).toBe(0);
+    expect(laid.lanes.find((l) => l.name === 'Code it touches').count).toBe(nodes.filter((n) => !n.work && !n.hidden).length);
+  });
+  it('fits the lanes under the toggles with room for the names at the edges, and keeps every shown node inside', () => {
+    const { nodes } = workScene(graph, map);
+    for (const [phone, width, height] of [[false, 1440, 848], [false, 1024, 700], [true, 390, 788]]) {
+      const laid = layoutWork(nodes, { phone, width, height });
+      const { fit, bounds } = laid;
+      expect(fit.zoom).toBeGreaterThan(0);
+      expect(fit.zoom).toBeLessThanOrEqual(1);
+      expect(fit.minX).toBeLessThan(bounds.x);
+      expect(fit.maxX).toBeGreaterThan(bounds.w);
+      expect(fit.minY).toBeLessThan(bounds.y);
+      for (const n of nodes) { expect(n.x).toBeGreaterThanOrEqual(bounds.x); expect(n.x).toBeLessThanOrEqual(bounds.w); expect(n.y).toBeGreaterThanOrEqual(bounds.y); expect(n.y).toBeLessThanOrEqual(bounds.h); }
+      // the engine's fit of the box (padding p) shows it at the zoom the layout was made for
+      const p = width < 640 ? 24 : 48;
+      const raw = Math.min((width - 2 * p) / (fit.maxX - fit.minX), (height - 2 * p) / (fit.maxY - fit.minY));
+      expect(Math.min(1, raw)).toBeCloseTo(fit.zoom, 5);
+    }
+  });
+  it('names each node by its tag and the start of its title (a phone: the tag), the whole name staying the node\'s', () => {
+    const { nodes } = workScene({ nodes: [{ id: 'issue:3', kind: 'issue', stage: 'talk', title: 'A very long title that goes on and on and on', state: 'open', open: true, waiting: false, number: 3, updated: '2026-11-12T00:00:00Z' }], edges: [] }, map);
+    layoutWork(nodes, { width: 1440, height: 800 });
+    expect(nodes[0].labelText.length).toBeLessThanOrEqual(DRAWN_CHARS + 1);
+    expect(nodes[0].labelText.startsWith('Issue #3 · A very')).toBe(true);
+    expect(nodes[0].label).toContain('A very long title');
+    layoutWork(nodes, { phone: true, width: 390, height: 788 });
+    expect(nodes[0].labelText).toBe('Issue #3');
   });
 });
 
@@ -131,6 +176,32 @@ describe('layers, and Waiting on you (D3, D4)', () => {
     expect(nodes.filter((n) => !n.work).every((n) => n.hidden)).toBe(true);
     expect(nodes.filter((n) => n.work).every((n) => !n.hidden)).toBe(true);
   });
+  it('holds the local drafts in a layer of their own, off to start, and counts them there and not as proposals', () => {
+    const withDrafts = { ...graph, nodes: [...graph.nodes, { id: 'proposal:0001-local', kind: 'proposal', stage: 'decide', title: 'A local draft', state: 'local', open: true, waiting: false, slug: '0001-local', number: null, updated: '2026-11-01T00:00:00Z' }], edges: [...graph.edges, { from: 'proposal:0001-local', to: 'invoices', rel: 'changes' }] };
+    const { nodes, edges } = workScene(withDrafts, map);
+    const draft = nodes.find((n) => n.id === 'proposal:0001-local');
+    expect(draft.draft).toBe(true);
+    expect(startLayers()[DRAFT_LAYER]).toBe(false);
+    applyFilters(nodes, edges, { layers: startLayers() });
+    expect(draft.hidden).toBe(true);
+    const rows = layerRowsOf(nodes);
+    expect(rows.find((r) => r.label === 'Drafts').countText).toBe('1 local');
+    expect(rows.find((r) => r.label === 'Proposals').count).toBe(1); // the one on a pull request
+    // nothing in Decide but the proposal on a pull request, and the lane for the drafts is not there
+    const laid = layoutWork(nodes, { width: 1440, height: 800 });
+    expect(laid.lanes.map((l) => l.name)).not.toContain('Drafts');
+    expect(laid.lanes.find((l) => l.name === 'Decide').count).toBe(1);
+    // on: drawn, in a lane of their own beside Decide
+    applyFilters(nodes, edges, { layers: { ...startLayers(), [DRAFT_LAYER]: true } });
+    expect(draft.hidden).toBe(false);
+    const on = layoutWork(nodes, { width: 1440, height: 800 });
+    expect(on.lanes.map((l) => l.name)).toEqual(['Talk', 'Decide', 'Drafts', 'Build', 'Ship', 'Code it touches']);
+    expect(on.lanes.find((l) => l.name === 'Drafts').count).toBe(1);
+    // the proposals' layer off leaves the drafts to their own
+    applyFilters(nodes, edges, { layers: { ...startLayers(), [DRAFT_LAYER]: true, 'work-proposal': false } });
+    expect(draft.hidden).toBe(false);
+    expect(nodes.find((n) => n.id === 'proposal:0100-flow').hidden).toBe(true);
+  });
   it('dims all but what waits', () => {
     const { nodes, edges } = workScene(graph, map);
     applyFilters(nodes, edges, { waiting: true });
@@ -140,7 +211,7 @@ describe('layers, and Waiting on you (D3, D4)', () => {
   });
   it('lists the six kinds and the code, with their counts in words', () => {
     const rows = layerRowsOf(workScene(graph, map).nodes);
-    expect(rows.map((r) => r.label)).toEqual(['Threads', 'Issues', 'Proposals', 'Agent runs', 'Pull requests', 'Deploys', 'Code they touch']);
+    expect(rows.map((r) => r.label)).toEqual(['Threads', 'Issues', 'Proposals', 'Pull requests', 'Agent runs', 'Deploys', 'Drafts', 'Code they touch']);
     const text = Object.fromEntries(rows.map((r) => [r.label, r.countText]));
     expect(text.Proposals).toBe('1 to decide');
     expect(text['Agent runs']).toBe('1 waiting');

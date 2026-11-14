@@ -36,7 +36,7 @@ describe('layers in the Work view (D4)', () => {
     const { state, inst } = open();
     const before = { ...state.activeLayers };
     const { layers, overlays } = layerRows(inst);
-    expect(layers.map((l) => l.key)).toEqual([...WORK_KINDS.map((k) => `work-${k}`), 'work-code']);
+    expect(layers.map((l) => l.key)).toEqual(['work-thread', 'work-issue', 'work-proposal', 'work-pull', 'work-run', 'work-deploy', 'work-drafts', 'work-code']);
     expect(overlays).toEqual([]);
     expect(layers.find((l) => l.key === 'work-pull').countText).toBe('1 open');
     expect(isOn(inst, 'work-pull')).toBe(true);

@@ -47,10 +47,10 @@ export const SPEC_LOOKS = [
 ];
 
 /**
- * @param {{ repoFiles: Record<string, string>, slugs: string[], port: number, runner?: 'online'|'offline'|'none', dataDir: string }} opts
+ * @param {{ repoFiles: Record<string, string>, slugs: string[], port: number, runner?: 'online'|'offline'|'none', dataDir: string, delayMs?: number }} opts
  *   `repoFiles` maps a repo path to its text (the generated repo's files: the proposals and their mockups are served from it)
  */
-export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online', dataDir }) {
+export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online', dataDir, delayMs = 0 }) {
   const base = recordings('github');
   const rich = slugs.filter((s) => /^01\d\d-/.test(s));
   const specs = rich.map((slug, i) => ({ slug, n: SPEC_PR_FIRST + i, sha: sha(slug) }));
@@ -63,7 +63,7 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   // `checks`: a spec PR's checks as the rig was told (GET /__rig/checks?pr=21&state=passed|running|failed|none); unset is one passed, one running.
   // `draft` and `edited`: a spec PR marked draft or ready, and a proposal file the agent pushed a change to (GET /__rig/pull, below)
   // `merged`: the heads a landing merged (the PR stays open in the rig, so it can be reviewed again; GET /__rig/pull says what was merged)
-  const state = { runner, checks: new Map(), draft: new Map(), edited: new Map(), merged: [] };
+  const state = { delayMs, runner, checks: new Map(), draft: new Map(), edited: new Map(), merged: [] };
   const comments = new Map(); // issue or PR number -> the comments posted to it since the rig started
   let nextComment = 9900;
   // The reviews the looks above name, posted as comments (kept in memory, like the ones a maintainer posts while the rig runs)
@@ -77,7 +77,12 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
   });
   let touchRunner = () => {};
 
-  const dispatch = (key, req) => {
+  // `delayMs`: every answer of the forge waits this long (a real repo's forge takes 100 to 200 ms a request); GET /__rig/delay?ms=150 sets it at run time
+  const dispatch = async (key, req) => {
+    if (state.delayMs > 0 && !key.includes('/__rig/')) await new Promise((r) => setTimeout(r, state.delayMs));
+    return answer(key, req);
+  };
+  const answer = (key, req) => {
     const space = key.indexOf(' ');
     const method = key.slice(0, space);
     const target = key.slice(space + 1);
@@ -108,6 +113,10 @@ export async function startForgeWorld({ repoFiles, slugs, port, runner = 'online
     if (p === '/__rig/requests') {
       const real = forge.requests.filter((r) => !r.url.startsWith('/__rig/'));
       return { body: { count: real.length, last: real.slice(-Number(url.searchParams.get('last') || 0) || real.length).map((r) => `${r.method} ${r.url}`).slice(-50) } };
+    }
+    if (p === '/__rig/delay') {
+      if (url.searchParams.has('ms')) state.delayMs = Math.max(0, Math.min(5000, Number(url.searchParams.get('ms')) || 0));
+      return { body: { delayMs: state.delayMs } };
     }
     if (p === '/__rig/runner') {
       if (['online', 'offline', 'none'].includes(url.searchParams.get('state'))) { state.runner = /** @type {any} */ (url.searchParams.get('state')); touchRunner(); }

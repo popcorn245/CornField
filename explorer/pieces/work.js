@@ -162,7 +162,7 @@ export function mount(root, inst, options = {}) {
     ui.threadsOn = threadsOn;
     // On a phone Work is a sheet: it opens as a peek and displaces the node panel; folded to a stub it says its title and what waits on you (spec 0010 D7)
     registerSheet(inst, 'forge', panel, {
-      stub: () => { const n = fn.waitingNow().total; return { title: h.t('issuesAndPrs'), badge: n ? String(n) : '', label: workButtonName(h.t('issuesAndPrs'), n, h.t) }; },
+      stub: () => { const n = fn.waitingNow().total; return { title: h.t('workPanel'), badge: n ? String(n) : '', label: workButtonName(h.t('workPanel'), n, h.t) }; },
       away: () => fn.closeForge({ restoreFocus: false }),
     });
     fn.paintFilters();
