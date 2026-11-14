@@ -18,6 +18,9 @@ import { NODE_THEMES } from '../core/schema.js';
 import { WORK_KINDS, WORK_THEMES, workType } from '../core/schema.js';
 import { relativeTime } from './review-model.js';
 import { SPEC_STATE_WORDS } from './waiting-model.js';
+import { cornState } from './corn-state.js';
+import { escapeHtml as esc } from '../core/text.js';
+import { safeUrl } from './pieces/work-common.js';
 
 /** The words of a kind of work, singular and as a layer */
 export const KIND_WORDS = Object.freeze({ thread: 'Thread', issue: 'Issue', proposal: 'Proposal', run: 'Agent run', pull: 'Pull request', deploy: 'Deploy' });
@@ -212,7 +215,7 @@ function fitBoxOf(w, h, z, m, p, v) {
  * columns beside them. Only what is not hidden is laid out. Writes `x`, `y` and `labelText` on the nodes and returns the lanes behind them and the box the first fit shows.
  * @param {object[]} nodes the nodes of `workScene`
  * @param {{ phone?: boolean, width?: number, height?: number, padding?: number }} [opts] the map's size in px, and the engine's padding around a fit
- * @returns {{ lanes: object[], bounds: { x: number, y: number, w: number, h: number }, fit: { minX: number, maxX: number, minY: number, maxY: number, zoom: number } }}
+ * @returns {{ lanes: object[], order: string[], bounds: { x: number, y: number, w: number, h: number }, fit: { minX: number, maxX: number, minY: number, maxY: number, zoom: number } }}
  */
 export function layoutWork(nodes, { phone = false, width = 1200, height = 800, padding = phone ? 24 : 48 } = {}) {
   nameNodes(nodes, phone);
@@ -278,7 +281,7 @@ function layoutDesk(stages, drafts, code, v, p) {
     });
     out.push(lane(l.key, l.title, l.nodes.length, part.x, 0, part.w, g.h));
   }
-  return { lanes: out, bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
+  return { lanes: out, order: g.parts.flatMap((part) => part.l.nodes.map((n) => n.id)), bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
 
 function layoutPhone(stages, drafts, code, v, p) {
@@ -326,7 +329,7 @@ function layoutPhone(stages, drafts, code, v, p) {
     code.forEach((n, j) => { const col = Math.floor(j / g.codeRows); n.x = x0 + c.pad + (col + 0.5) * c.codeCell; n.y = g.room + CODE_R + (j % g.codeRows + (col % 2) * 0.5) * c.codeRow; });
     out.push(lane('code', CODE_LANE_TITLE, code.length, x0, 0, g.wCode, g.hCode));
   }
-  return { lanes: out, bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
+  return { lanes: out, order: [...g.parts.flatMap((part) => part.b.nodes.map((n) => n.id)), ...code.map((n) => n.id)], bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +444,39 @@ export function panelOf(node, nodes, edges, { now = Date.now() } = {}) {
   return { kind: KIND_WORDS[item.kind], tag: tagOf(item), title: node.title, color: WORK_THEMES[item.kind].color, pills, meta, links, says: saysOf(item), url: text(item.url) };
 }
 
+// ---------------------------------------------------------------------------
+//  The panel's markup: every word that came from the forge is escaped, every link goes through `safeUrl` (an http or https address, else no link)
+// ---------------------------------------------------------------------------
+const pill = (p) => `<span class="hx-forge-state${p.state ? ` hx-forge-state--${esc(p.state)}` : ''}" data-corn="state-pill"${cornState(p.state) ? ` data-corn-state="${esc(cornState(p.state))}"` : ''}>${esc(p.text)}</span>`;
+const dotOf = (kind, color) => { const c = typeof color === 'function' ? color(kind) : ''; return `<span class="hx-work-dot" data-corn="swatch" data-work-kind="${esc(kind || 'code')}" aria-hidden="true"${c ? ` data-style="background-color: ${esc(c)}"` : ''}></span>`; };
+const linkButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${esc(l.id)}">${esc(l.label)}</button>`;
+
+/**
+ * The node panel's markup for a piece of work (`panelOf`'s answer): its state, what it is connected to (each a button that selects that node), the checks of a pull request,
+ * the words saying what the action will do, "Open in Work" (the actions move to the node panel in step 3), and a link to the forge when the address is a web one.
+ * @param {ReturnType<typeof panelOf>} p
+ * @param {object} node
+ * @param {{ color?: (kind: string) => string, checks?: string }} [opts] `color`: a kind's colour as the map draws it; `checks`: the words of a pull request's checks
+ */
+export function workPanelHtml(p, node, { color = () => '', checks = '' } = {}) {
+  const url = safeUrl(p.url);
+  const links = p.links.length
+    ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
+    : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
+  const checked = node.item.kind === 'pull' ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Checks</div><div class="hx-fact-v" id="work-checks" data-corn="work-checks">${esc(checks)}</div></div>` : '';
+  const actions = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><button type="button" class="hx-btn hx-btn--primary hx-foot-btn" data-corn-kind="primary" data-work-action="open-in-work" data-id="${esc(node.id)}">Open in Work</button>${url ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(url)}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : ''}</div>`;
+  return `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p><p class="hx-faint">${esc(p.tag)}${p.meta ? ` · ${esc(p.meta)}` : ''}</p></div>${links}${checked}${actions}`;
+}
+
+/** The node panel's section for a node of code in the Work view: the work that touches it, and "Show on the map" (a planned node is not on the map yet) */
+export function codePanelHtml(node, touching, { color = () => '' } = {}) {
+  const list = touching.length
+    ? `<ul class="hx-work-links" data-corn="work-links">${touching.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dotOf(l.work, color)}${linkButton(l)}</li>`).join('')}</ul>`
+    : '<p class="hx-faint">No work touches it now.</p>';
+  const show = node.planned ? '' : `<button type="button" class="hx-btn hx-btn--secondary hx-foot-btn" data-corn-kind="secondary" data-work-action="show-on-map" data-id="${esc(node.id)}">Show on the map</button>`;
+  return `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Work</div><div class="hx-fact-v">${node.planned ? '<p class="hx-faint">Planned: a proposal adds it, and the map does not hold it yet.</p>' : ''}${list}${show}</div></div>`;
+}
+
 /** The work that touches a node of code, as the node panel lists it: `{ rel, id, label, work }` */
 export function touchedBy(node, nodes, edges) {
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -455,6 +491,36 @@ export function touchedBy(node, nodes, edges) {
 
 /** The checks line of a pull request, from `GET /api/forge/pulls/<n>`'s `checks` ("1 failed, 1 still running", "All 3 passed", "No checks") */
 export { checksWords } from './forge-panel-model.js';
+
+// ---------------------------------------------------------------------------
+//  The keyboard (N and P step through the lanes; an arrow goes to the nearest node that way)
+// ---------------------------------------------------------------------------
+
+/** The node an arrow goes to from `from`: the nearest shown node that way, a little more for each step aside; null when there is none (and the first of `order` when nothing is selected) */
+export function arrowTarget(nodes, from, key) {
+  const dir = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[key];
+  if (!dir) return null;
+  const shown = nodes.filter((n) => !n.hidden && n.x !== undefined);
+  if (!from) return null;
+  let best = null;
+  let bestScore = Infinity;
+  for (const n of shown) {
+    if (n === from || n.id === from.id) continue;
+    const along = (n.x - from.x) * dir[0] + (n.y - from.y) * dir[1];
+    if (along < 1) continue;
+    const aside = Math.abs((n.x - from.x) * dir[1]) + Math.abs((n.y - from.y) * dir[0]);
+    const score = along + 3 * aside;
+    if (score < bestScore) { best = n; bestScore = score; }
+  }
+  return best;
+}
+
+/** What a screen reader hears when the keyboard lands on a node of the Work view: its name, its kind and state, what waits, and its place in the lanes */
+export function landingWords(node, index, count) {
+  if (!node.work) return `${node.label}, code${node.planned ? ', planned' : ''}, ${node.touches || 0} ${node.touches === 1 ? 'piece' : 'pieces'} of work touch it, ${index + 1} of ${count}`;
+  const item = node.item;
+  return `${node.label}, ${KIND_WORDS[item.kind].toLowerCase()}${node.draft ? ' (a local draft)' : ''}, ${stateWordsOf(item).toLowerCase()}${node.waiting ? ', waiting on you' : ''}, ${index + 1} of ${count}`;
+}
 
 // ---------------------------------------------------------------------------
 //  Addresses and search
@@ -517,7 +583,7 @@ export function openedWords({ work, code, waiting }) {
 // ---------------------------------------------------------------------------
 
 /** What the Work view keeps on the state (`state.work`): the answer, the scene made of it, the layers, the toggle, and the map it stands in for while it is open */
-export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null });
+export const newWorkState = () => ({ status: 'idle', graph: null, nodes: [], edges: [], lanes: [], counts: { work: 0, code: 0, waiting: 0 }, problems: [], layers: startLayers(), waiting: false, saved: null, bounds: null, fit: null, order: [], updating: false, stale: '', lastError: '' });
 
 /** Makes the scene of an answer (`workScene`), keeps the node a selection named, and sets the filters; the layout is `applyWorkLayout`'s */
 export function setWorkGraph(state, graph, mapNodes) {
@@ -573,6 +639,7 @@ export function applyWorkLayout(state, { phone = false } = {}) {
   if (!w) return;
   const laid = layoutWork(w.nodes, { phone, width: state.width || (phone ? 390 : 1200), height: state.height || (phone ? 760 : 800), padding: (state.width || 1200) < 640 ? 24 : 48 }); // the engine's own padding around a fit (engine/render.js `fitPadding`)
   w.lanes = laid.lanes;
+  w.order = laid.order;
   w.bounds = laid.bounds;
   w.fit = laid.fit;
   state.workLanes = w.lanes;

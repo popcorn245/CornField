@@ -19,6 +19,7 @@
 .hx-work-lanes { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; }
 .hx-work-lanes[hidden] { display: none; }
 .hx-work-lane-title { position: absolute; display: flex; gap: var(--corn-space-2); align-items: baseline; max-width: 100%; overflow: hidden; white-space: nowrap; font-size: var(--corn-text-xs); font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--corn-text-2); }
+.hx-work-lane-title.is-held { padding: 0 var(--corn-space-2); border-radius: var(--corn-radius-sm); background: color-mix(in srgb, var(--corn-surface-1) 85%, transparent); } /* held under the toggles over the lane's nodes: a ground of its own */
 .hx-work-lane-title > :first-child { overflow: hidden; text-overflow: ellipsis; }
 .hx-work-lane-count { flex: none; font-weight: 600; letter-spacing: 0; }
 .hx-work-busy { margin-left: var(--corn-space-2); font-size: var(--corn-text-xs); color: var(--corn-text-2); }

@@ -120,10 +120,9 @@ describe('D1, D2: one number, the same everywhere', () => {
     mount();
     await settle();
     // specs to decide: 21, 22, and 25 (approved, then changed) = 3; plus the run waiting = 4
-    expect($('forge-btn-waiting').hidden).toBe(false);
-    expect($('forge-btn-waiting').textContent).toBe('4');
-    expect($('forge-btn-waiting').dataset.corn).toBe('waiting-badge');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work, 4 waiting on you');
+    // the number is the view switch's Work (work-view.js) and the page's title; this button opens the panel and says so (spec 0012 D1), with no badge
+    expect($('forge-btn-waiting')).toBeNull();
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel');
     const specs = q('[data-forge-kind="specs"] .hx-forge-count');
     const runs = q('[data-forge-kind="work"] .hx-forge-count');
     expect([specs.textContent, specs.dataset.corn]).toEqual(['3', 'waiting-badge']);
@@ -141,8 +140,8 @@ describe('D1, D2: one number, the same everywhere', () => {
     fakeServer({ runs: [RUN(2, 'working')], proposals: [spec(23, '0023-approved', { review: OK('approved', 2) }), spec(24, '0024-sent', { review: OK('notes', 26) }), spec(26, '0026-d', { draft: true })] });
     mount();
     await settle();
-    expect($('forge-btn-waiting').hidden).toBe(true);
-    expect($('forge-btn').getAttribute('aria-label')).toBe('Work');
+    expect($('forge-btn-waiting')).toBeNull();
+    expect($('forge-btn').getAttribute('aria-label')).toBe('Work panel');
     expect(q('[data-forge-kind="specs"] .hx-forge-count').dataset.corn).toBe('count');
     expect(q('[data-forge-kind="specs"] .hx-forge-count').textContent).toBe('3');
     expect(q('[data-forge-kind="work"] .hx-forge-count').textContent).toBe('1');
@@ -158,7 +157,6 @@ describe('D1, D2: one number, the same everywhere', () => {
     server.setProposals([spec(21, '0021-old', { review: OK('approved', 1) })]);
     click(q('[data-action="toggle-forge"]'));
     await settle();
-    expect($('forge-btn-waiting').hidden).toBe(true);
     expect(document.title).toBe('Bucket');
   });
 
@@ -247,7 +245,7 @@ describe('D3, D4: the Specs groups and each row\'s review state', () => {
     expect(row.querySelector('[data-corn="review-state"]').textContent).toBe('Review state unknown');
     expect(row.closest('li').textContent).toContain('GitHub did not answer.');
     expect(row.closest('li').querySelector('[data-action="retry-forge"]').textContent).toBe('Try again');
-    expect($('forge-btn-waiting').textContent).toBe('1'); // only the one that is known to wait
+    expect(q('[data-forge-kind="specs"] .hx-forge-count').textContent).toBe('1'); // only the one that is known to wait
     server.setProposals([spec(21, '0021-x', { review: OK('approved', 1) }), spec(22, '0022-y')]);
     click(row.closest('li').querySelector('[data-action="retry-forge"]'));
     await settle();

@@ -755,7 +755,8 @@ describe('two Work panels in one document (step 6)', () => {
     expect(document.querySelectorAll('#forge-panel')).toHaveLength(2);
     expect(document.querySelectorAll('#forge-btn')).toHaveLength(2);
     expect(q(a, '#forge-btn').hidden).toBe(false);
-    expect(q(a, '#forge-btn-waiting').textContent).toBe('1');
+    expect(q(a, '#forge-btn-waiting')).toBeNull(); // the number is the view switch's, not this button's
+    expect(q(a, '#forge-btn').getAttribute('aria-label')).toBe('Work panel');
     for (const one of [a, b]) for (const el of one.root.querySelectorAll('[data-corn]')) expect(el.getAttribute('part'), el.outerHTML.slice(0, 80)).toBe(el.getAttribute('data-corn'));
   });
 
@@ -807,7 +808,7 @@ describe('two Work panels in one document (step 6)', () => {
     click(q(a, '[data-forge-kind="work"]'));
     await settle();
     expect(q(a, '#forge-runs-list').textContent).toContain('Plan 21 ready');
-    expect(q(b, '#forge-btn-waiting').textContent).toBe('1');
+    expect(q(b, '[data-forge-kind="work"] .hx-forge-count').textContent).toBe('1');
     click(q(a, `[data-run-answer="continue"][data-run-id="${ID(21)}"]`));
     await settle();
     expect(sa.calls.filter((c) => c.method === 'POST').map((c) => [c.path, c.body])).toEqual([[`/api/agent-runs/${ID(21)}/answer`, { action: 'continue' }]]);

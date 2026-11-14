@@ -1,6 +1,6 @@
 // The Work view's pure half (spec 0012 D2 to D5, D8): the scene of an answer, the layout, the filters, the layers' rows, the panel's words, the addresses.
 import { describe, it, expect } from 'vitest';
-import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
+import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, workPanelHtml, codePanelHtml, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
 import { buildScene, isNodeVisible } from '../../explorer/scene.js';
 import { WORK_KINDS, WORK_THEMES } from '../../core/schema.js';
 import { createState } from '../../explorer/instance-state.js';
@@ -334,5 +334,44 @@ describe('addresses (D8)', () => {
     expect(nodeForAddress(workAddress('?spec=0100-flow'), nodes)).toBe('proposal:0100-flow');
     expect(nodeForAddress(workAddress('?run=run-0123456789ABCDEFGHIJKLMNOP'), nodes)).toBe('run:run-0123456789ABCDEFGHIJKLMNOP');
     expect(nodeForAddress(workAddress('?issue=999'), nodes)).toBeNull();
+  });
+});
+
+describe('the panel keeps the forge\'s words as text and its links as web links (spec 0012, security)', () => {
+  const hostile = {
+    nodes: [
+      { id: 'issue:7', kind: 'issue', stage: 'talk', title: '<img src=x onerror=alert(1)>"\'', state: 'open', open: true, waiting: false, number: 7, author: '<b>me</b>', url: 'javascript:alert(1)', updated: '2026-11-12T00:00:00Z' },
+      { id: 'pull:8', kind: 'pull', stage: 'build', title: '<script>alert(2)</script>', state: 'open', open: true, waiting: false, number: 8, url: 'https://forge.example.test/pull/8"><script>x</script>', updated: '2026-11-12T00:00:00Z' },
+      { id: 'run:run-0123456789ABCDEFGHIJKLMNOP', kind: 'run', stage: 'build', title: 'ok', state: 'done', open: false, waiting: false, runId: 'run-0123456789ABCDEFGHIJKLMNOP', url: 'data:text/html,<b>x</b>', updated: '2026-11-12T00:00:00Z' },
+      { id: 'deploy:1', kind: 'deploy', stage: 'ship', title: 'd', state: 'success', open: false, waiting: false, deployId: 1, url: null, updated: '2026-11-12T00:00:00Z' },
+    ],
+    edges: [{ from: 'issue:7', to: 'pull:8', rel: 'closes' }],
+  };
+  const html = (id) => {
+    const { nodes, edges } = workScene(hostile, map);
+    const node = nodes.find((n) => n.id === id);
+    return workPanelHtml(panelOf(node, nodes, edges), node, { checks: '<i>checks</i>' });
+  };
+  it('escapes every title, author and label', () => {
+    for (const id of ['issue:7', 'pull:8']) {
+      const out = html(id);
+      expect(out).not.toMatch(/<img|<script|<b>|<i>/);
+      expect(out).toContain('&lt;');
+    }
+  });
+  it('links to the forge only for an http or https address, and the address cannot leave its attribute', () => {
+    expect(html('issue:7')).not.toContain('href=');
+    expect(html('run:run-0123456789ABCDEFGHIJKLMNOP')).not.toContain('href=');
+    expect(html('deploy:1')).not.toContain('href=');
+    const out = html('pull:8');
+    expect(out).toMatch(/href="https:\/\/forge\.example\.test\/pull\/8&quot;&gt;&lt;script&gt;x&lt;\/script&gt;"/);
+    expect(out).toContain('rel="noreferrer"');
+    expect((out.match(/href=/g) || []).length).toBe(1);
+  });
+  it('escapes the code panel too', () => {
+    const { nodes } = workScene(hostile, [{ id: '"><x>', label: '<u>x</u>', type: 'page', x: 0, y: 0, r: 9 }]);
+    const out = codePanelHtml({ id: '"><x>', label: '<u>x</u>' }, [{ rel: 'changed by', id: 'pull:8', label: '<script>', work: 'pull' }]);
+    expect(out).not.toMatch(/<script|<x>|<u>/);
+    expect(nodes.length).toBeGreaterThan(0);
   });
 });

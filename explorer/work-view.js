@@ -28,15 +28,14 @@ import { t } from './engine/strings.js';
 import { mount as mountStatus } from './pieces/status.js';
 import { fitGraphToViewport, fitPadding, onPaint, render } from './render.js';
 import { isPhone } from './sheets.js';
-import { escapeHtml as esc } from '../core/text.js';
 import { WORK_KINDS, WORK_THEMES } from '../core/schema.js';
 import { workButtonName } from './waiting-model.js';
-import { cornState } from './corn-state.js';
+import { stepFrom } from './keyboard-model.js';
 import { checksWords, pullUrl } from './forge-panel-model.js';
-import { RUNS_POLL_MS, safeUrl } from './pieces/work-common.js';
+import { RUNS_POLL_MS } from './pieces/work-common.js';
 import { openWorkAt } from './forge-panel.js';
 import {
-  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, applyWorkLayout, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress,
+  CODE_LAYER, DRAFT_LAYER, KIND_WORDS, applyFilters, arrowTarget, landingWords, applyWorkLayout, codePanelHtml, layerRowsOf, newWorkState, nodeForAddress, openedWords, panelOf, setWorkGraph, showWork, touchedBy, workAddress, workPanelHtml,
 } from './work-model.js';
 
 const GRAPH_URL = '/api/forge/work-graph';
@@ -69,6 +68,7 @@ export function initWorkView(opts = {}) {
     wired = true;
     const i = inst();
     document.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey, true); // before the map's own keys: in this view N and P step through the lanes, and an arrow goes to the nearest node that way
     i.on('view', syncWork);
     i.on('layers', refilter);
     i.on('work:open', ({ id }) => openWork({ select: id }));
@@ -105,7 +105,7 @@ function mount() {
   bar.hidden = true;
   bar.innerHTML = '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="all" aria-pressed="true">All work</button>'
     + '<button type="button" class="hx-work-chip" data-corn="work-chip" data-corn-kind="quiet" data-work-show="waiting" aria-pressed="false">Waiting on you</button>'
-    + '<span class="hx-work-busy" data-corn="work-busy" hidden>Updating…</span>';
+    + '<span class="hx-work-busy" hidden>Updating…</span>';
   const note = document.createElement('p');
   note.className = 'hx-work-note';
   note.dataset.corn = 'work-note';
@@ -122,7 +122,7 @@ function mount() {
   loading.dataset.corn = 'work-loading';
   loading.hidden = true;
   loading.innerHTML = `<div class="hx-work-skeleton" aria-hidden="true">${['Talk', 'Decide', 'Build', 'Ship', 'Code it touches'].map((name) => `<div class="hx-work-skel-lane"><span class="hx-work-lane-title">${name}</span><i></i><i></i><i></i><i></i></div>`).join('')}</div>`
-    + '<p class="hx-work-loading-text" role="status" data-corn="work-loading-text">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
+    + '<p class="hx-work-loading-text" role="status">Reading the work from the forge. A big repository can take several seconds the first time; the page works meanwhile.</p>';
   stage.append(lanes, loading, bar, note);
   els = { stage, bar, all: bar.children[0], waiting: bar.children[1], busy: bar.children[2], note, lanes, loading };
   if (offPaint) offPaint();
@@ -143,7 +143,6 @@ function paintLanes(scene, camera) {
     laneEls = w.lanes.map((l) => {
       const el = document.createElement('div');
       el.className = 'hx-work-lane-title';
-      el.dataset.corn = 'work-lane-title';
       const name = document.createElement('span');
       name.textContent = l.name;
       const count = document.createElement('span');
@@ -155,23 +154,26 @@ function paintLanes(scene, camera) {
     });
   }
   const phone = isPhone();
-  const top = phone ? 0 : STICKY_TOP;
+  const top = phone ? STICKY_TOP_PHONE : STICKY_TOP;
   for (const { el, lane } of laneEls) {
     const left = camera.x + lane.x * camera.zoom;
     const right = left + lane.w * camera.zoom;
     const topPx = camera.y + lane.y * camera.zoom;
     const bottomPx = topPx + lane.h * camera.zoom;
-    const seen = right > 0 && left < els.stage.clientWidth && bottomPx > 40 && topPx < els.stage.clientHeight;
+    // a phone's title stays at its lane's top and goes when that is under the toggles; a desktop's is held under them while the lane is in view
+    const seen = right > 0 && left < els.stage.clientWidth && bottomPx > 40 && topPx < els.stage.clientHeight && !(phone && topPx + 8 < top);
     el.style.visibility = seen ? 'visible' : 'hidden';
     if (!seen) continue;
     const y = phone ? topPx + 8 : Math.min(Math.max(topPx + 10, top), bottomPx - 44);
+    el.classList.toggle('is-held', !phone && y > topPx + 12);
     el.style.maxWidth = `${Math.max(40, right - left - 12)}px`;
     el.style.top = `${Math.round(y)}px`;
     if (phone) { el.style.left = `${Math.round(Math.max(left, 0) + 10)}px`; el.style.transform = 'none'; } else { el.style.left = `${Math.round((left + right) / 2)}px`; el.style.transform = 'translateX(-50%)'; }
   }
 }
-/** The line the lanes' titles hold under, in px from the top of the stage: below the toggles */
+/** The line the lanes' titles hold under, in px from the top of the stage: below the toggles (a phone's are on a second row, under the Layers chip) */
 const STICKY_TOP = 58;
+const STICKY_TOP_PHONE = 108;
 
 function paintBar() {
   if (!els) return;
@@ -375,32 +377,19 @@ function setWaiting(on_) {
 // ---------------------------------------------------------------------------
 //  The node panel's words for a node
 // ---------------------------------------------------------------------------
-const pill = (p) => `<span class="hx-forge-state${p.state ? ` hx-forge-state--${esc(p.state)}` : ''}" data-corn="state-pill"${cornState(p.state) ? ` data-corn-state="${esc(cornState(p.state))}"` : ''}>${esc(p.text)}</span>`;
 /** The kind's colour as the map draws it: the theme's token, else the default (the style goes on through `data-style`, which a host's CSP allows) */
 const colorOf = (kind) => { const v = mapStyleOf(inst()).get().values[workToken(kind)]; return /^#[0-9a-f]{3,8}$/i.test(v || '') ? v : WORK_THEMES[kind] ? WORK_THEMES[kind].color : ''; };
-const dot = (kind) => `<span class="hx-work-dot" data-corn="swatch" data-work-kind="${esc(kind || 'code')}" aria-hidden="true"${colorOf(kind) ? ` data-style="background-color: ${esc(colorOf(kind))}"` : ''}></span>`;
-const linkButton = (l) => `<button type="button" class="hx-linkbtn" data-corn="node-link" data-action="select-node" data-id="${esc(l.id)}">${esc(l.label)}</button>`;
 
-/** What the node panel shows for a node while the Work view is open (`work:panel`): a piece of work, replaced; a node of code, with the work that touches it first */
+/** What the node panel shows for a node while the Work view is open (`work:panel`): a piece of work, replaced; a node of code, with the work that touches it first (work-model.js builds the markup) */
 function panelFor(node) {
   if (!on() || !node) return undefined;
   const w = work();
   if (node.work) {
     const p = panelOf(node, w.nodes, w.edges);
-    const links = p.links.length
-      ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v"><ul class="hx-work-links" data-corn="work-links">${p.links.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dot(l.work)}${linkButton(l)}${l.planned ? ' <span class="hx-faint">planned</span>' : ''}</li>`).join('')}</ul></div></div>`
-      : '<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Connected</div><div class="hx-fact-v hx-faint">Nothing it is linked to is drawn.</div></div>';
-    const checks = node.item.kind === 'pull' ? `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Checks</div><div class="hx-fact-v" id="work-checks" data-corn="work-checks">${esc(checksLine(node))}</div></div>` : '';
-    const open = `<div class="hx-work-actions" data-corn="work-actions"><p class="hx-faint">${esc(p.says)}</p><button type="button" class="hx-btn hx-btn--primary hx-foot-btn" data-corn-kind="primary" data-work-action="open-in-work" data-id="${esc(node.id)}">Open in Work</button>${safeUrl(p.url) ? `<a class="hx-btn hx-btn--quiet hx-foot-btn" data-corn-kind="quiet" data-corn="open-link" href="${esc(safeUrl(p.url))}" target="_blank" rel="noreferrer">Open on the forge ↗</a>` : ''}</div>`;
     if (node.item.kind === 'pull') loadChecks(node);
-    return { replace: true, badge: p.kind, title: p.title, html: `<div class="hx-work-head" data-corn="work-head"><p class="hx-work-pills" data-corn="work-pills">${p.pills.map(pill).join(' ')}</p>${p.meta ? `<p class="hx-faint">${esc(p.tag)} · ${esc(p.meta)}</p>` : `<p class="hx-faint">${esc(p.tag)}</p>`}</div>${links}${checks}${open}` };
+    return { replace: true, badge: p.kind, title: p.title, html: workPanelHtml(p, node, { color: colorOf, checks: checksLine(node) }) };
   }
-  const touching = touchedBy(node, w.nodes, w.edges);
-  const list = touching.length
-    ? `<ul class="hx-work-links" data-corn="work-links">${touching.map((l) => `<li data-corn="work-link"><span class="hx-work-rel">${esc(l.rel)}</span>${dot(l.work)}${linkButton(l)}</li>`).join('')}</ul>`
-    : '<p class="hx-faint">No work touches it now.</p>';
-  const show = node.planned ? '' : `<button type="button" class="hx-btn hx-btn--secondary hx-foot-btn" data-corn-kind="secondary" data-work-action="show-on-map" data-id="${esc(node.id)}">Show on the map</button>`;
-  return { replace: false, html: `<div class="hx-fact" data-corn="section"><div class="hx-fact-k">Work</div><div class="hx-fact-v">${node.planned ? '<p class="hx-faint">Planned: a proposal adds it, and the map does not hold it yet.</p>' : ''}${list}${show}</div></div>` };
+  return { replace: false, html: codePanelHtml(node, touchedBy(node, w.nodes, w.edges), { color: colorOf }) };
 }
 
 /** What the checks of a pull request's head say, once read; "Reading the checks…" until then */
@@ -422,6 +411,27 @@ async function loadChecks(node) {
   pullDetail.set(n, { text });
   const el = document.getElementById('work-checks');
   if (el && state.selectedNode && state.selectedNode.id === node.id) el.textContent = text;
+}
+
+// ---------------------------------------------------------------------------
+//  Keys (the map's own are for the other views: Shift and an arrow still pan, the rest are the map's)
+// ---------------------------------------------------------------------------
+function onKey(e) {
+  if (!on() || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !state.canvas || e.target !== state.canvas) return;
+  const w = work();
+  const shown = w.order.map((id) => state.nodes.find((n) => n.id === id)).filter((n) => n && !n.hidden);
+  if (!shown.length) return;
+  const from = state.selectedNode;
+  let to = null;
+  if (e.key === 'n' || e.key === 'N' || e.key === ']') to = stepFrom(shown, from && from.id, 1);
+  else if (e.key === 'p' || e.key === 'P' || e.key === '[') to = stepFrom(shown, from && from.id, -1);
+  else if (e.key.startsWith('Arrow') && !e.shiftKey) to = from ? arrowTarget(state.nodes, from, e.key) : shown[0];
+  else return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (!to) { announce(inst(), 'No node that way.'); return; }
+  selectNode(inst(), to, { frame: true, source: 'keyboard' });
+  announce(inst(), landingWords(to, shown.indexOf(to), shown.length));
 }
 
 // ---------------------------------------------------------------------------

@@ -638,7 +638,7 @@ function buildNodes(state, subgraph) {
       ...(greyed ? { greyed: true } : {}), // not involved in the change: its colour is taken away at draw time, glyph and letters stay (map-style.js)
       selected, match, current, connected,
       degree: node.degree || 0,
-      label: shown.labelText && !selected ? shown.labelText : shown.label, // a node of the Work view is drawn as the start of its name, whole when selected (work-model.js)
+      label: shown.labelText || shown.label, // a node of the Work view is drawn as the start of its name; the whole of it is the node panel's (work-model.js)
       labelSize: big && !greyed ? 12 : 11, // a greyed node's label recedes (issue #232): plain, at the least size, placed last (labels.js)
       labelBold: big && !greyed,
       labelAlpha: greyed && !(subgraph && !connected) ? GREY_LABEL_ALPHA[state.theme === 'light' ? 'light' : 'dark'] // a greyed node's label: at the dimmed-label floor on either ground

@@ -91,7 +91,7 @@ describe('the static markup', () => {
     applyBranding(document, { title: 'x', links: [], signIn: false, strings: ALL });
     expect($('legend-toggle-btn').textContent).toContain('«layers»'); // its name is its text
     expect($('preset-dataflow-btn').textContent).toContain('«dataFlow»');
-    expect($('forge-btn').getAttribute('aria-label')).toBe('«issuesAndPrs»');
+    expect($('forge-btn').getAttribute('aria-label')).toBe('«workPanel»');
     expect($('node-search').getAttribute('placeholder')).toBe('«searchPlaceholder»');
     expect(document.querySelector('[data-view="diff"]').textContent).toBe('«diff»');
     expect(document.querySelector('[data-forge-kind="pulls"]').textContent).toBe('«tabPulls»');
