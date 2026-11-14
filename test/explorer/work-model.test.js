@@ -189,12 +189,17 @@ describe('layers, and Waiting on you (D3, D4)', () => {
     const laid = layoutWork(nodes, { width: 1440, height: 800 });
     expect(laid.lanes.map((l) => l.name)).not.toContain('Drafts');
     expect(laid.lanes.find((l) => l.name === 'Decide').count).toBe(1);
-    // on: drawn, in a lane of their own beside Decide
+    // on: drawn, in a band of their own under the row of lanes
     applyFilters(nodes, edges, { layers: { ...startLayers(), [DRAFT_LAYER]: true } });
     expect(draft.hidden).toBe(false);
     const on = layoutWork(nodes, { width: 1440, height: 800 });
-    expect(on.lanes.map((l) => l.name)).toEqual(['Talk', 'Decide', 'Drafts', 'Build', 'Ship', 'Code it touches']);
-    expect(on.lanes.find((l) => l.name === 'Drafts').count).toBe(1);
+    expect(on.lanes.map((l) => l.name)).toEqual(['Talk', 'Decide', 'Build', 'Ship', 'Code it touches', 'Drafts']);
+    const band = on.lanes.find((l) => l.name === 'Drafts');
+    expect(band.count).toBe(1);
+    // under the row, as wide as it, and the first fit is the row's: the drafts do not widen it or shrink its zoom
+    expect(band.y).toBeGreaterThanOrEqual(Math.max(...on.lanes.filter((l) => l !== band).map((l) => l.y + l.h)));
+    expect(band.w).toBeCloseTo(Math.max(...on.lanes.filter((l) => l !== band).map((l) => l.x + l.w)), 5);
+    expect(on.fit.zoom).toBeCloseTo(laid.fit.zoom, 5);
     // the proposals' layer off leaves the drafts to their own
     applyFilters(nodes, edges, { layers: { ...startLayers(), [DRAFT_LAYER]: true, 'work-proposal': false } });
     expect(draft.hidden).toBe(false);

@@ -254,8 +254,8 @@ async function main() {
     await closeMenu();
     await page.mouse.click(700, 880); await sleep(300);
     s = await snap();
-    const draftsOn = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { lanes: state.work.lanes.map((l) => `${l.name} ${l.count}`), shown: state.nodes.filter((n) => n.draft && !n.hidden).length }; });
-    check('Drafts on draws them in a lane of their own beside Decide', draftsOn.shown > 50 && draftsOn.lanes.some((l) => /^Drafts \d+/.test(l)) && draftsOn.lanes[2].startsWith('Drafts'), draftsOn.lanes.join(' | '));
+    const draftsOn = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { band: (() => { const d = state.work.lanes.find((l) => l.name === 'Drafts'); const row = state.work.lanes.filter((l) => l.name !== 'Drafts'); return !!d && d.y >= Math.max(...row.map((l) => l.y + l.h)) && d.w >= Math.max(...row.map((l) => l.x + l.w)) - 1; })(), lanes: state.work.lanes.map((l) => `${l.name} ${l.count}`), shown: state.nodes.filter((n) => n.draft && !n.hidden).length }; });
+    check('Drafts on draws them in a band of their own under the lanes, which stay as wide as before', draftsOn.shown > 50 && draftsOn.lanes.some((l) => /^Drafts \d+/.test(l)) && draftsOn.lanes[draftsOn.lanes.length - 1].startsWith('Drafts') && draftsOn.band, draftsOn.lanes.join(' | '));
     names = await namesOnScreen(page);
     check('Drafts on: the names that are drawn are on the screen and not over each other', names.count > 40 && names.off.length === 0 && names.over.length === 0, `${names.count} names, zoom ${names.zoom.toFixed(2)}; off ${names.off.join()} over ${names.over.slice(0, 3).join()}`);
     check('Drafts on: the Layers chip says 8 of 8', /8 of 8/.test(await page.locator('.hx-layers-chip').innerText()));
@@ -267,6 +267,15 @@ async function main() {
 
     // search
     const search = async (q) => { await page.click('#node-search'); await page.fill('#node-search', q); await sleep(700); const t = await page.locator('[data-corn="search-result"]').allInnerTexts(); await page.fill('#node-search', ''); await page.keyboard.press('Escape'); return t.join(' | ').replace(/\s+/g, ' '); };
+    const perLane = await page.evaluate(async () => {
+      const { state } = await import('/explorer/state.js'); const { getScene } = await import('/explorer/render.js'); const { placeLabels } = await import('/explorer/labels.js'); const { FONT_NODE } = await import('/explorer/scene.js');
+      const ctx = document.createElement('canvas').getContext('2d');
+      const placed = new Set(placeLabels(getScene(), state.camera.zoom, { measure: (t, sz, b) => { ctx.font = `${b ? 'bold ' : ''}${sz}px ${FONT_NODE}`; return ctx.measureText(t).width; } }).map((p) => p.id));
+      const out = {};
+      for (const n of state.nodes.filter((x) => x.work && !x.hidden && !x.draft)) { out[n.stage] = out[n.stage] || [0, 0]; out[n.stage][1]++; if (placed.has(n.id)) out[n.stage][0]++; }
+      return out;
+    });
+    check('Drafts on: every name of Talk, Decide, Build and Ship is still placed at the first fit, without zooming', Object.values(perLane).every(([placed, all]) => placed === all) && names.zoom > 0.55, `${JSON.stringify(perLane)}, zoom ${names.zoom.toFixed(2)}`);
     check('search finds #21 while in the Work view', /0100|#21/.test(await search('#21')));
     check('search finds PR 21', /0100|#21/.test(await search('PR 21')));
     check('search finds a slug', /0100/.test(await search('0100-new-flow-across-apps')));
