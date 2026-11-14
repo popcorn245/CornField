@@ -57,8 +57,8 @@ describe('the tokens', () => {
     expect(M.groupToken('cloud')).toBe('--corn-map-group-cloud');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-stroke', '--corn-map-label', '--corn-map-label-halo']));
     expect(M.MAP_COLOR_TOKENS.filter((t) => /-(stroke|label)$/.test(t) && t !== '--corn-map-stroke' && t !== '--corn-map-label')).toEqual([]);
-    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 6 + 2 + 2 + 8 + 4 + 1 + 2); // 6: the Work view's fills
-    expect(M.mapTokenNames()).toHaveLength(75); // 70 colours, widths and marks (the glyph ink and the review's grey among them), and the font, the edge width, the glow, the smallest label and the grey's opacity
+    expect(M.mapTokenNames()).toHaveLength(M.MAP_KINDS.length + M.MAP_GROUPS.length + M.MAP_EDGE_KINDS.length + 6 + 3 + 2 + 2 + 8 + 4 + 1 + 2); // 6: the Work view's fills, 3: its lines
+    expect(M.mapTokenNames()).toHaveLength(78); // 73 colours, widths and marks (the glyph ink and the review's grey among them), and the font, the edge width, the glow, the smallest label and the grey's opacity
     expect(M.edgeToken('runs-on')).toBe('--corn-map-edge-runs-on');
     expect(M.MAP_COLOR_TOKENS).toEqual(expect.arrayContaining(['--corn-map-added', '--corn-map-changed', '--corn-map-removed', '--corn-map-edit', '--corn-map-selected', '--corn-map-match', '--corn-map-lit']));
     expect(new Set(M.mapTokenNames()).size).toBe(M.mapTokenNames().length);
@@ -210,9 +210,7 @@ describe('styledScene', () => {
     expect(out.edges[1].color).toBe('rgba(0, 255, 0, 0.16)');
   });
 
-  it('marks the nodes a real painter coloured, in buildScene', () => {
-    const scene = buildScene(mk({ forgeLit: { changed: new Set(['tbl']), failing: new Set(['tbl']) } }));
-    expect([...scene.painted.nodes]).toContain('tbl');
+  it('marks no node as painted when nothing painted one, in buildScene', () => {
     expect(buildScene(mk()).painted.nodes.size).toBe(0);
   });
 

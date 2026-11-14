@@ -36,7 +36,7 @@
  */
 
 import { NODE_THEMES } from '../../core/schema.js';
-import { WORK_KINDS } from '../../core/schema.js';
+import { WORK_KINDS, WORK_EDGES } from '../../core/schema.js';
 import { parseColor } from '../theme-model.js';
 import { cssColor, rgbaText } from '../css-color.js';
 export { cssColor };
@@ -88,6 +88,8 @@ export const ICON_URL_PREFIX = '/cornfield/theme/assets/';
 export const nodeToken = (kind) => `--corn-map-node-${kind}`;
 /** The fill token of a kind of work in the Work view (spec 0012 D2) */
 export const workToken = (kind) => `--corn-work-${kind}`;
+/** The colour token of a line of the Work view (`work`, `code`, `adds`) */
+export const workEdgeToken = (name) => `--corn-work-edge-${name}`;
 export const groupToken = (group) => `--corn-map-group-${group}`;
 /** The fill token of a finer kind: `--corn-map-kind-service-timer`, or null for a kind that cannot be a part of a name (core/layers.js) */
 export const kindToken = (type, kind) => mapKindToken(type, kind);
@@ -99,6 +101,7 @@ export const MAP_COLOR_TOKENS = Object.freeze([
   ...MAP_KINDS.map(nodeToken),
   ...MAP_GROUPS.map(groupToken),
   ...WORK_KINDS.map(workToken),
+  ...WORK_EDGES.map(workEdgeToken),
   STROKE_TOKEN,
   LABEL_TOKEN,
   LABEL_HALO_TOKEN,

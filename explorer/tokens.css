@@ -199,6 +199,10 @@
   --corn-work-run: auto;
   --corn-work-pull: auto;
   --corn-work-deploy: auto;
+  /* …and its lines: a link between work, a link to code, and what a proposal adds (core/schema.js WORK_EDGE_THEMES) */
+  --corn-work-edge-work: auto;
+  --corn-work-edge-code: auto;
+  --corn-work-edge-adds: auto;
   /* Node fill by group */
   --corn-map-group-app: auto;
   --corn-map-group-pkg: auto;
