@@ -143,7 +143,14 @@ export function install(ctx) {
     const land = block
       ? `<button type="button" class="hx-btn hx-btn--approve" disabled data-corn-kind="approve">${escHtml(t('landIt'))}</button>`
       : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
-    const act = `<div class="hx-forge-cta">${land}${url ? `<a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${approvalWarning(ui.detail) ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(approvalWarning(ui.detail))}</p>` : ''}`;
+    // A spec pull request older than the graph's 14 days is a plain pull request here, with no Review of its own: its proposals that are not approved get one, found by their slug in the
+    // proposals list (the node panel of one the graph holds has it already: pieces/work-specs.js). A proposal the list does not hold is named in the warning instead.
+    const reviewable = ui.item && ui.item.kind === 'pull' && pull.state === 'open'
+      ? (ui.detail.specs || []).filter((x) => !x.approved).map((x) => ({ slug: x.slug, entry: fn.specEntry({ slug: x.slug, number: pull.number }) }))
+      : [];
+    const review = reviewable.filter((x) => x.entry).map((x) => `<button type="button" class="hx-btn hx-forge-act" data-corn-kind="secondary" data-work-action="review" data-slug="${escHtml(x.slug)}" data-source="${escHtml(x.entry.source || '')}" aria-label="Review proposal ${escHtml(x.slug)}">Review ${escHtml(x.slug)} …</button>`).join('');
+    const warning = approvalWarning(ui.detail, { review: !reviewable.length ? 'node' : reviewable.every((x) => x.entry) ? 'here' : 'list' });
+    const act = `<div class="hx-forge-cta">${land}${review}${url ? `<a data-corn="open-link" data-corn-kind="secondary" class="hx-btn hx-forge-open" href="${escHtml(url)}" target="_blank" rel="noreferrer">Open on ${escHtml(fn.forgeName())} ↗</a>` : ''}</div>${block ? `<p class="hx-forge-why hx-faint">${escHtml(block)}</p>` : ''}${warning ? `<p class="hx-forge-why hx-faint" data-corn="notice" data-corn-state="waiting">${escHtml(warning)}</p>` : ''}`;
     // A spec approved with `proposals.approveLands` waits for its checks: said here, with a way to stop it
     const waiting = ui.landing && pull.state === 'open'
       ? `<div class="hx-forge-step"><p class="hx-forge-notice hx-forge-notice--ok" role="status" data-corn="notice" data-corn-state="success">${escHtml(landingWords(ui.landing, m.now()))}</p><button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act" data-forge-landing-cancel="${pull.number}"${ui.busy ? ' aria-disabled="true"' : ''}>Cancel</button></div>`
