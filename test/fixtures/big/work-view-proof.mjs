@@ -214,6 +214,17 @@ async function main() {
     await shot('desktop-dark-selected');
     await page.evaluate(() => document.querySelector('#drawer-close, [data-action="close-drawer"]')?.click()); await sleep(300);
 
+    // a node of code: the work touching it, and Show on the map
+    const codeId = await page.evaluate(async () => (await import('/explorer/state.js')).state.nodes.find((n) => !n.work && !n.planned && !n.hidden && n.touches >= 2)?.id);
+    await pick(codeId);
+    check('a node of code shows the work that touches it', await page.locator('[data-corn="work-links"] [data-action="select-node"]').count() >= 2 && await page.locator('[data-work-action="show-on-map"]').count() === 1, codeId);
+    await page.click('[data-work-action="show-on-map"]'); await sleep(900);
+    s = await snap();
+    check('Show on the map goes to the Map view with that node selected', s.view === 'orbit' && s.selected === codeId, `${s.view} ${s.selected}`);
+    await page.click('#preset-work-btn');
+    await until(page, async () => { const { state } = await import('/explorer/state.js'); return state.view === 'work' && state.nodes.some((n) => n.work); });
+    await sleep(800);
+
     // Waiting on you
     await clear();
     await page.click('[data-work-show="waiting"]'); await sleep(500);
@@ -379,6 +390,8 @@ async function loadingProof(browser) {
     const page = await context.newPage();
     const errs = [];
     page.on('pageerror', (e) => errs.push(e.message));
+    let answeredAt = 0;
+    page.on('response', (r) => { if (r.url().includes('/api/forge/work-graph') && !answeredAt) answeredAt = Date.now(); });
     await page.goto(`${base}/`);
     await page.waitForSelector('#preset-work-btn:not([hidden])', { timeout: 30_000 });
     const t0 = Date.now();
@@ -404,8 +417,8 @@ async function loadingProof(browser) {
     await page.click('#preset-work-btn');
     check('coming back to the Work view shows the loading state again, not a blank map', await page.evaluate(() => !document.querySelector('[data-corn="work-loading"]').hidden));
     const arrived = await until(page, async () => { const { state } = await import('/explorer/state.js'); return state.view === 'work' && state.nodes.some((n) => n.work); }, null, 120_000);
-    const took = Date.now() - t0;
-    console.log(`     the first answer took ${(took / 1000).toFixed(1)} s with the forge ${SLOW} ms a request`);
+    const took = (answeredAt || Date.now()) - t0;
+    console.log(`     the server's first answer came ${(took / 1000).toFixed(1)} s after the click, with the forge ${SLOW} ms a request`);
     check('the answer arrives and the loading state goes', arrived && await page.evaluate(() => document.querySelector('[data-corn="work-loading"]').hidden), `${(took / 1000).toFixed(1)} s`);
     await sleep(800);
     // a refresh keeps the last answer on the map until the new one arrives

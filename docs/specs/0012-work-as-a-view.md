@@ -46,7 +46,7 @@ Status: **approved** (maintainer, in chat, 2026-11-13, on the mock: "That's fine
 
 ### D4. Layers: one per kind of work
 
-- In the Work view the Layers menu lists the six kinds and "Code they touch", each with its count (Proposals "3 to decide", Runs "1 waiting", Pull requests "8 open"), on or off like any layer.
+- In the Work view the Layers menu lists the six kinds, **Drafts** and "Code they touch", each with its count (Proposals "3 to decide", Runs "1 waiting", Pull requests "8 open", Drafts "64 local"), on or off like any layer. **Drafts** are the proposals that are only files in the checkout (no pull request holds them: nobody has been asked to decide them): they start off, so Decide holds the proposals on spec pull requests; on, they have a lane of their own beside Decide.
 - **On the Map view**, a new layer **Work**, off by default, puts a small badge (`PR #27`, `Issue #14`) on each node open work touches; the runs' pulse (`runs-map.js`) stays as it is.
 
 ### D5. The node panel shows a work node and its actions
@@ -79,7 +79,7 @@ A host uses `<corn-map view="work">` beside a `<corn-node-panel>` in a `<corn-sc
 
 ## Where it stands
 
-Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Step 2 built: the Work view in cornfield's page (`explorer/work-view.js`, `explorer/work-model.js`): the view switch's Work button with its badge, six kinds of node with their shapes and `--corn-work-<kind>` tokens, the lanes and the code they touch, the Waiting on you toggle, the Layers menu's own rows, the node panel's work detail with "Open in Work" (to today's panel, for the actions), search finding work, and `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=`. The checks of a pull request are not in the graph: the node panel reads them from the pull request's own route when it opens. The header's Work button and the side panel stay until step 3. Steps 3 and 4 are not built.
+Step 1 built (the server's work graph: `server/work-graph.js`, `GET /api/forge/work-graph`, documented in [issues-and-prs](../issues-and-prs.md#the-work-graph)). Step 2 built (with the loading state of a big repository's first answer, the drafts as a layer of their own, and the lanes made for the screen: see [issues-and-prs](../issues-and-prs.md#the-work-view)): the Work view in cornfield's page (`explorer/work-view.js`, `explorer/work-model.js`): the view switch's Work button with its badge, six kinds of node with their shapes and `--corn-work-<kind>` tokens, the lanes and the code they touch, the Waiting on you toggle, the Layers menu's own rows (the six kinds, Drafts, the code), the node panel's work detail with "Open in Work" (to today's panel, for the actions), search finding work, and `?view=work`, `?pr=`, `?issue=`, `?run=`, `?thread=` and `?spec=`. The checks of a pull request are not in the graph: the node panel reads them from the pull request's own route when it opens. The header's Work button and the side panel stay until step 3. Steps 3 and 4 are not built.
 
 ## What gets built, in order
 

@@ -71,6 +71,8 @@ export const relWord = (rel) => (Object.hasOwn(REL_WORDS, rel) ? REL_WORDS[rel][
 export const LABEL_CHARS = 34;
 export const DRAWN_CHARS = 28;
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
+/** The same, cut at a word when one is near the end of what fits */
+const clipWords = (s, n) => { if (s.length <= n) return s; const cut = s.slice(0, n - 1); const sp = cut.lastIndexOf(' '); return `${(sp > n * 0.6 ? cut.slice(0, sp) : cut).trimEnd()}…`; };
 const text = (v) => (typeof v === 'string' ? v : '');
 const isWork = (kind) => typeof kind === 'string' && Object.hasOwn(WORK_THEMES, kind);
 
@@ -194,7 +196,7 @@ const lane = (key, title, count, x, y, w, h) => ({ key, name: title, count, x, y
 /** The text drawn under a node: a piece of work's tag and the start of its title (a phone: the tag), the name of a node of code (a phone: the start of it) */
 function nameNodes(nodes, phone) {
   for (const n of nodes) {
-    if (n.work) { const tag = tagOf(n.item); n.labelText = phone ? tag : `${tag} · ${clip(n.title, Math.max(8, DRAWN_CHARS - tag.length - 3))}`; }
+    if (n.work) { const tag = tagOf(n.item); n.labelText = phone ? tag : `${tag} · ${clipWords(n.title, Math.max(8, DRAWN_CHARS - tag.length - 3))}`; }
     else n.labelText = clip(String(n.label), phone ? 14 : 32);
   }
 }
@@ -509,6 +511,7 @@ export function arrowTarget(nodes, from, key) {
     const along = (n.x - from.x) * dir[0] + (n.y - from.y) * dir[1];
     if (along < 1) continue;
     const aside = Math.abs((n.x - from.x) * dir[1]) + Math.abs((n.y - from.y) * dir[0]);
+    if (aside > (dir[0] ? 2 * along + 60 : 0.6 * along + 40)) continue; // a cone: Down stays in its column, Right may reach a lane whose rows are a little off
     const score = along + 3 * aside;
     if (score < bestScore) { best = n; bestScore = score; }
   }

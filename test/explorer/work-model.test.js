@@ -1,6 +1,6 @@
 // The Work view's pure half (spec 0012 D2 to D5, D8): the scene of an answer, the layout, the filters, the layers' rows, the panel's words, the addresses.
 import { describe, it, expect } from 'vitest';
-import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, workPanelHtml, codePanelHtml, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
+import { workScene, layoutWork, applyFilters, layerRowsOf, panelOf, touchedBy, workAddress, nodeForAddress, startLayers, CODE_LAYER, DRAFT_LAYER, DRAWN_CHARS, workPanelHtml, codePanelHtml, arrowTarget, landingWords, tagOf, REL_WORDS, byLane, newWorkState, setWorkGraph, enterWork, leaveWork, showWork, applyWorkLayout } from '../../explorer/work-model.js';
 import { buildScene, isNodeVisible } from '../../explorer/scene.js';
 import { WORK_KINDS, WORK_THEMES } from '../../core/schema.js';
 import { createState } from '../../explorer/instance-state.js';
@@ -259,6 +259,23 @@ describe('the scene draws it (D2, D3)', () => {
     expect(scene.nodes.find((n) => n.id === 'thread:31').alpha).toBeLessThan(0.5);
     expect(scene.nodes.find((n) => n.id === 'issue:14').alpha).toBe(1);
   });
+  it('names a node by the start of its name, keeps the names of what waits, and places the rest by the map\'s own placing', () => {
+    const { state } = stateOf();
+    const scene = buildScene(state);
+    const by = (id) => scene.nodes.find((n) => n.id === id);
+    expect(by('pull:27').label).toBe('PR #27 · Page exports in…'); // cut at a word
+    expect(by('proposal:0100-flow').labelKeep).toBe(true); // waits on you
+    expect(by('run:run-0123456789ABCDEFGHIJKLMNOP').labelKeep).toBe(true);
+    expect(by('pull:27').labelKeep).toBe(false); // the placing decides: no name for a node whose name would run into another
+    expect(by('issue:14').labelKeep).toBe(false);
+    state.selectedNode = state.nodes.find((n) => n.id === 'pull:27');
+    const lit = buildScene(state);
+    expect(lit.nodes.find((n) => n.id === 'pull:27').labelKeep).toBe(true); // the selected one and its neighbours keep theirs
+    expect(lit.nodes.find((n) => n.id === 'issue:14').labelKeep).toBe(true);
+    expect(lit.nodes.find((n) => n.id === 'thread:31').labelKeep).toBe(false);
+    applyWorkLayout(state, { phone: true });
+    expect(buildScene(state).nodes.find((n) => n.id === 'pull:27').label).toBe('PR #27'); // a phone: the tag alone
+  });
   it('dims what does not wait, hides what a layer hid, and the search finds #27, PR 27, a slug and words of a title', () => {
     const { state } = stateOf();
     state.work.waiting = true;
@@ -373,5 +390,35 @@ describe('the panel keeps the forge\'s words as text and its links as web links 
     const out = codePanelHtml({ id: '"><x>', label: '<u>x</u>' }, [{ rel: 'changed by', id: 'pull:8', label: '<script>', work: 'pull' }]);
     expect(out).not.toMatch(/<script|<x>|<u>/);
     expect(nodes.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the keyboard (N, P and the arrows)', () => {
+  it('goes to the nearest shown node that way, and to none when there is none', () => {
+    const { nodes } = workScene(graph, map);
+    layoutWork(nodes, { width: 1440, height: 800 });
+    const at = (id) => nodes.find((n) => n.id === id);
+    const right = arrowTarget(nodes, at('thread:31'), 'ArrowRight');
+    expect(right.x).toBeGreaterThan(at('thread:31').x);
+    expect(['proposal', 'run', 'pull', 'deploy'].includes(right.work) || right.work === undefined).toBe(true);
+    expect(arrowTarget(nodes, at('thread:31'), 'ArrowLeft')).toBeNull();
+    const down = arrowTarget(nodes, at('issue:14'), 'ArrowDown');
+    expect(down.id).toBe('thread:31'); // the next in the lane
+    expect(arrowTarget(nodes, at('thread:31'), 'ArrowDown')).toBeNull();
+    expect(arrowTarget(nodes, null, 'ArrowDown')).toBeNull();
+    at('proposal:0100-flow').hidden = true;
+    expect(arrowTarget(nodes, at('thread:31'), 'ArrowRight').id).not.toBe('proposal:0100-flow');
+  });
+  it('steps through the lanes in order, code last, and says where it is', () => {
+    const { nodes } = workScene(graph, map);
+    const laid = layoutWork(nodes, { width: 1440, height: 800 });
+    const work = laid.order.filter((id) => nodes.find((n) => n.id === id).work);
+    expect(work.slice(0, 2)).toEqual(['issue:14', 'thread:31']); // Talk, newest first
+    expect(laid.order.indexOf('proposal:0100-flow')).toBeGreaterThan(laid.order.indexOf('thread:31'));
+    expect(laid.order.indexOf('api-billing')).toBeGreaterThan(laid.order.indexOf('deploy:9')); // code after the lanes, the most touched first
+    expect(new Set(laid.order).size).toBe(nodes.length);
+    const words = landingWords(nodes.find((n) => n.id === 'proposal:0100-flow'), 2, 24);
+    expect(words).toMatch(/^Spec 0100 · A new flow, proposal, .*waiting on you, 3 of 24$/);
+    expect(landingWords(nodes.find((n) => n.id === 'api-billing'), 0, 5)).toMatch(/^api-billing, code, \d+ pieces? of work touch it, 1 of 5$/);
   });
 });

@@ -127,7 +127,30 @@ function mount() {
   els = { stage, bar, all: bar.children[0], waiting: bar.children[1], busy: bar.children[2], note, lanes, loading };
   if (offPaint) offPaint();
   offPaint = onPaint(paintLanes);
+  watchSize(stage);
   card = mountStatus(stage, inst(), { follow: false, onRetry: () => load({ again: true }), focusMap: () => { if (state.canvas) state.canvas.focus(); } });
+}
+
+/** The map's box changed (a window resized, a phone turned): the lanes are laid out again for it, and fitted, as they were when the answer came */
+let sizeKey = '';
+let sizeTimer = 0;
+function watchSize(stage) {
+  const Observer = typeof ResizeObserver === 'undefined' ? null : ResizeObserver;
+  if (!Observer) return;
+  sizeKey = `${stage.clientWidth}x${stage.clientHeight}`;
+  new Observer(() => {
+    const key = `${stage.clientWidth}x${stage.clientHeight}`;
+    if (key === sizeKey) return;
+    sizeKey = key;
+    clearTimeout(sizeTimer);
+    sizeTimer = setTimeout(() => {
+      if (!on() || work().status !== 'ok') return;
+      applyWorkLayout(state, { phone: isPhone() });
+      inst().touchScene();
+      fitGraphToViewport(fitPadding());
+      render();
+    }, 150);
+  }).observe(stage);
 }
 
 /** The lanes' titles, over the map in screen space: centred over their lane and held under the toggles while the lane is in view (a phone's: at the lane's top left) */
