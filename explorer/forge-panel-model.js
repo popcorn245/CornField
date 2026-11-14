@@ -385,12 +385,12 @@ export function mergeBlock(detail) {
  * A line of warning for a spec pull request whose proposal is not approved yet ('' when it is, or the pull request is not a spec's). Only words:
  * what Land does is not changed by it.
  * @param {{ pull: { state: string }, specs?: { slug: string, approved: boolean }[] }} detail
- * @param {{ review?: 'node' | 'here' | 'list' }} [opts] where Review is: 'node' (the default: the node panel of the proposal), 'here' (a button in this panel, for a pull request older than the graph's days), 'list' (some proposal is not in the proposals list, so a button cannot open it)
+ * @param {{ review?: 'node' | 'here' | 'list' }} [opts] where Review is: 'node' (the default: the node panel of the proposal), 'here' (a button above the warning in this panel, for a pull request older than the graph's days), 'list' (some proposal is not in the proposals list, so a button cannot open it)
  */
 export function approvalWarning(detail, { review = 'node' } = {}) {
   if (!detail || detail.pull.state !== 'open') return '';
   const open = (detail.specs || []).filter((s) => !s.approved).map((s) => s.slug);
-  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (${review === 'here' ? 'Review it below, then Approve' : review === 'list' ? 'Review it from the Proposals list, then Approve' : 'Review in the node panel, then Approve'}), then land this.` : '';
+  return open.length ? `Its proposal${open.length > 1 ? 's' : ''} ${open.join(', ')} ${open.length > 1 ? 'are' : 'is'} not approved yet. Next: approve ${open.length > 1 ? 'them' : 'it'} first (${review === 'here' ? 'Review above, then Approve' : review === 'list' ? `Review ${open.length > 1 ? 'them' : 'it'} from the Proposals list, then Approve` : 'Review in the node panel, then Approve'}), then land this.` : '';
 }
 
 /**

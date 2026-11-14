@@ -145,8 +145,11 @@ export function install(ctx) {
       : `<button type="button" class="hx-btn hx-btn--approve hx-forge-act" data-forge-merge="${escHtml(String(pull.number))}"${ui.busy ? ' aria-disabled="true"' : ''} data-corn-kind="approve">${escHtml(t('landIt'))} …</button>`;
     // A spec pull request older than the graph's 14 days is a plain pull request here, with no Review of its own: its proposals that are not approved get one, found by their slug in the
     // proposals list (the node panel of one the graph holds has it already: pieces/work-specs.js). A proposal the list does not hold is named in the warning instead.
+    // Only this pull request's own copy: another pull request may hold a file of the same slug (anyone can open one), and approving that copy would approve, and with
+    // `approveLands` land, the other pull request
+    const ownCopy = (slug) => { const e = fn.specEntry({ slug, number: pull.number }); return e && e.pull && e.pull.number === pull.number ? e : null; };
     const reviewable = ui.item && ui.item.kind === 'pull' && pull.state === 'open'
-      ? (ui.detail.specs || []).filter((x) => !x.approved).map((x) => ({ slug: x.slug, entry: fn.specEntry({ slug: x.slug, number: pull.number }) }))
+      ? (ui.detail.specs || []).filter((x) => !x.approved).map((x) => ({ slug: x.slug, entry: ownCopy(x.slug) }))
       : [];
     const review = reviewable.filter((x) => x.entry).map((x) => `<button type="button" class="hx-btn hx-forge-act" data-corn-kind="secondary" data-work-action="review" data-slug="${escHtml(x.slug)}" data-source="${escHtml(x.entry.source || '')}" aria-label="Review proposal ${escHtml(x.slug)}">Review ${escHtml(x.slug)} …</button>`).join('');
     const warning = approvalWarning(ui.detail, { review: !reviewable.length ? 'node' : reviewable.every((x) => x.entry) ? 'here' : 'list' });

@@ -318,7 +318,17 @@ describe('an old spec pull request (older than the map of work\'s days) is a pla
     const review = qa('#forge-detail [data-work-action="review"]');
     expect(review.map((b) => [b.dataset.slug, b.dataset.source])).toEqual([['0041-other', 'pr:0041-other']]);
     expect(review[0].getAttribute('aria-label')).toBe('Review proposal 0041-other');
-    expect(q('#forge-detail [data-corn="notice"]').textContent).toContain('(Review it below, then Approve)');
+    expect(q('#forge-detail [data-corn="notice"]').textContent).toContain('(Review above, then Approve)');
+    // the Review buttons come before the warning that points at them
+    expect(review[0].compareDocumentPosition(q('#forge-detail [data-corn="notice"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('never offers another pull request\'s copy of the same slug: approving that one would approve (and with approveLands land) the other pull request', async () => {
+    fakeServer({ specs: [{ slug: '0041-other', path: 'p/0041-other.json', approved: false }], proposals: [{ ...entry('0041-other'), source: 'pr:99', pull: { number: 99, draft: false } }, { ...entry('0041-other'), source: 'checkout', pull: undefined }] });
+    mount();
+    await openSpec({ proposals: true });
+    expect(q('#forge-detail [data-work-action="review"]')).toBe(null);
+    expect(q('#forge-detail').textContent).toContain('Review it from the Proposals list, then Approve');
   });
 
   it('an approved proposal gets none, and a proposal the list does not hold says to look in the Proposals list rather than point at a button that is not there', async () => {
