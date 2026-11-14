@@ -545,6 +545,9 @@ describe('Can\'t land yet says what to do next (F41)', () => {
   const pull = (extra = {}) => ({ number: 12, state: 'open', draft: false, ...extra });
   it('warns of a spec whose proposal is not approved, in words only', () => {
     expect(approvalWarning({ pull: pull(), specs: [{ slug: '0013-meals', approved: false }] })).toBe('Its proposal 0013-meals is not approved yet. Next: approve it first (Review in the node panel, then Approve), then land this.');
+    expect(approvalWarning({ pull: pull(), specs: [{ slug: '0013-meals', approved: false }] }, { review: 'here' })).toContain('(Review above, then Approve)'); // the buttons are in the row above the warning
+    expect(approvalWarning({ pull: pull(), specs: [{ slug: '0013-meals', approved: false }] }, { review: 'list' })).toContain('(Review it from the Proposals list, then Approve)');
+    expect(approvalWarning({ pull: pull(), specs: [{ slug: 'a', approved: false }, { slug: 'b', approved: false }] }, { review: 'list' })).toContain('approve them first (Review them from the Proposals list, then Approve)');
     expect(approvalWarning({ pull: pull(), specs: [{ slug: 'a', approved: true }] })).toBe('');
     expect(approvalWarning({ pull: pull(), specs: [] })).toBe('');
     expect(approvalWarning({ pull: pull({ state: 'merged' }), specs: [{ slug: 'a', approved: false }] })).toBe('');

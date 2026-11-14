@@ -306,8 +306,9 @@ const cut = (n, cap) => { const cols = Math.max(1, Math.ceil(n / cap)); return {
 
 function layoutDesk(stages, drafts, code, v, p) {
   const c = DESK;
-  // Left to right: Talk, Decide, the drafts (when they are shown), Build, Ship, then the code
-  const lanes = [stages[0], stages[1], ...(drafts.length ? [{ key: 'drafts', title: DRAFT_LANE_TITLE, nodes: drafts }] : []), stages[2], stages[3], ...(code.length ? [{ key: 'code', title: CODE_LANE_TITLE, nodes: code, code: true }] : [])];
+  // Left to right: Talk, Decide, Build, Ship, then the code. The drafts (when they are shown) are not a lane of this row: their own band under it, as wide as the row, so that they never
+  // widen what the first fit has to show and take the names' room from the lanes of work (turning them on left 1 of 9 Talk names placed): the fit is the row's, and the band is panned to
+  const lanes = [stages[0], stages[1], stages[2], stages[3], ...(code.length ? [{ key: 'code', title: CODE_LANE_TITLE, nodes: code, code: true }] : [])];
   const plan = (z, cap) => {
     const room = TITLE_PX / z;
     const below = NAME_PX / z;
@@ -350,7 +351,24 @@ function layoutDesk(stages, drafts, code, v, p) {
     });
     out.push(lane(l.key, l.title, l.nodes.length, part.x, 0, part.w, g.h));
   }
-  return { lanes: out, order: g.parts.flatMap((part) => part.l.nodes.map((n) => n.id)), bounds: { x: 0, y: 0, w: g.w, h: g.h }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
+  const order = g.parts.flatMap((part) => part.l.nodes.map((n) => n.id));
+  let bottom = g.h;
+  if (drafts.length) {
+    // the band: columns of the lanes' own cell, as many as the row is wide, staggered as the lanes' are; it starts a gap under the row
+    const top = g.h + c.gap;
+    const room = TITLE_PX / z;
+    const cols = Math.max(1, Math.floor((g.w - 2 * c.pad) / c.cell));
+    const rows = Math.ceil(drafts.length / cols);
+    drafts.forEach((n, j) => {
+      const col = j % cols;
+      n.x = c.pad + (col + 0.5) * c.cell + (g.w - 2 * c.pad - cols * c.cell) / 2;
+      n.y = top + room + 20 + (Math.floor(j / cols) + (col % 2) * 0.5) * c.row;
+    });
+    bottom = top + room + 40 + (rows - 0.5) * c.row + NAME_PX / z + 8;
+    out.push(lane('drafts', DRAFT_LANE_TITLE, drafts.length, 0, top, g.w, bottom - top));
+    order.push(...drafts.map((n) => n.id));
+  }
+  return { lanes: out, order, bounds: { x: 0, y: 0, w: g.w, h: bottom }, fit: fitBoxOf(g.w, g.h, z, c.margin, p, v) };
 }
 
 function layoutPhone(stages, drafts, code, v, p) {

@@ -32,7 +32,7 @@ export function install(ctx) {
       ${(what.previews || []).map((pv) => `<p class="hx-confirm-label">${escHtml(pv.label)}</p><pre class="hx-confirm-pre" data-corn="confirm-preview" tabindex="0" role="region" aria-label="${escHtml(pv.label)}">${escHtml(pv.text)}</pre>`).join('')}
       <p class="hx-confirm-note">${escHtml(what.note)}</p>`);
     const go = el.querySelector('[data-action="forge-confirm-go"]');
-    go.disabled = false;
+    go.removeAttribute('aria-disabled');
     go.textContent = goLabel;
     go.removeAttribute('aria-busy');
     // The scrim covers the page for the pointer, aria-modal tells a reader the rest is out of play, and the focus stays in
@@ -100,7 +100,7 @@ export function install(ctx) {
     ui.busy = kind;
     ui.actNote = null;
     const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
-    go.disabled = true;
+    go.setAttribute('aria-disabled', 'true'); // not `disabled`: the focus stays on it while the request runs (the guards are `ui.busy`)
     go.setAttribute('aria-busy', 'true');
     go.textContent = 'Working …';
     announce(kind === 'spec' ? `Starting the spec for issue ${n}` : `Opening the build issue for ${plan.slug}`);
@@ -138,7 +138,7 @@ export function install(ctx) {
     ui.busy = 'merge';
     ui.note = null;
     const go = confirmEl().querySelector('[data-action="forge-confirm-go"]');
-    go.disabled = true;
+    go.setAttribute('aria-disabled', 'true');
     go.setAttribute('aria-busy', 'true');
     go.textContent = 'Landing …';
     announce(`Landing pull request ${pull.number}`);

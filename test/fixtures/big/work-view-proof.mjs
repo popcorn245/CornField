@@ -210,6 +210,16 @@ async function main() {
       await links.first().click(); await sleep(500);
       check('a connection is followed: its node is selected', (await snap()).selected === first, first);
     }
+    // a title with no spaces (120 characters) in a work link breaks inside the panel rather than run past its edge
+    const overflow = await page.evaluate(() => {
+      const drawer = document.querySelector('#spec-drawer');
+      const a = drawer.querySelector('[data-corn="work-link"] [data-action="select-node"]');
+      a.textContent = `Pull #9 · ${'x'.repeat(120)}`;
+      const box = drawer.getBoundingClientRect();
+      const r = a.getBoundingClientRect();
+      return { linkRight: r.right, panelRight: box.right, scroll: drawer.scrollWidth - drawer.clientWidth };
+    });
+    check('a 120-character title with no spaces stays inside the node panel (Work view)', overflow.linkRight <= overflow.panelRight + 0.5 && overflow.scroll <= 0, JSON.stringify(overflow));
     await pick('proposal:0100-new-flow-across-apps');
     const hrefs = await page.evaluate(() => [...document.querySelectorAll('[data-corn="work-actions"] a[href], [data-corn="work-links"] a[href]')].map((a) => a.getAttribute('href')));
     check('the node panel links to the forge by an http or https address only', hrefs.length > 0 && hrefs.every((h) => /^https?:\/\//.test(h)), hrefs.join(' | '));
@@ -254,9 +264,18 @@ async function main() {
     await closeMenu();
     await page.mouse.click(700, 880); await sleep(300);
     s = await snap();
-    const draftsOn = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { lanes: state.work.lanes.map((l) => `${l.name} ${l.count}`), shown: state.nodes.filter((n) => n.draft && !n.hidden).length }; });
-    check('Drafts on draws them in a lane of their own beside Decide', draftsOn.shown > 50 && draftsOn.lanes.some((l) => /^Drafts \d+/.test(l)) && draftsOn.lanes[2].startsWith('Drafts'), draftsOn.lanes.join(' | '));
+    const draftsOn = await page.evaluate(async () => { const { state } = await import('/explorer/state.js'); return { band: (() => { const d = state.work.lanes.find((l) => l.name === 'Drafts'); const row = state.work.lanes.filter((l) => l.name !== 'Drafts'); return !!d && d.y >= Math.max(...row.map((l) => l.y + l.h)) && d.w >= Math.max(...row.map((l) => l.x + l.w)) - 1; })(), lanes: state.work.lanes.map((l) => `${l.name} ${l.count}`), shown: state.nodes.filter((n) => n.draft && !n.hidden).length }; });
+    check('Drafts on draws them in a band of their own under the lanes, which stay as wide as before', draftsOn.shown > 50 && draftsOn.lanes.some((l) => /^Drafts \d+/.test(l)) && draftsOn.lanes[draftsOn.lanes.length - 1].startsWith('Drafts') && draftsOn.band, draftsOn.lanes.join(' | '));
     names = await namesOnScreen(page);
+    const perLane = await page.evaluate(async () => {
+      const { state } = await import('/explorer/state.js'); const { getScene } = await import('/explorer/render.js'); const { placeLabels } = await import('/explorer/labels.js'); const { FONT_NODE } = await import('/explorer/scene.js');
+      const ctx = document.createElement('canvas').getContext('2d');
+      const placed = new Set(placeLabels(getScene(), state.camera.zoom, { measure: (t, sz, b) => { ctx.font = `${b ? 'bold ' : ''}${sz}px ${FONT_NODE}`; return ctx.measureText(t).width; } }).map((p) => p.id));
+      const out = {};
+      for (const n of state.nodes.filter((x) => x.work && !x.hidden && !x.draft)) { out[n.stage] = out[n.stage] || [0, 0]; out[n.stage][1]++; if (placed.has(n.id)) out[n.stage][0]++; }
+      return out;
+    });
+    check('Drafts on: every name of Talk, Decide, Build and Ship is still placed at the first fit, without zooming', Object.values(perLane).every(([placed, all]) => placed === all) && names.zoom > 0.55, `${JSON.stringify(perLane)}, zoom ${names.zoom.toFixed(2)}`);
     check('Drafts on: the names that are drawn are on the screen and not over each other', names.count > 40 && names.off.length === 0 && names.over.length === 0, `${names.count} names, zoom ${names.zoom.toFixed(2)}; off ${names.off.join()} over ${names.over.slice(0, 3).join()}`);
     check('Drafts on: the Layers chip says 8 of 8', /8 of 8/.test(await page.locator('.hx-layers-chip').innerText()));
     await shot('desktop-dark-drafts');
@@ -382,9 +401,23 @@ async function main() {
     await pick('pull:13');
     const prInfo = await page.evaluate(() => ({ land: document.querySelector('#forge-detail .hx-btn--approve') ? document.querySelector('#forge-detail .hx-btn--approve').disabled : null, why: document.querySelector('#forge-detail .hx-forge-why') ? document.querySelector('#forge-detail .hx-forge-why').textContent : '', rerun: document.querySelectorAll('#forge-detail [data-forge-rerun]').length, checks: document.querySelector('#forge-detail .hx-forge-sub') ? document.querySelector('#forge-detail .hx-forge-sub').textContent : '' }));
     check('a pull request shows its checks and Land it, off with the reason in words, and Re-run on a failed check', prInfo.land === true && /Can't land yet/.test(prInfo.why) && prInfo.rerun >= 1 && /failed/.test(prInfo.checks), JSON.stringify(prInfo));
+    // focus while a request runs (a slow forge): the button that was pressed keeps the focus (aria-disabled, never `disabled`), a second and third press are not more requests, and when it ends the focus is
+    // still in the panel, never on the page
+    const slow = (ms) => fetch(`http://127.0.0.1:${PORT + 1}/__rig/delay?ms=${ms}`);
+    // waits (at most 12 s) until nothing in the panel or its confirm says it is busy: the slow forge answers each request after 900 ms, and a request is followed by reads
+    const settle = async () => { for (let i = 0; i < 80; i++) { if (!(await page.evaluate(() => document.querySelector('#spec-drawer [aria-disabled="true"], #forge-confirm:not([hidden])')))) break; await sleep(150); } await sleep(300); };
+    const active = () => page.evaluate(() => { const a = document.activeElement; return { page: !a || a === document.body, drawer: !!(a && a.closest && a.closest('#spec-drawer') && a.offsetParent !== null), rerun: !!(a && a.hasAttribute && a.hasAttribute('data-forge-rerun')), merge: !!(a && a.hasAttribute && a.hasAttribute('data-forge-merge')), id: a && a.id, action: a && a.dataset && a.dataset.action, aria: a && a.getAttribute && a.getAttribute('aria-disabled'), dis: !!(a && a.disabled) }; });
     const rerunFrom = requests.length;
-    await page.click('#forge-detail [data-forge-rerun]'); await sleep(1500);
-    check('Re-run posts to the server for that head and check, and says what it came to', requests.slice(rerunFrom).some((x) => /^POST \/api\/forge\/pulls\/13\/rerun$/.test(x)) && (await detailText()).length > 0 && (await page.locator('#forge-detail .hx-forge-notice').count()) > 0, requests.slice(rerunFrom).join(' | '));
+    // Re-run on a slow forge, pressed three times from the keyboard: the button keeps the focus and says it is busy (aria-disabled, never `disabled`), the three presses are one request, and when it ends the focus is in the panel
+    await slow(900);
+    const rr = page.locator('#forge-detail [data-forge-rerun]');
+    await rr.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await sleep(150);
+    let a = await active();
+    check('Re-run pressed three times while it runs: the button keeps the focus and says it is busy (aria-disabled, not disabled)', a.rerun && a.aria === 'true' && !a.dis, JSON.stringify(a));
+    await settle();
+    await slow(0);
+    a = await active();
+    check('Re-run posts to the server for that head and check, once, and says what it came to; the focus is in the panel, not on the page', requests.slice(rerunFrom).filter((x) => /^POST \/api\/forge\/pulls\/13\/rerun$/.test(x)).length === 1 && (await detailText()).length > 0 && (await page.locator('#forge-detail .hx-forge-notice').count()) > 0 && !a.page && a.drawer, `${requests.slice(rerunFrom).join(' | ')}; ${JSON.stringify(a)}`);
     // a spec pull request that is green: Land it opens its confirm with the focus on Cancel; Cancel gives the focus back
     await fetch(`http://127.0.0.1:${PORT + 1}/__rig/checks?pr=21&state=passed`);
     await pick('proposal:0100-new-flow-across-apps'); await sleep(1500);
@@ -395,6 +428,19 @@ async function main() {
     check('Land it opens the confirm step: a modal dialog, the focus on Cancel, naming what lands', confirm.shown && confirm.focus === 'forge-confirm-cancel' && confirm.role === 'true' && /Land/.test(confirm.title), JSON.stringify(confirm));
     await page.keyboard.press('Escape'); await sleep(500);
     check('Escape closes it, nothing was sent, and the focus is back on Land it', await page.evaluate(() => document.querySelector('#forge-confirm').hidden && document.activeElement && document.activeElement.hasAttribute('data-forge-merge')) && !requests.some((x) => /\/merge$/.test(x)));
+    // Land it, confirmed, on a slow forge: Go keeps the focus while it lands, three presses are one POST, and the focus is in the panel when it ends
+    await slow(900);
+    await land.focus(); await page.keyboard.press('Enter'); await sleep(700);
+    await page.keyboard.press('Tab'); // Cancel, then Go
+    const merge0 = requests.length;
+    await page.evaluate(() => document.querySelector('[data-action="forge-confirm-go"]').focus());
+    await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await sleep(300);
+    a = await active();
+    check('Land it, confirmed, pressed three times: Go keeps the focus and says it is busy', a.action === 'forge-confirm-go' && a.aria === 'true' && !a.dis, JSON.stringify(a));
+    await settle();
+    a = await active();
+    check('Land it is one POST, and when it ends the focus is in the panel, not on the page', requests.slice(merge0).filter((x) => /\/merge$/.test(x)).length === 1 && !a.page && a.drawer, `${requests.slice(merge0).filter((x) => /\/merge$/.test(x)).length} POST; ${JSON.stringify(a)}`);
+    await slow(0);
     // an issue: Start an agent opens its dialog; Escape closes it, the focus back on the button
     await pick('issue:5');
     const agent = page.locator('#forge-detail [data-forge-agent="issue:5"]');
@@ -420,7 +466,14 @@ async function main() {
     const stop = page.locator('#forge-detail [data-forge-stop]');
     check('a working run has Stop (and the timeline), in its card', (await stop.count()) === 1 && (await page.locator('#forge-detail [data-run-timeline]').count()) === 1);
     const sent1 = requests.length;
-    await stop.click(); await sleep(1500);
+    await slow(900);
+    await stop.focus(); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await sleep(300);
+    a = await active();
+    check('Stop pressed three times: the button keeps the focus while it runs', a.aria === 'true' && !a.dis && a.drawer, JSON.stringify(a));
+    await settle();
+    await slow(0);
+    a = await active();
+    check('and when Stop ends the focus is in the panel, not on the page', !a.page && a.drawer, JSON.stringify(a));
     check('Stop posts once and the card says so', requests.slice(sent1).filter((x) => /POST .*\/stop$/.test(x)).length === 1 && (await page.locator('#forge-detail [data-run-result]').count()) > 0, requests.slice(sent1).join(' | '));
     // a thread: read-only, its links to the forge
     await pick('thread:21');

@@ -18,7 +18,7 @@ export function install(ctx) {
     const n = item.number;
     if (!item.open) return `<p class="hx-faint">${escHtml(specBlock({ state: 'closed' }))}</p>`;
     const spec = specBlock({ state: 'open' }) === null
-      ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${n}" aria-label="Start a spec for issue ${n}"${ui.busy ? ' disabled' : ''}>Start a spec …</button>`
+      ? `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-spec="${n}" aria-label="Start a spec for issue ${n}"${ui.busy ? ' aria-disabled="true"' : ''}>Start a spec …</button>`
       : '';
     const agent = `<button data-corn-kind="secondary" type="button" class="hx-btn hx-forge-act hx-forge-startspec" data-forge-agent="issue:${n}" aria-label="${escHtml(t('startAgent'))} on issue ${n}">${escHtml(t('startAgent'))} …</button>`;
     return `<div class="hx-forge-cta">${agent}${spec}</div>`;

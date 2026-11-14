@@ -1000,7 +1000,8 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await select(13);
     click(q('[data-forge-rerun="run:42"]'));
     await settle();
-    expect(q('[data-forge-rerun="run:42"]').disabled).toBe(true); // off while it is sent
+    expect(q('[data-forge-rerun="run:42"]').getAttribute('aria-disabled')).toBe('true'); // busy while it is sent: aria-disabled, never `disabled`, so the focus stays
+    expect(q('[data-forge-rerun="run:42"]').disabled).toBe(false);
     click(q('[data-work-ref="pull:12"]')); // another pull request, while the re-run is on its way
     await settle();
     open();
@@ -1222,11 +1223,14 @@ describe('a spec pull request waiting to land on its approval (proposals.approve
       const answer = init.method === 'POST' ? { ok: true, cancelled: true, number: 12 } : /landing$/.test(url) ? { ok: true, enabled: true, landing: null } : { ok: true, at: '2026-10-19T11:58:00.000Z', rate: '', ...DETAIL[12] };
       return { ok: true, status: 200, headers: new Headers(), json: async () => answer };
     });
+    q('[data-forge-landing-cancel="12"]').focus();
     click(q('[data-forge-landing-cancel="12"]'));
     await settle();
     const post = server.mock.mock.calls.find(([, init]) => init && init.method === 'POST');
     expect(post[0]).toBe('/api/forge/pulls/12/landing/cancel');
     expect(q('[data-forge-landing-cancel]')).toBeNull();
+    // the pressed Cancel is gone: the focus is on the actions' own place, never on the page
+    expect(document.activeElement).toBe(q('#forge-detail'));
     expect(q('.hx-forge-notice--ok').textContent).toBe('Pull request #12 will not land on its own. It stays open.');
   });
 

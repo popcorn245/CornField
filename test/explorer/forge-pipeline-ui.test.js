@@ -72,6 +72,7 @@ function fakeServer(opts = {}) {
     }
     const override = opts.answers && opts.answers[u.pathname + u.search];
     if (override) return json(override.status ?? 200, override.body);
+    if (u.pathname === '/proposals') return { ok: true, status: 200, headers: new Headers(), json: async () => opts.proposals ?? [] };
     if (u.pathname === '/api/forge/issues/7/spec') return json(200, { ok: true, at, rate: '', plan: opts.specPlan ?? SPEC_PLAN });
     if (u.pathname === '/api/forge/pulls/40/build') return json(200, { ok: true, at, rate: '', plan: opts.buildPlan ?? BUILD_PLAN });
     if (u.pathname === '/api/forge/issues') return json(200, { ok: true, at, rate: '', items: [issue(7, SPEC_PLAN.issue.title), issue(5, 'Sign-in'), issue(2, 'Done', { state: 'closed', closedAt: '2026-10-15T09:00:00Z' })] });
@@ -117,9 +118,10 @@ const openIssues = async (n = 7) => {
   await settle();
   if (n) await showWork('issue', n);
 };
-const openSpec = async () => {
+const openSpec = async ({ proposals = false } = {}) => {
   openForge({ tab: 'pulls' });
   await settle();
+  if (proposals) { click(q('[data-forge-kind="specs"]')); await settle(); } // the proposals list is read (the page reads it at the start, and every minute)
   await showWork('pull', 40);
 };
 
@@ -303,6 +305,45 @@ describe('step 1: Start a spec, on an issue', () => {
     click(q('[data-action="forge-confirm-go"]'));
     await settle();
     expect($('forge-act-note').textContent).toBe('No spec was started for issue #7: cornfield could not be reached. Look at the forge before trying again.');
+  });
+});
+
+describe('an old spec pull request (older than the map of work\'s days) is a plain pull request here', () => {
+  const entry = (slug, extra = {}) => ({ slug, title: slug, source: `pr:${slug}`, pull: { number: 40, draft: false }, ...extra });
+
+  it('has a Review button for each proposal it holds that is not approved, found by its slug, and the warning says where it is', async () => {
+    fakeServer({ specs: [{ slug: '0041-other', path: 'p/0041-other.json', approved: false }], proposals: [entry('0041-other')] });
+    mount();
+    await openSpec({ proposals: true });
+    const review = qa('#forge-detail [data-work-action="review"]');
+    expect(review.map((b) => [b.dataset.slug, b.dataset.source])).toEqual([['0041-other', 'pr:0041-other']]);
+    expect(review[0].getAttribute('aria-label')).toBe('Review proposal 0041-other');
+    expect(q('#forge-detail [data-corn="notice"]').textContent).toContain('(Review above, then Approve)');
+    // the Review buttons come before the warning that points at them
+    expect(review[0].compareDocumentPosition(q('#forge-detail [data-corn="notice"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('never offers another pull request\'s copy of the same slug: approving that one would approve (and with approveLands land) the other pull request', async () => {
+    fakeServer({ specs: [{ slug: '0041-other', path: 'p/0041-other.json', approved: false }], proposals: [{ ...entry('0041-other'), source: 'pr:99', pull: { number: 99, draft: false } }, { ...entry('0041-other'), source: 'checkout', pull: undefined }] });
+    mount();
+    await openSpec({ proposals: true });
+    expect(q('#forge-detail [data-work-action="review"]')).toBe(null);
+    expect(q('#forge-detail').textContent).toContain('Review it from the Proposals list, then Approve');
+  });
+
+  it('an approved proposal gets none, and a proposal the list does not hold says to look in the Proposals list rather than point at a button that is not there', async () => {
+    fakeServer({ specs: [{ slug: '0040-meals', path: 'p/0040-meals.json', approved: true }], proposals: [] });
+    mount();
+    await openSpec({ proposals: true });
+    expect(q('#forge-detail [data-work-action="review"]')).toBe(null);
+    closeForge({ restoreFocus: false });
+    closeDrawer();
+    fakeServer({ specs: [{ slug: '0042-gone', path: 'p/0042-gone.json', approved: false }], proposals: [] });
+    mount();
+    await openSpec({ proposals: true });
+    expect(q('#forge-detail [data-work-action="review"]')).toBe(null);
+    expect(q('#forge-detail').textContent).toContain('Review it from the Proposals list, then Approve');
+    expect(q('#forge-detail').textContent).not.toContain('Review in the node panel');
   });
 });
 

@@ -11,6 +11,8 @@
 .hx-view-badge { margin-left: var(--corn-space-2); }
 .hx-work-links { list-style: none; margin: 0; padding: 0; }
 .hx-work-links li { display: flex; align-items: center; gap: var(--corn-space-2); min-height: 2.25rem; border-bottom: var(--corn-border) solid var(--corn-line); }
+.hx-work-links, .hx-work-links li { min-width: 0; max-width: 100%; }
+.hx-work-links li > a, .hx-work-links li > button { min-width: 0; overflow-wrap: anywhere; text-align: left; } /* a title with no spaces breaks anywhere rather than run past the panel */
 .hx-work-rel { flex: none; width: 6.5rem; color: var(--corn-text-3); font-size: var(--corn-text-xs); }
 .hx-work-dot { flex: none; width: 0.6rem; height: 0.6rem; border-radius: var(--corn-radius-sm); background: var(--corn-text-3); }
 .hx-work-head, .hx-work-actions { display: flex; flex-direction: column; gap: var(--corn-space-2); margin: var(--corn-space-3) 0; }

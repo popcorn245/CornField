@@ -84,6 +84,12 @@ export function install(ctx) {
     }
     const back = again && box.querySelector(again);
     if (back && back !== inst.active() && !back.closest('[hidden]') && !back.disabled) back.focus();
+    // The control that had the focus is gone (Land it, once the pull request has landed; a Stop that was asked for) and the page has it: it goes to the actions' own place, which a keyboard
+    // user continues from with Tab, never to the page. (A pressed button that is still there keeps it: `aria-disabled`, not `disabled`.)
+    // (the page's own root is the document: its `activeElement` is then the body, not null)
+    const now = inst.active();
+    const lost = had && !had.isConnected && (!now || now === inst.doc.body);
+    if (lost && !(kind === 'run' && had.closest('[data-run]'))) { box.setAttribute('tabindex', '-1'); box.focus(); }
     // A control of a run card that is no longer drawn (the run went on): the focus goes to that run's card, never to the page
     const hadRun = had && !had.isConnected && had.closest('[data-run]');
     if (hadRun && !box.contains(inst.active())) {

@@ -340,6 +340,14 @@ async function main() {
       return { has: !!sec, links, outs, imgs: sec ? sec.querySelectorAll('img').length : -1, xss: window.__xss === undefined, first: sec ? sec.parentElement.firstElementChild === sec : false };
     });
     check('the node panel of a badged node has an Open work section, first, listing each piece of open work', panel.has && panel.links.length === 3 && panel.first, JSON.stringify(panel.links));
+    const long = await page.evaluate(() => {
+      const drawer = document.querySelector('#spec-drawer');
+      const a = drawer.querySelector('a[data-work-action="open-item"]');
+      a.textContent = `PR #13 · ${'x'.repeat(120)}`;
+      const r = a.getBoundingClientRect();
+      return { linkRight: r.right, panelRight: drawer.getBoundingClientRect().right, scroll: drawer.scrollWidth - drawer.clientWidth };
+    });
+    check('a 120-character title with no spaces stays inside the node panel (Open work)', long.linkRight <= long.panelRight + 0.5 && long.scroll <= 0, JSON.stringify(long));
     check('each is a link to the Work view with that piece selected (the address a new tab takes)', panel.links.some((l) => l.href === '?view=work&pr=13') && panel.links.some((l) => l.href === '?view=work&spec=0100-new-flow-across-apps') && panel.links.some((l) => l.href === '?view=work&issue=5'), JSON.stringify(panel.links.map((l) => l.href)));
     check('a title with markup is text, an address that is not http(s) is no link, an https one is', panel.imgs === 0 && panel.xss && panel.outs.length === 2 && panel.outs.every((u) => /^https:\/\//.test(u)), JSON.stringify({ imgs: panel.imgs, xss: panel.xss, outs: panel.outs }));
     await shot(FINAL, 'badged-node-selected-dark');
@@ -569,9 +577,15 @@ async function main() {
     await sleep(700);
     const sw = await pt2.evaluate(async () => { const { state } = await import('/explorer/state.js'); const t = document.querySelector('.hx-forge-tabs'); const tb = t.getBoundingClientRect(); const r = t.querySelector('[data-forge-kind="deploys"]').getBoundingClientRect(); return { left: Math.round(t.scrollLeft), whole: r.left >= tb.left - 1 && r.right <= tb.right + 1, cam: `${state.camera.x},${state.camera.y},${state.camera.zoom}` }; });
     check('on a phone, a finger swiping the strip brings Deploys whole into it, and moves neither the map nor anything else', sw.left > 0 && sw.whole && sw.cam === camA && Math.abs((await pt2.locator('.hx-forge-tabs').boundingBox()).y - sbox.y) < 1, JSON.stringify(sw));
-    await pt2.evaluate(() => { document.querySelector('.hx-forge-tabs').scrollLeft = 0; });
+    // the strip is put where Deploys is cut at its right edge (half of it shows): a finger can press only what shows
+    await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const d = t.querySelector('[data-forge-kind="deploys"]'); t.scrollLeft = 0; t.scrollLeft = Math.max(0, Math.round(d.getBoundingClientRect().left - t.getBoundingClientRect().left + d.offsetWidth / 2 - t.clientWidth)); });
     await sleep(300);
-    await pt2.evaluate(() => document.querySelector('[data-forge-kind="deploys"]').click());
+    // a real touch tap (as the swipe above: raw touch events), on the part of the tab that shows in the strip: `.click()` would press it without a finger, and Playwright's `tap` would scroll it into view first
+    const tabAt = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs').getBoundingClientRect(); const r = document.querySelector('[data-forge-kind="deploys"]').getBoundingClientRect(); const l = Math.max(r.left, t.left); const rr = Math.min(r.right, t.right); return { x: (l + rr) / 2, y: (Math.max(r.top, t.top) + Math.min(r.bottom, t.bottom)) / 2, shown: rr - l }; });
+    check('on a phone, Deploys shows at least in part in the strip before it is tapped', tabAt.shown > 4, JSON.stringify(tabAt));
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: Math.round(tabAt.x), y: Math.round(tabAt.y) }] });
+    await sleep(60);
+    await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await sleep(1400);
     const sp = await pt2.evaluate(() => { const t = document.querySelector('.hx-forge-tabs'); const d = t.querySelector('[data-forge-kind="deploys"]'); const tb = t.getBoundingClientRect(); const r = d.getBoundingClientRect(); return { cw: t.clientWidth, sw: t.scrollWidth, left: Math.round(t.scrollLeft), inside: r.left >= tb.left - 1 && r.right <= tb.right + 1, pressed: d.getAttribute('aria-pressed') }; });
     check('on a phone, with the list expanded, a tab pressed (Deploys) is whole in the strip', sp.cw > 0 && sp.sw > sp.cw && sp.inside && sp.pressed === 'true', JSON.stringify(sp));

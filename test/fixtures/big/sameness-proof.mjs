@@ -31,19 +31,47 @@ function startRig(serve, port, theme) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SIZES = { desktop: { viewport: { width: 1440, height: 900 } }, phone: { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } };
 
+/**
+ * A screenshot of a page that has stopped changing: no animation or transition runs (a style that stops them, the same in both checkouts), no font is still on its way (`document.fonts`),
+ * and frames are taken until two in a row, a moment apart, are the same bytes. The threshold is not touched: what differs still counts. (The retro theme's web fonts are not fetched at
+ * all, which is what removed the noise there was: see `shot`.)
+ */
+async function settled(page, clip) {
+  await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
+  let quiet = 0;
+  for (let i = 0; i < 60 && quiet < 3; i++) { // 3 looks 150 ms apart that find every font loaded: 30 s at the most
+    const loading = await page.evaluate(async () => { await document.fonts.ready; return document.fonts.status !== 'loaded' || [...document.fonts].some((f) => f.status === 'loading'); });
+    quiet = loading ? 0 : quiet + 1;
+    await sleep(loading ? 250 : 150);
+  }
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); // a frame drawn with the fonts that came
+  let last = await page.screenshot({ clip });
+  for (let i = 0; i < 20; i++) {
+    await sleep(250);
+    const next = await page.screenshot({ clip });
+    if (next.equals(last)) return next;
+    last = next;
+  }
+  return last; // it never held still: the comparison says so by differing
+}
+
 async function shot(browser, base, size, scheme, view) {
   const context = await browser.newContext({ reducedMotion: 'reduce', colorScheme: scheme, ...SIZES[size] });
   try {
+    // The retro theme's fonts come from a font service (`theme.fonts`). Whether one has arrived by the map's first label measurement changes how the labels sit by a fraction of a pixel (the map
+    // keeps each text's width, measured once, so a width taken in the fallback face stays), now in one rig and now in the other: about 10 000 pixels of text in one run in five, and a checkout
+    // against itself shows it too. Waiting does not help (it is the page's own first measurement), so neither checkout is given the fonts: both draw in the fallback face, always.
+    await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
     const sign = await context.newPage(); await sign.goto(`${base}/auth/start`); await sign.waitForURL(`${base}/**`); await sign.close();
     const page = await context.newPage();
     await page.goto(`${base}/`);
     await page.waitForSelector('#preset-work-btn:not([hidden])', { timeout: 30_000 });
-    await sleep(2500);
-    if (view === 'flow') { await page.click('#preset-dataflow-btn'); await sleep(2500); }
+    await sleep(1500);
+    if (view === 'flow') { await page.click('#preset-dataflow-btn'); await sleep(1500); }
     const top = await page.evaluate(() => Math.ceil(document.querySelector('[data-corn="header"]').getBoundingClientRect().bottom));
     const vp = SIZES[size].viewport;
     // the layer is off in both: the menu is shut and nothing is selected
-    return { png: (await page.screenshot({ clip: { x: 0, y: top, width: vp.width, height: vp.height - top } })).toString('base64'), top };
+    return { png: (await settled(page, { x: 0, y: top, width: vp.width, height: vp.height - top })).toString('base64'), top };
   } finally { await context.close(); }
 }
 
