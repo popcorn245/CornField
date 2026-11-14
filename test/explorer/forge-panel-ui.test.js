@@ -1000,7 +1000,8 @@ describe('actions: landing a green pull request and re-running a failed check', 
     await select(13);
     click(q('[data-forge-rerun="run:42"]'));
     await settle();
-    expect(q('[data-forge-rerun="run:42"]').disabled).toBe(true); // off while it is sent
+    expect(q('[data-forge-rerun="run:42"]').getAttribute('aria-disabled')).toBe('true'); // busy while it is sent: aria-disabled, never `disabled`, so the focus stays
+    expect(q('[data-forge-rerun="run:42"]').disabled).toBe(false);
     click(q('[data-work-ref="pull:12"]')); // another pull request, while the re-run is on its way
     await settle();
     open();

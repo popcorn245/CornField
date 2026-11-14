@@ -215,7 +215,7 @@ export function install(ctx) {
     $('idea-open').setAttribute('aria-expanded', String(ui.idea.open));
     $('idea-form').hidden = !ui.idea.open;
     $('idea-send').textContent = ui.idea.busy ? 'Opening …' : 'Open the idea';
-    $('idea-send').toggleAttribute('aria-disabled', !!ui.idea.busy); // not `disabled`: the focus stays (`sendIdea` ignores a press while busy)
+    if (ui.idea.busy) $('idea-send').setAttribute('aria-disabled', 'true'); else $('idea-send').removeAttribute('aria-disabled'); // not `disabled`: the focus stays (`sendIdea` ignores a press while busy)
     if (ui.idea.open) {
       const label = (ui.config && ui.config.threads && ui.config.threads.label) || 'idea';
       $('idea-words').textContent = `This opens an issue labelled "${label}" on ${fn.forgeName()}, as you. The conversation lives there; cornfield keeps no copy of it.`;

@@ -756,7 +756,8 @@ describe('New idea', () => {
     type('idea-body', 'What if we planned the week?');
     server.calls.length = 0;
     click($('idea-send'));
-    expect($('idea-send').disabled).toBe(true);
+    expect($('idea-send').getAttribute('aria-disabled')).toBe('true'); // busy: aria-disabled, never `disabled`, so the focus stays
+    expect($('idea-send').disabled).toBe(false);
     click($('idea-send')); // a second click while it is going does nothing
     await settle();
     expect(server.posts()).toHaveLength(1);
